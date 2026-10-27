@@ -3027,6 +3027,8 @@ describe("workflows module", () => {
 
     await click(buttonByText(container, "Inspector"));
     await click(container.querySelector(".wf-canvas .react-flow__node"));
+    expect(container.querySelector("[aria-label='Activity view'] [aria-selected='true']")?.textContent).toBe("Run data");
+    await click(container.querySelector("[aria-label='Activity view'] [data-tab-id='configuration']"));
     await waitForText(container, "Text");
     await fill(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']"), "Stale capsule clearing");
 

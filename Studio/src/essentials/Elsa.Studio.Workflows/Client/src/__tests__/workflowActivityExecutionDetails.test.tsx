@@ -535,12 +535,12 @@ describe("WorkflowActivityExecutionDetails", () => {
   });
 
   it("requires a fresh explicit action for sensitive evidence after a selection change with slash-containing IDs", async () => {
-    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([valueEvidence({
+    vi.mocked(getActivityExecutionInspection).mockImplementation(async (_context, workflowExecutionId, activityExecutionId) => ({ ...inspection([valueEvidence({
       name: "Secret",
       captureMode: "Payload",
       captureState: "payloadCaptured",
       isSensitive: true
-    })]));
+    })]), workflowExecutionId, activityExecutionId }));
     vi.mocked(getActivityExecutionValuePayload).mockResolvedValue({
       evidenceId: "evidence-1",
       captureMode: "Payload",
@@ -600,7 +600,7 @@ describe("WorkflowActivityExecutionDetails", () => {
   it("cancels a payload request and drops its result when the selected activity changes", async () => {
     const oldSnapshot = valueEvidence({ evidenceId: "old-evidence" });
     vi.mocked(getActivityExecutionInspection).mockImplementation(async (_context, _workflowExecutionId, activityExecutionId) =>
-      inspection(activityExecutionId === "ae-1" ? [oldSnapshot] : []));
+      ({ ...inspection(activityExecutionId === "ae-1" ? [oldSnapshot] : []), activityExecutionId }));
 
     let resolvePayload!: (value: { evidenceId: string; captureMode: string; payload: unknown }) => void;
     let payloadSignal: AbortSignal | undefined;
@@ -1323,6 +1323,24 @@ describe("WorkflowActivityExecutionDetails", () => {
     expect(container.textContent).toContain("Reference resolution is not available in this release.");
     expect(container.textContent).toContain("permission Hidden: missing-permission");
   });
+});
+
+it("rejects mismatched execution evidence before resolving any value payload", async () => {
+  vi.mocked(getActivityExecutionInspection).mockResolvedValue({ ...inspection([valueEvidence({ payload: "FOREIGN_VALUE" })]), activityExecutionId: "foreign" });
+  const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+  await waitFor(() => expect(container.textContent).toContain("identity did not match"));
+  expect(container.textContent).not.toContain("FOREIGN_VALUE");
+  expect(getActivityExecutionValuePayload).not.toHaveBeenCalled();
+});
+
+it.each([false, true])("keeps other evidence available when a partial response omits incidents (compact: %s)", async compact => {
+  const partial = inspection([], ["Confirmed outcome"]);
+  Reflect.deleteProperty(partial, "incidents");
+  vi.mocked(getActivityExecutionInspection).mockResolvedValue(partial);
+  const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} compact={compact} />);
+  await waitFor(() => expect(container.textContent).toContain("Incident details are unavailable for this execution."));
+  expect(container.textContent).toContain("Confirmed outcome");
+  expect(container.textContent).not.toContain("No incidents recorded for this execution.");
 });
 
 describe("WorkflowIncidentList", () => {

@@ -21,7 +21,7 @@ export function AttachedTestRunStatus({ view, canvas, onOpenDetails, onOpenRun }
       </> : !canvas.stale ? <button type="button" onClick={canvas.attach}>Show execution</button> : null}
       <button type="button" onClick={onOpenRun}>Open run</button>
       {canvas.loading ? <span role="status">Loading execution evidence…</span> : null}
-      {canvas.repeated ? <span>Some activities ran more than once. Open the run to choose an occurrence.</span> : null}
+      {canvas.repeated ? <span>Some activities ran more than once. Choose an occurrence in Run data.</span> : null}
       {canvas.attached && canvas.granularity === "boundary-level" ? <span>Activity state is recorded at commit boundaries.</span> : null}
     </> : null}
     {canvas.error ? <span role="status">{canvas.error}</span> : null}

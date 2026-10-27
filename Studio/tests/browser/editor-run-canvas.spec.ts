@@ -37,6 +37,53 @@ for (const theme of ["light", "dark"]) {
     await expect(node).toHaveAccessibleName(/State: authoring/);
   });
 
+  test(`inspects an explicit repeated occurrence in the same editor (${theme})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 950 });
+    await page.goto(`/?mode=activity-duplicate-editor&run-canvas=repeated&theme=${theme}`);
+    const canvas = page.getByLabel("Workflow canvas", { exact: true });
+    const node = canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ });
+    await page.getByRole("button", { name: "Test Run", exact: true }).click();
+    await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
+    await expect(page.getByText(/Some activities ran more than once/)).toBeVisible();
+    const viewport = await canvas.locator(".react-flow__viewport").getAttribute("style");
+    const route = page.url();
+    await node.click();
+    const inspector = page.getByLabel("Inspector panel", { exact: true });
+    await expect(inspector.getByRole("tab", { name: "Run data", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(inspector.getByText("Choose a recorded execution to inspect its evidence.")).toBeVisible();
+    await inspector.getByRole("button", { name: "10 recorded executions", exact: false }).click();
+    await inspector.getByRole("list", { name: "Recorded activity executions" }).getByRole("button", { name: /^Execution 4 Completed/ }).click();
+    await expect(inspector.getByText("Current: 4", { exact: true })).toBeVisible();
+    await expect(node).toHaveAccessibleName(/Run state: Completed\. Selected/);
+    await inspector.getByRole("tab", { name: "Configuration", exact: true }).click();
+    await inspector.getByRole("tab", { name: "Run data", exact: true }).click();
+    await expect(inspector.getByText("Current: 4", { exact: true })).toBeVisible();
+    await inspector.getByRole("button", { name: "Execution 4 of 10", exact: false }).click();
+    await inspector.getByRole("list", { name: "Recorded activity executions" }).getByRole("button", { name: /^Execution 10 Completed/ }).click();
+    await expect(inspector.getByText("Current: 10", { exact: true })).toBeVisible();
+    await expect(inspector.getByText("Current: 4", { exact: true })).toHaveCount(0);
+    expect(await canvas.locator(".react-flow__viewport").getAttribute("style")).toBe(viewport);
+    expect(page.url()).toBe(route);
+  });
+
+  test(`opens a second activity's incident while another activity is selected (${theme})`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 950 });
+    await page.goto(`/?mode=activity-duplicate-editor&run-canvas=incident&theme=${theme}`);
+    const canvas = page.getByLabel("Workflow canvas", { exact: true });
+    const first = canvas.getByRole("button", { name: /^Notify buyer\. Node ID:/ });
+    const second = canvas.getByRole("button", { name: /^Write Line\. Node ID: write-two/ });
+    await page.getByRole("button", { name: "Test Run", exact: true }).click();
+    await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
+    await expect(second).toHaveAccessibleName(/Run state: Faulted/);
+    await first.click();
+    await expect(first).toHaveAccessibleName(/Selected/);
+    await canvas.getByRole("button", { name: /^Open incidents for Write Line/ }).click();
+    const inspector = page.getByLabel("Inspector panel", { exact: true });
+    await expect(inspector.getByText("Second activity failed in its exact execution.", { exact: true })).toBeVisible();
+    await expect(second).toHaveAccessibleName(/Selected/);
+    await expect(first).toHaveAccessibleName(/Not selected/);
+  });
+
   test(`keeps attached-run controls within a narrow editor (${theme})`, async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 1000 });
     await page.goto(`/?mode=activity-duplicate-editor&run-canvas=repeated&theme=${theme}`);

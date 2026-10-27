@@ -72,11 +72,12 @@ function PageNavigation({ page, onPage }: { page: ActivityExecutionBrowsePage; o
 }
 
 export function ActivityExecutionNavigator({ context, workflowExecutionId, executableNodeId, ancestorActivityExecutionId,
-  selectedActivityExecutionId, parentActivityExecutionId, refreshKey, onResolve, onSelect, onIncident, collapseOnSelect = false }: {
+  selectedActivityExecutionId, parentActivityExecutionId, refreshKey, onResolve, onSelect, onIncident, collapseOnSelect = false, requireExplicitSelection = false }: {
   context: StudioEndpointContext; workflowExecutionId: string; executableNodeId: string;
   ancestorActivityExecutionId?: string; selectedActivityExecutionId?: string; refreshKey: number;
   parentActivityExecutionId?: string;
   collapseOnSelect?: boolean;
+  requireExplicitSelection?: boolean;
   onResolve(execution: ActivityExecutionStateSummary | null): void;
   onSelect(execution: ActivityExecutionStateSummary): void;
   onIncident(execution: ActivityExecutionStateSummary): void;
@@ -84,7 +85,7 @@ export function ActivityExecutionNavigator({ context, workflowExecutionId, execu
   const [expanded, setExpanded] = useState(false);
   const [popupHeight, setPopupHeight] = useState<number>();
   const [cursor, setCursor] = useState<{ query: string; value: string } | null>(null);
-  const queryIdentity = JSON.stringify([executableNodeId, ancestorActivityExecutionId, parentActivityExecutionId, selectedActivityExecutionId, refreshKey]);
+  const queryIdentity = JSON.stringify([executableNodeId, ancestorActivityExecutionId, parentActivityExecutionId, selectedActivityExecutionId, refreshKey, requireExplicitSelection]);
   const listId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -103,12 +104,12 @@ export function ActivityExecutionNavigator({ context, workflowExecutionId, execu
     if (pageState.status !== "ready" || !pageState.page || cursor?.query === queryIdentity) return;
     const selected = selectedActivityExecutionId
       ? pageState.page.items.find(item => item.execution.activityExecutionId === selectedActivityExecutionId)
-      : pageState.page.items.at(-1);
+      : !requireExplicitSelection || pageState.page.totalCount === 1 ? pageState.page.items.at(-1) : undefined;
     resolved.current(selected?.execution ?? null);
-  }, [cursor, pageState.key, pageState.page, pageState.status, queryIdentity, selectedActivityExecutionId]);
+  }, [cursor, pageState.key, pageState.page, pageState.status, queryIdentity, requireExplicitSelection, selectedActivityExecutionId]);
   const page = pageState.page;
   const retainedSelection = useRef<{ query: string; entry: ActivityExecutionBrowseEntry } | null>(null);
-  const pageSelection = page?.items.find(item => item.execution.activityExecutionId === selectedActivityExecutionId) ?? (!selectedActivityExecutionId ? page?.items.at(-1) : undefined);
+  const pageSelection = page?.items.find(item => item.execution.activityExecutionId === selectedActivityExecutionId) ?? (!selectedActivityExecutionId && (!requireExplicitSelection || page?.totalCount === 1) ? page?.items.at(-1) : undefined);
   useEffect(() => { if (pageSelection) retainedSelection.current = { query: queryIdentity, entry: pageSelection }; }, [pageSelection, queryIdentity]);
   const selected = pageState.status === "denied" ? undefined : pageSelection ?? (retainedSelection.current?.query === queryIdentity ? retainedSelection.current.entry : undefined);
   const navigate = async (id: string | null | undefined) => {
@@ -147,7 +148,7 @@ export function ActivityExecutionNavigator({ context, workflowExecutionId, execu
     </div>
     <PageFeedback state={pageState} />
     {neighbor ? <PageFeedback state={neighborState} /> : null}
-    {pageState.status === "ready" && !selected && !cursor ? <p role="status">{selectedActivityExecutionId ? "This execution is not available in this scope." : "No execution recorded in this scope."}</p> : null}
+    {pageState.status === "ready" && !selected && !cursor ? <p role="status">{selectedActivityExecutionId ? "This execution is not available in this scope." : page?.totalCount ? "Choose a recorded execution to inspect its evidence." : "No execution recorded in this scope."}</p> : null}
     {expanded && page ? <div ref={listRef} id={listId} className="wf-execution-list-container" style={collapseOnSelect ? { maxHeight: popupHeight } : undefined} onKeyDown={event => {
       if (event.key === "Escape") { event.preventDefault(); setExpanded(false); triggerRef.current?.focus(); }
     }}>
@@ -196,8 +197,9 @@ function ChildExecutionGroup({ context, execution, node, label, refreshKey, onEn
 }
 
 export function ActivityExecutionInspectionPanel({ context, workflowExecutionId, nodeId, nodeLabel, exactId, seed, ancestorId,
-  refreshKey, labelFor, onSelect, onEnter, onIncident, renderDetails }: {
+  refreshKey, labelFor, onSelect, onEnter, onIncident, renderDetails, requireExplicitSelection = false }: {
   context: StudioEndpointContext; workflowExecutionId: string; nodeId: string; nodeLabel: string;
+  requireExplicitSelection?: boolean;
   exactId?: string; seed: ActivityExecutionStateSummary | null; ancestorId?: string; refreshKey: number;
   labelFor(execution: ActivityExecutionStateSummary): string;
   onSelect(execution: ActivityExecutionStateSummary): void; onEnter(entry: ActivityExecutionBrowseEntry): void;
@@ -214,7 +216,7 @@ export function ActivityExecutionInspectionPanel({ context, workflowExecutionId,
   }, [context]);
   const execution = resolved?.key === key ? resolved.execution : supported?.context === context && !supported.value ? seed : null;
   const navigation = <ActivityExecutionNavigator context={context} workflowExecutionId={workflowExecutionId} executableNodeId={nodeId}
-    ancestorActivityExecutionId={ancestorId} selectedActivityExecutionId={exactId} refreshKey={refreshKey}
+    ancestorActivityExecutionId={ancestorId} selectedActivityExecutionId={exactId} refreshKey={refreshKey} requireExplicitSelection={requireExplicitSelection}
     onResolve={value => { setResolved({ key, execution: value }); if (value && !exactId) onSelect(value); }} onSelect={onSelect} onIncident={onIncident} />;
   const children = execution ? <ChildExecutionBrowser key={execution.activityExecutionId} context={context} execution={execution} refreshKey={refreshKey} labelFor={labelFor} onEnter={onEnter} onIncident={onIncident} /> : null;
   return execution ? renderDetails(execution, navigation, children) : <>
