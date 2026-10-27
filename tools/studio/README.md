@@ -58,6 +58,8 @@ Every archive child receipt referenced by the aggregate is retained and hash-che
 including original, fault and restored JSON. Literal project pins must retain the
 SDK-generated inclusive minimum without an upper bound; other range forms fail
 the archive contract.
+CI also uploads the aggregate report, available logs and archive JSON independently
+of the collector, so a missing or corrupt receipt cannot erase failure diagnostics.
 CI uploads these and the original product candidates, without caches or full
 published/source trees. The initial archive verifier also writes a failed receipt
 when its check fails before consumer execution. Existing publisher holds and

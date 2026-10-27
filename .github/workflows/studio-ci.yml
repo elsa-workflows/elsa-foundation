@@ -251,6 +251,9 @@ jobs:
             ${{ runner.temp }}/studio-nuget/*.nupkg
             ${{ runner.temp }}/studio-modularity-nuget/*.nupkg
             ${{ runner.temp }}/studio-archive-verification.json
+            ${{ runner.temp }}/studio-consumer-qualification/report.json
+            ${{ runner.temp }}/studio-consumer-qualification/**/*.log
+            ${{ runner.temp }}/studio-consumer-qualification/archive-controls/*.json
             ${{ runner.temp }}/studio-consumer-qualification/evidence/**
 
       - name: Build standalone Studio image without publishing

@@ -49,3 +49,12 @@ Whole architecture validation initially passed 589/590 and failed the workflow l
 The corrected whole architecture project passes **590/590, zero failed/skipped**, with runtime/discovery comparison recorded locally. Generated solution filters pass `Elsa.Maps.Generator -- check` without changes. This is a workflow lock-policy correction, not a timing failure; the initial failure remains recorded. No C# product or fixture changes require repeating unrelated local .NET suites. The final CI run will execute the complete Studio project and new package matrix.
 
 The spec is terminalized in the implementation PR as required by spec lifecycle; its status becomes true on merge. Delivery tasks stay pending until their actual reviewed-head and resulting-main evidence exists.
+
+
+## Independent review round 2: failed-run diagnostics
+
+Round 2 reviewed `36e8080b762eafb9090541a140c5a951cef14a9b`. Correctness and standards were clean. Acceptance identified one P2 failure-path gap: a missing archive receipt correctly fails qualification and retention, but the previous artifact selection retained no aggregate or logs if collection stopped before creating `evidence/`.
+
+The workflow now independently uploads the aggregate JSON, available qualification logs and archive child JSON, alongside collected evidence. A focused local artifact-selection/retention guard fixture uses copies of genuine completed receipts: remove the positive receipt, observe precise rejection and no evidence directory; prior workflow selects zero diagnostic files, corrected workflow selects 12 including aggregate/log/control report; restore the receipt and collection succeeds. Results: `/tmp/studio3365-retention-failure-bite.json`. The fixture's first setup attempt used the unresolved macOS temporary-directory alias and failed the path-containment check; resolving the fixture root corrected that setup before the causal result. This is a collector/workflow guard check, not another product qualification or hosted upload result.
+
+No product/tool behavior changed after the frozen `36e8080b7` orchestration started; this follow-up changes artifact selection and documentation. Hosted final-head validation must prove the complete supplied-candidate matrix and actual upload. All review/delivery gates remain pending until their receipts exist.
