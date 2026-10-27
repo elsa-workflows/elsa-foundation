@@ -32,6 +32,15 @@ internal static class AtomicConfigWriter
         }
     }
 
+    public static void ReloadAfterSave(IConfigurationRoot configuration, string description)
+    {
+        try { configuration.Reload(); }
+        catch (Exception error)
+        {
+            throw new StudioHostingException($"{description} was saved, but configuration reload failed. Inspect the host configuration and restart or reload it before making further changes.", error);
+        }
+    }
+
     private static void TryDelete(string path)
     {
         try

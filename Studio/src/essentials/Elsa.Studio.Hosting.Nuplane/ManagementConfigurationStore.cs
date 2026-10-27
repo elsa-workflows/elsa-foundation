@@ -41,7 +41,7 @@ internal sealed class ManagementConfigurationStore(StudioNuplaneSettings setting
             : new JsonObject();
         if (!mutate(document)) return false;
         await AtomicConfigWriter.WriteAtomicAsync(settings.ManagementFile, document.ToJsonString(JsonOptions) + Environment.NewLine, cancellationToken);
-        configuration.Reload();
+        AtomicConfigWriter.ReloadAfterSave(configuration, "Studio management configuration");
         return true;
     }
 

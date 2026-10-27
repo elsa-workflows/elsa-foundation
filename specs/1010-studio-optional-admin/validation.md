@@ -2,6 +2,46 @@
 
 This is incomplete work on #3359, not a delivery or completion receipt.
 
+## Current checkpoint — Web adoption and maintenance UI qualified locally
+
+The owner granted a new #3359 exception after the Web adoption three-attempt stop, recorded at
+3359#issuecomment-6431700996. Exclusive resumption claim6431701224 owns this work. The first resumed attempt
+fixed the registration-timing mismatch by preparing the owned management file before addon composition;
+package discovery/replacement worked, but the fixture still filtered reload logs on the retired Web category.
+Updating that filter to the addon category produced24/24 targeted passes. No production loader was changed.
+The fixture now asserts the registered feed path, actual active package/version and runtime First descriptor.
+
+Whole Studio after adoption passed564/564,0skipped; whole Modularity passed398/398,0skipped. Pre-adoption595
+minus the31 retired private helper cases and2 fake package-cache cases, plus1 public boolean/object blueprint
+case, equals564. Native package cache/range/revalidation and public upload/path/store/catalog coverage remain;
+the framework owns runtime-empty-dependency precedence and manifest dependency projection. Discovery557 plus
+7 expanded rows of the existing runtime8-row module-manifest theory equals564, with none omitted.
+
+A new public fault-provider test proved feature/feed/retention writes each committed a valid file before an
+unhandled reload exception. The controlled pre-fix run failed3/3 on that fact after checking committed bytes.
+The adapter now distinguishes atomic save from reload failure and returns503 with an explicit saved-state
+message without provider/feature secrets. Targeted corrected3/3 and whole Studio567/567,0skipped,86s passed
+(studio3359-post-commit-{before,fixed}.trx; studio3359-web-and-reload-whole.trx).
+
+Maintenance UI now uses explicit nullable inactive-version retention, default Preview, complete native reports,
+separate confirmation with observed root/epoch/policy and truthful execution/partial physical outcomes. Plans
+clear after host/policy changes; cancelled or detached confirmation cannot execute. Older Server count/age data
+remains visible and read-only; no synthetic3-version/30-day/automatic policy is created. New UI11 plus existing
+module-management31 tests passed42/42. Actual Chromium3/3 passed twice, including cancel, partial failure with
+observed deletion, saved-policy invalidation and read-only Server. The preview screenshot was visually inspected;
+Reconcile was moved outside the report's grid to avoid stretching. Configured workspace typecheck/lint/build pass;
+lint has56warnings,0errors. Full workspace test count is recorded below when final artifacts are qualified.
+
+An extra broad standalone Hosting Client tsc check (outside configured workspace typecheck) failed with91
+diagnostics in unrelated existing tests/vendor declarations. A fresh owned git-archive baseline39c351228 with
+the same dependency links produced byte-identical normalized diagnostics, also91. No changed maintenance file
+has a diagnostic. This extra failed check is not represented as green; see
+/tmp/studio3359-host-tsc-baseline-comparison.json. Canonical workspace typecheck passed after browser additions.
+
+Both Server and Studio locked restores pass. Whole architecture590/590 passes after the required graph restore.
+Package/inventory/isolated-consumer/Web smoke, final causal controls, review, CI and resulting-main delivery
+remain open. Nothing here marks #3359 or Program #3340 complete.
+
 ## Owner-authorized resumption, 27 October
 
 The owner explicitly replied "Resume #3359 with this exception" to this leaf's three-failed-check request;
@@ -75,7 +115,7 @@ maintenance UI, final package/CI/review/main gates remain incomplete; no duplica
 - Studio `pnpm typecheck`, `pnpm lint`, `pnpm build` passed. Lint reported 56 warnings and no errors. Runtime UI
   qualification and the remaining maintenance UI changes are still outstanding.
 
-## Latest whole-project check
+## Original blocked whole-project check (historical)
 
 `studio3359-maintenance-qualified.trx`: 564 passed, 2 failed, 0 skipped (566 total).
 

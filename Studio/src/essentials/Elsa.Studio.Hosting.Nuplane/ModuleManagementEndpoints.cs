@@ -175,6 +175,7 @@ internal static class ModuleManagementEndpoints
             return result;
         }
         catch (ConfigurationReadOnlyException error) { return Results.Conflict(new { Error = error.Message, Code = "configuration-read-only" }); }
+        catch (StudioHostingException error) { return Results.Json(new { Error = error.Message }, statusCode: StatusCodes.Status503ServiceUnavailable); }
     }
 
     private static IReadOnlyList<ModuleManagementFeed> ReadFeeds(IConfiguration configuration) =>

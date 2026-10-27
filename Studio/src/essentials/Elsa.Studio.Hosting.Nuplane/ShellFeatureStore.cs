@@ -53,13 +53,13 @@ internal sealed class ShellFeatureStore(
         try
         {
             await AtomicConfigWriter.WriteAtomicAsync(file, document.ToJsonString(JsonOptions) + Environment.NewLine, cancellationToken);
-            configuration.Reload();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or FormatException)
         {
-            throw new StudioHostingException($"Could not persist/reload feature configuration for Studio shell '{ShellName}'.", error);
+            throw new StudioHostingException($"Could not persist feature configuration for Studio shell '{ShellName}'.", error);
         }
+        AtomicConfigWriter.ReloadAfterSave(configuration, $"Feature configuration for Studio shell '{ShellName}'");
         return Snapshot(node, await ComposeAsync(cancellationToken), ShellConfiguration(document));
     }
 

@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.IO.Compression;
+using System.Text.Json.Nodes;
+using Microsoft.Extensions.Options;
 using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
@@ -37,7 +39,12 @@ public sealed class StudioPackageLifecycleTests
             var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { ContentRootPath = root });
             builder.Logging.ClearProviders();
             builder.Logging.AddProvider(logs);
-            File.Copy(Path.Combine(AppContext.BaseDirectory, "WebHost", "nuplane-management.json"), Path.Combine(root, "nuplane-management.json"));
+            // Feed registration consumes configuration during addon composition. Prepare the owned file first.
+            var management = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "WebHost", "nuplane-management.json"), token))!;
+            management["Nuplane"]!["Setup"]!["AutomaticReconciliation"] = false;
+            management["Nuplane"]!["Setup"]!["Feeds"]![0]!["DirectoryPath"] = feed;
+            management["Nuplane"]!["Setup"]!["Feeds"]![0]!["Directory"]!["Watch"] = false;
+            await File.WriteAllTextAsync(Path.Combine(root, "nuplane-management.json"), management.ToJsonString(), token);
             builder.Configuration.AddJsonFile(Path.Combine(AppContext.BaseDirectory, "WebHost", "appsettings.json"));
             var studio = builder.AddElsaStudio(options => options.ShellsFile = null)
                 .AddElsaStudioNuplane(configureNuplane: nuplane => nuplane.WithStateFile(Path.Combine(root, "state.json")));
@@ -45,10 +52,7 @@ public sealed class StudioPackageLifecycleTests
             {
                 ["CShells:Shells:Default:Features:StudioApi"] = "true",
                 ["CShells:Shells:Default:Features:StudioReuseProbe"] = "true",
-                ["CShells:Shells:Default:Features:StudioReloadGate:Fail"] = "false",
-                ["Nuplane:Setup:AutomaticReconciliation"] = "false",
-                ["Nuplane:Setup:Feeds:0:DirectoryPath"] = feed,
-                ["Nuplane:Setup:Feeds:0:Directory:Watch"] = "false"
+                ["CShells:Shells:Default:Features:StudioReloadGate:Fail"] = "false"
             });
             builder.Services.Configure<FeedResolutionOptions>(options => options.PackageInstallRoot = Path.Combine(root, "installs"));
             builder.Services.Configure<ReconciliationOptions>(options => options.EnableAutomaticReconciliation = false);
@@ -63,11 +67,15 @@ public sealed class StudioPackageLifecycleTests
             var catalog = host.Services.GetRequiredService<IRuntimeFeatureCatalog>();
             var admin = host.Services.GetRequiredService<INuplaneAdminOperations>();
             Assert.Empty(registry.GetActiveShells());
+            var registeredFeed = Assert.Single(host.Services.GetRequiredService<IOptions<FeedResolutionOptions>>().Value.Feeds);
+            Assert.Equal(feed, Path.TrimEndingDirectorySeparator(registeredFeed.ServiceIndex.LocalPath));
 
             Pack("1.0.0", "First");
             await Reconcile();
             Assert.Empty(registry.GetActiveShells());
             Assert.Empty(logs.ReloadResults);
+            Assert.Equal("1.0.0", Assert.Single((await admin.GetPackagesAsync(token)).Packages).Version);
+            Assert.Contains((await catalog.GetSnapshotAsync(token)).FeatureDescriptors, feature => feature.Id == "StudioReuseProbe" && feature.StartupType?.Assembly.GetName().Name == "First");
             var first = await registry.GetOrActivateAsync("Default", token);
             await using (var retained = first.BeginScope())
             {
@@ -166,7 +174,7 @@ public sealed class StudioPackageLifecycleTests
     {
         private readonly ConcurrentQueue<LogEntry> entries = new();
         public IReadOnlyCollection<LogEntry> ReloadResults => entries.ToArray();
-        public ILogger CreateLogger(string categoryName) => new Capture(categoryName == "Elsa.Studio.Web.PackageReload", entries);
+        public ILogger CreateLogger(string categoryName) => new Capture(categoryName == "Elsa.Studio.Hosting.Nuplane.PackageReload", entries);
         public void Dispose() { }
 
         private sealed class Capture(bool capture, ConcurrentQueue<LogEntry> entries) : ILogger
