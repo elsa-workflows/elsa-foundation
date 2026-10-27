@@ -16,6 +16,15 @@ using Elsa.Persistence.EntityFramework;
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 try
 {
+    if (args.Length == 6 && args[0] == "--inspect-opted-called")
+    {
+        await VerifySnapshotAsync(args[1], args[2]);
+        var observed = await OptedCalledSnapshotReader.ReadAsync(args[1], args[3], args[4], args[5]);
+        await VerifySnapshotAsync(args[1], args[2]);
+        Console.WriteLine(JsonSerializer.Serialize(new { ProviderChecked = true, ReadOnly = true,
+            SnapshotSha256 = args[2], CalledWorkflows = observed }, json));
+        return 0;
+    }
     if (args.Length == 6 && args[0] == "--inspect-called")
     {
         await VerifySnapshotAsync(args[1], args[2]);
