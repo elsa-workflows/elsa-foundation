@@ -13,10 +13,11 @@ param(
     [Parameter(Mandatory)][string] $EvidencePath,
     [string] $Python = 'python3',
     [Parameter(Mandatory)][string] $SourceRevision,
-    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal', 'competing-empty-proposal', 'competing-empty-winner', 'after-start', 'after-fanout')][string] $Phase = 'after-cohort'
+    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal', 'competing-empty-proposal', 'competing-empty-winner', 'after-start', 'after-fanout', 'after-source-commit')][string] $Phase = 'after-cohort'
 )
 $ErrorActionPreference = 'Stop'
-$completeFanout = $Phase -eq 'after-fanout'
+$committedAck = $Phase -eq 'after-source-commit'
+$completeFanout = $Phase -in @('after-fanout', 'after-source-commit')
 $partialStart = $Phase -eq 'after-start'
 $emptyProposal = $Phase -eq 'competing-empty-proposal'
 $emptyWinner = $Phase -eq 'competing-empty-winner'
@@ -63,7 +64,7 @@ $settings.CShells.Shells.default.Features.BpmnRecoveryProbe = @{ ControlDirector
 $settings.CShells.Shells.default.Features.WorkflowsRuntimeResumption = @{ SweepIntervalSeconds = 1 }
 $settings | ConvertTo-Json -Depth 60 | Set-Content $settingsPath
 @{ caseId = $caseId; phase = if ($competing) { 'before-install' } elseif ($Phase -eq 'empty-cohort') { 'after-cohort' } else { $Phase }; eventName = $eventName } | ConvertTo-Json | Set-Content (Join-Path $control 'plan.json')
-$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'after-start' { 'one-of-two-starts-parked-before-remaining-start-and-resumes' } 'after-fanout' { 'all-recipient-effects-completed-before-source-ack-write' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } 'competing-proposal' { 'expired-old-prepared-proposal-cannot-replace-successor-winner' } 'competing-empty-proposal' { 'expired-old-empty-proposal-cannot-replace-populated-successor-winner' } 'competing-empty-winner' { 'expired-old-populated-proposal-cannot-replace-empty-successor-winner' } default { 'after-cohort-before-dispatch' } }; passed = $false;
+$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'after-start' { 'one-of-two-starts-parked-before-remaining-start-and-resumes' } 'after-fanout' { 'all-recipient-effects-completed-before-source-ack-write' } 'after-source-commit' { 'committed-source-completion-before-provider-return-loss' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } 'competing-proposal' { 'expired-old-prepared-proposal-cannot-replace-successor-winner' } 'competing-empty-proposal' { 'expired-old-empty-proposal-cannot-replace-populated-successor-winner' } 'competing-empty-winner' { 'expired-old-populated-proposal-cannot-replace-empty-successor-winner' } default { 'after-cohort-before-dispatch' } }; passed = $false;
     probeAssemblySha256 = (Get-FileHash $ProbeAssembly).Hash.ToLowerInvariant(); normalAssemblySha256 = (Get-FileHash $NormalAssembly).Hash.ToLowerInvariant();
     sourceCommit = $sourceCommit; sourceFiles = $sourceManifest; probeBuild = $probeManifest; normalBuild = $normalManifest; readerSha256 = $readerHash; readerBuild = $readerManifest;
     cut = $null; stopped = $null; successorClaim = $null; recovered = $null; observations = @(); failures = @() }
@@ -108,6 +109,12 @@ function Observe([string] $Name, [string[]] $ExtraIds) {
     foreach ($id in $ExtraIds) { $arguments += @('--extra-workflow', $id) }
     & $Python @arguments | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "The checked $Name observation failed." }
+    return Get-Content -Raw $path | ConvertFrom-Json -AsHashtable -DateKind String
+}
+function Observe-Publisher([string] $Name, [string] $PublisherId) {
+    $path = Join-Path $caseDirectory "$Name.json"
+    & $Python "$PSScriptRoot/inspect_broadcast_recovery.py" --database (Join-Path $root 'elsa.db') --reader $ReaderAssembly --marker $markerPath --output $path --publisher $PublisherId | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw 'The checked control-publisher observation failed.' }
     return Get-Content -Raw $path | ConvertFrom-Json -AsHashtable -DateKind String
 }
 function Observe-Membership([string] $Name) {
@@ -208,6 +215,13 @@ try {
     }
     $marker = Get-Content -Raw $markerPath | ConvertFrom-Json -AsHashtable -DateKind String
     $receipt.cut = $marker
+    if ($committedAck) {
+        $liveCommitted = Observe 'committed-source-live' @($waitRun.workflowExecutionId)
+        if ($marker.providerEvent -ne 'EF.TransactionCommitted' -or $liveCommitted.source.status -ne 'Delivered' -or
+            $liveCommitted.source.deliveryFencingToken -ne $marker.fencingToken -or $null -ne $liveCommitted.source.deliveringOwnerId -or
+            -not $liveCommitted.source.deliveredAt) { throw 'The independent live observation did not prove a committed source completion at the diagnostic cut.' }
+        $receipt.committedSourceLive = $liveCommitted
+    }
     if ($selectsAfterRestart -or $emptyWinner) {
         if ($null -ne $marker.snapshot) { throw 'Selection already occurred before the delayed-delivery cut.' }
         if ($competing) {
@@ -296,6 +310,7 @@ try {
     if ($completeFanout) {
         $fanout = Observe 'fanout-before-crash' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
         $receipt.completedFanoutBeforeCrash = $fanout
+        if ($committedAck -and ($marker.providerEvent -ne 'EF.TransactionCommitted' -or $fanout.source.status -ne 'Delivered' -or $null -ne $fanout.source.deliveringOwnerId -or -not $fanout.source.deliveredAt)) { throw 'The independent live observation did not prove the source completion actually committed before the provider returned.' }
         $recipientIds = @(@($fanout.source.selectedResumes | ForEach-Object workflowExecutionId) + @($fanout.source.selectedStarts | ForEach-Object workflowExecutionId) | Sort-Object -Unique)
         if ($recipientIds.Count -ne 2 -or $waitRun.workflowExecutionId -notin $recipientIds) { throw 'The full fan-out observation does not cover both exact recipient workflows.' }
         $receipt.completedRecipientApiBeforeCrash = @()
@@ -323,7 +338,10 @@ try {
         $receipt.membershipBeforePeer = Observe-Membership 'membership-before-peer'
         if (@($receipt.membershipBeforePeer.members | Where-Object hostId -eq $oldNodeId).Count -ne 1) { throw 'The old host did not publish its actual unique membership identity.' }
     }
-    if ($stopped.source.status -ne 'Delivering' -or $stopped.source.deliveryFencingToken -ne $marker.fencingToken -or $stopped.source.deliveringOwnerId -ne $marker.ownerId) { throw 'The stopped source lost its actual claim facts.' }
+    if ($committedAck) {
+        if ($stopped.source.status -ne 'Delivered' -or $stopped.source.deliveryFencingToken -ne $marker.fencingToken -or
+            -not (Same-Snapshot $stopped.source $receipt.completedFanoutBeforeCrash.source)) { throw 'The committed source changed between its live observation and the owned crash.' }
+    } elseif ($stopped.source.status -ne 'Delivering' -or $stopped.source.deliveryFencingToken -ne $marker.fencingToken -or $stopped.source.deliveringOwnerId -ne $marker.ownerId) { throw 'The stopped source lost its actual claim facts.' }
     if (-not (Same-Snapshot $stopped.source.snapshot $marker.snapshot)) { throw 'The physical source differs from the captured winner.' }
     if ($emptyWinner) {
         $original = @($stopped.workflows | Where-Object workflowExecutionId -eq $waitRun.workflowExecutionId)[0]
@@ -382,23 +400,51 @@ try {
     $settings | ConvertTo-Json -Depth 60 | Set-Content (Join-Path $recoveryRoot 'shells.json')
     # Never rewrite the paused host's configuration; its original shell must attempt its prepared proposal.
     # Begin the observer before startup: normal background delivery may reclaim and complete before readiness returns.
-    $watchOutput = Join-Path $caseDirectory 'successor.json'
-    $info = [Diagnostics.ProcessStartInfo]::new(); $info.FileName = $Python; $info.UseShellExecute = $false
-    $info.RedirectStandardOutput = $true; $info.RedirectStandardError = $true
-    foreach ($arg in @("$PSScriptRoot/inspect_broadcast_recovery.py", '--database', (Join-Path $root 'elsa.db'), '--reader', $ReaderAssembly, '--marker', $markerPath, '--output', $watchOutput, '--watch-claim', '--previous-fence', [string]$stopped.source.deliveryFencingToken, '--timeout', '180')) { $info.ArgumentList.Add($arg) }
-    $watch = [Diagnostics.Process]::Start($info); $watchStdout = $watch.StandardOutput.ReadToEndAsync(); $watchStderr = $watch.StandardError.ReadToEndAsync()
+    if (-not $committedAck) {
+        $watchOutput = Join-Path $caseDirectory 'successor.json'
+        $info = [Diagnostics.ProcessStartInfo]::new(); $info.FileName = $Python; $info.UseShellExecute = $false
+        $info.RedirectStandardOutput = $true; $info.RedirectStandardError = $true
+        foreach ($arg in @("$PSScriptRoot/inspect_broadcast_recovery.py", '--database', (Join-Path $root 'elsa.db'), '--reader', $ReaderAssembly, '--marker', $markerPath, '--output', $watchOutput, '--watch-claim', '--previous-fence', [string]$stopped.source.deliveryFencingToken, '--timeout', '180')) { $info.ArgumentList.Add($arg) }
+        $watch = [Diagnostics.Process]::Start($info); $watchStdout = $watch.StandardOutput.ReadToEndAsync(); $watchStderr = $watch.StandardError.ReadToEndAsync()
+    }
     $peerEnvironment = @{} + $sharedEnvironment
     if ($competing) { $peerEnvironment.Elsa__Cluster__Membership__HostId = $peerNodeId }
     Start-OwnedElsaServer -BaseUrl $recoveryBase -ContentRoot $recoveryRoot -AssemblyPath $NormalAssembly -Environment $peerEnvironment
     $receipt.normalProcessId = $script:OwnedElsaServer.Process.Id; $receipt.crashedOrPausedProcessId = $probeProcess.Id
     $ctx = Connect-Elsa -BaseUrl $recoveryBase
-    $deadline = [DateTimeOffset]::UtcNow.AddSeconds(180)
-    while (-not $watch.HasExited -and [DateTimeOffset]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 200 }
-    if (-not $watch.HasExited) { throw 'Successor observation remains live beyond the fixture bound.' }
-    if ($watch.ExitCode -ne 0) { throw "Successor observation failed: $($watchStdout.GetAwaiter().GetResult()) $($watchStderr.GetAwaiter().GetResult())" }
-    $successor = Get-Content -Raw $watchOutput | ConvertFrom-Json -AsHashtable -DateKind String
-    $receipt.successorClaim = $successor
-    if ($successor.source.deliveryFencingToken -le $stopped.source.deliveryFencingToken -or $successor.source.deliveringOwnerId -eq $stopped.source.deliveringOwnerId) { throw 'No distinct successor source claim was proven.' }
+    if ($committedAck) {
+        $originalDeadline = [DateTimeOffset]::Parse($marker.visibleAfter).AddSeconds(2)
+        if ($originalDeadline -gt [DateTimeOffset]::UtcNow.AddSeconds(180)) { throw 'The actual original claim deadline exceeds this fixture bound.' }
+        while ([DateTimeOffset]::UtcNow -le $originalDeadline) {
+            if ($script:OwnedElsaServer.Process.HasExited) { throw 'The actual standard host exited before the committed-source recovery observation.' }
+            Start-Sleep -Milliseconds 200
+        }
+        $controlEvent = 'post-restart-control-' + [guid]::NewGuid().ToString('N')
+        $controlPublication = Import-Process ($publisherXml.Replace($eventName, $controlEvent).Replace('id="publisher"', 'id="control-publisher"'))
+        $controlRun = Invoke-Artifact -Ctx $ctx -ArtifactId $controlPublication.artifactId -SourceReferenceId $controlPublication.sourceReferenceId
+        $controlApi = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $controlRun.workflowExecutionId -TimeoutSeconds 30
+        if ($controlApi.instance.status -ne 'Completed' -or @($controlApi.incidents).Count -ne 0) { throw 'The real post-deadline standard-host publisher control did not complete.' }
+        $deadline = [DateTimeOffset]::UtcNow.AddSeconds(30)
+        do {
+            $controlSource = Observe-Publisher 'post-restart-control' $controlRun.workflowExecutionId
+            if ($controlSource.source.status -eq 'Delivered') { break }
+            Start-Sleep -Milliseconds 100
+        } while ([DateTimeOffset]::UtcNow -lt $deadline)
+        if ($controlSource.source.status -ne 'Delivered' -or $controlSource.source.intentPayload.eventName -ne $controlEvent -or
+            $null -eq $controlSource.source.snapshot -or $controlSource.source.selectedStarts.Count -ne 0 -or $controlSource.source.selectedResumes.Count -ne 0) { throw 'The standard host did not actually process its distinct post-deadline source.' }
+        $receipt.postRestartControl = @{ observedAtUtc = [DateTimeOffset]::UtcNow.ToString('O'); eventName = $controlEvent; api = $controlApi; source = $controlSource }
+        $committed = Observe 'committed-after-original-deadline' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
+        if (-not (Same-Snapshot $committed.source $stopped.source)) { throw 'The completed source was reclaimed or changed after its original deadline.' }
+        $receipt.committedRecoveryObservation = $committed
+    } else {
+        $deadline = [DateTimeOffset]::UtcNow.AddSeconds(180)
+        while (-not $watch.HasExited -and [DateTimeOffset]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 200 }
+        if (-not $watch.HasExited) { throw 'Successor observation remains live beyond the fixture bound.' }
+        if ($watch.ExitCode -ne 0) { throw "Successor observation failed: $($watchStdout.GetAwaiter().GetResult()) $($watchStderr.GetAwaiter().GetResult())" }
+        $successor = Get-Content -Raw $watchOutput | ConvertFrom-Json -AsHashtable -DateKind String
+        $receipt.successorClaim = $successor
+        if ($successor.source.deliveryFencingToken -le $stopped.source.deliveryFencingToken -or $successor.source.deliveringOwnerId -eq $stopped.source.deliveringOwnerId) { throw 'No distinct successor source claim was proven.' }
+    }
     if ($unmatchedInitial -or $emptyWinner) {
         $finished = Get-WorkflowInstance -Ctx $ctx -ExecutionId $waitRun.workflowExecutionId
         if (@($finished.incidents).Count -ne 0) { throw 'An unmatched listener acquired an incident during empty-source recovery.' }
@@ -462,6 +508,7 @@ try {
         Start-Sleep -Milliseconds 100
     } while ([DateTimeOffset]::UtcNow -lt $deadline)
     $receipt.recovered = $after
+    if ($committedAck -and -not (Same-Snapshot $after.source $stopped.source)) { throw 'The committed source did not retain its entire original delivery record.' }
     if ($after.source.status -ne 'Delivered' -or -not (Same-Snapshot $after.source.snapshot $selectedSource.source.snapshot)) { throw 'Recovery did not settle its complete immutable source cohort.' }
     $expectedArtifacts = @()
     if (-not $unmatchedInitial -and -not $emptyWinner) { $expectedArtifacts += $selectedPublication.artifactId }

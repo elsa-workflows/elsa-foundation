@@ -10,6 +10,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 
 // Closed, coherent fixture snapshots only. Every runtime row is read through the actual checked provider.
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
@@ -55,6 +56,8 @@ try
                 member.IsInterpretable, member.IsCurrent, IsLive = member.IsLive(now, TimeSpan.Zero) }) }, json));
         return 0;
     }
+    var findPublisher = args.Length > 0 && args[0] == "--find-publisher-source";
+    if (findPublisher) args = args.Skip(1).ToArray();
     if (args.Length < 4) throw new ArgumentException("Expected snapshot, hash, scope, source ID and optional workflow IDs.");
     var path = Path.GetFullPath(args[0]);
     await VerifySnapshotAsync(path, args[1]);
@@ -63,8 +66,29 @@ try
     await using (var command = connection.CreateCommand()) { command.CommandText = "PRAGMA query_only=ON"; await command.ExecuteNonQueryAsync(); }
     await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
     var scope = new PersistenceScope(args[2]); var access = new ScopedAccess(scope);
-    var source = await new EfRuntimePostCommitOutboxStore(context, access).FindAsync(args[3])
+    var scopeKey = EfRelationalIdentity.Encode(scope.Value); var scopeHash = EfRelationalIdentity.Hash(scope.Value);
+    var outbox = new EfRuntimePostCommitOutboxStore(context, access);
+    var sourceId = args[3];
+    if (findPublisher)
+    {
+        var workflowKey = EfRelationalIdentity.Encode(args[3]); var workflowHash = EfRelationalIdentity.Hash(args[3]);
+        var candidateIds = await context.RuntimePostCommitOutbox.AsNoTracking().Where(row => row.ScopeKey == scopeKey && row.ScopeKeyHash == scopeHash &&
+            row.WorkflowExecutionId == workflowKey && row.WorkflowExecutionIdHash == workflowHash)
+            .Select(row => row.OutboxItemId).ToArrayAsync();
+        var candidates = new List<RuntimePostCommitOutboxItem>();
+        foreach (var candidateId in candidateIds)
+            if (await outbox.FindAsync(EfRelationalIdentity.Decode(candidateId)) is { StimulusDeliveryProtocolVersion: not null } candidate) candidates.Add(candidate);
+        if (candidates.Count != 1) throw new InvalidDataException("Exactly one publisher source is required for this owned control fixture.");
+        sourceId = candidates[0].OutboxItemId;
+    }
+    var source = await outbox.FindAsync(sourceId)
         ?? throw new InvalidDataException("The exact committed source is missing.");
+    if (findPublisher && source.Intent.WorkflowExecutionId != args[3])
+        throw new InvalidDataException("The candidate source differs from the exact control publisher.");
+    var sourceKey = EfRelationalIdentity.Encode(source.OutboxItemId); var sourceHash = EfRelationalIdentity.Hash(source.OutboxItemId);
+    var sourceRow = await context.RuntimePostCommitOutbox.AsNoTracking().SingleAsync(row =>
+        row.ScopeKey == scopeKey && row.ScopeKeyHash == scopeHash && row.OutboxItemId == sourceKey && row.OutboxItemIdHash == sourceHash);
+    var sourceContentSha256 = Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(sourceRow.ContentJson)));
     var executions = new EfWorkflowExecutionStateStore(context, access, new NoPaging());
     var activities = new EfActivityExecutionStateStore(context, access, new NoPaging());
     var bookmarks = new EfBookmarkStateStore(context, access);
@@ -122,6 +146,7 @@ try
     await VerifySnapshotAsync(path, args[1]);
     Console.WriteLine(JsonSerializer.Serialize(new { ProviderChecked = true, ReadOnly = true, SnapshotSha256 = args[1],
         Source = new { source.OutboxItemId, source.Intent.WorkflowExecutionId, source.RecordedAt, Status = source.Status.ToString(), source.DeliveryAttemptCount,
+            ContentSha256 = sourceContentSha256, RowRevision = sourceRow.Revision, StorageSchemaVersion = sourceRow.SchemaVersion,
             source.DeliveringOwnerId, source.DeliveryFencingToken, source.DeliveryVisibleAfter, source.DeliveredAt, source.LastFailureMessage, IntentPayload = intentPayload,
             IntentFingerprint = RuntimeCheckpointCommitFingerprint.ComputeIntent(source.Intent), Snapshot = cohort,
             SelectedResumes = cohort?.Resumes.Select(entry => new { entry.WorkflowExecutionId, entry.BookmarkId, entry.ActivityExecutionId, entry.ExecutableNodeId, entry.CreatedAt, Generation = entry.RegistrationCapture?.Generation }),

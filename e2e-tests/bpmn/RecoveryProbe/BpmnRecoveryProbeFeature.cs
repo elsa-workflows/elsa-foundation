@@ -1,9 +1,15 @@
 using System.Text.Json;
+using System.Diagnostics;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Text.RegularExpressions;
 using CShells.Features;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Microsoft.EntityFrameworkCore;
+using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Workbench.RecoveryProbe;
 
@@ -25,7 +31,8 @@ public class BpmnRecoveryProbeFeature : IShellFeature
         Decorate<IWorkflowStartDispatcher>(services, (inner, provider) => new ProbeStarts(inner,
             provider.GetRequiredService<IStimulusDeliveryStore>(), provider.GetRequiredService<RecoveryProbeControl>()));
         Decorate<IRuntimePostCommitIntentDispatcher>(services, (inner, provider) => new ProbeIntents(inner,
-            provider.GetRequiredService<IStimulusDeliveryStore>(), provider.GetRequiredService<RecoveryProbeControl>()));
+            provider.GetRequiredService<IStimulusDeliveryStore>(), provider.GetRequiredService<RecoveryProbeControl>(),
+            provider.GetRequiredService<RuntimeDbContext>()));
     }
 
     private static void Decorate<T>(IServiceCollection services, Func<T, IServiceProvider, T> decorate) where T : class
@@ -81,8 +88,10 @@ public class BpmnRecoveryProbeFeature : IShellFeature
     }
 
     private sealed class ProbeIntents(IRuntimePostCommitIntentDispatcher inner, IStimulusDeliveryStore sources,
-        RecoveryProbeControl control) : IRuntimePostCommitIntentDispatcher
+        RecoveryProbeControl control, RuntimeDbContext context) : IRuntimePostCommitIntentDispatcher, IDisposable
     {
+        private IDisposable? completionObserver;
+        public void Dispose() => completionObserver?.Dispose();
         public bool RequiresDurableSource(string intentKind) => inner.RequiresDurableSource(intentKind);
         public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default) =>
             inner.DispatchAsync(intent, cancellationToken);
@@ -92,6 +101,8 @@ public class BpmnRecoveryProbeFeature : IShellFeature
             if (source.Intent.Kind == PublishStimulusConstants.PublishStimulusIntentKind)
             {
                 var current = await sources.ReadSourceAsync(source, cancellationToken);
+                if (await control.ArmCommittedSourceCutAsync(context, current, cancellationToken) is { } observer)
+                { completionObserver?.Dispose(); completionObserver = observer; }
                 await control.CutAsync("after-fanout", current, cancellationToken);
             }
         }
@@ -136,8 +147,79 @@ public class BpmnRecoveryProbeFeature : IShellFeature
 internal sealed class RecoveryProbeControl(string directory)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    // TransactionCommitted is diagnostic only; a separate checked reader proves the physical commit.
+    public async ValueTask<IDisposable?> ArmCommittedSourceCutAsync(RuntimeDbContext context, PostCommitDeliveryContext source,
+        CancellationToken cancellationToken)
+    {
+        var path = Path.Combine(directory, "plan.json");
+        if (!File.Exists(path)) return null;
+        var plan = JsonSerializer.Deserialize<Plan>(await File.ReadAllTextAsync(path, cancellationToken), Json);
+        if (plan is null || plan.Phase != "after-source-commit" ||
+            source.Intent.Payload?.GetProperty("eventName").GetString() != plan.EventName) return null;
+        return new CommittedSourceCut(context, source, this, cancellationToken);
+    }
+
+    private sealed class CommittedSourceCut : IObserver<DiagnosticListener>, IObserver<KeyValuePair<string, object?>>, IDisposable
+    {
+        private readonly RuntimeDbContext context;
+        private readonly PostCommitDeliveryContext source;
+        private readonly RecoveryProbeControl control;
+        private readonly CancellationToken cancellationToken;
+        private readonly string scopeKey;
+        private readonly string sourceKey;
+        private readonly object gate = new();
+        private readonly List<IDisposable> subscriptions = new();
+        private IDisposable? allListeners;
+        private bool disposed;
+
+        public CommittedSourceCut(RuntimeDbContext context, PostCommitDeliveryContext source,
+            RecoveryProbeControl control, CancellationToken cancellationToken)
+        {
+            this.context = context; this.source = source; this.control = control; this.cancellationToken = cancellationToken;
+            scopeKey = EfRelationalIdentity.Encode(source.Scope.Value); sourceKey = EfRelationalIdentity.Encode(source.SourceOutboxItemId);
+            allListeners = DiagnosticListener.AllListeners.Subscribe(this);
+        }
+        public void OnNext(DiagnosticListener listener)
+        {
+            if (listener.Name != DbLoggerCategory.Name) return;
+            lock (gate)
+            {
+                if (disposed) return;
+                subscriptions.Add(listener.Subscribe((IObserver<KeyValuePair<string, object?>>)this,
+                    name => name == RelationalEventId.TransactionCommitted.Name));
+            }
+        }
+        public void OnNext(KeyValuePair<string, object?> value)
+        {
+            if (value.Key != RelationalEventId.TransactionCommitted.Name || value.Value is not TransactionEndEventData data ||
+                !ReferenceEquals(data.Context, context)) return;
+            lock (gate) { if (disposed) return; }
+            var row = context.ChangeTracker.Entries<RuntimePostCommitOutboxEntity>().SingleOrDefault(entry =>
+                entry.Entity.ScopeKey == scopeKey && entry.Entity.OutboxItemId == sourceKey)?.Entity;
+            if (row?.Status != (int)RuntimePostCommitOutboxStatus.Delivered) return;
+            Dispose();
+            control.CutAsync("after-source-commit", source, cancellationToken,
+                providerEvent: "EF.TransactionCommitted").AsTask().GetAwaiter().GetResult();
+        }
+        public void OnError(Exception error) { }
+        public void OnCompleted() { }
+        public void Dispose()
+        {
+            List<IDisposable> owned;
+            lock (gate)
+            {
+                if (disposed) return;
+                disposed = true; owned = new(subscriptions); subscriptions.Clear();
+                if (allListeners is { } all) owned.Add(all);
+                allListeners = null;
+            }
+            foreach (var subscription in owned) subscription.Dispose();
+        }
+    }
+
     public async ValueTask CutAsync(string phase, PostCommitDeliveryContext source, CancellationToken cancellationToken,
-        StimulusDeliverySnapshot? proposal = null, string? acceptedExecution = null, string? acceptedBookmark = null)
+        StimulusDeliverySnapshot? proposal = null, string? acceptedExecution = null, string? acceptedBookmark = null,
+        string? providerEvent = null)
     {
         var path = Path.Combine(directory, "plan.json");
         if (!File.Exists(path) || source.Intent.Kind != PublishStimulusConstants.PublishStimulusIntentKind) return;
@@ -151,7 +233,7 @@ internal sealed class RecoveryProbeControl(string directory)
         var token = Path.Combine(caseDirectory, "claimed");
         try { using var claimed = new FileStream(token, FileMode.CreateNew, FileAccess.Write, FileShare.Read); claimed.Flush(true); }
         catch (IOException) when (File.Exists(token)) { return; }
-        var marker = new { plan.CaseId, Phase = phase, SourceOutboxItemId = source.SourceOutboxItemId,
+        var marker = new { plan.CaseId, Phase = phase, ProviderEvent = providerEvent, SourceOutboxItemId = source.SourceOutboxItemId,
             source.SourceCommitId, source.IntentFingerprint, Scope = source.Scope.Value, source.Claim.OwnerId,
             source.Claim.FencingToken, source.Claim.VisibleAfter, source.Intent.WorkflowExecutionId,
             Snapshot = source.Claim.Item.RecipientSnapshot, Proposal = proposal, AcceptedExecution = acceptedExecution,
