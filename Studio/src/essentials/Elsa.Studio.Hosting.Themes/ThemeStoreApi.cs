@@ -315,11 +315,13 @@ internal static class ThemeStoreApi
     }
 
     private static async Task<IResult> GetAssetContentAsync(string id, [FromServices] ThemeStoreSettings environment,
+        [FromServices] ThemeDirectorySource themeService,
         [FromServices] StudioConfigurationMutationGate mutationGate, CancellationToken cancellationToken)
     {
         if (!AssetIdPattern.IsMatch(id)) return Results.BadRequest(new ThemeStoreErrorResponse("A valid material-asset ID is required."));
         await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
         var path = Path.Combine(GetAssetFolder(environment), id);
+        if (themeService.IsSourceFile(path)) return Results.NotFound(new ThemeStoreErrorResponse($"Asset '{id}' was not found."));
         try
         {
             // Own the opened file across result execution, so a concurrent unlink cannot replace the bytes being served.
@@ -343,6 +345,7 @@ internal static class ThemeStoreApi
         if (!AssetIdPattern.IsMatch(id)) return Results.BadRequest(new ThemeStoreErrorResponse("A valid material-asset ID is required."));
         await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
         var path = Path.Combine(GetAssetFolder(environment), id);
+        if (themeService.IsSourceFile(path)) return Results.NotFound(new ThemeStoreErrorResponse($"Asset '{id}' was not found."));
         if (File.Exists(path))
             File.Delete(path);
 
@@ -436,7 +439,7 @@ internal static class ThemeStoreApi
         return new ThemeReadSnapshot(store, new ThemeStoreResponse(
             Themes: customThemes.ToArray(),
             DefaultThemeId: defaultThemeId,
-            Assets: ListAssets(environment, request),
+            Assets: ListAssets(environment, themeService, request),
             DisabledBuiltInThemeIds: (store.DisabledBuiltInThemeIds ?? [])
                 .Where(BuiltInThemeIds.Contains)
                 .ToArray(),
@@ -474,7 +477,7 @@ internal static class ThemeStoreApi
         return available ? store : store with { DefaultThemeId = "" };
     }
 
-    private static ThemeStoreAsset[] ListAssets(ThemeStoreSettings environment, HttpRequest request)
+    private static ThemeStoreAsset[] ListAssets(ThemeStoreSettings environment, ThemeDirectorySource themeService, HttpRequest request)
     {
         var folder = GetAssetFolder(environment);
         if (!Directory.Exists(folder))
@@ -482,6 +485,7 @@ internal static class ThemeStoreApi
 
         return Directory.EnumerateFiles(folder)
             .Where(path => AssetIdPattern.IsMatch(Path.GetFileName(path)))
+            .Where(path => !themeService.IsSourceFile(path))
             .Select(path =>
             {
                 var file = new FileInfo(path);

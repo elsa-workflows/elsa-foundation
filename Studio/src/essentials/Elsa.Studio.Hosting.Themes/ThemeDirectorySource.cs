@@ -21,6 +21,17 @@ internal sealed class ThemeDirectorySource
         _logger = logger;
     }
 
+    public bool IsSourceFile(string path)
+    {
+        if (_config.ThemesDirectory is not { } source) return false;
+        var resolvedPath = ThemeStoragePaths.Resolve(Path.GetFullPath(path));
+        var comparison = ThemeStoragePaths.ComparisonFor(resolvedPath);
+        if (File.Exists(source))
+            return string.Equals(ThemeStoragePaths.Resolve(source), resolvedPath, comparison);
+        return Directory.Exists(source) && Directory.EnumerateFiles(source, "*.json").Any(file =>
+            string.Equals(ThemeStoragePaths.Resolve(Path.GetFullPath(file)), resolvedPath, comparison));
+    }
+
     /// <summary>
     /// Loads custom themes from the configured directory.
     /// Returns theme definitions and the configured default theme ID.

@@ -11,6 +11,40 @@ public sealed class ThemeAssetTests
     private const string Assets = "/_elsa/theme-store/assets";
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Read_only_source_collections_cannot_be_exposed_or_deleted_as_material_assets(bool directorySource)
+    {
+        const string id = "00000000000000000000000000000000.png";
+        const string collection = """{"themes":[]}""";
+        await using var host = await ThemeHost.StartAsync("ThemeManagement", configure: (options, root) =>
+        {
+            options.AssetsDirectory = "materials";
+            Directory.CreateDirectory(Path.Combine(root, "materials"));
+            var target = Path.Combine(root, "materials", id);
+            File.WriteAllText(target, collection);
+            if (OperatingSystem.IsWindows()) options.ThemesDirectory = target; // No link-creation privilege required.
+            else
+            {
+                Directory.CreateDirectory(Path.Combine(root, "sources"));
+                var source = Path.Combine(root, "sources", "themes.json");
+                if (new FileInfo(source).LinkTarget is null) File.CreateSymbolicLink(source, target);
+                options.ThemesDirectory = directorySource ? "sources" : source;
+            }
+        });
+
+        var store = await host.Client.GetFromJsonAsync<JsonObject>("/_elsa/theme-store");
+        using var read = await host.Client.GetAsync(Assets + "/" + id + "/content");
+        using var delete = await host.Client.DeleteAsync(Assets + "/" + id);
+        var sourceFile = Path.Combine(host.Root, "materials", id);
+        Assert.True(File.Exists(sourceFile));
+        Assert.Equal(collection, await File.ReadAllTextAsync(sourceFile));
+        Assert.Empty(store!["assets"]!.AsArray());
+        Assert.Equal(HttpStatusCode.NotFound, read.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, delete.StatusCode);
+    }
+
+    [Theory]
     [InlineData("image/png", ".png")]
     [InlineData("image/webp", ".webp")]
     [InlineData("image/jpeg", ".jpg")]
