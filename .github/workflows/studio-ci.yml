@@ -22,7 +22,7 @@ on:
       - 'VersionLines.props'
       - 'PackageVersioning.props'
       - 'PackageRanges.targets'
-      - 'NuGet.Config'
+      - 'NuGet.config'
       - '.dockerignore'
       - 'global.json'
       - 'Directory.Packages.props'

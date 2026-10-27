@@ -275,11 +275,25 @@ were clean; correctness found one P2: the newly compiled Modularity libraries/bu
 Studio pull-request path filter, so a change to those inputs could skip validation of the addon/image. This
 survives because the backend solution does not compile the Studio addon.
 
-The filter now covers Modularity Core/Nuplane, their analyzer, version props/targets, actual root NuGet.Config
-casing and Docker context exclusions, while preserving narrow scope for unrelated backend work. The temporary
+The filter now covers Modularity Core/Nuplane, their analyzer, version props/targets, the root NuGet filename and Docker context exclusions (the initial casing mistake is corrected below), while preserving narrow scope for unrelated backend work. The temporary
 picomatch check against concrete input files reproduces8 uncovered inputs before the fix, then covers all9
 required examples and excludes all3 unrelated runtime/docs examples afterward. Logs:
-/tmp/studio3359-path-filter-{before,fixed}.log. The obsolete wrong-case root NuGet.config filter was removed;
-Studio/NuGet.config remains covered by Studio/**. This only changes triggers; the already qualified CI commands,
+/tmp/studio3359-path-filter-{before,fixed}.log. The initial casing example incorrectly assumed an uppercase Config filename from the case-insensitive filesystem;
+round5 identified and corrected that control/filter mistake below. This only changes triggers; the already qualified CI commands,
 actual image and application code are unchanged. No further whole-suite repetition is claimed or needed for
 this pure filter correction. Exact-head independent review and fresh remote gates remain outstanding.
+
+
+## Draft review round5 canonical filename correction
+
+Round5 reviewed12bb6997c4c2da6dad6c3feaceba92281a3f9538. Correctness and acceptance independently found
+one P2 in the filter patch: Git tracks root NuGet.config, not NuGet.Config. Filesystem access on macOS accepted
+either spelling, and the initial matcher example used the nonexistent uppercase spelling. That receipt did not
+prove correct coverage of the tracked root file; the initial8-missing count included this invalid example.
+
+The workflow restores NuGet.config. The control now derives that filename from git ls-tree and requires every
+positive example to exist with exact spelling in the Git tree. The corrected control is red before this fix
+(missing tracked NuGet.config;8/9 covered), then green after it (9/9 required,3/3 unrelated excluded).
+Logs: /tmp/studio3359-filter-casing-{before,fixed}.log. This corrects the trigger/control only; no production,
+versioned artifact or image-build behavior changed. Round6 checks the final exact head; remote CI/review/merge
+and resulting-main gates remain mandatory and incomplete.
