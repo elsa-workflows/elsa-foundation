@@ -31,7 +31,8 @@ on:
       - '.github/workflows/studio-ci.yml'
       - 'tools/ci/verify-studio-assets.py'
       - 'tools/ci/verify_studio_nuget_packages.py'
-      - 'tools/studio/ApiPackageClosure.Probe/**'
+      - 'tools/studio/**'
+      - 'tools/ci/qualify_studio_consumers.py'
       - 'tools/ci/studio*'
   push:
     branches: [main]
@@ -105,7 +106,8 @@ jobs:
   browser-tests:
     name: Studio browser tests (Chromium)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Cold Chromium installation and the complete browser suite share this job budget.
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -190,7 +192,7 @@ jobs:
         working-directory: Studio
 
       - name: Build
-        run: dotnet build Elsa.Studio.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603 "-p:Version=$STUDIO_PACKAGE_VERSION"
+        run: dotnet build Elsa.Studio.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603 "-p:Version=$STUDIO_PACKAGE_VERSION" "-p:SourceRevisionId=$GITHUB_SHA"
         working-directory: Studio
 
       - name: Test
@@ -202,16 +204,58 @@ jobs:
           dotnet pack Elsa.Studio.slnx -c Release --no-build
           -p:WarningsNotAsErrors=NU1603
           "-p:Version=$STUDIO_PACKAGE_VERSION"
+          "-p:SourceRevisionId=$GITHUB_SHA"
           "-p:PackageOutputPath=$RUNNER_TEMP/studio-nuget"
         working-directory: Studio
 
       - name: Verify complete Studio NuGet artifact
         run: |
           python3 tools/ci/verify_studio_nuget_packages.py --self-test
-          python3 tools/ci/verify_studio_nuget_packages.py --packages "$RUNNER_TEMP/studio-nuget" --version "$STUDIO_PACKAGE_VERSION"
+          python3 tools/ci/verify_studio_nuget_packages.py --packages "$RUNNER_TEMP/studio-nuget" --version "$STUDIO_PACKAGE_VERSION" --report "$RUNNER_TEMP/studio-archive-verification.json"
 
-      - name: Verify Studio.Api dependency closure from packed NuGet artifacts
-        run: python3 tools/studio/ApiPackageClosure.Probe/qualify.py --packages "$RUNNER_TEMP/studio-nuget"
+      - name: Pack matching lightweight Modularity candidates without publishing
+        run: |
+          for module in Core Nuplane; do
+            dotnet pack "Essentials/src/Modularity/$module/Elsa.Modularity.$module.csproj" -c Release -p:RestoreLockedMode=true \
+              "-p:Version=$STUDIO_PACKAGE_VERSION" "-p:SourceRevisionId=$GITHUB_SHA" \
+              -o "$RUNNER_TEMP/studio-modularity-nuget"
+          done
+
+      - name: Publish the matching actual reference Studio
+        run: >-
+          dotnet publish Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj -c Release --no-build --no-restore
+          "-p:Version=$STUDIO_PACKAGE_VERSION" "-p:SourceRevisionId=$GITHUB_SHA"
+          -o "$RUNNER_TEMP/studio-reference-web"
+
+      - name: Install Chromium for package consumer qualification
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: Studio
+
+      - name: Qualify actual Studio packages and causal controls
+        run: |
+          python3 tools/ci/qualify_studio_consumers.py --self-test
+          python3 tools/ci/qualify_studio_consumers.py \
+            --packages "$RUNNER_TEMP/studio-nuget" \
+            --modularity-packages "$RUNNER_TEMP/studio-modularity-nuget" \
+            --reference-web "$RUNNER_TEMP/studio-reference-web" \
+            --expected-producer-commit "$GITHUB_SHA" \
+            --output "$RUNNER_TEMP/studio-consumer-qualification"
+
+      - name: Retain package candidates and qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: studio-package-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/studio-nuget/*.nupkg
+            ${{ runner.temp }}/studio-modularity-nuget/*.nupkg
+            ${{ runner.temp }}/studio-archive-verification.json
+            ${{ runner.temp }}/studio-consumer-qualification/report.json
+            ${{ runner.temp }}/studio-consumer-qualification/**/*.log
+            ${{ runner.temp }}/studio-consumer-qualification/archive-controls/*.json
+            ${{ runner.temp }}/studio-consumer-qualification/evidence/**
 
       - name: Build standalone Studio image without publishing
         run: docker build --file Studio/src/apps/Elsa.Studio.Web/Dockerfile --build-arg "STUDIO_VERSION=$STUDIO_PACKAGE_VERSION" --tag "elsa-studio:ci-${{ github.sha }}" .

@@ -66,6 +66,7 @@ interface WorkflowCanvasParams {
   isUnsupportedDesigner: boolean;
   isBpmnDesigner: boolean;
   canAddActivitiesToCanvas: boolean;
+  readOnly?: boolean;
   selectedNodeId: string | null;
   // Document mutations (from useWorkflowDocument). The canvas never touches the reducer directly.
   editDraft(recipe: WorkflowDraftRecipe): void;
@@ -106,6 +107,7 @@ export function useWorkflowCanvas({
   isUnsupportedDesigner,
   isBpmnDesigner,
   canAddActivitiesToCanvas,
+  readOnly = false,
   selectedNodeId,
   editDraft,
   editDraftAndSelect,
@@ -119,7 +121,7 @@ export function useWorkflowCanvas({
   const scopeViewportKey = useMemo(
     () => `${draft?.definitionId ?? ""}:${scopeOwner?.nodeId ?? ""}:${scopeOwner?.activityVersionId ?? ""}:${getScopeViewportKey(frames)}`,
     [draft?.definitionId, frames, scopeOwner?.nodeId, scopeOwner?.activityVersionId]);
-  const mode: GraphCanvasMode = isUnsupportedDesigner
+  const mode: GraphCanvasMode = isUnsupportedDesigner || readOnly
     ? "unsupported"
     : scope?.slot.mode === "bpmn"
       ? "bpmn"
@@ -175,7 +177,7 @@ export function useWorkflowCanvas({
     nextEdges: WorkflowEdge[],
     options?: GraphCanvasCommitOptions
   ) => {
-    if (isUnsupportedDesigner) return;
+    if (isUnsupportedDesigner || readOnly) return;
 
     editDraft(({ draft: current, frames: currentFrames }) => {
       if (!current) return null;
@@ -212,7 +214,7 @@ export function useWorkflowCanvas({
         }
       };
     });
-  }, [catalogByVersion, isUnsupportedDesigner, editDraft, mode]);
+  }, [catalogByVersion, isUnsupportedDesigner, editDraft, mode, readOnly]);
 
   const observeReusablePlacement = useCallback((activity: ActivityCatalogItem) => {
     if (!activity.activityDefinitionVersionId) return;

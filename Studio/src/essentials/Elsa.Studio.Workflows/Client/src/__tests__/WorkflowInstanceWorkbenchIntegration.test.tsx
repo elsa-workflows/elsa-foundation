@@ -166,6 +166,33 @@ describe("workflow run workbench incident navigation", () => {
     expect(container.textContent).toContain("Execution context could not be resolved");
   });
 
+  it("finishes a terminal instance load when Refresh supersedes pending metadata", async () => {
+    const pending = deferred<WorkflowExecutableDetails>();
+    api.getExecutable.mockImplementationOnce(() => pending.promise);
+    renderWorkbench();
+    await vi.waitFor(() => expect(api.getExecutable).toHaveBeenCalledTimes(1));
+    click(buttonByText(container, "Refresh"));
+    await vi.waitFor(() => expect(api.getWorkflowInstance).toHaveBeenCalledTimes(2));
+    // Let the refreshed observation commit while the first metadata load still owns its slot.
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    flushSync(() => {});
+    pending.resolve(executable());
+    await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
+    expect(container.textContent).not.toContain("Loading workflow run");
+  });
+
+  it("does not repeatedly retry failed static metadata without a requested retry", async () => {
+    const pending = deferred<{ activities: ActivityCatalogItem[] }>();
+    api.listActivities.mockRejectedValueOnce(new Error("catalog unavailable")).mockImplementation(() => pending.promise);
+    renderWorkbench();
+    await vi.waitFor(() => expect(container.textContent).toContain("catalog unavailable"));
+    expect(api.listActivities).toHaveBeenCalledTimes(1);
+    click(buttonByText(container, "Refresh"));
+    await vi.waitFor(() => expect(api.listActivities).toHaveBeenCalledTimes(2));
+    pending.resolve({ activities: [sequenceActivity, writeLine] });
+    await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy());
+  });
+
   it("makes an interrupted ancestry read retryable after refresh", async () => {
     api.supportsActivityExecutionBrowsing.mockResolvedValue(true);
     api.browseActivityExecutions.mockResolvedValue({ items: [{ execution: activityExecution(), position: 1 }], totalCount: 1, previousCursor: null, nextCursor: null });

@@ -15,6 +15,7 @@ interface WorkflowGraphOperationBatchParams {
   catalog: ActivityCatalogItem[];
   // Applies a batch result / undo restore to the editor document (resets scope, selection, run, artifact).
   replaceDraftByBatch(draft: WorkflowDraft, selectedNodeId: string | null): void;
+  canEdit?(): boolean;
   setStatus(value: string): void;
   setError(value: WorkflowErrorInput): void;
 }
@@ -27,6 +28,7 @@ export function useWorkflowGraphOperationBatch({
   details,
   catalog,
   replaceDraftByBatch,
+  canEdit,
   setStatus,
   setError
 }: WorkflowGraphOperationBatchParams) {
@@ -39,6 +41,10 @@ export function useWorkflowGraphOperationBatch({
         respond(result: { ok: true; result: { appliedCount: number; finalActivityIds: string[]; temporaryReferences: Record<string, string>; summary: string; undoToken: string } } | { ok: false; message: string }): void;
       }>).detail;
       if (!detail?.batch || !detail.respond) return;
+      if (canEdit?.() === false) {
+        detail.respond({ ok: false, message: "Return to editing before applying a workflow change." });
+        return;
+      }
       if (!draft || !details) {
         detail.respond({ ok: false, message: "No active workflow draft is open." });
         return;
@@ -72,6 +78,10 @@ export function useWorkflowGraphOperationBatch({
         respond(result: { ok: true; summary: string } | { ok: false; message: string }): void;
       }>).detail;
       if (!detail?.undoToken || !detail.respond) return;
+      if (canEdit?.() === false) {
+        detail.respond({ ok: false, message: "Return to editing before undoing a workflow change." });
+        return;
+      }
 
       const previousDraft = undoSnapshotsRef.current.get(detail.undoToken);
       if (!previousDraft) {
@@ -92,5 +102,5 @@ export function useWorkflowGraphOperationBatch({
       window.removeEventListener(workflowGraphOperationApplyEvent, handleApply);
       window.removeEventListener(workflowGraphOperationUndoEvent, handleUndo);
     };
-  }, [catalog, details, draft, replaceDraftByBatch, setStatus, setError]);
+  }, [canEdit, catalog, details, draft, replaceDraftByBatch, setStatus, setError]);
 }

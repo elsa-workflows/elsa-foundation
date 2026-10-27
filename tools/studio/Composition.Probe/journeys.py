@@ -2,6 +2,7 @@
 
 import base64
 import copy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -213,7 +214,19 @@ def stream_client(p):
     (p.root / "stream-client-cache").rename(p.root / "hidden-stream-client-cache")
 
 
-def live_stream(p, label, control=False):
+EXPECTED_UPDATE_ERROR = "Actual package reconcile did not perform the expected v2 update."
+
+
+def require_package_update(outcome, expected_hash):
+    run = outcome.get("runResult") or {}
+    updates = [row for row in (run.get("changeSet") or {}).get("updated", []) if row.get("id") == CUSTOM_ID]
+    check(outcome.get("outcomeCode") == 0 and run.get("skipped") is False and run.get("isDegraded") is False
+          and not run.get("failedPackages") and len(updates) == 1 and updates[0].get("version") == "2.0.0"
+          and updates[0].get("packageContentHash") == expected_hash, EXPECTED_UPDATE_ERROR)
+
+
+def live_stream(p, label, control=False, update=True):
+    check(control or update, "No-update fault is only valid for the disabled-reload control")
     published = p.profiles["reference"]["published"]
     feed = published / "runtime-feed"
     archives = p.root / "hidden-build-feed"
@@ -243,10 +256,14 @@ def live_stream(p, label, control=False):
                                     before = row
                         check(client.poll() is None and time.monotonic() < deadline, "Stream pre-marker did not arrive: " + str(log))
                         time.sleep(.1)
-                    reset("2.0.0")
+                    if update:
+                        reset("2.0.0")
                     status, body, _ = request(base, "/__qualification/reconcile", method="POST", bearer="composition-owner")
                     outcome = json.loads(body)
-                    check(status == 200 and outcome.get("runResult", {}).get("isDegraded") is False, "Actual package reconcile failed/degraded")
+                    (p.root / (label + "-reconcile.json")).write_text(json.dumps({"httpStatus": status, "outcome": outcome}, indent=2) + "\n")
+                    check(status == 200, "Actual package reconcile HTTP request failed")
+                    expected_hash = "sha512:" + base64.b64encode(hashlib.sha512((archives / f"{CUSTOM_ID}.2.0.0.nupkg").read_bytes()).digest()).decode()
+                    require_package_update(outcome, expected_hash)
                     client.stdin.write("after\n")
                     client.stdin.flush()
                     code = client.wait(timeout=35)
