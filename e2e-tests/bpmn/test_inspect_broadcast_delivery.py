@@ -187,6 +187,27 @@ class BroadcastPreflightTests(unittest.TestCase):
         self.assertEqual(preflight.digest(compressed.read_bytes()), result["compressedSha256"])
         self.assertEqual(raw, self.path.read_bytes())
 
+    def test_current_protocol_states_and_scope_only_boundaries_are_not_legacy_dispatch_authority(self):
+        fixtures = Path(__file__).resolve().parents[2] / "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight"
+        manifest = json.loads((fixtures / "fixtures.json").read_text())
+        self.assertEqual(14, len(manifest["stores"]))
+        for witness in manifest["stores"]:
+            with self.subTest(scenario=witness["scenario"]):
+                source = fixtures / witness["sourceName"]
+                self.assertEqual(witness["compressedSha256"], preflight.digest(source.read_bytes()))
+                result = preflight.inspect_database(source)
+                self.assertTrue(result["providerChecked"], result)
+                self.assertFalse(result["deliveryActivationQualified"])
+                self.assertEqual(witness["databaseSha256"], result["databaseSha256"])
+                self.assertEqual(witness["expectedStatus"], result["status"])
+                self.assertEqual(witness["expectedClassifications"], result["classifications"])
+                self.assertEqual(witness["publishRows"], result["publishRows"])
+                self.assertEqual(1, result["outboxRows"])
+                if witness["scenario"] == "legacy-pending":
+                    self.assertEqual(0, result["publishes"][0]["deliveryAttemptCount"])
+                for private in ["commit:send", "fixed fixture failure", "selected-reference"]:
+                    self.assertNotIn(private, json.dumps(result))
+
     def test_inventory_reads_beyond_its_first_page(self):
         for index in range(300):
             self.add(status=2, row_id=f"row-{index:04}")

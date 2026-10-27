@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "task": "T049 read-only current-format preflight; actual quiescent upgrade admission remains open",
+  "sourceParentCommit": "a86c5d08c6705d1bcb278849aa4a86eee3361fe1",
+  "filesSha256": {
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/StimulusDeliveryStoreTests.cs": "ed9f7dd85c0f3e4308ef98885ec22c3cbcc9ccc74eca1f08066362ffe1d2e813",
+    "e2e-tests/bpmn/test_inspect_broadcast_delivery.py": "db09b8a94a30dfc4f81d4f741111075c68127206ed330e9b22873bc4fc7eb7e5",
+    "specs/1006-bpmn-library-adoption/contracts/broadcast-recipient-snapshot.md": "162a9598c74d663916af1a1b8dda6e9715c191d1efd42882342a42d25353385e",
+    "specs/1006-bpmn-library-adoption/tasks.md": "807b00c58e4a1608287e25dc93e2874e87885d05207146843d091612f7b04121",
+    "tools/bpmn/DeliveryPreflight/Program.cs": "6e1678eb2b879192cd2d9f609f43165818e1d799cb79115eb9b4b0d47dc12641",
+    "tools/bpmn/DeliveryPreflight/README.md": "40c27c87972ddc585dcba8c4c70bafe204e65d3c0fd2964eda5bcf62396ddca7",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/StimulusDeliveryUpgradePreflightTests.cs": "05d4c6a42c18efb0842c07e15965d7fe63b7edc3e820dce6e1094bdb0bf36d7a",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight.md": "6613c69cf7a5521d5328cea44218978cd7f0012d8f63acd7ed56b54dc38cafe3",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/accepted-cancelled.sqlite.gz": "d0450b5853a684b2943c47dd1e248f037ffd04007936d3f776faee083552c1be",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/accepted-delivered.sqlite.gz": "a48c27ad47b556adf593faad73b5e08bc49866394cc59030031067b7fcaf634a",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/accepted-empty.sqlite.gz": "58673fb41938539a228b85b0cde9eb90a06e05620e10a58989d9968a017c2d8f",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/accepted-failed-final.sqlite.gz": "a6caf6ca2c0499fb73c1fe5f7ade3d8eb0c8868679c7e1ad616761f00a57a13f",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/accepted.sqlite.gz": "e988c144e4a89f1ab2438ad1b35099545223c584548b494b32c28b5520dea180",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/captured-stores.json": "eb94f63bc33dd390da60f5d75153b231c373ca812fbc6c9fd898c9536261d418",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/data-only-delivered.sqlite.gz": "a9268a53ff9a2903aaf0506c81deb065befa89413ebd95f0d81eca07b69cd214",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/data-only.sqlite.gz": "57cc1d6d3722b64ff017edcfcfc6ea02c10046610b1e9403cfa96ba0e3334566",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/declared-delivered.sqlite.gz": "50a76f203595e49bf96c96aa3b48b5e8b6c04af140dd5f78df0b72f1f3e423a5",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/declared.sqlite.gz": "392bcfa54463b92e8ad043eab79e6d7d63936cbbdfd0340ad87e9f09edf5ac38",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/fixtures.json": "68869cc771b1fe0e015ba7ee940a407fdb73ece932e4bf8d5964b76d9c8382cb",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/generic-scope-only.sqlite.gz": "0d6c8eaad5954603dddce36bf2dbddcee77d241bbb63cc2e34b97fc9e1173b09",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/legacy-delivered.sqlite.gz": "3120819abaac842cf482dca7a37b557004563ff35e9f5d5428c27de84b435bef",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/legacy-pending.sqlite.gz": "3763d443d8a41a0997ad83f4251dc24156a79bf2c8a10f1ddc8b2ea7076b3214",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/owned-host.json": "49d124135e96f434ba0183d1d8bde126b36fc6ee228652365f21f9973899c012",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/scope-only-delivered.sqlite.gz": "eaa72ab432c009c3269e34cbed04632cb5106896c56782fedd9169f1859e81b9",
+    "specs/1006-bpmn-library-adoption/evidence/broadcast-upgrade-preflight/scope-only.sqlite.gz": "80ed05f378635e4451cff08050ea9f2b79c951639d9c6817eb347173d1ad2ac6",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Shipped.txt": "3c3b422dddb1efeb0fc5b228608fd8682452b2a9507d4031894bce3c4dedadbd",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "0d7c58b01673eed67330e82cbb7fbec857f5059ba78e796fb6dc84d8d1ded1b6",
+    "Essentials/src/Workflows/Publishing/Core/PublicAPI.Unshipped.txt": "d713ee3a8f01df4417e5a2b025f9df7795784d0bd9a4a0ec189920dc09976759",
+    "Essentials/src/Workflows/Publishing/Api/PublicAPI.Unshipped.txt": "73879d2fad5907a9c6de29c22d65b58bbe6d7c27f3dd0b76c3f758745b54ed68",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Configuration/RuntimeArtifactEntityConfigurations.cs": "27c2cc257c257afd4303f725296a9f2a5ef8b166e81a03a3e38737a08b2dc716",
+    "docs/reports/evidence/bpmn-extraction-baseline/activity-contract-fingerprint.json": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92"
+  },
+  "checks": [
+    {
+      "project": "Runtime EF",
+      "passed": 1569,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 14,
+      "trxSha256": "ff386897a9fb78aacc99f4bfb2ce60861d218102cd917003aa574fc13d8fe046",
+      "discovery": {
+        "listed": 1569,
+        "uniqueDisplayNames": 1567,
+        "executed": 1569,
+        "deferredTheories": {},
+        "unmapped": []
+      }
+    },
+    {
+      "project": "Python checked-provider preflight",
+      "passed": 16,
+      "failed": 0,
+      "fixtureSubcases": 14
+    }
+  ],
+  "focused": {
+    "passed": 14,
+    "failed": 0,
+    "skipped": 0
+  },
+  "mutations": [
+    {
+      "mutation": "current-protocol-misclassified-as-legacy",
+      "failedAssertions": 9,
+      "buildExit": 0,
+      "testExit": 1,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "declared-delivered-without-snapshot-appears-ready",
+      "failedAssertions": 1,
+      "buildExit": 0,
+      "testExit": 1,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "historical-data-only-cohort-appears-ready",
+      "failedAssertions": 2,
+      "buildExit": 0,
+      "testExit": 1,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "owed-scope-only-row-not-blocking",
+      "failedAssertions": 1,
+      "buildExit": 0,
+      "testExit": 1,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "empty-recorded-cohort-treated-as-unselected",
+      "failedAssertions": 1,
+      "buildExit": 0,
+      "testExit": 1,
+      "compileError": false,
+      "restored": true
+    }
+  ],
+  "sourceRestored": true,
+  "actualInventories": {
+    "capturedStores": 6,
+    "capturedOutboxRows": 33,
+    "capturedPublishRows": 0,
+    "originalCaptureHashesMatch": true,
+    "ownedRunningHostOutboxRows": 10,
+    "ownedRunningHostPublishRows": 1,
+    "ownedRunningHostClassifications": {
+      "LegacyDelivered": 1
+    },
+    "unresolvedLegacyObserved": false,
+    "quiescenceQualified": false,
+    "deliveryActivationQualified": false
+  },
+  "apiDelta": {
+    "added": 0,
+    "removed": 0
+  },
+  "runtimeProductionChanged": false,
+  "schemaChanged": false,
+  "maps": "passed",
+  "lockedRestore": "tool passed",
+  "reviewedDesign": "No online row-only hold conversion; require stopped-writer/cleanup quiescent admission. Scope-only generic contexts remain valid; no fabricated native durable authority.",
+  "reviews": {
+    "correctness": "final source/catalog/receipt clean; all 31 bindings and 14 witnesses verified; no activation/quiescence claim",
+    "standards": "final source/contracts/receipt clean; API/schema/frozen unchanged; discovery and five mutation records verified",
+    "acceptance": "final artifact/receipt clean; all raw/compressed fixture hashes, SQLite integrity, actual inventories and 1569 TRX results verified"
+  },
+  "fullPrReviewRoundsCompleted": 0,
+  "limits": [
+    "Constructed provider-format witnesses are not actual producer execution, host recovery or Studio proof.",
+    "Recorded cohort format is not physical-pin, current-claim or recipient-effect authority.",
+    "Owned host remained running; its current read-only coherent backup is not quiescent admission or a production inventory.",
+    "Quiescent admission/recovery migration, T050/T051 and other story/deletion/final host/Studio/PR/main/ADR gates remain open.",
+    "No unresolved legacy owner choice exists in the supplied observed stores; no recovery writer or ledger is introduced."
+  ]
+}

@@ -182,6 +182,37 @@ owner question is required now. Delivered legacy sends retain their prior result
 private-state v1 and the frozen authoring contract are unchanged. Running binary rollback remains
 unsupported where a new outbox family has been written.
 
+## Quiescent upgrade admission and recovery holds
+
+Unmarked means no recipient protocol, no committed source-scope witness and no cohort. T048 scope-only
+generic required-source rows remain valid and continue their existing delivery path; protocol absence
+alone does not make them ambiguous broadcast sends. The producer-specific preflight separately checks
+PublishStimulus rows and classifies unmarked, scope-only and historical data-only cohorts conservatively.
+A metadata/format inventory is never recipient authority or permission to activate delivery.
+
+Online conversion to a recovery hold is unsupported. Required-source delivery without its necessary
+physical source/scope/protocol authority must refuse before handler/recipient effects, leaving the exact
+owed source intact. Do not invent a delivery context from ordinary lookup or reselect current listeners.
+An online outbox-row rewrite cannot alone stop cleanup that already passed its final absence read.
+
+Upgrade admission requires stopped actors, dispatchers, publishers, GC, execution/dedup retirement and
+other writers against every affected owned store before classification, throughout any migration, and
+until only qualified new binaries resume. The schema/fleet family gate is necessary but does not prove
+that quiescence; SQLite EXCLUSIVE alone is also insufficient, particularly with WAL readers
+([SQLite transaction rules](https://www.sqlite.org/lang_transaction.html)). Admission
+requires zero unresolved legacy sends or a separately qualified quiescent recovery migration. An unknown
+actor, unreadable source/family, unresolved legacy FailedFinal/Cancelled/Delivering row or data-only cohort
+blocks that admission. Attempt zero never proves an absence of effects.
+
+If a real residual source requires conversion, recovery-required responsibility must preserve its exact
+intent, prior attempts/failure/history/fence and remaining physical data. Conversion must use an owned
+transaction, reread canonical rows and family state, CAS the supported source, require family 2, and verify
+post-commit state while writers/cleanup remain stopped. Unknown recipients cannot authorize an automatic
+release, resnapshot or fabricated missing material. The concrete owner choice is requested only for actual
+residual evidence. With zero owed rows no recovery writer or new delivery ledger is needed. The current
+read-only inventory is a format observation; deployment admission, recovery migration and current-host
+proof remain distinct gates until their evidence exists.
+
 ## Required qualification before deletion/merge
 
 - Competing distinct first cohorts, including empty versus nonempty: one persisted winner, no loser

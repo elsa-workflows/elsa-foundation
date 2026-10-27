@@ -54,9 +54,9 @@ try
             if (row.Id != EfRelationalIdentity.HashLengthFramed(scope, physicalId))
                 throw new InvalidDataException("The enumerated physical source differs from the checked source.");
             if (item.Intent.Kind != publishKind) continue;
-            var classification = item.Status == RuntimePostCommitOutboxStatus.Delivered ? "LegacyDelivered" : "LegacyRecoveryRequired";
+            var classification = Classify(item);
             counts[classification] = counts.GetValueOrDefault(classification) + 1;
-            blocked |= item.Status != RuntimePostCommitOutboxStatus.Delivered;
+            blocked |= classification is "LegacyRecoveryRequired" or "LegacyScopeOnlyRecoveryRequired" or "ProtocolRecoveryRequired";
             publishes.Add(new
             {
                 SourceIdentitySha256 = EfRelationalIdentity.Hash(item.OutboxItemId).ToLowerInvariant(),
@@ -80,6 +80,7 @@ try
         Classifications = counts,
         Status = blocked ? "RecoveryRequired" : "NoLegacyPublishResponsibilityOwed",
         ProviderChecked = true,
+        DeliveryActivationQualified = false,
         Publishes = publishes
     }, json));
     return blocked ? 2 : 0;
@@ -95,6 +96,24 @@ catch (Exception exception)
         ProviderChecked = false
     }, json));
     return 2;
+}
+
+// Checked format classification only. Accepted protocol data can be inventoried without claiming that
+// its recipients have run or that writers/GC are quiescent. Delivered without an accepted snapshot cannot
+// establish that a declared PublishStimulus followed the required first-selection protocol.
+static string Classify(RuntimePostCommitOutboxItem item)
+{
+    if (item.StimulusDeliveryProtocolVersion is null)
+    {
+        if (item.StimulusDeliverySourceScope is not null)
+            return item.Status == RuntimePostCommitOutboxStatus.Delivered ? "LegacyScopeOnlyDelivered" : "LegacyScopeOnlyRecoveryRequired";
+        return item.Status == RuntimePostCommitOutboxStatus.Delivered ? "LegacyDelivered" : "LegacyRecoveryRequired";
+    }
+    if (item.RecipientSnapshot is not { } snapshot)
+        return item.Status == RuntimePostCommitOutboxStatus.Delivered ? "ProtocolRecoveryRequired" : "ProtocolAwaitingSelection";
+    if (snapshot.RetentionAcceptanceVersion != StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion)
+        return "ProtocolRecoveryRequired";
+    return item.Status == RuntimePostCommitOutboxStatus.Delivered ? "ProtocolDelivered" : "ProtocolCohortRecorded";
 }
 
 static async Task VerifySnapshotAsync(string path, string expectedSha256)

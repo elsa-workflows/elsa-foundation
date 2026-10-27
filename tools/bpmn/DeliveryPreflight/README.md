@@ -12,8 +12,13 @@ dotnet build tools/bpmn/DeliveryPreflight/DeliveryPreflight.csproj
 python3 -m unittest discover -s e2e-tests/bpmn -p test_inspect_broadcast_delivery.py -v
 ```
 
-The receipt classifies only checked legacy sends: Delivered is settled; all other statuses retain
-responsibility. Invalid source/family/projection/state yields InventoryUnavailable. Attempt zero
+The receipt distinguishes checked legacy sends from declared current protocol rows and accepted cohorts.
+Only Delivered settles legacy responsibility. A current protocol row awaiting first selection is distinct
+from an accepted cohort; historical data-only cohorts and declared deliveries without an accepted snapshot
+remain recovery-required, including Delivered data-only cohorts. Scope-only PublishStimulus rows have
+separate legacy labels: owed rows block, while a valid Delivered row preserves its prior settled result.
+Generic scope-only handlers of other kinds remain outside this producer-specific inventory.
+Every checked inventory explicitly records `DeliveryActivationQualified=false`. Invalid source/family/projection/state yields InventoryUnavailable. Attempt zero
 never proves that no recipient effect occurred. Results cover only supplied databases; they do not
 establish mixed-writer quiescence, production-wide inventory or broadcast recovery acceptance.
 

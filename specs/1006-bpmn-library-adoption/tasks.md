@@ -152,3 +152,5 @@ T001–T005 precede source implementation. Gate A T006–T012 precedes T013 or a
 Independent read-only reviews may run concurrently. Source implementation is sequential in this session unless separately authorized. Parallel test opportunities, when machine build slots allow, include runtime vs interchange whole projects, Studio unit checks vs backend builds, and independent fixture review; dependent edits/pin changes/capture waits are serial.
 
 The first small deliverable is reviewed planning plus verified legacy captures in the single switch draft. It does not establish adoption acceptance. Continue through the complete switch; do not substitute a planning-only merge for the second ordered PR.
+
+The [current-format upgrade-preflight receipt](evidence/broadcast-upgrade-preflight.md) distinguishes actual checked legacy/protocol format states, including empty and historical data-only cohorts. It records a read-only observation only; the reviewed contract requires quiescent upgrade admission rather than an unsafe online row-only recovery hold. Actual stopped-writer/cleanup admission and any needed residual recovery migration remain open before rollout.

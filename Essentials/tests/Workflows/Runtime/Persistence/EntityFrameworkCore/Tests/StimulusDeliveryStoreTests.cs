@@ -1009,8 +1009,8 @@ public sealed partial class StimulusDeliveryStoreTests
         "start", "event", "named", null, new Dictionary<string, string> { ["key\ud800"] = "value\udc00" }, Now,
         "activation", "slot"), Pin, SelectedSource());
 
-    private static RuntimePostCommitOutboxItem Pending(string commit, bool protocol, string payload = "original") => new(
-        commit + ":send", new("send", "publisher", "publish", Now, "activity", "key", JsonSerializer.SerializeToElement(payload)),
+    private static RuntimePostCommitOutboxItem Pending(string commit, bool protocol, string payload = "original", string kind = "publish") => new(
+        commit + ":send", new("send", "publisher", kind, Now, "activity", "key", JsonSerializer.SerializeToElement(payload)),
         RuntimePostCommitOutboxStatus.Pending, Now, Now, new(4, TimeSpan.FromSeconds(1)), 0,
         null, null, null, null, null, 0, null, protocol ? 1 : null, protocol ? Scope : null, null);
 
@@ -1157,16 +1157,16 @@ public sealed partial class StimulusDeliveryStoreTests
             ? ef.SavePendingAsync(item) : ((InMemoryRuntimeCheckpointCommitStore)Outbox).AddPendingForTestingAsync(item);
         public ValueTask<WorkflowExecutionState> SavePublisher(WorkflowExecutionState publisher) => Context is null ?
             publishers.SaveAsync(publisher) : new EfWorkflowExecutionStateStore(Context, new Accessor(), new Codec()).SaveAsync(publisher);
-        public async Task SeedPending(bool protocol = true, WorkflowExecutionState? publisher = null)
+        public async Task SeedPending(bool protocol = true, WorkflowExecutionState? publisher = null, string kind = "publish")
         {
             await EnsureMaterial(publisher ?? Publisher);
             if (Context is null) await publishers.SaveAsync(publisher ?? Publisher);
             else await new EfWorkflowExecutionStateStore(Context, new Accessor(), new Codec()).SaveAsync(publisher ?? Publisher);
-            await SavePending(Pending("commit", protocol));
+            await SavePending(Pending("commit", protocol, kind: kind));
         }
-        public async Task<RuntimePostCommitOutboxClaim> Seed(bool protocol = true, WorkflowExecutionState? publisher = null)
+        public async Task<RuntimePostCommitOutboxClaim> Seed(bool protocol = true, WorkflowExecutionState? publisher = null, string kind = "publish")
         {
-            await SeedPending(protocol, publisher);
+            await SeedPending(protocol, publisher, kind);
             return Assert.Single(await Claims.ClaimAsync(new("owner", Now, TimeSpan.FromMinutes(1), 1)));
         }
         public async Task Export(string name)
