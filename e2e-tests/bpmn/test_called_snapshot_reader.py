@@ -29,7 +29,8 @@ def create_orphan(database):
     """The canonical Delivered row stays intact; only a new orphan row is deliberately invalid."""
     with closing(sqlite3.connect(database)) as connection:
         connection.row_factory = sqlite3.Row
-        row = dict(connection.execute("SELECT * FROM elsa_runtime_post_commit_outbox ORDER BY Id LIMIT 1").fetchone())
+        row = next(dict(candidate) for candidate in connection.execute("SELECT * FROM elsa_runtime_post_commit_outbox ORDER BY Id")
+                   if json.loads(candidate["ContentJson"])["status"] == "Delivered")
         canonical_id, canonical_content = row["Id"], row["ContentJson"]
         if json.loads(canonical_content)["status"] != "Delivered":
             raise RuntimeError("The orphan control requires an actual Delivered canonical source.")

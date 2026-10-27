@@ -42,11 +42,15 @@ def main():
     parser.add_argument("--database", type=Path, required=True)
     parser.add_argument("--source-revision", required=True)
     parser.add_argument("--tenant-id", default=None, help="Visible tenant; global rows remain visible")
+    parser.add_argument("--closed-snapshot", action="store_true", help="Read an immutable, closed backup without live sidecars")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--oracle", type=Path, default=Path(__file__).resolve().parents[2] / "docs/reports/evidence/bpmn-extraction-baseline/activity-contract-fingerprint.json")
     args = parser.parse_args()
     expected = json.loads(args.oracle.read_text())
-    connection = sqlite3.connect(args.database.resolve().as_uri() + "?mode=ro", uri=True)
+    before = hashlib.sha256(args.database.read_bytes()).hexdigest() if args.closed_snapshot else None
+    if args.closed_snapshot and any(Path(str(args.database) + suffix).exists() for suffix in ("-wal", "-shm", "-journal")):
+        raise AssertionError("A closed snapshot must not have live sidecars")
+    connection = sqlite3.connect(args.database.resolve().as_uri() + "?mode=ro" + ("&immutable=1" if args.closed_snapshot else ""), uri=True)
     connection.row_factory = sqlite3.Row
     connection.execute("BEGIN")
     actual, identities = [], []
@@ -68,7 +72,11 @@ def main():
         identities.append({"activityTypeKey": row["ActivityTypeKey"], "versionId": row["Id"], "publishedVersion": row["Version"], "hash": row["Hash"], "publicationId": row["PublicationId"], "publishedAt": row["PublishedAt"], "providerFingerprint": row["ProviderFingerprint"]})
     connection.rollback()
     connection.close()
+    if args.closed_snapshot and (hashlib.sha256(args.database.read_bytes()).hexdigest() != before or
+                                any(Path(str(args.database) + suffix).exists() for suffix in ("-wal", "-shm", "-journal"))):
+        raise AssertionError("The closed publication snapshot changed")
     receipt = {"sourceRevision": args.source_revision, "oracleSha256": hashlib.sha256(args.oracle.read_bytes()).hexdigest(),
+               "closedSnapshotSha256": before, "immutableSnapshot": args.closed_snapshot,
                "publishedIdentities": identities, "actualFingerprint": actual, "matchesFrozenFingerprint": actual == expected}
     args.output.write_text(json.dumps(receipt, indent=2) + "\n")
     if actual != expected:

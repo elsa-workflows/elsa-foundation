@@ -1,0 +1,262 @@
+{
+  "passed": true,
+  "naturalClaimDeadline": "2026-10-27T22:16:24.836952+00:00",
+  "noRuntimeRowsOrClockValuesEdited": true,
+  "preExpiryObservations": [
+    {
+      "observedAtUtc": "2026-10-27T22:16:11.979759+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:12.291820+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:12.603425+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:12.914325+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:13.217975+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:13.529968+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:13.837217+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:14.146149+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:14.457106+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:14.762709+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:15.071780+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:15.383675+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:15.695312+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:16.000825+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:16.313717+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:16.623525+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:16.930900+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:17.242108+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:17.554445+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:17.862247+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:18.166811+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:18.477480+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:18.787769+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:19.099829+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:19.406036+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:19.718228+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:20.027856+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:20.333330+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:20.643538+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:20.955319+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:21.264898+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:21.575994+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:21.882444+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:22.190827+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:22.502808+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:22.813641+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:23.124015+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:23.431407+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:23.737481+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:24.047105+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:24.350943+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    },
+    {
+      "observedAtUtc": "2026-10-27T22:16:24.658626+00:00",
+      "status": "Delivering",
+      "fencingToken": 1,
+      "recordedDeliveryAttemptCount": 0
+    }
+  ],
+  "newFencingToken": 2,
+  "recordedDeliveryAttemptCount": 1,
+  "deliveredAt": "2026-10-27T22:16:25.657153+00:00"
+}

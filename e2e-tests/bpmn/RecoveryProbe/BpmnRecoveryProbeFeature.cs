@@ -49,7 +49,8 @@ public class BpmnRecoveryProbeFeature : IShellFeature
             provider.GetRequiredService<IPersistenceAccessContextAccessor>()));
         Decorate<IRuntimePostCommitIntentDispatcher>(services, (inner, provider) => new ProbeIntents(inner,
             provider.GetRequiredService<IStimulusDeliveryStore>(), provider.GetRequiredService<RecoveryProbeControl>(),
-            provider.GetRequiredService<RuntimeDbContext>()));
+            provider.GetRequiredService<RuntimeDbContext>(), provider.GetRequiredService<IPostCommitOutboxLookupStore>(),
+            provider.GetRequiredService<IPersistenceAccessContextAccessor>()));
     }
 
     private static void Decorate<T>(IServiceCollection services, Func<T, IServiceProvider, T> decorate) where T : class
@@ -130,17 +131,24 @@ public class BpmnRecoveryProbeFeature : IShellFeature
     }
 
     private sealed class ProbeIntents(IRuntimePostCommitIntentDispatcher inner, IStimulusDeliveryStore sources,
-        RecoveryProbeControl control, RuntimeDbContext context) : IRuntimePostCommitIntentDispatcher, IDisposable
+        RecoveryProbeControl control, RuntimeDbContext context, IPostCommitOutboxLookupStore outbox,
+        IPersistenceAccessContextAccessor access) : IRuntimePostCommitIntentDispatcher, IDisposable
     {
         private readonly IDisposable? initialClaimObserver = control.ArmInitialClaimCut(context);
         private IDisposable? completionObserver;
         public void Dispose() { initialClaimObserver?.Dispose(); completionObserver?.Dispose(); }
         public bool RequiresDurableSource(string intentKind) => inner.RequiresDurableSource(intentKind);
-        public ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default) =>
-            inner.DispatchAsync(intent, cancellationToken);
+        public async ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
+        {
+            var cut = await control.CaptureCalledControlClaimAsync(intent, outbox, access, cancellationToken);
+            await inner.DispatchAsync(intent, cancellationToken);
+            await control.CutCalledControlBeforeAcknowledgmentAsync(cut, outbox, cancellationToken);
+        }
         public async ValueTask DispatchAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
         {
+            var cut = await control.CaptureCalledControlClaimAsync(source.Intent, outbox, access, cancellationToken);
             await inner.DispatchAsync(source, cancellationToken);
+            await control.CutCalledControlBeforeAcknowledgmentAsync(cut, outbox, cancellationToken);
             if (source.Intent.Kind == PublishStimulusConstants.PublishStimulusIntentKind)
             {
                 var current = await sources.ReadSourceAsync(source, cancellationToken);
@@ -214,6 +222,65 @@ public class BpmnRecoveryProbeFeature : IShellFeature
 internal sealed class RecoveryProbeControl(string directory)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+
+    public async ValueTask<CalledControlCapture?> CaptureCalledControlClaimAsync(RuntimePostCommitIntent intent,
+        IPostCommitOutboxLookupStore outbox, IPersistenceAccessContextAccessor access, CancellationToken cancellationToken)
+    {
+        const string notify = "Elsa.Activities.DispatchWorkflow.NotifyControl";
+        if (intent.Kind is not (notify or WorkflowDispatchLifecycle.ResumeParentIntentKind)) return null;
+        var path = Path.Combine(directory, "called-control-plan.json");
+        if (!File.Exists(path)) return null;
+        var plan = JsonSerializer.Deserialize<CalledControlPlan>(await File.ReadAllTextAsync(path, cancellationToken), Json)
+            ?? throw new InvalidDataException("The owned called-control cut plan is empty.");
+        if (!Regex.IsMatch(plan.CaseId, "^[a-z0-9-]{1,64}$", RegexOptions.CultureInvariant))
+            throw new InvalidDataException("The owned called-control cut case is invalid.");
+        if (intent.Kind != plan.IntentKind || intent.Payload is not { } payload) return null;
+        JsonElement wire;
+        if (intent.Kind == notify) wire = payload;
+        else if (!payload.TryGetProperty("result", out var result) || !result.TryGetProperty("control", out wire)) return null;
+        if (wire.ValueKind is not JsonValueKind.Object || !wire.TryGetProperty("batch", out var batch) ||
+            !batch.TryGetProperty("childWorkflowExecutionId", out var child) || child.GetString() != plan.ChildWorkflowExecutionId) return null;
+        var transport = wire.Deserialize<RuntimeChildControlTransport>(Json)
+            ?? throw new InvalidDataException("Actual called-control transport is missing.");
+        if (transport.Batch.Ordinal != plan.Ordinal) return null;
+        // The normal handler uses the intent overload. Read the actual selected provider's existing
+        // claim before forwarding it; never force a context overload or construct a claim/context.
+        var source = await outbox.FindAsync(transport.SourceOutboxItemId, cancellationToken);
+        if (source is not { Status: RuntimePostCommitOutboxStatus.Delivering, DeliveryFencingToken: > 0 } ||
+            string.IsNullOrEmpty(source.DeliveringOwnerId) || source.DeliveryVisibleAfter is null || !source.Intent.IsEquivalentTo(intent)) return null;
+        return new(plan, transport, source, access.Current.RequireScope());
+    }
+
+    public async ValueTask CutCalledControlBeforeAcknowledgmentAsync(CalledControlCapture? captured,
+        IPostCommitOutboxLookupStore outbox, CancellationToken cancellationToken)
+    {
+        if (captured is null) return;
+        var (plan, transport, before, scope) = captured;
+        var source = await outbox.FindAsync(before.OutboxItemId, cancellationToken)
+            ?? throw new InvalidDataException("Actual called-control source disappeared after its handler returned.");
+        if (source.Status != RuntimePostCommitOutboxStatus.Delivering || source.DeliveringOwnerId != before.DeliveringOwnerId ||
+            source.DeliveryFencingToken != before.DeliveryFencingToken || source.DeliveryVisibleAfter != before.DeliveryVisibleAfter ||
+            !source.Intent.IsEquivalentTo(before.Intent))
+            throw new InvalidDataException("The actual called-control claim changed before the observed pre-acknowledgment cut.");
+        var caseDirectory = Path.Combine(directory, plan.CaseId); Directory.CreateDirectory(caseDirectory);
+        var token = Path.Combine(caseDirectory, "claimed");
+        try { using var claimed = new FileStream(token, FileMode.CreateNew, FileAccess.Write, FileShare.Read); claimed.Flush(true); }
+        catch (IOException) when (File.Exists(token)) { return; }
+        var marker = new { plan.CaseId, Phase = "called-control-before-acknowledgment", ProviderEvent = "ActualIntentDispatcherReturnedBeforeDeliveryResult",
+            SourceOutboxItemId = source.OutboxItemId, transport.SourceCommitId, IntentFingerprint = RuntimeCheckpointCommitFingerprint.ComputeIntent(source.Intent), Scope = scope.Value,
+            OwnerId = source.DeliveringOwnerId, FencingToken = source.DeliveryFencingToken, VisibleAfter = source.DeliveryVisibleAfter, source.Intent.WorkflowExecutionId,
+            IntentKind = source.Intent.Kind, transport, CapturedAtUtc = DateTimeOffset.UtcNow };
+        var temporary = Path.Combine(caseDirectory, "reached.tmp");
+        await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        { await JsonSerializer.SerializeAsync(stream, marker, Json, cancellationToken); stream.Flush(true); }
+        File.Move(temporary, Path.Combine(caseDirectory, "reached.json"));
+        while (!File.Exists(Path.Combine(caseDirectory, "release")))
+            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+    }
+
+    internal sealed record CalledControlPlan(string CaseId, string IntentKind, string ChildWorkflowExecutionId, long Ordinal);
+    internal sealed record CalledControlCapture(CalledControlPlan Plan, RuntimeChildControlTransport Transport, RuntimePostCommitOutboxItem Source, PersistenceScope Scope);
+
     public async ValueTask WaitForActualLoadAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken)
     {
         var path = Path.Combine(directory, "plan.json");
