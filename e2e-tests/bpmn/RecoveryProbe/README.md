@@ -18,7 +18,9 @@ dotnet build tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj -p:Rest
   -SourceRevision "$(git rev-parse HEAD)+explicit-candidate-worktree"
 ```
 
-The post-cohort case publishes one signal-start binding and arms two parallel catches before publishing the signal. After the actual cohort commit, it creates a different start binding and another two-catch listener, then kills the owned probe process. It reads a coherent snapshot with the actual checked provider, starts a read-only successor observer, and restarts the standard host on the same database. It waits for the real persisted lease deadline; it does not edit clocks, claims, recipients or checkpoint data.
+Use `-Phase after-resume` for partial callback/rearm recovery. Both signal-catch branches self-loop. The source router pauses after accepting its first saved resume, but the runner waits for the actual child to complete and the same authored listener to persist a distinct new wait. Before killing, checked state must show that completed callback, its new physical generation, the other original recipient still suspended, and the original keyed start already parked. Standard-host retry must leave the first rearm and completed attempt facts unchanged, execute exactly one resume attempt for the remaining original recipient, and leave its later wait too. The already parked keyed start and later listeners/binding must remain unchanged. This proves callback effects rather than treating a dispatch acknowledgment as completion.
+
+The default post-cohort case publishes one signal-start binding and arms two parallel catches before publishing the signal. After the actual cohort commit, it creates a different start binding and another two-catch listener, then kills the owned probe process. It reads a coherent snapshot with the actual checked provider, starts a read-only successor observer, and restarts the standard host on the same database. It waits for the real persisted lease deadline; it does not edit clocks, claims, recipients or checkpoint data.
 
 The observer pins a read transaction when it sees a new owner/fence, backs up that exact SQLite view, and checks it through the provider. Missing that claim is a failed proof, even if the source subsequently completes. Final checks require the immutable cohort, both saved child activities completed, retired selected waits, the exact deterministic start parked on its next signal, and identical later bookmark IDs/generations/activity facts. A `Dispatched` result alone is not callback completion.
 
@@ -33,4 +35,4 @@ python3 e2e-tests/bpmn/test_inspect_broadcast_recovery.py \
   --reader tools/bpmn/DeliveryRecoveryRead/bin/Debug/net10.0/DeliveryRecoveryRead.dll -v
 ```
 
-Those controls qualify observer mechanics only. This one crash cut does not establish partial-recipient/rearm recovery, every T051 case, legacy upgraded-host recovery, Studio compatibility or production fleet acceptance.
+Those controls qualify observer mechanics only. These bounded crash cuts do not establish every T051 case, legacy upgraded-host recovery, Studio compatibility or production fleet acceptance.

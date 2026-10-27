@@ -89,7 +89,7 @@ try
         Source = new { source.OutboxItemId, source.Intent.WorkflowExecutionId, Status = source.Status.ToString(), source.DeliveryAttemptCount,
             source.DeliveringOwnerId, source.DeliveryFencingToken, source.DeliveryVisibleAfter, source.DeliveredAt, source.LastFailureMessage,
             IntentFingerprint = RuntimeCheckpointCommitFingerprint.ComputeIntent(source.Intent), Snapshot = cohort,
-            SelectedResumes = cohort?.Resumes.Select(entry => new { entry.WorkflowExecutionId, entry.BookmarkId, entry.ActivityExecutionId, Generation = entry.RegistrationCapture?.Generation }),
+            SelectedResumes = cohort?.Resumes.Select(entry => new { entry.WorkflowExecutionId, entry.BookmarkId, entry.ActivityExecutionId, entry.ExecutableNodeId, Generation = entry.RegistrationCapture?.Generation }),
             SelectedStarts = cohort?.Starts.Select(entry => new { entry.Executable.ArtifactId,
                 WorkflowExecutionId = KeyedWorkflowStartIdentity.For(source.Intent.IdempotencyKey!, entry.Executable.ArtifactId).WorkflowExecutionId }) }, Workflows = observations,
         AllWorkflows = all.Select(state => new { state.WorkflowExecutionId, state.PinnedExecutable.ArtifactId, Status = state.Status.ToString() }) }, json));
