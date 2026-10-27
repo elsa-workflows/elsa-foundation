@@ -1,6 +1,25 @@
 import { expect, test } from "@playwright/test";
 
 for (const theme of ["light", "dark"]) {
+  test(`restores the same Test Run explicitly after a reload (${theme})`, async ({ page }) => {
+    await page.goto(`/?mode=activity-duplicate-editor&run-canvas=unique&theme=${theme}`);
+    const node = page.getByLabel("Workflow canvas", { exact: true }).getByRole("button", { name: /^Notify buyer\. Node ID:/ });
+    await page.getByRole("button", { name: "Test Run", exact: true }).click();
+    await page.getByRole("button", { name: "Start Test Run", exact: true }).click();
+    await expect(node).toHaveAccessibleName(/Run state: Completed/);
+    await page.reload();
+    await expect(node).toHaveAccessibleName(/State: authoring/);
+    await expect(page.getByRole("group", { name: "Attached Test Run", exact: true })).toHaveCount(0);
+    const previous = page.getByRole("group", { name: "Previous Test Run", exact: true });
+    await expect(previous).toBeVisible();
+    await previous.getByRole("button", { name: "Restore Test Run", exact: true }).click();
+    await expect(node).toHaveAccessibleName(/Run state: Completed/);
+    await expect(previous).toHaveCount(0);
+    await expect(page.getByRole("group", { name: "Attached Test Run", exact: true })).toBeVisible();
+    await node.click();
+    await expect(page.getByLabel("Inspector panel", { exact: true }).getByText("Current: 1", { exact: true })).toBeVisible();
+  });
+
   test(`keeps the existing canvas and viewport when attaching and detaching a run (${theme})`, async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 950 });
     await page.goto(`/?mode=activity-duplicate-editor&run-canvas=unique&theme=${theme}`);

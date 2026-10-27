@@ -23,6 +23,19 @@ model, forced checkpoint cadence, blanket payload capture or new workflow-model 
 execution-evidence and commit-journal ADRs are not dependencies. A consequential new observation
 contract requires an explicit decision before implementation.
 
+Following uses one editor-owned observer over existing Test Run, wait and runtime reads. Pausing
+observation leaves the workflow running and retains the deliberately inspected occurrence. A stop
+receipt remains pending until runtime confirms a terminal state. Historical snapshot inspection is
+read only; returning to editing restores the separate draft and its navigation.
+
+Reload recovery is explicit and tab scoped: retain only run/artifact references and a SHA-256 digest
+of the executed design, with no authored inputs, captured values or credentials in browser storage.
+Restore rechecks current authorization, exact run identity, expiry and the freshly loaded design.
+When the saved design differs, the prior editor snapshot cannot be reconstructed after reload; offer
+the existing run viewer instead. Session/endpoint changes revoke recovery references. Recovery and
+reconnection never dispatch another execution. In-page draft changes retain the full captured editor
+snapshot in memory for inspection.
+
 ## Delivery plan
 
 | Epic | Deliverable feature | Dependency |

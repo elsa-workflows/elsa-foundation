@@ -59,6 +59,7 @@ import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { ValidationPanel, WorkflowRuntimePanel } from "./editorPanels";
 import { AttachedTestRunStatus } from "./AttachedTestRunStatus";
 import { useTestRunObservation } from "./useTestRunObservation";
+import { useTestRunRestoration } from "./useTestRunRestoration";
 import { usePinnedEditorDocument } from "./usePinnedEditorDocument";
 import { useEditorRunCanvas } from "./useEditorRunCanvas";
 import { useAttachedExecutionSelection } from "./useAttachedExecutionSelection";
@@ -186,6 +187,7 @@ export function WorkflowEditor({
   const editableDoc = useWorkflowDocument();
   const { draft: editableDraft, testRun, publishedArtifactId } = editableDoc.state;
   const observation = useTestRunObservation({ context, testRun, onRunViewUpdated: editableDoc.updateTestRunView });
+  const restoration = useTestRunRestoration({ context, definitionId, draft: editableDraft, testRun, onRestore: editableDoc.startTestRun });
   const [error, setErrorState] = useState<WorkflowEditorError | null>(null);
   const setError = useCallback((value: WorkflowErrorInput) => setErrorState(normalizeWorkflowError(value)), []);
   const [status, setStatus] = useState("");
@@ -1257,7 +1259,13 @@ export function WorkflowEditor({
               setInspectorCollapsed(false);
             }}
           />
-        ) : null}
+        ) : restoration.receipt ? <div className="wf-attached-test-run" role="group" aria-label="Previous Test Run">
+          <span>Restore the previous Test Run after verifying the saved design and current access.</span>
+          <button type="button" disabled={restoration.pending} onClick={() => void restoration.restore()}>{restoration.pending ? "Verifying Test Run…" : "Restore Test Run"}</button>
+          {restoration.receipt.workflowExecutionId ? <button type="button" onClick={() => openWorkflowRun(restoration.receipt!.workflowExecutionId!)}>Open run</button> : null}
+          <button type="button" onClick={restoration.dismiss}>Dismiss</button>
+          {restoration.message ? <span role="status">{restoration.message}</span> : null}
+        </div> : null}
         moreActions={[
           {
             label: "Weaver",
