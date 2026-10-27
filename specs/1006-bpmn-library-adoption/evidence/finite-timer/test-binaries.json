@@ -1,0 +1,120 @@
+{
+  "files": [
+    {
+      "name": "CShells.Abstractions.dll",
+      "sha256": "dbcf0e5d572791124ac582e3a10519d80f01b9f2e4228cffadb61171f796b5a0"
+    },
+    {
+      "name": "Cronos.dll",
+      "sha256": "e0ad7c799904f1b663ab090b32665e0e90ede27699937588900845383064ba03"
+    },
+    {
+      "name": "Elsa.Cluster.Core.dll",
+      "sha256": "6c048b18b6ccafb91107422e8cb4b3df80136a83028024c43573014e228622f4"
+    },
+    {
+      "name": "Elsa.Locking.Core.dll",
+      "sha256": "b79411516c0e95dcbeaa4fbe2019af5fbb33b599742aec8a7685a3de9645a6dc"
+    },
+    {
+      "name": "Elsa.Primitives.dll",
+      "sha256": "135e2718f98b6fb029a546573f57cbc6be4f707d56e77e3cb094c05e95345c5a"
+    },
+    {
+      "name": "Elsa.Tasks.Core.dll",
+      "sha256": "320b04847d1fda9cefe99edd70e8f944c4c762924c383693124fbc9668e3a645"
+    },
+    {
+      "name": "Elsa.Tasks.Schedules.dll",
+      "sha256": "532be0c59d762896c4325aa2cb46a5f96fa407bdb70acb2e7c173c36493cba19"
+    },
+    {
+      "name": "Elsa.Tasks.Testing.dll",
+      "sha256": "b30b213343a56f92216c348a257b8d2cf220d0e1f0771dd81e7573f04b864a7e"
+    },
+    {
+      "name": "Elsa.Tasks.Tests.deps.json",
+      "sha256": "0a2b5b93514104ca31538bf8ed9a6a44934064c9b9221dd6e426fe55a989780b"
+    },
+    {
+      "name": "Elsa.Tasks.Tests.dll",
+      "sha256": "ca19dadc09e085c914ace953cf4373fa0800b8fb9c2facb7fbc8bbacfc0d040e"
+    },
+    {
+      "name": "Elsa.Tasks.Tests.runtimeconfig.json",
+      "sha256": "4cb0ce0c1f14265c82f2307976900c3347e3fd624d20f5a1580246644768cc70"
+    },
+    {
+      "name": "Elsa.Tasks.dll",
+      "sha256": "ae946633ebbe56a2a193c4b762eed5209a4bac4338beeecebd9a2dfd8f53fcfa"
+    },
+    {
+      "name": "Elsa.Testing.dll",
+      "sha256": "d5f64440e534190a1aa7e7215add7700f10a23969f498203cfe7cac5fdd352b2"
+    },
+    {
+      "name": "JetBrains.Annotations.dll",
+      "sha256": "8f2c837af3f4f61b1726a2e67eafcf5bae23debd9e1de425bb5ce1d4837508d6"
+    },
+    {
+      "name": "Microsoft.TestPlatform.CommunicationUtilities.dll",
+      "sha256": "ec4b51df00684261eb6ff3ca1095ac3f6d2e4a0edd64c6785293dede135993d3"
+    },
+    {
+      "name": "Microsoft.TestPlatform.CoreUtilities.dll",
+      "sha256": "f3321a772e26a844095dee350618e8bb2fbfc7491f033565efc1cb934bccfc3d"
+    },
+    {
+      "name": "Microsoft.TestPlatform.CrossPlatEngine.dll",
+      "sha256": "c09199b0a94b05eb305aa068362c7d8675298e32a4e961a23b09ddb6e82c3458"
+    },
+    {
+      "name": "Microsoft.TestPlatform.PlatformAbstractions.dll",
+      "sha256": "f0d83493a38dc3ea3f093a32f945d5d54e3c5e5ab963be474f4c6fb861c4008d"
+    },
+    {
+      "name": "Microsoft.TestPlatform.Utilities.dll",
+      "sha256": "03a03028986be5e109ebddd556c496b4eadfd8d55d83088671d512477dd04906"
+    },
+    {
+      "name": "Microsoft.VisualStudio.CodeCoverage.Shim.dll",
+      "sha256": "b8d16360ff831bd09562700f6b51b435d74884a68b48707e180f811cba47e5aa"
+    },
+    {
+      "name": "Microsoft.VisualStudio.TestPlatform.Common.dll",
+      "sha256": "b24d33ac6b0707ebaed537812b71a97b9a1fcdda49e0202ce1f4ea094153d9cc"
+    },
+    {
+      "name": "Microsoft.VisualStudio.TestPlatform.ObjectModel.dll",
+      "sha256": "b06be0dd6f9434fefb41c6b538b300b89389d56e1377f5355e19f332db474813"
+    },
+    {
+      "name": "Newtonsoft.Json.dll",
+      "sha256": "a28c251dfe36d881e9e2462e171441b8b0ec156fe3f452602c9149b1b9efe05b"
+    },
+    {
+      "name": "testhost.dll",
+      "sha256": "e628c35d40214ce1db714937109bac6a8e7591fcb424482f81c1ec123fe5bd54"
+    },
+    {
+      "name": "xunit.abstractions.dll",
+      "sha256": "3166dc70323fb30ccf1cedb0fe86f2ad122c46d254542342d90386efc4c9285c"
+    },
+    {
+      "name": "xunit.assert.dll",
+      "sha256": "bcd9711b22d227ac8cd4c1568e72433a0f576d2ec8aae64ac508081892015b1d"
+    },
+    {
+      "name": "xunit.core.dll",
+      "sha256": "2f7feeec8c6dec7df684c25fb80aadb292b963d09723460f03d53c5ad2088acc"
+    },
+    {
+      "name": "xunit.execution.dotnet.dll",
+      "sha256": "e70febe547c15f8155db3e2d95c3ba4445a59cbc21a3e7541ab22ed49d3dcf7b"
+    },
+    {
+      "name": "xunit.runner.visualstudio.testadapter.dll",
+      "sha256": "384aba4bad96399a7fd2205a5a3517b643a16f4d7e843bd0b92e1e42f81fce2a"
+    }
+  ]
+}
