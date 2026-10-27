@@ -22,7 +22,7 @@ Framework6.1.0 and Elsa6.3.0 Gate indexes and the review checklist apply. Pre-de
 
 - `tools/studio/ApiPackageClosure.Probe/qualify.py`: preserve the existing positive API-only consumer; add locked restore, private unsigned-archive dependency omission and precise result evidence.
 - Its `README.md`: commands and expected outcomes, with original/copy and intended/unrelated failures distinguished.
-- `tools/studio/HostingAssets.Probe/`: reuse unchanged production UI/customization and missing-vendor proof.
+- `tools/studio/HostingAssets.Probe/`: reuse production UI/customization and missing-vendor proof; add explicit dynamic runtime-script HTTP/browser/sentinel checks and missing/empty runtime controls from round1.
 - `specs/1013-studio-package-consumer-proof/`: specification, this plan, research, report model, quickstart, tasks and validation evidence. This is internal qualification tooling; its canonical command contract stays with the tool README rather than a second public API contract.
 
 ## Design and qualification
@@ -32,7 +32,7 @@ Framework6.1.0 and Elsa6.3.0 Gate indexes and the review checklist apply. Pre-de
 3. Enable lock-file generation and repeat restore in locked mode in the Api consumer. Add private node/npm/pnpm/npx denial shims and retain a zero-invocation audit in normal and control profiles. Keep its package/HTTP cache isolated and public/runtime type checks, DLL hashes, hidden inputs and owned-server cleanup.
 4. A valid dependency negative still exits1 with product status failed. Mark expected failure observed only when publish fails with the missing-Core compile diagnostic and the restored graph has no Core library. A network/restore/SDK/unrelated failure or masked dependency is not a valid control. Preserve full logs and bounded diagnostics.
 5. Run actual normal/omitted/restored Api profiles and verify source candidates and payloads stayed unchanged. Exercise already-missing/invalid-input rejection where it proves the control cannot report an unrelated failure as success.
-6. Run unchanged Hosting normal/missing published React/restored profiles against the actual four production candidates. Require the precise missing-resource404 error; verify Node denial and published UI/module/resource behavior again after restoration.
+6. Run Hosting normal/missing published React/restored profiles against the actual four production candidates. Require the precise missing-resource404 error; verify Node denial and published UI/module/resource behavior again after restoration. Separately assert runtime-script status/MIME/global shape and a nondefault HostId in HTTP and browser root/deep routes. Prove missing404, empty200 and browser-only empty-body failures before restoring the normal profiles.
 7. Run Python syntax, complete affected generated consumers, required architecture graph/whole architecture project/maps, and review the complete diff. Product C#/frontend source, project references and versions stay unchanged, so unrelated Studio/frontend suites need no local repeat; exact-head CI still applies.
 8. Open one draft PR, independently review correctness/standards/acceptance to convergence, set terminal spec status in that implementation PR, request formal review and require current-head checks. Verify reviewed merge/resulting main and actual artifact proof before Done.
 

@@ -36,3 +36,20 @@ Python syntax and the complete architecture project pass590/590,0fail/skip (stud
 ## Delivery-ready local checkpoint
 
 Architecture discovery581 entries matches581 TRX definitions and590 executed cases; no failures/skips. Generated-maps check passes with no solution-filter change. Python syntax/diff whitespace checks pass. These are the required local checks for the changed qualification tool and generated consumers; no production API/reference/asset source changed. All controls, originals/payload integrity and restored positives above are complete, and the final Api tool hash matches the source being committed. Independent review starts from this implementation checkpoint; no delivery/main outcome is claimed yet.
+
+
+## Independent round1: runtime configuration gap
+
+Round1 reviewed4a4deff199..c91ce6b014. Correctness and standards were clean; acceptance retained one P2: the existing static-resource and Home/shared-import proof could pass without the dynamic runtime script, while FR004/issue3363 explicitly require runtime configuration. No finding was discarded.
+
+Adversarial real generated-host controls confirm both faults incorrectly pass the old checks: missing404 at studio-hosting-assets-zi9wt73u and empty200 at8b_pblwz each report passed and render Home. These are false-green proof results, not valid runtime-config qualification. The original asset-only evidence remains bounded to its actual checks.
+
+The updated production probe configures HostId package-consumer-proof and separately asserts dynamic-script HTTP200/JavaScript MIME/global JSON/public shape and that nondefault value. The browser driver requires the actual global and verifies the supplied expected HostId on both root and deep links; runtime-script failures join its missing-response filter. Controlled missing/empty middleware is only in the generated test host, with actual package composition preserved. Corrected missing t8u3gt7p fails standard-runtime specifically Runtime configuration script has status404; empty vza3mkty fails specifically the missing global assignment.
+
+The separate studio3363-browser-runtime-control-j9dmsn9_ control proves the browser assertion itself: actual published-server HTTP runtime is healthy, but Playwright serves an empty200 runtime response only to the browser. A private pre-guard driver copy still passes; the guarded driver exits1 specifically Browser runtime configuration is missing or lost the configured HostId. All other resources/modules use real published packages. Restored normal standard/fallback/optout runtime and browser profiles are running before round2; no new product C#/frontend/public API change.
+
+
+The restored corrected runtime profile vgnp9ng4 passes all3published HTTP runtime checks (including frontend opt-out), exact HostId sentinel/JavaScript MIME/global shape, standard/fallback140 resources and optout6, ETag/range/collision/discovery/version behavior, and both real Chromium root/deep routes per standard/fallback. Both browser reports show the expected HostId on both routes with no errors/missing resources. Exact current qualifier and browser-driver hashes match the report; consumer frontend audit0. This supersedes the earlier browser evidence for runtime-config acceptance, without rewriting those narrower historical results.
+
+
+The current corrected qualifier also repeats the published-vendor control at lj2grfhe: runtime HTTP/config checks pass first, then the actual missing React file still fails specifically with HTTP asset mismatch /studio/vendor/react.js(status404). A final restored normal run will follow from the committed correction. Existing Api control code/hash is unchanged by this runtime fix.

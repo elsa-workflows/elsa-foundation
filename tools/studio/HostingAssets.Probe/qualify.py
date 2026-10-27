@@ -22,6 +22,7 @@ import zipfile
 
 REPO = Path(__file__).resolve().parents[3]
 IDS = ("Elsa.Studio.Core", "Elsa.Studio.Api", "Elsa.Studio.Hosting", "Elsa.Studio.Dashboard")
+RUNTIME_HOST_ID = "package-consumer-proof"
 
 
 def check(value, message):
@@ -77,7 +78,7 @@ def main(args):
     root = args.output.resolve() if args.output else Path(tempfile.mkdtemp(prefix="studio-hosting-assets-")).resolve()
     if args.output:
         root.mkdir(parents=True, exist_ok=False)
-    report = {"root": str(root), "status": "running", "stage": "setup"}
+    report = {"root": str(root), "status": "running", "stage": "setup", "runtimeScriptFault": args.runtime_script_fault}
     print("Artifacts: " + str(root), flush=True)
     dotnet, node = shutil.which("dotnet"), shutil.which("node")
     check(dotnet and node, "Producer/browser driver requires dotnet and node")
@@ -170,7 +171,7 @@ def main(args):
         env = {key: value for key, value in os.environ.items() if not key.lower().startswith(("studio__", "cshells__", "aspnetcore_"))}
         env.update(PATH=os.pathsep.join([str(denied), str(Path(dotnet).parent), "/usr/bin", "/bin"]), NUGET_PACKAGES=str(cache),
                    NUGET_HTTP_CACHE_PATH=str(root / "http-cache"), STUDIO_FRONTEND_DENIAL_AUDIT=str(audit),
-                   ASPNETCORE_ENVIRONMENT="Production", DOTNET_ENVIRONMENT="Production")
+                   ASPNETCORE_ENVIRONMENT="Production", DOTNET_ENVIRONMENT="Production", Studio__HostId=RUNTIME_HOST_ID)
         config = ET.Element("configuration")
         sources = ET.SubElement(config, "packageSources")
         ET.SubElement(sources, "clear")
@@ -186,6 +187,18 @@ def main(args):
             path = root / name
             path.mkdir()
             exclude = ' ExcludeAssets="build;buildTransitive"' if optout else ""
+            runtime_fault = ""
+            if args.runtime_script_fault:
+                status = 404 if args.runtime_script_fault == "missing" else 200
+                runtime_fault = '''app.Use(async (context, next) => {
+    if (context.Request.Path == "/studio-runtime.js") {
+        context.Response.StatusCode = ''' + str(status) + ''';
+        context.Response.ContentType = "application/javascript";
+        return;
+    }
+    await next();
+});
+'''
             (path / "Consumer.csproj").write_text(f'''<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup>
 <TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
 </PropertyGroup><ItemGroup><PackageReference Include="Elsa.Studio.Hosting" Version="{version}"{exclude}/>
@@ -199,6 +212,7 @@ var builder = WebApplication.CreateBuilder(args);
 var studio = builder.AddElsaStudio(options => { options.ShellName = "Authoring"; options.IndexFile = "''' + fallback + '''"; })
     .ConfigureShells(shells => shells.WithAssemblies(typeof(DashboardStudioFeature).Assembly));
 var app = builder.Build();
+''' + runtime_fault + '''
 app.UseElsaStudio();
 app.MapElsaStudio();
 app.MapGet("/__qualification", () => new {
@@ -262,6 +276,15 @@ app.Run();
         for name, published in profiles.items():
             report["stage"] = name + "-runtime"
             with serve(dotnet, published, env, root / (name + "-runtime.log")) as base:
+                runtime_status, runtime_body, runtime_headers = request(base, "/studio-runtime.js")
+                check(runtime_status == 200, f"Runtime configuration script has status {runtime_status}")
+                runtime_mime = runtime_headers.get("content-type", "").split(";")[0]
+                check(runtime_mime in ("application/javascript", "text/javascript"), "Unexpected runtime configuration MIME: " + runtime_mime)
+                assignment = re.fullmatch(rb"\s*window\.__ELSA_STUDIO_RUNTIME__\s*=\s*(\{.*\})\s*;\s*", runtime_body, re.S)
+                check(assignment is not None, "Runtime configuration script did not assign window.__ELSA_STUDIO_RUNTIME__")
+                runtime_config = json.loads(assignment[1])
+                check(runtime_config.get("hostId") == RUNTIME_HOST_ID, "Runtime configuration lost the configured HostId")
+                check(isinstance(runtime_config.get("backendBaseUrl"), str) and isinstance(runtime_config.get("auth", {}).get("enabled"), bool), "Runtime configuration has an unexpected public shape")
                 rows = []
                 for url, data in expected.items():
                     if name == "optout" and url.startswith("/studio/"):
@@ -288,9 +311,11 @@ app.Run();
                     check(request(base, "/")[1] == expected_index and request(base, "/overview")[1] == expected_index, "Root/deep-link document mismatch")
                     status, data, _ = request(base, "/studio/sdk/index.js", {"Range": "bytes=0-9"})
                     check(status == 206 and data == expected["/studio/sdk/index.js"][:10], "Published range request failed")
-                    browser_env = dict(os.environ, STUDIO_HOSTING_ASSET_BASE=base, STUDIO_HOSTING_ASSET_OUTPUT=str(root / (name + "-browser.json")))
+                    browser_env = dict(os.environ, STUDIO_HOSTING_ASSET_BASE=base, STUDIO_HOSTING_ASSET_OUTPUT=str(root / (name + "-browser.json")),
+                                       STUDIO_HOSTING_RUNTIME_HOST_ID=RUNTIME_HOST_ID)
                     run(name + "-browser", [node, str(Path(__file__).with_name("browser.mjs"))], REPO, browser_env)
-                report["runtime"][name] = {"resources": rows, "hostVersion": modules["hostVersion"], "sdkVersion": modules["sdkVersion"], "publishedOnly": True}
+                report["runtime"][name] = {"resources": rows, "hostVersion": modules["hostVersion"], "sdkVersion": modules["sdkVersion"], "publishedOnly": True,
+                                          "runtimeConfig": {"hostId": runtime_config["hostId"], "mime": runtime_mime, "sha256": sha(runtime_body)}}
         check(not audit.exists() or not audit.read_text().strip(), "Consumer invoked frontend tooling")
         report.update(status="passed", stage="complete", frontendInvocations=0, hiddenInputs=[path.name for path in root.glob("hidden-*")], samePathCollisionRejected=True)
         return 0
@@ -308,4 +333,5 @@ if __name__ == "__main__":
     parser.add_argument("--version", default="4.0.0-asset-consumer-probe", help="Local candidate version when packing")
     parser.add_argument("--output", type=Path, help="New owned artifact directory")
     parser.add_argument("--omit-published-vendor", action="store_true", help="Negative control: remove published React before HTTP verification")
+    parser.add_argument("--runtime-script-fault", choices=("missing", "empty"), help="Negative control: the generated test host returns a missing or empty runtime configuration script")
     raise SystemExit(main(parser.parse_args()))
