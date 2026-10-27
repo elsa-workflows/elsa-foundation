@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3363-studio-package-consumer-proof`
 **Created**: 2026-10-27
-**Status**: Approved — owner-authorized Program3340 M3 task3363; spec reviewed before planning.
+**Status**: Implemented — staged in PR3391; exact-head delivery and resulting-main verification pending.
 **Input**: Program [#3340](https://github.com/elsa-workflows/elsa-foundation/issues/3340), task [#3363](https://github.com/elsa-workflows/elsa-foundation/issues/3363); accepted [hosting contract](../../docs/reports/studio-hosting-contract.md), completed #3361/#3367 and the production browser qualification in [spec1012](../1012-studio-browser-assets/spec.md).
 
 ## User Scenarios & Testing
