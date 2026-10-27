@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3366-studio-host-guide`
 **Created**: 2026-10-27
-**Status**: In progress
+**Status**: Implemented
 **Input**: Program #3340 task #3366: give developers a runnable package-only starting point, explain migration and supported choices, and reconcile the complete program from integrated evidence.
 
 ## User Scenarios & Testing

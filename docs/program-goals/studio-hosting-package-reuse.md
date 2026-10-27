@@ -1,6 +1,7 @@
 # Studio Hosting and Package Reuse
 
-- **Status:** Active for end-to-end M0–M3 delivery by owner authorization on 25 October 2026; runs beside the other active programs and displaces none.
+- **Status:** Completed through final exit task #3366. Reviewed source and resulting-main verification are recorded on [Program #3340](https://github.com/elsa-workflows/elsa-foundation/issues/3340). The completion entry lands with the final implementation PR; the issue remains the live authority until its final gate receipt is posted.
+- **Authorization:** End-to-end M0–M3 delivery by owner authorization on 25 October 2026; ran beside the other active programs and displaced none.
 - **Area:** Studio hosting, optional capabilities, package delivery and custom-host developer experience.
 - **Steward:** Sipke Schoorstra. Delivery leaves are claimed under Issue Bus Lite.
 - **Program:** [#3340](https://github.com/elsa-workflows/elsa-foundation/issues/3340).
