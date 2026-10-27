@@ -13,16 +13,18 @@ param(
     [Parameter(Mandatory)][string] $EvidencePath,
     [string] $Python = 'python3',
     [Parameter(Mandatory)][string] $SourceRevision,
-    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal', 'competing-empty-proposal')][string] $Phase = 'after-cohort'
+    [ValidateSet('after-cohort', 'after-resume', 'before-selection', 'empty-cohort', 'competing-proposal', 'competing-empty-proposal', 'competing-empty-winner')][string] $Phase = 'after-cohort'
 )
 $ErrorActionPreference = 'Stop'
 $emptyProposal = $Phase -eq 'competing-empty-proposal'
-$competing = $Phase -in @('competing-proposal', 'competing-empty-proposal')
+$emptyWinner = $Phase -eq 'competing-empty-winner'
+$competing = $Phase -in @('competing-proposal', 'competing-empty-proposal', 'competing-empty-winner')
 $unmatchedInitial = $Phase -eq 'empty-cohort' -or $emptyProposal
 $selectsAfterRestart = $Phase -in @('before-selection', 'competing-proposal', 'competing-empty-proposal')
 if ($competing -and $IsWindows) { throw 'This owned process-suspension race requires Unix signals.' }
 . "$PSScriptRoot/../_ServerLifecycle.ps1"
 . "$PSScriptRoot/../_ElsaCommon.ps1"
+. "$PSScriptRoot/../runtime-alterations/_AlterationCommon.ps1"
 # Verify assembly metadata and the full adjacent runtime closure before launching either build.
 function Read-BuildManifest([string] $Assembly) {
     $text = & dotnet $ReaderAssembly --inspect-host $Assembly
@@ -33,7 +35,7 @@ $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $sourceCommit = (& git -C $repository rev-parse HEAD).Trim()
 if (-not $SourceRevision.StartsWith($sourceCommit, [StringComparison]::Ordinal)) { throw 'The candidate revision must name the current full source commit, with an optional explicit worktree suffix.' }
 function Read-SourceManifest {
-    $files = & git -C $repository ls-files --cached --others --exclude-standard -- Essentials/src/Activities/Bpmn Essentials/src/Activities/Primitives Essentials/src/Workflows/Runtime Essentials/apps/Elsa.Workbench e2e-tests/bpmn tools/bpmn/DeliveryRecoveryRead
+    $files = & git -C $repository ls-files --cached --others --exclude-standard -- Essentials/src/Activities/Bpmn Essentials/src/Activities/Primitives Essentials/src/Workflows/Runtime Essentials/apps/Elsa.Workbench e2e-tests/bpmn tools/bpmn/DeliveryRecoveryRead e2e-tests/_ElsaCommon.ps1 e2e-tests/_ServerLifecycle.ps1 e2e-tests/runtime-alterations/_AlterationCommon.ps1
     if ($LASTEXITCODE -ne 0) { throw 'The source manifest could not be enumerated.' }
     return @($files | Sort-Object -Unique | ForEach-Object {
         $path = Join-Path $repository $_
@@ -59,7 +61,7 @@ $settings.CShells.Shells.default.Features.BpmnRecoveryProbe = @{ ControlDirector
 $settings.CShells.Shells.default.Features.WorkflowsRuntimeResumption = @{ SweepIntervalSeconds = 1 }
 $settings | ConvertTo-Json -Depth 60 | Set-Content $settingsPath
 @{ caseId = $caseId; phase = if ($competing) { 'before-install' } elseif ($Phase -eq 'empty-cohort') { 'after-cohort' } else { $Phase }; eventName = $eventName } | ConvertTo-Json | Set-Content (Join-Path $control 'plan.json')
-$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } 'competing-proposal' { 'expired-old-prepared-proposal-cannot-replace-successor-winner' } 'competing-empty-proposal' { 'expired-old-empty-proposal-cannot-replace-populated-successor-winner' } default { 'after-cohort-before-dispatch' } }; passed = $false;
+$receipt = @{ sourceRevision = $SourceRevision; scenario = switch ($Phase) { 'after-resume' { 'partial-callback-and-rearm-before-source-ack' } 'before-selection' { 'delayed-first-selection-and-pre-start-wait-exclusion' } 'empty-cohort' { 'empty-saved-cohort-excludes-later-matches' } 'competing-proposal' { 'expired-old-prepared-proposal-cannot-replace-successor-winner' } 'competing-empty-proposal' { 'expired-old-empty-proposal-cannot-replace-populated-successor-winner' } 'competing-empty-winner' { 'expired-old-populated-proposal-cannot-replace-empty-successor-winner' } default { 'after-cohort-before-dispatch' } }; passed = $false;
     probeAssemblySha256 = (Get-FileHash $ProbeAssembly).Hash.ToLowerInvariant(); normalAssemblySha256 = (Get-FileHash $NormalAssembly).Hash.ToLowerInvariant();
     sourceCommit = $sourceCommit; sourceFiles = $sourceManifest; probeBuild = $probeManifest; normalBuild = $normalManifest; readerSha256 = $readerHash; readerBuild = $readerManifest;
     cut = $null; stopped = $null; successorClaim = $null; recovered = $null; observations = @(); failures = @() }
@@ -202,7 +204,7 @@ try {
     }
     $marker = Get-Content -Raw $markerPath | ConvertFrom-Json -AsHashtable -DateKind String
     $receipt.cut = $marker
-    if ($selectsAfterRestart) {
+    if ($selectsAfterRestart -or $emptyWinner) {
         if ($null -ne $marker.snapshot) { throw 'Selection already occurred before the delayed-delivery cut.' }
         if ($competing) {
             $proposalStarts = if ($emptyProposal) { 0 } else { 1 }; $proposalResumes = if ($emptyProposal) { 0 } else { 2 }
@@ -233,11 +235,29 @@ try {
         $receipt.partialBeforeCrash = $partial; $receipt.rearmedWait = $newWait[0]
         $receipt.acceptedRecipient = $recipient; $receipt.partialApi = $partialInstance
     }
+    if ($emptyWinner) {
+        $plan = Submit-AlterationPlan -Ctx $ctx -Target @{ executionIds = @($waitRun.workflowExecutionId) } `
+            -Alterations @(@{ kind = 'CancelWorkflow'; schemaVersion = 1; payload = @{} }) -IdempotencyKey "cancel-$caseId"
+        $terminal = Wait-AlterationPlanTerminal -Ctx $ctx -PlanId $plan.PlanId -TimeoutSeconds 45
+        if ($terminal.Json.status -ne 'Completed' -or $terminal.Json.counts.succeeded -ne 1 -or $terminal.Json.counts.targetCount -ne 1) { throw 'The original listener was not canceled through the actual public alteration service.' }
+        $cancelled = Get-WorkflowInstance -Ctx $ctx -ExecutionId $waitRun.workflowExecutionId
+        if ($cancelled.instance.status -ne 'Cancelled' -or @($cancelled.incidents).Count -ne 0) { throw 'The original listener did not reach its actual canceled checkpoint.' }
+        foreach ($recipient in $marker.proposal.resumes) {
+            $activity = @($cancelled.activities | Where-Object activityExecutionId -eq $recipient.activityExecutionId)
+            if ($activity.Count -ne 1 -or $activity[0].status -ne 'Cancelled') { throw 'A prepared exact original catch was not canceled.' }
+        }
+        $definitionId = [Uri]::EscapeDataString($marker.proposal.starts[0].binding.definitionId)
+        $unpublished = Invoke-RestMethod "$base/publishing/workflows/$definitionId/slots/default" -Method Delete -WebSession $ctx.Session
+        $receipt.withdrawal = @{ plan = $terminal.Json; cancelledInstance = $cancelled; publicationSlot = $unpublished }
+    }
     # These recipients are created after publisher commit. They join only if selection has not yet happened.
-    $latePublication = Import-Process ($waitXml.Replace('id="waiter"', 'id="late-waiter"'))
+    $lateWaitXml = $waitXml.Replace('id="waiter"', 'id="late-waiter"')
+    $lateStartXml = $startXml.Replace('id="selected-start"', 'id="late-start"')
+    if ($emptyWinner) { $lateWaitXml = $lateWaitXml.Replace($eventName, "unmatched-later-$eventName"); $lateStartXml = $lateStartXml.Replace($eventName, "unmatched-later-$eventName") }
+    $latePublication = Import-Process $lateWaitXml
     $lateRun = Invoke-Artifact -Ctx $ctx -ArtifactId $latePublication.artifactId -SourceReferenceId $latePublication.sourceReferenceId
     $null = Wait-Catches $lateRun.workflowExecutionId 2
-    $lateStart = Import-Process ($startXml.Replace('id="selected-start"', 'id="late-start"'))
+    $lateStart = Import-Process $lateStartXml
     if ($competing) {
         if ($probeProcess.HasExited) { throw 'The owned first process exited before suspension.' }
         $pausePath = Join-Path $caseDirectory 'paused.json'
@@ -258,6 +278,14 @@ try {
     }
     if ($stopped.source.status -ne 'Delivering' -or $stopped.source.deliveryFencingToken -ne $marker.fencingToken -or $stopped.source.deliveringOwnerId -ne $marker.ownerId) { throw 'The stopped source lost its actual claim facts.' }
     if (-not (Same-Snapshot $stopped.source.snapshot $marker.snapshot)) { throw 'The physical source differs from the captured winner.' }
+    if ($emptyWinner) {
+        $original = @($stopped.workflows | Where-Object workflowExecutionId -eq $waitRun.workflowExecutionId)[0]
+        $later = @($stopped.workflows | Where-Object workflowExecutionId -eq $lateRun.workflowExecutionId)[0]
+        $identity = $stopped.source.intentPayload
+        if ($null -ne $stopped.source.snapshot -or $original.status -ne 'Cancelled' -or $original.bookmarks.Count -ne 0 -or
+            $stopped.matchingBindings.Count -ne 0 -or $later.bookmarks.Count -ne 2 -or
+            @($later.bookmarks | Where-Object { $_.stimulusType -eq $identity.stimulusType -and $_.stimulusHash -eq $identity.stimulusHash }).Count -ne 0) { throw 'The checked physical state does not establish withdrawal before the empty winning selection.' }
+    }
     if ($Phase -eq 'empty-cohort') {
         $identity = $stopped.source.intentPayload
         $prior = @($stopped.workflows | Where-Object workflowExecutionId -eq $waitRun.workflowExecutionId)[0]
@@ -321,7 +349,7 @@ try {
     $successor = Get-Content -Raw $watchOutput | ConvertFrom-Json -AsHashtable -DateKind String
     $receipt.successorClaim = $successor
     if ($successor.source.deliveryFencingToken -le $stopped.source.deliveryFencingToken -or $successor.source.deliveringOwnerId -eq $stopped.source.deliveringOwnerId) { throw 'No distinct successor source claim was proven.' }
-    if ($unmatchedInitial) {
+    if ($unmatchedInitial -or $emptyWinner) {
         $finished = Get-WorkflowInstance -Ctx $ctx -ExecutionId $waitRun.workflowExecutionId
         if (@($finished.incidents).Count -ne 0) { throw 'An unmatched listener acquired an incident during empty-source recovery.' }
     } elseif ($Phase -ne 'after-resume') {
@@ -339,7 +367,16 @@ try {
         } while ([DateTimeOffset]::UtcNow -lt $deadline)
         if ($completed.Count -ne 2 -or $armed.Count -ne 2 -or @($finished.incidents).Count -ne 0) { throw 'Recovery did not complete only both saved callbacks and preserve rearmed listeners.' }
     }
-    if ($selectsAfterRestart) {
+    if ($emptyWinner) {
+        $deadline = [DateTimeOffset]::UtcNow.AddSeconds(30)
+        do {
+            $selectedSource = Observe 'empty-winner' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
+            if ($selectedSource.source.status -eq 'Delivered') { break }
+            Start-Sleep -Milliseconds 100
+        } while ([DateTimeOffset]::UtcNow -lt $deadline)
+        if ($null -eq $selectedSource.source.snapshot -or $selectedSource.source.selectedStarts.Count -ne 0 -or $selectedSource.source.selectedResumes.Count -ne 0) { throw 'The successor did not install a nonnull empty winner.' }
+        $receipt.firstSelected = $selectedSource
+    } elseif ($selectsAfterRestart) {
         $lateCompleted = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $lateRun.workflowExecutionId -TimeoutSeconds 60
         if ($lateCompleted.instance.status -ne 'Completed' -or @($lateCompleted.incidents).Count -ne 0) { throw 'First delivery did not include the listener armed after publisher commit.' }
         $selectedSource = Observe 'selected-after-recovery' @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId)
@@ -377,14 +414,14 @@ try {
     $receipt.recovered = $after
     if ($after.source.status -ne 'Delivered' -or -not (Same-Snapshot $after.source.snapshot $selectedSource.source.snapshot)) { throw 'Recovery did not settle its complete immutable source cohort.' }
     $expectedArtifacts = @()
-    if (-not $unmatchedInitial) { $expectedArtifacts += $selectedPublication.artifactId }
+    if (-not $unmatchedInitial -and -not $emptyWinner) { $expectedArtifacts += $selectedPublication.artifactId }
     if ($selectsAfterRestart) { $expectedArtifacts += $lateStart.artifactId }
     if ($after.source.selectedStarts.Count -ne $expectedArtifacts.Count) { throw 'The final source has an unexpected start set.' }
     foreach ($selectedStart in $after.source.selectedStarts) {
         $selected = @($after.allWorkflows | Where-Object artifactId -eq $selectedStart.artifactId)
         if ($selectedStart.artifactId -notin $expectedArtifacts -or $selected.Count -ne 1 -or $selected[0].workflowExecutionId -ne $selectedStart.workflowExecutionId) { throw 'A saved start did not produce exactly its original deterministic keyed execution.' }
     }
-    if ($Phase -eq 'empty-cohort') {
+    if ($Phase -eq 'empty-cohort' -or $emptyWinner) {
         if ($after.source.selectedResumes.Count -ne 0 -or $null -eq $after.source.snapshot) { throw 'Recovery changed an actual empty decision into new recipients.' }
         foreach ($before in $stopped.workflows | Where-Object { $_.workflowExecutionId -in @($waitRun.workflowExecutionId, $lateRun.workflowExecutionId) }) {
             $current = @($after.workflows | Where-Object workflowExecutionId -eq $before.workflowExecutionId)
