@@ -84,14 +84,28 @@ try
             PinnedExecutable = state?.PinnedExecutable, PinnedSource = state?.PinnedSource, RunKind = state?.RunKind, Bookmarks = waits, SelectedActivities = selectedActivities });
     }
     var all = await executions.ListAsync();
+    // Observe declared stimulus fields and the actual checked binding index; these reads grant no dispatch authority.
+    var intentPayload = source.Intent.Payload ?? throw new InvalidDataException("The fixture source has no stimulus payload.");
+    var stimulusType = intentPayload.GetProperty("stimulusType").GetString() ?? throw new InvalidDataException("Missing declared stimulus type.");
+    var stimulusHash = intentPayload.GetProperty("stimulusHash").GetString() ?? throw new InvalidDataException("Missing declared stimulus hash.");
+    var bindings = new List<object>();
+    var bindingStore = new EfWorkflowTriggerBindingStore(context, access);
+    string? continuation = null;
+    do
+    {
+        var page = await bindingStore.ListByStimulusAsync(new(stimulusType, stimulusHash, continuationToken: continuation));
+        bindings.AddRange(page.Items.Select(binding => new { binding.TriggerBindingId, binding.ArtifactId,
+            binding.ExecutableNodeId, binding.StimulusType, binding.StimulusHash, binding.IsActive, binding.CreatedAt }));
+        continuation = page.NextContinuationToken;
+    } while (continuation is not null);
     await VerifyAsync();
     Console.WriteLine(JsonSerializer.Serialize(new { ProviderChecked = true, ReadOnly = true, SnapshotSha256 = args[1],
         Source = new { source.OutboxItemId, source.Intent.WorkflowExecutionId, source.RecordedAt, Status = source.Status.ToString(), source.DeliveryAttemptCount,
-            source.DeliveringOwnerId, source.DeliveryFencingToken, source.DeliveryVisibleAfter, source.DeliveredAt, source.LastFailureMessage,
+            source.DeliveringOwnerId, source.DeliveryFencingToken, source.DeliveryVisibleAfter, source.DeliveredAt, source.LastFailureMessage, IntentPayload = intentPayload,
             IntentFingerprint = RuntimeCheckpointCommitFingerprint.ComputeIntent(source.Intent), Snapshot = cohort,
             SelectedResumes = cohort?.Resumes.Select(entry => new { entry.WorkflowExecutionId, entry.BookmarkId, entry.ActivityExecutionId, entry.ExecutableNodeId, entry.CreatedAt, Generation = entry.RegistrationCapture?.Generation }),
             SelectedStarts = cohort?.Starts.Select(entry => new { entry.Executable.ArtifactId, BindingCreatedAt = entry.Binding.CreatedAt,
-                WorkflowExecutionId = KeyedWorkflowStartIdentity.For(source.Intent.IdempotencyKey!, entry.Executable.ArtifactId).WorkflowExecutionId }) }, Workflows = observations,
+                WorkflowExecutionId = KeyedWorkflowStartIdentity.For(source.Intent.IdempotencyKey!, entry.Executable.ArtifactId).WorkflowExecutionId }) }, Workflows = observations, MatchingBindings = bindings,
         AllWorkflows = all.Select(state => new { state.WorkflowExecutionId, state.PinnedExecutable.ArtifactId, Status = state.Status.ToString() }) }, json));
     return 0;
 
