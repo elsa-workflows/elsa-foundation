@@ -21,7 +21,7 @@ Iteration 1 at `7a3d36adbcebf063a767bfab48a1fd55688d03de`: standards clean; corr
 
 ## Tasks
 
-Draft task list generated; independent review and cross-artifact analysis pending. No source implementation yet.
+Iteration 1 at `62c33169a19c71fb57a352709a0ab36e27334f6b`: acceptance clean; correctness and standards identified the same missing T025 bridge dependency. The revised task list explicitly waits for T027/T034–T035 and requires T040 to complete its real terminal-settlement arms; a synthetic earlier producer cannot qualify it. Re-review and cross-artifact analysis pending. No source implementation yet.
 
 ## Complete PR
 
