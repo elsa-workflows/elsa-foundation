@@ -66,7 +66,7 @@ a list.
 ### 2. The criteria
 
 An activity type may be marked `[BackgroundExecutionSafe]`, and a node placed in the background, only when all of these
-hold. The **Check** column says who guarantees it:
+hold. The **Check** column says who must guarantee it under this ADR; the **Today** column says what the code does now:
 - **E**: the engine enforces it at publish and again at run time;
 - **R**: the engine can only check it at run time, after the body ran;
 - **D**: the activity author declares it with the attribute, because no code can prove it.
@@ -92,7 +92,9 @@ One eligibility component defines the enforced criteria (C1–C5 and C9 for publ
 for run time only), and both publication and the worker call it. A new criterion is one change. A publish-time check
 that needs design-time information (for example the CLR result type) and a run-time check that needs the activated
 object may be two methods of that one component, but not two separate lists. The component lives in
-`Elsa.Activities.Runtime.Core`, which Publishing already references, so the Design/Runtime direction is kept.
+`Elsa.Workflows.Runtime.Core`, where `ExecutableNode` and the structural and checkpoint contracts it checks already
+live, and which both Publishing and `Elsa.Activities.Runtime` already reference, so no new dependency direction is
+needed.
 
 The declared criteria (C7, C8) are documented on `[BackgroundExecutionSafe]` itself, so an activity author reads the
 promise where they make it.
