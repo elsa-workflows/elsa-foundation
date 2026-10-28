@@ -1,0 +1,18 @@
+{
+  "kind": "actual-predecessor-queue-reader-refusal",
+  "currentWriterProductVersion": "1.0.0+7be89f8eea17d2d35514ffde1f0d15421d48ca96",
+  "currentWriterSha256": "cc0cbddab9706466bec5639771cf400aed57d0f274b363cd3d6296d4524ab3b2",
+  "currentCoreProductVersion": "1.0.0+7be89f8eea17d2d35514ffde1f0d15421d48ca96",
+  "toolProductVersion": "1.0.0+7be89f8eea17d2d35514ffde1f0d15421d48ca96",
+  "predecessorProductVersion": "1.0.0+bf83b23b4b3987d6ac3b7c31df98ee9133156763",
+  "predecessorProviderSha256": "90be398437748cc80d0dd757b89b5c7302463880eade48e062ab658c6b76f1a2",
+  "predecessorCoreProductVersion": "1.0.0+bf83b23b4b3987d6ac3b7c31df98ee9133156763",
+  "predecessorCoreSha256": "205a0931e505b890d85430f8f365790e2966c50de72654cf80f015b2de078134",
+  "nativeV1ControlRead": true,
+  "actualModelWriterStamp": "2.0.0",
+  "modelReaderRefusal": "Elsa.Persistence.EntityFramework.EfSchemaVersionSkewException",
+  "modelClaimToken": 0,
+  "modelRevision": 1,
+  "actualHostRecoveryProved": false,
+  "workerPlacementProved": false
+}

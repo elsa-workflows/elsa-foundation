@@ -1,0 +1,109 @@
+{
+  "kind": "T009 partial: protected model queue format and pre-claim refusal",
+  "source_commit": "7be89f8eea17d2d35514ffde1f0d15421d48ca96",
+  "source_binding": "Runtime/tool source is this committed head. Local behavior suites ran against byte-identical runtime source before its commit; imported main changes affect only Studio build-path handling and its separate test.",
+  "unique_passing_checks": 1026,
+  "results": [
+    {
+      "scope": "Runtime scheduler/coalescing/model/lease behavior",
+      "passed": 517,
+      "failed": 0,
+      "skipped": 0,
+      "trx_sha256": "dfaf90d5eb5bfbd4052c64b7d88d84d8f4152067c2cefc80ff78b76db79fd219"
+    },
+    {
+      "scope": "EF queue/material/native-model retention/checkpoint/captured-store schema checks",
+      "passed": 333,
+      "failed": 0,
+      "skipped": 0,
+      "trx_sha256": "ef7097139f4626956c9f721670f86e359fdb96896c880b3e7e3eb56eaf4eb3ff"
+    },
+    {
+      "scope": "Held-v1 writes, model admission refusal and no peer downgrade",
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0,
+      "trx_sha256": "61bfd9efb22d597c476cd8bc0d872005d824dd16ecaef154111d80949e8e5027"
+    },
+    {
+      "scope": "Architecture/catalog/composition/permission checks",
+      "passed": 84,
+      "failed": 0,
+      "skipped": 0,
+      "trx_sha256": "0171007ce70a28c0aeb511349fabfa0146119ce3410be43e656b6fc64a661500"
+    },
+    {
+      "scope": "Cluster schema readability",
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0,
+      "trx_sha256": "c88309732f73096e94572c5c6d15445c07e76b40042842a5acdfc3cce5caa64d"
+    },
+    {
+      "scope": "Four-provider migration agreement/payload/finalization/schema",
+      "passed": 63,
+      "failed": 0,
+      "skipped": 0,
+      "trx_sha256": "d95bfe6d6f71b1d40744178e7c5ac9fedbf8d0fb532d767b14969a6233eabc54"
+    },
+    {
+      "scope": "Updated exact finalization advertisement assertions",
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "trx_sha256": "ff9c9409005b3f2ed53d6ae26b163abdafebaa10b864d4c0b332cf970ac31248"
+    },
+    {
+      "scope": "Unchanged native EF command budgets",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "trx_sha256": "f7939f4485b1bf36eb543ee59945e2fd23595885b1548dbcb4324c4c436f0ca5"
+    }
+  ],
+  "negative_control": {
+    "removed": "EF ClaimAsync invocation of request.ValidateBeforeClaim",
+    "test": "Model_input_uses_a_predecessor_unreadable_stamp_and_survives_missing_driver_without_a_claim",
+    "result": "Expected failure: no RuntimeSchedulerWorkUnavailableException; native fallback acknowledged the model input",
+    "guard_restored_sha256": "b06c175df147a206ccf150b1d13238b85df7a40417beb93fcb1e576648aa1170",
+    "restored_provider_selection_passed": 333
+  },
+  "predecessor_witness": {
+    "command": "dotnet <built DeliveryRecoveryRead.dll> --check-predecessor-queue-reader <built predecessor Workbench.dll> <new fixture.sqlite>",
+    "predecessor_source_commit": "bf83b23b4b3987d6ac3b7c31df98ee9133156763",
+    "observation": "queue-reader-compatibility/predecessor-reader.json",
+    "fixture": "queue-reader-compatibility/runtime.sqlite.gz",
+    "fixture_gzip_sha256": "592d1328aa8df98e47fe293798dac953db115b99aed01ae46ea55e246b9f4147",
+    "fixture_database_sha256": "ddb1f25aa0b46a732293cc0733f72179b4e10875cf6b5256e80490b317b29d45",
+    "native_control": "Deliberately constructed v1 stamp over unchanged native format; actual held-v1 writes qualified separately.",
+    "model_row": "Unmodified output from the real current EF queue writer; revision 1, claim token 0.",
+    "proof": "Actual predecessor checked reader accepts native v1 and refuses model v2 with EfSchemaVersionSkewException; not a full old-host/placement witness."
+  },
+  "ci_regression_repair": {
+    "prior_head": "ff5266e67dd50dc69e5981d0b6517bfb16e1118d",
+    "failed_job": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40778085585/job/123132579194",
+    "failure": "Nine native EF command budgets exceeded by model-only retention revalidation on native closures.",
+    "repair": "Apply additional material incarnation/grant revalidation only to closures containing model material. Existing native and model safeguards remain qualified; budgets unchanged.",
+    "passing_command_budget_checks": 10
+  },
+  "proof_limits": {
+    "direct_model_admission_enabled": false,
+    "direct_bpmn_recovery_proved": false,
+    "upgraded_host_recovery_proved": false,
+    "studio_compatibility_proved": false,
+    "worker_placement_proved": false,
+    "full_pr_review_rounds": 0,
+    "T009_complete": false
+  },
+  "verification_commands": [
+    "dotnet test Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj -c Release --filter \"FullyQualifiedName~Scheduler|FullyQualifiedName~Coalesc|FullyQualifiedName~WorkflowExecutableRootWriteLeaseManager|FullyQualifiedName~RuntimeModel\"",
+    "dotnet test Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj -c Release --filter \"FullyQualifiedName~EfRuntimeModelCheckpointTests|FullyQualifiedName~RuntimeModelMigrationTests|FullyQualifiedName~EfRuntimeArtifactScopeTests|FullyQualifiedName~EfWorkflowExecutableStoreTests|FullyQualifiedName~StimulusDeliveryPhysicalRetentionTests|FullyQualifiedName~EfSchedulerWorkQueueStoreTests|FullyQualifiedName~StimulusDeliverySchemaGateTests\"",
+    "dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj -c Release --filter \"FullyQualifiedName~ArchitectureGuardTests|FullyQualifiedName~CatalogLinkGuardTests|FullyQualifiedName~Every_packable_runtime_library_is_loaded_so_its_features_are_composed|FullyQualifiedName~The_scan_inspects_every_runtime_library_endpoint_and_authorization_context\"",
+    "dotnet test Essentials/tests/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj -c Release --filter \"FullyQualifiedName~EfSchemaReadabilitySourceTests\"",
+    "dotnet test Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj -c Release --filter \"FullyQualifiedName~ModuleMigrationTests|FullyQualifiedName~ModulePayloadColumnTests|FullyQualifiedName~EfToolingFinalizationTests|FullyQualifiedName~EfSchemaContentDeclarationTests|FullyQualifiedName~EfSchemaFamilyDescriptorTests\"",
+    "dotnet test Essentials/tests/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj -c Release --filter \"FullyQualifiedName~EfCommandBudgetTests\"",
+    "dotnet run --project tools/maps/Elsa.Maps.Generator -- check",
+    "dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check"
+  ],
+  "schema_table_layout_changed_in_this_slice": false
+}
