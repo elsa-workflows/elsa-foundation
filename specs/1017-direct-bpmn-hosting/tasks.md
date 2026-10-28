@@ -8,6 +8,8 @@
 
 **Organization**: Setup → shared foundations → P1 US1/US2/US3/US5 → P2 US4 → integrated delivery. Each story has a useful independently demonstrable checkpoint; cross-story outcome integration remains mandatory before #2898 closes. `[P]` permits independent files/checks after stated prerequisites; one implementation leaf and the build-slot wrapper remain in force.
 
+**28 October delivery focus:** [owner-confirmed direct recovery first](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6480176858). Introduce each shared contract with its actual consumer. Model state/input/checkpoint participation and additive Runtime migrations are implemented under T005/T007/T008; material/retention, dispatch and the real driver remain open. Native-caller, model-work admission predicates and protocol registration are deferred until those concrete paths are wired. These partial foundations do not check off the full tasks or establish direct-host acceptance.
+
 ## Phase 1: Setup and actual baseline capture
 
 **Hard ordering**: No affected production writer, schema or payload change before T002. New capture tooling may be implemented first because it operates through the current product commands and does not alter those writers.

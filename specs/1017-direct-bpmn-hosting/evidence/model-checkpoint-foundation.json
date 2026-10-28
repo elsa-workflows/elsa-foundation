@@ -1,0 +1,72 @@
+{
+  "kind": "partial model checkpoint foundation",
+  "source_binding": "Commit containing this receipt; exact head recorded in PR3410 checkpoint.",
+  "source_parent": "401267e9a7c8f59076d276c00a425382b93647a5",
+  "goal": "Direct BPMN start/wait/restart/resume/complete first; only necessary shared mechanisms.",
+  "results": [
+    {
+      "scope": "Runtime model/checkpoint/native/coalescing behavior",
+      "total": 182,
+      "passed": 182,
+      "failed": 0,
+      "notExecuted": 0
+    },
+    {
+      "scope": "SQLite model/native checkpoints and captured-store schema upgrade",
+      "total": 64,
+      "passed": 64,
+      "failed": 0,
+      "notExecuted": 0
+    },
+    {
+      "scope": "Four-provider model/migration agreement, fresh SQLite and schema declarations",
+      "total": 47,
+      "passed": 47,
+      "failed": 0,
+      "notExecuted": 0
+    }
+  ],
+  "schema_upgrade": {
+    "fixture": "baseline/multi-instance-and-studio/runtime.sqlite.gz",
+    "sha256": "3fcd6e38a968d05026a2c57a188f5d5c9d6fdbc313afd9ce19c82ad3e2b21416",
+    "old_migration": "20261017151421_Initial",
+    "new_tables": 2,
+    "all_legacy_rows_unchanged": true,
+    "original_migration_sources": {
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/PostgreSql/20261017151417_Initial.Designer.cs": "ee4d276520c509980d91ce18064d90178d6e216cc58945d4963e0e28db88f37d",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/PostgreSql/20261017151417_Initial.cs": "c06151f8fe24ae136aa427cad6c2df1b5af9fca92da085dcd65a1ebe4ad7465d",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/Sqlite/20261017151421_Initial.cs": "5cad388ec7b5b9fec3b4da80d998a2250aaf5db502d915f9b9a9565fb1a19ad6",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/Sqlite/20261017151421_Initial.Designer.cs": "397c94f9cf63599d988b280392038e7f2a49b31dd60bf1236c1c362207a3cded",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/MySql/20261017151415_Initial.Designer.cs": "475d7b501e304f7f923827c32b16acb6b6fe012cfcff57076660d218364b2721",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/MySql/20261017151415_Initial.cs": "ee57b44aeb048bfadffa5ac694269138ebbf28a73cbe6f7ea327e0c696b65bea",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/SqlServer/20261017151419_Initial.Designer.cs": "4f795349a2987255f71c78970e8e5287566455792ae9092afb71c19afa67b58c",
+      "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/SqlServer/20261017151419_Initial.cs": "86a3a45b99bf170da2ada8fe5324dbe3fecbc40c106f7d3acd358c3abf4d1785"
+    }
+  },
+  "negative_control": {
+    "guard": "immutable model execution authority in EfRuntimeModelCheckpointParticipantStaging",
+    "removed_guard_result": "authority replacement test failed because no exception was thrown; other three pin/protocol/incarnation cases passed",
+    "restored_result": "64 focused SQLite checks passed, including this case",
+    "restored_source_sha256": "4555b9be001e4fcf87518b22246c41f6ea112207f467cf0099d13ac425ac2c0b"
+  },
+  "environment_retry": "The schema scan initially passed46/failed1 because its repository-root resolver starts at AppContext.BaseDirectory and artifacts were outside the repository. Re-running from ignored in-repository artifacts passed47; no source/test guard was changed for that retry.",
+  "limits": {
+    "direct_bpmn_admission_enabled": false,
+    "direct_bpmn_recovery_proven": false,
+    "changed_host_legacy_recovery_proven": false,
+    "studio_acceptance_proven": false,
+    "non_sqlite_database_checkpoint_behavior_proven": false,
+    "non_sqlite_model_migration_shapes_verified": true,
+    "full_pr_review_rounds": 0
+  },
+  "next": "Implement actual model material/retention and verified dispatch, then wire the released BPMN driver and HTTP journey. Native-caller and native admission predicates wait for their actual consumers.",
+  "commands": [
+    "dotnet test Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj -c Release --filter \"FullyQualifiedName~RuntimeModelCheckpointTests|FullyQualifiedName~RuntimeCheckpointCommitTests|FullyQualifiedName~RuntimeCheckpointCommitValidatorTests|FullyQualifiedName~RuntimeCheckpointCoalescingTests|FullyQualifiedName~RuntimeModelMaterialTests\"",
+    "dotnet test Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj -c Release --filter \"FullyQualifiedName~RuntimeModelMigrationTests|FullyQualifiedName~EfRuntimeModelCheckpointTests|FullyQualifiedName~EfRuntimeCheckpointCommitStoreTests\"",
+    "dotnet test Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj -c Release --filter \"FullyQualifiedName~ModuleMigrationTests|FullyQualifiedName~ExpandOnlyMigrationScanTests|FullyQualifiedName~EfSchemaContentDeclarationTests|FullyQualifiedName~EfSchemaFamilyDescriptorTests\"",
+    "dotnet run --project tools/maps/Elsa.Maps.Generator -- check",
+    "dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check"
+  ],
+  "maps": "Generated solution filters still describe the project graph.",
+  "test_tiers": "123 projects, each in one tier and one shard."
+}

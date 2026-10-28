@@ -265,6 +265,8 @@ public static class RuntimeCheckpointCommitFingerprint
         var element = commit.ExpectedBookmarkResume is null
             ? JsonSerializer.SerializeToElement(payload, SerializerOptions)
             : JsonSerializer.SerializeToElement(new { ExactBookmarkResumeVersion = 1, Payload = payload, commit.ExpectedBookmarkResume }, ExactBookmarkOptions);
+        if (commit.ModelState is not null)
+            element = JsonSerializer.SerializeToElement(new { ModelStateVersion = 1, Payload = element, commit.ModelState }, ExactBookmarkOptions);
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
             WriteCanonical(element, writer);

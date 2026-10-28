@@ -15,6 +15,24 @@ public sealed record RuntimeCheckpointCommit(
 {
     public string WorkflowExecutionId => Checkpoint.WorkflowExecutionId;
 
+    /// <summary>Optional model decision written with the fence, consumed input and outbox in one transaction.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeModelStateChange? ModelState { get; init; }
+
+    /// <summary>Reject a model decision that could alias native state or escape its execution fence.</summary>
+    public void EnsureModelStateShape()
+    {
+        if (ModelState is not { } model) return;
+        if (model.State.ExecutionId != WorkflowExecutionId || ExpectedFence is null ||
+            model.State.UpdatedAt != Checkpoint.OccurredAt || model.Input.AcceptedAt != Checkpoint.OccurredAt ||
+            ExpectedBookmarkResume is not null || StateChanges.WorkflowExecution is not null ||
+            StateChanges.ActivityExecutions.Count != 0 || StateChanges.ActivityExecutionInspections.Count != 0 ||
+            StateChanges.Bookmarks.Count != 0 || StateChanges.DurableValues.Count != 0 ||
+            StateChanges.Incidents.Count != 0 || StateChanges.ActivityScopeCleanups.Count != 0 ||
+            StateChanges.AlterationJobTerminalChange is not null || !StateChanges.BackgroundActivityWork.IsEmpty)
+            throw new InvalidOperationException("A model decision requires its exact execution, timestamp and fence, without native execution state.");
+    }
+
     /// <summary>Optional exact physical wait condition, atomically checked with initial trigger consumption.</summary>
     /// <remarks>This is a write condition, not source authority. Legacy providers refuse it. Null retains the old wire/fingerprint.</remarks>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

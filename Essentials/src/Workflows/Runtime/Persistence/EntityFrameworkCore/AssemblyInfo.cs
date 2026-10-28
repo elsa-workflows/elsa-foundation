@@ -38,6 +38,9 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaFamily(RuntimeWorkflowAlterationEfModule.SchemaFamily, "Workflows.Runtime", RuntimeWorkflowAlterationEfModule.SchemaVersion, Entities = [typeof(WorkflowAlterationPlanEntity), typeof(WorkflowAlterationJobEntity)])]
 [assembly: EfSchemaFamily(RuntimeWorkflowDispatchEfModule.SchemaFamily, "Workflows.Runtime", RuntimeWorkflowDispatchEfModule.SchemaVersion, Entities = [typeof(WorkflowDispatchEntity)])]
 [assembly: EfSchemaFamily(RuntimeWorkflowExecutionEfModule.SchemaFamily, "Workflows.Runtime", RuntimeWorkflowExecutionEfModule.SchemaVersion, Entities = [typeof(WorkflowExecutionStateEntity)])]
+[assembly: EfSchemaFamily(RuntimeModelStateEfModule.SchemaFamily, "Workflows.Runtime", RuntimeModelStateEfModule.SchemaVersion, Entities = [typeof(RuntimeModelExecutionEntity), typeof(RuntimeModelInputEntity)])]
+[assembly: EfSchemaContent(RuntimeModelStateEfModule.SchemaFamily, typeof(RuntimeModelExecutionEntity), nameof(RuntimeModelExecutionEntity.ContentJson))]
+[assembly: EfSchemaContent(RuntimeModelStateEfModule.SchemaFamily, typeof(RuntimeModelInputEntity), nameof(RuntimeModelInputEntity.ContentJson))]
 [assembly: EfSchemaFamily(RuntimeWorkflowTestScopeEfModule.SchemaFamily, "Workflows.Runtime", RuntimeWorkflowTestScopeEfModule.SchemaVersion, Entities = [typeof(WorkflowTestScopeEntity)])]
 
 // Content and integrity columns: see Essentials/src/Persistence/EntityFramework/EXTENSION_POINTS.md, "Content and integrity columns".

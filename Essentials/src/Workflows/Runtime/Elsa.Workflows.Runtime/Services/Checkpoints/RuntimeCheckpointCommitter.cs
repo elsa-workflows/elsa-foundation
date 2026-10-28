@@ -102,10 +102,15 @@ public sealed class RuntimeCheckpointCommitter
         // then validate this fence inside the same atomic decision as state, outbox, and the commit marker.
         commit = AttachExpectedFence(commit);
 
+        if (commit.ModelState is not null && !_checkpointCommitStore.SupportsModelCheckpoint)
+            throw new NotSupportedException("The selected checkpoint store cannot atomically persist model state and accepted inputs.");
         if (commit.ExpectedBookmarkResume is not null && !_checkpointCommitStore.SupportsExactBookmarkResume)
             throw new NotSupportedException("The selected checkpoint store cannot enforce exact bookmark resume admission.");
         var decision = await _persistencePolicy.DecideAsync(commit.Checkpoint, cancellationToken);
-        if (commit.ExpectedBookmarkResume is not null)
+        if (commit.ModelState is not null)
+            decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate,
+                "Model decisions require an atomic physical checkpoint.");
+        else if (commit.ExpectedBookmarkResume is not null)
             decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate,
                 "Exact bookmark admission requires an atomic physical checkpoint.");
         else if (!commit.StateChanges.BackgroundActivityWork.IsEmpty)

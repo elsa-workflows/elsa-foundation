@@ -3,10 +3,11 @@
 #
 # Usage:
 #   bash tools/ef/generate-module-migrations.sh [context-regex]
+#   bash tools/ef/generate-module-migrations.sh --runtime-incremental MigrationName
 #
 # Elsa is pre-release and ships no production data, so each module keeps one Initial migration
 # per provider that is regenerated whenever its model changes. Secrets keeps its historical
-# migration chain; only a provider with no Secrets migrations yet gets an Initial here.
+# migration chain. Runtime retains saved-execution history and requires --runtime-incremental.
 #
 # Regeneration ends when 4.0 ships as a stable release (ADR 0078, issue #1976): each Initial is
 # then frozen as its module's baseline and later model changes add incremental migrations. A
@@ -17,7 +18,21 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 cd "$root"
+mode="regenerate"
 filter="${1:-.*}"
+migration_name="Initial"
+if [[ "$filter" == "--runtime-incremental" ]]; then
+  mode="runtime-incremental"
+  migration_name="${2:-}"
+  if [[ $# -ne 2 || ! "$migration_name" =~ ^[A-Za-z][A-Za-z0-9_]*$ || "$migration_name" == "Initial" ]]; then
+    echo "Usage: $0 --runtime-incremental MigrationName (a new, non-Initial identifier)" >&2
+    exit 2
+  fi
+  filter='Runtime(Sqlite|SqlServer|PostgreSql|MySql)DbContext'
+elif [[ "$filter" == --* || $# -gt 1 ]]; then
+  echo "Usage: $0 [context-regex] | --runtime-incremental MigrationName" >&2
+  exit 2
+fi
 tooling="tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj"
 configuration="${ELSA_EF_CONFIGURATION:-Release}"
 module_roots=(Essentials/src)
@@ -64,6 +79,8 @@ build_tooling() {
 while IFS= read -r snapshot; do
   name="$(basename "$snapshot" ModelSnapshot.cs)"
   [[ "$name" =~ ^($filter)$ ]] || continue
+  # #2898 retains real saved Runtime executions. Their original history must survive every generator mode.
+  [[ "$mode" == "runtime-incremental" || "$name" =~ ^Runtime(Sqlite|SqlServer|PostgreSql|MySql)DbContext$ ]] && continue
   [[ "$snapshot" == */Secrets/* && "$name" != SecretsMySqlDbContext ]] && continue
   rm -rf "$(dirname "$snapshot")"
 done < <(find "${module_roots[@]}" -name '*ModelSnapshot.cs' -path '*/EntityFrameworkCore/Migrations/*' -not -path '*/obj/*')
@@ -83,11 +100,15 @@ for row in "${rows[@]}"; do
   IFS='|' read -r context provider assembly namespace <<<"$row"
   project="$(module_project "$assembly")"
   dir="$(dirname "$project")/$(output_dir "$context" "$provider" "$assembly")"
+  if [[ "$mode" != "runtime-incremental" && "$assembly" == "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore" ]]; then
+    echo "skip $context: retained Runtime history requires --runtime-incremental MigrationName"
+    continue
+  fi
   if [[ "$assembly" == "Elsa.Secrets.Persistence.EntityFrameworkCore" && -d "$dir" ]]; then
     echo "skip $context: Secrets keeps its migration chain"
     continue
   fi
-  rm -rf "$dir"
+  if [[ "$mode" != "runtime-incremental" ]]; then rm -rf "$dir"; fi
   targets+=("$context|$provider|$project|$(output_dir "$context" "$provider" "$assembly")|$namespace")
 done
 
@@ -95,8 +116,8 @@ build_tooling
 
 for target in "${targets[@]}"; do
   IFS='|' read -r context provider project dir namespace <<<"$target"
-  echo "migrations add Initial --context $context"
-  dotnet ef migrations add Initial \
+  echo "migrations add $migration_name --context $context"
+  dotnet ef migrations add "$migration_name" \
     --context "$context" \
     --project "$project" \
     --startup-project "$tooling" \
@@ -115,4 +136,4 @@ for target in "${targets[@]}"; do
   bash "$root/tools/ef/strip-provider-calls.sh" "$module_dir/$dir"
 done
 
-echo "Regenerated ${#targets[@]} migration set(s). Build the modules and run the EF migration tests before committing."
+echo "Updated ${#targets[@]} migration set(s) ($mode). Build the modules and run the EF migration tests before committing."

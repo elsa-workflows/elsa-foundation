@@ -4,6 +4,13 @@
 checkpointing, durable runtime state, scheduling, recovery, and runtime alterations. It does not load Design
 definitions at execution time.
 
+Direct model hosting (spec1017) is in progress. Model state and accepted-input receipts participate in the
+existing fenced checkpoint transaction through the Runtime EF provider; native commits without a model
+participant retain their wire and fingerprint. This does not enable direct BPMN admission: model material/retention,
+dispatch, and the real start/wait/restart/resume/complete journey remain to be wired and qualified.
+See the [model reader and checkpoint boundary](EXTENSION_POINTS.md) and
+[current delivery objective](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6480176858).
+
 ## Activation channels
 
 An activation slot belongs to one `(definitionId, slotName)` pair. A declared channel gives the same slot name

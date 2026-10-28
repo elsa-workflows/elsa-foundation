@@ -154,6 +154,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(commit);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (commit.ModelState is not null)
+            throw new NotSupportedException("The in-memory checkpoint writer does not support model decisions.");
         try { return await CommitWithParticipantsAsync(commit, decision, cancellationToken); }
         catch (Exception exception) when (commit.ExpectedBookmarkResume is not null && exception is
             WorkflowExecutableRootWriteLeaseUnavailableException or WorkflowExecutableRootWriteLeaseLostException)

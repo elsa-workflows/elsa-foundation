@@ -56,6 +56,8 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     private readonly IRuntimeCheckpointCommitStore _inner;
 
     public bool SupportsExactBookmarkResume => _inner.SupportsExactBookmarkResume;
+    bool IRuntimeCheckpointCommitStore.SupportsModelCheckpoint => _inner.SupportsModelCheckpoint;
+    bool IRuntimeCheckpointCommitStore.CanCommitModelState(IRuntimeModelExecutionReader reader) => _inner.CanCommitModelState(reader);
     public bool CanCommitExactBookmarkResume(IBookmarkStateStore bookmarks, IWorkflowExecutionStateStore physicalExecutions,
         IActivityExecutionStateStore activities) => _inner.CanCommitExactBookmarkResume(bookmarks, physicalExecutions, activities);
 
@@ -64,6 +66,16 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     {
         ArgumentNullException.ThrowIfNull(commit);
         ArgumentNullException.ThrowIfNull(decision);
+
+        if (commit.ModelState is not null)
+        {
+            if (!_inner.SupportsModelCheckpoint || sessionAccessor.Current?.AppliesTo(commit.WorkflowExecutionId) == true)
+                throw new NotSupportedException("Model decisions require a qualified physical writer outside a native coalescing session.");
+            if (decision.Mode != RuntimeCheckpointPersistenceMode.Immediate)
+                throw new NotSupportedException("Model decisions cannot be deferred or skipped.");
+            commit.EnsureModelStateShape();
+            return await _inner.CommitAsync(commit, decision, cancellationToken);
+        }
 
         if (commit.ExpectedBookmarkResume is not null && !SupportsExactBookmarkResume)
             throw new NotSupportedException("The physical checkpoint store cannot enforce exact bookmark resume admission.");

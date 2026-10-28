@@ -28,6 +28,9 @@ public sealed class EfRuntimeCheckpointCommitStore(
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     bool IRuntimeCheckpointCommitStore.SupportsExactBookmarkResume => true;
+    bool IRuntimeCheckpointCommitStore.SupportsModelCheckpoint => true;
+    bool IRuntimeCheckpointCommitStore.CanCommitModelState(IRuntimeModelExecutionReader reader) =>
+        reader is EfRuntimeModelExecutionReader selected && selected.Uses(context, accessContextAccessor);
 
     bool IRuntimeCheckpointCommitStore.CanCommitExactBookmarkResume(IBookmarkStateStore bookmarks,
         IWorkflowExecutionStateStore physicalExecutions, IActivityExecutionStateStore activities)
@@ -115,6 +118,17 @@ public sealed class EfRuntimeCheckpointCommitStore(
         ArgumentException.ThrowIfNullOrWhiteSpace(commit.WorkflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
 
+        commit.EnsureModelStateShape();
+        if (commit.ModelState is { } model)
+        {
+            accessContextAccessor.Current.EnsureScope(model.State.Scope);
+            accessContextAccessor.Current.EnsureTenantScope(model.State.TenantId);
+            EfRuntimeOperationalStoreSupport.ValidateIdentity(model.State.ExecutionId, nameof(model.State.ExecutionId));
+            EfRuntimeOperationalStoreSupport.ValidateIdentity(model.Input.InputId, nameof(model.Input.InputId));
+            if (decision.Mode != RuntimeCheckpointPersistenceMode.Immediate)
+                throw new NotSupportedException("Model decisions require an immediate physical checkpoint.");
+        }
+
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
         var fingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
         var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, commit.CommitId);
@@ -147,11 +161,12 @@ public sealed class EfRuntimeCheckpointCommitStore(
             return replay;
         }
 
-        if (commit.ExpectedBookmarkResume is not null && (context.ChangeTracker.HasChanges() || context.Database.CurrentTransaction is not null ||
+        if ((commit.ExpectedBookmarkResume is not null || commit.ModelState is not null) && (context.ChangeTracker.HasChanges() || context.Database.CurrentTransaction is not null ||
             context.Database.GetEnlistedTransaction() is not null || System.Transactions.Transaction.Current is not null))
             throw new InvalidOperationException("Exact bookmark checkpoint admission requires a clean context and its own transaction.");
 
-        if (commit.StateChanges.WorkflowExecution is { } executionChange)
+        var pinned = commit.ModelState?.State.Executable ?? commit.StateChanges.WorkflowExecution?.State.PinnedExecutable;
+        if (pinned is not null)
         {
             if (rootWriteLeaseManager is null)
                 throw new InvalidOperationException(
@@ -164,7 +179,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
             // The lease is this attempt's alone (#2286). Two attempts of one commit (a retry that overlaps a slow first
             // attempt) would otherwise share one lease, and the first to release it would leave the other's closure unfenced.
             await rootWriteLeaseManager.ExecuteAsync(
-                executionChange.State.PinnedExecutable,
+                pinned,
                 $"checkpoint:{commit.CommitId}:{Guid.NewGuid():N}",
                 ExecuteCheckpointAsync,
                 cancellationToken);
@@ -207,6 +222,9 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 }
 
                 await StageExactBookmarkResumeAsync(commit, scope, touchedTestScopes, writeCancellationToken);
+
+                if (commit.ModelState is { } modelChange)
+                    await EfRuntimeModelCheckpointParticipantStaging.StageAsync(context, modelChange, scope, writeCancellationToken);
 
                 if (commit.StateChanges.WorkflowExecution is { } workflowChange)
                 {

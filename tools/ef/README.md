@@ -14,6 +14,7 @@ gains a context. `module-migrate.sh` also builds this same project as the `--hos
 
 ```bash
 bash tools/ef/generate-module-migrations.sh [context-regex]   # regenerate Initial after a model change
+bash tools/ef/generate-module-migrations.sh --runtime-incremental MigrationName # retain Runtime history
 bash tools/ef/module-migrate.sh pending                        # CI-safe: fails on an unmigrated model change
 bash tools/ef/module-migrate.sh apply PostgreSql --connection-env ELSA_EF_CONNECTION # out-of-process apply, every module
 bash tools/ef/module-migrate.sh validate PostgreSql --connection-env ELSA_EF_CONNECTION
@@ -31,6 +32,13 @@ regex this script used to take — and defaults to every module.
 Elsa is pre-release with no production data, so a module keeps a single `Initial` migration per provider
 that is regenerated whenever its model changes; Secrets keeps its historical chain. The generator rewrites
 the few provider-package calls EF emits so modules stay provider-free.
+
+**Runtime saved-execution exception (#2898):** Runtime now retains actual saved executions for upgraded-host
+recovery. Its existing migration IDs/files are retained. The default generator skips Runtime even when its
+context matches the filter; use `--runtime-incremental MigrationName` to append one additive migration per
+Runtime provider and update those snapshots. This mode never deletes an existing migration directory.
+Review the diff and prove migration of the captured baseline as well as fresh installation. This exception
+does not freeze other modules or complete the release-wide baseline policy under #1976.
 
 At runtime each EF shell feature registers `EfModuleMigrator<TContext>` for its context. It runs on shell
 activation (`IShellInitializer`) and plain host start, applying migrations under `EfMigrateOptions.Policy =
