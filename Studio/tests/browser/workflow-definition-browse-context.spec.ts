@@ -38,6 +38,8 @@ async function expectPriorPageIsDisplayOnly(page: import("@playwright/test").Pag
   await expect(page.getByRole("link", { name: "Second page renewal" })).toHaveCount(0);
   await expect(page.getByLabel("Select workflow definition Second page renewal")).toHaveCount(0);
   await expect(page.locator(".wf-pagination")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Identifiers for / })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: /^Workflow definition identifiers for / })).toHaveCount(0);
 }
 
 async function recordedSearchRequests(page: import("@playwright/test").Page, searchTerm: string) {
