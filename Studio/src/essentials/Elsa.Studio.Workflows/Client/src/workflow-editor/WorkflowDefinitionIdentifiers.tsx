@@ -1,5 +1,5 @@
 import { useId, useRef, useState, type ReactNode } from "react";
-import { Fingerprint, X } from "lucide-react";
+import { Hash, X } from "lucide-react";
 import { AnchoredPopover, CopyableIdentifier } from "@elsa-workflows/studio-ui";
 import type { WorkflowListIdentifier } from "./WorkflowListIdentity";
 import "./workflowListIdentity.css";
@@ -30,7 +30,7 @@ export function WorkflowDefinitionIdentifiers({ name, identifiers, description, 
       aria-expanded={open}
       aria-controls={open ? id : undefined}
       onClick={() => setOpen(value => !value)}
-    ><Fingerprint size={16} aria-hidden="true" /></button>
+    ><Hash size={16} aria-hidden="true" /></button>
     <AnchoredPopover
       anchorRef={trigger}
       open={open}
