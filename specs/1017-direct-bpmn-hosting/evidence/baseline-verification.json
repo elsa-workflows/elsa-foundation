@@ -4,7 +4,7 @@
   "manifest": "baseline/manifest.json",
   "manifestSha256": "c2e5d9c8c2a001ff5141c2ca8eaaed097ec7c81d78d0180b6c7a4ecf5bed4153",
   "verifierSourceSha256": "d97fe2ead7e22d91d444344ca6d09c909ce8acc4d6d2b1fc57ec6c2c71aefc7c",
-  "readerSourceCommit": "8f071394f",
+  "readerSourceCommit": "8f071394fbec4f0df52849b3112db43f6fb9c51c",
   "readerBinarySha256": "27ee6cd0d574d3613afefe44c3a52782e98cbc4920c5b510faf63eba85a9d0c2",
   "result": {
     "assetsVerified": 104,
