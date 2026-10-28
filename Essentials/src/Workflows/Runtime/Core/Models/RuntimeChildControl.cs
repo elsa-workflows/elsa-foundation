@@ -162,20 +162,47 @@ public sealed class RuntimeChildControlTransport
     public RuntimeChildControlBatch Batch { get; }
 }
 
-/// <summary>Nullable wire scalars distinguish a truncated batch from ordinal zero or a nonterminal emission.</summary>
+/// <summary>Persisted control must declare its complete authored content before constructor defaults apply.</summary>
 internal sealed class RuntimeChildControlBatchJsonConverter : JsonConverter<RuntimeChildControlBatch>
 {
     public RuntimeChildControlBatchJsonConverter() { }
 
     public override RuntimeChildControlBatch Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        var wire = JsonSerializer.Deserialize<WireBatch>(ref reader, options)
+        using var document = JsonDocument.ParseValue(ref reader);
+        var members = ReadMembers(document.RootElement, options);
+        var notifications = Required(members, nameof(WireBatch.Notifications), options);
+        if (notifications.ValueKind != JsonValueKind.Array)
+            throw new JsonException("A persisted child-control batch must declare its notification array.");
+        _ = Required(members, nameof(WireBatch.AuthoredFailureCode), options);
+        foreach (var notification in notifications.EnumerateArray())
+            _ = Required(ReadMembers(notification, options), nameof(RuntimeChildControlNotification.Payload), options);
+        var wire = document.RootElement.Deserialize<WireBatch>(options)
             ?? throw new JsonException("A child-control batch must be an object.");
         if (wire.Ordinal is null || wire.IsTerminal is null)
             throw new JsonException("A child-control batch must declare its ordinal and terminal status.");
         return new RuntimeChildControlBatch(wire.Version, wire.ConsumerKey, wire.ConsumerVersion,
             wire.ChildWorkflowExecutionId, wire.RootActivityExecutionId, wire.SourceWorkItemId,
             wire.Ordinal.Value, wire.IsTerminal.Value, wire.Notifications, wire.AuthoredFailureCode);
+    }
+
+    private static Dictionary<string, JsonElement> ReadMembers(JsonElement value, JsonSerializerOptions options)
+    {
+        if (value.ValueKind != JsonValueKind.Object)
+            throw new JsonException("A child-control record must be an object.");
+        var members = new Dictionary<string, JsonElement>(options.PropertyNameCaseInsensitive
+            ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        foreach (var property in value.EnumerateObject())
+            if (!members.TryAdd(property.Name, property.Value))
+                throw new JsonException("A child-control record cannot shadow a persisted member.");
+        return members;
+    }
+
+    private static JsonElement Required(Dictionary<string, JsonElement> members, string name, JsonSerializerOptions options)
+    {
+        var wireName = options.PropertyNamingPolicy?.ConvertName(name) ?? name;
+        return members.TryGetValue(wireName, out var value) ? value
+            : throw new JsonException($"A child-control record must declare '{wireName}', including explicit null values.");
     }
 
     public override void Write(Utf8JsonWriter writer, RuntimeChildControlBatch value, JsonSerializerOptions options) =>

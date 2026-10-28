@@ -10,7 +10,7 @@ using Xunit;
 namespace Elsa.Activities.DispatchWorkflow.Tests;
 
 /// <summary>Wire and data-boundary tests; these do not qualify dispatch authority or host delivery.</summary>
-public sealed class ChildControlContractTests
+public sealed partial class ChildControlContractTests
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
     private static readonly WorkflowDispatchIdentity Identity = new("caller-workflow", "call-invocation");

@@ -14,7 +14,7 @@ using Fixture = Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTe
 namespace Elsa.Activities.DispatchWorkflow.Tests;
 
 /// <summary>Terminal checkpoint projection controls; transport and upgraded-host recovery remain separate gates.</summary>
-public sealed class WorkflowControlProducerTests
+public sealed partial class WorkflowControlProducerTests
 {
     [Theory]
     [InlineData(WorkflowExecutionStatus.Completed)]
