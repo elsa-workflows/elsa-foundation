@@ -1,0 +1,114 @@
+# Tasks: Direct and embedded BPMN production hosting
+
+**Input**: [spec](spec.md), [plan](plan.md), [research](research.md), [state model](data-model.md), [contracts](contracts/hosting.md), [quickstart](quickstart.md).
+
+**Prerequisites**: Specification clean at `10af302d8`; plan clean at `66e691224` across independent correctness, standards and acceptance. Task review and cross-artifact analysis must pass before implementation. Full-PR review rounds: zero.
+
+**Tests**: Risk-based tests accompany behavior; no blanket TDD cadence. Meaningful safeguard-removal controls must fail and then pass after restoration. Registration tests cover logic-bearing wiring; existing composition checks cover plain registrations. No tests over markdown/source text.
+
+**Organization**: Setup → shared foundations → P1 US1/US2/US3/US5 → P2 US4 → integrated delivery. Each story has a useful independently demonstrable checkpoint; cross-story outcome integration remains mandatory before #2898 closes. `[P]` permits independent files/checks after stated prerequisites; one implementation leaf and the build-slot wrapper remain in force.
+
+## Phase 1: Setup and actual baseline capture
+
+**Hard ordering**: No affected production writer, schema or payload change before T002. New capture tooling may be implemented first because it operates through the current product commands and does not alter those writers.
+
+- [ ] T001 Implement the portable owned-host capture runner in `tools/bpmn/qualify-hosting.py`, reusing `e2e-tests/bpmn/run_owned_broadcast_probe.py` process-ownership conventions; verify source/assembly/config/scope identities, consistent backups, output hashes and normal-command fixture creation without stored-state edits or secrets in evidence.
+- [ ] T002 Capture actual current-writer states and observations under `specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json`: partial parallel/waits, Sequence/Flowchart/CompensationScope outcomes and pending delivery, affected source/cohort/rearm/pre-ACK cuts, called control/MI/compensation where touched, and actual Studio-published authored/export/layout/pins; map each affected writer to its capture, include Balanced/Durable differences, verify the frozen fingerprint, and retain whole coupled stores/object data where required. Do not relabel historical #2735 assets.
+- [ ] T003 Add the actual consumer projects `Essentials/src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj` and `Essentials/src/Activities/Bpmn/Api/Elsa.Activities.Bpmn.Api.csproj`, with centralized dependencies, API tracking and README/catalog skeletons; no interpreter/provider implementation dependency in Core and no new root domain.
+- [ ] T004 Add `Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj` and owned-host fixture support, register exactly one integration-tier entry in `tools/ci/test-tiers.json`, and update actual solution/discovery metadata; tests run production hosts/artifacts rather than copied host code.
+
+**Checkpoint**: Baseline artifacts are portable and source-bound; writer map authorizes the specific subsequent edits. Missing actual capture keeps the related writer unchanged.
+
+## Phase 2: Shared foundations
+
+- [ ] T005 Define additive model material/state/input/lifecycle/dispatch contracts and named initialization event in `Essentials/src/Workflows/Runtime/Core/Models/` and `Contracts/`, preserving native DTO constructors/enum values and default-refusing provider/decorator capabilities; keep opaque model payloads out of string metadata and heavy dependencies out of Core.
+- [ ] T006 Implement versioned model material in `Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/` and extend `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableRootWriteLeaseManager.cs` plus reference/GC paths so native/model material shares exact identity/incarnation, source references, closure-checked dependencies, deletion protection and runtime-only reads without fabricated RootActivity.
+- [ ] T007 Extend `Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommit.cs`, `RuntimeCheckpointCommitFingerprint.cs`, checkpoint validation/copy/coalescing paths and `Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs` for atomic typed model-state/input/precondition participation with consumed claims/outbox/marker/fence; force model commits durable initially and preserve exact absent-participant fingerprints.
+- [ ] T008 Add a narrowly selected incremental Runtime mode to `tools/ef/generate-module-migrations.sh`, document the saved-execution exception in `tools/ef/README.md`, and generate additive Runtime migrations/snapshots for all four provider directories under `Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/`; preserve every baseline migration ID/file and prevent default regeneration from deleting the retained chain, without globally freezing unrelated modules or claiming #1976.
+- [ ] T009 Implement verified protocol selection and native/default adapter in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/`, using the existing partition-bound mailbox, queue/claims and extracted ownership/heartbeat/release mechanics; named Sequential contributor aggregation and startup validation must reject duplicate/unknown protocols/kinds before native lifecycle or Noop acknowledgement.
+- [ ] T010 Integrate the authoritative lifecycle reader into `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs` and `Services/Recovery/RuntimeResumptionService.cs`: preserve native terminal purge, distinguish model Running/WaitingIncident/TerminalPendingSettlement/TerminalSettled, retain and route exact settlement/replay inputs, and refuse ordinary terminal progression without purging unknown/unavailable owed work.
+- [ ] T011 [P] Add provider/material/state/atomicity/fence/receipt/dependency-retention tests and meaningful rollback controls in `Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/` and `ProviderTests/`; exercise every affected first-party engine and actual baseline-database migration separately from fresh install.
+- [ ] T012 [P] Add native constructor/wire/IPayloadSerializer/fingerprint, registry/composition, lifecycle/resumption and coalescing-preservation tests in `Essentials/tests/Workflows/Runtime/Tests/`, `Resumption/Tests/` and `Essentials/tests/Architecture/Tests/`; prove unknown dispatch refuses, terminal settlement survives and existing native purge remains unchanged.
+- [ ] T013 Update the owning runtime `EXTENSION_POINTS.md` and README under `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/` with actual public ports, named event/contributors, provider requirements and consumers; run focused foundation checks and verify clean runtime-only composition before starting model behavior.
+
+**Checkpoint**: Native remains functional through the shared path; model material/state capability is explicit and transactional. No direct-host guarantee yet.
+
+## Phase 3: US1 — direct parallel process recovery (P1)
+
+**Goal**: First observable production milestone: publish/start/inspect a genuine direct process, complete exact waits and recover partial fork/join.
+
+**Independent test**: Two explicitly bound model human waits, one accepted completion, actual host exit/restart, second completion and exactly one join/terminal result; no native enclosing/root execution.
+
+- [ ] T014 [US1] Implement BPMN immutable artifact/profile validation and public command/result DTOs in `Essentials/src/Activities/Bpmn/Core/` and `Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/`; validate the complete binding inventory, pins and supported cuts before runnable publication/admission, without changing frozen legacy authoring or importer ownership.
+- [ ] T015 [US1] Implement the direct model driver and shared internal evaluation component in `Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/`, using released interpreter state/commands, model-owned exact work handles/attempts, native-free material/state and the common queue/fence/checkpoint/outbox path.
+- [ ] T016 [US1] Implement initial model human wait/completion and publish/start/execution/work/command-inspection endpoints in `Essentials/src/Activities/Bpmn/Api/`, with current permission/tenant conventions, authorized exact identities, canonical conflict/replay outcomes and durable-admission-versus-consumption responses.
+- [ ] T017 [US1] Compose explicit model hosting/API features in `Essentials/apps/Elsa.Workbench/` and new BPMN feature wiring, with virtual ConfigureServices and startup capability/cardinality checks; keep native default and runtime-only deployment functional.
+- [ ] T018 [P] [US1] Add focused driver, material, exact wait, registration/authorization and API behavior tests in `Essentials/tests/Activities/Bpmn/Tests/` and `Hosting/Tests/`, including foreign/conflicting/unknown input refusal and retained replay after ownership change.
+- [ ] T019 [P] [US1] Qualify actual start/wait/resume, partial fork/join, pre-dispatch and recipient-pre-ACK crashes, predecessor exit/stale decision refusal and native counterpart in `Essentials/tests/Activities/Bpmn/Hosting/Tests/` and `specs/1017-direct-bpmn-hosting/evidence/direct-recovery/`; verify no native root substitute and record meaningful safeguard-removal controls.
+
+**Checkpoint**: Demonstrate the direct recovery journey and its exact source/limits on the PR. This milestone alone does not close #2898.
+
+## Phase 4: US2 — operational races and exact delivery (P1)
+
+**Independent test**: Human-first/timer-first and worker-first/timer-first, actual restart, then obsolete/replayed inputs; first-delivery broadcast recipient set remains fixed after rearm.
+
+- [ ] T020 [US2] Implement duration-timer/interrupting-boundary binding, eligibility/deadline checks and exact model cancellation/late-result handling in `Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/`; retain deterministic input IDs, independent attempt validity and first eligible durable winner.
+- [ ] T021 [US2] Extend physical first-delivery recipient snapshot participation and retention in `Essentials/src/Workflows/Runtime/Core/Models/` and the selected runtime source/delivery stores for exact model recipients; preserve all native cohort wire/fingerprints and fail closed for unsupported provider/decorator paths before dispatch.
+- [ ] T022 [US2] Complete supported human/work/cancel/command inspection and replay/conflict authorization behavior in `Essentials/src/Activities/Bpmn/Api/`; current scope/authority checks must precede retained-result disclosure and obsolete attempts must not advance the model.
+- [ ] T023 [P] [US2] Add pure behavior and provider-bound tests for timer eligibility, competing decisions, cross-scope/foreign attempt inputs, snapshot empty/populated/duplicate/conflict and unsupported capability in `Essentials/tests/Activities/Bpmn/Tests/` and runtime EF tests.
+- [ ] T024 [P] [US2] Add real-process race, two-listener broadcast, publication-before-first-delivery listener, rearm and accepted-recipient/pre-ACK witnesses in `Essentials/tests/Activities/Bpmn/Hosting/Tests/` and `specs/1017-direct-bpmn-hosting/evidence/races/`, with failing removed-guard controls. Use real bound native work for the worker/timer arm when T034–T035 are ready; human/timer and broadcast are independently demonstrable now.
+- [ ] T025 [US2] Qualify a terminal model with owed cancellation/result/parent settlement across fresh-process recovery in `Essentials/tests/Activities/Bpmn/Hosting/Tests/` and `evidence/races/`; prove no semantic revival, no dropped settlement, unchanged native purge, and truthful distinction between stale new decisions and previously committed physical delivery.
+
+## Phase 5: US3 — native composition of the same model lifecycle (P1)
+
+**Independent test**: Real native RunBpmn invocation completes/cancels through the direct model path; persisted parent delivery survives restart. Typed service fault/business-error integration is additionally completed under US4.
+
+- [ ] T026 [US3] Refactor `Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs` to consume the shared evaluation component while retaining native ledger/context/incident/parent mappings, original constructors and `BpmnStateCodec` v1/v2 strict readers/writers; retain old embedded profile and exact native fault projection.
+- [ ] T027 [US3] Add the native `RunBpmn` activity, immutable model pin contribution, exact real wait/result address and durable start/cancel/terminal-delivery bridge in `Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/`; do not construct synthetic native parents/bookmarks or silently migrate old BpmnProcess instances.
+- [ ] T028 [P] [US3] Add compatibility/registration/pin/result-consumption/cancellation-before-admission tests in `Essentials/tests/Activities/Bpmn/Tests/` and dispatch/runtime tests, including parent-terminal cleanup and exact receipt proof rather than queue acknowledgement.
+- [ ] T029 [P] [US3] Qualify normalized direct/RunBpmn traces and Sequence/Flowchart/CompensationScope completion/cancel/pending-parent restart in `Essentials/tests/Activities/Bpmn/Hosting/Tests/` and `specs/1017-direct-bpmn-hosting/evidence/embedding/`; preserve existing native-only behavior and extend the terminal fault/business-error matrix with real service work under T040.
+
+## Phase 6: US5 — actual saved-execution upgrade and Studio (P1)
+
+**Independent test**: Gate A's actual native/BPMN saved runs recover and finish on the changed host; existing Studio author/export/publish/run/inspect remains valid. Repeat final qualification after later source changes affecting these paths.
+
+- [ ] T030 [US5] Implement `resume-upgrade` and portable comparison phases in `tools/bpmn/qualify-hosting.py`, using T002's actual whole-store inputs, retained published pins and normal finish commands; preserve original captures, phase source identities and separate corrupt/synthetic controls under `specs/1017-direct-bpmn-hosting/evidence/upgrade/`.
+- [ ] T031 [US5] Prove runtime-only execution, native/model material/dependency retention, old-reader/write-family protection and admission-off rollback in `Essentials/tests/Activities/Bpmn/Hosting/Tests/` plus runtime/provider tests; accepted readers/workers/results remain available and no old binary silently opens new families.
+- [ ] T032 [US5] Exercise and visually inspect the owned actual Studio open/edit/export/publish/run/exact-execution journey; commit source-bound observations/export/layout/screenshots under `specs/1017-direct-bpmn-hosting/evidence/studio/`, verify frozen authoring fingerprint and original supported XML/diagram boundaries, and retain user hosts/tabs.
+- [ ] T033 [US5] Re-run focused native/BPMN/interchange/payload compatibility suites against the changed source and verify the actual upgrade/Studio manifests under `specs/1017-direct-bpmn-hosting/evidence/`; distinguish existing Studio compatibility from uncompleted first-class direct-host Studio acceptance.
+
+## Phase 7: US4 — real recoverable pipeline and incident retry (P2)
+
+**Independent test**: Direct and embedded real RunEtl service invocation, typed terminal families, interruption/cancellation settlement and one authorized retry after restart without reopening final semantics.
+
+- [ ] T034 [US4] Implement the explicit model-to-native work adapter through runtime contribution contracts and `Essentials/src/Activities/DispatchWorkflow/Runtime/` integration: exact committed source/outbox claim, complete dependency pin, deterministic child/attempt identity and atomic model-work precondition at native admission; use actual published RunEtl worker material, never dummy parent/address data.
+- [ ] T035 [US4] Retain typed native worker terminal results and model delivery responsibility in the same native checkpoint, and propagate model cancellation through actual native/ETL cancellation using the shared outbox; implement/qualify cancellation-before-start, start-before-cancel and result/pre-ACK boundaries in the same integration paths and `Extensions/Etl/src/Workflows/Runtime/` only if a demonstrated focused fix is needed.
+- [ ] T036 [US4] Implement pinned FinalFault/default and bounded HoldForRetry in `Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/`: retain active interpreter work/pre-failure state, old failure evidence and incident while WaitingIncident; one retry creates a new physical attempt without restarting tokens, old results refuse, interruption can retire held work, and final/exhausted fault cannot reopen.
+- [ ] T037 [US4] Complete incident inspection/retry API commands in `Essentials/src/Activities/Bpmn/Api/` with exact current incident/failed attempt, authorization-before-replay, retained retry result and contextual terminal/budget conflicts; do not imply a full task/operator-console product.
+- [ ] T038 [P] [US4] Add bridge/atomic admission/cancellation/result-proof tests in `Essentials/tests/Activities/DispatchWorkflow/Tests/ModelNativeWorkBridgeTests.cs` and held-retry tests in `Essentials/tests/Activities/Bpmn/Tests/BpmnIncidentRetryTests.cs`, plus affected runtime EF/ETL tests; cover native Completed-with-BusinessError, current versus old attempt, final-fault refusal and matching/conflicting retry content.
+- [ ] T039 [P] [US4] Qualify real direct/RunBpmn finite ETL success, matched/unmatched business error, technical fault, pipeline-originated cancel, actual physical output and both worker/timer orders in `Essentials/tests/Activities/Bpmn/Hosting/Tests/` and `specs/1017-direct-bpmn-hosting/evidence/pipeline/`; inspect actual run/partition state rather than workflow status alone.
+- [ ] T040 [US4] Qualify all three native parent terminal mappings, actual pipeline cancellation before admission/during work/pending result, truthful already-terminal results, terminal settlement restart, and direct/RunBpmn held-failure → restart → one retry → completion in `Essentials/tests/Activities/Bpmn/Hosting/Tests/` and `specs/1017-direct-bpmn-hosting/evidence/pipeline/`; retain unchanged old fault evidence and meaningful removed-guard controls, and complete the dependent T024/T029 service arms.
+- [ ] T041 [US4] Re-run actual upgrade/Studio checks affected by the bridge/retry changes and consolidate source-bound manifests in `specs/1017-direct-bpmn-hosting/evidence/`; no earlier-source pass is relabeled as final-source qualification.
+
+## Phase 8: Integrated delivery and closeout
+
+- [ ] T042 Finalize public API/version comparisons, feature README/extension catalogs/root index, profile/XML/provider/rollback limits and model/worker module composition in the changed package paths and `EXTENSION_POINTS.md`; remove duplication only with build/test evidence and retain required legacy readers.
+- [ ] T043 Run the exact changed-project tests/builds, all affected provider/migration checks and maps/discovery/tier checks from `quickstart.md`; verify meaningful controls are restored and commit one concise FR/SC/#2898 evidence mapping under `specs/1017-direct-bpmn-hosting/evidence/qualification.md` with commands/assets/hashes and explicit limits.
+- [ ] T044 Set `specs/1017-direct-bpmn-hosting/spec.md` to Implemented and retire its checklist as required by `docs/reference/spec-lifecycle.md` in this same implementation PR, only once all runtime acceptance is evidenced; update `review-notes.md` without claiming the broader program complete.
+- [ ] T045 Run the independent correctness/standards/acceptance complete-PR loop against all issue/PR discussion and exact head, fixing findings in new commits and recording round comments within the six-round bound; use `specs/1017-direct-bpmn-hosting/review-notes.md` only as an index to authoritative PR receipts.
+- [ ] T046 Verify green exact-head required checks, no failed check/human hold/changes-requested/blocked decision, current claim and protected-merge eligibility; post the standing-authorization self-merge audit on PR3410, index it from `specs/1017-direct-bpmn-hosting/review-notes.md`, and merge normally as the Codex GitHub App with no protection bypass.
+- [ ] T047 Verify resulting main and record source-bound evidence under `specs/1017-direct-bpmn-hosting/evidence/post-merge.md`; publish exact evidence/limits on #2898/#2907/#2892 and PR3410, update/read back Project62, close only proven #2898 acceptance and release its specific claim; preserve unfinished operational/Studio/ETL/agent/program criteria and all existing deferrals.
+
+## Dependencies & execution order
+
+T001 → T002 is a hard barrier before affected production writes. T003–T013 establish shared foundations. US1 depends on those foundations; US2 and US3 extend its working direct path. US5 validates the current upgrade boundary before the pipeline addition, then T041 repeats any affected qualification on final source. US4 uses US1/US3 and completes their pipeline-dependent race/outcome arms. Final delivery requires all stories, all those integration arms and exact-source qualification.
+
+No phase is a substitute for the full issue. The US1 milestone is a demo/checkpoint, not permission to merge an incomplete #2898 PR. Story independence means a useful tested journey, not that shared foundations or later cross-story integration do not exist.
+
+## Parallel examples
+
+After prerequisite implementation is complete, T011/T012 can be developed/run independently in provider versus native compatibility projects; both still use build slots. Within US1, T018's focused API/driver tests and T019's owned-host recovery fixtures use different files/output roots. US2's T023 focused tests and T024 process witnesses, US3's T028 unit boundaries and T029 host traces, and US4's T038 unit/provider checks and T039 real pipeline witnesses have the same separation. Do not run them against shared fixture stores or before their production prerequisites exist. US5's writer/host/Studio comparison is sequential because it shares baseline and upgraded stores.
+
+## Implementation strategy
+
+Keep one claimed issue and one draft PR. Complete/review spec → plan → tasks, then capture the baseline and implement in small commits with focused checks. Demonstrate US1 first; continue all required stories and service integration without claiming partial issue completion. Preserve the frozen authoring/state boundary, named semantic owners and actual result/settlement proofs. Maintain concise GitHub checkpoints at material transitions and Project62 mirrors; no new checkpoint issues or competing backlog.

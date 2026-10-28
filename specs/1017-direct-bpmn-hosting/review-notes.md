@@ -17,11 +17,11 @@ The three reviewers inspected independently without seeing each other's outputs.
 
 ## Plan
 
-Iteration 1 at `7a3d36adbcebf063a767bfab48a1fd55688d03de`: standards clean; correctness required an authoritative lifecycle-read/terminal-settlement policy before native cleanup reuse; acceptance required a nonterminal retryable-incident lifecycle and actual retry proof without reviving final semantics. The revised plan adds both. Author source review also found Initial-regeneration incompatible with retained baseline databases; the plan now requires a narrow incremental Runtime migration mode. Re-review pending. No source implementation is authorized by a clean specification review alone; plan/tasks reviews and actual pre-writer captures remain required.
+Iteration 1 at `7a3d36adbcebf063a767bfab48a1fd55688d03de`: standards clean; correctness required an authoritative lifecycle-read/terminal-settlement policy before native cleanup reuse; acceptance required a nonterminal retryable-incident lifecycle and actual retry proof without reviving final semantics. Both were fixed by `66e691224`. Author source review also found Initial-regeneration incompatible with retained baseline databases; that commit requires a narrow incremental Runtime migration mode. Iteration 2 at `66e69122411e1aeb3ff78ba20dbbe8c9c94abf03` is clean across all three independent lenses. This qualifies the plan for task breakdown, not runtime acceptance.
 
 ## Tasks
 
-Pending.
+Draft task list generated; independent review and cross-artifact analysis pending. No source implementation yet.
 
 ## Complete PR
 
