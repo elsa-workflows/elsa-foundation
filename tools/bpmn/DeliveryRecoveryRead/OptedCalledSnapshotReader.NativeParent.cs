@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -52,7 +53,7 @@ internal static partial class OptedCalledSnapshotReader
                 payload.GetProperty("ExecutableNodeId").GetString() == "legacy-bpmn" &&
                 payload.GetProperty("ParentActivityExecutionId").GetString() == native.Execution.ActivityExecutionId &&
                 payload.GetProperty("CompletionKind").GetInt32() == (int)SchedulerCompletionKind.ActivityCompleted &&
-                payload.GetProperty("PinnedExecutable").GetProperty("ArtifactId").GetString() == workflow.ArtifactId,
+                payload.GetProperty("PinnedExecutable").GetProperty("ArtifactId").GetString() == workflow.PinnedExecutable.ArtifactId,
                 "The actual pending work does not address the exact completed BPMN child and unadvanced native parent.");
         }
         else Require(api.GetProperty("persistenceMode").GetString() == "Balanced" && workflow.Status == WorkflowExecutionStatus.Completed &&

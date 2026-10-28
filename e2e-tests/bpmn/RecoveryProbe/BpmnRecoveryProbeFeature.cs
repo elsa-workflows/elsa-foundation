@@ -32,7 +32,7 @@ public class BpmnRecoveryProbeFeature : IShellFeature
         if (!Path.IsPathFullyQualified(ControlDirectory) || !Directory.Exists(ControlDirectory))
             throw new InvalidOperationException("The recovery probe requires an existing owned absolute control directory.");
         var control = new RecoveryProbeControl(ControlDirectory);
-        services.AddSingleton(control);
+        services.AddSingleton<RecoveryProbeControl>(_ => control);
         if (AdmissionStaticLimit is { } limit)
         {
             if (limit <= 0) throw new InvalidOperationException("The owned admission limit must be positive.");
@@ -136,9 +136,8 @@ public class BpmnRecoveryProbeFeature : IShellFeature
         IPersistenceAccessContextAccessor access) : IRuntimePostCommitIntentDispatcher, IDisposable
     {
         private readonly IDisposable? initialClaimObserver = control.ArmInitialClaimCut(context);
-        private readonly IDisposable parentCompletionObserver = control.ArmNativeParentCompletionCut(context);
         private IDisposable? completionObserver;
-        public void Dispose() { initialClaimObserver?.Dispose(); parentCompletionObserver.Dispose(); completionObserver?.Dispose(); }
+        public void Dispose() { initialClaimObserver?.Dispose(); completionObserver?.Dispose(); }
         public bool RequiresDurableSource(string intentKind) => inner.RequiresDurableSource(intentKind);
         public async ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
         {
@@ -221,26 +220,27 @@ public class BpmnRecoveryProbeFeature : IShellFeature
     }
 }
 
-internal sealed class RecoveryProbeControl(string directory)
+internal sealed class RecoveryProbeControl(string directory) : IDisposable
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
 
-    public IDisposable ArmNativeParentCompletionCut(RuntimeDbContext context) => new NativeParentCompletionCut(context, directory);
+    private readonly IDisposable nativeParentObserver = new NativeParentCompletionCut(directory);
+    public void Dispose() => nativeParentObserver.Dispose();
 
-    // Observe only the selected context's real physical transaction. Buffered/coalesced logical
+    // Observe this isolated probe process's real runtime transactions, including nested drain scopes.
+    // Exact scope/workflow/node matching selects the owned case. Buffered/coalesced logical
     // acknowledgments never reach this observer. No checkpoint row or queue item is manufactured.
     private sealed class NativeParentCompletionCut : IObserver<DiagnosticListener>, IObserver<KeyValuePair<string, object?>>, IDisposable
     {
-        private readonly RuntimeDbContext context;
         private readonly string directory;
         private readonly List<IDisposable> subscriptions = new();
         private readonly object gate = new();
         private IDisposable? allListeners;
         private bool disposed;
 
-        public NativeParentCompletionCut(RuntimeDbContext context, string directory)
+        public NativeParentCompletionCut(string directory)
         {
-            this.context = context; this.directory = directory;
+            this.directory = directory;
             allListeners = DiagnosticListener.AllListeners.Subscribe(this);
         }
         public void OnNext(DiagnosticListener listener)
@@ -255,7 +255,7 @@ internal sealed class RecoveryProbeControl(string directory)
         public void OnNext(KeyValuePair<string, object?> value)
         {
             if (value.Key != RelationalEventId.TransactionCommitted.Name || value.Value is not TransactionEndEventData data ||
-                !ReferenceEquals(data.Context, context)) return;
+                data.Context is not RuntimeDbContext context) return;
             lock (gate) { if (disposed) return; }
             var path = Path.Combine(directory, "native-parent-plan.json");
             if (!File.Exists(path)) return;
@@ -268,7 +268,8 @@ internal sealed class RecoveryProbeControl(string directory)
             foreach (var entry in context.ChangeTracker.Entries<RuntimePostCommitOutboxEntity>())
             {
                 var row = entry.Entity;
-                if (row.WorkflowExecutionId != EfRelationalIdentity.Encode(workflowId!) ||
+                if (row.ScopeKey != EfRelationalIdentity.Encode(plan.GetProperty("scope").GetString()!) ||
+                    row.WorkflowExecutionId != EfRelationalIdentity.Encode(workflowId!) ||
                     row.IntentKind != EfRelationalIdentity.Encode(RuntimePostCommitIntentKinds.EnqueueSchedulerWork) ||
                     row.Status != (int)RuntimePostCommitOutboxStatus.Pending) continue;
                 using var document = JsonDocument.Parse(row.ContentJson);

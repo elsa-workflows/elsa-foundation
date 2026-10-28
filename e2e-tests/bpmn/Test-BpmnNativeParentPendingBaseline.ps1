@@ -65,7 +65,7 @@ try {
             $run = Invoke-Artifact $ctx $publication.artifactId $publication.sourceReferenceId
             $before = Wait-ControlNode $ctx $run.workflowExecutionId 'node-held' 'Suspended'
             $caseId = "$($kind.ToLowerInvariant())-$($mode.ToLowerInvariant())"
-            @{ caseId = $caseId; workflowExecutionId = $run.workflowExecutionId; childNodeId = 'legacy-bpmn' } |
+            @{ caseId = $caseId; workflowExecutionId = $run.workflowExecutionId; childNodeId = 'legacy-bpmn'; scope = 'default' } |
                 ConvertTo-Json | Set-Content (Join-Path $control 'native-parent-plan.json')
             $info = [Diagnostics.ProcessStartInfo]::new((Get-Process -Id $PID).Path)
             $info.UseShellExecute = $false; $info.RedirectStandardOutput = $true; $info.RedirectStandardError = $true
