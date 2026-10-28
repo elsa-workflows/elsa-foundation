@@ -170,6 +170,8 @@
     <Project Path="Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Activities/Bpmn/">
+    <Project Path="Essentials/src/Activities/Bpmn/Api/Elsa.Activities.Bpmn.Api.csproj" />
+    <Project Path="Essentials/src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj" />
     <Project Path="Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj" />
     <Project Path="Essentials/src/Activities/Bpmn/Interchange/Elsa.Activities.Bpmn.Interchange.csproj" />
   </Folder>

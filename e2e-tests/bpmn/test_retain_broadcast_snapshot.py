@@ -57,6 +57,18 @@ class RetainedSnapshotTests(unittest.TestCase):
                     capture.retain_snapshot(source, target)
             self.assertFalse(target.exists())
 
+    def test_authentication_and_secret_tables_are_refused_without_sanitization(self):
+        for name in ['identity_users', 'identity_credentials', 'OpenIddictTokens', 'elsa_secrets']:
+            with self.subTest(table=name), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory); source = self.fixture(root); target = root / 'retained.sqlite'
+                with sqlite3.connect(source) as database:
+                    database.execute(f'create table {name}(value text)')
+                original = source.read_bytes()
+                with self.assertRaisesRegex(ValueError, 'Isolate authentication'):
+                    capture.retain_snapshot(source, target)
+                self.assertFalse(target.exists())
+                self.assertEqual(original, source.read_bytes())
+
 
 if __name__ == '__main__':
     unittest.main()

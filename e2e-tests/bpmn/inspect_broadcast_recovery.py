@@ -33,6 +33,10 @@ def read_snapshot(path: Path, reader: Path, marker: dict, extras: list[str], pub
 
 def retain_snapshot(source: Path, destination: Path) -> dict:
     """Persist the already checked closed input, without overwriting an earlier capture."""
+    with closing(sqlite3.connect(source.resolve().as_uri() + '?mode=ro&immutable=1', uri=True)) as database:
+        tables = {row[0].lower() for row in database.execute("select name from sqlite_master where type='table'")}
+        if any(name.startswith(('identity_', 'openiddict', 'elsa_secret')) for name in tables):
+            raise ValueError('Isolate authentication and secrets stores before creating a retained fixture.')
     expected = hashlib.sha256(source.read_bytes()).hexdigest()
     created = False
     try:

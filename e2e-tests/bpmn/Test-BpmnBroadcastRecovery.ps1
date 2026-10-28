@@ -73,6 +73,13 @@ $settingsPath = Join-Path $root 'shells.json'
 $settings = Get-Content -Raw $settingsPath | ConvertFrom-Json -AsHashtable
 $settings.CShells.Shells.default.Features.BpmnRecoveryProbe = @{ ControlDirectory = $control }
 $settings.CShells.Shells.default.Features.WorkflowsRuntimeResumption = @{ SweepIntervalSeconds = 1 }
+if ($RetainedSnapshotDirectory) {
+    # Keep authentication material out of whole-store upgrade inputs at creation time.
+    # Never sanitize an already-written positive runtime checkpoint.
+    foreach ($feature in @('IdentityIamEntityFrameworkCore', 'IdentityProviderConfigurationEntityFrameworkCore', 'FoundationIdentityAspNetCoreIdentityEntityFrameworkCore', 'SecretsEntityFrameworkCore')) {
+        $settings.CShells.Shells.default.Features[$feature]['ConnectionString'] = 'Data Source=private-identity.db'
+    }
+}
 if ($republishedCohort -or $collectionWins) {
     $settings.CShells.Shells.default.Features.WorkflowsRuntimeReferenceGarbageCollection = @{
         SweepIntervalMinutes = 0.02; MaxBackoffIntervalMinutes = 0.1; ArtifactCreationGracePeriodMinutes = 0

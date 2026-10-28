@@ -135,8 +135,9 @@ public class BpmnRecoveryProbeFeature : IShellFeature
         IPersistenceAccessContextAccessor access) : IRuntimePostCommitIntentDispatcher, IDisposable
     {
         private readonly IDisposable? initialClaimObserver = control.ArmInitialClaimCut(context);
+        private readonly IDisposable parentCompletionObserver = control.ArmNativeParentCompletionCut(context);
         private IDisposable? completionObserver;
-        public void Dispose() { initialClaimObserver?.Dispose(); completionObserver?.Dispose(); }
+        public void Dispose() { initialClaimObserver?.Dispose(); parentCompletionObserver.Dispose(); completionObserver?.Dispose(); }
         public bool RequiresDurableSource(string intentKind) => inner.RequiresDurableSource(intentKind);
         public async ValueTask DispatchAsync(RuntimePostCommitIntent intent, CancellationToken cancellationToken = default)
         {
@@ -222,6 +223,89 @@ public class BpmnRecoveryProbeFeature : IShellFeature
 internal sealed class RecoveryProbeControl(string directory)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+
+    public IDisposable ArmNativeParentCompletionCut(RuntimeDbContext context) => new NativeParentCompletionCut(context, directory);
+
+    // Observe only the selected context's real physical transaction. Buffered/coalesced logical
+    // acknowledgments never reach this observer. No checkpoint row or queue item is manufactured.
+    private sealed class NativeParentCompletionCut : IObserver<DiagnosticListener>, IObserver<KeyValuePair<string, object?>>, IDisposable
+    {
+        private readonly RuntimeDbContext context;
+        private readonly string directory;
+        private readonly List<IDisposable> subscriptions = new();
+        private readonly object gate = new();
+        private IDisposable? allListeners;
+        private bool disposed;
+
+        public NativeParentCompletionCut(RuntimeDbContext context, string directory)
+        {
+            this.context = context; this.directory = directory;
+            allListeners = DiagnosticListener.AllListeners.Subscribe(this);
+        }
+        public void OnNext(DiagnosticListener listener)
+        {
+            if (listener.Name != DbLoggerCategory.Name) return;
+            lock (gate)
+            {
+                if (!disposed) subscriptions.Add(listener.Subscribe((IObserver<KeyValuePair<string, object?>>)this,
+                    name => name == RelationalEventId.TransactionCommitted.Name));
+            }
+        }
+        public void OnNext(KeyValuePair<string, object?> value)
+        {
+            if (value.Key != RelationalEventId.TransactionCommitted.Name || value.Value is not TransactionEndEventData data ||
+                !ReferenceEquals(data.Context, context)) return;
+            lock (gate) { if (disposed) return; }
+            var path = Path.Combine(directory, "native-parent-plan.json");
+            if (!File.Exists(path)) return;
+            using var planDocument = JsonDocument.Parse(File.ReadAllText(path));
+            var plan = planDocument.RootElement;
+            var caseId = plan.GetProperty("caseId").GetString()!;
+            if (!Regex.IsMatch(caseId, "^[a-z0-9-]{1,64}$", RegexOptions.CultureInvariant)) throw new InvalidDataException("Invalid native-parent probe case.");
+            var workflowId = plan.GetProperty("workflowExecutionId").GetString();
+            var nodeId = plan.GetProperty("childNodeId").GetString();
+            foreach (var entry in context.ChangeTracker.Entries<RuntimePostCommitOutboxEntity>())
+            {
+                var row = entry.Entity;
+                if (row.WorkflowExecutionId != EfRelationalIdentity.Encode(workflowId!) ||
+                    row.IntentKind != EfRelationalIdentity.Encode(RuntimePostCommitIntentKinds.EnqueueSchedulerWork) ||
+                    row.Status != (int)RuntimePostCommitOutboxStatus.Pending) continue;
+                using var document = JsonDocument.Parse(row.ContentJson);
+                var work = document.RootElement.GetProperty("intent").GetProperty("payload");
+                if (work.GetProperty("CommandKind").GetInt32() != (int)WorkflowExecutionCommandKind.CompleteActivity ||
+                    !work.TryGetProperty("Payload", out var payload) ||
+                    !payload.TryGetProperty("ExecutableNodeId", out var node) || node.GetString() != nodeId) continue;
+                var caseDirectory = Path.Combine(directory, caseId); Directory.CreateDirectory(caseDirectory);
+                var claimed = Path.Combine(caseDirectory, "claimed");
+                try { using var token = new FileStream(claimed, FileMode.CreateNew, FileAccess.Write, FileShare.Read); token.Flush(true); }
+                catch (IOException) when (File.Exists(claimed)) { return; }
+                var marker = new { CaseId = caseId, Phase = "native-parent-completion-before-consumption", ProviderEvent = "EF.TransactionCommitted",
+                    WorkflowExecutionId = workflowId, ChildNodeId = nodeId, SourceOutboxItemId = EfRelationalIdentity.Decode(row.OutboxItemId),
+                    Scope = EfRelationalIdentity.Decode(row.ScopeKey), Work = work.Clone(), CapturedAtUtc = DateTimeOffset.UtcNow };
+                var temporary = Path.Combine(caseDirectory, "reached.tmp");
+                using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                { JsonSerializer.Serialize(stream, marker, Json); stream.Flush(true); }
+                File.Move(temporary, Path.Combine(caseDirectory, "reached.json"));
+                Dispose();
+                while (!File.Exists(Path.Combine(caseDirectory, "release"))) Thread.Sleep(100);
+                return;
+            }
+        }
+        public void OnError(Exception error) { }
+        public void OnCompleted() { }
+        public void Dispose()
+        {
+            List<IDisposable> owned;
+            lock (gate)
+            {
+                if (disposed) return;
+                disposed = true; owned = new(subscriptions); subscriptions.Clear();
+                if (allListeners is { } all) owned.Add(all);
+                allListeners = null;
+            }
+            foreach (var subscription in owned) subscription.Dispose();
+        }
+    }
 
     public async ValueTask<CalledControlCapture?> CaptureCalledControlClaimAsync(RuntimePostCommitIntent intent,
         IPostCommitOutboxLookupStore outbox, IPersistenceAccessContextAccessor access, CancellationToken cancellationToken)

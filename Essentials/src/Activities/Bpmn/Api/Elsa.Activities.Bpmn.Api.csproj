@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="NativeEndpoints" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Core/Elsa.Activities.Bpmn.Core.csproj" />
+    <ProjectReference Include="../../../Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="../../../Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
+  </ItemGroup>
+</Project>

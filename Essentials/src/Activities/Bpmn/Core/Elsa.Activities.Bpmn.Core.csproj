@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" />
+  </ItemGroup>
+</Project>
