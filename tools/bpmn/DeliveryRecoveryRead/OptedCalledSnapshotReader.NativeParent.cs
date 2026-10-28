@@ -24,12 +24,14 @@ internal static partial class OptedCalledSnapshotReader
         var activities = new EfActivityExecutionStateStore(context, access, new NoPaging());
         var workflow = await workflows.FindAsync(executionId) ?? throw new InvalidDataException("Actual native workflow missing.");
         MatchPin(workflow, view.GetProperty("instance"));
+        Require(workflow.Status.ToString() == view.GetProperty("instance").GetProperty("status").GetString(), "Native workflow/API status differs.");
         Require(workflow.SystemMetadata.GetValueOrDefault(RuntimeMetadataKeys.PersistenceMode) == api.GetProperty("persistenceMode").GetString(), "Native persistence mode differs.");
         var states = await activities.ListAllAsync(executionId);
         var native = Exact(states, view, "native-parent"); var bpmn = Exact(states, view, "legacy-bpmn");
         Require(bpmn.Status == ActivityExecutionStatus.Faulted && bpmn.ParentActivityExecutionId == native.Execution.ActivityExecutionId,
             "Actual BPMN fault/parent identity differs.");
         var pending = api.GetProperty("pendingParentConsumption").GetBoolean();
+        Require(pending, "This reader requires an actual pending native fault outcome; folded success uses its earlier durable precursor.");
         string? sourceId = null;
         if (pending)
         {
@@ -55,12 +57,19 @@ internal static partial class OptedCalledSnapshotReader
                 payload.GetProperty("CompletionKind").GetInt32() is (int)SchedulerCompletionKind.ParentCompletionEvaluation or (int)SchedulerCompletionKind.ParentOutcomeEvaluation &&
                 payload.GetProperty("PinnedExecutable").GetProperty("ArtifactId").GetString() == workflow.PinnedExecutable.ArtifactId,
                 "The actual pending work does not address the exact completed BPMN child and unadvanced native parent.");
+            var incidents = await new EfIncidentStateStore(context, access).ListAsync(executionId);
+            var incidentId = work.GetProperty("CommandMetadata").GetProperty(RuntimeMetadataKeys.IncidentId).GetString();
+            var incident = incidents.SingleOrDefault(item => item.IncidentId == incidentId)
+                ?? throw new InvalidDataException("The pending callback's actual incident is missing.");
+            Require(incident.ActivityExecutionId == bpmn.Execution.ActivityExecutionId && incident.IsActive &&
+                bpmn.IncidentIds.Contains(incident.IncidentId) &&
+                incident.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ActivityExecutionId) == bpmn.Execution.ActivityExecutionId,
+                "The actual incident does not retain this exact pending parent outcome.");
+            var material = await new EfWorkflowExecutableStore(context, access).FindAsync(workflow.PinnedExecutable.ArtifactId);
+            Require(material is not null && WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(material.Identity, workflow.PinnedExecutable),
+                "The actual pending native outcome lost its pinned executable material.");
         }
-        else Require(api.GetProperty("persistenceMode").GetString() == "Balanced" && workflow.Status == WorkflowExecutionStatus.Completed &&
-            native.Status == ActivityExecutionStatus.Completed && Exact(states, view, "after-bpmn").Status == ActivityExecutionStatus.Completed,
-            "The folded path has no actual completed native-parent projection.");
         return new { WorkflowExecutionId = executionId, PendingParentConsumption = pending, SourceOutboxItemId = sourceId,
-            NativeActivityExecutionId = native.Execution.ActivityExecutionId, BpmnActivityExecutionId = bpmn.Execution.ActivityExecutionId,
-            BalancedFoldedAlreadyConsumed = !pending };
+            NativeActivityExecutionId = native.Execution.ActivityExecutionId, BpmnActivityExecutionId = bpmn.Execution.ActivityExecutionId };
     }
 }

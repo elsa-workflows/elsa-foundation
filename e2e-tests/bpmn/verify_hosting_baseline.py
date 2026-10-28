@@ -66,6 +66,9 @@ def verify(path: Path, reader: Path) -> dict:
                 args = ['--inspect-called-ack', str(database), sha, 'default', str(root / case['api']),
                         str(root / case['marker']), 'held']
                 document(case['marker'])
+            elif mode == 'native-parent':
+                args = ['--inspect-native-parent', str(database), sha, 'default', str(root / case['api']), str(root / case['marker'])]
+                document(case['marker'])
             elif mode in ('called-control', 'compensation'):
                 flag = '--inspect-opted-called' if mode == 'called-control' else '--inspect-compensation'
                 args = [flag, str(database), sha, 'default', str(root / case['api']), case['phase']]
@@ -96,8 +99,25 @@ def verify(path: Path, reader: Path) -> dict:
         for mapping in manifest['writerMap']:
             if not mapping['writers'] or not mapping['captures'] or any(name not in assets for name in mapping['captures']):
                 raise ValueError('A writer has no retained source-bound capture.')
+        complete = False
+        if manifest.get('gateAComplete'):
+            native = document(manifest['nativePendingReceipt'])
+            mi = document(manifest['multiInstanceReceipt'])
+            physical = document(manifest['multiInstancePhysicalReceipt'])
+            if (native['passed'] is not True or len(native['cases']) != 6 or
+                    {(case['parent'], case['persistenceMode']) for case in native['cases']} != {
+                        (parent, mode) for parent in ('Sequence', 'Flowchart', 'CompensationScope') for mode in ('Balanced', 'Durable')} or
+                    not all(case['pendingParentConsumption'] for case in native['cases']) or
+                    sum(case['mode'] == 'native-parent' for case in manifest['checkedObservations']) != 6 or
+                    mi['passed'] is not True or len(mi['cases']) != 4 or physical['passed'] is not True or
+                    {(case['persistenceMode'], case['isSequential']) for case in mi['cases']} != {
+                        (mode, sequential) for mode in ('Balanced', 'Durable') for sequential in (False, True)} or
+                    physical['stores']['runtime']['sha256Before'] != assets[manifest['multiInstanceStore']]['databaseSha256'] or
+                    physical['stores']['runtime']['sha256After'] != assets[manifest['multiInstanceStore']]['databaseSha256']):
+                raise ValueError('Claimed capture gate lacks native pending or genuine MI inputs.')
+            complete = True
     return {'assetsVerified': len(assets), 'wholeStoresVerified': len(databases), 'checkedProviderObservations': observed,
-            'nativeTerminalCases': 12, 'gateAComplete': False,
+            'nativeTerminalCases': 12, 'gateAComplete': complete,
             'upgradeRecoveryProved': False, 'directHostAcceptanceProved': False}
 
 
