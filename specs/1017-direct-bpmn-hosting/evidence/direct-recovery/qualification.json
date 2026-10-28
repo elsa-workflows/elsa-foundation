@@ -1,0 +1,83 @@
+{
+  "kind": "Initial direct human wait/process restart/completion qualification; spec1017 remains partial",
+  "sourceCommit": "48bf343b51f9db4c682bacb737758d0c6dbdcfbc",
+  "sourceBinding": "The production host suite was rebuilt and rerun after this source commit, with asserted binary product revision and exported binary hashes. Other listed suites ran against byte-identical production code before commit; dependency lock refresh and documentation followed. This receipt commit only adds evidence.",
+  "uniquePassingChecks": 1320,
+  "results": [
+    {
+      "scope": "BPMN whole suite",
+      "passed": 378,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "3a72c6e919facc0c1c7e995ad1f35ad0cff759caf45b46d9ef5d9a97d9574589"
+    },
+    {
+      "scope": "Runtime scheduler/ownership/model/coalescing selection",
+      "passed": 512,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "04c0175e391beac1ec095c7c723be74638d98e68491c45c2ac6b54f01321a512"
+    },
+    {
+      "scope": "Runtime EF queue/model/material/migrations selection",
+      "passed": 334,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "1ce62ec0129e7c5b90f69485625003e78d748aaa1ebdfecdb591217cac0934bd"
+    },
+    {
+      "scope": "Architecture/catalog/composition/permission selection",
+      "passed": 84,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "c145ee9870ac5fcb1cee396904e2f0048d96888037b40365e978a7dfa06e5696"
+    },
+    {
+      "scope": "Native EF budgets",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "69c0d13048e1bf43ab420facf38460c428845a03a26f749d9812d6b9955543ef"
+    },
+    {
+      "scope": "Production host whole suite; rebuilt exact source",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "95ba086998fa309fb2d8e44131969db18c79ef9ad66157f7c29b197da370c9dd"
+    }
+  ],
+  "wholeSuiteDiscovery": {
+    "bpmn": 378,
+    "productionHost": 2
+  },
+  "negativeControl": {
+    "removed": "Direct driver human-work AttemptId equality in exact invocation lookup",
+    "failed": 1,
+    "trxSha256": "6e373347d02f5e2a2d322c71f53370ea084820fc337c6b56e111c70b99997332",
+    "observed": "Stale completion returned HTTP 200 Accepted/TerminalSettled instead of expected HTTP 409 rejected.",
+    "restoredDriverSha256": "981d499af1f91958bf556f2813a15d1e5d491a64d85bdddaa467ea8830bcb672",
+    "restoredHostSuitePassed": 2
+  },
+  "metadataChecks": {
+    "lockedSolutionRestore": true,
+    "architectureGraphRestoredReleaseAndDebug": true,
+    "mapsCheck": true,
+    "testTierProjects": 123
+  },
+  "baselinePreservation": {
+    "assetHashesUnchanged": 104,
+    "wholeStoreIntegrityChecks": 22,
+    "frozenFingerprintUnchanged": true,
+    "changedHostRecoveryProved": false,
+    "unmigratedCurrentReaderDiagnostic": "Current provider refused a raw pre-migration baseline observation with RuntimeArtifactEntityFrameworkPersistenceException. That store has no MaterialKind column. Actual migrated/changed-host resume remains open; this diagnostic is not upgrade acceptance."
+  },
+  "fullPrReviewRounds": 0,
+  "limits": [
+    "Same-source process restart; no changed-binary or legacy-upgrade acceptance.",
+    "Combined host has Design storage configured; runtime-only proof remains open.",
+    "Clustered model placement, service/timer/native bindings, Studio and full scenario matrix remain open.",
+    "No concurrent source-retirement/admission proof."
+  ],
+  "remaining": "Partial fork/join and operational/crash matrix, source-admission serialization, authoritative lifecycle/settlement, actual native bindings/ETL, runtime-only and changed-host/legacy recovery, Studio and clustered placement remain required."
+}
