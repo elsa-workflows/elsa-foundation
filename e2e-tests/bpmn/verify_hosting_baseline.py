@@ -102,9 +102,12 @@ def verify(path: Path, reader: Path) -> dict:
         complete = False
         if manifest.get('gateAComplete'):
             native = document(manifest['nativePendingReceipt'])
+            native_physical = document(manifest['nativePendingPhysicalReceipt'])
             mi = document(manifest['multiInstanceReceipt'])
             physical = document(manifest['multiInstancePhysicalReceipt'])
             if (native['passed'] is not True or len(native['cases']) != 6 or
+                    native_physical['passed'] is not True or len(native_physical['cases']) != 6 or
+                    {case['workflowExecutionId'] for case in native_physical['cases']} != {case['workflowExecutionId'] for case in native['cases']} or
                     {(case['parent'], case['persistenceMode']) for case in native['cases']} != {
                         (parent, mode) for parent in ('Sequence', 'Flowchart', 'CompensationScope') for mode in ('Balanced', 'Durable')} or
                     not all(case['pendingParentConsumption'] for case in native['cases']) or

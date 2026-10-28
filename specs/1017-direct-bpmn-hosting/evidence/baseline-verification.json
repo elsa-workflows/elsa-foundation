@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "kind": "pre-writer-capture-verification",
+  "manifest": "baseline/manifest.json",
+  "manifestSha256": "c2e5d9c8c2a001ff5141c2ca8eaaed097ec7c81d78d0180b6c7a4ecf5bed4153",
+  "verifierSourceSha256": "d97fe2ead7e22d91d444344ca6d09c909ce8acc4d6d2b1fc57ec6c2c71aefc7c",
+  "readerSourceCommit": "8f071394f",
+  "readerBinarySha256": "27ee6cd0d574d3613afefe44c3a52782e98cbc4920c5b510faf63eba85a9d0c2",
+  "result": {
+    "assetsVerified": 104,
+    "wholeStoresVerified": 22,
+    "checkedProviderObservations": 15,
+    "nativeTerminalCases": 12,
+    "gateAComplete": true,
+    "upgradeRecoveryProved": false,
+    "directHostAcceptanceProved": false
+  },
+  "captureToolTests": {
+    "qualifyHosting": 12,
+    "retainBroadcastSnapshot": 5
+  },
+  "legacyControlReaderChecks": 20,
+  "calledAckReaderChecks": 18,
+  "nativeParentControls": {
+    "passed": true,
+    "controls": [
+      {
+        "name": "actual-pending-fault",
+        "exitCode": 0,
+        "providerChecked": true,
+        "readOnlyInputUnchanged": true
+      },
+      {
+        "name": "wrong-marker-source",
+        "exitCode": 2,
+        "providerChecked": false,
+        "readOnlyInputUnchanged": true
+      },
+      {
+        "name": "wrong-api-invocation",
+        "exitCode": 2,
+        "providerChecked": false,
+        "readOnlyInputUnchanged": true
+      },
+      {
+        "name": "missing-pending-source",
+        "exitCode": 2,
+        "providerChecked": false,
+        "readOnlyInputUnchanged": true
+      },
+      {
+        "name": "missing-incident",
+        "exitCode": 2,
+        "providerChecked": false,
+        "readOnlyInputUnchanged": true
+      },
+      {
+        "name": "consumed-parent",
+        "exitCode": 2,
+        "providerChecked": false,
+        "readOnlyInputUnchanged": true
+      },
+      {
+        "name": "foreign-artifact-pin",
+        "exitCode": 2,
+        "providerChecked": false,
+        "readOnlyInputUnchanged": true
+      }
+    ],
+    "originalStoreSha256": "42ba933efd4f8e8d75bec9df2bfdcf5c9e97a36fa8baa5173c45e62fffa7ea95",
+    "originalUnchanged": true,
+    "upgradedHostRecoveryProved": false
+  },
+  "callbackPinRefusal": {
+    "passed": true,
+    "privateInvalidCallbackPinRefused": true,
+    "mutatedPrivateSnapshotSha256": "28bdf7ae130ee707b02ddead3b3152436bc9217707ad38ebf39537778411832f",
+    "originalUnchanged": true,
+    "weakerReaderAlsoRefused": true,
+    "guardRemovalProved": false,
+    "upgradedHostRecoveryProved": false
+  },
+  "bundleControls": {
+    "passed": true,
+    "controls": [
+      {
+        "name": "changed-asset-hash",
+        "refused": true,
+        "exitCode": 1
+      },
+      {
+        "name": "missing-whole-store",
+        "refused": true,
+        "exitCode": 1
+      },
+      {
+        "name": "changed-studio-pin-with-rehashed-receipt",
+        "refused": true,
+        "exitCode": 1
+      },
+      {
+        "name": "changed-frozen-oracle",
+        "refused": true,
+        "exitCode": 1
+      }
+    ],
+    "originalAssetsUnchanged": true,
+    "upgradeRecoveryProved": false
+  },
+  "independentCoverageReview": "Actual MI loops/iterations and pending native fault outcomes resolve the two Gate A coverage findings; successful completion precursors are not mislabeled already-persisted callbacks.",
+  "excludedAttempts": [
+    "Initial mixed authentication/runtime captures are private and excluded; final inputs isolate authentication/secrets before authoring.",
+    "Initial diagnostic scope/kind filters missed the cut; the successful completion cascade can also fold in Durable. Neither is positive pending-callback evidence.",
+    "Initial reader compile/projection assumptions were fixed; actual six pending fault inputs pass the final reader.",
+    "A proposed full-pin guard-removal control was already refused by the weaker reader; it is an invalid-input refusal, not a guard-removal witness."
+  ],
+  "upgradeRecoveryProved": false,
+  "directHostAcceptanceProved": false,
+  "completePrReviewRounds": 0
+}

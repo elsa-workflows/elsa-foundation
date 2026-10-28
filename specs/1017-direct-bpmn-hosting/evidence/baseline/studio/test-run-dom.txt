@@ -1,0 +1,296 @@
+- complementary:
+  - link "Elsa Studio Foundation":
+    - /url: /
+    - strong: Elsa Studio
+    - generic: Foundation
+  - button "Collapse navigation" [expanded]:
+  - searchbox "Search modules"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard
+      - generic: Home
+    - link "Workflows":
+      - /url: /workflows/definitions
+      - generic: Workflows
+    - link "Runs":
+      - /url: /workflows/instances
+      - generic: Runs
+  - navigation "More tools":
+    - button "More tools":
+      - generic: More tools
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings
+      - generic: Settings
+  - group "Environment and account":
+    - 'group "Configured backend endpoint: 127.0.0.1:53186"':
+      - strong: Backend API
+      - generic: 127.0.0.1:53186
+    - 'button "Account: Administrator"':
+      - generic: A
+      - generic: Administrator
+- banner:
+  - generic: Studio / Workflows
+  - heading "Workflows" [level=1]
+  - button "Weaver":
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation-studio
+  - link "Designer source":
+    - /url: https://github.com/elsa-workflows/elsa-foundation-designer
+  - radiogroup "Colour mode":
+    - radio "Light":
+    - radio "Dark" [checked]:
+    - radio "Dim":
+  - button "Select theme":
+- main:
+  - button "Definitions"
+  - strong: BPMN execution model · reviewed host
+  - generic: Draft
+  - status
+  - group "Canvas tools":
+    - button "Undo" [disabled]:
+    - button "Redo" [disabled]:
+    - button "Auto-layout":
+  - button "Save":
+    - generic: Save
+  - group "Workflow publication actions":
+    - button "Review & publish":
+      - text: Review & publish
+    - button "Publish options":
+  - button "Test Run":
+    - text: Test Run
+  - button "More workflow actions":
+  - group "Attached Test Run":
+    - button "Test Run dispatched":
+      - text: Test Run dispatched
+    - generic: Completed
+    - status: Execution on this canvas
+    - button "Pause following" [pressed]
+    - button "Refresh execution"
+    - button "Return to editing"
+    - button "Open run"
+    - generic: Activity state is recorded at commit boundaries.
+  - complementary "Activities panel":
+    - tablist "Activities panel tabs":
+      - tab "Activities" [selected]:
+        - generic: Activities
+    - button "Collapse activities panel":
+    - button "Maximize activities panel":
+    - generic: BPMN shapes
+    - list "BPMN shapes":
+      - listitem "Add start event to the canvas": Start event
+      - listitem "Add end event to the canvas": End event
+      - listitem "Add terminate end event to the canvas": Terminate end event
+      - listitem "Add exclusive gateway to the canvas": Exclusive gateway
+      - listitem "Add parallel gateway to the canvas": Parallel gateway
+      - listitem "Add inclusive gateway to the canvas": Inclusive gateway
+      - listitem "Add task (unbound) to the canvas": Task (unbound)
+    - searchbox "Search activity palette"
+    - tree "Available activities":
+      - treeitem "BPMN 2" [expanded] [level=1]:
+        - generic: BPMN
+        - generic: "2"
+      - treeitem "BPMN Decision, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: BPMN Decision
+      - treeitem "BPMN Process, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: BPMN Process
+      - treeitem "Compensation 3" [expanded] [level=1]:
+        - generic: Compensation
+        - generic: "3"
+      - treeitem "Compensate, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Compensate
+      - treeitem "Compensation Scope, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Compensation Scope
+      - treeitem "Confirm, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Confirm
+      - treeitem "Control Flow 7" [expanded] [level=1]:
+        - generic: Control Flow
+        - generic: "7"
+      - treeitem "Do, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Do
+      - treeitem "For, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: For
+      - treeitem "For Each, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: For Each
+      - treeitem "If, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: If
+      - treeitem "Parallel, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Parallel
+      - treeitem "Switch, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Switch
+      - treeitem "While, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: While
+      - treeitem "Flowchart 1" [expanded] [level=1]:
+        - generic: Flowchart
+        - generic: "1"
+      - treeitem "Flowchart, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Flowchart
+      - treeitem "Http 3" [expanded] [level=1]:
+        - generic: Http
+        - generic: "3"
+      - treeitem "Http Endpoint, Exact version 1.1.0" [level=2]:
+        - strong: Http Endpoint
+      - treeitem "Send Http Request, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Send Http Request
+      - treeitem "Write Http Response, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Write Http Response
+      - treeitem "Primitives 13" [expanded] [level=1]:
+        - generic: Primitives
+        - generic: "13"
+      - treeitem "Break, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Break
+      - treeitem "Event, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Event
+      - treeitem "Fault, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Fault
+      - treeitem "Finish, Exact version 1" [level=2]:
+        - strong: Finish
+        - generic: Completes the workflow with a named outcome.
+      - treeitem "Inline, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Inline
+      - treeitem "Publish Event, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Publish Event
+      - treeitem "Read Line, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Read Line
+      - treeitem "Set Correlation Id, Exact version 1" [level=2]:
+        - strong: Set Correlation Id
+        - generic: Assigns the correlation id of the running workflow instance.
+      - treeitem "Set Instance Name, Exact version 1" [level=2]:
+        - strong: Set Instance Name
+        - generic: Assigns the display name of the running workflow instance.
+      - treeitem "Set Output, Exact version 1" [level=2]:
+        - strong: Set Output
+        - generic: Assigns a value to a named workflow output.
+      - treeitem "Set Variable, Exact version 1" [level=2]:
+        - strong: Set Variable
+        - generic: Assigns a value to a declared workflow variable, resolved to its nearest visible scope.
+      - treeitem "Write Line, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Write Line
+      - treeitem "Write Lines, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Write Lines
+      - treeitem "Runtime 5" [expanded] [level=1]:
+        - generic: Runtime
+        - generic: "5"
+      - treeitem "Complete, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Complete
+      - treeitem "Dispatch Workflow, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Dispatch Workflow
+      - treeitem "Graph Activity, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Graph Activity
+      - treeitem "Run Etl, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Run Etl
+      - treeitem "Run Rules, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Run Rules
+      - treeitem "Scheduling 3" [expanded] [level=1]:
+        - generic: Scheduling
+        - generic: "3"
+      - treeitem "Cron, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Cron
+      - treeitem "Delay, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Delay
+      - treeitem "Timer, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Timer
+      - treeitem "Sequence 1" [expanded] [level=1]:
+        - generic: Sequence
+        - generic: "1"
+      - treeitem "Sequence, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0" [level=2]:
+        - strong: Sequence
+  - separator "Resize activities panel"
+  - main:
+    - tablist "Editor view tabs":
+      - tab "Designer" [selected]:
+        - generic: Designer
+      - tab "Code":
+        - generic: Code
+      - tab "Properties":
+        - generic: Properties
+    - button "Root"
+    - generic "Workflow canvas":
+      - application:
+        - button "Insert activity into connection":
+        - button "Delete connection":
+        - button "Insert activity into connection":
+        - button "Delete connection":
+        - button "Insert activity into connection":
+        - button "Delete connection":
+        - button "Insert activity into connection":
+        - button "Delete connection":
+        - 'button "Start. Node ID: start. Activity type: unknown. State: authoring. Not selected."':
+          - generic "Start event":
+            - generic: Start
+        - 'button "Reviewed default route. Node ID: route. Activity type: unknown. State: authoring. Not selected."':
+          - generic "Exclusive gateway":
+            - generic: ×
+            - generic: Reviewed default route
+        - 'button "Default timer. Node ID: wait. Activity type: unknown. Run state: Completed. Not selected."':
+          - generic "Intermediate catch event":
+            - strong: Default timer
+            - generic: Intermediate catch event
+        - 'button "Default complete. Node ID: end. Activity type: unknown. State: authoring. Not selected."':
+          - generic "End event":
+            - generic: Default complete
+        - 'button "Other complete. Node ID: other-end. Activity type: unknown. State: authoring. Not selected."':
+          - generic "End event":
+            - generic: Other complete
+        - generic "Control Panel":
+          - button "Zoom In":
+          - button "Zoom Out":
+          - button "Fit View":
+          - button "Toggle Interactivity":
+        - img "Mini Map"
+        - link "React Flow attribution":
+          - /url: https://reactflow.dev
+          - text: React Flow
+    - text: No validation errors
+  - separator "Resize inspector panel"
+  - complementary "Inspector panel":
+    - tablist "Inspector panel tabs":
+      - tab "Inspector":
+        - generic: Inspector
+      - tab "Runtime" [selected]:
+        - generic: Runtime
+      - tab "Test Run":
+        - generic: Test Run
+      - tab "Artifacts":
+        - generic: Artifacts
+    - button "Collapse inspector panel":
+    - button "Maximize inspector panel":
+    - text: Latest Test Run
+    - heading "Transient run accepted" [level=3]
+    - generic: DispatchAccepted
+    - paragraph: Ephemeral - not saved, promoted, or published.
+    - paragraph: "Start: Direct start"
+    - text: Current draft has the same behavior as a published version.
+    - term: Dispatch
+    - definition: DispatchAccepted
+    - term: Test Run
+    - definition: 14iZvnsldWE
+    - term: Artifact
+    - definition: artifact-cfadffc29096
+    - term: Run / Instance
+    - definition:
+      - button "14iZvo3Gbql"
+    - term: Activities
+    - definition: Available on linked Run
+    - term: Incidents
+    - definition: Available on linked Run
+    - term: Expires
+    - definition: 10/28/2026, 8:49:42 AM
+    - region "Test Run controls":
+      - status:
+        - strong: Execution
+        - text: Completed
+      - heading "Waiting triggers" [level=4]
+      - button "Refresh"
+      - paragraph: No supported waits are active on this Test Run.
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - generic "Bottom panel controls":
+    - button "Expand bottom panel":
+    - button "Maximize bottom panel":
+  - option "All sources" [selected]
+  - option "Elsa Studio · Sipkes-Mac-Mini:41059"
