@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Observe real owned-host SQLite snapshots through checked runtime readers; never modifies source data."""
 from __future__ import annotations
-import argparse, base64, hashlib, json, sqlite3, subprocess, tempfile, time
+import argparse, base64, hashlib, json, shutil, sqlite3, subprocess, tempfile, time
 from contextlib import closing
 from pathlib import Path
 
@@ -31,13 +31,35 @@ def read_snapshot(path: Path, reader: Path, marker: dict, extras: list[str], pub
     return result
 
 
-def observe(database: Path, reader: Path, marker: dict, extras: list[str], publisher: str | None = None) -> dict:
+def retain_snapshot(source: Path, destination: Path) -> dict:
+    """Persist the already checked closed input, without overwriting an earlier capture."""
+    expected = hashlib.sha256(source.read_bytes()).hexdigest()
+    created = False
+    try:
+        with destination.open('xb') as output:
+            created = True
+            with source.open('rb') as input_stream:
+                shutil.copyfileobj(input_stream, output)
+        if hashlib.sha256(destination.read_bytes()).hexdigest() != expected:
+            raise ValueError('Retained snapshot differs from the checked reader input.')
+    except BaseException:
+        if created:
+            destination.unlink(missing_ok=True)
+        raise
+    return {'file': destination.name, 'sha256': expected, 'byteLength': destination.stat().st_size}
+
+
+def observe(database: Path, reader: Path, marker: dict, extras: list[str], publisher: str | None = None,
+            retain: Path | None = None) -> dict:
     with tempfile.TemporaryDirectory(prefix="elsa-broadcast-recovery-read-") as directory:
         copy = Path(directory) / "snapshot.sqlite"
         with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True)) as source:
             source.execute("pragma query_only=ON")
             copy_snapshot(source, copy)
-        return read_snapshot(copy, reader, marker, extras, publisher)
+        result = read_snapshot(copy, reader, marker, extras, publisher)
+        if retain is not None:
+            result['retainedSnapshot'] = retain_snapshot(copy, retain)
+        return result
 
 
 def observe_membership(database: Path, reader: Path) -> dict:
@@ -96,18 +118,21 @@ def main() -> int:
     parser.add_argument("--publisher")
     parser.add_argument("--previous-fence", type=int, default=0)
     parser.add_argument("--timeout", type=float, default=180)
+    parser.add_argument("--retain-snapshot", type=Path, help="Keep the exact checked closed input as a new portable file")
     args = parser.parse_args()
     marker = json.loads(args.marker.read_text())
     try:
         database = args.database.resolve(strict=True); reader = args.reader.resolve(strict=True)
         if args.membership and args.watch_claim: raise ValueError("Membership mode cannot watch a source claim.")
         if args.publisher and (args.membership or args.watch_claim): raise ValueError("Publisher discovery is a separate checked observation mode.")
+        if args.retain_snapshot and (args.membership or args.watch_claim):
+            raise ValueError("Snapshot retention requires an ordinary checked source observation.")
         if args.membership:
             result = observe_membership(database, reader)
         elif args.watch_claim:
             result = watch_claim(database, reader, marker, args.extra_workflow, args.timeout, args.previous_fence)
         else:
-            result = observe(database, reader, marker, args.extra_workflow, args.publisher)
+            result = observe(database, reader, marker, args.extra_workflow, args.publisher, args.retain_snapshot)
         args.output.write_text(json.dumps(result, indent=2) + "\n")
         print(json.dumps({"providerChecked": True, "members": len(result["members"])} if args.membership else {"providerChecked": True, "status": result["source"]["status"], "fence": result["source"]["deliveryFencingToken"]}))
         return 0
