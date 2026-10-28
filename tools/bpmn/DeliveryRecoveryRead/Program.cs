@@ -43,6 +43,15 @@ try
             ActualProductVersions = products, ReleasedLibraryProducts = libraries }, json));
         return 0;
     }
+    if (args.Length == 6 && args[0] == "--inspect-native-parent")
+    {
+        await VerifySnapshotAsync(args[1], args[2]);
+        var observed = await OptedCalledSnapshotReader.ReadNativeParentAsync(args[1], args[3], args[4], args[5]);
+        await VerifySnapshotAsync(args[1], args[2]);
+        Console.WriteLine(JsonSerializer.Serialize(new { ProviderChecked = true, ReadOnly = true,
+            SnapshotSha256 = args[2], NativeParent = observed }, json));
+        return 0;
+    }
     if (args.Length == 6 && args[0] == "--inspect-compensation")
     {
         await VerifySnapshotAsync(args[1], args[2]);
