@@ -265,6 +265,7 @@ internal sealed class RecoveryProbeControl(string directory) : IDisposable
             if (!Regex.IsMatch(caseId, "^[a-z0-9-]{1,64}$", RegexOptions.CultureInvariant)) throw new InvalidDataException("Invalid native-parent probe case.");
             var workflowId = plan.GetProperty("workflowExecutionId").GetString();
             var nodeId = plan.GetProperty("childNodeId").GetString();
+            var childExecutionId = plan.GetProperty("childActivityExecutionId").GetString();
             foreach (var entry in context.ChangeTracker.Entries<RuntimePostCommitOutboxEntity>())
             {
                 var row = entry.Entity;
@@ -276,7 +277,8 @@ internal sealed class RecoveryProbeControl(string directory) : IDisposable
                 var work = document.RootElement.GetProperty("intent").GetProperty("payload");
                 if (work.GetProperty("CommandKind").GetInt32() != (int)WorkflowExecutionCommandKind.CompleteActivity ||
                     !work.TryGetProperty("Payload", out var payload) ||
-                    !payload.TryGetProperty("ExecutableNodeId", out var node) || node.GetString() != nodeId) continue;
+                    !payload.TryGetProperty("CompletedChildActivityExecutionId", out var child) || child.GetString() != childExecutionId ||
+                    payload.GetProperty("ExecutableNodeId").GetString() != "native-parent") continue;
                 var caseDirectory = Path.Combine(directory, caseId); Directory.CreateDirectory(caseDirectory);
                 var claimed = Path.Combine(caseDirectory, "claimed");
                 try { using var token = new FileStream(claimed, FileMode.CreateNew, FileAccess.Write, FileShare.Read); token.Flush(true); }

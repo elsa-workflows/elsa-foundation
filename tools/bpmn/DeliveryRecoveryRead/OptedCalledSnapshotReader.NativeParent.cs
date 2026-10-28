@@ -27,13 +27,13 @@ internal static partial class OptedCalledSnapshotReader
         Require(workflow.SystemMetadata.GetValueOrDefault(RuntimeMetadataKeys.PersistenceMode) == api.GetProperty("persistenceMode").GetString(), "Native persistence mode differs.");
         var states = await activities.ListAllAsync(executionId);
         var native = Exact(states, view, "native-parent"); var bpmn = Exact(states, view, "legacy-bpmn");
-        Require(bpmn.Status == ActivityExecutionStatus.Completed && bpmn.ParentActivityExecutionId == native.Execution.ActivityExecutionId,
-            "Actual BPMN completion/parent identity differs.");
+        Require(bpmn.Status == ActivityExecutionStatus.Faulted && bpmn.ParentActivityExecutionId == native.Execution.ActivityExecutionId,
+            "Actual BPMN fault/parent identity differs.");
         var pending = api.GetProperty("pendingParentConsumption").GetBoolean();
         string? sourceId = null;
         if (pending)
         {
-            Require(workflow.Status == WorkflowExecutionStatus.Running && native.Status == ActivityExecutionStatus.Running &&
+            Require(workflow.Status is WorkflowExecutionStatus.Running or WorkflowExecutionStatus.Faulted && native.Status == ActivityExecutionStatus.Running &&
                 states.All(state => state.Execution.ExecutableNodeId != "after-bpmn"), "Native parent has already advanced.");
             using var markerDocument = JsonDocument.Parse(await File.ReadAllTextAsync(markerPath)); var marker = markerDocument.RootElement;
             Require(marker.GetProperty("providerEvent").GetString() == "EF.TransactionCommitted" &&
@@ -49,10 +49,10 @@ internal static partial class OptedCalledSnapshotReader
             Require(work.GetProperty("CommandKind").GetInt32() == (int)WorkflowExecutionCommandKind.CompleteActivity &&
                 work.GetProperty("WorkflowExecutionId").GetString() == executionId &&
                 work.GetProperty("WorkItemId").GetString() == marker.GetProperty("work").GetProperty("WorkItemId").GetString() &&
-                payload.GetProperty("ActivityExecutionId").GetString() == bpmn.Execution.ActivityExecutionId &&
-                payload.GetProperty("ExecutableNodeId").GetString() == "legacy-bpmn" &&
-                payload.GetProperty("ParentActivityExecutionId").GetString() == native.Execution.ActivityExecutionId &&
-                payload.GetProperty("CompletionKind").GetInt32() == (int)SchedulerCompletionKind.ActivityCompleted &&
+                payload.GetProperty("ActivityExecutionId").GetString() == native.Execution.ActivityExecutionId &&
+                payload.GetProperty("CompletedChildActivityExecutionId").GetString() == bpmn.Execution.ActivityExecutionId &&
+                payload.GetProperty("ExecutableNodeId").GetString() == "native-parent" &&
+                payload.GetProperty("CompletionKind").GetInt32() is (int)SchedulerCompletionKind.ParentCompletionEvaluation or (int)SchedulerCompletionKind.ParentOutcomeEvaluation &&
                 payload.GetProperty("PinnedExecutable").GetProperty("ArtifactId").GetString() == workflow.PinnedExecutable.ArtifactId,
                 "The actual pending work does not address the exact completed BPMN child and unadvanced native parent.");
         }

@@ -97,7 +97,8 @@ def verify(path: Path, reader: Path) -> dict:
             if not mapping['writers'] or not mapping['captures'] or any(name not in assets for name in mapping['captures']):
                 raise ValueError('A writer has no retained source-bound capture.')
     return {'assetsVerified': len(assets), 'wholeStoresVerified': len(databases), 'checkedProviderObservations': observed,
-            'nativeTerminalCases': 12, 'upgradeRecoveryProved': False, 'directHostAcceptanceProved': False}
+            'nativeTerminalCases': 12, 'gateAComplete': False,
+            'upgradeRecoveryProved': False, 'directHostAcceptanceProved': False}
 
 
 if __name__ == '__main__':

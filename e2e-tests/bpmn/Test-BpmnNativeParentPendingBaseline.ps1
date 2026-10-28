@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Retain actual native-composite completion checkpoints before parent consumption.
+    Retain actual BPMN fault/incident/native-parent callback checkpoints before parent consumption.
 .DESCRIPTION
     The test-only probe holds an actual EF transaction-committed return. Balanced
     folding is observed explicitly; no pending callback is manufactured when folded.
@@ -50,7 +50,8 @@ try {
             $parentVersion = Get-ActivityVersionId $ctx $type
             $name = "native-parent-$([guid]::NewGuid().ToString('N'))"
             $process = New-ActivityNode 'legacy-bpmn' $bpmn -Structure (New-ControlStructure @((New-ControlWait 'node-held' $event $name)) @(
-                (New-ControlElement 'start' 'startEvent'), (New-ControlElement 'held' 'task' 'node-held'), (New-ControlElement 'end' 'endEvent')) @(
+                (New-ControlElement 'start' 'startEvent'), (New-ControlElement 'held' 'task' 'node-held'),
+                (New-ControlElement 'end' 'endEvent' '' @(@{ type = 'error'; properties = @{ code = 'NATIVE-PENDING-BASELINE' } }))) @(
                 (New-ControlFlow 'begin' 'start' 'held'), (New-ControlFlow 'finish' 'held' 'end')))
             $after = New-ActivityNode 'after-bpmn' $write -Inputs @((New-LiteralInput 'text' 'Native parent continued after the real BPMN completion.'))
             $structure = if ($kind -eq 'Flowchart') { @{ kind = 'elsa.flowchart.structure'; schemaVersion = '1.0.0'; payload = @{
@@ -65,7 +66,8 @@ try {
             $run = Invoke-Artifact $ctx $publication.artifactId $publication.sourceReferenceId
             $before = Wait-ControlNode $ctx $run.workflowExecutionId 'node-held' 'Suspended'
             $caseId = "$($kind.ToLowerInvariant())-$($mode.ToLowerInvariant())"
-            @{ caseId = $caseId; workflowExecutionId = $run.workflowExecutionId; childNodeId = 'legacy-bpmn'; scope = 'default' } |
+            $childId = @($before.activities | Where-Object executableNodeId -ceq 'legacy-bpmn')[0].activityExecutionId
+            @{ caseId = $caseId; workflowExecutionId = $run.workflowExecutionId; childNodeId = 'legacy-bpmn'; childActivityExecutionId = $childId; scope = 'default' } |
                 ConvertTo-Json | Set-Content (Join-Path $control 'native-parent-plan.json')
             $info = [Diagnostics.ProcessStartInfo]::new((Get-Process -Id $PID).Path)
             $info.UseShellExecute = $false; $info.RedirectStandardOutput = $true; $info.RedirectStandardError = $true
@@ -82,10 +84,9 @@ try {
             $view = Get-WorkflowInstance $ctx $run.workflowExecutionId
             $child = @($view.activities | Where-Object executableNodeId -ceq 'legacy-bpmn')
             $parent = @($view.activities | Where-Object executableNodeId -ceq 'native-parent')
-            if ($child.Count -ne 1 -or $child[0].status -cne 'Completed') { throw 'The actual completed BPMN activity was not persisted.' }
+            if ($child.Count -ne 1 -or $child[0].status -cne 'Faulted') { throw 'The actual faulted BPMN activity was not persisted.' }
             $pending = $parent.Count -eq 1 -and $parent[0].status -eq 'Running' -and @($view.activities | Where-Object executableNodeId -ceq 'after-bpmn').Count -eq 0
-            if ($mode -eq 'Durable' -and -not $pending) { throw 'The native parent already consumed the promised Durable callback cut.' }
-            if (-not $pending -and $view.instance.status -cne 'Completed') { throw 'A folded parent has no truthful completed projection.' }
+            if (-not $pending) { throw 'The native parent already consumed the promised fault callback cut.' }
             if (Test-Path $marker) { Copy-Item $marker (Join-Path $OutputDirectory "$caseId-marker.json") }
             Stop-OwnedElsaServer
             if (-not $request.WaitForExit(10000)) { $request.Kill(); $request.WaitForExit() }
