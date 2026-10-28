@@ -54,9 +54,12 @@ internal static partial class OptedCalledSnapshotReader
                 payload.GetProperty("ActivityExecutionId").GetString() == native.Execution.ActivityExecutionId &&
                 payload.GetProperty("CompletedChildActivityExecutionId").GetString() == bpmn.Execution.ActivityExecutionId &&
                 payload.GetProperty("ExecutableNodeId").GetString() == "native-parent" &&
-                payload.GetProperty("CompletionKind").GetInt32() is (int)SchedulerCompletionKind.ParentCompletionEvaluation or (int)SchedulerCompletionKind.ParentOutcomeEvaluation &&
-                payload.GetProperty("PinnedExecutable").GetProperty("ArtifactId").GetString() == workflow.PinnedExecutable.ArtifactId,
+                payload.GetProperty("CompletionKind").GetInt32() is (int)SchedulerCompletionKind.ParentCompletionEvaluation or (int)SchedulerCompletionKind.ParentOutcomeEvaluation,
                 "The actual pending work does not address the exact completed BPMN child and unadvanced native parent.");
+            var callbackPin = payload.GetProperty("PinnedExecutable").Deserialize<WorkflowExecutableIdentity>(Json)
+                ?? throw new InvalidDataException("The pending native callback has no executable pin.");
+            Require(WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(callbackPin, workflow.PinnedExecutable),
+                "The pending native callback's complete executable pin differs.");
             var incidents = await new EfIncidentStateStore(context, access).ListAsync(executionId);
             var incidentId = work.GetProperty("CommandMetadata").GetProperty(RuntimeMetadataKeys.IncidentId).GetString();
             var incident = incidents.SingleOrDefault(item => item.IncidentId == incidentId)
