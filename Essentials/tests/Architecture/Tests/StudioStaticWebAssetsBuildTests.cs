@@ -15,9 +15,9 @@ public sealed class StudioStaticWebAssetsBuildTests
         try
         {
             var root = directory.FullName;
-            Directory.CreateDirectory(Path.Join(root, "Library"));
-            // Exercise genuinely case-distinct project paths where the filesystem supports them.
-            var secondDirectory = Directory.Exists(Path.Join(root, "library")) ? "OtherLibrary" : "library";
+            // MSBuild's project cache treats case-only paths as the same project even on Linux.
+            // Use distinct projects; the stale metadata below still changes their path casing.
+            const string secondDirectory = "OtherLibrary";
             var libraries = new[] { "Library", secondDirectory };
             for (var index = 0; index < libraries.Length; index++)
             {
