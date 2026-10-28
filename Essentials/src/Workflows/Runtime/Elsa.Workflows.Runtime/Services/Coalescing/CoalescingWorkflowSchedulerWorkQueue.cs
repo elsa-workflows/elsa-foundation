@@ -25,6 +25,9 @@ public sealed class CoalescingWorkflowSchedulerWorkQueue(
     public bool SupportsClaimTransitions =>
         sessionAccessor.Current is { IsActive: true } || _inner.SupportsClaimTransitions;
 
+    public bool SupportsClaimValidation =>
+        sessionAccessor.Current is { IsActive: true } || _inner.SupportsClaimValidation;
+
     bool IRuntimeSchedulerWorkDeferralCapability.CanDefer(RuntimeSchedulerWorkClaim claim) =>
         sessionAccessor.Current is not { } session || !session.OwnsOverlayClaim(claim) || session.SupportsDeferredOverlayRelease;
 
@@ -89,6 +92,8 @@ public sealed class CoalescingWorkflowSchedulerWorkQueue(
             var head = await session.ListOverlayAsync(
                 new RuntimeSchedulerWorkQuery(request.WorkflowExecutionId, limit: 1),
                 cancellationToken);
+            if (head.Items.FirstOrDefault() is { } item && request.ValidateBeforeClaim is { } validate)
+                await validate(item, cancellationToken);
             if (!session.SupportsDeferredOverlayRelease &&
                 head.Items.FirstOrDefault()?.CommandKind == WorkflowExecutionCommandKind.ResumeBookmark)
             {

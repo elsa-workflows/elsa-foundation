@@ -45,11 +45,12 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
         if (executableStore.SupportsModelMaterial)
         {
             var material = await graph.LoadMaterialClosureAsync(root, cancellationToken);
+            var hasModel = material.Any(item => item.Model is not null);
             await ExecuteLeasedAsync(material.Select(x => x.Identity.ArtifactId), leaseId, async (_, token) =>
             {
-                await EnsureCurrentMaterialAsync(material, leaseId, token);
+                if (hasModel) await EnsureCurrentMaterialAsync(material, leaseId, token);
                 await write(token);
-            }, cancellationToken, verifyBeforeWrite: true);
+            }, cancellationToken, verifyBeforeWrite: hasModel);
             return;
         }
         var closure = await graph.LoadClosureAsync(root, cancellationToken);
@@ -202,11 +203,13 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
         var graph = new WorkflowExecutableDependencyGraph(executableStore);
         var artifactIds = new HashSet<string>(StringComparer.Ordinal);
         var materialPins = new Dictionary<string, RuntimeExecutionMaterial>(StringComparer.Ordinal);
+        var hasModel = false;
         foreach (var root in savedRoots)
         {
             if (executableStore.SupportsModelMaterial)
             {
                 var material = await graph.LoadMaterialClosureAsync(root, cancellationToken);
+                hasModel |= material.Any(item => item.Model is not null);
                 if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(material.Single(x => x.Identity.ArtifactId == root.ArtifactId).Identity, root))
                     throw new WorkflowExecutableDependencyGraphException(WorkflowExecutableDependencyGraphFailureKind.ConflictingIdentity,
                         "The requested root differs from its complete immutable material pin.");
@@ -229,7 +232,7 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
         }
         await ExecuteLeasedAsync(artifactIds, leaseId, async (grants, token) =>
         {
-            if (materialPins.Count > 0) await EnsureCurrentMaterialAsync(materialPins.Values, leaseId, token);
+            if (hasModel) await EnsureCurrentMaterialAsync(materialPins.Values, leaseId, token);
             await write(grants, token);
         }, cancellationToken, verifyBeforeWrite: true);
     }

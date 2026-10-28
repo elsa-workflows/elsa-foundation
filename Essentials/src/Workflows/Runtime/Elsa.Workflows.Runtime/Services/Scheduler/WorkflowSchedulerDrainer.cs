@@ -541,21 +541,40 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         string workflowExecutionId,
         CancellationToken cancellationToken)
     {
-        if (_schedulerWorkQueue.SupportsClaimTransitions)
+        if (_schedulerWorkQueue.SupportsClaimTransitions && _schedulerWorkQueue.SupportsClaimValidation)
         {
             var claim = await _schedulerWorkQueue.ClaimAsync(
                 new RuntimeSchedulerWorkClaimRequest(
                     workflowExecutionId,
                     _claimOwnerId,
                     _timeProvider.GetUtcNow(),
-                    _claimOptions.VisibilityTimeout),
+                    _claimOptions.VisibilityTimeout) { ValidateBeforeClaim = ValidateProtocolBeforeClaimAsync },
                 cancellationToken);
             return claim is null ? null : new SchedulerWorkDelivery(claim.Item, claim);
         }
 
+        // Legacy providers cannot run operation-local validation on their claim path. Validate the observed
+        // head under the execution's single-writer lease before entering their unchanged claim/dequeue path.
         var page = await _schedulerWorkQueue.ListAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId, limit: 1), cancellationToken);
         var item = page.Items.FirstOrDefault();
+        if (item is not null)
+            await ValidateProtocolBeforeClaimAsync(item, cancellationToken);
+        if (_schedulerWorkQueue.SupportsClaimTransitions)
+        {
+            var claim = await _schedulerWorkQueue.ClaimAsync(new(workflowExecutionId, _claimOwnerId,
+                _timeProvider.GetUtcNow(), _claimOptions.VisibilityTimeout), cancellationToken);
+            return claim is null ? null : new SchedulerWorkDelivery(claim.Item, claim);
+        }
         return item is null ? null : new SchedulerWorkDelivery(item, null);
+    }
+
+    private static ValueTask ValidateProtocolBeforeClaimAsync(RuntimeSchedulerWorkItem item, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (item.CommandKind == WorkflowExecutionCommandKind.ExecuteModel || !Enum.IsDefined(item.CommandKind))
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.model.protocol-unavailable",
+                "Scheduler work requires a verified execution protocol that this host has not selected.");
+        return ValueTask.CompletedTask;
     }
 
     // Completes the current fenced claim when the provider supports claim transitions. For a legacy provider, consumes

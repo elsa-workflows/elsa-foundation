@@ -26,3 +26,11 @@ python3 -m unittest discover -s e2e-tests/bpmn -p test_qualify_hosting.py -v
 Output must be a new directory. A failed preparation retains its case journal/failure receipt and is not positive evidence. Successful bundles use relative paths and matched hashes; verification refuses missing assets, path escapes, changed snapshots, mismatched execution/pins/modes or absent frozen-contract proof. A bundle is a source-bound capture, not an independent signature or an upgraded-host acceptance result.
 
 Pending callback/cohort/control/MI/compensation/Studio cuts still need their own actual captures. `allWriterCaptureFamiliesComplete` remains false. Later implementation tasks add actual upgrade/complete-host qualification phases; unsupported phases currently fail argument parsing rather than return a successful placeholder.
+# Predecessor queue-reader witness
+
+`DeliveryRecoveryRead --check-predecessor-queue-reader <built-old-Workbench.dll> <new-fixture.sqlite>` writes the
+current EF queue and loads the supplied predecessor's checked reader in an isolated assembly context. It verifies
+that an unchanged native v1 control reads and the actual current model v2 row is refused with schema skew.
+The fixture path must be new. Output includes the predecessor provider/Core product commits and hashes.
+The native control's v1 stamp is deliberately constructed; this witness proves predecessor reader refusal, with
+separate tests for the actual held-v1 write gate. It does not prove host admission, worker placement or recovery.

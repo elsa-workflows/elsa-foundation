@@ -26,6 +26,15 @@ public sealed class RuntimeSchedulerWorkClaimRequest
     public string OwnerId { get; }
     public DateTimeOffset Now { get; }
     public TimeSpan VisibilityTimeout { get; }
+
+    /// <summary>
+    /// Optional operation-local validation of the exact head before its claim changes.
+    /// Only providers declaring SupportsClaimValidation may receive this callback. It may read durable evidence
+    /// but must not change state; compare-and-swap retries may evaluate it again. This is not a cross-execution
+    /// checkpoint precondition or a substitute for the execution ownership fence.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Func<RuntimeSchedulerWorkItem, CancellationToken, ValueTask>? ValidateBeforeClaim { get; init; }
 }
 
 /// <summary>

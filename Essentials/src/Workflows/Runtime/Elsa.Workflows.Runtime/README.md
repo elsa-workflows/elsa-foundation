@@ -10,6 +10,9 @@ participant retain their wire and fingerprint. The EF artifact provider also sto
 actual incarnations, model content hashes, full dependency leases, fenced sources and retention roots. This does
 not enable direct BPMN admission: verified dispatch and the real start/wait/restart/resume/complete journey
 remain to be wired and qualified.
+Model input uses a protected queue format that predecessor readers reject. The drainer refuses unselected
+model/unknown work before claiming it. EF validates the exact head on its existing claim read; coalescing
+forwards that validation. Model-free native retention uses its existing read/grant path.
 See the [model reader and checkpoint boundary](EXTENSION_POINTS.md) and
 [current delivery objective](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6480176858).
 

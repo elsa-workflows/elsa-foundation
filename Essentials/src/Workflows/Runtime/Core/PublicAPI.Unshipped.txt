@@ -9328,3 +9328,7 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.ModelState.init -> vo
 Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial.CreatedAt.get -> System.DateTimeOffset
 Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial.RuntimeExecutionMaterial(Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial! model, string! incarnationId, System.DateTimeOffset createdAt) -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial.ComputeContentHash() -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionCommandKind.ExecuteModel = 21 -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionCommandKind
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkQueue.SupportsClaimValidation.get -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkClaimRequest.ValidateBeforeClaim.get -> System.Func<Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>?
+Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkClaimRequest.ValidateBeforeClaim.init -> void

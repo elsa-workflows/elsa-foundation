@@ -16,6 +16,11 @@ using Elsa.Persistence.EntityFramework;
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 try
 {
+    if (args.Length == 3 && args[0] == "--check-predecessor-queue-reader")
+    {
+        Console.WriteLine(JsonSerializer.Serialize(await PredecessorQueueReader.RunAsync(args[1], args[2]), json));
+        return 0;
+    }
     if (args.Length == 2 && args[0] == "--inspect-host-products")
     {
         var directory = Path.GetDirectoryName(Path.GetFullPath(args[1]))!;
