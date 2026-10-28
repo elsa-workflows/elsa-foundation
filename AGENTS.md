@@ -29,6 +29,7 @@ Use the narrowest source that answers the task.
 | Repo contributor notes: claim detail, PR gate evidence, generated maps, task paths, review checklist | `docs/contributing/` |
 | Personal workflow/model preferences | `.agent-prefs/` for local selections; `docs/reference/` for committed catalogs/templates |
 | Shared backlog, program-goal bucket registry, stewardship, active objectives, roadmap notes | `docs/program-goals/` |
+| Human-led planning: initiatives, their coordinator and technical architects, ADR agreement, the initiative board | `docs/contributing/initiatives.md` |
 | Repo navigation, extension points, dependency/test maps | [docs/maps/README.md](docs/maps/README.md) (the generated maps are published on the [`generated-maps` branch](https://github.com/elsa-workflows/elsa-foundation/tree/generated-maps/docs/maps)) and `EXTENSION_POINTS.md` |
 | Current gaps, draft decisions, draft history, inventory findings | `docs/reports/` |
 | Feature/work-unit specifications | `specs/` ([lifecycle and numbering](docs/reference/spec-lifecycle.md)) |
@@ -85,6 +86,7 @@ Maintainers publish organization-repository branches and contributors use fork P
 |---|---|
 | Feature development | [Speckit flow](docs/skills/catalog.md#speckit-flow-guide) and [task path](docs/contributing/task-paths.md#feature-development) |
 | Architecture development | [Critical Constitution Review](docs/skills/catalog.md#critical-constitution-review) or [Work Unit Planner](docs/skills/catalog.md#work-unit-planner) |
+| Work on or linked to an `initiative`-labelled issue | [Initiative Coordination](docs/skills/catalog.md#initiative-coordination) and [initiatives](docs/contributing/initiatives.md) |
 | Codebase verification | [Verify Codebase Against Constitution](docs/skills/catalog.md#verify-codebase-against-constitution) |
 | Backend e2e tests | [Backend e2e tests](docs/contributing/task-paths.md#backend-e2e-tests) and [e2e-tests/README.md](e2e-tests/README.md) |
 | Constitution review of a change | [Review checklist](docs/contributing/review-checklist.md) |

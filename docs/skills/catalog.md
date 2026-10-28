@@ -80,6 +80,26 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 **Output:** a concise work-unit plan ready for `speckit-specify` or architecture review, including the program-goal route, any program milestone the work advances, and the reason it is not merely local polish.
 
+### Initiative Coordination
+
+**Use when:** a user works on, asks about or checks in to an `initiative`-labelled issue, or on an issue or PR linked to one (a sub-issue at any depth, or `Part of #N`). Typical asks: "where am I needed on #N?", "here is my analysis for #N", "I reviewed X", "sync #N", "start an initiative for <objective>". Never for work that is not linked to an initiative; that follows the existing rules.
+
+**Workflow:** read [Initiatives: human-led planning](../contributing/initiatives.md), then:
+
+1. **Find the initiative.** Use the issue number given. Otherwise start from the issue in hand, or, for a PR, from the issues it closes (`gh pr view <n> --json closingIssuesReferences`) and its `Part of #N`. Walk up the parents (`gh api repos/elsa-workflows/elsa-foundation/issues/<n>/parent`) until an issue with the `initiative` label is found. If none is found, stop: this skill does not apply.
+2. **Find the role** of the signed-in user (`gh api user -q .login`). The issue's assignee is the coordinator. People in the board's **Who is needed where** table are technical architects. Otherwise infer the role from the request, and never refuse.
+3. **Do the action that was asked for:**
+   - **Check in.** Read the board, the pointer comments without the coordinator's 👍, and the user's open review requests on PRs linked to the initiative (`gh search prs --repo elsa-workflows/elsa-foundation --review-requested=@me --state=open`, kept to those linked to it by the boundary rule). Answer: where the user is needed, in order, and what is blocked on them.
+   - **Contribute an analysis.** Convert what the user brings (text, notes, a PDF's text) to Markdown. If an ADR PR exists for it, post the analysis as a comment there. Otherwise draft the ADR or amendment from it and open a draft PR that requests every other technical architect as reviewer, then post the analysis on that PR. Finish with a pointer comment on the initiative.
+   - **Report work** (a review, a merged PR, a closed issue, a new spec). Make sure the work is recorded where it happened, then post a pointer comment.
+   - **Sync** (coordinator only). For every pointer without the coordinator's 👍, and for the PRs and issues linked to the initiative: check that the work fits the plan, and update the board's tables. Apply agreement when every technical architect other than the PR's author has approved an ADR PR: commit `Status: accepted (<date>)` on the PR branch (or ask the author to), mark the decision agreed, and mark the PR ready. Add the 👍 to each handled pointer. Set the "Last synced" line. Report who blocks whom, and offer, without sending, reminders and meeting topics.
+   - **Start an initiative** (the future coordinator). Create the issue from the board template on the initiatives page, add the `initiative` label (create it with `gh label create initiative` if it does not exist yet) and assign it to the coordinator.
+4. **Size guard.** Before posting any comment or body, check the [size guard](../contributing/initiatives.md#size-guard). If the text is over the limit, or depends on images or files `gh` cannot post, stop and offer the three choices. Never pick a workaround yourself.
+
+Only the coordinator edits the initiative's description. Everyone else, the coordinator included when working as an architect, reports through pointer comments. Analyses go on ADR PRs, never on the initiative issue.
+
+**Output:** for a check-in, a short list of where the user is needed, with links. For other actions, the links to what was posted or changed, and who is now needed.
+
 ### Source-of-Truth Audit
 
 **Use when:** content may be in the wrong layer, duplicate concept explanations appear, constitution text needs thinning, or new knowledge/workflow/rule material needs a canonical home.

@@ -4,6 +4,8 @@ Index of every ADR in this folder. Generated from each file's H1 and status line
 The early Extension Builder series carries its own `EB-` prefix and is closed; every ADR number is unique.
 A new ADR, Extension Builder ones included, takes the highest number in the main series plus one. Two open branches can still pick the same number, so check open pull requests that add a file under `docs/adr/` before choosing.
 
+An ADR proposed from an [initiative](../contributing/initiatives.md) is accepted when every technical architect of that initiative, other than the PR's author, has approved its pull request; the coordinator then records `Status: accepted (<date>)`. Other ADRs keep their existing practice.
+
 | Number | Title | Status |
 |---|---|---|
 | 0001 | [Checkpoint-Gated Activity Execution Inspection](0001-checkpoint-gated-activity-execution-inspection.md) | Accepted |
