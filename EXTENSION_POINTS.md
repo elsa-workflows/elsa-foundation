@@ -153,7 +153,8 @@ not automatic constitution violations.
 | Activities graph design — authoring provider, compiler, dependency discovery, and reference rewriting | [`Essentials/src/Activities/Graph/Design/EXTENSION_POINTS.md`](Essentials/src/Activities/Graph/Design/EXTENSION_POINTS.md) |
 | Activities graph runtime — compiled graph activity consumer and transient activation | [`Essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md`](Essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md) |
 | Activities BPMN (scoped execution seam, element behavior contributors) | [`Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md) |
-| Activities BPMN hosting API (implementation in progress) | [`Essentials/src/Activities/Bpmn/Api/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Api/EXTENSION_POINTS.md) |
+| Activities BPMN hosting contracts (scoped publication/execution/inspection replacement) | [`Essentials/src/Activities/Bpmn/Core/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Core/EXTENSION_POINTS.md) |
+| Activities BPMN hosting API (authenticated direct-model commands and inspection) | [`Essentials/src/Activities/Bpmn/Api/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Api/EXTENSION_POINTS.md) |
 | Activities BPMN interchange (document importer and exporter replacement) | [`Essentials/src/Activities/Bpmn/Interchange/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Interchange/EXTENSION_POINTS.md) |
 
 ### Workflows

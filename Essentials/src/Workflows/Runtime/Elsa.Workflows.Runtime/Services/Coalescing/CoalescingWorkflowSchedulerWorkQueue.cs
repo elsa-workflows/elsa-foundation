@@ -25,8 +25,9 @@ public sealed class CoalescingWorkflowSchedulerWorkQueue(
     public bool SupportsClaimTransitions =>
         sessionAccessor.Current is { IsActive: true } || _inner.SupportsClaimTransitions;
 
-    public bool SupportsClaimValidation =>
-        sessionAccessor.Current is { IsActive: true } || _inner.SupportsClaimValidation;
+    // A nested execution can bypass the current execution's overlay. Never credit an unknown inner provider
+    // merely because some other execution has an active in-memory segment in this async context.
+    public bool SupportsClaimValidation => _inner.SupportsClaimValidation;
 
     bool IRuntimeSchedulerWorkDeferralCapability.CanDefer(RuntimeSchedulerWorkClaim claim) =>
         sessionAccessor.Current is not { } session || !session.OwnsOverlayClaim(claim) || session.SupportsDeferredOverlayRelease;

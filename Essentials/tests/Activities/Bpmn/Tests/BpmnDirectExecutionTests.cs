@@ -1,0 +1,241 @@
+using System.Text.Json;
+using Bpmn.Model;
+using CShells.Lifecycle;
+using Elsa.Activities.Bpmn.Core;
+using Elsa.Activities.Bpmn.Internal;
+using Elsa.Activities.Testing;
+using Elsa.Events;
+using Elsa.Cluster.Readability;
+using Elsa.Persistence.EntityFramework;
+using Elsa.Tasks.Core;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Xunit;
+
+namespace Elsa.Activities.Bpmn.Tests;
+
+/// <summary>Actual feature/mailbox/EF/interpreter decisions. Service-provider restart is not process-host proof.</summary>
+public sealed class BpmnDirectExecutionTests : IDisposable
+{
+    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private readonly string database = Path.Combine(Path.GetTempPath(), "elsa-direct-bpmn-" + Guid.NewGuid().ToString("N") + ".sqlite");
+
+    [Theory]
+    [InlineData("duplicate-protocol")]
+    [InlineData("duplicate-driver")]
+    [InlineData("singleton-driver")]
+    public async Task Actual_startup_refuses_ambiguous_protocols_and_driver_lifetimes(string invalid)
+    {
+        await Assert.ThrowsAsync<InvalidOperationException>(() => OpenAsync(configure: services =>
+        {
+            if (invalid == "duplicate-protocol") services.AddSingleton<IRuntimeExecutionProtocolContributor, DuplicateProtocol>();
+            else if (invalid == "duplicate-driver") services.AddScoped<BpmnDirectExecutionDriver>();
+            else
+            {
+                services.RemoveAll<BpmnDirectExecutionDriver>();
+                services.AddSingleton<BpmnDirectExecutionDriver>();
+            }
+        }));
+    }
+
+    [Fact]
+    public async Task Accepted_first_input_stays_rooted_and_recovers_after_restart_with_new_admission_disabled()
+    {
+        RuntimeExecutionMaterial material;
+        await using (var host = await OpenAsync())
+        {
+            await using var scope = await ScopeAsync(host);
+            var store = scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>();
+            var definition = Material();
+            await store.SaveModelAsync(definition);
+            material = (await store.FindMaterialAsync(definition.Identity.ArtifactId))!;
+            var now = DateTimeOffset.UtcNow;
+            var input = new RuntimeModelExecutionCommand(material.Identity, material.IncarnationId, "start", "start",
+                JsonSerializer.SerializeToElement(new { }, Web), new("bpmn-test", "bpmn-test"), null);
+            await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>().EnqueueAsync(new("accepted", "direct-execution", "start",
+                WorkflowExecutionCommandKind.ExecuteModel, "accepted", "start", now, now, payload: JsonSerializer.SerializeToElement(input, Web)));
+            Assert.Null(await scope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>().FindAsync("direct-execution"));
+            Assert.Contains(material.Identity.ArtifactId, await scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().ListPinnedExecutableArtifactIdsAsync());
+        }
+        await using (var host = await OpenAsync(admitNewExecutions: false))
+        {
+            await using var scope = await ScopeAsync(host);
+            var now = DateTimeOffset.UtcNow;
+            var actor = await host.Services.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(
+                new("direct-execution", WorkflowExecutionActorActivationReason.Start, now, "recovery", WorkflowExecutionActorCapabilities.InProcessMailbox));
+            Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, (await actor.EnqueueAsync(new("recover", "direct-execution",
+                new("recover", "direct-execution", WorkflowExecutionCommandKind.RunSchedulerWork, now, null, new Dictionary<string, string>()),
+                "recover", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now))).Status);
+            var state = (await scope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>().FindAsync("direct-execution"))!;
+            Assert.Equal(1, state.Revision);
+            var work = Assert.Single(state.Payload.Deserialize<BpmnDirectExecutionDriver.Document>(Web)!.Work);
+            await SendAsync(host, material, "complete", "complete-human", new { work.InvocationId, work.AttemptId });
+            Assert.Equal(RuntimeModelLifecycle.TerminalSettled, (await scope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>().FindAsync("direct-execution"))!.Lifecycle);
+            var runtime = scope.ServiceProvider.GetRequiredService<IBpmnModelRuntime>();
+            var caller = new BpmnModelCaller("operator", null);
+            var published = await runtime.PublishAsync(Material().Definition.Deserialize<BpmnModelDefinition>(Web)!, "publish", caller);
+            await Assert.ThrowsAsync<Elsa.Workflows.Runtime.Core.Exceptions.RuntimeSchedulerWorkUnavailableException>(() =>
+                runtime.StartAsync(published.SourceReferenceId, "new-start", null, caller).AsTask());
+            Assert.False(await scope.ServiceProvider.GetRequiredService<RuntimeDbContext>().SchedulerWorkItems.AnyAsync());
+            await AssertNativeEmptyAsync(scope.ServiceProvider);
+        }
+    }
+
+    private sealed class DuplicateProtocol : IRuntimeExecutionProtocolContributor
+    {
+        public IEnumerable<RuntimeExecutionProtocolRegistration> GetProtocols() =>
+            [new(new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), typeof(BpmnDirectExecutionDriver)) { InputKinds = ["start"] }];
+    }
+
+    [Fact]
+    public async Task Published_source_commands_keep_exact_replay_human_attempts_and_tenant_disclosure_boundaries()
+    {
+        await using var host = await OpenAsync();
+        await using var scope = await ScopeAsync(host);
+        var runtime = scope.ServiceProvider.GetRequiredService<IBpmnModelRuntime>();
+        var caller = new BpmnModelCaller("operator", null);
+        var definition = Material().Definition.Deserialize<BpmnModelDefinition>(Web)!;
+        var published = await runtime.PublishAsync(definition, "publish", caller);
+        Assert.Equal(published, await runtime.PublishAsync(definition, "publish", caller));
+        var started = await runtime.StartAsync(published.SourceReferenceId, "request-start", null, caller);
+        Assert.False(started.Pending);
+        Assert.False(started.Replay);
+        Assert.True((await runtime.StartAsync(published.SourceReferenceId, "request-start", new Dictionary<string, JsonElement>(), caller)).Replay);
+        var work = Assert.Single((await runtime.ListWorkAsync(started.ExecutionId, new(), caller)).Items);
+        var obsolete = await runtime.CompleteHumanAsync(started.ExecutionId, "obsolete", work.InvocationId, "wrong-attempt", null, caller);
+        Assert.Equal("Rejected", obsolete.Result!.Value.GetProperty("status").GetString());
+        Assert.Equal("obsolete-human-work", obsolete.Result.Value.GetProperty("code").GetString());
+        await Assert.ThrowsAsync<Elsa.Workflows.Runtime.Core.Exceptions.RuntimeCheckpointReplayConflictException>(() =>
+            runtime.CompleteHumanAsync(started.ExecutionId, "obsolete", work.InvocationId, work.AttemptId, null, caller).AsTask());
+        var completed = await runtime.CompleteHumanAsync(started.ExecutionId, "complete", work.InvocationId, work.AttemptId, null, caller);
+        Assert.Equal("Accepted", completed.Result!.Value.GetProperty("status").GetString());
+        Assert.True((await runtime.CompleteHumanAsync(started.ExecutionId, "complete", work.InvocationId, work.AttemptId, ["Done"], caller)).Replay);
+        Assert.True((await runtime.CompleteHumanAsync(started.ExecutionId, "complete", work.InvocationId, work.AttemptId, [], caller)).Replay);
+        Assert.Equal(RuntimeModelLifecycle.TerminalSettled, (await runtime.FindExecutionAsync(started.ExecutionId, caller))!.Lifecycle);
+        var foreign = new BpmnModelCaller("other-operator", "other-tenant");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => runtime.FindExecutionAsync(started.ExecutionId, foreign).AsTask());
+        await using (var foreignScope = await host.Services.GetRequiredService<IPersistenceOperationScopeFactory>().CreateAsync(new("other-tenant")))
+        {
+            var foreignRuntime = foreignScope.ServiceProvider.GetRequiredService<IBpmnModelRuntime>();
+            Assert.Null(await foreignRuntime.FindExecutionAsync(started.ExecutionId, foreign));
+            await Assert.ThrowsAsync<BpmnModelResourceMissingException>(() => foreignRuntime.FindCommandAsync(started.ExecutionId, "complete", foreign).AsTask());
+            await Assert.ThrowsAsync<BpmnModelResourceMissingException>(() => foreignRuntime.StartAsync(published.SourceReferenceId, "foreign-start", null, foreign).AsTask());
+        }
+        await AssertNativeEmptyAsync(scope.ServiceProvider);
+    }
+
+    [Fact]
+    public async Task Direct_human_work_survives_service_provider_restart_and_completes_without_native_state()
+    {
+        RuntimeExecutionMaterial material;
+        BpmnDirectExecutionDriver.Work work;
+        await using (var host = await OpenAsync())
+        {
+            await using var scope = await ScopeAsync(host);
+            var store = scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>();
+            var definition = Material();
+            await store.SaveModelAsync(definition);
+            material = (await store.FindMaterialAsync(definition.Identity.ArtifactId))!;
+            await SendAsync(host, material, "start", "start", new { });
+            var state = Assert.IsType<RuntimeModelExecutionState>(await scope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>().FindAsync("direct-execution"));
+            Assert.Equal(RuntimeModelLifecycle.Running, state.Lifecycle);
+            Assert.Equal(1, state.Revision);
+            work = Assert.Single(state.Payload.Deserialize<BpmnDirectExecutionDriver.Document>(Web)!.Work);
+            Assert.Equal("human", work.ElementId);
+            await AssertNativeEmptyAsync(scope.ServiceProvider);
+        }
+        await using (var host = await OpenAsync())
+        {
+            await using var scope = await ScopeAsync(host);
+            var reader = scope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>();
+            var waiting = (await reader.FindAsync("direct-execution"))!;
+            Assert.Equal(work, Assert.Single(waiting.Payload.Deserialize<BpmnDirectExecutionDriver.Document>(Web)!.Work));
+            Assert.Equal(material.Identity, waiting.Executable);
+            Assert.Equal(material.IncarnationId, waiting.MaterialIncarnationId);
+            await SendAsync(host, material, "complete", "complete-human", new { work.InvocationId, work.AttemptId });
+            var completed = (await reader.FindAsync("direct-execution"))!;
+            Assert.Equal(RuntimeModelLifecycle.TerminalSettled, completed.Lifecycle);
+            Assert.Equal(2, completed.Revision);
+            Assert.Equal("Completed", completed.TerminalResult!.Value.GetProperty("status").GetString());
+            Assert.Empty(completed.Payload.Deserialize<BpmnDirectExecutionDriver.Document>(Web)!.Work);
+            Assert.Equal("Accepted", (await reader.FindInputAsync("direct-execution", "complete"))!.Result.GetProperty("status").GetString());
+            await SendAsync(host, material, "complete", "complete-human", new { work.InvocationId, work.AttemptId }, "replay-transport");
+            Assert.Equal(2, (await reader.FindAsync("direct-execution"))!.Revision);
+            Assert.Empty((await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAsync(new("direct-execution"))).Items);
+            await AssertNativeEmptyAsync(scope.ServiceProvider);
+        }
+    }
+
+    private async Task<WorkflowExecutionHarness> OpenAsync(bool admitNewExecutions = true, Action<IServiceCollection>? configure = null)
+    {
+        var host = WorkflowExecutionHarness.Create().ConfigureServices(services =>
+        {
+            services.AddLogging();
+            services.AddEfSchemaReadability();
+            new EventsFeature().ConfigureServices(services);
+            new ActivitiesBpmnHostingFeature { AdmitNewExecutions = admitNewExecutions }.ConfigureServices(services);
+            services.AddRuntimeEntityFrameworkCore(new()
+            {
+                Provider = "Sqlite", ConnectionString = $"Data Source={database};Pooling=False",
+                RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('h', 32)
+            }).AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
+            configure?.Invoke(services);
+        }).Build();
+        try
+        {
+            foreach (var initializer in host.Services.GetServices<IShellInitializer>()) await initializer.InitializeAsync();
+            foreach (var task in host.Services.GetServices<IStartupTask>()) await task.ExecuteAsync(CancellationToken.None);
+            return host;
+        }
+        catch { await host.DisposeAsync(); throw; }
+    }
+
+    private static ValueTask<PersistenceOperationScope> ScopeAsync(WorkflowExecutionHarness host) =>
+        host.Services.GetRequiredService<IPersistenceOperationScopeFactory>().CreateAsync(new(PersistenceScope.DefaultValue));
+
+    private static async Task SendAsync(WorkflowExecutionHarness host, RuntimeExecutionMaterial material,
+        string inputId, string kind, object payload, string? transport = null)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var command = new RuntimeModelExecutionCommand(material.Identity, material.IncarnationId, inputId, kind,
+            JsonSerializer.SerializeToElement(payload, Web), new("bpmn-test", "bpmn-test"), null);
+        var actor = await host.Services.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(
+            new("direct-execution", WorkflowExecutionActorActivationReason.Start, now, "bpmn-test", WorkflowExecutionActorCapabilities.InProcessMailbox));
+        var result = await actor.EnqueueAsync(new(transport ?? inputId, "direct-execution",
+            new(inputId, "direct-execution", WorkflowExecutionCommandKind.ExecuteModel, now,
+                JsonSerializer.SerializeToElement(command, Web), new Dictionary<string, string>()),
+            transport ?? inputId, WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now));
+        Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.Status);
+    }
+
+    private static RuntimeModelMaterial Material()
+    {
+        var process = new BpmnProcessDefinition("direct-process", Elements:
+            [new("start", BpmnElementTypes.StartEvent), new("human", BpmnElementTypes.UserTask, bindingRef: "human-work"), new("end", BpmnElementTypes.EndEvent)],
+            SequenceFlows: [new("to-human", "start", "human"), new("to-end", "human", "end")]);
+        var definition = new BpmnModelDefinition(1, JsonSerializer.SerializeToElement(process, Web), ["human-work"]);
+        var pin = new WorkflowExecutableIdentity("direct-artifact", "definition", "definition-v1", "1.0.0", "pending");
+        var material = new RuntimeModelMaterial(1, pin, new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), BpmnModelProtocol.Profile,
+            JsonSerializer.SerializeToElement(definition, Web), new(1, []), [], [], []);
+        return new(1, pin with { ArtifactHash = material.ComputeContentHash() }, material.Protocol, material.Profile, material.Definition,
+            material.InputContract, [], [], []);
+    }
+
+    private static async Task AssertNativeEmptyAsync(IServiceProvider services)
+    {
+        var database = services.GetRequiredService<RuntimeDbContext>();
+        Assert.False(await database.WorkflowExecutionStates.AnyAsync());
+        Assert.False(await database.ActivityExecutionStates.AnyAsync());
+        Assert.False(await database.Bookmarks.AnyAsync());
+    }
+
+    public void Dispose()
+    {
+        foreach (var path in new[] { database, database + "-wal", database + "-shm" }) File.Delete(path);
+    }
+}

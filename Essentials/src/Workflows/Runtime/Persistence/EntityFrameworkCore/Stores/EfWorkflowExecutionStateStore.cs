@@ -289,6 +289,19 @@ public sealed class EfWorkflowExecutionStateStore(
                 var state = EfRuntimeModelExecutionReader.Read(row, scope, Decode(row.ExecutionId));
                 if (seen.Add(state.Executable.ArtifactId)) ids.Add(state.Executable.ArtifactId);
             }
+            // An accepted first input can outlive its owner's crash before the first model checkpoint. Its
+            // immutable material must stay rooted after the short admission grant expires, just like a live header.
+            var pendingInputs = await context.SchedulerWorkItems.AsNoTracking()
+                .Where(x => x.ScopeKeyHash == Hash(scope) || x.ScopeKey == Encode(scope)).ToArrayAsync(cancellationToken);
+            foreach (var row in pendingInputs)
+            {
+                var input = EfSchedulerWorkQueueStore.ReadChecked(row, scope);
+                if (input.CommandKind != WorkflowExecutionCommandKind.ExecuteModel) continue;
+                var command = input.Payload?.Deserialize<RuntimeModelExecutionCommand>(new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))
+                    ?? throw new InvalidDataException("An accepted model input has no material pin.");
+                if (command.InputId != input.CommandId) throw new InvalidDataException("The model input identity differs from its retained queue command.");
+                if (seen.Add(command.Executable.ArtifactId)) ids.Add(command.Executable.ArtifactId);
+            }
             return ids.ToArray();
         }
         catch (OperationCanceledException) { throw; }

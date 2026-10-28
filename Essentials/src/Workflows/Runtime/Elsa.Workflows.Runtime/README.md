@@ -7,12 +7,15 @@ definitions at execution time.
 Direct model hosting (spec1017) is in progress. Model state and accepted-input receipts participate in the
 existing fenced checkpoint transaction through the Runtime EF provider; native commits without a model
 participant retain their wire and fingerprint. The EF artifact provider also stores native/model material with
-actual incarnations, model content hashes, full dependency leases, fenced sources and retention roots. This does
-not enable direct BPMN admission: verified dispatch and the real start/wait/restart/resume/complete journey
-remain to be wired and qualified.
+actual incarnations, model content hashes, full dependency leases, fenced sources and retention roots.
+The explicit `ActivitiesBpmnHosting` feature now supplies the scoped released-library driver, model-owned human
+work and authenticated command/inspection consumer. Its first built-in single-node/EF SQLite profile supports
+start → human wait → owned process restart → exact completion; new admission defaults off. Clustered placement,
+runtime-only/changed-host qualification, generic settlement and Studio remain open in spec1017.
 Model input uses a protected queue format that predecessor readers reject. The drainer refuses unselected
 model/unknown work before claiming it. EF validates the exact head on its existing claim read; coalescing
-forwards that validation. Model-free native retention uses its existing read/grant path.
+forwards that validation. Accepted first inputs retain their material before the first model checkpoint. Native
+and model dispatch share lease/heartbeat/release mechanics while preserving native lifecycle and fault policies.
 See the [model reader and checkpoint boundary](EXTENSION_POINTS.md) and
 [current delivery objective](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6480176858).
 

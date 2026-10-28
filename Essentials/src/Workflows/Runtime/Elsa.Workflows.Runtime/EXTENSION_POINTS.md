@@ -67,6 +67,14 @@ adapters validate and translate the selected context at their own persistence bo
 
 ## Overridable replacement contracts
 
+### Model protocol drivers and contributions *(Core contracts, implementation-owned dispatch)*
+
+[`IRuntimeExecutionProtocolDriver` / `IRuntimeExecutionProtocolContributor`](../Core/Contracts/IRuntimeExecutionProtocolDriver.cs) define scoped model decisions and exact protocol registrations. `AddRuntimeModelHosting` opts into the existing command executor and drainer. Internal `RuntimeExecutionProtocolsInitializing` is a named Sequential event; one `RegisterRuntimeExecutionProtocols` handler aggregates contributors, and its startup task freezes the registry after checking duplicate protocol/version keys, input kinds and exactly one scoped driver registration.
+
+Selection reads actual physical material, full pin/incarnation, committed model state and captured authority. Missing/unsupported protocols and kinds refuse before claim or native fallback. The selected queue must support real claim transitions and pre-claim validation; the physical checkpoint participant must atomically consume the input with model state and its retained receipt. Accepted first inputs root their material before any model header exists. Native dispatch keeps its existing lifecycle/purge/error policies and shares only ownership, heartbeat and release mechanics.
+
+The cross-domain production consumer is `ActivitiesBpmnHostingFeature` and its internal BPMN driver. This initial single-node human profile does not qualify clustered model placement, generic settlement, runtime-only deployment or a stable arbitrary-model plugin promise. See [spec1017](../../../../../specs/1017-direct-bpmn-hosting/spec.md).
+
 ### `IWorkflowDispatchStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one provider owns first-class workflow-dispatch lifecycle records).
 - **Signature:** save/find plus list by parent workflow execution ID.

@@ -89,6 +89,16 @@ public static class RuntimeCheckpointCommitFingerprint
         }
     }
 
+    /// <summary>Canonical identity of a model input, independent of transport timestamps and queue envelopes.</summary>
+    public static string ComputeModelInput(RuntimeModelExecutionCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        var payload = JsonSerializer.SerializeToElement(new { Format = "elsa.model.input.v1", Command = command }, ExactBookmarkOptions);
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream)) WriteIntentCanonical(payload, writer);
+        return Convert.ToHexStringLower(SHA256.HashData(stream.ToArray()));
+    }
+
     // Intent equivalence uses JsonElement.DeepEquals, including exact numeric equivalence. Keep this
     // normalization separate from the historical checkpoint writer, whose existing bytes are durable identities.
     private static void WriteIntentCanonical(JsonElement element, Utf8JsonWriter writer)

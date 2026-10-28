@@ -21,8 +21,9 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
     public int ProcessId => process?.Id ?? throw new InvalidOperationException("The owned Workbench is stopped.");
     public string RuntimeDatabase => Path.Combine(ContentRoot, "runtime.db");
     public string DesignDatabase => Path.Combine(ContentRoot, "design.db");
+    internal string AssemblyPath => Metadata("BpmnHostingWorkbenchAssembly");
 
-    public static async Task<OwnedWorkbench> StartAsync()
+    public static async Task<OwnedWorkbench> StartAsync(bool directBpmn = false)
     {
         var host = new OwnedWorkbench(Directory.CreateTempSubdirectory("elsa-bpmn-hosting-").FullName);
         try
@@ -34,6 +35,14 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
             var shellPath = Path.Combine(host.ContentRoot, "shells.json");
             var shells = JsonNode.Parse(await File.ReadAllTextAsync(shellPath))!;
             var features = shells["CShells"]!["Shells"]!["default"]!["Features"]!;
+            if (directBpmn)
+            {
+                features["ActivitiesBpmnHosting"] = new JsonObject { ["AdmitNewExecutions"] = true };
+                features["ActivitiesBpmnHostingApi"] = new JsonObject();
+                // Qualify the built-in single-node profile first. Clustered model placement remains a separate gate.
+                foreach (var name in new[] { "WorkflowsRuntimeDistributed", "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence", "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence" })
+                    features.AsObject().Remove(name);
+            }
             features["WorkflowsRuntimeEntityFrameworkCore"]!["ConnectionString"] = "Data Source=runtime.db";
             foreach (var name in new[] { "ActivitiesDesignEntityFrameworkCore", "WorkflowsDesignEntityFrameworkCore", "WorkflowsPublishingEntityFrameworkCore" })
                 features[name]!["ConnectionString"] = "Data Source=design.db";
@@ -55,16 +64,16 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
             throw Failure($"Test-account login returned HTTP {(int)response.StatusCode}");
     }
 
-    public async Task<JsonNode> GetAsync(string path)
+    public async Task<JsonNode> GetAsync(string path, HttpStatusCode? expected = null)
     {
         using var response = await client.GetAsync(path);
-        return await ReadAsync(response, path);
+        return await ReadAsync(response, path, expected);
     }
 
-    public async Task<JsonNode> PostAsync(string path, object value)
+    public async Task<JsonNode> PostAsync(string path, object value, HttpStatusCode? expected = null)
     {
         using var response = await client.PostAsJsonAsync(path, value);
-        return await ReadAsync(response, path);
+        return await ReadAsync(response, path, expected);
     }
 
     public async Task RestartAsync()
@@ -142,9 +151,11 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
     private static string Metadata(string key) => typeof(OwnedWorkbench).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
         .Single(attribute => attribute.Key == key).Value ?? throw new InvalidOperationException($"Missing host build metadata '{key}'.");
 
-    private async Task<JsonNode> ReadAsync(HttpResponseMessage response, string path)
+    private async Task<JsonNode> ReadAsync(HttpResponseMessage response, string path, HttpStatusCode? expected)
     {
-        if (!response.IsSuccessStatusCode) throw Failure($"Owned-host request {path} returned HTTP {(int)response.StatusCode}");
+        if (expected is { } status ? response.StatusCode != status : !response.IsSuccessStatusCode)
+            throw Failure($"Owned-host request {path} returned HTTP {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+        if (expected is not null && response.Content.Headers.ContentLength == 0) return new JsonObject();
         return await response.Content.ReadFromJsonAsync<JsonNode>() ?? throw Failure("An owned-host API returned no document");
     }
 

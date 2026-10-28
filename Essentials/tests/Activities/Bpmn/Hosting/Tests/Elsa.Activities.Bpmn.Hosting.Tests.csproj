@@ -8,6 +8,9 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+    <PackageReference Include="Bpmn.Model" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <ProjectReference Include="../../../../../src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj" />
     <ProjectReference Include="../../../../../apps/Elsa.Workbench/Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
   <!-- Build and launch the real host; never load its assembly or reproduce its composition in this test process. -->

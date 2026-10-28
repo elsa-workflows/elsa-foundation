@@ -8,7 +8,13 @@ The contract's StartAsync, CompleteAsync, FaultAsync, SignalAsync, ControlAsync 
 
 The default adapter uses released `Bpmn.Semantics` 0.5.0 with its default behavior set. Neutral element behaviors, graph rules and semantic state types belong to that package and `Bpmn.Model`. Foundation's former IBpmnElementBehavior, IBpmnBehaviorRegistry, IBpmnBehaviorContext and BpmnExecutionEngine extension APIs are retired with their duplicated implementations. They are not compatibility aliases for the library contracts. Custom neutral semantics require an integration using the library's contracts rather than a copy of Foundation's retired engine.
 
-## Host responsibilities
+## Direct model hosting
+
+`ActivitiesBpmnHostingFeature` is an inheritable opt-in feature with virtual service registration and `AdmitNewExecutions=false` by default. It registers the scoped [`IBpmnModelRuntime`](../Core/IBpmnModelRuntime.cs) replacement port and rejects conflicting lifetimes/registrations at shell initialization. Admission-off retains installed readers and workers for accepted inputs.
+
+Its internal contributor registers exact protocol `elsa.bpmn/1`, profile `foundation-direct-v1`, and `start`/`complete-human` input kinds through Runtime's one named Sequential initialization aggregator (cross-domain contribution). Its scoped `BpmnDirectExecutionDriver` uses the same internal released-interpreter evaluation component as the embedded adapter; model-owned human handles/state use the shared queue, execution ownership and atomic EF checkpoint/receipt boundary. The initial profile and remaining proof limits are described in the [API README](../Api/README.md).
+
+## Embedded host responsibilities
 
 | Surface | Owner and behavior |
 |---|---|

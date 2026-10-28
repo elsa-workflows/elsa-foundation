@@ -9332,3 +9332,45 @@ Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionCommandKind.ExecuteModel = 2
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkQueue.SupportsClaimValidation.get -> bool
 Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkClaimRequest.ValidateBeforeClaim.get -> System.Func<Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>?
 Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkClaimRequest.ValidateBeforeClaim.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeExecutionProtocolContributor
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeExecutionProtocolContributor.GetProtocols() -> System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocolRegistration!>!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeExecutionProtocolDriver
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeExecutionProtocolDriver.ExecuteAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeExecutionProtocolDriver.ValidateMaterialAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial! material, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocolRegistration
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocolRegistration.DriverType.get -> System.Type!
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocolRegistration.Protocol.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol!
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocolRegistration.RuntimeExecutionProtocolRegistration(Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol! protocol, System.Type! driverType) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionCommand
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionCommand.Authority.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionAuthoritySnapshot!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionCommand.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionCommand.InputId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionCommand.InputKind.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionCommand.MaterialIncarnationId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionCommand.Payload.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionCommand.RuntimeModelExecutionCommand(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! executable, string! materialIncarnationId, string! inputId, string! inputKind, System.Text.Json.JsonElement payload, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionAuthoritySnapshot! authority, string? tenantId) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionCommand.TenantId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.Command.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionCommand!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.Command.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.Deconstruct(out Elsa.Workflows.Runtime.Core.Models.PersistenceScope! Scope, out Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial! Material, out Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionState? State, out Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionCommand! Command, out Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem! WorkItem) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.Material.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.Material.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.RuntimeModelExecutionContext(Elsa.Workflows.Runtime.Core.Models.PersistenceScope! Scope, Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial! Material, Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionState? State, Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionCommand! Command, Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem! WorkItem) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.Scope.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.State.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionState?
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.State.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.WorkItem.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.WorkItem.init -> void
+override Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommitFingerprint.ComputeModelInput(Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionCommand! command) -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.operator !=(Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext? left, Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.operator ==(Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext? left, Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext? right) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocolRegistration.InputKinds.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocolRegistration.InputKinds.init -> void
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeExecutionProtocolDriver.ValidateInputAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask

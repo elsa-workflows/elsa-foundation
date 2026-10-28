@@ -5,10 +5,13 @@
   <ItemGroup>
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
     <PackageReference Include="NativeEndpoints" />
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="CShells.AspNetCore.Abstractions" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../Core/Elsa.Activities.Bpmn.Core.csproj" />
     <ProjectReference Include="../../../Api/AspNetCore/Elsa.Api.AspNetCore.csproj" />
+    <ProjectReference Include="../../../Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj" />
     <ProjectReference Include="../../../Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
   </ItemGroup>
 </Project>

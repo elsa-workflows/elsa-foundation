@@ -1,0 +1,5 @@
+# BPMN hosting contract extension points
+
+[`IBpmnModelRuntime`](IBpmnModelRuntime.cs) is a single-provider scoped replacement port. The default internal `BpmnModelRuntime` is registered with `TryAddScoped` by `ActivitiesBpmnHostingFeature`; shell initialization requires exactly one scoped registration. [`BpmnModelDefinition` and `BpmnModelProtocol`](BpmnModelDefinition.cs) describe the immutable direct profile separately from the frozen embedded authoring format.
+
+The actual [BPMN API](../Api/EXTENSION_POINTS.md) consumes this port for publication, start, work/completion and execution/command inspection. Replacements must preserve explicit persistence scope/tenant checks, live-source/full-pin authority, retained conflict/replay outcomes and model-owned invocation/attempt identity. They must use the shared runtime's fenced durable admission/checkpoint authority and the selected released semantics rather than inventing another store or interpreter. The built-in implementation currently refuses actor providers outside its qualified single-node profile.
