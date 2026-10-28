@@ -270,7 +270,7 @@ internal sealed class RecoveryProbeControl(string directory) : IDisposable
                 var row = entry.Entity;
                 if (row.ScopeKey != EfRelationalIdentity.Encode(plan.GetProperty("scope").GetString()!) ||
                     row.WorkflowExecutionId != EfRelationalIdentity.Encode(workflowId!) ||
-                    row.IntentKind != EfRelationalIdentity.Encode(RuntimePostCommitIntentKinds.EnqueueSchedulerWork) ||
+                    row.IntentKind != RuntimePostCommitIntentKinds.EnqueueSchedulerWork ||
                     row.Status != (int)RuntimePostCommitOutboxStatus.Pending) continue;
                 using var document = JsonDocument.Parse(row.ContentJson);
                 var work = document.RootElement.GetProperty("intent").GetProperty("payload");
