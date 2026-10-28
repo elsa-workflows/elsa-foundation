@@ -419,8 +419,8 @@ describe("workflows module", () => {
     expect(activeMenu.textContent).not.toContain("Restore");
     await click(buttonByLabel(activeRow!, "Actions for Active workflow"));
 
-    const activeCells = activeRow?.querySelectorAll<HTMLElement>("[role='cell']");
-    const latestCell = activeCells?.[2];
+    const activeCells = activeRow?.querySelectorAll<HTMLElement>(".wf-definition-version");
+    const latestCell = activeCells?.[0];
     const draftDetails = latestCell?.querySelector<HTMLDetailsElement>("details");
     const draftSummary = draftDetails?.querySelector<HTMLElement>("summary");
     expect(latestCell?.querySelector(".wf-definition-version-number")?.textContent).toBe("3.0.0");
@@ -437,8 +437,8 @@ describe("workflows module", () => {
     expect(deletedMenu.textContent).toContain("Delete permanently");
     expect(deletedMenu.textContent).not.toContain("Artifacts");
     expect(container.querySelector(".wf-grid-head")?.textContent).toContain("Published version");
-    expect(activeCells?.[3].textContent).toContain("1.0.0");
-    expect(activeCells?.[3].textContent).not.toContain("2.0.0");
+    expect(activeCells?.[1].textContent).toContain("1.0.0");
+    expect(activeCells?.[1].textContent).not.toContain("2.0.0");
     await unmount();
   });
 
@@ -478,14 +478,14 @@ describe("workflows module", () => {
     const newerDraftRow = rowByLabel(container, "Open workflow definition Published with draft");
 
     expect(container.querySelector(".wf-grid-head")?.textContent).toContain("Published version");
-    const firstDraftCell = draftRow?.querySelectorAll<HTMLElement>("[role='cell']")[2];
+    const firstDraftCell = draftRow?.querySelectorAll<HTMLElement>(".wf-definition-version")[0];
     const firstDraftDetails = firstDraftCell?.querySelector<HTMLDetailsElement>("details");
     expect(firstDraftDetails?.querySelector("summary")?.textContent).toBe("Draft");
     expect(draftRow?.textContent).not.toContain("Published");
     expect(firstDraftDetails?.open).toBe(false);
     expect(firstDraftDetails?.textContent).toContain("Draft based on saved version 0.9.0.");
     expect(firstDraftCell?.querySelector(".wf-definition-version-number")).toBeNull();
-    expect(draftRow?.querySelectorAll<HTMLElement>("[role='cell']")[3].textContent).toContain("Not published");
+    expect(draftRow?.querySelectorAll<HTMLElement>(".wf-definition-version")[1].textContent).toContain("Not published");
     expect(draftRow?.querySelector("a")?.textContent).toContain("Unpublished workflow");
     await click(firstDraftDetails?.querySelector("summary") ?? null);
     expect(firstDraftDetails?.open).toBe(true);
@@ -493,13 +493,13 @@ describe("workflows module", () => {
     expect(new URLSearchParams(window.location.search).has("definition")).toBe(false);
     await waitForStatusBadge(publishedRow, "1.0.0");
     expect(publishedRow?.textContent).not.toContain("Newer draft");
-    const cells = newerDraftRow?.querySelectorAll<HTMLElement>("[role='cell']");
-    const newerDraftDetails = cells?.[2].querySelector<HTMLDetailsElement>("details");
+    const cells = newerDraftRow?.querySelectorAll<HTMLElement>(".wf-definition-version");
+    const newerDraftDetails = cells?.[0].querySelector<HTMLDetailsElement>("details");
     expect(newerDraftDetails?.querySelector("summary")?.textContent).toBe("Draft");
     expect(newerDraftDetails?.open).toBe(false);
-    expect(cells?.[2].querySelector(".wf-definition-version-number")?.textContent).toBe("3.0.0");
-    expect(cells?.[3].textContent).toContain("1.0.0");
-    expect(cells?.[3].textContent).not.toContain("2.0.0");
+    expect(cells?.[0].querySelector(".wf-definition-version-number")?.textContent).toBe("3.0.0");
+    expect(cells?.[1].textContent).toContain("1.0.0");
+    expect(cells?.[1].textContent).not.toContain("2.0.0");
     expect(newerDraftRow?.textContent).not.toContain("Newer draft");
     await unmount();
   });
@@ -3819,7 +3819,8 @@ describe("workflows module", () => {
     );
 
     await waitForText(container, "Global workflow");
-    const breadcrumb = container.querySelector<HTMLElement>('[aria-label="Folder for Global workflow"]');
+    await click(buttonByLabel(container, "Identifiers for Global workflow"));
+    const breadcrumb = document.querySelector<HTMLElement>('[aria-label="Folder for Global workflow"]');
     expect(breadcrumb?.textContent).toContain("Platform");
     expect(breadcrumb?.textContent).toContain("Operations");
     const leaf = Array.from(breadcrumb?.querySelectorAll("button") ?? [])
@@ -3863,7 +3864,8 @@ describe("workflows module", () => {
 
     await waitForText(container, "Unfiled workflow");
     expect(container.querySelector('[aria-label="Folder for Older workflow"]')).toBeNull();
-    await click(container.querySelector('[aria-label="Folder for Unfiled workflow"] button'));
+    await click(buttonByLabel(container, "Identifiers for Unfiled workflow"));
+    await click(document.querySelector('[aria-label="Folder for Unfiled workflow"] button'));
     await waitForText(container, "Scoped Unfiled workflow");
     expect(new URLSearchParams(window.location.search).get("unfiled")).toBe("true");
     expect(new URLSearchParams(window.location.search).has("folderId")).toBe(false);
