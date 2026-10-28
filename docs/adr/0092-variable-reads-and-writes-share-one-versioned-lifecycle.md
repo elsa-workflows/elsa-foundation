@@ -57,8 +57,9 @@ timelines and the Elsa 3 comparison, is in the A-2 analysis on the epic. This se
    the successor starts as `Running`, so `StartActivity` skips materialization
    (`WorkflowStartActivitySchedulerWorkHandler.cs:138-144`); Set, Merge and Reduce successors already re-materialize. An
    operator who corrects a variable with `ModifyVariable` and then retries gets a retry that still uses the old value.
-   ADR 0045 §3 does not require this: its "same input snapshot" applies to attempts of one invocation, and the successor
-   is a new invocation. The copy is code behaviour that conflicts with D-2.
+   ADR 0045 §3 says "retries and resumptions retain one stable logical `InvocationId` and the same input snapshot". The
+   code already gives an operator retry a new id but keeps the snapshot, which matches neither that sentence nor D-2
+   ("a re-run is a new execution with new values").
 4. **ADR 0090 §7, as proposed, sees only part of it.** Its check covers variables read through the step's variable
    session. A step that reads `count` through its input and writes it through the session or a capture is not
    checked. Its value comparison also costs one serialization per checked variable.
@@ -99,8 +100,10 @@ record.
   writer built its value on data that another writer has replaced.
 - **Write history**: the record of every applied write, and of every lost update and how it was resolved.
 - **Step**: as in ADR 0090: one invocation attempt, from invoke or resume to its next transition. Each evaluation of a
-  structural activity is its own step (D-3, Sipke's follow-up 6). The input read set belongs to the invocation and is
-  shared by all its attempts; session reads belong to one attempt.
+  structural activity is its own step (D-3, Sipke's follow-up 6).
+- **Invocation**: one logical execution of a node, with one `InvocationId` and one input snapshot, across all its
+  attempts, suspensions and resumes (ADR 0045 §3). The input read set, including bases advanced by the invocation's own
+  writes (decision 4), belongs to the invocation and is persisted across suspension. Session reads belong to one step.
 
 ## Decision
 
@@ -130,8 +133,11 @@ mechanisms.
 ### 2. Every variable has a version
 
 Each variable has its own version, independent of other variables in the same frame or scope, stored in the frame or
-row with a digest of its value. Both are computed once, when a write is applied. A write whose digest equals the
-current digest applies nothing and does not increment the version.
+row with a digest of its value. Both are computed once, when a write is applied.
+
+The commit rule (decision 5) runs first. Only a write that passed it, or a blind write, is then compared with the
+current value: if their digests are equal, the write applies nothing and the version stays. So two branches that both
+read 0 and both write 1 do not hide the second write as a no-op; the second is a lost update.
 
 *Why.* The frame revision counts writes to every variable in the frame, so using it would report conflicts between
 unrelated variables (Sipke's R4: "conflict handling must concern the variable in question"). Storing the digest at
@@ -167,16 +173,17 @@ only to log it, and then write an unrelated value. ADR 0090 §7 already treats "
 this applies the same rule to both surfaces. The conservative choice is correct here: a missed lost update is silent,
 while a false one is visible and can be overridden (decision 6).
 
-**A step never conflicts with its own writes.** When an invocation's own write to X is applied, its base for X advances
-to the version that write produced. This covers a step that commits a session change to X when it suspends and
-captures X when it completes, and ADR 0090 §6's order within one commit (session changes first, captures last).
+**An invocation never conflicts with its own writes.** When an invocation's own write to X is applied, its base for X
+advances to the version that write produced, and that advanced base is persisted with the invocation. This covers an
+invocation that commits a session change to X when it suspends and captures X when it completes, and ADR 0090 §6's
+order within one commit (session changes first, captures last).
 
 ### 5. The commit rule
 
 When a step commits a write to variable X:
 
-1. **No base (blind write):** the write applies. Between unordered branches the last commit wins (D-8), and draft
-   validation warns about unordered writes (spec 266).
+1. **No base (blind write):** the write applies. Between unordered branches the last commit wins (D-8, which now
+   covers blind writes only; see below), and draft validation warns about unordered writes (spec 266).
 2. **Base equals the current version:** the write applies.
 3. **Base is older, but the current value's digest equals the base digest:** the value moved and came back (for
    example 0 → 1 → 0). Nothing the writer relied on was lost. The write applies, and the write history records the
@@ -214,8 +221,10 @@ what happens (`FaultWorkflow`, `ContinueWithIncidents` or `WaitForIntervention`;
 Recovery uses the alterations API's retry. No new recovery mechanism is introduced.
 
 A lost-update fault is detected at commit, so the step's body has already run, and its external effects have already
-happened. A retry runs the body again; idempotency of external effects belongs to the workflow designer (D-2). The
-incident therefore records the rejected result (under the existing protection rules), so that an operator can see what
+happened. A retry runs the body again; idempotency of external effects belongs to the workflow designer (D-2). Note
+that an operator retry is a new invocation with a new `InvocationId` (decision 8), so an activity that keys its
+idempotency on `InvocationId` does **not** deduplicate it: its external effects repeat. The incident therefore records
+the rejected result (under the existing protection rules), so that an operator can see what
 the body produced, for example a payment id, and decide between a retry and applying it. How an operator applies a
 recorded result is left to the implementing spec (open question 11).
 
@@ -233,8 +242,10 @@ This differs from **recovery of the same invocation**, which keeps its committed
 
 In both cases a new attempt starts with no session reads; it reads again through the session (ADR 0090 §6).
 
-This aligns the code with D-2 and with ADR 0045 §3, whose "same input snapshot" applies to attempts of one invocation,
-not to a successor.
+This **amends ADR 0045 §3**. Its sentence "retries and resumptions retain one stable logical `InvocationId` and the
+same input snapshot" becomes: attempts and resumptions of one invocation retain its `InvocationId` and snapshot; an
+operator retry or reschedule creates a new invocation, with a new `InvocationId` (as the code already does) and fresh
+inputs.
 
 *Why.* Without this, a lost-update fault followed by a retry would read the same outdated value and fault again, or,
 with `LastWins`, lose the update again. And a variable an operator corrected would never reach the retried step. The
@@ -271,10 +282,11 @@ design, and today it depends on the side-effect profile and persistence mode. Wa
 ignore warnings. Whether this can be done without breaking the claim and flush rules is to be verified in the spec
 (open question 7).
 
-### 11. A suspended step keeps its base
+### 11. A suspended invocation keeps its base
 
-A step that suspends and later resumes keeps its committed snapshot and read set. If a variable in its read set was
-changed by someone else meanwhile, its commit is a lost update under decision 5. This is correct, but in long-running
+An invocation that suspends and later resumes keeps its committed snapshot and input read set (with any bases its own
+writes advanced). The resumed step starts with no session reads. If a variable in the input read set was changed by
+someone else meanwhile, the invocation's commit is a lost update under decision 5. This is correct, but in long-running
 workflows it may be frequent. Open question 8 asks whether this needs a different answer.
 
 ### 12. Operator alterations use per-variable versions
@@ -312,8 +324,8 @@ be in place and agreed first, and evidence on its cost for large values. It is l
 
 ## Consequences
 
-- **ADR 0045 §3.** Recovery of the same invocation keeps the snapshot, as today. An operator retry or reschedule, which
-  is a new invocation, materializes again (decision 8). Before background admission a stale snapshot may be
+- **ADR 0045 §3.** Its retry sentence is amended (decision 8): attempts and resumptions of one invocation keep the id
+  and the snapshot, as today; an operator retry or reschedule is a new invocation with a new id and fresh inputs. Before background admission a stale snapshot may be
   superseded by a new one (decision 9). A `While` pass that re-materializes under the #977 amendment records its own
   input read set for that evaluation.
 - **ADR 0045 §4.** "Reads occur when the consumer invocation materializes its inputs" stays true, and those reads are
@@ -321,7 +333,7 @@ be in place and agreed first, and evidence on its cost for large values. It is l
 - **ADR 0045 §5, ADR 0089 decision 5, ADR 0090 §3.** They still refuse computed names. D-7 changes that through the
   ADR 0089 amendment; decision 3 follows whatever that amendment allows.
 - **ADR 0048 §4.** Commits stay totally ordered per execution (as amended on PR #3286). Each variable gets its own
-  version beside the frame revision. Captures write against the step's read set.
+  version beside the frame revision. Captures write against the invocation's read set.
 - **ADR 0090.** The session is the second surface over this mechanism (decision 1). Its base becomes version plus
   digest (decision 5), its check covers input reads too (decision 4), and its `[VariableConflictPolicy]` becomes the
   lost-update policy of decision 6. Whether background steps get a session at all, and whether scripts may write
@@ -339,7 +351,8 @@ be in place and agreed first, and evidence on its cost for large values. It is l
 
 - A test that reproduces today's inline lost update with `External` leaves (Context, item 1), failing before the change
   and passing after.
-- A step that writes X on suspension and captures X on completion does not conflict with itself.
+- Two branches that read 0 and both write 1: the second is a lost update, not a no-op.
+- An invocation that writes X on suspension and captures X on completion does not conflict with itself.
 - Read sets contain actual reads only, including computed names; an unread visible variable never causes a conflict.
 - A blind write follows D-8; an unchanged value writes nothing and keeps the version.
 - 0 → 1 → 0 applies without a fault and is recorded; a real lost update faults by default.
@@ -406,7 +419,8 @@ you would change.
 9. **Granularity.** The whole variable now, and a three-way merge later (decision 14).
 10. **Scope with A-3.** If writing variables from scripts becomes a compatibility mode only, this ADR still holds for
     bindings and captures. Do you agree it is independent of A-3's answer?
-11. **A rejected result.** The incident records the result a faulted step produced (decision 7). Should an operator be
-    able to apply it as `LastWins`, instead of only retrying the body and repeating its external effects?
+11. **A rejected result.** The incident records the result a faulted step produced (decision 7). A retry is a new
+    invocation, so `InvocationId`-keyed idempotency will not stop its external effects from repeating. Should an
+    operator be able to apply the recorded result as `LastWins` instead of retrying?
 12. **Write history cost.** Extra rows per write, or derived from checkpoint commits; values always, or opt-in with a
     retention limit (decision 13)?
