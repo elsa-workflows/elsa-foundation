@@ -441,6 +441,7 @@
     <Project Path="Essentials/tests/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Activities/Bpmn/">
+    <Project Path="Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj" />
     <Project Path="Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Activities/Bpmn/Interchange/">

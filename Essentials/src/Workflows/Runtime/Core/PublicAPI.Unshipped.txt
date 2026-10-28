@@ -9235,3 +9235,45 @@ Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntentHandlerContribution.Ru
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntentHandlerContribution.StimulusDeliveryProtocolVersion.get -> int?
 static Elsa.Workflows.Runtime.Core.Extensions.RuntimePostCommitIntentHandlerServiceCollectionExtensions.AddRuntimePostCommitIntentHandler<THandler>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! intentKind, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitRetryPolicy! retryPolicy, bool requiresDurableSource, int? stimulusDeliveryProtocolVersion) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitEnricher.ValidateFinalAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit! commit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.FindMaterialAsync(string! artifactId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial?>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.ListMaterialPageAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeStorePageRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeStorePage<Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial!>!>
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.SaveModelAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial! material, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.SupportsModelMaterial.get -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial.Identity.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial.IncarnationId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial.Model.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial?
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial.NativeWorkflow.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable?
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial.RuntimeExecutionMaterial(Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial! model, string! incarnationId) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial.RuntimeExecutionMaterial(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutable! nativeWorkflow, string! incarnationId) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol!
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol.Key.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol.RuntimeExecutionProtocol(string! key, int version) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol.Version.get -> int
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelDeclaredOutput
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelDeclaredOutput.Name.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelDeclaredOutput.RuntimeModelDeclaredOutput(string! name, Elsa.Primitives.Models.TypeReference! type) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelDeclaredOutput.Type.get -> Elsa.Primitives.Models.TypeReference!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelDependency
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelDependency.BindingId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelDependency.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelDependency.RuntimeModelDependency(string! bindingId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! executable) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial.Definition.get -> System.Text.Json.JsonElement
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial.Dependencies.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeModelDependency!>!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial.FormatVersion.get -> int
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial.Identity.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial.InputContract.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputContract!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial.Outputs.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeModelDeclaredOutput!>!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial.Profile.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial.Protocol.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial.RuntimeModelMaterial(int formatVersion, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! identity, Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol! protocol, string! profile, System.Text.Json.JsonElement definition, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableInputContract! inputContract, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeModelDeclaredOutput!>! outputs, System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.RuntimeModelDependency!>! dependencies, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Runtime.Core.Models.RuntimeRequirement!>! runtimeRequirements) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial.RuntimeRequirements.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Runtime.Core.Models.RuntimeRequirement!>!
+const Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial.CurrentFormatVersion = 1 -> int
+override Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol.operator !=(Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol? left, Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol.operator ==(Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol? left, Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol? right) -> bool

@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <WorkbenchProject>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../../../../../apps/Elsa.Workbench/Elsa.Workbench.csproj'))</WorkbenchProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="coverlet.collector" PrivateAssets="all" />
+    <ProjectReference Include="../../../../../apps/Elsa.Workbench/Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <!-- Build and launch the real host; never load its assembly or reproduce its composition in this test process. -->
+  <Target Name="DescribeBpmnHostingWorkbench" BeforeTargets="GetAssemblyAttributes">
+    <MSBuild Projects="$(WorkbenchProject)" Targets="GetTargetPath" Properties="Configuration=$(Configuration)" BuildInParallel="false">
+      <Output TaskParameter="TargetOutputs" ItemName="BpmnHostingWorkbenchOutput" />
+    </MSBuild>
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>BpmnHostingWorkbenchAssembly</_Parameter1>
+        <_Parameter2>@(BpmnHostingWorkbenchOutput)</_Parameter2>
+      </AssemblyAttribute>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>BpmnHostingWorkbenchSource</_Parameter1>
+        <_Parameter2>$([System.IO.Path]::GetDirectoryName('$(WorkbenchProject)'))</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+</Project>
