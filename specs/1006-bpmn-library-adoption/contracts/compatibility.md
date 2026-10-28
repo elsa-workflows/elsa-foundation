@@ -11,3 +11,25 @@ This preserves existing contracts; it introduces no general public runtime API.
 7. Retention: keep replay identities and readers needed by accepted executions. No cleanup or rollback may strand or resurrect work.
 
 Acceptance is defined in [spec.md](../spec.md). Technical staging and proof gates are in [plan.md](../plan.md); these statements alone are not execution evidence.
+
+## Qualified persisted writer profiles
+
+Version 1 qualification covers the complete pre-switch d81 writer layout retained in the actual
+checkpoint captures, and its supported continuation through this adapter. That writer explicitly
+emits empty collections, false flags and nullable record members. The reader requires those members
+before deserialization, including nested replay lists, registration status, token role/parent identity,
+race membership and loop counters/items. Record members with conflicting case-insensitive names
+refuse instead of shadowing the validated member. String-map keys and opaque JSON items retain
+their exact casing; a null item inside a collection remains a legitimate JSON value.
+
+The original version-1 writer legitimately lacks invocationCorrelation and stoppedHandle; these
+remain explicit compatibility exceptions. Version 2 requires the complete current writer layout,
+including those members. Compensation replay must retain its exact claimed registrations,
+coordinator and current handler association. Pruned ordinary ancestors, resolved race members and
+compensated host history do not need live tokens.
+
+Earlier additions were made under schema version 1. The version number alone therefore cannot
+distinguish an earlier writer from a truncated newer checkpoint. An incomplete profile is
+unqualified and ambiguous: preserve the original document and refuse further dispatch rather than
+infer empty responsibility. Qualifying another historical profile requires its actual provenance and
+captures. Semantic transitions and pruning remain with the released library.

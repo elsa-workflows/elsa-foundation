@@ -24,7 +24,7 @@ internal sealed class StimulusDeliveryServices(
     CoalescingInner<IActivityExecutionStateStore>? physicalActivities = null,
     CoalescingInner<IRuntimePostCommitOutboxStore>? physicalOutbox = null)
 {
-    private readonly IReadOnlyDictionary<string, IStimulusDeliveryIntentAdapter> _adapters = UniqueAdapters(adapters);
+    private readonly StimulusDeliveryRequestProjector _requests = new(adapters);
     internal IStimulusDeliveryStore Sources => sources;
     internal IWorkflowExecutableStore Material => material;
     internal IWorkflowExecutionStateStore Executions => executions;
@@ -41,17 +41,7 @@ internal sealed class StimulusDeliveryServices(
             throw new NotSupportedException("Source-owned stimulus delivery requires coherent physical source, retention and exact resume stores.");
     }
 
-    internal StimulusDispatchRequest Request(PostCommitDeliveryContext source)
-    {
-        if (!_adapters.TryGetValue(source.Intent.Kind, out var adapter))
-            throw new NotSupportedException("No owning adapter can decode the canonical stimulus intent.");
-        var request = adapter.CreateRequest(source.Intent) ?? throw new InvalidDataException("The owning stimulus adapter returned no request.");
-        if (!Enum.IsDefined(request.Mode) || request.IdempotencyKey != source.Intent.IdempotencyKey || request.IdempotencyKey is null ||
-            request.StartKeyScope != StimulusStartKeyScope.Artifact || request.MatchedTriggerBindings is not null || request.DispatchOptions is not null ||
-            !request.ResumeAllMatchingBookmarks || request.TargetWorkflowExecutionId is { } target && target != source.Intent.WorkflowExecutionId)
-            throw new InvalidDataException("The stimulus adapter changed the immutable source key or declared an unsupported routing override.");
-        return request;
-    }
+    internal StimulusDispatchRequest Request(PostCommitDeliveryContext source) => _requests.Read(source);
 
     internal async ValueTask<StimulusDeliverySnapshot> SelectAsync(PostCommitDeliveryContext source, StimulusDispatchRequest request,
         IGlobalBookmarkStimulusLookup lookup, IWorkflowTriggerBindingStore bindings, CancellationToken cancellationToken)
@@ -136,17 +126,6 @@ internal sealed class StimulusDeliveryServices(
         return new(source, resume, expected, observed.State, execution);
     }
 
-    private static IReadOnlyDictionary<string, IStimulusDeliveryIntentAdapter> UniqueAdapters(IEnumerable<IStimulusDeliveryIntentAdapter> adapters)
-    {
-        ArgumentNullException.ThrowIfNull(adapters);
-        var result = new Dictionary<string, IStimulusDeliveryIntentAdapter>(StringComparer.Ordinal);
-        foreach (var adapter in adapters)
-        {
-            ArgumentNullException.ThrowIfNull(adapter); ArgumentException.ThrowIfNullOrWhiteSpace(adapter.IntentKind);
-            if (!result.TryAdd(adapter.IntentKind, adapter)) throw new InvalidOperationException("Several adapters own the same stimulus intent kind.");
-        }
-        return result;
-    }
 }
 
 internal sealed record SavedBookmarkResume(PostCommitDeliveryContext Source, BookmarkResumeDispatchRequest Request,

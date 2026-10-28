@@ -30,6 +30,7 @@ public sealed partial class StimulusDeliveryStoreTests
         Assert.Equal(key.StartKey, command.IdempotencyKey); Assert.Equal(key.WorkflowExecutionId, command.WorkflowExecutionId);
         Assert.Equal("start", payload.TriggerNodeId); Assert.Equal(AdmissionMetadata, payload.TriggerMetadata);
         Assert.Equal(SelectedSource(), payload.PinnedSource); Assert.Equal("selected-label", command.Metadata["runtime.artifactVersion"]);
+        Assert.True(JsonElement.DeepEquals(source.Intent.Payload!.Value, payload.StimulusInput!.Value));
         Assert.Equal(WorkflowExecutableStartAuthorityKind.StimulusDelivery, payload.StartAuthority!.Kind);
         Assert.Equal("tenant", payload.TenantId); Assert.Equal(Publisher.Partition, payload.Partition);
         Assert.Same(options, Assert.Single(actors.Options));
@@ -53,6 +54,55 @@ public sealed partial class StimulusDeliveryStoreTests
         var result = await SavedDispatcher(harness, actors, policy).DispatchAsync(SavedRequest(source, binding: "binding-b"));
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Duplicate, result.CommandDispatch.Status);
         Assert.Equal(actualSource, result.PinnedSource); Assert.Empty(actors.Envelopes); Assert.Empty(actors.Activations); Assert.Empty(policy.Contexts);
+    }
+
+    [Theory]
+    [InlineData(false, false, false)] [InlineData(false, false, true)]
+    [InlineData(false, true, false)] [InlineData(false, true, true)]
+    [InlineData(true, false, false)] [InlineData(true, false, true)]
+    [InlineData(true, true, false)] [InlineData(true, true, true)]
+    public async Task Saved_start_rejects_caller_stimulus_input_before_duplicate_or_effects(bool ef, bool existing, bool missing)
+    {
+        await using var harness = await Harness.Create(ef);
+        var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
+        await harness.Delivery.InstallAsync(source, AdmissionSnapshot(source));
+        if (existing)
+            await harness.Executions.SaveAsync(Publisher with
+            {
+                WorkflowExecutionId = KeyedWorkflowStartIdentity.For("key", Pin.ArtifactId).WorkflowExecutionId,
+                Authority = WorkflowExecutionAuthoritySnapshot.CreateRoot("runtime.publish-test")
+            });
+        var actors = new StartActors();
+        var policy = new StartPolicy();
+
+        var refusal = await Assert.ThrowsAsync<WorkflowExecutableStartRejectedException>(() =>
+            SavedDispatcher(harness, actors, policy).DispatchAsync(SavedRequest(source,
+                missing ? "stimulus-input-missing" : "stimulus-input-changed")).AsTask());
+
+        Assert.Equal(WorkflowExecutableStartRejectionCategory.Authority, refusal.Category);
+        Assert.Equal("stimulus-delivery-input-mismatch", refusal.ReasonCode);
+        Assert.Empty(actors.Activations);
+        Assert.Empty(actors.Envelopes);
+        Assert.Empty(policy.Contexts);
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Saved_start_rejects_caller_identity_replacing_the_source_identity(bool ef)
+    {
+        await using var harness = await Harness.Create(ef);
+        var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
+        await harness.Delivery.InstallAsync(source, AdmissionSnapshot(source));
+        var actors = new StartActors();
+        var policy = new StartPolicy();
+
+        var refusal = await Assert.ThrowsAsync<WorkflowExecutableStartRejectedException>(() =>
+            SavedDispatcher(harness, actors, policy).DispatchAsync(SavedRequest(source, "requested-by")).AsTask());
+
+        Assert.Equal("stimulus-delivery-input-mismatch", refusal.ReasonCode);
+        Assert.Empty(actors.Activations);
+        Assert.Empty(actors.Envelopes);
+        Assert.Empty(policy.Contexts);
     }
 
     public static TheoryData<bool, string> SavedRequestDefects()
@@ -326,12 +376,12 @@ public sealed partial class StimulusDeliveryStoreTests
     }
 
     private static IReadOnlyDictionary<string, string> AdmissionMetadata => new Dictionary<string, string> { ["startElementId"] = "bpmn-start", ["descriptor"] = "same-artifact" };
-    private static StimulusDeliverySnapshot AdmissionSnapshot(PostCommitDeliveryContext source, WorkflowExecutionState? publisher = null)
+    private static StimulusDeliverySnapshot AdmissionSnapshot(PostCommitDeliveryContext source, WorkflowExecutionState? publisher = null, bool originalMetadata = false)
     {
         var candidate = Snapshot(source, publisher: publisher);
         return new(candidate.Version, candidate.SourceOutboxItemId, candidate.IntentFingerprint, candidate.Scope, candidate.SelectedAt,
             candidate.StimulusType, candidate.StimulusHash, candidate.Starts.Select(start => new StimulusStartRecipient(
-                start.Binding with { Metadata = AdmissionMetadata }, start.Executable, start.SourceProvenance)).ToArray(), candidate.Resumes);
+                start.Binding with { Metadata = originalMetadata ? start.Binding.Metadata : AdmissionMetadata }, start.Executable, start.SourceProvenance)).ToArray(), []);
     }
 
     [Theory]
@@ -339,7 +389,7 @@ public sealed partial class StimulusDeliveryStoreTests
     public async Task Saved_metadata_that_ordinary_command_wire_cannot_preserve_refuses_before_actor_lookup(bool ef)
     {
         await using var harness = await Harness.Create(ef); var source = new PostCommitDeliveryContext(await harness.Seed(), Scope);
-        await harness.Delivery.InstallAsync(source, Snapshot(source)); // Includes the deliberately unpaired UTF-16 storage control.
+        await harness.Delivery.InstallAsync(source, AdmissionSnapshot(source, originalMetadata: true)); // Keeps the unpaired UTF-16 storage control.
         var request = SavedRequest(source);
         request = new(request.ArtifactId, request.RequestedBy, request.WorkflowExecutionId, request.IdempotencyKey, null, null, null,
             request.StimulusInput, request.TriggerNodeId, request.RunKind, null, request.ProvenanceRequirement, null, null,
@@ -352,16 +402,25 @@ public sealed partial class StimulusDeliveryStoreTests
     }
 
     private static WorkflowStartDispatcher SavedDispatcher(Harness harness, StartActors actors, StartPolicy policy, IWorkflowExecutionStateStore? executions = null) => new(
-        harness.Artifacts, harness.References, actors, new NoStartIds(), harness.Clock, null, policy, null, executions ?? harness.Executions, null, harness.Delivery);
+        harness.Artifacts, harness.References, actors, new NoStartIds(), harness.Clock, null, policy, null, executions ?? harness.Executions, null, harness.Delivery,
+        [new SavedStartIntentAdapter()]);
+
+    private sealed class SavedStartIntentAdapter : IStimulusDeliveryIntentAdapter
+    {
+        public string IntentKind => "publish";
+        public StimulusDispatchRequest CreateRequest(RuntimePostCommitIntent intent) => new("event", "named", intent.Payload,
+            idempotencyKey: intent.IdempotencyKey, requestedBy: "runtime.publish-test") { ResumeAllMatchingBookmarks = true };
+    }
 
     private static WorkflowExecutionStartDispatchRequest SavedRequest(PostCommitDeliveryContext source, string? defect = null, string binding = "binding-a", WorkflowExecutionState? publisher = null, WorkflowExecutableStartAuthority? overrideAuthority = null)
     {
         var key = KeyedWorkflowStartIdentity.For("key", Pin.ArtifactId); var entry = Start(binding);
-        return new(defect == "artifact" ? "other" : Pin.ArtifactId, "runtime.publish-test",
+        return new(defect == "artifact" ? "other" : Pin.ArtifactId, defect == "requested-by" ? "caller-identity" : "runtime.publish-test",
             defect == "execution" ? "other-execution" : key.WorkflowExecutionId, defect == "key" ? "other-key" : key.StartKey,
             null, defect == "variables" ? new Dictionary<string, object?> { ["injected"] = 1 } : null,
             defect == "inputs" ? new Dictionary<string, object?> { ["injected"] = 1 } : null,
-            JsonSerializer.SerializeToElement("original stimulus input"), defect == "node" ? "other-node" : entry.Binding.ExecutableNodeId,
+            defect == "stimulus-input-missing" ? null : defect == "stimulus-input-changed" ? JsonSerializer.SerializeToElement("caller-changed") : source.Intent.Payload,
+            defect == "node" ? "other-node" : entry.Binding.ExecutableNodeId,
             defect == "run" ? WorkflowRunKind.Unknown : WorkflowRunKind.PublishedRun, null,
             WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy, defect == "parent" ? "other-parent" : null,
             defect == "correlation" ? "other-correlation" : null, defect == "tenant" ? "foreign" : (publisher ?? Publisher).TenantId,

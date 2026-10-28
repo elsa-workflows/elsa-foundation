@@ -4,13 +4,14 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.Triggers;
 
 namespace Elsa.Workflows.Runtime.Services.Executions;
 
 public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 {
     bool IWorkflowStartDispatcher.CanDispatchSavedStimulus(IStimulusDeliveryStore sources, IWorkflowExecutableStore material,
-        IWorkflowExecutionStateStore executions) => ReferenceEquals(sources, _stimulusDeliveryStore) &&
+        IWorkflowExecutionStateStore executions) => _stimulusRequests.IsConfigured && ReferenceEquals(sources, _stimulusDeliveryStore) &&
         ReferenceEquals(material, _executableStore) && ReferenceEquals(executions, _workflowExecutionStateStore);
 
     private readonly IWorkflowExecutableStore _executableStore;
@@ -24,6 +25,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly IRuntimePersistenceModeResolver? _persistenceModeResolver;
     private readonly IStimulusDeliveryStore? _stimulusDeliveryStore;
+    private readonly StimulusDeliveryRequestProjector _stimulusRequests;
 
     public WorkflowStartDispatcher(
         IWorkflowExecutableStore executableStore,
@@ -102,6 +104,22 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         IWorkflowExecutionStateStore? workflowExecutionStateStore,
         IRuntimePersistenceModeResolver? persistenceModeResolver,
         IStimulusDeliveryStore? stimulusDeliveryStore)
+        : this(executableStore, sourceReferenceStore, agentProvider, idGenerator, timeProvider, partitionAccessor,
+            startPolicy, workflowDispatchStore, workflowExecutionStateStore, persistenceModeResolver, stimulusDeliveryStore, []) { }
+
+    public WorkflowStartDispatcher(
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IWorkflowExecutionActorProvider agentProvider,
+        IRuntimeExecutionIdGenerator idGenerator,
+        TimeProvider timeProvider,
+        IWorkflowExecutionPartitionAccessor? partitionAccessor,
+        IWorkflowExecutableStartPolicy startPolicy,
+        IWorkflowDispatchStore? workflowDispatchStore,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IRuntimePersistenceModeResolver? persistenceModeResolver,
+        IStimulusDeliveryStore? stimulusDeliveryStore,
+        IEnumerable<IStimulusDeliveryIntentAdapter> stimulusIntentAdapters)
     {
         ArgumentNullException.ThrowIfNull(executableStore);
         ArgumentNullException.ThrowIfNull(sourceReferenceStore);
@@ -121,6 +139,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _persistenceModeResolver = persistenceModeResolver;
         _stimulusDeliveryStore = stimulusDeliveryStore;
+        _stimulusRequests = new(stimulusIntentAdapters);
     }
 
     public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
@@ -233,6 +252,12 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             source.IntentFingerprint != authority.IntentFingerprint || source.Scope != authority.Scope ||
             source.Claim.OwnerId != authority.OwnerId || source.Claim.FencingToken != authority.FencingToken)
             throw AuthorityRejected("stimulus-delivery-cohort-unverified", "No verified exact cohort authorizes the saved start.");
+        if (!_stimulusRequests.Owns(source.Intent.Kind))
+            throw AuthorityRejected("stimulus-delivery-source-input-unavailable", "Saved start admission requires the canonical intent's owning decoder.");
+        var canonical = _stimulusRequests.Read(source);
+        StimulusDeliveryServices.ValidateWinner(source, canonical);
+        if (request.RequestedBy != canonical.RequestedBy || !SameStimulusInput(request.StimulusInput, canonical.Input))
+            throw AuthorityRejected("stimulus-delivery-input-mismatch", "The saved start differs from its canonical persisted stimulus input or source identity.");
         var recipient = snapshot.Starts.SingleOrDefault(entry => entry.Binding.TriggerBindingId == authority.TriggerBindingId);
         if (recipient is null || !recipient.SourceProvenanceCaptured)
             throw AuthorityRejected("stimulus-delivery-binding-not-found", "The exact captured start binding is unavailable.");
@@ -252,6 +277,11 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             throw AuthorityRejected("stimulus-delivery-context-mismatch", "The saved start cannot override its ordinary root scope or authority.");
         return recipient;
     }
+
+    private static bool SameStimulusInput(JsonElement? supplied, JsonElement? canonical) =>
+        supplied.HasValue == canonical.HasValue && (!supplied.HasValue ||
+            supplied.Value.ValueKind != JsonValueKind.Undefined && canonical!.Value.ValueKind != JsonValueKind.Undefined &&
+            JsonElement.DeepEquals(supplied.Value, canonical.Value));
 
     private static ResolvedPinnedExecutable ResolveStimulusExecutable(StimulusStartRecipient saved, WorkflowExecutable executable)
     {

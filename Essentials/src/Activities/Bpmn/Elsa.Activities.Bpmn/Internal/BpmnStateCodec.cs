@@ -32,17 +32,7 @@ internal sealed class BpmnStateCodec
         {
             var root = JsonNode.Parse(payload.GetRawText())?.AsObject()
                 ?? throw new JsonException("BPMN state is null.");
-            // JsonConstructor defaults are useful for a new library state, but a persisted checkpoint
-            // must not become a fresh empty execution merely because its payload was truncated.
-            foreach (var key in new[] { "tokens", "diagnostics" })
-                if (root[key] is not JsonArray)
-                    throw new JsonException($"BPMN state collection '{key}' is missing.");
-            if (root["sequence"] is not JsonValue sequence || !sequence.TryGetValue<int>(out var next) || next < 0 ||
-                root["terminated"] is not JsonValue terminated || !terminated.TryGetValue<bool>(out _))
-                throw new JsonException("BPMN state sequence or termination flag is invalid.");
-            if (document.StateVersion == CurrentVersion &&
-                (root["activeWork"] is not JsonArray || root[InvocationKey] is not JsonObject))
-                throw new JsonException("BPMN state work or scope correlation is missing.");
+            BpmnPersistedStateShape.Validate(root, document.StateVersion);
             var correlation = root[InvocationKey]?.Deserialize<Dictionary<string, string>>(Web)
                 ?? new Dictionary<string, string>();
             root.Remove(InvocationKey);
@@ -61,6 +51,7 @@ internal sealed class BpmnStateCodec
                 state.ActiveWork.Select(work => work.TokenId).Distinct(StringComparer.Ordinal).Count() != state.ActiveWork.Count ||
                 state.ActiveWork.Any(work => !state.Tokens.Any(token => token.TokenId == work.TokenId)))
                 throw new JsonException("BPMN state work-token identities are inconsistent.");
+            BpmnPersistedStateShape.ValidateRetainedCompensation(state);
             return new(state, document.StateVersion, correlation);
         }
         catch (Exception exception) when (exception is JsonException or InvalidOperationException or NotSupportedException or ArgumentException)

@@ -202,6 +202,13 @@ then carries only the captured wait condition into the existing queued command. 
 claim is required for the later accepted callback. Legacy router/dispatcher overloads default to
 refusal for this source-owned capability; ordinary external stimulus delivery keeps its existing path.
 
+Direct saved-start admission uses the same owning decoder and verifies the supplied stimulus input
+and requested-by identity against its canonical request before duplicate lookup, policy or actor
+effects. The runtime registration factory supplies the registered decoder set to the dispatcher.
+Existing constructor signatures remain available; construction without owning decoders grants no
+saved-source capability. The decoder-aware constructor is an additive tracked API on the existing
+dispatcher, and does not let Runtime interpret Primitives payload fields.
+
 A saved resume freezes the provider-observed physical bookmark generation as well as its existing
 identity/CreatedAt/expiry, complete metadata and payload fingerprint (never the retained payload), plus
 the recipient's full executable pin, pinned source and trusted tenant/partition/run/test facts. Native

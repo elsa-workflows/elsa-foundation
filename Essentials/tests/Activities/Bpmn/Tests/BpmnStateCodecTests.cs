@@ -9,12 +9,14 @@ using Xunit;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>Translation regression tests; actual upgraded-host proof uses the frozen EF snapshots separately.</summary>
-public sealed class BpmnStateCodecTests
+public sealed partial class BpmnStateCodecTests
 {
     private const string LegacyJson = """
-        {"tokens":[{"tokenId":"token:7","atElementId":"work","status":1,"producingActivityExecutionId":"child:producer"}],
+        {"tokens":[{"tokenId":"token:7","atElementId":"work","flowId":null,"parentTokenId":null,"status":1,
+                    "producingActivityExecutionId":"child:producer","iterationKey":null,"kind":null}],
          "activeChildren":[{"nodeId":"node-work","elementId":"work","tokenId":"token:7","schedulingCause":"flow","iterationId":"iteration:2"}],
-         "sequence":17,"terminated":false,"diagnostics":[],"pendingFault":{"faultCode":"original.fault","message":"original message"}}
+         "sequence":17,"terminated":false,"cancelling":false,"diagnostics":[],"races":[],"loops":[],"compensables":[],"compensationRuns":[],
+         "pendingFault":{"faultCode":"original.fault","message":"original message"}}
         """;
 
     [Fact]
