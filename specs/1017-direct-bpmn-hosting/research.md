@@ -12,6 +12,8 @@ Source baseline: `d3ebb980e2dbebeed680808e58c1edd694fae0f7`; specification revie
 
 **Rejected**: Separate SQLite runtime; new actor framework; treating local serialization as a durable fence; storing model state in string metadata; a universal graph or BPMN name-switch in the shared runtime.
 
+Native lifecycle cleanup currently reads only WorkflowExecutionState: [scheduler terminal guard](../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs) stops dispatch and [resumption](../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Recovery/RuntimeResumptionService.cs) purges queued work. Add one authoritative native/model lifecycle reader and model-specific terminal settlement policy before reusing those paths. Preserve native purge while retaining exact model settlement/replay inputs after semantic terminality.
+
 ## 2. Give direct execution real material and state
 
 **Decision**: Preserve `WorkflowExecutable` and all native constructors. Add a versioned opaque model-material variant through an additive runtime material contract implemented by the existing runtime artifact provider. Share artifact identity, physical incarnation/coordination, retained dependency closure and deletion guards. Add model state as an optional versioned checkpoint participant, with dedicated typed storage and accepted-input receipts in the same transaction.
@@ -49,6 +51,8 @@ Source baseline: `d3ebb980e2dbebeed680808e58c1edd694fae0f7`; specification revie
 **Source**: [runtime permissions](../../Essentials/src/Workflows/Runtime/Api/Authorization/WorkflowRuntimePermissions.cs), [stimulus dispatch](../../Essentials/src/Workflows/Runtime/Api/Endpoints/Stimuli/Dispatch/Endpoint.cs), [incident actions](../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Incidents/IncidentResolutionActions.cs).
 
 **Rationale**: No existing first-class human-task completion contract covers direct models. Exact authorized commands are necessary for this witness; full #2907 operations/Studio remain separate. Existing first-delivery broadcast snapshots remain authoritative and must cover model recipients through an explicit qualified extension, not a native bookmark fiction.
+
+Retryable technical incidents are held before semantic fault under an explicitly pinned bounded HoldForRetry policy; default FinalFault is not reopenable. Retain the exact interpreter work/state and original failure evidence, then issue one distinguishable physical attempt. This avoids promising operator retry after the released interpreter already terminalized the process.
 
 ## 6. Preserve domains and deployment shapes
 

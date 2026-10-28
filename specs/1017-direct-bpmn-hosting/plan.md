@@ -20,6 +20,8 @@ This is an implementation design awaiting independent review. It does not assert
 
 **Testing**: Existing xUnit risk-based suites plus a dedicated real-host BPMN hosting test project in the integration tier. Native/EF/material/payload compatibility tests and safeguard-removal controls; actual owned Workbench/Studio sessions with portable durable captures.
 
+Test cadence follows ADR0080/Elsa's deliberate absence of a blanket TDD gate: add focused behavior tests with their implementation and demonstrate meaningful failing safeguard-removal controls before final review. No new owner cadence decision is needed for this existing program.
+
 **Target Platform**: Existing built-in execution host on supported .NET server platforms; local acceptance on macOS, required CI on its configured platforms. Runtime-only execution consumes immutable artifacts and installed runtime modules, without Design storage.
 
 **Project Type**: Modular libraries, runtime/API consumers, native activity adapter and integration qualification.
@@ -84,11 +86,14 @@ Gate A is passed only when a portable manifest maps each affected writer to actu
 1. Add versioned model material through the existing artifact provider while retaining native DTO constructors, hashes, physical incarnation and closure-checked root leases. Add default-refusing provider capability. Native reads remain native; model reads never invent RootActivity.
 2. Add optional model-state/input-receipt checkpoint participation and EF typed rows; all state, accepted input, consumed scheduler claim, owed outbox, marker and current fence commit atomically. Empty/absent model participation preserves the exact historical fingerprint shape. Initial model-bearing commits force durable flush; unsupported coalescing/provider routes refuse rather than drop a participant.
 3. Add model dispatch selection inside the existing partition-bound scope before native lifecycle handlers. Selection follows verified immutable material or committed execution protocol, not a caller-controlled model hint. Native consumer delegates existing behavior; direct consumer uses the same mailbox, ownership service and durable queue/claims. Extract shared ownership mechanics rather than duplicating acquisition/heartbeat/release. Unknown protocol/kind fails closed, never Noop-acknowledges.
+   Add one authoritative lifecycle-read seam used by dispatch/drain selection and RuntimeResumptionService. Its native adapter preserves the existing terminal-stop/purge policy. Model lifecycle distinguishes Running/WaitingIncident, TerminalPendingSettlement and TerminalSettled; the model path never projects a fake native WorkflowExecutionState. Terminal model progression is closed, but exact retained cancellation acknowledgements, result-consumption proofs, parent-delivery acknowledgements and identical command replay remain admissible for settlement. Recovery must retain/route those inputs rather than native-purge them; purge only proven obsolete progression work under the model policy, never unclassified or unavailable work. Keep execution/material/source retention until settlement ends.
 4. Demonstrate native execution plus direct BPMN start/wait/resume, real restart, receipt replay and stale-owner refusal. This is the first production milestone; later gates remain required for #2898 closure.
 
 ### Gate C — real bindings and races
 
 Implement model-owned work handles/attempts, human completion, duration timers, cancellation, incident/retry and supported inspection. Scope/tenant/authority is verified before retained-result disclosure. Preserve matching/conflicting replay and exact current invocation/attempt checks.
+
+Technical failure policy is pinned per service binding: default FinalFault feeds the interpreter and cannot be retried after semantic terminality. Explicit HoldForRetry with a bounded attempt budget retains the exact active semantic work token/state, records failed-attempt evidence and enters nonterminal WaitingIncident before feeding a terminal fault to the interpreter. Authorized retry creates one new physical attempt/child identity for that retained work; it does not restart or revive the process. Cancellation/timer interruption can resolve the still-active work while held. Budget exhaustion follows FinalFault. Test actual direct and RunBpmn failure → restart → retry → completion, duplicate retry, immutable old failure evidence, rejected old results and final-fault retry refusal. Business errors retain their modeled disposition and do not enter this technical retry policy.
 
 Use the same atomic state/receipt boundary for competing inputs. Extend the existing first-delivery snapshot protocol with exact model recipients and provider qualification; preserve its native cohorts/wire. A new listener cannot receive an old retry. Work committed by a valid owner may still be delivered physically after ownership change; it does not authorize a stale new decision.
 
@@ -105,6 +110,8 @@ Capture typed `RunEtl` output at native terminal acceptance; workflow Completed 
 ### Gate E — qualified profile, actual upgrade and Studio
 
 Run the full scenario/outcome matrix in [quickstart](quickstart.md), resume Gate A's actual stores on the changed host, and exercise the existing Studio journey. Prove runtime-only recovery with no Design storage. Publish profile cuts and provider-specific evidence separately. Qualify capability admission-off rollback while retaining accepted-work readers/workers; old binaries are not allowed to open new write families without schema/readability checks.
+
+Runtime migrations must preserve Gate A's applied migration IDs and content. The current `generate-module-migrations.sh` regenerates Initial and deletes old sets, so its default mode cannot be used for this upgrade. Add a narrowly selected incremental mode for Runtime model hosting through the existing tooling/context factories, retain all existing Runtime Initial files, and document/test this program's saved-execution preservation requirement. Do not globally freeze unrelated modules or mark #1976 delivered. Prove actual old-database migration plus fresh installs on each affected provider, and guard against the regeneration path deleting the retained chain.
 
 ### Gate F — review and delivery
 

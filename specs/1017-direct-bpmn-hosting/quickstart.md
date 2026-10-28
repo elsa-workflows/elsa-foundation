@@ -30,7 +30,7 @@ dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check
 ```
 
-Also run the actual touched Runtime, Runtime EF, DispatchWorkflow, ETL, API and serialization projects discovered from the changed-project map; record exact commands/results in the resulting receipt. Run genuine provider/migration/upgrade tests for all changed first-party EF paths. Generate migrations with the repository's `tools/ef` workflow, not ad-hoc DDL or edits to the initial baseline migrations.
+Also run the actual touched Runtime, Runtime EF, DispatchWorkflow, ETL, API and serialization projects discovered from the changed-project map; record exact commands/results in the resulting receipt. Run genuine provider/migration/upgrade tests for all changed first-party EF paths. Add/use the explicitly selected incremental mode in the repository's `tools/ef` workflow; the current default regenerates/deletes Initial and must not be used against this retained Runtime baseline. No ad-hoc DDL, rewritten baseline IDs or unrelated global freeze.
 
 ## Actual host matrix
 
@@ -46,6 +46,8 @@ The portable runner's `qualify` phase records normal API commands and persisted 
 | Real pipeline | Direct and embedded success, caught/unmatched business error, technical fault and pipeline-originated cancellation; inspect physical output and actual ETL/native terminal result. |
 | Propagated cancellation | BPMN interruption and each supported native-parent cancellation before admission, during work and during pending result; inspect actual pipeline and remaining work after restart. No unsettled uncompleted run silently remains Running; already-terminal results remain truthful. |
 | Human/incident commands | Inspect/complete actual wait, inspect/retry actual incident and cancel after restart; one retry attempt; authorization precedes replay disclosure; no direct state edits. |
+| Retry lifecycle | Actual direct and RunBpmn native-service technical failure held before semantic fault; restart in WaitingIncident, retry once, matching retry replay, unchanged old fault evidence, rejection of old results and eventual typed completion. FinalFault/exhausted-budget/cancelled work refuses retry without reviving semantics. |
+| Terminal settlement recovery | Terminal model plus owed child cancellation/result-consumption or parent acknowledgement; terminate/restart, retain and consume the exact settlement input without new semantic progression. Existing native terminal-purge behavior remains unchanged. |
 | Native parents | Sequence/Flowchart/CompensationScope completion/fault/cancel and pending outcome recovery; preserve existing fault projection and actual typed outputs. |
 | Ownership | Real predecessor termination/replacement plus deliberately delayed stale decision and obsolete worker attempts; no stale new state/outbox acceptance, while previously committed physical delivery remains allowed. |
 | Material/retention/rollback | Immutable pins survive publication retirement with retained edges; delete/GC cannot remove owed material; capability admission off retains accepted readers/workers; unsupported old writer fails before touching new families. |

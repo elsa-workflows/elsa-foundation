@@ -17,7 +17,7 @@ The three reviewers inspected independently without seeing each other's outputs.
 
 ## Plan
 
-Pending. No source implementation is authorized by a clean specification review alone; the plan and tasks must be reviewed in order, followed by actual pre-writer captures.
+Iteration 1 at `7a3d36adbcebf063a767bfab48a1fd55688d03de`: standards clean; correctness required an authoritative lifecycle-read/terminal-settlement policy before native cleanup reuse; acceptance required a nonterminal retryable-incident lifecycle and actual retry proof without reviving final semantics. The revised plan adds both. Author source review also found Initial-regeneration incompatible with retained baseline databases; the plan now requires a narrow incremental Runtime migration mode. Re-review pending. No source implementation is authorized by a clean specification review alone; plan/tasks reviews and actual pre-writer captures remain required.
 
 ## Tasks
 

@@ -10,6 +10,7 @@ Design for review. Public signatures are introduced only for demonstrated host/m
 | Model execution read | Provider-neutral scoped read/page queries for committed header and opaque payload/receipts. No independently writable state-store path; writes enter checkpoint participation. |
 | Checkpoint participant | Optional versioned model state/input receipt/precondition data, same authoritative transaction as fence, consumed queue claim, outbox and marker. Absent data retains exact legacy fingerprints. Unsupported providers refuse before mutation. |
 | Scoped model selection | Resolve from verified material or committed execution protocol. Native default delegates existing scheduler behavior. Unknown protocols/kinds fail closed. Selection precedes native start/root scheduling. |
+| Lifecycle read/cleanup | One authoritative scoped native/model reader. Native terminal stop/purge remains unchanged. Model terminal state closes progression while exact owed settlement/replay inputs remain recoverable; resumption cannot delete those as native residual work. Unknown/unavailable inputs are retained, not silently purged. |
 | Registration | Named Sequential initialization event, one contributor aggregator and immutable registry; unique protocol/version with startup cardinality validation. No kernel BPMN switches or generic anonymous handler bus. |
 | Native work bridge | Exact committed model-work source/claim/pin/attempt validates before and atomically at native child admission. Native terminal checkpoint retains typed result delivery; cancellation-before-start and result consumption have durable proof. |
 
@@ -28,10 +29,12 @@ The concrete API package follows existing runtime HTTP authorization/problem/ten
 | Complete human work | Request ID, exact current invocation/attempt and supported result | Atomic accepted input/state/owed work, equivalent replay or explicit stale/conflicting refusal. |
 | Cancel | Request ID and execution or exact supported invocation | Durable cancellation and owed propagation; distinguish acceptance from downstream pipeline settlement. Inspection exposes pending settlement. |
 | Inspect incident | Authorized execution and incident | Cause, invocation/attempt and supported retry state, without foreign-scope data. |
-| Retry incident | Request ID, exact incident/invocation/previous attempt | One new attempt and retained retry result; replay cannot create another attempt. |
+| Retry incident | Request ID, exact current incident/invocation/failed attempt; pinned HoldForRetry policy with budget remaining | One new physical attempt for the retained active semantic work and a retained retry result. WaitingIncident is nonterminal; replay cannot create another attempt. Final semantic fault/cancellation refuses retry. |
 | Deliver timer/work result | Registered internal producer with physically verified source/claim, exact destination/pin/attempt and typed payload | Retained acceptance/equivalence or proven terminal responsibility. Dispatch/Noop/Duplicate/NotFound alone is not acknowledgement. |
 
 Check authorization before lookup/disclosure of retained outcomes. Malformed/unsupported new work is refused before acceptance. Temporary store/material unavailability leaves previously accepted work owed and retryable. Accepted work is not silently repinned to current definitions. Domain errors include execution/material/element/invocation context and preserve infrastructure cause; caller cancellation remains cancellation.
+
+Service bindings pin FinalFault by default or explicit bounded HoldForRetry. HoldForRetry records the native child's actual technical failure while preserving the interpreter's pre-failure active work/state; it does not first terminalize and then revive BPMN. Timer/parent interruption can retire that held work. Budget exhaustion becomes final fault. Require actual direct and RunBpmn retry-after-restart proof, one new attempt, unchanged prior fault evidence and rejection of late old results. A business-error result retains its modeled catch/propagation classification.
 
 ### HTTP shape
 
