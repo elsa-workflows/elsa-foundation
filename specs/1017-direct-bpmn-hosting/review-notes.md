@@ -21,7 +21,7 @@ Iteration 1 at `7a3d36adbcebf063a767bfab48a1fd55688d03de`: standards clean; corr
 
 ## Tasks
 
-Iteration 1 at `62c33169a19c71fb57a352709a0ab36e27334f6b`: acceptance clean; correctness and standards identified the same missing T025 bridge dependency. The revised task list explicitly waits for T027/T034–T035 and requires T040 to complete its real terminal-settlement arms; a synthetic earlier producer cannot qualify it. Re-review and cross-artifact analysis pending. No source implementation yet.
+Iteration 1 at `62c33169a19c71fb57a352709a0ab36e27334f6b`: acceptance clean; correctness and standards identified the same missing T025 bridge dependency. Fixed by `647f7f54f`: T025 waits for T027/T034–T035 and T040 completes its real settlement arms. Iteration 2 at `647f7f54fc797a3ef205385e72f7ccf0373bcfa8` is clean across all three independent lenses. Read-only cross-artifact analysis at that same head maps all 22 FRs/six SCs to the 47 tasks with no unresolved findings. This permits T001 capture tooling, followed by actual T002 capture before affected writers; it is not runtime acceptance.
 
 ## Complete PR
 

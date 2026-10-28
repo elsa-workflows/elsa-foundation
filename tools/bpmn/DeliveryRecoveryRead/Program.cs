@@ -16,6 +16,33 @@ using Elsa.Persistence.EntityFramework;
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 try
 {
+    if (args.Length == 2 && args[0] == "--inspect-host-products")
+    {
+        var directory = Path.GetDirectoryName(Path.GetFullPath(args[1]))!;
+        var required = new[] { "Elsa.Workbench.dll", "Elsa.Activities.Bpmn.dll", "Elsa.Activities.Bpmn.Interchange.dll",
+            "Elsa.Workflows.Runtime.Core.dll", "Elsa.Workflows.Runtime.dll", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+            "Elsa.Activities.Runtime.dll", "Elsa.Activities.DispatchWorkflow.Runtime.dll", "Elsa.Serialization.SystemText.dll" };
+        var products = required.Select(name => {
+            var path = Path.Combine(directory, name);
+            var version = System.Diagnostics.FileVersionInfo.GetVersionInfo(path).ProductVersion
+                ?? throw new InvalidDataException($"Product metadata is missing for '{name}'.");
+            using var stream = File.OpenRead(path);
+            return new { Name = name, ProductVersion = version, Sha256 = Convert.ToHexStringLower(SHA256.HashData(stream)) };
+        }).ToArray();
+        var hostProductCommit = products[0].ProductVersion.Split('+').Last();
+        if (hostProductCommit.Length != 40 || hostProductCommit.Any(character => !char.IsAsciiHexDigitLower(character)) ||
+            products.Any(product => !product.ProductVersion.EndsWith("+" + hostProductCommit, StringComparison.Ordinal)))
+            throw new InvalidDataException("The actual host/writer products do not share one full source commit.");
+        var libraries = new[] { "Bpmn.Model.dll", "Bpmn.Semantics.dll", "Bpmn.Interchange.dll" }.Select(name => {
+            var path = Path.Combine(directory, name);
+            using var stream = File.OpenRead(path);
+            return new { Name = name, ProductVersion = System.Diagnostics.FileVersionInfo.GetVersionInfo(path).ProductVersion,
+                Sha256 = Convert.ToHexStringLower(SHA256.HashData(stream)) };
+        }).ToArray();
+        Console.WriteLine(JsonSerializer.Serialize(new { SourceCommit = hostProductCommit, MetadataOnly = true,
+            ActualProductVersions = products, ReleasedLibraryProducts = libraries }, json));
+        return 0;
+    }
     if (args.Length == 6 && args[0] == "--inspect-compensation")
     {
         await VerifySnapshotAsync(args[1], args[2]);
