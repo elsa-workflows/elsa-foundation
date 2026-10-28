@@ -22,6 +22,7 @@ public sealed class RuntimeChildControlNotification
     }
 
     public string Code { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
     public JsonElement? Payload { get; }
 }
 
@@ -213,7 +214,7 @@ internal sealed class RuntimeChildControlBatchJsonConverter : JsonConverter<Runt
     private sealed record WireBatch(int Version, string ConsumerKey, int ConsumerVersion,
         string ChildWorkflowExecutionId, string RootActivityExecutionId, string SourceWorkItemId,
         long? Ordinal, bool? IsTerminal, IReadOnlyList<RuntimeChildControlNotification>? Notifications,
-        string? AuthoredFailureCode);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? AuthoredFailureCode);
 }
 
 internal static class RuntimeChildControlValidation
