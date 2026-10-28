@@ -1,0 +1,9 @@
+{
+  "definitionId": "14iBsLEuiJS",
+  "artifactId": "artifact-cfadffc29096",
+  "artifactHash": "sha256:cfadffc290962fdc6a6bbc4e070f867c305028a6343178957c5a5dd77e685dd5",
+  "workflowExecutionId": "14iBw6oMURH",
+  "runKind": "PublishedRun",
+  "backendBuildSourceCommit": "cb1ebc606d72ede03d0f9915b3c13d69d5b00fc1",
+  "studioBuildSourceCommit": "3815806acb51475903f3ee3b44cf263ac572db26"
+}

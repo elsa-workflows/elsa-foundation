@@ -1,0 +1,21 @@
+{
+  "actualProductVersions": [
+    {
+      "productVersion": "1.0.0+cb1ebc606d72ede03d0f9915b3c13d69d5b00fc1",
+      "sha256": "da95b4c2a743bb7643908ef9ff8e8ad76ceca6357ffeee7ccff5e22330f62de3",
+      "name": "Elsa.Workbench.dll"
+    },
+    {
+      "productVersion": "1.0.0+cb1ebc606d72ede03d0f9915b3c13d69d5b00fc1",
+      "sha256": "2cd0aed637a38f1d3ed1ca1508eca7ef00630732e4169998f9c8d975f79d9f9d",
+      "name": "Elsa.Activities.Bpmn.dll"
+    },
+    {
+      "productVersion": "1.0.0+cb1ebc606d72ede03d0f9915b3c13d69d5b00fc1",
+      "sha256": "dd499bc06ffae198f5a01cf0b9dfa0e033a923e2716f45381171019dc786b1b8",
+      "name": "Elsa.Activities.Bpmn.Interchange.dll"
+    }
+  ],
+  "metadataOnly": true,
+  "sourceCommit": "cb1ebc606d72ede03d0f9915b3c13d69d5b00fc1"
+}
