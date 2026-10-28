@@ -40,7 +40,7 @@
     "e2e-tests/bpmn/verify_published_contracts.py": "27dd5b278c2abcd1382a067299c406e03215ede5a301241e92ab7ed2864be0c7",
     "specs/1006-bpmn-library-adoption/contracts/called-workflow-control.md": "50cb5b187a1298643849d23e82f98c116c05c1f51e044488b998b2a72e44d3cb",
     "specs/1006-bpmn-library-adoption/evidence/round2-control-wire-fix.md": "79f731acd1481e270de6deaf884159b9c5bfd63bc27ceb302ebaf03508460a9f",
-    "specs/1006-bpmn-library-adoption/evidence/round3-fixed-host-qualification.md": "ab15e4f6fef869189407d7949f47e3f0a731b470945cdd06b1b21334c3f21854",
+    "specs/1006-bpmn-library-adoption/evidence/round3-fixed-host-qualification.md": "f172e98579fbc811c4bcb14f1ae447f85e4186ac4b9ecbfa47ce9302e30f17f7",
     "specs/1006-bpmn-library-adoption/evidence/round3-null-writer-fix.md": "b3f92969a8a61a2f0d068d902ee2c5b02c3594d43a23b7e379d1884bd3988bd9",
     "specs/1006-bpmn-library-adoption/tasks.md": "87193f1bb24ab765f65dba93010be77995ed59857d10181c2c084be210c998ce",
     "tools/bpmn/DeliveryRecoveryRead/CalledSnapshotReader.cs": "2c8e21c0f223732112d5b28b4eab98417e6d603e1b61cb1fb14ba1e725ddd71a",
