@@ -1,8 +1,10 @@
 """Mechanical capture safeguards; these tests do not qualify workflow recovery."""
 import importlib.util
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import signal
+import shlex
 import sqlite3
 import tempfile
 from types import SimpleNamespace
@@ -16,6 +18,27 @@ spec.loader.exec_module(capture)
 
 
 class HostingCaptureTests(unittest.TestCase):
+    def test_owner_paths_allow_canonical_aliases_but_refuse_a_different_root(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            actual = root / "actual"; actual.mkdir()
+            alias = root / "alias"; alias.symlink_to(actual, target_is_directory=True)
+            assembly = actual / "host.dll"; assembly.write_bytes(b"owned-host")
+            manifest = actual / "owner.json"; manifest.write_text("{}")
+            start = "Wed Oct 28 04:41:48 2026"
+            epoch = int(datetime.strptime(start, "%a %b %d %H:%M:%S %Y").astimezone(timezone.utc).timestamp())
+            fields = {(42, "ppid"): "41", (42, "lstart"): start,
+                (42, "command"): shlex.join(["dotnet", str(alias / "host.dll"), "--contentRoot", str(alias)]),
+                (41, "command"): shlex.join(["python3", "run_owned_broadcast_probe.py", "--manifest", str(alias / "owner.json"),
+                    "--content-root", str(alias), "--base-url", "http://127.0.0.1:1"])}
+            args = SimpleNamespace(assembly=assembly.resolve(), content_root=actual.resolve(), owner_manifest=manifest.resolve(), base_url="http://127.0.0.1:1")
+            owner = {"processId": 42, "controllerProcessId": 41, "startEpochSeconds": epoch}
+            with patch.object(capture, "process_field", side_effect=lambda pid, field: fields[(pid, field)]):
+                self.assertEqual(42, capture.verify_owned(args, owner)["processId"])
+                args.content_root = root
+                with self.assertRaisesRegex(ValueError, "content root differs"):
+                    capture.verify_owned(args, owner)
+
     def test_snapshot_includes_committed_wal_and_excludes_uncommitted_work(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -66,6 +66,10 @@ def process_field(pid: int, field: str) -> str:
         env={**os.environ, "LC_ALL": "C"}, timeout=5).strip()
 
 
+def has_path(arguments: list[str], expected: Path) -> bool:
+    return any(Path(value).is_absolute() and Path(value).resolve() == expected.resolve() for value in arguments)
+
+
 def verify_owned(args, owner: dict) -> dict:
     pid = int(owner["processId"])
     controller = int(owner["controllerProcessId"])
@@ -78,14 +82,13 @@ def verify_owned(args, owner: dict) -> dict:
     if epoch != int(owner["startEpochSeconds"]):
         raise ValueError("The host PID was reused or its start identity changed.")
     command = shlex.split(process_field(pid, "command"))
-    if str(args.assembly) not in command or str(args.content_root) not in command:
+    if not has_path(command, args.assembly) or not has_path(command, args.content_root):
         raise ValueError("The actual host executable/content root differs from the owned manifest.")
     parent = shlex.split(process_field(controller, "command"))
     if not any(Path(part).name == "run_owned_broadcast_probe.py" for part in parent):
         raise ValueError("The parent is not the supported explicit owned-host controller.")
-    for value in (str(args.owner_manifest), str(args.content_root), args.base_url):
-        if value not in parent:
-            raise ValueError("The controller configuration differs from this capture request.")
+    if not has_path(parent, args.owner_manifest) or not has_path(parent, args.content_root) or args.base_url not in parent:
+        raise ValueError("The controller configuration differs from this capture request.")
     return {"processId": pid, "controllerProcessId": controller, "startEpochSeconds": epoch,
             "assemblyName": args.assembly.name, "assemblySha256": digest(args.assembly)}
 
