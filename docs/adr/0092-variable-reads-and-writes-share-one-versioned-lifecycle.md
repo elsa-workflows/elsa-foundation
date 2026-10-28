@@ -5,8 +5,8 @@ Status: proposed (2026-10-28). Joey Barten (@j03y-nxxbz) drafted it from analysi
 (@sfmskywalker) and Frans van Ek (@FransVanEk). It completes Sipke's stale read-modify-write proposal (ADR 0090 §7
 and his decision record R4, 25 October), rather than replacing it.
 
-Part of epic #3052. Implementing it needs an active program whose scope covers runtime value flow
-([program-goal registry](../program-goals/README.md#registry)). If accepted, it amends
+Part of epic #3052, which plans its implementation through its own specs (S-10), not through a program goal. If
+accepted, it amends
 [ADR 0045](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md) §3 and §4,
 [ADR 0048](0048-container-output-captures-resolve-through-producer-visible-variable-frames.md) §4, and the proposed
 [ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) §2, §6 and §7. It keeps
