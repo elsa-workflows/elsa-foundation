@@ -2,9 +2,11 @@
 import importlib.util
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import signal
 import shlex
+import shutil
 import sqlite3
 import tempfile
 from types import SimpleNamespace
@@ -113,6 +115,56 @@ class HostingCaptureTests(unittest.TestCase):
         for base in ("https://example.com", "http://127.0.0.1@elsewhere:53186", "http://admin:secret@127.0.0.1:53186", "http://127.0.0.1:53186?redirect=elsewhere"):
             with self.subTest(base=base), self.assertRaises(ValueError):
                 capture.Api(base)
+
+
+@unittest.skipUnless(os.environ.get("ELSA_BPMN_CAPTURE_MANIFEST"), "Actual captured bundle must be supplied explicitly")
+class ActualCaptureControls(unittest.TestCase):
+    def setUp(self):
+        self.original = Path(os.environ["ELSA_BPMN_CAPTURE_MANIFEST"]).resolve(strict=True)
+        capture.verify_capture(self.original)
+        self.before = capture.digest(self.original)
+        self.directory = tempfile.TemporaryDirectory()
+        self.bundle = Path(self.directory.name) / "capture"
+        shutil.copytree(self.original.parent, self.bundle)
+        self.path = self.bundle / self.original.name
+        self.manifest = json.loads(self.path.read_text())
+
+    def tearDown(self):
+        self.assertEqual(self.before, capture.digest(self.original))
+        capture.verify_capture(self.original)
+        self.directory.cleanup()
+
+    def test_changed_actual_database_is_refused(self):
+        database = self.bundle / "runtime.sqlite"
+        with database.open("r+b") as stream:
+            stream.seek(100); byte = stream.read(1); stream.seek(100); stream.write(bytes([byte[0] ^ 1]))
+        with self.assertRaisesRegex(ValueError, "retained hash"):
+            capture.verify_capture(self.path)
+
+    def test_wrong_case_execution_is_refused_even_after_rehashing_the_receipt(self):
+        receipt = self.bundle / self.manifest["caseReceipt"]
+        cases = json.loads(receipt.read_text())
+        cases[0]["workflowExecutionId"] = "different-execution"
+        capture.write_json(receipt, cases)
+        next(a for a in self.manifest["assets"] if a["path"] == receipt.name)["sha256"] = capture.digest(receipt)
+        capture.write_json(self.path, self.manifest)
+        with self.assertRaisesRegex(ValueError, "execution, immutable pin or persistence mode"):
+            capture.verify_capture(self.path)
+
+    def test_unbound_actual_database_cannot_be_omitted_from_the_manifest(self):
+        self.manifest["assets"] = [a for a in self.manifest["assets"] if a["path"] != "runtime.sqlite"]
+        capture.write_json(self.path, self.manifest)
+        with self.assertRaisesRegex(ValueError, "required hashed asset"):
+            capture.verify_capture(self.path)
+
+    def test_frozen_receipt_from_another_snapshot_is_refused_after_rehashing(self):
+        receipt = self.bundle / self.manifest["frozenContractReceipt"]
+        frozen = json.loads(receipt.read_text()); frozen["closedSnapshotSha256"] = "0" * 64
+        capture.write_json(receipt, frozen)
+        next(a for a in self.manifest["assets"] if a["path"] == receipt.name)["sha256"] = capture.digest(receipt)
+        capture.write_json(self.path, self.manifest)
+        with self.assertRaisesRegex(ValueError, "frozen authoring verification"):
+            capture.verify_capture(self.path)
 
 
 if __name__ == "__main__":
