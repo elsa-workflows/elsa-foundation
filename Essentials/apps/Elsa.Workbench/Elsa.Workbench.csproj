@@ -5,6 +5,11 @@
 		<IsPackable>false</IsPackable>
 	</PropertyGroup>
 
+	<!-- Finite host-recovery fault cuts. Standard builds contain no probe feature or control-file ports. -->
+	<ItemGroup Condition="'$(ElsaBpmnRecoveryProbe)' == 'true'">
+		<Compile Include="../../../e2e-tests/bpmn/RecoveryProbe/BpmnRecoveryProbeFeature.cs" Link="RecoveryProbe/BpmnRecoveryProbeFeature.cs" />
+	</ItemGroup>
+
 	<ItemGroup>
 		<PackageReference Include="CShells.Management.Api" />
 		<PackageReference Include="CShells.Nuplane" />

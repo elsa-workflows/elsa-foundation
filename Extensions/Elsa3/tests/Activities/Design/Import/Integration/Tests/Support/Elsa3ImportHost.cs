@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Cluster.Readability;
 using CShells;
 using CShells.AspNetCore.Extensions;
 using CShells.DependencyInjection;
@@ -192,6 +193,8 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
             builder.Services.AddSingleton<IDistributedLockProvider, ProcessLockProvider>();
             // An instance, not a type: a shell copies the host's registrations, and the tests read the one its seam uses.
             builder.Services.AddSingleton(new PublishRefusals());
+            // Same host-wide fleet/observed schema boundary as Workbench; the publisher must not infer finalization.
+            builder.Services.AddEfSchemaReadability();
             builder.Services.AddFoundationIdentityAbstractions(options =>
                 options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal) { AuthenticationScheme });
             builder.Services.AddAuthentication(AuthenticationScheme).AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(AuthenticationScheme, _ => { });

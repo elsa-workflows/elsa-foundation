@@ -145,6 +145,23 @@ public sealed class RuntimeCoalescingSession
     /// </summary>
     public bool IsActive { get; private set; } = true;
 
+    internal string? PreparedQuiescenceFlushCommitId { get; private set; }
+
+    internal void PrepareQuiescenceFlush(string commitId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commitId);
+        if (PreparedQuiescenceFlushCommitId is { } prepared && prepared != commitId)
+            throw new InvalidOperationException("Resolve the prepared quiescence flush before preparing another.");
+        PreparedQuiescenceFlushCommitId = commitId;
+    }
+
+    internal void EnsurePreparedFlushAllows(RuntimeCheckpointCommit commit)
+    {
+        if (!AppliesTo(commit.WorkflowExecutionId) || PreparedQuiescenceFlushCommitId is not { } prepared) return;
+        if (commit.CommitId != prepared || !commit.Checkpoint.Metadata.ContainsKey(RuntimeCoalescingMetadataKeys.CoalescedFlush))
+            throw new InvalidOperationException("Resolve or abort the prepared quiescence flush before another checkpoint decision.");
+    }
+
     /// <summary>How many distinct activity executions the current segment's buffered checkpoints touched.</summary>
     public int ActivityCount => _segmentActivityIds.Count;
     public bool HasBufferedChanges => _bufferedChangeSets.Count > 0;
@@ -152,6 +169,7 @@ public sealed class RuntimeCoalescingSession
     public void Deactivate()
     {
         IsActive = false;
+        PreparedQuiescenceFlushCommitId = null;
         DisableDurableValuePageReuse();
     }
 
@@ -638,14 +656,18 @@ public sealed class RuntimeCoalescingSession
         return _outboxItems.TryGetValue(outboxItemId, out item);
     }
 
-    public IReadOnlyCollection<RuntimePostCommitOutboxClaim> ClaimOutbox(RuntimePostCommitOutboxClaimRequest request)
+    public IReadOnlyCollection<RuntimePostCommitOutboxClaim> ClaimOutbox(RuntimePostCommitOutboxClaimRequest request) =>
+        ClaimOutbox(request, _ => true);
+
+    internal IReadOnlyCollection<RuntimePostCommitOutboxClaim> ClaimOutbox(RuntimePostCommitOutboxClaimRequest request,
+        Func<RuntimePostCommitOutboxItem, bool> admitsOverlay)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         // Same stable causal ordering as GetDeliverableOutbox: same-tick items claim in recording order.
         var claimable = _outboxOrder
             .Select(id => _outboxItems[id])
-            .Where(item => RuntimePostCommitOutboxClaimTransitions.CanClaim(item, request))
+            .Where(item => admitsOverlay(item) && RuntimePostCommitOutboxClaimTransitions.CanClaim(item, request))
             .OrderBy(item => item.AvailableAt ?? DateTimeOffset.MinValue)
             .ThenBy(item => item.RecordedAt)
             .Take(request.Limit)
@@ -706,7 +728,11 @@ public sealed class RuntimeCoalescingSession
             deliveredAt: status == RuntimePostCommitOutboxStatus.Delivered ? result.RecordedAt : null,
             lastFailureMessage: result.FailureMessage,
             metadata: existing.Metadata,
-            deliveryFencingToken: existing.DeliveryFencingToken);
+            deliveryFencingToken: existing.DeliveryFencingToken,
+                deliveryVisibleAfter: null,
+                stimulusDeliveryProtocolVersion: existing.StimulusDeliveryProtocolVersion,
+                stimulusDeliverySourceScope: existing.StimulusDeliverySourceScope,
+                recipientSnapshot: existing.RecipientSnapshot);
     }
 
     public void RecordOutboxDelivery(RuntimePostCommitOutboxClaim claim, RuntimePostCommitOutboxDeliveryResult result)
@@ -857,6 +883,15 @@ public sealed class RuntimeCoalescingSession
     {
         var result = await _overlayQueue.CompleteClaimAsync(claim, cancellationToken);
         _overlayClaims.TryRemove(claim, out _);
+        if (result.Succeeded && !IsActive && _durableWorkItemIds.Contains(claim.Item.WorkItemId))
+        {
+            // The final decision already passed the execution fence. A retaining boundary may have ended
+            // coalescing before that decision, so no later active flush will acknowledge this durable copy.
+            // As in AdvanceInnerQueueAsync, clean only its exact accepted identity, never a sibling/head.
+            await _innerQueue.DeleteAsync(WorkflowExecutionId, claim.Item.WorkItemId, cancellationToken);
+            _durableWorkItemIds.Remove(claim.Item.WorkItemId);
+            _durablyConsumedWorkItemIds.Add(claim.Item.WorkItemId);
+        }
         return result;
     }
 
@@ -865,14 +900,14 @@ public sealed class RuntimeCoalescingSession
         DateTimeOffset visibleAt,
         CancellationToken cancellationToken)
     {
-        if (SupportsDeferredOverlayRelease && claim.Item.CommandKind == WorkflowExecutionCommandKind.ResumeBookmark &&
+        if (SupportsDeferredOverlayRelease && RuntimeUnavailableWork.SupportsDelayedRelease(claim.Item.CommandKind) &&
             _durablyConsumedWorkItemIds.Contains(claim.Item.WorkItemId))
             return RuntimeSchedulerWorkClaimTransitionResult.Stale;
 
         var result = await _overlayQueue.ReleaseClaimAsync(claim, visibleAt, cancellationToken);
         var owned = _overlayClaims.TryRemove(claim, out var visibilityTimeout);
         if (result.Succeeded && owned && SupportsDeferredOverlayRelease &&
-            claim.Item.CommandKind == WorkflowExecutionCommandKind.ResumeBookmark)
+            RuntimeUnavailableWork.SupportsDelayedRelease(claim.Item.CommandKind))
         {
             _pendingReleases[claim.Item.WorkItemId] = new PendingRelease(claim, visibleAt, visibilityTimeout);
             // A handler can cross a durable boundary before reporting unavailable. If it deactivated the overlay,

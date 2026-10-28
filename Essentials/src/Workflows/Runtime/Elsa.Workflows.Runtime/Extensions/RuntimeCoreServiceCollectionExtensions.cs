@@ -138,7 +138,14 @@ public static class RuntimeCoreServiceCollectionExtensions
         // tracer (which itself stays free until a listener attaches).
         services.TryAddSingleton<IWorkflowEngineTracer>(NullWorkflowEngineTracer.Instance);
 
-        services.TryAddSingleton<IWorkflowExecutableStore, InMemoryWorkflowExecutableStore>();
+        // Own the three default native stores together. Factories never resolve a host's selected scoped
+        // replacements into a singleton. Exact selected-store capability still rejects mixed compositions.
+        var nativeArtifacts = ServiceDescriptor.Singleton<InMemoryRuntimeArtifactStores, InMemoryRuntimeArtifactStores>();
+        if (RuntimeArtifactStoreBackend.Find(services)?.Name != RuntimeArtifactStoreBackend.EntityFramework)
+            services.TryAdd(nativeArtifacts);
+        var defaultWorkflowExecutableStore = ServiceDescriptor.Singleton<IWorkflowExecutableStore>(provider =>
+            provider.GetRequiredService<InMemoryRuntimeArtifactStores>().Executables);
+        services.TryAdd(defaultWorkflowExecutableStore);
         services.AddWorkflowActivationDefaults();
         services.TryAddScoped<IWorkflowExecutableHasher, WorkflowExecutableHasher>();
         // Burst-scoped reconstructible cache. The accessor is a singleton AsyncLocal (like
@@ -152,23 +159,28 @@ public static class RuntimeCoreServiceCollectionExtensions
         // import admission. Hosts compose the serialization/type-registry feature alongside Runtime.
         services.TryAddScoped<IRuntimeRequirementChecker, RuntimeRequirementChecker>();
         services.TryAddSingleton<IWorkflowArtifactClosureSerializer, WorkflowArtifactClosureSerializer>();
-        services.TryAddSingleton<IExecutableActivityTemplateStore, InMemoryExecutableActivityTemplateStore>();
+        var defaultActivityTemplateStore = ServiceDescriptor.Singleton<IExecutableActivityTemplateStore>(provider =>
+            provider.GetRequiredService<InMemoryRuntimeArtifactStores>().Templates);
+        services.TryAdd(defaultActivityTemplateStore);
         var defaultActivityTemplateReader = ServiceDescriptor.Scoped<IExecutableActivityTemplateReader>(serviceProvider =>
             serviceProvider.GetRequiredService<IExecutableActivityTemplateStore>());
         services.TryAdd(defaultActivityTemplateReader);
-        services.TryAddSingleton<IWorkflowExecutableSourceReferenceStore, InMemoryWorkflowExecutableSourceReferenceStore>();
+        var defaultSourceReferenceStore = ServiceDescriptor.Singleton<IWorkflowExecutableSourceReferenceStore>(provider =>
+            provider.GetRequiredService<InMemoryRuntimeArtifactStores>().References);
+        services.TryAdd(defaultSourceReferenceStore);
         var defaultSourceReferenceReader = ServiceDescriptor.Scoped<IWorkflowExecutableSourceReferenceReader>(serviceProvider =>
             serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>());
         services.TryAdd(defaultSourceReferenceReader);
         if (RuntimeArtifactStoreBackend.Find(services) is null)
         {
             var defaultArtifactDescriptors = services.Where(descriptor =>
-                descriptor.ServiceType == typeof(IWorkflowExecutableStore) && descriptor.ImplementationType == typeof(InMemoryWorkflowExecutableStore) ||
-                descriptor.ServiceType == typeof(IExecutableActivityTemplateStore) && descriptor.ImplementationType == typeof(InMemoryExecutableActivityTemplateStore) ||
-                descriptor.ServiceType == typeof(IWorkflowExecutableSourceReferenceStore) && descriptor.ImplementationType == typeof(InMemoryWorkflowExecutableSourceReferenceStore) ||
+                ReferenceEquals(descriptor, nativeArtifacts) ||
+                ReferenceEquals(descriptor, defaultWorkflowExecutableStore) ||
+                ReferenceEquals(descriptor, defaultActivityTemplateStore) ||
+                ReferenceEquals(descriptor, defaultSourceReferenceStore) ||
                 ReferenceEquals(descriptor, defaultActivityTemplateReader) ||
                 ReferenceEquals(descriptor, defaultSourceReferenceReader)).ToArray();
-            if (defaultArtifactDescriptors.Length == 5)
+            if (defaultArtifactDescriptors.Length == 6)
                 RuntimeArtifactStoreBackend.Register(services, new RuntimeArtifactStoreBackend(RuntimeArtifactStoreBackend.InMemory, defaultArtifactDescriptors));
         }
         services.AddOptions<ActivityExecutionHierarchyCursorOptions>();
@@ -201,7 +213,8 @@ public static class RuntimeCoreServiceCollectionExtensions
             ServiceDescriptor.Singleton<IBookmarkStateStore, InMemoryBookmarkStateStore>());
         services.TryAddScoped<IBookmarkStimulusLookup, BookmarkStimulusLookup>();
         services.TryAddSingleton<IBookmarkResumeResolver, BookmarkResumeResolver>();
-        services.TryAddScoped<IBookmarkResumeDispatcher, BookmarkResumeDispatcher>();
+        services.TryAddScoped<StimulusDeliveryServices>();
+        services.TryAddScoped<IBookmarkResumeDispatcher>(BookmarkResumeDispatcher.Create);
         services.TryAddScoped<IBookmarkConsumptionCheckpointService, BookmarkConsumptionCheckpointService>();
         // Fan-in notifier over IBookmarkLifecycleObserver contributions. Singleton is safe because the
         // observers themselves register as singletons that open their own scopes (mirroring RouteTableTriggerIndexObserver).
@@ -279,11 +292,14 @@ public static class RuntimeCoreServiceCollectionExtensions
             serviceProvider.GetRequiredService<IWorkflowDispatchStore>() as IWorkflowDispatchCancellationStore ??
             throw new InvalidOperationException("The configured workflow dispatch store does not provide atomic parent cancellation resolution."));
         services.TryAddScoped(serviceProvider => ActivatorUtilities.CreateInstance<InMemoryRuntimeCheckpointCommitStore>(
-            serviceProvider, serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>()));
+            serviceProvider, serviceProvider.GetRequiredService<IWorkflowExecutableStore>(),
+            serviceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>(), serviceProvider.GetRequiredService<IWorkflowExecutionStateStore>(),
+            ResolveUnderlyingStore<IActivityExecutionStateStore>(serviceProvider, typeof(CoalescingActivityExecutionStateStore))));
         services.TryAddScoped<IRuntimeCheckpointCommitStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddScoped<IRuntimePostCommitOutboxStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddScoped<IPostCommitOutboxLookupStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddScoped<IRuntimePostCommitOutboxClaimStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
+        services.TryAddScoped<IStimulusDeliveryStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddScoped<IRuntimePostCommitOutboxClaimCompletionStore>(serviceProvider => serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>());
         services.TryAddScoped<IWorkflowDispatchRedriveStore, ScopedWorkflowDispatchRedriveStore>();
         services.TryAddScoped<IRuntimePostCommitOutboxProcessor>(serviceProvider =>
@@ -296,7 +312,9 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetServices<IPostCommitFailureProjector>(),
                 serviceProvider.GetService<ILogger<RuntimePostCommitOutboxProcessor>>(),
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
-                serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>()));
+                serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>(),
+                serviceProvider.GetService<IPersistenceAccessContextAccessor>(),
+                serviceProvider.GetServices<RuntimePostCommitIntentHandlerContribution>()));
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
         services.TryAddSingleton<RuntimeSchedulerWorkClaimOptions>();
         services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
@@ -445,7 +463,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IRuntimeConsumedSchedulerWorkClaimAccessor>(),
                 serviceProvider.GetService<IRuntimeCoalescingSessionAccessor>(),
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
-                serviceProvider.GetService<RuntimeInProcessHopFastPathOptions>()));
+                serviceProvider.GetService<RuntimeInProcessHopFastPathOptions>(),
+                serviceProvider.GetService<IPersistenceAccessContextAccessor>()));
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, WorkflowDispatchCheckpointEnricher>());
         services.TryAddSingleton<IRuntimePayloadCapturePolicy, DefaultRuntimePayloadCapturePolicy>();
         services.TryAddSingleton<IWorkflowExecutableInputValidator, WorkflowExecutableInputValidator>();
@@ -510,7 +529,9 @@ public static class RuntimeCoreServiceCollectionExtensions
                 policies[0],
                 serviceProvider.GetService<IWorkflowDispatchStore>(),
                 serviceProvider.GetService<IWorkflowExecutionStateStore>(),
-                serviceProvider.GetRequiredService<IRuntimePersistenceModeResolver>());
+                serviceProvider.GetRequiredService<IRuntimePersistenceModeResolver>(),
+                serviceProvider.GetService<IStimulusDeliveryStore>(),
+                serviceProvider.GetServices<IStimulusDeliveryIntentAdapter>());
         });
         services.TryAddScoped<IWorkflowDispatchRetentionCollector, WorkflowDispatchRetentionCollector>();
         services.TryAddSingleton<WorkflowDispatchRetentionCursor>();
@@ -524,7 +545,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         // configure the policy and schedule the collector through the separate sweeper feature.
         services.AddOptions<WorkflowExecutableGarbageCollectionOptions>();
         services.TryAddScoped<IWorkflowExecutableRootWriteLeaseManager, WorkflowExecutableRootWriteLeaseManager>();
-        services.TryAddScoped<IWorkflowExecutableReferenceGarbageCollector, WorkflowExecutableReferenceGarbageCollector>();
+        // Cohort maintenance is selected only for the actual provider tuple. Publisher rollout still
+        // separately requires protocol/old-writer preflight; a GC capability is not that authorization.
+        services.TryAddScoped<IWorkflowExecutableReferenceGarbageCollector>(WorkflowExecutableReferenceGarbageCollector.Create);
 
         if (!hadExplicitActivityExecutionContracts && RuntimeActivityExecutionStoreBackend.Find(services) is null)
         {

@@ -36,7 +36,7 @@ public sealed class BackgroundActivityWorkLifecycleTests
         var admission = Commit("admit") with { ExpectedFence = owner.ToFence() };
         await checkpoint.CommitAsync(admission with
         {
-            StateChanges = admission.StateChanges.WithBackgroundActivityWork(new BackgroundActivityWorkCheckpointChanges(admissions: [request]))
+            StateChanges = admission.StateChanges.WithBackgroundActivityWork(new BackgroundActivityWorkCheckpointChanges(admissions: [request])).WithActivityExecutions(admission.StateChanges.ActivityExecutions)
         }, Immediate);
 
         Assert.Equal(BackgroundActivityWorkStatus.Pending, (await workerA.FindAsync("workflow-a", request.WorkId))!.Status);

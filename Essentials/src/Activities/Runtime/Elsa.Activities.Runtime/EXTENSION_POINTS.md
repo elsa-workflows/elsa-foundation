@@ -142,3 +142,24 @@ These consumers do not yet implement the combined callback.
 
 - Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.22.1; Elsa §E2.2 (no Runtime → Design dependency).
+
+### `ActivityResumeValidating` *(Core — `Elsa.Workflows.Runtime.Core`, #2735)*
+
+- **Kind:** Named validation event, published inline with Sequential delivery before bookmark trigger claim or CLR activation, including retry of an existing claim.
+- **Register:** `AddEventHandler<ActivityResumeValidating, THandler>()`; scoped handlers run in registration order. Zero handlers preserves the ordinary path. Configured handlers require `IInlineEventPublisher`; missing event infrastructure fails closed. A handler skips activity families it does not own and validates without changing execution or delivery state.
+- **Failure:** Conflicting data refuses. Temporary source unavailability throws `RuntimeSchedulerWorkUnavailableException` before the bookmark is consumed; the claim/fence stays governed by the existing scheduler. This gate is outside the activity callback fault conversion, so an infrastructure read does not become an authored activity fault.
+
+### `IRuntimeActivityChildControlConsumer` *(Core — `Elsa.Workflows.Runtime.Core`, #2735)*
+
+- **Kind:** Explicit structural callback capability, declared by the pinned consumer contract; no default interpretation.
+- **Usage:** `OnChildControlAsync(RuntimeChildControlContext)` receives one contiguous exact-call prefix after immutable source authorization. Nonterminal command `DeliverChildControl=20` uses the frozen `WorkflowChildControlSchedulerWorkHandler` name. Terminal delivery enters through ordinary completed-child evaluation, including an empty terminal barrier. Future ordinals buffer without activation; consumed or identical pending duplicates acknowledge without repeating the callback. Conflicts refuse.
+- **Atomicity:** The calling child's inbox and processed terminal-child receipt commit with the consumer's returned state and owed schedules/cancellations on Defer, Complete, intentional Fault and Cancel. Cancellation of the same call merges its cursor into the cancelled projection. Unexpected callback failure does not consume the prefix. `ActivityScopeCleanup` removes invocation-owned resources, preserving invocation projections and their inboxes. Whole-run deletion uses provider-atomic dependency refusal and sticky caller retirement proof; its finite controls are in [T043 evidence](../../../../../specs/1006-bpmn-library-adoption/evidence/control-inbox.md). Fresh-provider gap recovery remains a separate T045 gate.
+
+### Activation claims and unavailable control dependencies (#2735)
+
+Normal invocation and structural callback activation claims retain their scheduler source until the
+final decision commits. A temporary control-source failure can retry before an accepted decision;
+activation claims do not promise that callback code executes only once across such retries. The
+existing consumed markers and fenced final commit prevent repeating accepted effects. Background
+admission retains its separate atomic claim/publication path. Clean activation disposal preserves
+the typed unavailable signal; disposal failure follows the ordinary fault path with both causes.

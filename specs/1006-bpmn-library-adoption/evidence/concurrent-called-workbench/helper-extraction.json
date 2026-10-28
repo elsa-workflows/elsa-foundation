@@ -1,0 +1,11 @@
+{
+  "sourceParentCommit": "f0411e2fedb80eba38f3bee9451e16ef7d6992c0",
+  "originalRunnerSha256": "9084d3bd55e0841745cb29815882fb20f80e9db23bfbfe97871ac88e01fb52f5",
+  "copiedHelperBlockSha256": "c78cdbe9bc0894cd5d0773a97d22afced8ba33a61f7897cb4f14f79ddbd21a71",
+  "sharedHelperSha256": "9f13b5cbcb2a6a41ea0a97722428f793bc2888412ceef6a992fb86dcde8e27a5",
+  "updatedRunnerSha256": "353494c9a929b48950ce5df489b9278da40e71697c8c39bb829bdcf376656324",
+  "onlyRunnerChangeIsDotSourceRouting": true,
+  "sameScriptDirectorySemantics": true,
+  "exactHelperFunctionBodiesCopied": true,
+  "onlyTrailingSeparatorBlankLineRemoved": true
+}

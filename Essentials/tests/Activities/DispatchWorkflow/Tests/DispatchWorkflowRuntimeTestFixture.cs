@@ -6,6 +6,7 @@ using Elsa.Activities.DispatchWorkflow.Runtime.Models;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core;
+using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
@@ -17,6 +18,7 @@ using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Attributes;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
@@ -64,7 +66,12 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         int maxNestingDepth = DispatchWorkflowOptions.DefaultMaxNestingDepth,
         bool failDispatchCommit = false,
         Action<PersistenceModeOptions>? persistenceModes = null,
-        bool replaySafeChild = false)
+        bool replaySafeChild = false,
+        bool authoredFaultChild = false,
+        bool authoredNotificationChild = false,
+        bool terminalAfterNotification = false,
+        bool ordinaryFaultAfterNotification = false,
+        Action<IServiceCollection>? configureServices = null)
     {
         var services = new ServiceCollection();
         var timeProvider = new FakeTimeProvider(Now);
@@ -77,6 +84,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         services.AddSingleton<IWellKnownTypeRegistry>(typeRegistry);
         services.AddSingleton<RecordingDispatchBookmarkObserver>();
         services.AddSingleton<IBookmarkLifecycleObserver>(serviceProvider => serviceProvider.GetRequiredService<RecordingDispatchBookmarkObserver>());
+        new Elsa.Events.EventsFeature().ConfigureServices(services);
         new SerializationFeature().ConfigureServices(services);
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
         new ActivitiesRuntimeFeature().ConfigureServices(services);
@@ -96,12 +104,16 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 serviceProvider.GetRequiredService<CheckpointRecorder>(),
                 failDispatchCommit)));
         services.AddPersistenceModes(persistenceModes ?? (options => options.Mode = PersistenceMode.Durable));
+        configureServices?.Invoke(services);
 
         RegisterActivityTypes(typeRegistry);
         var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         var fixture = new DispatchWorkflowRuntimeTestFixture(
             provider,
             timeProvider,
+            authoredNotificationChild ? ordinaryFaultAfterNotification ? typeof(NotificationThenFaultRootProbeActivity) :
+                terminalAfterNotification ? typeof(NotificationThenCompleteRootProbeActivity) : typeof(NotificationRootProbeActivity) :
+            authoredFaultChild ? typeof(AuthoredFaultChildProbeActivity) :
             replaySafeChild ? typeof(ReplaySafeChildProbeActivity) : typeof(ChildProbeActivity));
         await fixture.SeedChildAsync();
         return fixture;
@@ -119,7 +131,9 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         bool waitForCompletion = false,
         bool? cancelChildOnParentCancellation = null,
         WorkflowRunKind runKind = WorkflowRunKind.BackgroundWeaverRun,
-        WorkflowTestScope? testScope = null)
+        WorkflowTestScope? testScope = null,
+        int? controlConsumerVersion = null,
+        string controlResponse = "auto")
     {
         var parentExecutable = NewParentExecutable(
             caseId,
@@ -127,7 +141,9 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             dispatchInputs,
             parentDefinitionId,
             waitForCompletion,
-            cancelChildOnParentCancellation);
+            cancelChildOnParentCancellation,
+            controlConsumerVersion,
+            controlResponse);
         var parentReference = NewSourceReference(
             sourceReferenceId: $"source-parent-{caseId}",
             identity: parentExecutable.Identity,
@@ -172,8 +188,9 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 dispatchNestingDepth: dispatchNestingDepth,
                 testScope: testScope));
 
-        var activityState = AssertSingle(await _provider.GetRequiredService<IActivityExecutionStateStore>()
-            .ListAllAsync(parentWorkflowExecutionId));
+        var parentActivities = await _provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(parentWorkflowExecutionId);
+        var activityState = AssertSingle(controlConsumerVersion is null ? parentActivities :
+            parentActivities.Where(state => state.Execution.ExecutableNodeId == "node-dispatch").ToArray());
         var identity = new WorkflowDispatchIdentity(parentWorkflowExecutionId, activityState.Execution.ActivityExecutionId);
         var dispatch = await _provider.GetRequiredService<IWorkflowDispatchStore>().FindAsync(identity.DispatchId);
         if (dispatch is null)
@@ -348,7 +365,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                         nameof(ChildProbeActivity.Defaulted),
                         typeof(string),
                         "defaulted")
-                }),
+                }, childSlots: typeof(NotificationRootProbeActivity).IsAssignableFrom(activityType ?? typeof(ChildProbeActivity))
+                    ? [new ExecutableChildSlot("Activities", [NewNode("node-notification-child", typeof(PlainChildProbeActivity))])] : null),
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: Now,
             compatibilityMetadata: new Dictionary<string, string>(),
@@ -373,7 +391,9 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         IReadOnlyDictionary<string, object?>? dispatchInputs,
         string? parentDefinitionId,
         bool waitForCompletion,
-        bool? cancelChildOnParentCancellation)
+        bool? cancelChildOnParentCancellation,
+        int? controlConsumerVersion = null,
+        string controlResponse = "auto")
     {
         dispatchInputs ??= new Dictionary<string, object?>
         {
@@ -429,6 +449,14 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             activityType: typeof(DispatchWorkflowActivity),
             inputBindings: inputs,
             metadata: metadata);
+        var root = controlConsumerVersion is null ? node : NewNode("node-control-parent", typeof(ControlParentActivity),
+            metadata: new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.ChildControlConsumerKey] = "test.control",
+                [RuntimeMetadataKeys.ChildControlConsumerVersion] = "1",
+                ["test.requestedControlVersion"] = controlConsumerVersion.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ["test.controlResponse"] = controlResponse
+            }, childSlots: [new ExecutableChildSlot("Activities", [node])]);
         return new WorkflowExecutable(
             identity: new WorkflowExecutableIdentity(
                 $"artifact-parent-{caseId}",
@@ -436,7 +464,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                 $"version-parent-{caseId}",
                 "1.0.0",
                 $"sha256:parent-{caseId}"),
-            rootActivity: node,
+            rootActivity: root,
             resumeTargets: NodeScopedResumeTargets(node),
             createdAt: Now,
             compatibilityMetadata: new Dictionary<string, string>(),
@@ -501,7 +529,8 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         string executableNodeId,
         Type activityType,
         IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null,
-        IReadOnlyDictionary<string, string>? metadata = null)
+        IReadOnlyDictionary<string, string>? metadata = null,
+        IReadOnlyCollection<ExecutableChildSlot>? childSlots = null)
     {
         var contract = ActivityContractFor(activityType);
         return new ExecutableNode(
@@ -517,6 +546,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             inputBindings: CompleteInputBindings(contract, inputBindings),
             outputCaptures: new Dictionary<string, RuntimeOutputCapture>(),
             metadata: metadata ?? new Dictionary<string, string>(),
+            childSlots: childSlots,
             activityContract: contract);
     }
 
@@ -668,6 +698,12 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             typeof(WorkflowDispatchParentResumePayload),
             typeof(DispatchWorkflowResult),
             typeof(ChildProbeActivity),
+            typeof(AuthoredFaultChildProbeActivity),
+            typeof(NotificationRootProbeActivity),
+            typeof(NotificationThenCompleteRootProbeActivity),
+            typeof(NotificationThenFaultRootProbeActivity),
+            typeof(PlainChildProbeActivity),
+            typeof(ControlParentActivity),
             typeof(ReplaySafeChildProbeActivity),
             typeof(ActivityUnit),
             typeof(JsonElement),
@@ -677,8 +713,54 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             registry.RegisterType(type, TypeAliasConvention.CanonicalAlias(type));
     }
 
-    private class ChildProbeActivity(ChildExecutionProbe probe) : Activity<ActivityUnit>
+    [ActivityChildControlConsumer("test.control", 1)]
+    private sealed class ControlParentActivity : StructuralActivity, IRuntimeStructuralActivity,
+        IRuntimeActivityChildControlConsumer, IRuntimeActivityChildCompletionHandler
     {
+        public ControlParentActivity() { }
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildControlAsync(RuntimeChildControlContext context)
+        {
+            var runtime = context.ParentContext;
+            var previous = runtime.ActivityExecutionState.PrivateState?.Value.InlineValue?.GetProperty("count").GetInt32() ?? 0;
+            var response = runtime.ExecutableNode.Metadata["test.controlResponse"];
+            if (response == "cancel-call")
+                runtime.RequestChildSubtreeCancellation(context.CallingActivityExecutionId, "test.control.interrupt");
+            var continuation = response switch
+            {
+                "fault" => RuntimeStructuralContinuation.Faulted(new ActivityFault("test.consumer.intentional", "Intentional consumer fault.")),
+                "cancel" => RuntimeStructuralContinuation.Cancel("Intentional consumer cancellation."),
+                "defer" or "cancel-call" => RuntimeStructuralContinuation.Defer,
+                _ => context.Batches[^1].Batch.IsTerminal ? RuntimeStructuralContinuation.Complete() : RuntimeStructuralContinuation.Defer
+            };
+            var value = ValueEnvelope.Inline(new ValueTypeDescriptor("Test.ControlConsumerState", schemaVersion: 1),
+                JsonSerializer.SerializeToElement(new { count = previous + 1, ordinals = context.Batches.Select(item => item.Batch.Ordinal).ToArray(),
+                    codes = context.Batches.SelectMany(item => item.Batch.Notifications).Select(item => item.Code).ToArray() }), ValueProtectionPolicy.InstanceInline);
+            return ValueTask.FromResult(continuation.WithState(value));
+        }
+
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            var metadata = new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.ChildControlConsumerKey] = "test.control",
+                [RuntimeMetadataKeys.ChildControlConsumerVersion] = context.ExecutableNode.Metadata["test.requestedControlVersion"]
+            };
+            var owner = context.ActivityExecutionState.InvocationId;
+            context.ScheduleChildActivity("node-dispatch", owner, metadata,
+                ActivitySchedulingProvenance.From(context.WorkflowExecutionId, owner, owner, null, null,
+                    null, null, "test.control", metadata));
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+    }
+
+    private class ChildProbeActivity(ChildExecutionProbe probe, IRuntimeWorkflowControlBoundary boundary, IWorkflowDispatchStore dispatches) : Activity<ActivityUnit>
+    {
+        protected IRuntimeWorkflowControlBoundary ControlBoundary => boundary;
+
         [ActivityInput]
         [Required]
         public string Message { get; set; } = null!;
@@ -693,8 +775,12 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         [ActivityInput]
         public string? Defaulted { get; set; }
 
-        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
+        protected override async ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context)
         {
+            var target = await boundary.ResolveAsync(context.WorkflowExecutionId, context.InvocationId, context.CancellationToken);
+            var dispatchStatus = target is null ? (WorkflowDispatchStatus?)null :
+                (await dispatches.FindAsync(target.DispatchId, context.CancellationToken))!.Status;
+            probe.RecordControl(context.WorkflowExecutionId, context.InvocationId, target, dispatchStatus);
             probe.Record(
                 context.WorkflowExecutionId,
                 context.InvocationId,
@@ -705,12 +791,67 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
                     ["tenant"] = Tenant,
                     ["defaulted"] = Defaulted
                 });
-            return ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+            return ActivityTransition.Complete(ActivityUnit.Value);
         }
     }
 
     [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
-    private sealed class ReplaySafeChildProbeActivity(ChildExecutionProbe probe) : ChildProbeActivity(probe);
+    private sealed class ReplaySafeChildProbeActivity(ChildExecutionProbe probe, IRuntimeWorkflowControlBoundary boundary, IWorkflowDispatchStore dispatches) : ChildProbeActivity(probe, boundary, dispatches);
+
+    private sealed class PlainChildProbeActivity : Activity<ActivityUnit>
+    {
+        public PlainChildProbeActivity() { }
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+    }
+
+    private class NotificationRootProbeActivity(ChildExecutionProbe probe, IRuntimeWorkflowControlBoundary boundary,
+        IWorkflowDispatchStore dispatches) : ChildProbeActivity(probe, boundary, dispatches), IRuntimeStructuralActivity,
+        IRuntimeActivityChildCompletionHandler
+    {
+        public async ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            var target = await ControlBoundary.ResolveAsync(context.WorkflowExecutionId, context.ActivityExecutionState.InvocationId,
+                context.CancellationToken) ?? throw new InvalidOperationException("Expected an admitted control boundary.");
+            var batch = new RuntimeChildControlBatch(1, target.ConsumerKey, target.ConsumerVersion, context.WorkflowExecutionId,
+                context.ActivityExecutionState.InvocationId, context.SchedulerWorkItem.WorkItemId, 0, false,
+                [new("first"), new("second")]);
+            context.ScheduleChildActivity("node-notification-child");
+            return RuntimeStructuralContinuation.Defer.WithControl(batch);
+        }
+
+        public virtual ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+    }
+
+    private sealed class NotificationThenCompleteRootProbeActivity(ChildExecutionProbe probe, IRuntimeWorkflowControlBoundary boundary,
+        IWorkflowDispatchStore dispatches) : NotificationRootProbeActivity(probe, boundary, dispatches)
+    {
+        public override ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+    }
+
+    private sealed class NotificationThenFaultRootProbeActivity(ChildExecutionProbe probe, IRuntimeWorkflowControlBoundary boundary,
+        IWorkflowDispatchStore dispatches) : NotificationRootProbeActivity(probe, boundary, dispatches)
+    {
+        public override ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Faulted(new ActivityFault("test.ordinary.runtime-fault", "Ordinary runtime fault.")));
+    }
+
+    private sealed class AuthoredFaultChildProbeActivity(ChildExecutionProbe probe, IRuntimeWorkflowControlBoundary boundary,
+        IWorkflowDispatchStore dispatches) : ChildProbeActivity(probe, boundary, dispatches), IRuntimeStructuralActivity
+    {
+        public async ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            var target = await ControlBoundary.ResolveAsync(context.WorkflowExecutionId, context.ActivityExecutionState.InvocationId,
+                context.CancellationToken) ?? throw new InvalidOperationException("Expected an admitted control boundary.");
+            var batch = new RuntimeChildControlBatch(1, target.ConsumerKey, target.ConsumerVersion, context.WorkflowExecutionId,
+                context.ActivityExecutionState.InvocationId, context.SchedulerWorkItem.WorkItemId, 0, true,
+                [new("before-error"), new("alongside-error")], "authored-error");
+            return RuntimeStructuralContinuation.Faulted(new ActivityFault("original-runtime-code", "Original runtime failure."))
+                .WithControl(batch);
+        }
+    }
 }
 
 internal sealed record ParentDispatchRun(
@@ -865,6 +1006,15 @@ internal sealed class ChildExecutionProbe
 {
     private readonly Lock _gate = new();
     private readonly List<ChildExecutionObservation> _observations = [];
+    private readonly List<ChildControlObservation> _controlObservations = [];
+    internal IReadOnlyCollection<ChildControlObservation> ControlObservations
+    {
+        get { lock (_gate) return _controlObservations.ToArray(); }
+    }
+    internal void RecordControl(string workflow, string root, RuntimeChildControlTarget? target, WorkflowDispatchStatus? status)
+    {
+        lock (_gate) _controlObservations.Add(new ChildControlObservation(workflow, root, target, status));
+    }
 
     internal IReadOnlyCollection<ChildExecutionObservation> Observations
     {
@@ -885,3 +1035,5 @@ internal sealed class ChildExecutionProbe
         }
     }
 }
+
+internal sealed record ChildControlObservation(string WorkflowExecutionId, string RootActivityExecutionId, RuntimeChildControlTarget? Target, WorkflowDispatchStatus? DispatchStatus);

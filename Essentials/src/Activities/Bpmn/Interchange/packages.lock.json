@@ -4,18 +4,18 @@
     "net10.0": {
       "Bpmn.Interchange": {
         "type": "Direct",
-        "requested": "[0.1.1-preview.19, )",
-        "resolved": "0.1.1-preview.19",
-        "contentHash": "wY7iGwfKBDKZ4YxZ7lA4HZgogRGobHnXgtzk8fGFHV3H3Syfjb1Yh2J55tOVqjM/kZVZ8QBJrrBdxf7u0kqFaw==",
+        "requested": "[0.5.0, )",
+        "resolved": "0.5.0",
+        "contentHash": "Gmx/OdUQ0aiqVJIpaSk6GhPkloFGRB/bSl5rEuhkglUe1FEKb3WS7q50wlltVfvUGpI6vI8JHHNvyqxENnd4kA==",
         "dependencies": {
-          "Bpmn.Model": "0.1.1-preview.19"
+          "Bpmn.Model": "0.5.0"
         }
       },
       "Bpmn.Model": {
         "type": "Direct",
-        "requested": "[0.1.1-preview.19, )",
-        "resolved": "0.1.1-preview.19",
-        "contentHash": "ci5fWsH3V2vvFf9p/zTrKZ3dw1ZtSy0YT3hUnDULuP8q0vWe6NOCQj3y4GFgoQKktWbom4MUAGcWSfZXenT+5w=="
+        "requested": "[0.5.0, )",
+        "resolved": "0.5.0",
+        "contentHash": "cNb+hULTLIwso23a5rW9zP8Zh10YjtuRwjG++u+guXEx/gFiJSI4XE5u6NUYS32i5emP0OL1O2UlqBEPh5Au4A=="
       },
       "CShells.Abstractions": {
         "type": "Direct",
@@ -56,6 +56,8 @@
       "elsa.activities.bpmn": {
         "type": "Project",
         "dependencies": {
+          "Bpmn.Model": "[0.5.0, )",
+          "Bpmn.Semantics": "[0.5.0, )",
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
@@ -163,6 +165,15 @@
           "Elsa.Expressions.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )"
+        }
+      },
+      "Bpmn.Semantics": {
+        "type": "CentralTransitive",
+        "requested": "[0.5.0, )",
+        "resolved": "0.5.0",
+        "contentHash": "t38QPPliLGS3TokIdJIfJO016DYMit4UEGAHtqv+WNA3BWRAPpbKAb8qtIo8T0ZU76PQlfGVXECJXRHk111v2w==",
+        "dependencies": {
+          "Bpmn.Model": "0.5.0"
         }
       },
       "Cronos": {

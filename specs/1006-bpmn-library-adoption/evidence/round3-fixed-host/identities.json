@@ -1,0 +1,14 @@
+{
+  "backendBuildSourceCommit": "409ee7ba331b46925cd228f3bdccd7627f4d643b",
+  "studioBuildSourceCommit": "3815806acb51475903f3ee3b44cf263ac572db26",
+  "definitionId": "14iBsLEuiJS",
+  "artifactId": "artifact-cfadffc29096",
+  "artifactHash": "sha256:cfadffc290962fdc6a6bbc4e070f867c305028a6343178957c5a5dd77e685dd5",
+  "publishedRun": "14iGKYmvX2h",
+  "inspectedRecoveredCaller": "14iG40qMjTo",
+  "inspectedCallOutcome": "Faulted",
+  "callerStatus": "Completed",
+  "callerIncidents": 0,
+  "retainedAuthoredPayloadEqualsPriorSavedPayload": true,
+  "actualExportByteIdenticalToPriorUiExport": true
+}

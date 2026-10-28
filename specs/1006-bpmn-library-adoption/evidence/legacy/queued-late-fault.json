@@ -1,0 +1,85 @@
+{
+  "scenario": "queued-late-fault",
+  "captureSourceRevision": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+  "capturePatchSha256": "1b4332b7fc97d0920ca2697dfacf172cfbe83556a697fb3916863d0ba327bf06",
+  "runtimeBaselineRevision": "fbe694d2f3d126e324c3e46578bc1a560b0217f1",
+  "modelPackage": "0.1.1-preview.19",
+  "interchangePackage": "0.1.1-preview.19",
+  "stateAlias": "Elsa.Bpmn.ExecutionState",
+  "stateVersion": 1,
+  "databaseSha256": "aae3c9fb08fd213b426ed5dede4fce3ea632d641d947b3b7f141a196354e6235",
+  "compressedSha256": "820cce74e45099f65494568799d9b009ea2ed8bc79a140a5ef4ffcf97490e879",
+  "oldHostControl": "fresh old provider ignores canceled-token fault but leaves original incident blocking, workflow Faulted and BPMN/final catch parked; known legacy incident-absorption gap",
+  "facts": {
+    "parentId": "legacy-activity-0",
+    "pendingFault": null,
+    "canceledLoser": true,
+    "queuedLoser": true,
+    "queuedBeforeCancellation": true,
+    "loserQueuedObservation": 10,
+    "firstCancellationObservation": 14,
+    "originalLoserFault": {
+      "code": "TEST-FAULT",
+      "exceptionType": "Elsa.Activities.Runtime.Core.Models.ActivityFault",
+      "message": "Branch \u0027node-loser\u0027 faulted.",
+      "sanitizedStackTrace": null,
+      "isRetryable": false,
+      "metadata": {}
+    },
+    "originalLoserIncident": {
+      "incidentId": "incident:c0a6142754f9bc68:21a0fd65402864cb:ActivityReturnedFault",
+      "workflowExecutionId": "wfexec-1",
+      "activityExecutionId": "legacy-activity-2",
+      "executableNodeId": "node-loser",
+      "severity": 2,
+      "status": 1,
+      "resolutionOutcome": null,
+      "failureType": "ActivityReturnedFault",
+      "message": "Branch \u0027node-loser\u0027 faulted.",
+      "createdAt": "2026-10-25T17:52:57.27019+00:00",
+      "resolvedAt": null,
+      "metadata": {
+        "runtime.schedulerWorkItemId": "90576540c4875c39:invoke:legacy-activity-2",
+        "runtime.commandId": "27233c7ff07e1e7c:invoke:legacy-activity-2",
+        "runtime.activityExecutionId": "legacy-activity-2",
+        "runtime.executableNodeId": "node-loser",
+        "runtime.faultSubStatus": "ActivityReturnedFault",
+        "runtime.faultType": "Elsa.Activities.Runtime.Services.ActivityTransitionFaultException",
+        "runtime.faultMessage": "Branch \u0027node-loser\u0027 faulted."
+      },
+      "isActive": true,
+      "isBlocking": true
+    },
+    "queuedFault": true,
+    "activeWork": [
+      {
+        "nodeId": "node-final",
+        "elementId": "catch-final",
+        "tokenId": "token:24",
+        "schedulingCause": "element:intermediateCatchEvent",
+        "iterationId": null
+      }
+    ],
+    "children": [
+      {
+        "invocationId": "legacy-activity-1",
+        "node": "node-winner",
+        "status": 4,
+        "iterationId": null,
+        "token": "token:7"
+      },
+      {
+        "invocationId": "legacy-activity-2",
+        "node": "node-loser",
+        "status": 5,
+        "iterationId": null,
+        "token": "token:9"
+      }
+    ],
+    "bookmarkCount": 0,
+    "queuedIds": [
+      "8535a6fe0b56198a:parent:legacy-activity-0:child:legacy-activity-1",
+      "c0a6142754f9bc68:child-fault-parent:legacy-activity-0:child:legacy-activity-2"
+    ]
+  }
+}

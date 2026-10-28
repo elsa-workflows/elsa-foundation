@@ -3,11 +3,8 @@ using System.Text.Json.Serialization;
 namespace Elsa.Activities.Bpmn.Models;
 
 /// <summary>
-/// An event definition attached to a BPMN event element. The engine interprets
-/// <see cref="BpmnEventDefinitionTypes.Terminate"/> on end events and
-/// <see cref="BpmnEventDefinitionTypes.Timer"/>/<see cref="BpmnEventDefinitionTypes.Message"/>/
-/// <see cref="BpmnEventDefinitionTypes.Signal"/> on intermediate catch events; other
-/// types are carried for later phases.
+/// An authored event definition translated to the released BPMN model. Execution requires
+/// both a supported neutral construct and its Foundation host binding.
 /// </summary>
 public sealed class BpmnEventDefinition
 {
@@ -28,9 +25,8 @@ public sealed class BpmnEventDefinition
 }
 
 /// <summary>
-/// The <see cref="BpmnEventDefinition.Properties"/> keys this engine slice reads. These establish the
-/// property-key convention an event-defined start element carries; a later interchange unit populates them from
-/// <c>messageRef</c>/<c>signalRef</c>/<c>timerEventDefinition</c>. No key existed before this slice.
+/// Foundation's retained <see cref="BpmnEventDefinition.Properties"/> conventions for
+/// event names, timer schedules and control-event matching.
 /// </summary>
 public static class BpmnEventDefinitionProperties
 {

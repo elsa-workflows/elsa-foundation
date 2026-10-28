@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "task": "T051 bounded actual empty-cohort recovery; complete/empty competing proposals and other gates remain open",
+  "sourceParentCommit": "fe7918bf590914ae748bf7400e96324af07054a0",
+  "filesSha256": {
+    "e2e-tests/README.md": "49528afd8cb0251c6273949c7d775d33f539e5332c820656ce2269cd68774865",
+    "e2e-tests/bpmn/RecoveryProbe/README.md": "52ee8d61d1da6dce237bacc9a7a0e58e616dfc66aba92f4abbd76100ec0ace3c",
+    "e2e-tests/bpmn/Test-BpmnBroadcastRecovery.ps1": "918e2ad32acaea6bc53e19343fe86bf684506c422338f409dc32d7b42737f295",
+    "tools/bpmn/DeliveryRecoveryRead/Program.cs": "a4ea6e67c7314c8fd20a201992459ce8815ebe7df7cf5712e499e6d34a8d2c27"
+  },
+  "hostReceiptsSha256": {
+    "broadcast-empty-cohort-host.json": "83c4b0e14f170a475878d677661ccb16c3cc47caefdb17ea013fc650fa9d4138",
+    "broadcast-empty-cohort-before-selection.json": "76c33c82b7d3dced05fcaa9e1f1173f760be057877285b4e546df0151c3d3524",
+    "broadcast-empty-cohort-after-cohort.json": "3350cc144e4f53c9d480c289f83c1967c4ac52ad18e84368ef03a38e1e46b795",
+    "broadcast-empty-cohort-after-resume.json": "77ed499b5f1e64dce23157d388be3f3b0155a52799825e3abdbce8338451b992"
+  },
+  "sourceBindingsCheckedPerCase": 1371,
+  "checks": [
+    {
+      "name": "actual saved-empty-cohort crash to standard-host recovery",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "actual delayed/post-cohort/partial-rearm regressions",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "explicit checked-observer controls with expected0starts/0resumes",
+      "passed": 8,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "name": "separate probe/standard and checked-reader builds",
+      "passed": 3,
+      "failed": 0
+    }
+  ],
+  "emptyDecision": {
+    "nonnullCohort": true,
+    "retentionAcceptanceVersion": 1,
+    "savedStarts": 0,
+    "savedResumes": 0,
+    "laterMatchingPhysicalWaits": 2,
+    "laterActiveMatchingBindings": 1,
+    "laterMatchesCreatedAfterCut": true,
+    "initialUnmatchedWaits": 2,
+    "allFourWaitsRemainSuspendedAtAttempt1": true,
+    "fullWorkflowObservationsUnchanged": true,
+    "workflowInventoryUnchanged": true,
+    "keyedStartExecutionsCreated": 0,
+    "distinctSuccessorOwner": true,
+    "fenceBefore": 1,
+    "fenceAfter": 2,
+    "delivered": true,
+    "snapshotUnchanged": true
+  },
+  "observationalBoundary": "canonical source raw payload and actual checked active binding pages are read-only facts, not dispatch authority",
+  "verificationIteration": "initial four-mode batch exposed singleton-array coercion in generalized expected-artifact assertion for delayed mode; explicit array initialization fixed it, then final allfour source-bound modes passed",
+  "reviews": {
+    "type": "three independent component source/actual-evidence/portable-receipt audits; not full PR",
+    "remainingActionable": []
+  },
+  "productionSourceChanged": false,
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "remainingGates": [
+    "complete/empty competing proposals, real renew/stale-owner and partial-start cuts",
+    "ACK loss/redrive, same-artifact shedding, retention/GC/republish races and remaining scope controls",
+    "remaining T045 semantics/native-composite, actual historical upgraded-host recovery and final current Studio",
+    "legacy writer/duplicate semantics deletion and guards, full-PR review, green exact-head required checks/protected merge and resulting-main verification",
+    "separate ADR0063 acceptance; production #2898/#2907/program evidence; Orleans/task-runner deferred"
+  ],
+  "fullPrRounds": 0
+}

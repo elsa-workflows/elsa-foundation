@@ -64,6 +64,9 @@ public sealed class WorkflowInstanceDeletionService(
                 case WorkflowExecutionDeletionResult.Unsupported:
                     throw new RuntimeRunDeletionRejectedSignal(StatusCodes.Status503ServiceUnavailable,
                         "Run deletion is unavailable for this runtime's persistence configuration.");
+                case WorkflowExecutionDeletionResult.DependencyRetained:
+                    throw new RuntimeRunDeletionRejectedSignal(StatusCodes.Status409Conflict,
+                        "Linked control delivery still needs this run's history. Finish delivery and delete the caller before its called run.");
                 case WorkflowExecutionDeletionResult.NotTerminal:
                     throw Changed();
                 case WorkflowExecutionDeletionResult.Changed:

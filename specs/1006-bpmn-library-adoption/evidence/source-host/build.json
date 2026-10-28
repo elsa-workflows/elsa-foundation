@@ -1,0 +1,19 @@
+{
+  "sourceRevision": "b2fc515ffc213e7ba96f4040769269f43b4c00d8",
+  "configurationVariant": "committed default composition",
+  "shellsSha256": "000b0c2a42db5a0acade48094be4bcb17d2f437f33ad1476336521877037e96a",
+  "sdkVersion": "10.0.402",
+  "binaries": {
+    "Elsa.Workbench.dll": "ba7ce9bf70886561396a2b7cf8f03c6c8e5bc381205b367b5a6cc31015bd62cf",
+    "Elsa.Activities.Bpmn.dll": "50021e54a10c2569c374d2364a31f318e4c08967cf38af43616bcf492ebf97bd",
+    "Elsa.Activities.Bpmn.Interchange.dll": "c9ef2b7c44a4e42f780de2236680f5c8b73cd10c9aefe1ae1d03a0bf8f0f6b42",
+    "Bpmn.Model.dll": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776",
+    "Bpmn.Interchange.dll": "4199d813b9e6dad4f0ec4f189b05b9084de86fb9a7d46233a85183072d88c6d9",
+    "Bpmn.Semantics.dll": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+  },
+  "releasedPackages": {
+    "Bpmn.Model": "0.5.0",
+    "Bpmn.Interchange": "0.5.0",
+    "Bpmn.Semantics": "0.5.0"
+  }
+}

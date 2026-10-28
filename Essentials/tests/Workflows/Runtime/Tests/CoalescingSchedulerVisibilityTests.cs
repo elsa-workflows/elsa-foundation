@@ -94,10 +94,16 @@ public sealed class CoalescingSchedulerVisibilityTests
         Assert.Empty((await _queue.ListAsync(new RuntimeSchedulerWorkQuery(ExecutionId))).Items);
     }
 
-    [Fact]
-    public async Task Retained_source_can_be_deferred_after_a_boundary_deactivates_the_overlay()
+    [Theory]
+    [InlineData(WorkflowExecutionCommandKind.ResumeBookmark)]
+    [InlineData(WorkflowExecutionCommandKind.InvokeActivity)]
+    [InlineData(WorkflowExecutionCommandKind.CompleteActivity)]
+    [InlineData(WorkflowExecutionCommandKind.NotifyParentActivity)]
+    [InlineData(WorkflowExecutionCommandKind.DeliverChildControl)]
+    [InlineData(WorkflowExecutionCommandKind.Checkpoint)]
+    public async Task Retained_source_can_be_deferred_after_a_boundary_deactivates_the_overlay(WorkflowExecutionCommandKind kind)
     {
-        await _queue.EnqueueAsync(Work("resume"));
+        await _queue.EnqueueAsync(Work("resume", kind));
         var session = Session();
         var claim = Assert.IsType<RuntimeSchedulerWorkClaim>(await session.ClaimOverlayAsync(Request(), default));
         await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, default);
@@ -108,6 +114,34 @@ public sealed class CoalescingSchedulerVisibilityTests
 
         var retained = Assert.Single((await _queue.ListWithVisibilityAsync(new RuntimeSchedulerWorkQuery(ExecutionId))).Items);
         Assert.Equal(visibleAt, retained.VisibleAfter);
+    }
+
+    [Fact]
+    public async Task Completed_retained_notice_after_deactivation_removes_only_its_accepted_durable_identity()
+    {
+        await _queue.EnqueueAsync(Work("notice", WorkflowExecutionCommandKind.NotifyParentActivity));
+        await _queue.EnqueueAsync(Work("sibling"));
+        var session = Session();
+        var claim = Assert.IsType<RuntimeSchedulerWorkClaim>(await session.ClaimOverlayAsync(Request(), default));
+        await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, default);
+        session.Deactivate();
+        Assert.True((await session.CompleteOverlayClaimAsync(claim, default)).Succeeded);
+        Assert.Equal("sibling", Assert.Single((await _queue.ListAsync(new RuntimeSchedulerWorkQuery(ExecutionId))).Items).WorkItemId);
+    }
+
+    [Fact]
+    public async Task Stale_overlay_completion_after_deactivation_cannot_remove_unaccepted_durable_source()
+    {
+        await _queue.EnqueueAsync(Work("notice", WorkflowExecutionCommandKind.NotifyParentActivity));
+        var session = Session();
+        var old = Assert.IsType<RuntimeSchedulerWorkClaim>(await session.ClaimOverlayAsync(Request(), default));
+        Assert.NotNull(await session.ClaimOverlayAsync(new RuntimeSchedulerWorkClaimRequest(ExecutionId, "successor",
+            _now.AddDays(2), TimeSpan.FromDays(1)), default));
+        await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, default);
+        session.Deactivate();
+        Assert.Equal(RuntimeSchedulerWorkClaimTransitionStatus.Stale,
+            (await session.CompleteOverlayClaimAsync(old, default)).Status);
+        Assert.Equal("notice", Assert.Single((await _queue.ListAsync(new RuntimeSchedulerWorkQuery(ExecutionId))).Items).WorkItemId);
     }
 
     [Fact]
@@ -147,7 +181,7 @@ public sealed class CoalescingSchedulerVisibilityTests
     private RuntimeSchedulerWorkClaimRequest Request(string owner = "overlay-owner") =>
         new(ExecutionId, owner, _now, TimeSpan.FromDays(1));
 
-    private RuntimeSchedulerWorkItem Work(string id) => new(
-        id, ExecutionId, $"command-{id}", WorkflowExecutionCommandKind.ResumeBookmark,
+    private RuntimeSchedulerWorkItem Work(string id, WorkflowExecutionCommandKind kind = WorkflowExecutionCommandKind.ResumeBookmark) => new(
+        id, ExecutionId, $"command-{id}", kind,
         $"envelope-{id}", $"key-{id}", _now, _now);
 }

@@ -24,27 +24,54 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// this store has already been fenced by the committer for the same workflow execution. The durable scheduler queue is
 /// advanced only after the folded commit lands (condition B), so a crash mid-segment replays from the last flushed state.
 /// </remarks>
-public sealed class CoalescingRuntimeCheckpointCommitStore(
-    CoalescingInner<IRuntimeCheckpointCommitStore> inner,
-    IRuntimeCoalescingSessionAccessor sessionAccessor,
-    IRuntimeExecutionOwnershipService? ownershipService = null) : IRuntimeCheckpointCommitStore
+public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore
 {
+    private readonly IRuntimeCoalescingSessionAccessor sessionAccessor;
+    private readonly IRuntimeExecutionOwnershipService? ownershipService;
+    private readonly HashSet<string> requiredSourceKinds;
+
+    public CoalescingRuntimeCheckpointCommitStore(CoalescingInner<IRuntimeCheckpointCommitStore> inner,
+        IRuntimeCoalescingSessionAccessor sessionAccessor, IRuntimeExecutionOwnershipService? ownershipService = null)
+        : this(inner, sessionAccessor, ownershipService, []) { }
+
+    public CoalescingRuntimeCheckpointCommitStore(CoalescingInner<IRuntimeCheckpointCommitStore> inner,
+        IRuntimeCoalescingSessionAccessor sessionAccessor, IRuntimeExecutionOwnershipService? ownershipService,
+        IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        ArgumentNullException.ThrowIfNull(sessionAccessor);
+        ArgumentNullException.ThrowIfNull(contributions);
+        _inner = inner.Value;
+        this.sessionAccessor = sessionAccessor;
+        this.ownershipService = ownershipService;
+        requiredSourceKinds = RuntimePostCommitOutboxItems.RequiredSourceKinds(contributions);
+    }
+
     private static readonly RuntimeCheckpointPersistenceDecision ImmediateDecision =
         new(RuntimeCheckpointPersistenceMode.Immediate, "Coalesced segment flush.");
 
     private static readonly RuntimeCheckpointPersistenceDecision NoActiveSessionDecision =
         new(RuntimeCheckpointPersistenceMode.Immediate, "No matching active coalescing session.");
 
-    private readonly IRuntimeCheckpointCommitStore _inner = inner.Value;
+    private readonly IRuntimeCheckpointCommitStore _inner;
+
+    public bool SupportsExactBookmarkResume => _inner.SupportsExactBookmarkResume;
+    public bool CanCommitExactBookmarkResume(IBookmarkStateStore bookmarks, IWorkflowExecutionStateStore physicalExecutions,
+        IActivityExecutionStateStore activities) => _inner.CanCommitExactBookmarkResume(bookmarks, physicalExecutions, activities);
+
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(commit);
         ArgumentNullException.ThrowIfNull(decision);
 
+        if (commit.ExpectedBookmarkResume is not null && !SupportsExactBookmarkResume)
+            throw new NotSupportedException("The physical checkpoint store cannot enforce exact bookmark resume admission.");
+
         // Capture the ambient owner before the await so a concurrent context change cannot redirect this write lease to
         // another session. Even a non-matching commit fences the current owner's raw-page memo conservatively.
         var session = sessionAccessor.Current;
+        session?.EnsurePreparedFlushAllows(commit);
         if (session is null || !session.AppliesTo(commit.WorkflowExecutionId))
         {
             // Deferred has meaning only inside this matching working set. In particular, a legacy queue's disabled
@@ -237,12 +264,14 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
     // it is, keeping its attempt count and retry time so the sweep that delivers it counts the attempt already made. One
     // an earlier flush already persisted is left out: its durable Pending row is that backstop, and the overlay's changed
     // copy would be a conflicting second save of the same item. Both are what the quiescence flush does with such an item.
-    private static IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> FoldableOutbox(
+    private IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> FoldableOutbox(
         RuntimeCoalescingSession session,
         IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> remaining) =>
         remaining
-            .Where(change => change.State.Status != RuntimePostCommitOutboxStatus.FailedRetryable ||
-                             !session.IsOutboxDurablyPersisted(change.StateId))
+            .Where(change => !session.IsOutboxDurablyPersisted(change.StateId) ||
+                             change.State.Status != RuntimePostCommitOutboxStatus.FailedRetryable &&
+                             change.State.StimulusDeliverySourceScope is null &&
+                             !requiredSourceKinds.Contains(change.State.Intent.Kind))
             .Select(change => change.State.Status == RuntimePostCommitOutboxStatus.FailedRetryable
                 ? change with { State = AsPending(change.State) }
                 : change)
@@ -257,9 +286,16 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
             item.AvailableAt,
             item.RetryPolicy,
             item.DeliveryAttemptCount,
+            deliveringOwnerId: null,
+            deliveryStartedAt: null,
+            deliveredAt: null,
             lastFailureMessage: item.LastFailureMessage,
             metadata: item.Metadata,
-            deliveryFencingToken: item.DeliveryFencingToken);
+            deliveryFencingToken: item.DeliveryFencingToken,
+            deliveryVisibleAfter: null,
+            stimulusDeliveryProtocolVersion: item.StimulusDeliveryProtocolVersion,
+            stimulusDeliverySourceScope: item.StimulusDeliverySourceScope,
+            recipientSnapshot: item.RecipientSnapshot);
 
     // A claim is taken just before the claimed work runs, and the work item that runs it can exist only in the session's
     // memory: a parent re-claimed to evaluate its finished child runs from such an item. A cap fold at the claim would
@@ -278,6 +314,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore(
     // Operational (lease/heartbeat/ownership — condition E), incident, and bookmark writes must never be buffered:
     // they are durability-critical and are flushed immediately even if they ride on a deferrable checkpoint name.
     private static bool HasBoundaryState(RuntimeCheckpointCommit commit) =>
+        commit.ExpectedBookmarkResume is not null ||
         commit.StateChanges.Operational.Count > 0 ||
         commit.StateChanges.Incidents.Count > 0 ||
         commit.StateChanges.Bookmarks.Count > 0 ||

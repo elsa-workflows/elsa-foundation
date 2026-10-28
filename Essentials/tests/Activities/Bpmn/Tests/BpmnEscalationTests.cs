@@ -10,6 +10,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 
+using BpmnExecutionState = global::Bpmn.Model.State.BpmnExecutionState;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
@@ -159,7 +161,7 @@ public sealed class BpmnEscalationTests
         var nested = resumed.State("node-nested");
         Assert.Equal(ActivityExecutionStatus.Cancelled, nested.Status);
         Assert.Equal("ParentCancelled", nested.SubStatus);
-        Assert.Equal(BpmnExecutionEngine.EscalationHostInterruptedReason, nested.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
+        Assert.Equal("bpmn.escalation.host-interrupted", nested.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
         // The nested process's still-suspended keeper child was reclaimed through seam A — no bookmarks remain.
         Assert.Equal(ActivityExecutionStatus.Cancelled, resumed.State("node-keep").Status);
         Assert.Empty(await fixture.BookmarksAsync());

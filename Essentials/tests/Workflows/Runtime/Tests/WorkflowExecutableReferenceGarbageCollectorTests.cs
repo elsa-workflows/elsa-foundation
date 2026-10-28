@@ -3,9 +3,12 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -18,6 +21,37 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
     private readonly InMemoryWorkflowExecutableStore _executableStore = new();
     private readonly InMemoryWorkflowExecutableSourceReferenceStore _sourceReferenceStore = new();
     private readonly IWorkflowExecutionStateStore _workflowExecutionStateStore = new InMemoryWorkflowExecutionStateStore();
+
+    [Fact]
+    public void Legacy_collector_constructor_does_not_claim_saved_cohort_root_support() =>
+        Assert.False(NewGarbageCollector().SupportsStimulusDeliveryRetention);
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Default_DI_selects_qualified_cohort_retention_and_keeps_ordinary_template_cleanup(bool pumpFirst)
+    {
+        var services = new ServiceCollection().AddLogging();
+        if (pumpFirst) new WorkflowsRuntimeReferenceGarbageCollectionFeature().ConfigureServices(services);
+        services.AddWorkflowRuntime();
+        if (!pumpFirst) new WorkflowsRuntimeReferenceGarbageCollectionFeature().ConfigureServices(services);
+        services.Configure<WorkflowExecutableGarbageCollectionOptions>(options => options.ArtifactCreationGracePeriod = TimeSpan.Zero);
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        var runtime = scope.ServiceProvider;
+        Assert.NotNull(runtime.GetRequiredService<IStimulusDeliveryStore>());
+        var templates = runtime.GetRequiredService<IExecutableActivityTemplateStore>();
+        var references = runtime.GetRequiredService<IWorkflowExecutableSourceReferenceStore>();
+        var template = Template("ordinary-retired");
+        await templates.SaveAsync(template);
+        await references.SaveAsync(Reference("ordinary-ref", template.TemplateId, WorkflowExecutableReferenceScope.Published));
+        Assert.True(await references.RetireAsync("ordinary-ref", _now));
+        var collector = runtime.GetRequiredService<IWorkflowExecutableReferenceGarbageCollector>();
+
+        Assert.True(collector.SupportsStimulusDeliveryRetention);
+        var result = await collector.SweepAsync(_now);
+        Assert.Equal(1, result.DeletedReferenceCount); Assert.Equal(1, result.DeletedActivityTemplateCount);
+        Assert.Null(await templates.FindAsync(template.TemplateId)); Assert.Null(await references.FindAsync("ordinary-ref"));
+    }
 
     [Fact]
     public async Task Sweep_RemovesExpiredReferencesThenTheirNowUnreferencedArtifacts_ButKeepsArtifactsWithALiveReference()
@@ -208,6 +242,160 @@ public sealed class WorkflowExecutableReferenceGarbageCollectorTests
         Assert.Null(await _sourceReferenceStore.FindAsync("template-ref"));
         Assert.Null(await templates.FindAsync(template.TemplateId));
     }
+
+    [Theory]
+    [InlineData("wrapper", "none")]
+    [InlineData("node", "none")]
+    [InlineData("nested", "none")]
+    [InlineData("wrapper", "closed")]
+    [InlineData("node", "closed")]
+    [InlineData("nested", "closed")]
+    [InlineData("wrapper", "direct")]
+    [InlineData("node", "direct")]
+    [InlineData("nested", "direct")]
+    public async Task Sweep_preserves_exact_template_closure_from_every_retained_placement(string placement, string dependencyKind)
+    {
+        var templates = new InMemoryExecutableActivityTemplateStore();
+        var leaf = Template("leaf");
+        var root = Template("root", dependencyKind == "closed" ? [new(leaf.TemplateId, leaf.TemplateHash)] : [],
+            dependencyKind == "direct" ? [TemplateDependency(leaf)] : []);
+        await templates.SaveAsync(leaf); await templates.SaveAsync(root);
+        var metadata = new Dictionary<string, string> { ["activity.templateHash"] = root.TemplateHash };
+        ExecutableNode Node(string id, IReadOnlyDictionary<string, string> values, params ExecutableNode[] children) => new(
+            id, id, "test/activity", "1.0.0", Executable("unused").RootActivity.Descriptor,
+            new Dictionary<string, RuntimeInputBinding>(), values,
+            children.Length == 0 ? [] : [new ExecutableChildSlot("body", children)]);
+        var node = placement == "nested" ? Node("root", new Dictionary<string, string>(), Node("nested", metadata))
+            : Node("root", placement == "node" ? metadata : new Dictionary<string, string>());
+        var original = Executable("artifact-template");
+        var executable = new WorkflowExecutable(original.Identity, node, original.ResumeTargets, _now,
+            placement == "wrapper" ? metadata : new Dictionary<string, string>(), original.IncidentStrategy);
+        await _executableStore.SaveAsync(executable);
+        await _sourceReferenceStore.SaveAsync(Reference("wrapper-ref", executable.Identity.ArtifactId, WorkflowExecutableReferenceScope.TestRun, _now.AddMinutes(-1)));
+        await _sourceReferenceStore.SaveAsync(Reference("root-ref", root.TemplateId, WorkflowExecutableReferenceScope.TestRun, _now.AddMinutes(-1)));
+        await _sourceReferenceStore.SaveAsync(Reference("leaf-ref", leaf.TemplateId, WorkflowExecutableReferenceScope.TestRun, _now.AddMinutes(-1)));
+        await _workflowExecutionStateStore.SaveAsync(Execution("execution-template", executable.Identity.ArtifactId, WorkflowExecutionStatus.Completed));
+        var collector = TemplateCollector(templates);
+
+        var retained = await collector.SweepAsync(_now);
+        Assert.Equal(dependencyKind == "none" ? 1 : 0, retained.DeletedActivityTemplateCount);
+        Assert.NotNull(await templates.FindAsync(root.TemplateId));
+        Assert.NotNull(await _sourceReferenceStore.FindAsync("root-ref"));
+        Assert.Equal(dependencyKind != "none", await templates.FindAsync(leaf.TemplateId) is not null);
+        Assert.Equal(dependencyKind != "none", await _sourceReferenceStore.FindAsync("leaf-ref") is not null);
+        Assert.NotNull(await _executableStore.FindAsync(executable.Identity.ArtifactId));
+
+        Assert.True(await _workflowExecutionStateStore.DeleteAsync("execution-template"));
+        var released = await collector.SweepAsync(_now);
+        Assert.Equal(dependencyKind == "none" ? 1 : 2, released.DeletedActivityTemplateCount);
+        Assert.Null(await templates.FindAsync(root.TemplateId)); Assert.Null(await templates.FindAsync(leaf.TemplateId));
+        Assert.Null(await _sourceReferenceStore.FindAsync("root-ref")); Assert.Null(await _sourceReferenceStore.FindAsync("leaf-ref"));
+    }
+
+    [Theory]
+    [InlineData(false, false)] [InlineData(true, false)]
+    [InlineData(false, true)] [InlineData(true, true)]
+    public async Task Sweep_retains_all_material_when_a_present_retained_template_has_an_unreadable_exact_dependency(bool mismatched, bool direct)
+    {
+        var templates = new InMemoryExecutableActivityTemplateStore();
+        var leaf = Template("leaf");
+        var identity = new ExecutableActivityTemplateIdentity(leaf.TemplateId, mismatched ? "wrong-hash" : leaf.TemplateHash);
+        var root = Template("root", direct ? [] : [identity],
+            direct ? [TemplateDependency(leaf) with { TemplateHash = identity.TemplateHash }] : []);
+        if (mismatched) await templates.SaveAsync(leaf);
+        await templates.SaveAsync(root);
+        var original = Executable("artifact-template");
+        await _executableStore.SaveAsync(new WorkflowExecutable(original.Identity, original.RootActivity, original.ResumeTargets, _now,
+            new Dictionary<string, string> { ["activity.templateHash"] = root.TemplateHash }, original.IncidentStrategy));
+        await _sourceReferenceStore.SaveAsync(Reference("root-ref", root.TemplateId, WorkflowExecutableReferenceScope.TestRun, _now.AddMinutes(-1)));
+        await _sourceReferenceStore.SaveAsync(Reference("unrelated-retired", "absent", WorkflowExecutableReferenceScope.TestRun, _now.AddMinutes(-1)));
+        await _workflowExecutionStateStore.SaveAsync(Execution("execution-template", original.Identity.ArtifactId, WorkflowExecutionStatus.Completed));
+
+        Assert.False((await TemplateCollector(templates).SweepAsync(_now)).DidWork);
+        Assert.NotNull(await templates.FindAsync(root.TemplateId));
+        Assert.NotNull(await _sourceReferenceStore.FindAsync("root-ref"));
+        Assert.NotNull(await _sourceReferenceStore.FindAsync("unrelated-retired"));
+    }
+
+    [Theory]
+    [InlineData("template-metadata")]
+    [InlineData("nested-node")]
+    [InlineData("mixed-edges")]
+    [InlineData("shared-leaf")]
+    public async Task Sweep_follows_template_local_and_multilevel_edges_then_releases_the_complete_material(string route)
+    {
+        var templates = new InMemoryExecutableActivityTemplateStore();
+        var leaf = Template("leaf");
+        var metadata = new Dictionary<string, string> { ["activity.templateHash"] = leaf.TemplateHash };
+        var empty = new Dictionary<string, string>();
+        ExecutableNode Node(string id, IReadOnlyDictionary<string, string> values, params ExecutableNode[] children) => new(
+            id, id, "test/activity", "1.0.0", Executable("unused").RootActivity.Descriptor,
+            new Dictionary<string, RuntimeInputBinding>(), values,
+            children.Length == 0 ? [] : [new ExecutableChildSlot("body", children)]);
+        var middle = Template("middle",
+            route == "shared-leaf" ? [new(leaf.TemplateId, leaf.TemplateHash)] : [],
+            route == "mixed-edges" ? [TemplateDependency(leaf)] : [],
+            route == "nested-node" ? Node("root", empty, Node("nested", metadata)) : null,
+            route == "template-metadata" ? metadata : null);
+        var root = Template("root", [new(middle.TemplateId, middle.TemplateHash)],
+            route == "shared-leaf" ? [TemplateDependency(leaf)] : []);
+        var unrelated = Template("unrelated");
+        foreach (var template in new[] { root, middle, leaf, unrelated })
+        {
+            await templates.SaveAsync(template);
+            await _sourceReferenceStore.SaveAsync(Reference(template.TemplateId + "-ref", template.TemplateId,
+                WorkflowExecutableReferenceScope.TestRun, _now.AddMinutes(-1)));
+        }
+        var original = Executable("artifact-template");
+        await _executableStore.SaveAsync(new WorkflowExecutable(original.Identity, original.RootActivity, original.ResumeTargets, _now,
+            new Dictionary<string, string> { ["activity.templateHash"] = root.TemplateHash }, original.IncidentStrategy));
+        await _workflowExecutionStateStore.SaveAsync(Execution("execution-template", original.Identity.ArtifactId, WorkflowExecutionStatus.Completed));
+
+        var retained = await TemplateCollector(templates).SweepAsync(_now);
+        Assert.Equal(1, retained.DeletedActivityTemplateCount); Assert.Equal(1, retained.DeletedReferenceCount);
+        foreach (var template in new[] { root, middle, leaf })
+        {
+            Assert.NotNull(await templates.FindAsync(template.TemplateId));
+            Assert.NotNull(await _sourceReferenceStore.FindAsync(template.TemplateId + "-ref"));
+        }
+        Assert.Null(await templates.FindAsync(unrelated.TemplateId));
+        Assert.True(await _workflowExecutionStateStore.DeleteAsync("execution-template"));
+        var released = await TemplateCollector(templates).SweepAsync(_now);
+        Assert.Equal(3, released.DeletedActivityTemplateCount); Assert.Equal(3, released.DeletedReferenceCount);
+        Assert.Equal(1, released.DeletedArtifactCount);
+        Assert.Empty(await templates.ListAllAsync()); Assert.Empty(await _sourceReferenceStore.ListAllAsync());
+    }
+
+    private ExecutableActivityTemplate Template(string id, IReadOnlyCollection<ExecutableActivityTemplateIdentity>? closed = null,
+        IReadOnlyCollection<ExecutableActivityTemplateDependency>? direct = null, ExecutableNode? root = null,
+        IReadOnlyDictionary<string, string>? metadata = null) => new(
+        "template-" + id, "hash-template-" + id, root ?? Executable("unused").RootActivity,
+        new Dictionary<string, WorkflowExecutableResumeTarget>(), direct ?? [], closed ?? [], [], "test/1", metadata ?? new Dictionary<string, string>(), _now);
+
+    private static ExecutableActivityTemplateDependency TemplateDependency(ExecutableActivityTemplate template) => new(
+        "activity-definition", "activity-version", "1.0.0", template.TemplateId, template.TemplateHash, "occurrence",
+        new ActivityInvocationOrigin([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "root")]));
+
+    [Fact]
+    public async Task Sweep_keeps_inlined_imports_usable_without_installing_their_original_template_store()
+    {
+        var templates = new InMemoryExecutableActivityTemplateStore();
+        var original = Executable("artifact-inline-only");
+        await _executableStore.SaveAsync(new WorkflowExecutable(original.Identity, original.RootActivity, original.ResumeTargets, _now,
+            new Dictionary<string, string> { ["activity.templateHash"] = "not-installed-on-this-host" }, original.IncidentStrategy));
+        await _workflowExecutionStateStore.SaveAsync(Execution("execution-inline", original.Identity.ArtifactId, WorkflowExecutionStatus.Completed));
+        await _sourceReferenceStore.SaveAsync(Reference("unrelated-expired", "absent", WorkflowExecutableReferenceScope.TestRun, _now.AddMinutes(-1)));
+
+        var result = await TemplateCollector(templates).SweepAsync(_now);
+        Assert.Equal(1, result.DeletedReferenceCount);
+        Assert.NotNull(await _executableStore.FindAsync(original.Identity.ArtifactId));
+        Assert.Null(await _sourceReferenceStore.FindAsync("unrelated-expired"));
+    }
+
+    private WorkflowExecutableReferenceGarbageCollector TemplateCollector(IExecutableActivityTemplateStore templates) => new(
+        _executableStore, _sourceReferenceStore, templates, _workflowExecutionStateStore,
+        Options.Create(new WorkflowExecutableGarbageCollectionOptions { ArtifactCreationGracePeriod = TimeSpan.Zero }),
+        TimeProvider.System, NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance);
 
     /// <summary>
     /// Resolves a claim the split publication design left on reasoning alone: whether the material a split reusable-activity

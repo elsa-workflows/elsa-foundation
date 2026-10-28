@@ -5,6 +5,7 @@
         "Name": "default",
         "Features": {
           "ActivitiesBpmn": {},
+          "ActivitiesBpmnInterchange": {},
           "ActivitiesCompensation": {},
           "ActivitiesControlFlow": {},
           "ActivitiesDispatchWorkflowRuntime": {},

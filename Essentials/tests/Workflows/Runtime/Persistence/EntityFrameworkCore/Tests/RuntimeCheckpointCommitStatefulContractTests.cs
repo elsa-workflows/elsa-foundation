@@ -142,6 +142,17 @@ public sealed class RuntimeCheckpointCommitStatefulContractTests
         var projection = await new WorkflowDispatchDeliveryFailureProjector(backend.Dispatches).ProjectAsync(claim.Item, result);
         var followUp = Assert.IsType<RuntimePostCommitOutboxItem>(projection?.FollowUpOutboxItem);
 
+        var forgedSnapshot = new StimulusDeliverySnapshot(1, followUp.OutboxItemId,
+            RuntimeCheckpointCommitFingerprint.ComputeIntent(followUp.Intent),
+            new(new("forged"), null, null, WorkflowRunKind.Unknown, null), followUp.RecordedAt,
+            "event", "named", [], [], StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion);
+        var forged = new RuntimePostCommitOutboxItem(followUp.OutboxItemId, followUp.Intent, followUp.Status,
+            followUp.RecordedAt, followUp.AvailableAt, followUp.RetryPolicy, 0, null, null, null, null, null, 0, null,
+            1, new("forged"), forgedSnapshot);
+        Assert.Throws<ArgumentException>(() => new RuntimePostCommitOutboxClaimCompletion(claim, result, projection!.WorkflowDispatch, forged));
+        Assert.Equal(RuntimePostCommitOutboxStatus.Delivering, (await outbox.FindAsync(claim.OutboxItemId))!.Status);
+        Assert.Null(await outbox.FindAsync(followUp.OutboxItemId));
+
         var outcome = await outbox.CompleteClaimAsync(
             new RuntimePostCommitOutboxClaimCompletion(claim, result, projection!.WorkflowDispatch, followUp));
 

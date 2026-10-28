@@ -7,16 +7,40 @@
 - **Kind:** Replacement contract
 - **Contract:** `Elsa.Activities.Bpmn.Interchange.Contracts.IBpmnDocumentImporter`
 - **Default:** `BpmnDocumentImporter` *(intra-domain — default)*
-- **Registration:** Singleton via `ActivitiesBpmnInterchangeFeature`; replace by registering another
-  implementation after the feature.
+- **Signature:** [IBpmnDocumentImporter](Contracts/IBpmnDocumentImporter.cs): Import/Analyze perform
+  pure conversion; ImportAsync/AnalyzeAsync also resolve references against the visible activity catalog.
+- **Registration:** Scoped via `ActivitiesBpmnInterchangeFeature`; register one replacement before the
+  feature. Shell startup rejects missing or competing registrations.
+- **Override when:** the host replaces document ingestion, retaining the authored contract and explicit
+  degradation/availability reporting. Changing only activity mapping uses IBpmnWorkBinder instead.
 
 ### `IBpmnDocumentExporter`
 
 - **Kind:** Replacement contract
 - **Contract:** `Elsa.Activities.Bpmn.Interchange.Contracts.IBpmnDocumentExporter`
 - **Default:** `BpmnDocumentExporter` *(intra-domain — default)*
-- **Registration:** Singleton via `ActivitiesBpmnInterchangeFeature`; replace by registering another
-  implementation after the feature.
+- **Signature:** [IBpmnDocumentExporter](Contracts/IBpmnDocumentExporter.cs): Export returns BPMN XML.
+- **Registration:** Scoped; one replacement before the feature, with the same startup exclusivity check.
+- **Override when:** the host replaces export while retaining the authored/runtime compatibility boundary.
+
+### `IBpmnWorkBinder`
+
+- **Kind:** Scoped single-implementation replacement contract.
+- **Contract / signature:** [IBpmnWorkBinder](Contracts/IBpmnWorkBinder.cs), Bind(BpmnWorkBindingRequest)
+  returns BpmnWorkBindingResult with the activity and explicit availability/reason.
+- **Default / owner:** internal `BpmnWorkBinder`, in `Elsa.Activities.Bpmn.Interchange`.
+- **Registration:** TryAddScoped; an explicit host policy before the feature is preserved. Shell startup
+  rejects duplicates. Importer/exporter/binder registration has positive and removal controls.
+- **Override when:** a host supplies different concrete work activities. Preserve exact binding identity,
+  nested/listener CanStartWorkflow=false, unavailable/unknown reporting and catalog validation; token
+  routing remains in the released interpreter.
+
+Synchronous conversion retains legacy placeholder version references and reports unverified mappings
+as Unknown. The registered HTTP endpoints use the asynchronous catalog path: it resolves visible,
+active recommended 1.0.0 profile versions (including build metadata) to their real catalog IDs, preserving the existing contracts
+instead of silently selecting a newer version. Missing inventory or recommendation cannot qualify CanExecute; normal
+publication validation remains required. The timer binding converts ISO duration text to an invariant
+TimeSpan literal for Delay; the authored event descriptor retains the XML text for export. This check is distinct from runtime/Studio qualification.
 
 ## Owned interchange contracts
 

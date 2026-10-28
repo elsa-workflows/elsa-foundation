@@ -1,0 +1,27 @@
+{
+  "boundaries": [
+    {
+      "before": "prepared",
+      "after": "reopened",
+      "completeCheckedObservationEqual": true,
+      "observationSha256": "8eac589f041f9dc6e58798d18d9c82d7847e1b6b69167f589de492b978707731",
+      "stateVersion": 2
+    },
+    {
+      "before": "legacy-seed",
+      "after": "legacy-old-reopened",
+      "completeCheckedObservationEqual": true,
+      "observationSha256": "c57c9dae0a50efd40bfcabb95d619e95a9ac1af656628b30b0683000eb66300f",
+      "stateVersion": 1
+    },
+    {
+      "before": "legacy-seed",
+      "after": "legacy-upgraded-reopened",
+      "completeCheckedObservationEqual": true,
+      "observationSha256": "c57c9dae0a50efd40bfcabb95d619e95a9ac1af656628b30b0683000eb66300f",
+      "stateVersion": 1
+    }
+  ],
+  "fieldExclusions": [],
+  "scope": "Complete checked named workflow/all activity/incident/dispatch/physical-wait/source model projection. Not every module row, variable or scheduler document. Subsequent newly minted handler A IDs differ between old and upgraded hosts; no cross-host final identity equality claimed."
+}

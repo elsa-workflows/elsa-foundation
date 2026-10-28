@@ -317,10 +317,11 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
         }
         catch (RuntimeSchedulerWorkUnavailableException exception)
         {
-            // Bookmark resumes preserve their retry delay either through a durable claim or through a visibility-aware
-            // overlay whose drain flush persists the release before returning. Other command kinds retain their source.
-            if (workItem.CommandKind != WorkflowExecutionCommandKind.ResumeBookmark ||
-                renewal is null || _consumedWorkClaimAccessor?.WasConsumedDurably == true)
+            // Supported work preserves its retry delay through a durable claim or a visibility-aware overlay
+            // whose drain flush persists the release. Unsupported work/provider pairs retain their source.
+            if (!RuntimeUnavailableWork.SupportsDelayedRelease(workItem.CommandKind) ||
+                renewal is null || _consumedWorkClaimAccessor?.WasConsumedDurably == true ||
+                _schedulerWorkQueue is IRuntimeSchedulerWorkDeferralCapability capability && !capability.CanDefer(renewal.Current))
                 throw;
 
             var activeClaim = renewal;
@@ -509,6 +510,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             or WorkflowExecutionCommandKind.StartActivity
             or WorkflowExecutionCommandKind.InvokeActivity
             or WorkflowExecutionCommandKind.NotifyParentActivity
+            or WorkflowExecutionCommandKind.DeliverChildControl
             or WorkflowExecutionCommandKind.DeliverInterventionDecision
             or WorkflowExecutionCommandKind.RetryActivityBoundary
             or WorkflowExecutionCommandKind.CancelActivityScope;

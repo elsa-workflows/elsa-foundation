@@ -9,6 +9,12 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public interface IWorkflowExecutableStore
 {
+    /// <summary>The physical material/lease boundary used for provider coordination.</summary>
+    /// <remarks>Returns this store unless an explicitly cooperating decorator forwards every material mutation,
+    /// lease and deletion-guard operation unchanged to another boundary. Resolving it performs no I/O. Normal reads and writes must still use
+    /// the selected store, preserving cache invalidation and other decorator behavior. This is not independent authority.</remarks>
+    IWorkflowExecutableStore GetMaterialStore() => this;
+
     /// <summary>Saves the artifact. Idempotent by <c>ArtifactId</c>: an existing artifact is left untouched.</summary>
     ValueTask SaveAsync(WorkflowExecutable executable, CancellationToken cancellationToken = default);
 

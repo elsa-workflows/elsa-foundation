@@ -1,0 +1,525 @@
+{
+  "schemaVersion": 1,
+  "task": "T045 actual called-control commit-before-result recovery and evidence reconciliation",
+  "sourceParentCommit": "81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0",
+  "hostBuildSourceCommit": "81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0",
+  "hostSourceRevisionIdExplicit": "81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0",
+  "productionSourceUnchangedDuringBuildAndPositiveRuns": true,
+  "standardHostRecoveryProbeAbsent": true,
+  "testOnlyProbeSourceExplicitlyIncluded": true,
+  "releasedPackageBinariesMatchCache": true,
+  "persistenceMode": "Balanced",
+  "actualCases": {
+    "publicAuthoredCallerAndSeparateChild": 1,
+    "distinctActualCuts": 2,
+    "noticeOrdinal": 0,
+    "terminalSuccessOrdinal": 1,
+    "qualifiedHostProcesses": 4,
+    "standardRecoveryProcesses": 2,
+    "naturalClaimExpiry": true,
+    "runtimeOrClockOrClaimTimestampEdits": false,
+    "allFiveApiAndCheckedStagesPassed": true
+  },
+  "comparisons": {
+    "cuts": [
+      {
+        "cut": "notice",
+        "heldSourceFencingToken": 1,
+        "recoveredSourceFencingToken": 2,
+        "heldRecordedDeliveryAttemptCount": 0,
+        "recoveredRecordedDeliveryAttemptCount": 1,
+        "completeObservedFactsEqual": true,
+        "sourceIntentEqual": true,
+        "factsSha256": "5d8ae4dee8afc5887da711a35e67606356da8cd7d478d862fa744ec1635e4e7b",
+        "deliveredAt": "2026-10-27T22:11:35.476342+00:00",
+        "originalClaimDeadline": "2026-10-27T22:10:59.220887+00:00"
+      },
+      {
+        "cut": "terminal",
+        "heldSourceFencingToken": 1,
+        "recoveredSourceFencingToken": 2,
+        "heldRecordedDeliveryAttemptCount": 0,
+        "recoveredRecordedDeliveryAttemptCount": 1,
+        "completeObservedFactsEqual": true,
+        "sourceIntentEqual": true,
+        "factsSha256": "76684dc9f0c6d665cd203e280eb7ca5b929869a29b0735ef36eb0805c6e28ba6",
+        "deliveredAt": "2026-10-27T22:16:25.657153+00:00",
+        "originalClaimDeadline": "2026-10-27T22:16:24.836952+00:00"
+      }
+    ],
+    "comparisonScope": "Complete checked recipient Facts model, including named workflows/all activities/dispatch/incidents/physical waits/other-source projections; target source delivery projection changes and its complete Intent is compared separately. Not every SQLite/module row or raw EF source revision.",
+    "factsFieldExclusions": [],
+    "originalWarningPhysicalObservationPreservedAcrossBothCuts": true,
+    "warningObservation": {
+      "scope": {
+        "value": "default"
+      },
+      "state": {
+        "bookmarkId": "14hweETmpD9:attempt:1:trigger:1",
+        "workflowExecutionId": "14hwZ286OyC",
+        "activityExecutionId": "14hweETmpD9",
+        "executableNodeId": "node-warning",
+        "resumeTargetId": "node-warning:resume-target:event",
+        "stimulusType": "Event",
+        "stimulusHash": "sha256:14add179e508882194534f1398cddb8ac72d4f073d271027c4f7da5f9583ab32",
+        "payload": null,
+        "metadata": {
+          "runtime.correlationId": "14hwZ286OyC",
+          "runtime.schedulerWorkItemId": "9ba02971580a0ecb:create-bookmark:14hweETmpD9:attempt:1:trigger:1",
+          "runtime.commandId": "9ba02971580a0ecb:create-bookmark:14hweETmpD9:attempt:1:trigger:1",
+          "runtime.reason": "ActivitySuspended"
+        },
+        "createdAt": "2026-10-27T22:09:59.261374+00:00",
+        "expiresAt": null
+      },
+      "generation": 4046990127303331444
+    }
+  },
+  "wholeModuleSnapshots": 6,
+  "identityAndTokensExcluded": true,
+  "qualifiedOwnedProcessesExited": true,
+  "filesSha256": {
+    "e2e-tests/bpmn/Test-BpmnCalledControlHost.ps1": "353494c9a929b48950ce5df489b9278da40e71697c8c39bb829bdcf376656324",
+    "e2e-tests/bpmn/test_opted_called_snapshot_reader.py": "b4f7181cffa60875828a0ac1af0f27f293b60d0379f7aab8a4274e2d973c440f",
+    "e2e-tests/bpmn/test_called_snapshot_reader.py": "b24d72b97511d91d57a423b74bf174034ad8a7b12f8cc4d1a778050a88233a5a",
+    "e2e-tests/bpmn/run_owned_broadcast_probe.py": "916716d10446ec7650b99ec926dcb08024fc8619fc21402c862e6d47e163b5de",
+    "e2e-tests/_ElsaCommon.ps1": "16905ef3c7503c33308d596290601c2b94cd8e829220a08ab857d0680f6d469f",
+    "e2e-tests/_ServerLifecycle.ps1": "2b09790145f93c0e30ff1c08ff7066a172755236de51d0b7af258ac61060e93d",
+    "e2e-tests/stimuli/_StimuliCommon.ps1": "7afd5ef449e274237db35bc27c787af8d5e4f5e3e236b5a8e7acad9987ec21b7",
+    "tools/bpmn/DeliveryRecoveryRead/Program.cs": "2e5844f85b94a6a25eebceb01e7f1b3f730bcc0f124b6c523aad5ea671a41aee",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.cs": "7db5bdb5fd4fdf3a2d2d573c0ee12c6d77d4605b818232b9b431826cd3a82e75",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.Escalation.cs": "f7133978eec14279d9d26635ba5f05ccc38d191bd1f1361aae57d2538bc45711",
+    "tools/bpmn/DeliveryRecoveryRead/CalledSnapshotReader.cs": "2c8e21c0f223732112d5b28b4eab98417e6d603e1b61cb1fb14ba1e725ddd71a",
+    "tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj": "2e7e1246eddc92f28703065038aaa9dd74aec19ec51e1b96d69fbb1632691e99",
+    "tools/bpmn/DeliveryRecoveryRead/packages.lock.json": "eac338b10044cfaecaaf7d9d5af7fb34edd76d7c1d9fca7f3227a02b80225182",
+    "Directory.Packages.props": "7b2feb0ae75708d57f93187541e3790e1a6dabddb42043e28ea34c10a165ffc3",
+    "Directory.Build.props": "97f65f6d3a30a68ae97f27dfa09449bd3ae92096d59f0049b368fac27db36b90",
+    "global.json": "a647fbc942871cef23ce38ef75c362bd02269b0bb634aa348a4537cadc926c3f",
+    "specs/1006-bpmn-library-adoption/tasks.md": "af04fd65feffb3c52ce5046c3c62897c1100202018310234068a22597493bf5b",
+    "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj": "bb47eb0a6b9424742045a20059fcb0a09bb40b44e77b6d36928a21e9201616ef",
+    "Essentials/apps/Elsa.Workbench/Program.cs": "935ff425bce142597d82d59c763fca41ac386564c67f42dcad49b3f56891c568",
+    "Essentials/apps/Elsa.Workbench/appsettings.json": "20ab11c707acf9b8c2c3305a972e1493da6747da45a1c5532bd65d63b54495b0",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs": "048583371facd58258d9b88f54640e0c766f3a934b8d9c52dd2eeae4f66b48e9",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnControlProtocol.cs": "955e3c3161e34345dcdf63aca43d9addc5e588cc657c79ce7084ba50c10bc60d",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchControlBoundary.cs": "3abc10cb37854b3016ba9eae13c18aa9525fd71944f3827fba33853b00a126d4",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlTransport.cs": "2342a7d9ff3aa55821884ca45fa3b6f92f732a6b54a4815e1df9f9868e457d66",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlProducerEnricher.cs": "4976b49110fdb49887096dd6562c7a7b16503a33404f142502c24d60260e23b5",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlNotificationEnricher.cs": "304f300ffc0b4d5e44d534c836ca079e05e2287e2b4b301b39c623bb2433a4fb",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlNotificationExecutor.cs": "bdcbfce6f2692d083a1c19e0def64fc544e835902f0ff7b8fddaa4c385fd0d80",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCompletionEnricher.cs": "4e88471da1a0bc40a84d228729d5e7642f0a2727080a919a191ee28e62e65cf6",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/ParentResumeExecutor.cs": "2141d1a62ad804fa83f10739a47d474011b1834e3a81fa1c49f46c0ed93e73c3",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/ChildCancelExecutor.cs": "099324a417801eaa57badd3a7897a7ea4576ca3f6f6c61b7c50963da70be0fb3",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCancelIntentFactory.cs": "100c7344d3f33988b163eef3c3f8dd323d5d2b6ed33a7ec6296992b6637d823e",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControl.cs": "f94b5634281f4a4995313fd5b92105fdcc4e4d5007b4d8f423343fddca6bf586",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControlInbox.cs": "47aef1e9f8c740999704659682bad26b86983e54a68566ba9d5ed333bd75c771",
+    "Essentials/src/Workflows/Runtime/Core/Models/ActivityExecutionState.cs": "209497c223fc2cf3ed1b491e776acaba535e7a4de1c560baefccb3466602ae96",
+    "Essentials/src/Workflows/Runtime/Core/Models/WorkflowDispatchRecord.cs": "3dc8474a8342f58f6f781803d3ec75f3265ae7b4c8a42faa31bf874f4096aa75",
+    "Essentials/src/Workflows/Runtime/Core/Constants/RuntimeMetadataKeys.cs": "b93fcd5387e333000261804ee8e9507d0cbfacd998641a59372ae70a1e550b94",
+    "Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/RuntimeInputBindingCompiler.cs": "f99988de7f05486c1a07ec5fa6768331f4b25232c12cb1862f962a40e663a5f3",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/RuntimePortableExpressionEvaluator.cs": "62315f089834167ec4e3fa97780365796ef06132ffb4e4fc4c1951282292accd",
+    "Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs": "7e19747b75b8daf2ee5f79720820936902aba72ff8c77a2d80ea2b39db853572",
+    "Essentials/src/Activities/Primitives/Activities/Event.cs": "3efe57fdf22dbb7395d302c7e9c56c97a4ef57b6fa168d253561e17d0258ee3c",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs": "d224a89077fcaae97177bdc7bdf0989e3c0df4ac51fb040b9c33e16c63435d67",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowDispatchStore.cs": "431b73abf580af6303dc556b4c6e68d7006ae00c422d021e24c671200122b94e",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutionStateStore.cs": "8871951b099053d008a51c036d651baf3858ba5df4e79a08b493f8c3f6af8819",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfActivityExecutionStateStore.cs": "cfc9d0007bef3d9a7cc1bc14dfab64d0ada5172c374311954ab5b6aee91afe7b",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfBookmarkStateStore.cs": "ad8ae1307ac345820a65664dcb8ddd87608fa12165b6c6b691798e23b8e6cc20",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfIncidentStateStore.cs": "762a1a1e9f3dd2092bc35790f2c6549bd85ec11eb643849f57507a0d3085299b",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs": "039a0f9f329b82602aa192f679543aaaaba00c6b94e9635a0985af6196954fe0",
+    "e2e-tests/bpmn/Test-BpmnConcurrentCalledHost.ps1": "79c5de9cc95c986d1fa32192bf499cf32f89f3a28373f2724f2cd9246f621ab3",
+    "e2e-tests/bpmn/_CalledControlCommon.ps1": "9f13b5cbcb2a6a41ea0a97722428f793bc2888412ceef6a992fb86dcde8e27a5",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.Concurrent.cs": "156604e161140da36d67f9697cca3419398ab0200ef1b6fae1d2c892f3c4b46c",
+    "Essentials/src/Tasks/Schedules/ScheduledTaskExecution.cs": "912696fb5307e74d894773c4b841c72ab4f24ab8546acc3be34e96b2fc0daca8",
+    "Essentials/tests/Tasks/Tests/TaskScheduleTests.cs": "79ef549b37794ef95a26bb56bd0a616d0ac95d06c3080831df0d873b31acd9a8",
+    "e2e-tests/bpmn/RecoveryProbe/BpmnRecoveryProbeFeature.cs": "de2c4cbbb2aed509986869c24f620e4f03c55f8ae252361361faceb94e926248",
+    "e2e-tests/bpmn/Test-BpmnCalledAckHost.ps1": "b7953c6c59ee15615b5f5478d40f320f69a9ce1eba205bb7e71047270e9f7cb8",
+    "e2e-tests/bpmn/test_called_ack_snapshot_reader.py": "294d3c1a9443dbb6d22bf4516fffd6e285027b5f8d3b70a53597b95f9e1ac66c",
+    "e2e-tests/bpmn/verify_published_contracts.py": "27dd5b278c2abcd1382a067299c406e03215ede5a301241e92ab7ed2864be0c7",
+    "tools/bpmn/DeliveryRecoveryRead/OptedCalledSnapshotReader.Acknowledgment.cs": "b2409701254ac5707b96478e31c90938f499792f3ff23f18e092bf6cfb2fb0b5",
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench-recovery.md": "1daf224732e499c6411988d8260df9ccb0e1421ab8905907dc996cb0c6e0bee9",
+    "specs/1006-bpmn-library-adoption/evidence/called-control-reconciliation.md": "4897666cd6da18fe3d75b53445d28c0f3668ced4b2d31a21d019c0122e057e35",
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/README.md": "9408b2a6f0246eaae9889ab9fe2adc6c0b2134b3b745acc9a43e5e9bccdb7d73"
+  },
+  "portableArtifacts": {
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/README.md": {
+      "sha256": "9408b2a6f0246eaae9889ab9fe2adc6c0b2134b3b745acc9a43e5e9bccdb7d73",
+      "bytes": 6613
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/bounded-reviews.json": {
+      "sha256": "a2aac411c722d01ee8d6c0f51357f9d94d5acc98262f314298691216517a785a",
+      "bytes": 677
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/comparisons.json": {
+      "sha256": "ec48dce783a551bcc8bd8086f90ff982b726c7870131869b71dd4258177faaeb",
+      "bytes": 2356
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/compatibility-coded.json": {
+      "sha256": "bf2c12cd54e63cf0a05cfec6418a535641185e9fb1783754d88587ea82f9420a",
+      "bytes": 1849
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/compatibility-concurrent-finished.json": {
+      "sha256": "7fe59dd316f2c3b9feddf423ed8f5b30290c4c7133878095c9ca0d279f8817f3",
+      "bytes": 1863
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/compatibility-concurrent-prepared.json": {
+      "sha256": "be5810ceae03d72692fee46c3ab8af6ff5cb37918f533ad356d86ee8c04d47db",
+      "bytes": 1863
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/compatibility-concurrent-recovered.json": {
+      "sha256": "eeb76af24d27ee47d909f46bdb32ff6f06542f8155e056021a4d8192ce664610",
+      "bytes": 1864
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/compatibility-concurrent-selected.json": {
+      "sha256": "a698f39bc1c9819c462022a446bb10361d13afb4368aa9f28ca15414e23cdece",
+      "bytes": 1863
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/compatibility-escalation-finished.json": {
+      "sha256": "64084d24b7f0002123005504c8ca08b8fa7b4f800b452bb91f9dbf6e76a755eb",
+      "bytes": 1863
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/compatibility-escalation-parked.json": {
+      "sha256": "123a5a53fd8fb593fc2b3daaaa52197e159573064bd36a2e5dfabfee26a59b53",
+      "bytes": 1861
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/compatibility-escalation-recovered.json": {
+      "sha256": "5872f4ddfe6e1dbe7cd623ea05d2232a71fdb78b716bcbb67a08e625307c7e7b",
+      "bytes": 1864
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/compatibility-legacy.json": {
+      "sha256": "7e0311d5526a65c237d696acd937570ea611fa46524f65f0711ea824a6982f84",
+      "bytes": 1535
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/controls-finished.json": {
+      "sha256": "c460b0ad1da4ab611ff4a10b53ce399bb972a383012f0368627a9f11d41eaefe",
+      "bytes": 2702
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/controls-notice-held.json": {
+      "sha256": "49b7a663a2d656e28843d286bf8a5de4c4e6f2ab016b4ae6622090ad98cb8389",
+      "bytes": 2698
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/controls-notice-recovered.json": {
+      "sha256": "485d9ac9f6716fd86e4445fc81a35911868ba2afd112c74ec55fd82ffd8a1a8b",
+      "bytes": 2703
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/controls-terminal-held.json": {
+      "sha256": "2f8733553c316fb029baaa889aae5c7cbed0d94fa7ee8587a960f3ab05388968",
+      "bytes": 2698
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/controls-terminal-recovered.json": {
+      "sha256": "cb0ba6658e5672953f4fbd76db1123ed2f96945657654198f394e8ea42e68684",
+      "bytes": 2703
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/current-suite-results.json": {
+      "sha256": "715ebee554b4726d83dff27d347cbfdc9d92c1e8b3407e8dea7c5c71c8284546",
+      "bytes": 77318
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/design.json": {
+      "sha256": "fd9315394639f50979a9d3163ecf9c77796669352f190982b03869f1848ea747",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/design.sqlite.gz": {
+      "sha256": "e03847b01a8cd5664cdc0fefb0f4914c9c82b2f71844554f5b550573b6abad09",
+      "bytes": 108896
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/finished-api.json": {
+      "sha256": "afb50f36c2d4fb51f6617f346ba0203a7aeda5118d065a731945c95956990363",
+      "bytes": 17892
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/finished-checked.json": {
+      "sha256": "d4762efdb125a772b485f701f274d5d88c9d0490d7d4dfb52d6e50c6a22e74d6",
+      "bytes": 80560
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/finished-runtime.json": {
+      "sha256": "98ba60822e17f75dd2a825945e91da5a3ba39af6727eee316cf2688cd9840d18",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/finished-runtime.sqlite.gz": {
+      "sha256": "31d61984d252ff98e764648428d2c0de3125e78637b01356bd8b69e5798d4d97",
+      "bytes": 185571
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/historical-evidence-inventory.json": {
+      "sha256": "7d9db740c0d5e4027ef27a218667ce83e322e177bb5d29a7ff81c34392e096aa",
+      "bytes": 53202
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/inbox-reader-mutation.json": {
+      "sha256": "8fe1699e6e237ad1835b8e3d0d9aeb4489237db75ae0fbcb0bd622b2ab15ae81",
+      "bytes": 551
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/notice-cut.json": {
+      "sha256": "afabf1114591034e85ff2bf840e09bf9288bb6f34169f8737e8ee3b71239fe69",
+      "bytes": 3428
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/notice-emitter-api.json": {
+      "sha256": "d7c5187f817b1ddf020a895ce120199c8b9e7190637e56f84dec2f7c9926bb44",
+      "bytes": 16184
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/notice-held-api.json": {
+      "sha256": "17dc17654f8ffdd61757233fd79c476965a7751141297494d490e301f75927cc",
+      "bytes": 15746
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/notice-held-checked.json": {
+      "sha256": "b392fe6fcb4f350e97898a7eda1510f905c76f58059118ea6df824514c8f874a",
+      "bytes": 71539
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/notice-held-runtime.json": {
+      "sha256": "f0a0e81a2ea485741587ae0847932d07c467cc8b70e0ef306ec2568db1e2b34f",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/notice-held-runtime.sqlite.gz": {
+      "sha256": "5b5b6fbd6fa93c810207832f325ad6ab6a5df448a59f6ebee581b6063723afcb",
+      "bytes": 172067
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/notice-recovered-api.json": {
+      "sha256": "557342cdf6c1ef97be5fcc70b6465c51b4185004bb8976a3648a6fb5ab4e95e5",
+      "bytes": 15746
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/notice-recovered-checked.json": {
+      "sha256": "5f273ec43680184289d616bf794104b4db78dafa35afffe5bf55e85a2c89b343",
+      "bytes": 71433
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/notice-recovered-runtime.json": {
+      "sha256": "1a2a0393c2d3bb0be8ed68e365b80360f7840f524f8824fb9ac31456938c68d1",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/notice-recovered-runtime.sqlite.gz": {
+      "sha256": "43752061e5b57fa58a542f27e465b3dbf67b109b4613c39b61ff95ab401ce9ee",
+      "bytes": 173335
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/owned-processes.json": {
+      "sha256": "79fb2520e41e888b6bee6315e92a056df58ff80f047642f8202762570c75cc9c",
+      "bytes": 980
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/prepare-api.json": {
+      "sha256": "f6d2a9d4307cc913651ee8d7e93f6f3f245a0b5905624af5918d906d104ebaa9",
+      "bytes": 12503
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/probe-binaries.json": {
+      "sha256": "bba7fd81d54d6ca43c942edb26bf7fb6555ced1cbc3a0c379eb05ddb250a8e32",
+      "bytes": 34595
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/publication-controls.json": {
+      "sha256": "e57e98b73afd8881edeaca3322a0f88e88edb577449b4b2448cdf6dbc7110b13",
+      "bytes": 389
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/published-contracts.json": {
+      "sha256": "f47ae56b536225e14fdff47d8235766ed4e858dc64877e8403f3d2ae4acbabeb",
+      "bytes": 3491
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/reader-binaries.json": {
+      "sha256": "2bf3ef6f4ff9979e00be4aa2ef97cb2a96428c6c0eaa1e69ea086a5c4f60b720",
+      "bytes": 7644
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/released-package-binaries.json": {
+      "sha256": "d50f3aab6e88d673a57792b933de20d63b29f1bd5bb51f327cb344b23939b697",
+      "bytes": 570
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/standard-binaries.json": {
+      "sha256": "5a1d753d1bf2aafe18a9fbb3d4e5cf53685644704268ab37f354f901a83dc366",
+      "bytes": 34596
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/terminal-cut.json": {
+      "sha256": "19711b8a727a22ade8b5668af9f483770e65ef654639884cae49a183e87d090b",
+      "bytes": 2720
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/terminal-emitter-api.json": {
+      "sha256": "b48b3761477e54110d041bd0060ce04259b5d94ffc097c79e34b733a4db6db7d",
+      "bytes": 17912
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/terminal-held-api.json": {
+      "sha256": "48eb26f39bc821f22831a89cadcd97bfcb185ef4aa90ba4a90885f04e6e6b3fb",
+      "bytes": 17467
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/terminal-held-checked.json": {
+      "sha256": "5851a9fd6aad50655a02ae656a6a81b040a0d56ce8f9b710ca69c7a98523920a",
+      "bytes": 82672
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/terminal-held-runtime.json": {
+      "sha256": "ceedd017cac33d459e9359282097b1d2f6331b6fa1beff5fe870a912b08b2862",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/terminal-held-runtime.sqlite.gz": {
+      "sha256": "afadcd6020f006db0ae0485b7ba28b82b0e97ee2831edc82137d36c33d2ee11e",
+      "bytes": 184630
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/terminal-natural-takeover.json": {
+      "sha256": "e3785ea9e0237d31afaf47b78daa2e4e115ad4b922096496908184464f7f40aa",
+      "bytes": 7288
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/terminal-recovered-api.json": {
+      "sha256": "c066b556e1edfbd9d48601985a00a42f3697d90e450c6ef2ae0b1de0f6e4d85a",
+      "bytes": 17467
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/terminal-recovered-checked.json": {
+      "sha256": "77b2f385ad8a5220643b06fc1a0b623dec660c788231b8d4d6c67071a4ce7a8d",
+      "bytes": 82566
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/terminal-recovered-runtime.json": {
+      "sha256": "e95de120b099abaa55921eba3290bcc673d94d20d9cce8816fae55a196409883",
+      "bytes": 378
+    },
+    "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/terminal-recovered-runtime.sqlite.gz": {
+      "sha256": "bd6da4d65d18c5f5a17b91be72d6b98b11fc30ea9086e7aa762fd2cdc3d5692a",
+      "bytes": 184898
+    }
+  },
+  "readerControls": {
+    "newPhases": 5,
+    "controlsPerPhase": 9,
+    "newTotal": 45,
+    "priorFixtureCompatibilityTotal": 53,
+    "total": 98,
+    "postMutationRestoredControlsPassed": true
+  },
+  "observationInboxMutation": {
+    "name": "observation-reader-omits-committed-inbox",
+    "sourceSha256": "b2409701254ac5707b96478e31c90938f499792f3ff23f18e092bf6cfb2fb0b5",
+    "scope": "Private observation-tool mutation; never applied to positive runtime/host.",
+    "sourceRestored": true,
+    "compileSucceeded": true,
+    "missingCommittedInboxIncorrectlyAccepted": true,
+    "controlFailedAsExpected": true,
+    "buildLogSha256": "b4d08771bb3a727b302918478fbaba2a9a592e99511f449fe24c4feefbf9f3a1",
+    "controlLogSha256": "78137078407c32597bc07f97dab1e88c97c3752276245c4b78ad25cf81ed50e0"
+  },
+  "publicationComparison": {
+    "actualPersistedRecommendedContracts": 2,
+    "matchesFrozenFingerprint": true,
+    "closedSnapshotUnchanged": true,
+    "additionalPositiveAndNegativeControls": 3
+  },
+  "freshWholeProjectResults": {
+    "RuntimeEF": 1710,
+    "Bpmn": 303,
+    "Interchange": 130,
+    "Tasks": 71,
+    "total": 2214,
+    "failed": 0,
+    "skipped": 0,
+    "calledControlEfCases": 32
+  },
+  "excludedAttempts": [
+    "Initial context-overload-only observer missed the normal intent-only dispatch path; successful ordinary source delivery without a marker is not a qualified cut.",
+    "An unbounded-worker mutation build exited MSB4166 before behavioral verification. The bounded two-worker retry compiled and its actual independent control failed as expected; restored normal verification is final.",
+    "Initial immutable publication verification used live read-only SQLite mode against a closed WAL-format backup and could not query. Explicit immutable closed-snapshot mode subsequently qualifies the unchanged original database.",
+    "An initial reader build used unsupported dotnet build --locked-mode and failed before compilation. Final build uses RestoreLockedMode=true and passed."
+  ],
+  "historicalDatabaseCapturesUnchanged": {
+    "specs/1006-bpmn-library-adoption/evidence/legacy/deferred-fault.sqlite.gz": {
+      "compressedSha256": "bc8290630360944deaf4b8dcd95a35ee6f03bfaf2a39171944f2ab89cbeed114",
+      "databaseSha256": "9fb85f497dc6cc1d2fd8836a3120875fdda9da57619d80bec094d6f085f4de51"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/listener-rearm-outcome.sqlite.gz": {
+      "compressedSha256": "972d66fd92c6e17b62e738a5b0b0c6907ce2f18f6c3aed09dba30b960be6c518",
+      "databaseSha256": "aaa978cdf13b22b65e7b59f18b860749e5164edd8304d10cd2556de216dd8404"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/listener-rearm.sqlite.gz": {
+      "compressedSha256": "217102f444b01fd9a970aff53ed75f48f9f043cd76de876b774a01e7f17da017",
+      "databaseSha256": "d7a674b085de74faeedf2f35082a0cfd454bb5dc7030d7ad621dd5788f58083d"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/parallel-mi-outcome.sqlite.gz": {
+      "compressedSha256": "a5e3c499c1afa90a8114f0ba00e5a2f9e99982208d84615b7d3489a49eaf42e3",
+      "databaseSha256": "2f2efebe2d6856cf4653d1339eb986be8717f8ebd50b9830f96e6c4ad16a44a1"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/parallel-mi.sqlite.gz": {
+      "compressedSha256": "6aa83b9e172ad0fc08a7c046b611fa74928aabcd5924701529f343388d953170",
+      "databaseSha256": "7026c2b7d69e0d8a6ab649d3ff8856076257c8b1c143d7cb972440e40d339734"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/queued-late-fault.sqlite.gz": {
+      "compressedSha256": "820cce74e45099f65494568799d9b009ea2ed8bc79a140a5ef4ffcf97490e879",
+      "databaseSha256": "aae3c9fb08fd213b426ed5dede4fce3ea632d641d947b3b7f141a196354e6235"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/queued-loser.sqlite.gz": {
+      "compressedSha256": "ce051448a84c5263f78a477724cff7e985aa619bea2c85442cb470bdd528fda5",
+      "databaseSha256": "71e98ed339a85926b434aa3f75613e8da883db0d118942ed4fb117ef6d097fa6"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy/resolved-race.sqlite.gz": {
+      "compressedSha256": "e1c8a5254550c1fe72e8ed76c0f701d40376824d3cdd7f2e79c507104824863f",
+      "databaseSha256": "fd6762b2d731e79c1e080fa8902d76579f20ea080e0c103eb8332f4f88f6cd7f"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/design.sqlite.gz": {
+      "compressedSha256": "101c56c6730d43fb75609fc2ddd8b8933e053ad8d8df9e7ef61f2387ba984ba2",
+      "databaseSha256": "32bab40972d5a8f686db0f099d1a2c5f625f9dfa419af479cf5a38776a33fe7a"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/old-resumed-runtime.sqlite.gz": {
+      "compressedSha256": "324434f3b08bfbf5ed4140b3d3036cb17c43e6b5e5fb7e11182610a5ed39a46b",
+      "databaseSha256": "d507c063aabd7b38c57f3e8d62c0b9c9b02c807ee0614b48df67aa6314c8d469"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/portability-resumed-runtime.sqlite.gz": {
+      "compressedSha256": "dc9c0ba1cbbbc607f713cded981075640865672de00493e73060b70e7e7ab462",
+      "databaseSha256": "9564bddf9b83c8ccf78cbc0f5ce2e42fb3a239671a7eb233e087b4d83ae2e354"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/runtime.sqlite.gz": {
+      "compressedSha256": "bcf934af937cf21823624e0a94c7bc634b7a227f8e30940953e1d4c06c1d5843",
+      "databaseSha256": "d0fcbe5132a0ae93f50e67c3186fa95ea7994caf892feb98e038bb5e2bff43b4"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/legacy-workbench-called/upgraded-resumed-runtime.sqlite.gz": {
+      "compressedSha256": "d89330ade54f818bb19ea65c26371381404fc71efd47820014bff786acb3c050",
+      "databaseSha256": "f8d863e2a90c8a90d78e149d265346e25157dfc42b870d37b7222ba7be5aa087"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/coded-runtime.sqlite.gz": {
+      "compressedSha256": "01a1f61c6970bdbb9cffe25deaf1451b99ae053b0f3d2d8d61a4e993003a7626",
+      "databaseSha256": "4bb165f9325cf092377056a13227bae1240750ba11927e4e06cf5a95f6b61a8f"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/design.sqlite.gz": {
+      "compressedSha256": "b4ca2421b3fcbfddafcc2ef4679945ee19f09c7766310bac4da75e7cab93e454",
+      "databaseSha256": "de000465e0b78cfa777d12507b73ab6da09ccea5a2b4d22fd81eb46ef4232673"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/finished-runtime.sqlite.gz": {
+      "compressedSha256": "ef0cdf0a0b289630bc0d578977c946925451d59989b657892eb3ac5551cd55c6",
+      "databaseSha256": "7e4d5d42e7716e6289359d0cd00a1b06f9a838ff6253c15966c6a3e43921ba7d"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/parked-runtime.sqlite.gz": {
+      "compressedSha256": "0f2f733c9e482a218544918b352fb65b32a37f6a3dff4492b73949a417f3927b",
+      "databaseSha256": "1720cc78c20c7bf03a98c291475f8fd0a5845be514c80344942734b427509640"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/opted-called-workbench/recovered-runtime.sqlite.gz": {
+      "compressedSha256": "8116c2433f7e97ca3ead5c6b71429dc6dd5a862b293320fb15f92e3b56dc0b6d",
+      "databaseSha256": "b6c802751da8fc4562e3980737ba2a402f9c2b4d7c7020233becbf57159033d0"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/design.sqlite.gz": {
+      "compressedSha256": "a73cb3fab55e5cf77775c67937f511f0694011a2812cfa0f62e27d53895d4579",
+      "databaseSha256": "b10cdf20cfe939a2f6b98169d0bef861865b8d3e5fcdafe810549c8ee90f599f"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/finished-runtime.sqlite.gz": {
+      "compressedSha256": "f55afcc37b591894d2c968a27583a38bfd0624a669cd3f7df663b544f6cee18b",
+      "databaseSha256": "2aa31aaf4c4a19d307b0e83463a3013fe189d11e53e911bcfb4893ef4b2c95a2"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/prepared-runtime.sqlite.gz": {
+      "compressedSha256": "c91948ebe002ec0516ae95830225d8cb412e2196e7e6847c749f491b47d28385",
+      "databaseSha256": "3e233f32f99452999fd57d1f9483620333d9fe85dc7709dd372b57362ae95621"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/recovered-runtime.sqlite.gz": {
+      "compressedSha256": "cbbb4b5aa7995b5122732c2f41a2057d99f44680d4a08bf15b89dda0ca60656d",
+      "databaseSha256": "be0637dc441a558fc09594b6e81c7fed723d4a6b1e39e42eb162f4f83476fb04"
+    },
+    "specs/1006-bpmn-library-adoption/evidence/concurrent-called-workbench/selected-runtime.sqlite.gz": {
+      "compressedSha256": "968948df0f6fa5a19fffb49b0dfe0cb6aeb0fef9d26770642b179a38aeb05014",
+      "databaseSha256": "639a9355eb750eaaaf56dbd9380e0d9528d2bec1635854090c90054b3a36046f"
+    }
+  },
+  "allPriorEvidenceInventory": "specs/1006-bpmn-library-adoption/evidence/called-ack-workbench/historical-evidence-inventory.json",
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "productionSourceChangedInThisIncrement": false,
+  "rootDependenciesChanged": false,
+  "duplicateSemanticWriterDeleted": false,
+  "reviews": {
+    "type": "three independent bounded correctness/standards/acceptance source and final artifact audits",
+    "remainingActionable": []
+  },
+  "fullPrRounds": 0,
+  "fullPrRoundBound": 6,
+  "scopeLimits": [
+    "Facts compares the complete named workflow/activity/dispatch/incident/physical-wait/non-target-source projections, not every module/SQLite row, raw EF revision or scheduler/value inventory. Target immutable Intent is separately equal; source delivery projection intentionally changes.",
+    "DeliveryAttemptCount is recorded source result count, not dispatcher or adapter invocation count. No actual callback-entry count is inferred.",
+    "Both host cuts precede the source result write; committed-ACK return loss is qualified separately for the generic outbox in T051.",
+    "42 pre-expiry terminal samples serialize timestamp/status/fence/recorded count; held checked source separately proves actual owner.",
+    "Historical host evidence remains source-bound, not rerun or restamped by current reader compatibility controls.",
+    "Final actual current Studio and protected resulting-main/production acceptance remain separate."
+  ],
+  "remainingGates": [
+    "T029 ordinary bound-task compensation and final actual current Studio",
+    "T032 deletion after remaining proof; T033/T034/T035 guards/baseline/docs",
+    "T036/T037/T038 final qualification/fullPR/green required exact-head checks/protected delivery/resulting-main; separate ADR0063",
+    "Independent2898/2907/program production acceptance;Orleans/task-runner follow-up deferred"
+  ]
+}

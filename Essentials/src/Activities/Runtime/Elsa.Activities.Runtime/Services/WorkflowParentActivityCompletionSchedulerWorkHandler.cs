@@ -143,6 +143,14 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         else if (ActivityAttemptActivationClaimer.WasParentCompletionProcessed(completedChildState))
             return;
 
+        if (!isParentOutcomeEvaluation && !isDescendantFaultEvaluation &&
+            completedChildState.Status == ActivityExecutionStatus.Completed && completedChildState.ChildControl is { } control)
+        {
+            await ChildControlDelivery.RunAsync(serviceProvider, TimeProvider, workItem, payload, control,
+                workItem.WorkItemId, cancellationToken);
+            return;
+        }
+
         var viaChildState = isDescendantFaultEvaluation
             ? await activityExecutionStateStore.FindAsync(
                   workItem.WorkflowExecutionId,
@@ -484,6 +492,9 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         {
             var disposalException = await ActivityActivationLeaseDisposer.TryDisposeAsync(activationLease);
             activationLease = null;
+            // Validation before semantic effects may defer its still-owed structural source. A real disposal
+            // failure retains the ordinary fault path and both causes instead of silently retrying cleanup.
+            if (exception is RuntimeSchedulerWorkUnavailableException && disposalException is null) throw;
             var fault = disposalException is null
                 ? exception
                 : ActivityActivationLeaseDisposer.CombineExecutionFailure(exception, disposalException);

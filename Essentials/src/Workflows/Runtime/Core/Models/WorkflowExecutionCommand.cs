@@ -35,5 +35,7 @@ public enum WorkflowExecutionCommandKind
     NotifyParentActivity = 17,
     AlterWorkflow = 18,
     /// <summary>Delivers an operator's intervention decision to the structural parent that requested it (spec 260 R-5).</summary>
-    DeliverInterventionDecision = 19
+    DeliverInterventionDecision = 19,
+    /// <summary>Delivers exact-source nonterminal called-workflow control through its caller inbox.</summary>
+    DeliverChildControl = 20
 }

@@ -13,6 +13,7 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Attributes;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -181,6 +182,14 @@ public sealed class ExecutableNodeCompiler(
         // #3135: whether rescheduling a faulted child the node already evaluated may reach it, read at preflight.
         if (clrActivityType is not null && typeof(IRuntimeAcceptsRescheduledFaultedChild).IsAssignableFrom(clrActivityType))
             metadata[RuntimeMetadataKeys.AcceptsRescheduledFaultedChild] = "true";
+        if (clrActivityType?.GetCustomAttribute<ActivityChildControlConsumerAttribute>() is { } control)
+        {
+            if (!typeof(IRuntimeStructuralActivity).IsAssignableFrom(clrActivityType) ||
+                !typeof(IRuntimeActivityChildControlConsumer).IsAssignableFrom(clrActivityType))
+                throw new InvalidOperationException("A child-control declaration requires a structural control consumer.");
+            metadata[RuntimeMetadataKeys.ChildControlConsumerKey] = control.Key;
+            metadata[RuntimeMetadataKeys.ChildControlConsumerVersion] = control.Version.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
 
         return metadata;
     }

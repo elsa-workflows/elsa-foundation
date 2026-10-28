@@ -8,6 +8,7 @@ namespace Elsa.Activities.Bpmn.Interchange.Contracts;
 /// BPMN 2.0 XML document with BPMNDI. Layout comes from the authored <c>diagram</c> payload when
 /// present; otherwise a simple grid is synthesized so other modelers can open the file.
 /// </summary>
+/// <remarks>Scoped single-implementation replacement contract; shell startup rejects multiple registrations.</remarks>
 public interface IBpmnDocumentExporter
 {
     string Export(ActivityNode processNode, BpmnExportOptions? options = null);

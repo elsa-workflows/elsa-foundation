@@ -1,0 +1,17 @@
+{
+  "path": "/_content/Elsa.Studio.Workflows/studio/modules/workflows/module.js?v=1.0.0",
+  "sha256": "291f87a415eb6ae8d66d8cfdc4399fc683f3681257e06b6b57260e5480d9782c",
+  "bytes": 197,
+  "matchesCurrentSourceBuild": true,
+  "mainImplementationChunk": {
+    "path": "/_content/Elsa.Studio.Workflows/studio/modules/workflows/module-CEwHBqsq.js",
+    "sha256": "f03c3d7003e01560a1920aa02421ffb9788df7e119fb4cb997e81e8656c24433",
+    "bytes": 107100,
+    "matchesCurrentSourceBuild": true,
+    "matchesUnchangedStudioSourceBuild": true
+  },
+  "scope": "Actual loader and referenced main implementation chunk only; not an inventory of every browser-fetched dependency.",
+  "matchesUnchangedStudioSourceBuild": true,
+  "backendBuildSourceCommit": "cb1ebc606d72ede03d0f9915b3c13d69d5b00fc1",
+  "studioBuildSourceCommit": "3815806acb51475903f3ee3b44cf263ac572db26"
+}

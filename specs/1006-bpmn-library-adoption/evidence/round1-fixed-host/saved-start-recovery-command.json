@@ -1,0 +1,21 @@
+{
+  "sourceCommit": "cb1ebc606d72ede03d0f9915b3c13d69d5b00fc1",
+  "arguments": [
+    "/tmp/elsa-2735-tools/pwsh/pwsh",
+    "-NoProfile",
+    "-File",
+    "e2e-tests/bpmn/Test-BpmnBroadcastRecovery.ps1",
+    "-ProbeAssembly",
+    "/tmp/elsa-2735-review/round1-fixed-probe-build/bin/Elsa.Workbench/release/Elsa.Workbench.dll",
+    "-NormalAssembly",
+    "/tmp/elsa-2735-review/round1-fixed-standard-build/bin/Elsa.Workbench/release/Elsa.Workbench.dll",
+    "-ReaderAssembly",
+    "/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/bpmn/DeliveryRecoveryRead/bin/Release/net10.0/DeliveryRecoveryRead.dll",
+    "-EvidencePath",
+    "/tmp/elsa-2735-review/round1-fixed-after-start.json",
+    "-SourceRevision",
+    "cb1ebc606d72ede03d0f9915b3c13d69d5b00fc1",
+    "-Phase",
+    "after-start"
+  ]
+}

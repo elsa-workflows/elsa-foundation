@@ -18,6 +18,8 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         "Runtime post-commit intent delivery deferred pending acknowledgement.";
 
     private readonly IRuntimePostCommitOutboxStore _outboxStore;
+    private readonly IPersistenceAccessContextAccessor? _persistenceAccessContextAccessor;
+    private readonly HashSet<string> _requiredSourceKinds = new(StringComparer.Ordinal);
     private readonly IRuntimePostCommitIntentDispatcher _intentDispatcher;
     private readonly TimeProvider _timeProvider;
     private readonly IRuntimeFaultCapturePolicy _faultCapturePolicy;
@@ -127,6 +129,23 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         _deliveryFailureProjector = projectors.SingleOrDefault();
     }
 
+    public RuntimePostCommitOutboxProcessor(IRuntimePostCommitOutboxStore outboxStore,
+        IRuntimePostCommitIntentDispatcher intentDispatcher, TimeProvider timeProvider, IRuntimeFaultCapturePolicy faultCapturePolicy,
+        IWorkflowDispatchStore? workflowDispatchStore, IEnumerable<IPostCommitFailureProjector> deliveryFailureProjectors,
+        ILogger<RuntimePostCommitOutboxProcessor>? logger, IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor,
+        IRuntimeCoalescingSessionAccessor? coalescingSessionAccessor, IPersistenceAccessContextAccessor? persistenceAccessContextAccessor,
+        IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions)
+        : this(outboxStore, intentDispatcher, timeProvider, faultCapturePolicy, workflowDispatchStore, deliveryFailureProjectors,
+            logger, liveDrainDeliveryAccessor, coalescingSessionAccessor)
+    {
+        _persistenceAccessContextAccessor = persistenceAccessContextAccessor;
+        _requiredSourceKinds = RuntimePostCommitOutboxItems.RequiredSourceKinds(contributions);
+    }
+
+    private bool RequiresDurableSource(RuntimePostCommitOutboxItem item) =>
+        item.StimulusDeliverySourceScope is not null || item.StimulusDeliveryProtocolVersion is not null ||
+        _requiredSourceKinds.Contains(item.Intent.Kind) || _intentDispatcher.RequiresDurableSource(item.Intent.Kind);
+
     public async ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(
         RuntimePostCommitOutboxProcessRequest request,
         CancellationToken cancellationToken = default)
@@ -208,6 +227,9 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
         RuntimePostCommitOutboxItem item,
         CancellationToken cancellationToken)
     {
+        if (RequiresDurableSource(item))
+            throw new RuntimePostCommitSourceBoundaryException(item.OutboxItemId, item.Intent.Kind,
+                new NotSupportedException("Required-source delivery needs the provider's fenced claim path."), false);
         try
         {
             await _intentDispatcher.DispatchAsync(item.Intent, cancellationToken);
@@ -238,12 +260,20 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
             claim,
             async dispatchCancellationToken =>
             {
-                await _intentDispatcher.DispatchAsync(item.Intent, dispatchCancellationToken);
+                if (RequiresDurableSource(item))
+                    await _intentDispatcher.DispatchAsync(await OpenDurableSourceAsync(claim, dispatchCancellationToken), dispatchCancellationToken);
+                else
+                    await _intentDispatcher.DispatchAsync(item.Intent, dispatchCancellationToken);
                 return true;
             },
             cancellationToken);
 
-        if (run.ClaimLost)
+        if (run.Exception is RuntimePostCommitSourceBoundaryException boundary)
+            ExceptionDispatchInfo.Capture(boundary).Throw();
+
+        if (run.ClaimLost || run.Exception is RuntimePostCommitOutboxStaleClaimException sourceStale &&
+            sourceStale.OutboxItemId == claim.OutboxItemId && sourceStale.PresentedOwnerId == claim.OwnerId &&
+            sourceStale.PresentedFencingToken == claim.FencingToken)
         {
             // Nothing was dispatched: the claimant that holds the item now delivers it. Delivering is reported as the
             // requested status because nothing was requested at all, and the superseded outcome keeps the item out of
@@ -280,6 +310,40 @@ public sealed class RuntimePostCommitOutboxProcessor : IRuntimePostCommitOutboxP
                 run.Exception is { } failure ? EffectiveFailureStatus(item, failure) : RuntimePostCommitOutboxStatus.Delivered,
                 FailureMessage: null,
                 RuntimePostCommitOutboxClaimCompletionOutcome.SupersededByOtherOwner);
+        }
+    }
+
+    private async ValueTask<PostCommitDeliveryContext> OpenDurableSourceAsync(RuntimePostCommitOutboxClaim claim,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var access = _persistenceAccessContextAccessor?.Current ??
+                throw new InvalidOperationException("Required-source delivery needs explicit persistence access.");
+            var scope = access.RequireScope();
+            var lookup = _outboxStore as IPostCommitOutboxLookupStore ??
+                throw new NotSupportedException("Required-source delivery needs the provider's durable lookup capability.");
+            var current = await lookup.FindDurableAsync(claim.OutboxItemId, cancellationToken) ??
+                throw new InvalidDataException("The physically committed source does not exist.");
+            if (current.OutboxItemId != claim.OutboxItemId ||
+                RuntimeCheckpointCommitFingerprint.ComputeIntent(current.Intent) != RuntimeCheckpointCommitFingerprint.ComputeIntent(claim.Item.Intent) ||
+                current.StimulusDeliverySourceScope is { } committedScope && committedScope != scope)
+                throw new InvalidDataException("The durable source identity, intent or committed scope differs from the claim.");
+            if (current.Status != RuntimePostCommitOutboxStatus.Delivering || current.DeliveringOwnerId != claim.OwnerId ||
+                current.DeliveryFencingToken != claim.FencingToken || current.DeliveryVisibleAfter is null ||
+                current.DeliveryVisibleAfter <= _timeProvider.GetUtcNow())
+                throw new RuntimePostCommitOutboxStaleClaimException(claim.OutboxItemId, claim.OwnerId, claim.FencingToken,
+                    current.DeliveringOwnerId, current.DeliveryFencingToken, current.Status);
+            var authoritativeClaim = new RuntimePostCommitOutboxClaim(current, claim.OwnerId, claim.FencingToken,
+                current.DeliveryStartedAt!.Value, current.DeliveryVisibleAfter.Value);
+            return new(authoritativeClaim, scope);
+        }
+        catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception)
+        {
+            throw new RuntimePostCommitSourceBoundaryException(claim.OutboxItemId, claim.Item.Intent.Kind, exception,
+                exception is not (InvalidDataException or InvalidOperationException or ArgumentException or NotSupportedException));
         }
     }
 

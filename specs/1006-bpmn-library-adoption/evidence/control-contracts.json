@@ -1,0 +1,24 @@
+{
+  "preIncrementSourceRevision": "6cec2a090",
+  "sourceSha256": {
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControl.cs": "3023bb709223c441b70d74f5107f51418d507e9176cccf04e257a7eb1d17747c",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeStructuralContinuation.cs": "ed5912f87a9eab78d756373b430d4f14d637337b85570928c441aaa9bcf43683",
+    "Essentials/src/Workflows/Runtime/Core/Models/ActivityExecutionState.cs": "2f69d308a575a9fbaae9b3d473677713a54a36c074459cdd865c0e3737ed82f1",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Models/DispatchWorkflowResult.cs": "f8ce50c9ae92e3606f626bb0bf8a5f407ded62f42056ec62d8e88f8384b54232",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/ChildControlContractTests.cs": "542e6949a4ff8ca238af6c3971d6f0f399af5afbaf76c9db7938c70ed0d3a489"
+  },
+  "tests": {
+    "targeted": 19,
+    "dispatchWorkflowWhole": 240,
+    "workflowsRuntimeWhole": 2610,
+    "failed": 0,
+    "skipped": 0
+  },
+  "mutation": "Remove scalar-presence and carried-pin shape guards: exact7 targeted cases fail; restored green",
+  "publicCoreApiDeclarationsAdded": 37,
+  "limits": [
+    "Contract and legacy-wire evidence only",
+    "No producer/authority/outbox/inbox or BPMN consumer yet",
+    "Not host-delivery or production acceptance"
+  ]
+}

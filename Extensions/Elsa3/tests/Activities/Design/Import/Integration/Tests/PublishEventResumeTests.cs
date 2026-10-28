@@ -3,6 +3,8 @@ using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Primitives.Activities;
+using Elsa.Cluster.Core.Contracts;
+using Elsa.Cluster.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa3.Activities.Design.Import.Integration.Tests.Support;
@@ -19,6 +21,17 @@ namespace Elsa3.Activities.Design.Import.Integration.Tests;
 /// </summary>
 public sealed class PublishEventResumeTests(ITestOutputHelper output)
 {
+    [Fact]
+    public async Task Import_host_observes_finalized_outbox_schema_for_publication()
+    {
+        await using var host = await Elsa3ImportHost.StartAsync();
+        using var scope = host.Shell.ServiceProvider.CreateScope();
+        var dormancy = scope.ServiceProvider.GetService<ISchemaDormancyCheck>();
+        Assert.NotNull(dormancy);
+        var availability = await dormancy.EvaluateAsync([new SchemaVersionRequirement("RuntimePostCommitOutbox", "2.0.0")]);
+        Assert.True(availability.IsAvailable, $"{availability.Reason}: {JsonSerializer.Serialize(dormancy.Observe())}");
+    }
+
     /// <summary>
     /// An Elsa 3 <c>Object</c> literal is the text the author typed. The import keeps it as text, so the imported
     /// Publish Event sends, and the Event receives, that JSON string unchanged.

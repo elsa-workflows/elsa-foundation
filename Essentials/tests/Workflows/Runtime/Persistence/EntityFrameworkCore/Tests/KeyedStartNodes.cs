@@ -3,6 +3,7 @@ using Elsa.Activities.Testing;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -72,6 +73,12 @@ internal static class KeyedStartNodes
     public sealed class ScopedStimulusRouter(WorkflowExecutionHarness node) : IStimulusRouter
     {
         public StimulusRoutingResult? LastResult { get; private set; }
+
+        public async ValueTask<StimulusRoutingResult> RouteSourceAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
+        {
+            await using var scope = await node.Services.GetRequiredService<IServiceScopeFactory>().CreateAsyncScopeAsync(source.Scope);
+            return LastResult = await scope.ServiceProvider.GetRequiredService<IStimulusRouter>().RouteSourceAsync(source, cancellationToken);
+        }
 
         public async ValueTask<StimulusRoutingResult> RouteAsync(StimulusDispatchRequest request, CancellationToken cancellationToken = default)
         {

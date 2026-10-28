@@ -1,3 +1,4 @@
+using System.Transactions;
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -26,10 +27,87 @@ public sealed class EfRuntimeCheckpointCommitStore(
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
+    bool IRuntimeCheckpointCommitStore.SupportsExactBookmarkResume => true;
+
+    bool IRuntimeCheckpointCommitStore.CanCommitExactBookmarkResume(IBookmarkStateStore bookmarks,
+        IWorkflowExecutionStateStore physicalExecutions, IActivityExecutionStateStore activities)
+    {
+        if (bookmarks is not EfBookmarkStateStore bookmarkStore || physicalExecutions is not EfWorkflowExecutionStateStore executions ||
+            activities is not EfActivityExecutionStateStore activityStore || !ReferenceEquals(bookmarkStore.Context, context) ||
+            !ReferenceEquals(executions.Context, context) || !ReferenceEquals(activityStore.Context, context)) return false;
+        try
+        {
+            var scope = accessContextAccessor.Current.RequireScope();
+            return bookmarkStore.AccessContext.RequireScope() == scope && executions.AccessContext.RequireScope() == scope &&
+                activityStore.AccessContext.RequireScope() == scope;
+        }
+        catch (InvalidOperationException) { return false; }
+    }
+
+    private async ValueTask StageExactBookmarkResumeAsync(RuntimeCheckpointCommit commit, string scope,
+        Dictionary<string, WorkflowTestScopeRecord> touchedTestScopes, CancellationToken cancellationToken)
+    {
+        if (commit.ExpectedBookmarkResume is not { } expected) return;
+        commit.EnsureExactBookmarkResumeShape();
+        if (accessContextAccessor.Current.RequireScope().Value != scope)
+            throw new InvalidOperationException("The exact bookmark checkpoint changed physical scope.");
+        var id = EfBookmarkStateStore.CreateId(scope, expected.WorkflowExecutionId, expected.BookmarkId);
+        var row = await context.Bookmarks.SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+        if (row is null) throw new BookmarkResumeSupersededException(expected.WorkflowExecutionId, expected.BookmarkId);
+        var bookmark = EfBookmarkStateStore.MapChecked(row, scope, expected.WorkflowExecutionId, expected.BookmarkId, id);
+        var workflowId = EfWorkflowExecutionStateStore.CreateId(scope, expected.WorkflowExecutionId);
+        var workflowRow = await context.WorkflowExecutionStates.SingleOrDefaultAsync(candidate => candidate.Id == workflowId, cancellationToken);
+        var activityId = ActivityExecutionEfSupport.CreateId("state", scope, expected.WorkflowExecutionId, expected.ActivityExecutionId);
+        var activityRow = await context.ActivityExecutionStates.SingleOrDefaultAsync(candidate => candidate.Id == activityId, cancellationToken);
+        if (workflowRow is null || activityRow is null)
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.owner-unavailable", "The saved wait's owning execution is unavailable.");
+        var workflow = EfWorkflowExecutionStateStore.ReadChecked(workflowRow, scope, expected.WorkflowExecutionId);
+        var activity = EfActivityExecutionStateStore.ReadChecked(activityRow, scope, expected.WorkflowExecutionId, expected.ActivityExecutionId);
+        accessContextAccessor.Current.EnsureTenantScope(workflow.TenantId);
+        var observed = new BookmarkStateObservation(bookmark, row.Revision, new PersistenceScope(scope));
+        if (!expected.MatchesAdmission(observed, workflow, activity, new(scope), _timeProvider.GetUtcNow()))
+            throw new BookmarkResumeSupersededException(expected.WorkflowExecutionId, expected.BookmarkId);
+        if (workflow.TestScope is { } testScope)
+        {
+            try { await EfRuntimeCheckpointTestScopeParticipantStaging.AssertOpenAndStageAsync(context, testScope,
+                _timeProvider.GetUtcNow(), scope, touchedTestScopes, cancellationToken); }
+            catch (TestScopeAdmissionException) { throw new BookmarkResumeSupersededException(expected.WorkflowExecutionId, expected.BookmarkId); }
+        }
+        // Protect the exact generation and both live owner headers even when this checkpoint changes only
+        // activity state. Normal participant staging reuses these tracked rows and their original CAS revisions.
+        row.Revision = checked(row.Revision + 1);
+        workflowRow.Revision = checked(workflowRow.Revision + 1);
+        activityRow.Revision = checked(activityRow.Revision + 1);
+    }
+
+    private void EnsureExactBookmarkDeadline(RuntimeCheckpointCommit commit)
+    {
+        if (commit.ExpectedBookmarkResume is not { } expected) return;
+        var now = _timeProvider.GetUtcNow();
+        if (expected.ExpiresAt <= now || expected.RegistrationCapture?.Scope.TestScope?.IsExpired(now) == true)
+            throw new BookmarkResumeSupersededException(expected.WorkflowExecutionId, expected.BookmarkId);
+    }
+
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
         RuntimeCheckpointCommit commit,
         RuntimeCheckpointPersistenceDecision decision,
         CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(commit);
+        try { return await CommitCoreAsync(commit, decision, cancellationToken); }
+        catch (Exception exception) when (commit.ExpectedBookmarkResume is not null &&
+            (exception is IOException or DbUpdateConcurrencyException or
+                WorkflowExecutableRootWriteLeaseLostException or WorkflowExecutableRootWriteLeaseUnavailableException ||
+             exception is OperationCanceledException && !cancellationToken.IsCancellationRequested ||
+             EfRelationalExceptionClassifier.IsProviderFailure(exception)))
+        {
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable",
+                "Exact bookmark admission is unavailable.", exception);
+        }
+    }
+
+    private async ValueTask<RuntimeCheckpointCommitStoreResult> CommitCoreAsync(
+        RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(commit);
         ArgumentNullException.ThrowIfNull(decision);
@@ -68,6 +146,10 @@ public sealed class EfRuntimeCheckpointCommitStore(
             EfRuntimeAlterationCheckpointParticipationGate.MarkDurable(context, commit, scope);
             return replay;
         }
+
+        if (commit.ExpectedBookmarkResume is not null && (context.ChangeTracker.HasChanges() || context.Database.CurrentTransaction is not null ||
+            context.Database.GetEnlistedTransaction() is not null || System.Transactions.Transaction.Current is not null))
+            throw new InvalidOperationException("Exact bookmark checkpoint admission requires a clean context and its own transaction.");
 
         if (commit.StateChanges.WorkflowExecution is { } executionChange)
         {
@@ -123,6 +205,8 @@ public sealed class EfRuntimeCheckpointCommitStore(
                         _timeProvider,
                         writeCancellationToken);
                 }
+
+                await StageExactBookmarkResumeAsync(commit, scope, touchedTestScopes, writeCancellationToken);
 
                 if (commit.StateChanges.WorkflowExecution is { } workflowChange)
                 {
@@ -202,18 +286,22 @@ public sealed class EfRuntimeCheckpointCommitStore(
 
                 // Flush all participant rows first, then add the immutable marker as the final write in this
                 // transaction. The marker is the durable commit proof, so it must never precede a participant failure.
+                EnsureExactBookmarkDeadline(commit);
                 await context.SaveChangesAsync(writeCancellationToken);
                 context.RuntimeCheckpointCommits.Add(marker);
                 await context.SaveChangesAsync(writeCancellationToken);
+                EnsureExactBookmarkDeadline(commit);
                 await transaction.CommitAsync(writeCancellationToken);
                 return ResultFor(commit, marker);
             }
             catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
             {
                 await RollbackAndRestoreAsync(transaction);
-                var winner = await FindMarkerAsync(scope, commit.CommitId, writeCancellationToken);
+                var winner = await ReconcileMarkerAsync(exception, writeCancellationToken);
                 if (winner is not null)
                     return ResolveReplay(commit, fingerprint, winner);
+                if (commit.ExpectedBookmarkResume is not null)
+                    throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable", "Exact bookmark admission changed concurrently.", exception);
                 throw;
             }
             catch (OperationCanceledException)
@@ -227,10 +315,25 @@ public sealed class EfRuntimeCheckpointCommitStore(
 
                 // A provider can acknowledge the commit ambiguously. The immutable marker is the only authoritative
                 // reconciliation signal: if it is visible, return the original result; otherwise preserve the failure.
-                var reconciled = await FindMarkerAsync(scope, commit.CommitId, writeCancellationToken);
+                var reconciled = await ReconcileMarkerAsync(exception, writeCancellationToken);
                 if (reconciled is not null)
                     return ResolveReplay(commit, fingerprint, reconciled);
+                if (commit.ExpectedBookmarkResume is not null && (exception is DbUpdateConcurrencyException or IOException ||
+                    EfRelationalExceptionClassifier.IsProviderFailure(exception)))
+                    throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable", "Exact bookmark admission is unavailable.", exception);
                 throw;
+            }
+        }
+
+        async ValueTask<RuntimeCheckpointCommitEntity?> ReconcileMarkerAsync(Exception original, CancellationToken token)
+        {
+            try { return await FindMarkerAsync(scope, commit.CommitId, token); }
+            catch (Exception lookupFailure) when (commit.ExpectedBookmarkResume is not null &&
+                (lookupFailure is IOException || lookupFailure is OperationCanceledException && !token.IsCancellationRequested ||
+                    EfRelationalExceptionClassifier.IsProviderFailure(lookupFailure)))
+            {
+                throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable",
+                    "Exact bookmark admission could not reconcile its durable checkpoint.", new AggregateException(original, lookupFailure));
             }
         }
     }

@@ -298,7 +298,7 @@ public sealed class WorkflowDispatchCompletionEnricherTests
             availableAt: null,
             deliveredAt: invalid.RecordedAt);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
             NewEnricher(new ThrowingOutputSource(), new FixedLookupStore(committedItem))
                 .EnrichAsync(NewCompletedCommit()).AsTask());
 
@@ -342,7 +342,7 @@ public sealed class WorkflowDispatchCompletionEnricherTests
             availableAt: null,
             deliveredAt: mismatched.RecordedAt);
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
             NewEnricher(new ThrowingOutputSource(), new FixedLookupStore(committedItem))
                 .EnrichAsync(NewCompletedCommit()).AsTask());
 

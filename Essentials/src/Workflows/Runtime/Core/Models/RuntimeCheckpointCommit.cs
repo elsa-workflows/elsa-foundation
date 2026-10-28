@@ -15,6 +15,29 @@ public sealed record RuntimeCheckpointCommit(
 {
     public string WorkflowExecutionId => Checkpoint.WorkflowExecutionId;
 
+    /// <summary>Optional exact physical wait condition, atomically checked with initial trigger consumption.</summary>
+    /// <remarks>This is a write condition, not source authority. Legacy providers refuse it. Null retains the old wire/fingerprint.</remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StimulusResumeRecipient? ExpectedBookmarkResume { get; init; }
+
+
+    /// <summary>Validate that the exact wait condition belongs to this initial trigger-claim checkpoint.</summary>
+    public void EnsureExactBookmarkResumeShape()
+    {
+        if (ExpectedBookmarkResume is not { } expected) return;
+        var activity = StateChanges.ActivityExecutions.SingleOrDefault(change => change.StateId == expected.ActivityExecutionId);
+        var bookmark = StateChanges.Bookmarks.SingleOrDefault(change => change.StateId == expected.BookmarkId);
+        if (expected.RegistrationCapture is null || expected.WorkflowExecutionId != WorkflowExecutionId ||
+            bookmark is not { Operation: RuntimeStateChangeOperation.Delete } || !expected.Matches(bookmark.State) ||
+            activity is not { Operation: RuntimeStateChangeOperation.Upsert, State.Status: ActivityExecutionStatus.Running } ||
+            activity.State.Execution.WorkflowExecutionId != WorkflowExecutionId ||
+            activity.State.Execution.ActivityExecutionId != expected.ActivityExecutionId || activity.State.Execution.ExecutableNodeId != expected.ExecutableNodeId ||
+            !activity.State.Metadata.TryGetValue(Constants.RuntimeMetadataKeys.ActivityAttemptActivationClaim, out var claim) ||
+            activity.State.Attempts?.Any(attempt => attempt.AttemptId == claim && attempt.InvocationId == expected.ActivityExecutionId &&
+                attempt.Reason == ActivityAttemptReason.Resume && attempt.EndedAt is null) != true)
+            throw new InvalidOperationException("Exact bookmark resume requires its captured wait deletion and matching initial activity-attempt claim.");
+    }
+
     /// <summary>
     /// Optional single-writer fence that a durable store must validate in the same atomic decision as the checkpoint
     /// state, post-commit outbox, and idempotency marker. It is intentionally excluded from replay identity: an
@@ -24,7 +47,7 @@ public sealed record RuntimeCheckpointCommit(
 
     /// <summary>
     /// Keeps the scheduler work item that caused this checkpoint available until its handler finishes. This is used by
-    /// bookmark trigger-claim boundaries: claiming an activity attempt is not the same as successfully executing it.
+    /// activity and bookmark trigger-claim boundaries: claiming an activity attempt is not the same as accepting its decision.
     /// </summary>
     public bool RetainSchedulerWork { get; init; }
 }
@@ -187,6 +210,26 @@ public sealed class RuntimeCheckpointStateChangeSet
             WorkflowDispatches,
             ActivityExecutionInspections,
             postCommitOutbox,
+            ActivityScopeCleanups,
+            WorkflowDispatchCancellations,
+            ConsumedSchedulerWorkItems,
+            AlterationJobTerminalChange,
+            BackgroundActivityWork);
+
+    /// <summary>Returns a copy with the supplied activity projections, preserving every other atomic participant.</summary>
+    public RuntimeCheckpointStateChangeSet WithActivityExecutions(
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>> activityExecutions) =>
+        new(
+            WorkflowExecution,
+            Scheduler,
+            activityExecutions,
+            Bookmarks,
+            DurableValues,
+            Incidents,
+            Operational,
+            WorkflowDispatches,
+            ActivityExecutionInspections,
+            PostCommitOutbox,
             ActivityScopeCleanups,
             WorkflowDispatchCancellations,
             ConsumedSchedulerWorkItems,

@@ -182,6 +182,10 @@ public sealed class RuntimeResumeBookmarkCommandPayload : IActivityCommandPayloa
         TestRunDelivery = testRunDelivery;
     }
 
+    /// <summary>Optional captured physical wait condition; only initial trigger admission consumes it.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StimulusResumeRecipient? ExpectedBookmarkResume { get; init; }
+
     public WorkflowExecutableIdentity PinnedExecutable { get; }
     public string BookmarkId { get; }
     public string ActivityExecutionId { get; }

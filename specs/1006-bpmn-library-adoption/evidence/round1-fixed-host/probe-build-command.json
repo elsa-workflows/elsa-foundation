@@ -1,0 +1,19 @@
+{
+  "sourceCommit": "cb1ebc606d72ede03d0f9915b3c13d69d5b00fc1",
+  "arguments": [
+    "dotnet",
+    "build",
+    "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+    "-c",
+    "Release",
+    "--artifacts-path",
+    "/tmp/elsa-2735-review/round1-fixed-probe-build",
+    "-p:ElsaBpmnRecoveryProbe=true",
+    "-p:RestoreLockedMode=true",
+    "-p:SourceRevisionId=cb1ebc606d72ede03d0f9915b3c13d69d5b00fc1",
+    "-m:2",
+    "-nodeReuse:false",
+    "-p:UseSharedCompilation=false"
+  ],
+  "profile": "opt-in recovery probe after complete-PR round1 corrections"
+}

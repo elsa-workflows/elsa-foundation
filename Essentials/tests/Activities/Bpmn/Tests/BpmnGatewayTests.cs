@@ -1,6 +1,8 @@
 using Elsa.Activities.Bpmn.Models;
 using Xunit;
 
+using BpmnDiagnosticKind = global::Bpmn.Model.State.BpmnDiagnosticKind;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 public sealed class BpmnGatewayTests

@@ -12,7 +12,7 @@ public sealed class BpmnRoundTripTests
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly BpmnDocumentImporter _importer = new();
+    private readonly BpmnDocumentImporter _importer = new(new BpmnWorkBinder());
     private readonly BpmnDocumentExporter _exporter = new();
 
     private static ActivityNode ProcessNode(BpmnAuthoredStructure structure) =>
@@ -208,7 +208,7 @@ public sealed class BpmnRoundTripTests
         Assert.Equal("PT5M", Assert.Single(catchEvent.EventDefinitions).Properties[BpmnEventDefinitionProperties.Interval]);
         var child = Assert.Single(reimported.Activities);
         Assert.Equal("Elsa.Delay", child.ActivityVersionId);
-        Assert.Equal("PT5M", LiteralString(child, "Duration"));
+        Assert.Equal("00:05:00", LiteralString(child, "Duration"));
     }
 
     [Theory]

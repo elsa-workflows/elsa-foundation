@@ -21,7 +21,7 @@ public sealed class BpmnCallActivityInterchangeTests
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly BpmnDocumentImporter _importer = new();
+    private readonly BpmnDocumentImporter _importer = new(new BpmnWorkBinder());
     private readonly BpmnDocumentExporter _exporter = new();
 
     private const string BoundDocument = """
@@ -66,7 +66,7 @@ public sealed class BpmnCallActivityInterchangeTests
 
         // No unbound finding, and the imported graph builds.
         Assert.DoesNotContain(result.Analysis.Issues, issue => issue.ElementId == "call");
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(structure)));
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public sealed class BpmnCallActivityInterchangeTests
 
         Assert.Contains(result.Analysis.Issues, issue =>
             issue.Severity == BpmnImportIssueSeverity.Info && issue.ElementId == "call" && issue.Message.Contains("imported unbound", StringComparison.Ordinal));
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(structure)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(structure)));
     }
 
     [Fact]
@@ -123,7 +123,7 @@ public sealed class BpmnCallActivityInterchangeTests
         Assert.Equal("ForeignProcess", call.Properties["bpmn.calledElement"]);
         var child = reimported.Activities.Single(activity => activity.NodeId == call.ChildNodeId);
         Assert.Equal("child-def-1", Literal(child, "WorkflowDefinitionId"));
-        Assert.NotNull(BpmnGraph.From(BridgeToExecutableNode(reimported)));
+        Assert.NotNull(BpmnGraphAdapter.Build(BridgeToExecutableNode(reimported)));
     }
 
     [Fact]

@@ -10,13 +10,18 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
-public sealed class EfWorkflowExecutableSourceReferenceStore(
+public sealed partial class EfWorkflowExecutableSourceReferenceStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor access,
-    IRuntimeRecoveryContinuationCodec continuationCodec) : IWorkflowExecutableSourceReferenceStore
+    IRuntimeRecoveryContinuationCodec continuationCodec,
+    TimeProvider? timeProvider) : IWorkflowExecutableSourceReferenceStore
 {
+    public EfWorkflowExecutableSourceReferenceStore(RuntimeDbContext context, IPersistenceAccessContextAccessor access,
+        IRuntimeRecoveryContinuationCodec continuationCodec) : this(context, access, continuationCodec, TimeProvider.System) { }
+
     private const string ContinuationPurpose = "ef-runtime-source-reference-page-v1";
     private readonly IRuntimeRecoveryContinuationCodec continuationCodec = continuationCodec;
+    private readonly TimeProvider timeProvider = timeProvider ?? TimeProvider.System;
     public async ValueTask SaveAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken = default)
     {
         Validate(reference);
@@ -40,6 +45,7 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
                 _ = Read(existing, scope, reference.SourceReferenceId);
                 throw new InvalidOperationException($"Workflow executable source reference '{reference.SourceReferenceId}' already exists; source references are create-only.");
             }
+            await EfExecutableActivityTemplateStore.StageSourceTemplateFenceAsync(context, scope, reference.ArtifactId, cancellationToken);
             context.WorkflowExecutableSourceReferences.Add(ToEntity(reference, scope, id));
             await RuntimeArtifactEfPersistenceBoundary.ExecuteAsync(
                 context, "saving", reference.SourceReferenceId, () => context.SaveChangesAsync(cancellationToken));
@@ -59,13 +65,38 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
 
     /// <summary>The context this store reads and stages through.</summary>
     internal RuntimeDbContext Context => context;
+    internal PersistenceAccessContext AccessContext => access.Current;
+    internal async Task<(WorkflowExecutableSourceReferenceEntity Row, WorkflowExecutableSourceReference Value)?> ReadPhysicalMaintenanceSourceAsync(
+        string scope, string sourceReferenceId, CancellationToken cancellationToken)
+    {
+        if (RequireScope() != scope) throw new InvalidOperationException("Template maintenance source scope changed.");
+        var row = await context.WorkflowExecutableSourceReferences.AsNoTracking().SingleOrDefaultAsync(
+            candidate => candidate.Id == CreateId(scope, sourceReferenceId), cancellationToken);
+        return row is null ? null : (row, Read(row, scope, sourceReferenceId));
+    }
+
+    internal async Task<IReadOnlyCollection<WorkflowExecutableSourceReference>> ReadMaintenanceSourcesAsync(string scope, CancellationToken cancellationToken)
+    {
+        if (RequireScope() != scope) throw new InvalidOperationException("Template maintenance reference scope changed.");
+        var rows = await EfExecutableActivityTemplateStore.ReadCheckedMaintenanceRowsAsync<WorkflowExecutableSourceReferenceEntity>(context, scope, cancellationToken);
+        return rows.Select(row => Read(row, scope, EfExecutableActivityTemplateStore.DecodeMaintenanceId(row.SourceReferenceId))).ToArray();
+    }
+
+    internal string ScopeForPublication(WorkflowExecutableSourceReference reference) => ScopeForWrite(reference);
+
+    // Cohort acceptance must resolve publications in its own selected access boundary, even when a
+    // caller supplies a native reader over this context with a different ambient accessor.
+    internal EfWorkflowExecutableSourceReferenceStore WithAccess(IPersistenceAccessContextAccessor accessor) =>
+        new(context, accessor, continuationCodec, timeProvider);
 
     /// <summary>
     /// Stages a create-only source reference in the caller's open transaction without saving. A live reference
-    /// already carrying the same identity and artifact is adopted and returns <c>false</c>: it is the one a
-    /// previous attempt of the same publication committed. Anything else under that id is a conflict.
+    /// already carrying the same identity and artifact is adopted with Created=false and its persisted payload:
+    /// it is the one a previous attempt committed. Strict live mode also checks the complete source payload
+    /// and expiry, except retry CreatedAt/PublishedAt timestamps. Anything else under that id is a conflict.
     /// </summary>
-    internal async Task<bool> StageCreateOrAdoptAsync(WorkflowExecutableSourceReference reference, CancellationToken cancellationToken)
+    internal async Task<(bool Created, WorkflowExecutableSourceReference Reference)> StageCreateOrAdoptAsync(
+        WorkflowExecutableSourceReference reference, CancellationToken cancellationToken, TimeProvider? liveClock = null)
     {
         Validate(reference);
         var scope = ScopeForWrite(reference);
@@ -74,18 +105,32 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
             context,
             "saving",
             reference.SourceReferenceId,
-            () => RowsOf(scope, reference.SourceReferenceId).AsNoTracking().SingleOrDefaultAsync(cancellationToken));
+            () => liveClock is null ? RowsOf(scope, reference.SourceReferenceId).AsNoTracking().SingleOrDefaultAsync(cancellationToken)
+                : context.WorkflowExecutableSourceReferences.AsNoTracking().SingleOrDefaultAsync(row => row.Id == id, cancellationToken));
+        if (liveClock is not null && !reference.IsLive(liveClock.GetUtcNow()))
+            throw new InvalidOperationException("The proposed template source reference is no longer live.");
         if (existing is null)
         {
+            await EfExecutableActivityTemplateStore.StageSourceTemplateFenceAsync(context, scope, reference.ArtifactId, cancellationToken);
             context.WorkflowExecutableSourceReferences.Add(ToEntity(reference, scope, id));
-            return true;
+            return (true, reference);
         }
 
         var current = Read(existing, scope, reference.SourceReferenceId);
+        if (liveClock is not null && (!current.IsLive(liveClock.GetUtcNow()) ||
+                !WorkflowExecutableSourceReferenceComparer.SameIdentity(current,
+                    reference with { CreatedAt = current.CreatedAt, PublishedAt = current.PublishedAt })))
+            throw new InvalidOperationException("The template source reference conflicts or is no longer live.");
         if (current.DeletedAt is not null || !SameArtifactBinding(current, reference))
             throw new InvalidOperationException(
                 $"Workflow executable source reference '{reference.SourceReferenceId}' already exists for different material; source references are create-only.");
-        return false;
+        await EfExecutableActivityTemplateStore.StageSourceTemplateFenceAsync(context, scope, reference.ArtifactId, cancellationToken);
+        // Adoption is a root write too. Fence a concurrent retirement/replacement of this exact row
+        // in the same commit as the native material revision, without rewriting its source payload.
+        context.Attach(existing);
+        existing.Revision = checked(existing.Revision + 1);
+        context.Entry(existing).Property(row => row.Revision).IsModified = true;
+        return (false, current);
     }
 
     // Timestamps are deliberately excluded: a retry of the same publication may re-mint them, but it cannot
@@ -294,6 +339,34 @@ public sealed class EfWorkflowExecutableSourceReferenceStore(
         var row = await RowsOf(scope, sourceReferenceId).SingleOrDefaultAsync(cancellationToken);
         if (row is not null && next(Read(row, scope, sourceReferenceId)) is { } moved)
             Copy(row, moved, scope);
+    }
+
+    public async ValueTask<bool> TryDeleteDoomedAsync(WorkflowExecutableSourceReference expectedDoomedReference,
+        DateTimeOffset now, WorkflowExecutableDeletionGuard deletionGuard, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(expectedDoomedReference); ArgumentNullException.ThrowIfNull(deletionGuard);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (expectedDoomedReference.ArtifactId != deletionGuard.ArtifactId)
+            throw new ArgumentException("The reference and deletion guard differ.", nameof(deletionGuard));
+        try
+        {
+            return await new EfWorkflowExecutableStore(context, access).ExecuteUnderDeletionGuardAsync(deletionGuard, now, async () =>
+            {
+                Validate(expectedDoomedReference);
+                var scope = RequireScope();
+                var row = await RowsOf(scope, expectedDoomedReference.SourceReferenceId).AsNoTracking().SingleOrDefaultAsync(cancellationToken);
+                if (row is null) return false;
+                var current = Read(row, scope, expectedDoomedReference.SourceReferenceId);
+                if (!WorkflowExecutableSourceReferenceComparer.SameSnapshot(current, expectedDoomedReference) || current.IsLive(now)) return false;
+                return await context.WorkflowExecutableSourceReferences.Where(candidate => candidate.Id == row.Id &&
+                    candidate.Revision == row.Revision && candidate.IncarnationId == row.IncarnationId)
+                    .ExecuteDeleteAsync(cancellationToken) == 1;
+            }, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (RuntimeArtifactEntityFrameworkPersistenceException) { throw; }
+        catch (Exception exception) when (exception is IOException or OperationCanceledException || EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        { context.ChangeTracker.Clear(); throw NormalizeProviderFailure("guarded reference cleanup", expectedDoomedReference.SourceReferenceId, exception); }
     }
 
     public async ValueTask<bool> TryDeleteDoomedAsync(WorkflowExecutableSourceReference expectedDoomedReference, DateTimeOffset now, CancellationToken cancellationToken = default)
