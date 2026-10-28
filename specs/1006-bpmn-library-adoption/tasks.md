@@ -142,8 +142,8 @@ do not replace its host/fresh-EF/concurrency proof. Full-PR rounds remain at zer
 - [x] T034 Reconcile every moved/changed scenario against the permanent 242-method audit in `specs/1006-bpmn-library-adoption/evidence/test-reconciliation.md`; preserve host assertions and name released replacements/reasons for intentionally changed expectations.
 - [x] T035 Update affected BPMN/interchange READMEs, API surface/version evidence and relevant extension-point references with delivered behavior and exact limits. Complete spec status/checklist cleanup only when implementation is actually ready.
 - [x] T036 Run affected whole projects with discovery/execution counts, relevant Studio suites/browser proof, architecture guards, generated maps and locked solution restore when references change; record red/green controls and retained failures/skips on the PR.
-- [ ] T037 Review the complete switch PR to convergence with independent correctness/standards/acceptance lenses, record each round and gate evidence, mark ready and retain all required exact-head checks/protection/human holds.
-- [ ] T038 Merge only under the existing review/standing-authorization rules, verify resulting main and checkpoint #2735/#2892. Keep ADR0063 proposed until the third ordered PR; keep #2898/#2907 and unproved production criteria open.
+- [x] T037 Review the complete switch PR to convergence with independent correctness/standards/acceptance lenses, record each round and gate evidence, mark ready and retain all required exact-head checks/protection/human holds.
+- [x] T038 Merge only under the existing review/standing-authorization rules, verify resulting main and checkpoint #2735/#2892. Keep ADR0063 proposed until the third ordered PR; keep #2898/#2907 and unproved production criteria open.
 
 ## Dependencies and execution
 
@@ -251,3 +251,17 @@ Full-PR round3 on `35ed1215b9a4d91385015a6d2e467ffa2da0ad83` requires one serial
 The [round-3 explicit-null writer correction](evidence/round3-null-writer-fix.md) uses two existing-member JsonIgnore(Never) attributes to preserve nullable payload/classification under omission policies. Actual registered SerializationFeature/IPayloadSerializer regressions plus omission/naming cases execute16fail/1pass on unchanged production, then17pass after correction. Whole BPMN372/EF1724/Runtime3043/Dispatch380/ActivitiesRuntime720/Architecture590 pass (6829total/0failed/0skipped), discovery expansions reconciled/maps green. Strict malformed-state refusal, constructors/CLR signatures, legacy absence and frozen authoring remain compatible. Actual exact-code host/Studio refresh and full-PR round4 remain pending; three rounds completed of six, no clean final verdict.
 
 The [round-3 writer-corrected host/Studio qualification](evidence/round3-fixed-host-qualification.md) closes T036 on exact standard build `409ee7ba331b46925cd228f3bdccd7627f4d643b`. Both coded errors and six escalation cases pass; six complete parent/child/control/physical/source observations equal across a real owned cold restart, then public completion preserves truthful results. Four Runtime stages pass24readercontrols and final Studio Runtime/Design make six portable module backups. Actual Studio PublishedRun14iGKYmvX2h completes2activities/0incidents on retained artifactcfad; recovered caller14iG40qMjTo shows Completedcall/Faultedoutcome/0localincidents and handled caller completion. Retained complete authored-v1 payload and actual exported XML exactly equal original UI values. Two inspected screenshots/fullDOM/API/binary/servedJS/frozenfingerprint evidence is portable. Full rounds3/6 complete; full round4/newexactheadchecks/actualFulltier/protection/delivery/main, thirdADR0063 and independentprogramproductiongates remain open.
+
+
+## Adoption delivery and resulting-main closeout — 28 October 2026
+
+T037/T038 are complete. Complete-PR round5 converged cleanly on d44b0a796 across independent
+correctness, standards and acceptance. Adoption #3338 merged through normal protection as
+`438001406d980051584234e5d656eb8e6a67f47f`; its complete tree equals the reviewed tree.
+The [resulting-main qualification](evidence/resulting-main-qualification.md) records green exact-main
+CI/Studio/CodeQL, actual six-case409-to438 upgrade recovery and both coded errors, and normal
+Studio retained-artifact execution/reload/export with unchanged authoring and frozen contracts2/2.
+Four whole module backups and24readercontrols are portable; original old-writer/ack and6829whole
+local cases retain their earlier source scopes. The third ordered PR accepts ADR0063 after this
+verified delivery. Independent #2898/#2907 and #2892 production acceptance remain open; deferred
+Orleans/task-runner work remains deferred.

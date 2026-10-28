@@ -45,11 +45,18 @@ are built as general Elsa modules that Flowchart can use too.
 - An operator console. That belongs to Valence Control.
 - Zeebe wire-protocol compatibility, CMMN and analytics.
 
+## Delivered Foundation adoption
+
+[#2735](https://github.com/elsa-workflows/elsa-foundation/issues/2735) delivers the ordered parity
+[PR #3335](https://github.com/elsa-workflows/elsa-foundation/pull/3335), adoption
+[PR #3338](https://github.com/elsa-workflows/elsa-foundation/pull/3338) and accepted
+[ADR0063](../adr/0063-bpmn-moves-to-a-host-agnostic-library.md). Adoption main438001406 has
+[actual upgraded-host/Studio and exact-main check evidence](../../specs/1006-bpmn-library-adoption/evidence/resulting-main-qualification.md).
+Foundation consumes released0.5.0 semantics and removes the duplicate engine with compatibility
+and deletion guards. Broader BPMN import/production objectives below remain open.
+
 ## Active objectives
 
-- [#2735](https://github.com/elsa-workflows/elsa-foundation/issues/2735): switch to `Bpmn.Semantics`, in three
-  PRs. First, a parity diff that upstreams anything only Elsa 4 has. Then the switch, with the work binder and
-  a guard test. Then ADR 0063 marked Accepted.
 - [#2736](https://github.com/elsa-workflows/elsa-foundation/issues/2736): refuse to import or publish BPMN whose
   meaning changed on import.
 - Library follow-ups: [valence-works/bpmn#27](https://github.com/valence-works/bpmn/issues/27) (cycles that

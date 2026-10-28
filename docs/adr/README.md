@@ -52,7 +52,7 @@ A new ADR, Extension Builder ones included, takes the highest number in the main
 | 0060 | [Execution evidence ordering is workflow-local and causal](0060-execution-evidence-ordering-is-workflow-local-and-causal.md) | Proposed |
 | 0061 | [Baseline execution evidence records committed semantic transitions](0061-baseline-execution-evidence-records-committed-semantic-transitions.md) | Proposed |
 | 0062 | [Execution Evidence starts in memory and adds Groundwork durability](0062-execution-evidence-starts-in-memory-and-adds-groundwork-durability.md) | Proposed |
-| 0063 | [BPMN moves to a host-agnostic library](0063-bpmn-moves-to-a-host-agnostic-library.md) | Proposed |
+| 0063 | [BPMN moves to a host-agnostic library](0063-bpmn-moves-to-a-host-agnostic-library.md) | Accepted |
 | 0064 | [Flowchart Infers Joins From Propagated Dead Paths](0064-flowchart-infers-joins-from-propagated-dead-paths.md) | Proposed |
 | 0065 | [Groundwork Persistence Targets Are Named and Lanes Bind to Them](0065-groundwork-persistence-targets-are-named-and-lanes-bind-to-them.md) | Superseded |
 | 0066 | [Reusable-Activity Publication Orders Its Writes Instead of Requiring One Transaction](0066-reusable-activity-publication-orders-writes-instead-of-one-transaction.md) | Accepted |
