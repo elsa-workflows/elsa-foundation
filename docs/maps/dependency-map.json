@@ -839,6 +839,16 @@
         },
         {
           "type": "external",
+          "id": "Bpmn.Model",
+          "version": "0.5.0"
+        },
+        {
+          "type": "external",
+          "id": "Bpmn.Semantics",
+          "version": "0.5.0"
+        },
+        {
+          "type": "external",
           "id": "CShells.Abstractions",
           "version": "0.0.31"
         },
@@ -908,6 +918,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Activities.Design.Core",
+          "path": "Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Api.AspNetCore",
           "path": "Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
         },
@@ -929,12 +944,12 @@
         {
           "type": "external",
           "id": "Bpmn.Interchange",
-          "version": "0.1.1-preview.19"
+          "version": "0.5.0"
         },
         {
           "type": "external",
           "id": "Bpmn.Model",
-          "version": "0.1.1-preview.19"
+          "version": "0.5.0"
         },
         {
           "type": "external",
@@ -955,6 +970,11 @@
           "type": "external",
           "id": "NativeEndpoints",
           "version": "1.0.0-preview.6"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Bpmn.Semantics",
+          "version": "0.5.0"
         },
         {
           "type": "pinned-transitive",
@@ -2134,6 +2154,11 @@
           "type": "internal",
           "id": "Elsa.Activities.Runtime",
           "path": "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.Core",
+          "path": "Essentials/src/Cluster/Core/Elsa.Cluster.Core.csproj"
         },
         {
           "type": "internal",
@@ -9951,6 +9976,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Events",
+          "path": "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Expressions",
           "path": "Essentials/src/Expressions/Elsa.Expressions/Elsa.Expressions.csproj"
         },
@@ -12027,6 +12057,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Cluster.InProcess",
+          "path": "Essentials/src/Cluster/InProcess/Elsa.Cluster.InProcess.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Events",
           "path": "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
         },
@@ -12430,6 +12465,16 @@
           "type": "internal",
           "id": "Elsa.Activities.Runtime",
           "path": "Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.Core",
+          "path": "Essentials/src/Cluster/Core/Elsa.Cluster.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.InProcess",
+          "path": "Essentials/src/Cluster/InProcess/Elsa.Cluster.InProcess.csproj"
         },
         {
           "type": "internal",
@@ -20780,6 +20825,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Cluster.Readability",
+          "path": "Essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
           "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
         },
@@ -20909,6 +20959,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Activities.Scheduling",
+          "path": "Essentials/src/Activities/Scheduling/Elsa.Activities.Scheduling.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Sequence",
           "path": "Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj"
         },
@@ -20921,6 +20976,11 @@
           "type": "internal",
           "id": "dotnet-elsa",
           "path": "Essentials/src/Cli/Elsa.Cli/Elsa.Cli.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.Readability",
+          "path": "Essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj"
         },
         {
           "type": "internal",
@@ -21070,6 +21130,11 @@
           "type": "internal",
           "id": "Elsa.Activities.DispatchWorkflow.Runtime",
           "path": "Essentials/src/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Events",
+          "path": "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
         },
         {
           "type": "internal",
@@ -22358,6 +22423,11 @@
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
           "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Cluster.Readability",
+          "path": "Essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj"
         },
         {
           "type": "internal",
