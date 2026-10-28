@@ -6,8 +6,10 @@ definitions at execution time.
 
 Direct model hosting (spec1017) is in progress. Model state and accepted-input receipts participate in the
 existing fenced checkpoint transaction through the Runtime EF provider; native commits without a model
-participant retain their wire and fingerprint. This does not enable direct BPMN admission: model material/retention,
-dispatch, and the real start/wait/restart/resume/complete journey remain to be wired and qualified.
+participant retain their wire and fingerprint. The EF artifact provider also stores native/model material with
+actual incarnations, model content hashes, full dependency leases, fenced sources and retention roots. This does
+not enable direct BPMN admission: verified dispatch and the real start/wait/restart/resume/complete journey
+remain to be wired and qualified.
 See the [model reader and checkpoint boundary](EXTENSION_POINTS.md) and
 [current delivery objective](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6480176858).
 

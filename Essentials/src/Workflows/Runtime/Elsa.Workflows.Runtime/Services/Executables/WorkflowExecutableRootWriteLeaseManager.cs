@@ -41,7 +41,18 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
         ArgumentException.ThrowIfNullOrWhiteSpace(leaseId);
         ArgumentNullException.ThrowIfNull(write);
 
-        var closure = await new WorkflowExecutableDependencyGraph(executableStore).LoadClosureAsync(root, cancellationToken);
+        var graph = new WorkflowExecutableDependencyGraph(executableStore);
+        if (executableStore.SupportsModelMaterial)
+        {
+            var material = await graph.LoadMaterialClosureAsync(root, cancellationToken);
+            await ExecuteLeasedAsync(material.Select(x => x.Identity.ArtifactId), leaseId, async (_, token) =>
+            {
+                await EnsureCurrentMaterialAsync(material, leaseId, token);
+                await write(token);
+            }, cancellationToken, verifyBeforeWrite: true);
+            return;
+        }
+        var closure = await graph.LoadClosureAsync(root, cancellationToken);
         await ExecuteLeasedAsync(
             closure.Select(executable => executable.Identity.ArtifactId),
             leaseId,
@@ -190,8 +201,25 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
             throw new ArgumentException("An atomic root set requires at least one non-null executable identity.", nameof(roots));
         var graph = new WorkflowExecutableDependencyGraph(executableStore);
         var artifactIds = new HashSet<string>(StringComparer.Ordinal);
+        var materialPins = new Dictionary<string, RuntimeExecutionMaterial>(StringComparer.Ordinal);
         foreach (var root in savedRoots)
         {
+            if (executableStore.SupportsModelMaterial)
+            {
+                var material = await graph.LoadMaterialClosureAsync(root, cancellationToken);
+                if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(material.Single(x => x.Identity.ArtifactId == root.ArtifactId).Identity, root))
+                    throw new WorkflowExecutableDependencyGraphException(WorkflowExecutableDependencyGraphFailureKind.ConflictingIdentity,
+                        "The requested root differs from its complete immutable material pin.");
+                foreach (var item in material)
+                {
+                    if (materialPins.TryGetValue(item.Identity.ArtifactId, out var prior) &&
+                        (prior.IncarnationId != item.IncarnationId || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(prior.Identity, item.Identity)))
+                        throw new WorkflowExecutableRootWriteLeaseUnavailableException(item.Identity.ArtifactId, leaseId);
+                    materialPins[item.Identity.ArtifactId] = item;
+                }
+                artifactIds.UnionWith(material.Select(x => x.Identity.ArtifactId));
+                continue;
+            }
             var closure = await graph.LoadClosureAsync(root, cancellationToken);
             if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(
                     closure.Single(executable => executable.Identity.ArtifactId == root.ArtifactId).Identity, root))
@@ -199,7 +227,22 @@ public sealed class WorkflowExecutableRootWriteLeaseManager(
                     "The requested root differs from its complete immutable executable pin.");
             artifactIds.UnionWith(closure.Select(executable => executable.Identity.ArtifactId));
         }
-        await ExecuteLeasedAsync(artifactIds, leaseId, write, cancellationToken, verifyBeforeWrite: true);
+        await ExecuteLeasedAsync(artifactIds, leaseId, async (grants, token) =>
+        {
+            if (materialPins.Count > 0) await EnsureCurrentMaterialAsync(materialPins.Values, leaseId, token);
+            await write(grants, token);
+        }, cancellationToken, verifyBeforeWrite: true);
+    }
+
+    private async ValueTask EnsureCurrentMaterialAsync(IEnumerable<RuntimeExecutionMaterial> material, string leaseId, CancellationToken cancellationToken)
+    {
+        foreach (var expected in material)
+        {
+            var current = await executableStore.FindMaterialAsync(expected.Identity.ArtifactId, cancellationToken);
+            if (current is null || current.IncarnationId != expected.IncarnationId ||
+                !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(current.Identity, expected.Identity))
+                throw new WorkflowExecutableRootWriteLeaseUnavailableException(expected.Identity.ArtifactId, leaseId);
+        }
     }
 
     private async Task RenewUntilStoppedAsync(

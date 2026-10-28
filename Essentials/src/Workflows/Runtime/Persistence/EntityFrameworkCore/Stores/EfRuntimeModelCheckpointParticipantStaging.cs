@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -71,16 +70,9 @@ internal static class EfRuntimeModelCheckpointParticipantStaging
         var id = Hash($"{scope.Length}:{scope}{artifactId.Length}:{artifactId}");
         var row = await context.WorkflowExecutables.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken)
             ?? throw new InvalidOperationException("The model decision's pinned material is unavailable.");
-        if (row.ScopeKey != Encode(scope) || row.ScopeKeyHash != Hash(scope) || row.ArtifactId != Encode(artifactId) ||
-            row.ArtifactIdHash != Hash(artifactId) || row.ArtifactIdOrderKey != Order(artifactId) ||
-            row.ArtifactHash != Encode(state.Executable.ArtifactHash) || row.IncarnationId != state.MaterialIncarnationId)
-            throw new InvalidDataException("The model decision's physical material pin does not match its artifact.");
-        var json = RuntimeArtifactEfModule.Chain.Upcast<WorkflowExecutableEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson));
-        RuntimeModelMaterial material;
-        try { material = RuntimeArtifactJson.Deserialize<RuntimeModelMaterial>(json[nameof(row.ContentJson)]!); }
-        catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
-        { throw new InvalidDataException("A model decision requires valid model material.", exception); }
-        if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(material.Identity, state.Executable) || material.Protocol != state.Protocol)
-            throw new InvalidDataException("The model decision's full pin or protocol does not match its material.");
+        var material = EfWorkflowExecutableStore.ReadMaterial(row, scope, artifactId, id);
+        if (material.Model is null || material.IncarnationId != state.MaterialIncarnationId ||
+            !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(material.Identity, state.Executable) || material.Model.Protocol != state.Protocol)
+            throw new InvalidDataException("The model decision's full physical pin or protocol does not match its material.");
     }
 }

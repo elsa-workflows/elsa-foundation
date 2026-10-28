@@ -9325,3 +9325,6 @@ const Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionState.CurrentForma
 Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.EnsureModelStateShape() -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.ModelState.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelStateChange?
 Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.ModelState.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial.CreatedAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial.RuntimeExecutionMaterial(Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial! model, string! incarnationId, System.DateTimeOffset createdAt) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial.ComputeContentHash() -> string!

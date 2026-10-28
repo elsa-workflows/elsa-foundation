@@ -54,6 +54,32 @@ public sealed class RuntimeModelMaterialTests
         Assert.Null(await store.FindAsync(Pin.ArtifactId));
     }
 
+    [Fact]
+    public void Model_hash_canonicalizes_definition_keys_and_tracks_protocol_without_source_attribution()
+    {
+        using var first = JsonDocument.Parse("{\"start\":\"human\",\"count\":2}");
+        using var reordered = JsonDocument.Parse("{\"count\":2,\"start\":\"human\"}");
+        var material = NewMaterial(first.RootElement);
+        Assert.Equal(material.ComputeContentHash(), NewMaterial(reordered.RootElement).ComputeContentHash());
+        var otherSource = new RuntimeModelMaterial(1, Pin with { DefinitionId = "other-source" }, Protocol, "test/1", first.RootElement,
+            new WorkflowExecutableInputContract(1, []), [], [], []);
+        Assert.Equal(material.ComputeContentHash(), otherSource.ComputeContentHash());
+        var otherProtocol = new RuntimeModelMaterial(1, Pin, new(Protocol.Key, 2), "test/1", first.RootElement,
+            new WorkflowExecutableInputContract(1, []), [], [], []);
+        Assert.NotEqual(material.ComputeContentHash(), otherProtocol.ComputeContentHash());
+    }
+
+    [Fact]
+    public void Model_hash_preserves_opaque_protocol_code_units()
+    {
+        using var definition = JsonDocument.Parse("{}");
+        var first = new RuntimeModelMaterial(1, Pin, new("test-\ud800", 1), "test/1", definition.RootElement,
+            new WorkflowExecutableInputContract(1, []), [], [], []);
+        var second = new RuntimeModelMaterial(1, Pin, new("test-\ud801", 1), "test/1", definition.RootElement,
+            new WorkflowExecutableInputContract(1, []), [], [], []);
+        Assert.NotEqual(first.ComputeContentHash(), second.ComputeContentHash());
+    }
+
     private static RuntimeModelMaterial NewMaterial(JsonElement definition, IReadOnlyList<RuntimeModelDependency>? dependencies = null,
         IReadOnlyList<RuntimeModelDeclaredOutput>? outputs = null) =>
         new(1, Pin, Protocol, "test/1", definition, new WorkflowExecutableInputContract(1, []), outputs ?? [], dependencies ?? [], []);

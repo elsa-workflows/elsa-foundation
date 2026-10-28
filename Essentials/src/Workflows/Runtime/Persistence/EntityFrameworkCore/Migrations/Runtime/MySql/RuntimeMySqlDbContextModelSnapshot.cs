@@ -2367,6 +2367,11 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                         .HasMaxLength(64)
                         .HasColumnType("varchar(64)");
 
+                    b.Property<bool>("IsModelMaterial")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)

@@ -2,14 +2,18 @@ using System.Data.Common;
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeOperationalStoreSupport;
 
@@ -18,15 +22,16 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 public sealed class EfRuntimeModelCheckpointTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 28, 12, 0, 0, TimeSpan.Zero);
-    private static readonly WorkflowExecutableIdentity Pin = new("model-artifact", "process", "process-v1", "1.0.0", "model-hash");
     private static readonly RuntimeExecutionProtocol Protocol = new("test.model", 1);
+    private static readonly WorkflowExecutableIdentity Pin = CreatePin();
+    private string materialIncarnation = null!;
     private static readonly RuntimeExecutionLease Lease = new("lease", "execution", "owner", Now, Now.AddMinutes(10), 1);
     private static readonly RuntimeCheckpointPersistenceDecision Immediate = new(RuntimeCheckpointPersistenceMode.Immediate);
 
     [Fact]
     public async Task Decisions_survive_context_restart_with_exact_receipts_and_no_native_header()
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         var first = Commit(1);
         await using (var context = database.Open())
         {
@@ -44,7 +49,7 @@ public sealed class EfRuntimeModelCheckpointTests
             Assert.Equal(2, state.Revision);
             Assert.Equal("human-wait", state.Payload.GetProperty("tokens")[0].GetString());
             Assert.Equal(Pin, state.Executable);
-            Assert.Equal("incarnation", state.MaterialIncarnationId);
+            Assert.Equal(materialIncarnation, state.MaterialIncarnationId);
             Assert.Equal(1, (await reader.FindInputAsync("execution", "input-1"))!.AcceptedRevision);
             Assert.Equal(2, (await reader.FindInputAsync("execution", "input-2"))!.AcceptedRevision);
             Assert.Empty(await restarted.WorkflowExecutionStates.ToArrayAsync());
@@ -61,7 +66,7 @@ public sealed class EfRuntimeModelCheckpointTests
     [Fact]
     public async Task Failure_at_the_final_marker_rolls_back_state_receipt_and_fence_touch()
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         long fenceRevision;
         await using (var before = database.Open()) fenceRevision = (await before.ExecutionLivenessStates.SingleAsync()).Revision;
         await using (var context = database.Open(new FailMarker()))
@@ -81,7 +86,7 @@ public sealed class EfRuntimeModelCheckpointTests
     [Fact]
     public async Task Stale_fence_revision_and_reused_input_refuse_without_partial_decisions()
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.Open();
         var store = Store(context);
         await store.CommitAsync(Commit(1), Immediate);
@@ -100,7 +105,7 @@ public sealed class EfRuntimeModelCheckpointTests
     [InlineData(true)]
     public async Task Model_state_input_consumed_claim_outbox_and_marker_share_one_transaction(bool failMarker)
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using (var context = failMarker ? database.Open(new FailMarker()) : database.Open())
         {
             var queue = new EfSchedulerWorkQueueStore(context, new Access("tenant-a"), new Codec());
@@ -142,7 +147,7 @@ public sealed class EfRuntimeModelCheckpointTests
     [InlineData("protocol")]
     public async Task An_update_cannot_replace_the_execution_pin_or_authority(string field)
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.Open();
         await Store(context).CommitAsync(Commit(1), Immediate);
         var change = Change(2, incarnation: field == "incarnation" ? "replacement" : null,
@@ -159,7 +164,7 @@ public sealed class EfRuntimeModelCheckpointTests
     [InlineData(RuntimeCheckpointPersistenceMode.Skip)]
     public async Task A_model_decision_cannot_be_buffered_or_skipped(RuntimeCheckpointPersistenceMode mode)
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.Open();
         await Assert.ThrowsAsync<NotSupportedException>(() => Store(context).CommitAsync(Commit(1), new(mode)).AsTask());
         Assert.Empty(await context.RuntimeCheckpointCommits.ToArrayAsync());
@@ -168,7 +173,7 @@ public sealed class EfRuntimeModelCheckpointTests
     [Fact]
     public async Task Material_incarnation_and_all_five_pin_fields_are_verified_before_acceptance()
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.Open();
         await Assert.ThrowsAsync<InvalidDataException>(() => Store(context).CommitAsync(Commit(1) with
             { ModelState = Change(1, incarnation: "replacement") }, Immediate).AsTask());
@@ -181,7 +186,7 @@ public sealed class EfRuntimeModelCheckpointTests
     [Fact]
     public async Task Scoped_reader_pages_and_rejects_corrupt_projection_or_foreign_continuation()
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.Open();
         await Store(context).CommitAsync(Commit(1), Immediate);
         var reader = Reader(context);
@@ -197,7 +202,7 @@ public sealed class EfRuntimeModelCheckpointTests
     [Fact]
     public async Task Capability_qualification_requires_the_actual_scoped_reader_context_and_access()
     {
-        await using var database = await Database.CreateAsync();
+        await using var database = await CreateDatabaseAsync();
         await using var context = database.Open();
         await using var other = database.Open();
         var access = new Access("tenant-a");
@@ -208,12 +213,113 @@ public sealed class EfRuntimeModelCheckpointTests
         Assert.False(writer.CanCommitModelState(new EfRuntimeModelExecutionReader(context, new Access("tenant-a"), new Codec())));
     }
 
-    private static RuntimeCheckpointCommit Commit(long revision, RuntimeModelLifecycle lifecycle = RuntimeModelLifecycle.Running) =>
+    [Fact]
+    public async Task A_real_model_checkpoint_holds_actual_artifact_grants_and_refuses_a_deletion_guard()
+    {
+        await using var database = await CreateDatabaseAsync();
+        await using var context = database.Open();
+        var access = new Access("tenant-a");
+        IWorkflowExecutableStore artifacts = new EfWorkflowExecutableStore(context, access);
+        var leases = new WorkflowExecutableRootWriteLeaseManager(artifacts, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), new Clock());
+        var store = new EfRuntimeCheckpointCommitStore(context, access, new Clock(), leases);
+        var guard = (await artifacts.TryBeginDeletionAsync(Pin.ArtifactId, "deletion", Now.AddMinutes(1), Now))!;
+        await Assert.ThrowsAsync<WorkflowExecutableRootWriteLeaseUnavailableException>(() => store.CommitAsync(Commit(1), Immediate).AsTask());
+        Assert.Null(await Reader(context).FindAsync("execution"));
+        Assert.True(await artifacts.CancelDeletionAsync(guard));
+        await store.CommitAsync(Commit(1), Immediate);
+        Assert.Equal(materialIncarnation, (await Reader(context).FindAsync("execution"))!.MaterialIncarnationId);
+        Assert.Empty(await context.WorkflowExecutableRootWriteLeases.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task A_fenced_model_publication_and_retained_execution_protect_the_actual_model_material()
+    {
+        await using var database = await CreateDatabaseAsync();
+        await using var context = database.Open();
+        var access = new Access("tenant-a");
+        IWorkflowExecutableStore artifacts = new EfWorkflowExecutableStore(context, access);
+        var sources = new EfWorkflowExecutableSourceReferenceStore(context, access, new Codec(), new Clock());
+        var leases = new WorkflowExecutableRootWriteLeaseManager(artifacts, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), new Clock());
+        var reference = new WorkflowExecutableSourceReference("model-published", Pin.ArtifactId, "test.model", "process", "1",
+            Pin.DefinitionId, Pin.DefinitionVersionId, Pin.ArtifactVersion, Now, Now, WorkflowExecutableReferenceScope.Published, TenantId: "tenant-a");
+        await leases.ExecuteFencedAsync([Pin], "publish-model", async (grants, token) =>
+            await sources.SaveWithRootWriteLeasesAsync(reference, Pin, grants, token));
+        Assert.NotNull(await sources.FindAsync(reference.SourceReferenceId));
+        Assert.Null(await artifacts.FindAsync(Pin.ArtifactId)); // Model material never manufactures a native root.
+        Assert.Empty((await artifacts.ListPageAsync(new(10))).Items);
+        Assert.NotNull(Assert.Single((await artifacts.ListMaterialPageAsync(new(10))).Items).Model);
+        await new EfRuntimeCheckpointCommitStore(context, access, new Clock(), leases).CommitAsync(Commit(1), Immediate);
+        Assert.True(await sources.RetireAsync(reference.SourceReferenceId, Now.AddMinutes(1), "retired"));
+        var executions = new EfWorkflowExecutionStateStore(context, access, new Codec());
+        Assert.Contains(Pin.ArtifactId, await executions.ListPinnedExecutableArtifactIdsAsync());
+        Assert.Empty(await executions.ListAsync());
+        var collector = new WorkflowExecutableReferenceGarbageCollector(artifacts, sources, new InMemoryExecutableActivityTemplateStore(),
+            executions, null, Options.Create(new WorkflowExecutableGarbageCollectionOptions { ArtifactCreationGracePeriod = TimeSpan.Zero }),
+            new Clock(), NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance);
+        var result = await collector.SweepAsync(Now.AddDays(2));
+        Assert.Equal(0, result.DeletedArtifactCount);
+        Assert.Equal(0, result.DeletedReferenceCount);
+        Assert.Equal(materialIncarnation, (await artifacts.FindMaterialAsync(Pin.ArtifactId))!.IncarnationId);
+        Assert.NotNull(await sources.FindAsync(reference.SourceReferenceId));
+    }
+
+    [Fact]
+    public async Task Unreferenced_model_material_is_collected_after_its_actual_staging_grace()
+    {
+        await using var database = await CreateDatabaseAsync();
+        await using var context = database.Open();
+        var access = new Access("tenant-a");
+        IWorkflowExecutableStore artifacts = new EfWorkflowExecutableStore(context, access);
+        var collector = new WorkflowExecutableReferenceGarbageCollector(artifacts,
+            new EfWorkflowExecutableSourceReferenceStore(context, access, new Codec()), new InMemoryExecutableActivityTemplateStore(),
+            new EfWorkflowExecutionStateStore(context, access, new Codec()), null,
+            Options.Create(new WorkflowExecutableGarbageCollectionOptions { ArtifactCreationGracePeriod = TimeSpan.FromMinutes(1) }),
+            new Clock(), NullLogger<WorkflowExecutableReferenceGarbageCollector>.Instance);
+        var createdAt = (await artifacts.FindMaterialAsync(Pin.ArtifactId))!.CreatedAt;
+        Assert.Equal(0, (await collector.SweepAsync(createdAt)).DeletedArtifactCount);
+        Assert.Equal(1, (await collector.SweepAsync(createdAt.AddMinutes(2))).DeletedArtifactCount);
+        Assert.Null(await artifacts.FindMaterialAsync(Pin.ArtifactId));
+    }
+
+    [Fact]
+    public async Task Model_dependency_pins_receive_real_closure_grants_and_refuse_foreign_source_identity()
+    {
+        await using var database = await CreateDatabaseAsync();
+        await using var context = database.Open();
+        IWorkflowExecutableStore artifacts = new CachingWorkflowExecutableStore(new EfWorkflowExecutableStore(context, new Access("tenant-a")), new WorkflowExecutableCacheOptions());
+        var child = (await artifacts.FindMaterialAsync(Pin.ArtifactId))!;
+        var correct = Parent(child.Identity, "parent-good");
+        await artifacts.SaveModelAsync(correct);
+        var leases = new WorkflowExecutableRootWriteLeaseManager(artifacts, Options.Create(new WorkflowExecutableGarbageCollectionOptions()), new Clock());
+        await leases.ExecuteFencedAsync([correct.Identity], "dependency-proof", (grants, token) =>
+        {
+            Assert.Equal(new[] { Pin.ArtifactId, correct.Identity.ArtifactId }.Order(StringComparer.Ordinal),
+                grants.Select(x => x.ArtifactId).Order(StringComparer.Ordinal));
+            return ValueTask.CompletedTask;
+        });
+        var wrong = Parent(child.Identity with { DefinitionVersionId = "foreign-version" }, "parent-wrong");
+        await artifacts.SaveModelAsync(wrong);
+        var called = false;
+        await Assert.ThrowsAsync<WorkflowExecutableDependencyGraphException>(() => leases.ExecuteAsync(wrong.Identity, "foreign-child", token =>
+        { called = true; return ValueTask.CompletedTask; }).AsTask());
+        Assert.False(called);
+        Assert.Empty(await context.WorkflowExecutableRootWriteLeases.ToArrayAsync());
+
+        RuntimeModelMaterial Parent(WorkflowExecutableIdentity dependency, string id)
+        {
+            using var definition = JsonDocument.Parse("{\"start\":\"dependent\"}");
+            var seed = new WorkflowExecutableIdentity(id, "parent", "parent-v1", "1.0.0", "pending");
+            var material = new RuntimeModelMaterial(1, seed, Protocol, "test/1", definition.RootElement, new(1, []), [], [new("child", dependency)], []);
+            return new(1, seed with { ArtifactHash = material.ComputeContentHash() }, Protocol, "test/1", definition.RootElement, new(1, []), [], [new("child", dependency)], []);
+        }
+    }
+
+    private RuntimeCheckpointCommit Commit(long revision, RuntimeModelLifecycle lifecycle = RuntimeModelLifecycle.Running) =>
         new($"commit-{revision}", new($"checkpoint-{revision}", "ModelDecision", "execution", Now.AddSeconds(revision), [], new Dictionary<string, string>()),
             new(null, null, [], [], [], [], []), [], new Dictionary<string, string>())
         { ExpectedFence = Lease.ToFence(), ModelState = Change(revision, lifecycle: lifecycle) };
 
-    private static RuntimeModelStateChange Change(long revision, string? inputId = null, string? payload = null,
+    private RuntimeModelStateChange Change(long revision, string? inputId = null, string? payload = null,
         string? incarnation = null, WorkflowExecutionAuthoritySnapshot? authority = null, WorkflowExecutableIdentity? pin = null,
         RuntimeExecutionProtocol? protocol = null, RuntimeModelLifecycle lifecycle = RuntimeModelLifecycle.Running)
     {
@@ -221,10 +327,25 @@ public sealed class EfRuntimeModelCheckpointTests
         using var result = JsonDocument.Parse("{\"outcome\":\"completed\"}");
         var at = Now.AddSeconds(revision);
         var state = new RuntimeModelExecutionState(1, new("tenant-a"), "execution", "tenant-a", protocol ?? Protocol,
-            pin ?? Pin, incarnation ?? "incarnation", revision, lifecycle, authority ?? new("system", "initiator"), Now, at,
+            pin ?? Pin, incarnation ?? materialIncarnation, revision, lifecycle, authority ?? new("system", "initiator"), Now, at,
             data.RootElement, lifecycle is RuntimeModelLifecycle.TerminalSettled or RuntimeModelLifecycle.TerminalPendingSettlement ? result.RootElement : null);
         return new(revision == 1 ? null : revision - 1, state,
             new(new("tenant-a"), "execution", inputId ?? $"input-{revision}", "test.input", $"content-{revision}", revision, at, null, null, result.RootElement));
+    }
+
+    private async Task<Database> CreateDatabaseAsync()
+    {
+        var database = await Database.CreateAsync();
+        materialIncarnation = database.Incarnation;
+        return database;
+    }
+
+    private static WorkflowExecutableIdentity CreatePin()
+    {
+        using var definition = JsonDocument.Parse("{\"start\":\"human\"}");
+        var seed = new WorkflowExecutableIdentity("model-artifact", "process", "process-v1", "1.0.0", "pending");
+        var material = new RuntimeModelMaterial(1, seed, Protocol, "test/1", definition.RootElement, new(1, []), [], [], []);
+        return seed with { ArtifactHash = material.ComputeContentHash() };
     }
 
     private static EfRuntimeCheckpointCommitStore Store(RuntimeDbContext context) => new(context, new Access("tenant-a"), new Clock(), new LeaseManager());
@@ -254,6 +375,7 @@ public sealed class EfRuntimeModelCheckpointTests
     }
     private sealed class Database(SqliteConnection connection) : IAsyncDisposable
     {
+        public string Incarnation { get; private set; } = null!;
         public static async Task<Database> CreateAsync()
         {
             var connection = new SqliteConnection("Data Source=:memory:"); await connection.OpenAsync();
@@ -263,15 +385,9 @@ public sealed class EfRuntimeModelCheckpointTests
                 .SaveAsync(new("ownership:execution", "execution", Lease, null, null, null));
             using var definition = JsonDocument.Parse("{\"start\":\"human\"}");
             var material = new RuntimeModelMaterial(1, Pin, Protocol, "test/1", definition.RootElement, new(1, []), [], [], []);
-            const string scope = "tenant-a";
-            context.WorkflowExecutables.Add(new()
-            {
-                Id = Hash($"{scope.Length}:{scope}{Pin.ArtifactId.Length}:{Pin.ArtifactId}"), ScopeKey = Encode(scope), ScopeKeyHash = Hash(scope),
-                ArtifactId = Encode(Pin.ArtifactId), ArtifactIdHash = Hash(Pin.ArtifactId), ArtifactIdOrderKey = Order(Pin.ArtifactId),
-                ArtifactHash = Encode(Pin.ArtifactHash), ContentJson = RuntimeArtifactJson.Serialize(material), SchemaVersion = RuntimeArtifactEfModule.SchemaVersion,
-                IncarnationId = "incarnation"
-            });
-            await context.SaveChangesAsync(); context.ChangeTracker.Clear();
+            IWorkflowExecutableStore artifacts = new EfWorkflowExecutableStore(context, new Access("tenant-a"));
+            await artifacts.SaveModelAsync(material);
+            database.Incarnation = (await artifacts.FindMaterialAsync(Pin.ArtifactId))!.IncarnationId;
             return database;
         }
         public RuntimeSqliteDbContext Open(params IInterceptor[] interceptors)

@@ -1,6 +1,6 @@
 {
   "kind": "partial model checkpoint foundation",
-  "source_binding": "Commit containing this receipt; exact head recorded in PR3410 checkpoint.",
+  "source_binding": "Historical verification at source_commit; later commits require their own receipts.",
   "source_parent": "401267e9a7c8f59076d276c00a425382b93647a5",
   "goal": "Direct BPMN start/wait/restart/resume/complete first; only necessary shared mechanisms.",
   "results": [
@@ -68,5 +68,6 @@
     "dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check"
   ],
   "maps": "Generated solution filters still describe the project graph.",
-  "test_tiers": "123 projects, each in one tier and one shard."
+  "test_tiers": "123 projects, each in one tier and one shard.",
+  "source_commit": "151de7d669f6a9d74eecd3b13e90a56c24fd787d"
 }

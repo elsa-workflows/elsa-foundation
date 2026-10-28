@@ -38,6 +38,8 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
         new(RuntimeActivityExecutionEfModule.SchemaFamily, Runtime, [RuntimeActivityExecutionEfModule.SchemaVersion]),
         new(RuntimeArtifactEfModule.SchemaFamily, Runtime, [RuntimeArtifactEfModule.SchemaVersion]),
         new(RuntimeBackgroundActivityWorkEfModule.SchemaFamily, Runtime, [RuntimeBackgroundActivityWorkEfModule.SchemaVersion]),
+        // Model state/input is a separately versioned family; keep this expectation independent of discovery.
+        new("RuntimeModelState", Runtime, ["1.0.0"]),
         new(RuntimeOperationalStateEfModule.SchemaFamily, Runtime, [RuntimeOperationalStateEfModule.SchemaVersion]),
         // The adoption's checked chain retains the legacy reader while adding the durable-cohort format.
         // Keep the predecessor literal independent of the discovered declaration so losing that reader fails here.

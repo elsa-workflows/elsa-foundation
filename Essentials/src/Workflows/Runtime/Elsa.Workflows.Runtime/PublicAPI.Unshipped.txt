@@ -1876,3 +1876,4 @@ virtual Elsa.Workflows.Runtime.Services.Claims.FencedClaimRenewal<TClaim>.Invoke
 ~override Elsa.Workflows.Runtime.Services.Values.RuntimeInputBindingStateProjectionSet.ToString() -> string
 ~override Elsa.Workflows.Runtime.Services.Values.RuntimeWorkflowIdentity.Equals(object obj) -> bool
 ~override Elsa.Workflows.Runtime.Services.Values.RuntimeWorkflowIdentity.ToString() -> string
+static Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableDependencyGraph.ResolveMaterialClosure(System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!>! roots, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial!>! materials) -> System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial!>!

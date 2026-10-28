@@ -42,8 +42,13 @@ public sealed class RuntimeModelMigrationTests
             Assert.Contains(RuntimeModelStateEfModule.InputTable, after.Keys);
             var upgradedHistory = await History(connection);
             Assert.Equal(history, upgradedHistory.Take(history.Length));
-            Assert.EndsWith("_ModelExecutionState", upgradedHistory.Last());
-            Assert.Equal(history.Length + 1, upgradedHistory.Length);
+            Assert.Equal(["ModelExecutionState", "ModelMaterialKind"], upgradedHistory.Skip(history.Length).Select(x => x[(x.LastIndexOf('_') + 1)..]));
+            Assert.Equal(history.Length + 2, upgradedHistory.Length);
+            await using (var nativeKinds = connection.CreateCommand())
+            {
+                nativeKinds.CommandText = $"SELECT COUNT(*) FROM \"{RuntimeArtifactEfModule.WorkflowExecutableTableName}\" WHERE IsModelMaterial <> 0";
+                Assert.Equal(0L, (long)(await nativeKinds.ExecuteScalarAsync())!);
+            }
             // Schema upgrade only: no execution is resumed and no direct-host acceptance is implied.
         }
         finally { directory.Delete(recursive: true); }
@@ -75,8 +80,10 @@ public sealed class RuntimeModelMigrationTests
             var rows = new List<string>();
             while (await reader.ReadAsync())
             {
-                var row = new object?[reader.FieldCount];
-                for (var i = 0; i < row.Length; i++) row[i] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                // Compare every original column; the newly added discriminator is verified separately above.
+                var columns = Enumerable.Range(0, reader.FieldCount).Where(i =>
+                    table != RuntimeArtifactEfModule.WorkflowExecutableTableName || reader.GetName(i) != "IsModelMaterial").ToArray();
+                var row = columns.Select(i => reader.IsDBNull(i) ? null : reader.GetValue(i)).ToArray();
                 rows.Add(JsonSerializer.Serialize(row));
             }
             rows.Sort(StringComparer.Ordinal);

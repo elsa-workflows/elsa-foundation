@@ -280,6 +280,15 @@ public sealed class EfWorkflowExecutionStateStore(
                 if (row.ArtifactIdHash != Hash(id) || row.ArtifactIdOrderKey != OrderKey(id)) throw new InvalidDataException("The persisted workflow execution artifact projection is corrupt.");
                 if (seen.Add(id)) ids.Add(id);
             }
+            // This is a retention-root projection, not a native execution read. Model headers retain their
+            // actual material (including settled results) without creating native workflow state.
+            var modelRows = await context.Set<RuntimeModelExecutionEntity>().AsNoTracking()
+                .Where(x => x.ScopeKeyHash == Hash(scope) || x.ScopeKey == Encode(scope)).ToArrayAsync(cancellationToken);
+            foreach (var row in modelRows)
+            {
+                var state = EfRuntimeModelExecutionReader.Read(row, scope, Decode(row.ExecutionId));
+                if (seen.Add(state.Executable.ArtifactId)) ids.Add(state.Executable.ArtifactId);
+            }
             return ids.ToArray();
         }
         catch (OperationCanceledException) { throw; }
