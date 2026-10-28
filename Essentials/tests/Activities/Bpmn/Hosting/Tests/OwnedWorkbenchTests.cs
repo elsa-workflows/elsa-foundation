@@ -25,12 +25,12 @@ public sealed class OwnedWorkbenchTests
         var started = await host.PostAsync($"/runtime/workflows/executables/{artifactId}/execute", new { sourceReferenceId = publication["sourceReferenceId"]!.GetValue<string>() });
         var executionId = started["workflowExecutionId"]!.GetValue<string>();
         var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
-        while (true)
+        var completed = await host.GetAsync($"/runtime/workflows/instances/{executionId}");
+        while (completed["instance"]!["status"]!.GetValue<string>() != "Completed")
         {
-            var view = await host.GetAsync($"/runtime/workflows/instances/{executionId}");
-            if (view["instance"]!["status"]!.GetValue<string>() == "Completed") break;
             Assert.True(DateTimeOffset.UtcNow < deadline, "The real native execution did not complete.");
             await Task.Delay(TimeSpan.FromMilliseconds(100));
+            completed = await host.GetAsync($"/runtime/workflows/instances/{executionId}");
         }
         Assert.True(File.Exists(host.RuntimeDatabase));
         Assert.True(File.Exists(host.DesignDatabase));
@@ -41,6 +41,8 @@ public sealed class OwnedWorkbenchTests
         var recovered = await host.GetAsync($"/runtime/workflows/instances/{executionId}");
         Assert.Equal("Completed", recovered["instance"]!["status"]!.GetValue<string>());
         Assert.Equal(artifactId, recovered["instance"]!["artifactId"]!.GetValue<string>());
+        foreach (var field in new[] { "artifactId", "artifactHash", "artifactVersion", "definitionId", "definitionVersionId" })
+            Assert.Equal(completed["instance"]![field]!.GetValue<string>(), recovered["instance"]![field]!.GetValue<string>());
         Assert.Equal("Completed", Assert.Single(recovered["activities"]!.AsArray())!["status"]!.GetValue<string>());
     }
 }
