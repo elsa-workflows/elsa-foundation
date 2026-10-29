@@ -19,7 +19,8 @@ using Microsoft.Extensions.DependencyInjection;
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 try
 {
-    if (args.Length == 4 && args[0] == "--read-bpmn-native" || args.Length is 4 or 5 && args[0] == "--read-bpmn-embedding")
+    if (args.Length == 4 && args[0] == "--read-bpmn-native" || args.Length is 4 or 5 && args[0] == "--read-bpmn-embedding" ||
+        args.Length == 3 && args[0] == "--read-bpmn-retirement")
     {
         var boundDatabase = Path.GetFullPath(args[1]);
         var boundConnectionString = new SqliteConnectionStringBuilder
@@ -37,6 +38,54 @@ try
         await using var boundScope = boundProvider.CreateAsyncScope();
         var boundModels = boundScope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>();
         var boundModel = await boundModels.FindAsync(args[2]);
+        if (args[0] == "--read-bpmn-retirement")
+        {
+            if (boundModel is null) throw new InvalidDataException("The actual cancelling model is absent.");
+            var originElement = boundModel.Payload.TryGetProperty("cancellations", out var cancellations)
+                ? cancellations.EnumerateArray().Single().GetProperty("origin")
+                : boundModel.Payload.GetProperty("work").EnumerateArray().Single().GetProperty("nativeWork");
+            var origin = originElement.Deserialize<RuntimeModelNativeWorkOrigin>(json)!;
+            var sourceIds = new List<string>(); var inputIds = new List<string>();
+            await using (var index = new SqliteConnection(boundConnectionString))
+            {
+                await index.OpenAsync();
+                foreach (var selection in new[] { (Table: "elsa_runtime_model_input", Column: "InputId"),
+                             (Table: "elsa_runtime_post_commit_outbox", Column: "ContentJson") })
+                {
+                    await using var command = index.CreateCommand();
+                    command.CommandText = $"SELECT {selection.Column} FROM {selection.Table} WHERE WorkflowExecutionId=$worker OR WorkflowExecutionId=$model";
+                    if (selection.Column == "InputId") command.CommandText = "SELECT InputId FROM elsa_runtime_model_input WHERE ExecutionId=$model";
+                    command.Parameters.AddWithValue("$model", Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(boundModel.ExecutionId)));
+                    if (selection.Column != "InputId") command.Parameters.AddWithValue("$worker", Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(origin.WorkerExecutionId)));
+                    await using var rows = await command.ExecuteReaderAsync();
+                    while (await rows.ReadAsync())
+                    {
+                        using var document = selection.Column == "InputId" ? null : JsonDocument.Parse(rows.GetString(0));
+                        var encoded = document is null ? rows.GetString(0) : document.RootElement.GetProperty("outboxItemId").GetString()!;
+                        (selection.Column == "InputId" ? inputIds : sourceIds).Add(System.Text.Encoding.Unicode.GetString(Convert.FromBase64String(encoded)));
+                    }
+                }
+            }
+            var inputs = new List<RuntimeModelInputReceipt>(); var sources = new List<RuntimePostCommitOutboxItem>();
+            foreach (var id in inputIds.Order(StringComparer.Ordinal)) inputs.Add(await boundModels.FindInputAsync(boundModel.ExecutionId, id) ?? throw new InvalidDataException("An indexed model input is absent."));
+            foreach (var id in sourceIds.Order(StringComparer.Ordinal)) sources.Add(await boundScope.ServiceProvider.GetRequiredService<IPostCommitOutboxLookupStore>()
+                .FindDurableAsync(id) ?? throw new InvalidDataException("An indexed delivery source is absent."));
+            async Task<IReadOnlyList<RuntimeSchedulerWorkItem>> Queue(string execution)
+            {
+                var items = new List<RuntimeSchedulerWorkItem>(); string? cursor = null;
+                do
+                {
+                    var page = await boundScope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAsync(new(execution, continuationToken: cursor));
+                    items.AddRange(page.Items); cursor = page.NextContinuationToken;
+                } while (cursor is not null);
+                return items.OrderBy(item => item.WorkItemId, StringComparer.Ordinal).ToArray();
+            }
+            Console.WriteLine(JsonSerializer.Serialize(new { readOnly = true, model = boundModel, origin,
+                worker = await boundScope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(origin.WorkerExecutionId),
+                inputs, sources, queuedNativeWork = await Queue(origin.WorkerExecutionId), queuedModelInputs = await Queue(boundModel.ExecutionId),
+                workerMaterial = await boundScope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().FindMaterialAsync(origin.WorkerExecutable.ArtifactId) }, json));
+            return 0;
+        }
         var boundWorker = await boundScope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(args[3])
             ?? throw new InvalidDataException("The actual native worker is absent.");
         if (args[0] == "--read-bpmn-embedding")

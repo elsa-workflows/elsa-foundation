@@ -15,7 +15,8 @@ namespace Elsa.Activities.Bpmn.Internal;
 internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
     IPostCommitOutboxLookupStore outbox, IWorkflowExecutionStateStore workflows, IActivityExecutionStateStore activities,
     IRuntimeCheckpointCommitStore checkpoints, IRuntimePostCommitOutboxStore outboxStore,
-    IPersistenceAccessContextAccessor access, TimeProvider clock, IRuntimeModelExecutionReader? models = null,
+    IPersistenceAccessContextAccessor access, TimeProvider clock, IWorkflowSchedulerWorkQueue queue,
+    IRuntimeModelExecutionReader? models = null,
     CoalescingInner<IWorkflowExecutionStateStore>? physicalWorkflows = null,
     CoalescingInner<IActivityExecutionStateStore>? physicalActivities = null,
     CoalescingInner<IRuntimePostCommitOutboxStore>? physicalOutbox = null,
@@ -165,6 +166,92 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
     internal static string CancellationIntentId(RuntimeModelNativeWorkOrigin origin) =>
         "bpmn-cancel-native:" + BpmnModelIdentity.Create(origin.InvocationId, origin.AttemptId);
 
+    internal static string RetirementInputId(BpmnNativeWorkCancellation cancellation) =>
+        "native-start-retired:" + BpmnModelIdentity.Create(cancellation.Origin.SourceOutboxItemId, cancellation.SourceOutboxItemId);
+
+    internal async ValueTask<(RuntimeModelExecutionState Model, BpmnNativeWorkCancellation Cancellation, RuntimePostCommitOutboxItem Source)?>
+        FindCancellationAsync(RuntimeModelNativeWorkOrigin origin, CancellationToken cancellationToken)
+    {
+        EnsureQualified(); access.Current.EnsureScope(origin.Scope);
+        var model = await models!.FindAsync(origin.ExecutionId, cancellationToken)
+            ?? throw Unavailable("The model execution authorizing this native start is unavailable.");
+        access.Current.EnsureTenantScope(model.TenantId);
+        if (!origin.MatchesModel(model)) throw new BpmnModelValidationException("The native start's model pin changed.");
+        var cancellation = BpmnDirectExecutionDriver.Read(model).Cancellations?.SingleOrDefault(item => origin.IsEquivalentTo(item.Origin));
+        if (cancellation is null) return null;
+        var source = await PhysicalLookup.FindDurableAsync(cancellation.SourceOutboxItemId, cancellationToken)
+            ?? throw Unavailable("The model's committed cancellation source is unavailable.");
+        if (model.TerminalResult?.GetProperty("status").GetString() != "Cancelled" || source.StimulusDeliverySourceScope != origin.Scope ||
+            source.Intent.Kind != CancelKind || source.Intent.WorkflowExecutionId != model.ExecutionId ||
+            source.Intent.IntentId != CancellationIntentId(origin) || source.Intent.Payload is not { } payload ||
+            !JsonElement.DeepEquals(payload, JsonSerializer.SerializeToElement(cancellation with { Settled = false, NotAdmitted = false }, Web)))
+            throw new BpmnModelValidationException("Native start retirement requires its exact committed model cancellation.");
+        return (model, cancellation, source);
+    }
+
+    internal async ValueTask<RuntimePostCommitOutboxItem> RequireStartSourceAsync(RuntimeModelNativeWorkOrigin origin, CancellationToken cancellationToken)
+    {
+        var source = await PhysicalLookup.FindDurableAsync(origin.SourceOutboxItemId, cancellationToken)
+            ?? throw Unavailable("The original native start source is unavailable.");
+        if (source.StimulusDeliverySourceScope != origin.Scope || source.Intent.Kind != StartKind ||
+            source.Intent.WorkflowExecutionId != origin.ExecutionId || source.Intent.IntentId != origin.SourceIntentId ||
+            source.Intent.Payload is not { } payload || !origin.IsEquivalentTo(payload.Deserialize<RuntimeModelNativeWorkOrigin>(Web)))
+            throw new BpmnModelValidationException("The original native start source differs from its retired invocation.");
+        return source;
+    }
+
+    internal static RuntimeModelExecutionCommand RetirementCommand(RuntimeModelExecutionState model, BpmnNativeWorkCancellation cancellation) =>
+        new(model.Executable, model.MaterialIncarnationId, RetirementInputId(cancellation), "native-start-retired",
+            JsonSerializer.SerializeToElement(cancellation with { Settled = false, NotAdmitted = false }, Web), model.Authority, model.TenantId);
+
+    internal async ValueTask<bool> HasRetirementReceiptAsync(RuntimeModelExecutionState model, BpmnNativeWorkCancellation cancellation,
+        CancellationToken cancellationToken)
+    {
+        var command = RetirementCommand(model, cancellation);
+        var receipt = await models!.FindInputAsync(model.ExecutionId, command.InputId, cancellationToken);
+        if (receipt is null) return false;
+        if (!cancellation.Settled || !cancellation.NotAdmitted)
+            throw Unavailable("The native start retirement receipt advanced beyond the observed model snapshot.");
+        if (receipt.InputKind != command.InputKind || receipt.ContentFingerprint != RuntimeCheckpointCommitFingerprint.ComputeModelInput(command) ||
+            receipt.Result.GetProperty("status").GetString() != "Accepted")
+            throw new BpmnModelValidationException("Native start retirement differs from its exact retained model receipt.");
+        return true;
+    }
+
+    internal async ValueTask RequireNoQueuedStartAsync(RuntimeModelNativeWorkOrigin origin, CancellationToken cancellationToken)
+    {
+        if (!queue.SupportsClaimTransitions || !queue.SupportsClaimValidation)
+            throw new NotSupportedException("Native start retirement requires the qualified claimed scheduler queue.");
+        var page = await queue.ListAsync(new(origin.WorkerExecutionId, limit: 1), cancellationToken);
+        if (page.Items.Count != 0 || page.NextContinuationToken is not null)
+            throw Unavailable("The original native start still has queued work to retire.");
+    }
+
+    internal async ValueTask ValidateRetirementAsync(RuntimeModelExecutionContext context, BpmnNativeWorkCancellation cancellation,
+        CancellationToken cancellationToken)
+    {
+        var authorized = await FindCancellationAsync(cancellation.Origin, cancellationToken)
+            ?? throw new BpmnModelValidationException("The native start has no committed cancellation to retire it.");
+        var expected = RetirementCommand(authorized.Model, authorized.Cancellation);
+        if (context.State is null || context.State.Revision != authorized.Model.Revision)
+            throw Unavailable("The cancelling model advanced before native start retirement.");
+        if (context.Command.InputId != expected.InputId || RuntimeCheckpointCommitFingerprint.ComputeModelInput(context.Command) !=
+            RuntimeCheckpointCommitFingerprint.ComputeModelInput(expected))
+            throw new BpmnModelValidationException("The native start retirement does not address this exact cancelled invocation.");
+        if (await FindWorkerAsync(cancellation.Origin, cancellationToken) is not null)
+            throw new BpmnModelValidationException("An admitted native worker must retain its actual terminal result.");
+        if (await HasRetirementReceiptAsync(authorized.Model, authorized.Cancellation, cancellationToken)) return;
+        if (authorized.Cancellation.Settled)
+            throw new BpmnModelValidationException("The native cancellation has no matching retirement receipt.");
+        var start = await RequireStartSourceAsync(cancellation.Origin, cancellationToken);
+        if (start.Status is RuntimePostCommitOutboxStatus.Delivered or RuntimePostCommitOutboxStatus.FailedFinal)
+            throw Unavailable("A terminal native start source has no positive retirement receipt.");
+        await RequireNoQueuedStartAsync(cancellation.Origin, cancellationToken);
+        // This is more than an absent header: the qualified writer made cancellation irreversible before
+        // this read. Every initial native admission compares that same model row atomically while Running.
+        // An admission that won first would already have its header; a later one cannot commit.
+    }
+
     internal async ValueTask<BpmnNativeWorkResult> CaptureAsync(RuntimeCheckpointCommit commit, WorkflowExecutionState worker,
         CancellationToken cancellationToken)
     {
@@ -212,4 +299,5 @@ internal sealed record BpmnNativeWorkResult(RuntimeModelNativeWorkOrigin Origin,
     WorkflowExecutionStatus Status, BpmnNativeCompletion? Completion, string? FaultCode,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? CancellationSources = null);
 
-internal sealed record BpmnNativeWorkCancellation(RuntimeModelNativeWorkOrigin Origin, string SourceOutboxItemId, bool Settled = false);
+internal sealed record BpmnNativeWorkCancellation(RuntimeModelNativeWorkOrigin Origin, string SourceOutboxItemId, bool Settled = false,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool NotAdmitted = false);

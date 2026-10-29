@@ -72,6 +72,10 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             case "native-result":
                 await NativeWork.ValidateResultAsync(context, NativeResult(context.Command.Payload), cancellationToken);
                 break;
+            case "native-start-retired":
+                await NativeWork.ValidateRetirementAsync(context, context.Command.Payload.Deserialize<BpmnNativeWorkCancellation>(Strict)
+                    ?? throw new BpmnModelValidationException("Native start retirement is missing."), cancellationToken);
+                break;
             default: throw new BpmnModelValidationException("The BPMN input kind is unsupported.");
         }
         var prior = await Reader.FindInputAsync(context.WorkItem.WorkflowExecutionId, context.Command.InputId, cancellationToken);
@@ -126,6 +130,15 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                 document = document with { Work = [], FormatVersion = cancellations.Length > 0 ? 4 : document.FormatVersion,
                     Cancellations = cancellations.Length > 0 ? cancellations : document.Cancellations };
             }
+        }
+        else if (command.InputKind == "native-start-retired")
+        {
+            var retirement = command.Payload.Deserialize<BpmnNativeWorkCancellation>(Strict)!;
+            var owed = document.Cancellations!.Single(item => !item.Settled && retirement.Origin.IsEquivalentTo(item.Origin));
+            document = document with { Cancellations = document.Cancellations.Select(item => item == owed
+                ? item with { Settled = true, NotAdmitted = true } : item).ToArray() };
+            completion = new(retirement.Origin.InvocationId, retirement.Origin.AttemptId);
+            settledCancellation = true;
         }
         else if (command.InputKind is "start" or "start-embedded")
         {
@@ -297,7 +310,8 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                     item.Origin.WorkerExecutionId != BpmnNativeWorkBoundary.WorkerIdentity(state.Scope, state.ExecutionId,
                         item.Origin.InvocationId, item.Origin.AttemptId, item.Origin.WorkerExecutable).WorkflowExecutionId ||
                     !item.SourceOutboxItemId.EndsWith(":" + BpmnNativeWorkBoundary.CancellationIntentId(item.Origin), StringComparison.Ordinal) ||
-                    item.Settled && result.NativeResults?.Any(value => item.Origin.IsEquivalentTo(value.Origin)) != true)) ||
+                    item.NotAdmitted && (!item.Settled || result.NativeResults?.Any(value => item.Origin.IsEquivalentTo(value.Origin)) == true) ||
+                    item.Settled && !item.NotAdmitted && result.NativeResults?.Any(value => item.Origin.IsEquivalentTo(value.Origin)) != true)) ||
             (cancelled ? result.Work.Count != 0 : result.Work.Count != result.State.ActiveWork.Count) ||
             result.Work.Select(item => item.InvocationId).Distinct(StringComparer.Ordinal).Count() != result.Work.Count ||
             result.Work.Select(item => item.TokenId).Distinct(StringComparer.Ordinal).Count() != result.Work.Count ||

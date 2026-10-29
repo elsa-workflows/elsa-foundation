@@ -69,8 +69,9 @@ def main():
     outcome_group.add_argument("--pipeline-cancel", action="store_true", help="Cancel the actual ETL run after host recovery and observe native/BPMN cancellation.")
     outcome_group.add_argument("--native-cancel", action="store_true", help="Cancel the actual native worker after recovery and verify cancellation reaches ETL and BPMN.")
     outcome_group.add_argument("--model-cancel", action="store_true", help="Cancel the BPMN model after recovery and verify its durable cancellation reaches the admitted worker and ETL.")
+    outcome_group.add_argument("--model-cancel-before-admission", action="store_true", help="Cancel the model while its original native start is owed, kill the host and recover positive retirement without admitting a worker.")
     args = parser.parse_args()
-    cancelling=args.pipeline_cancel or args.native_cancel or args.model_cancel
+    cancelling=args.pipeline_cancel or args.native_cancel or args.model_cancel or args.model_cancel_before_admission
     if cancelling and args.parent != "BpmnModel":parser.error("Cancellation currently qualifies the direct BPMN/native RunEtl root only.")
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
     if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True).strip():
@@ -157,6 +158,7 @@ def main():
             "EtlRuntimeApi":{"CursorSigningKey":"owned-etl-recovery-runtime-cursor-signing-key"},"EtlWorkflowsDesign":{},"EtlWorkflowsRuntime":{}})
         if direct_bpmn:
             features.update({"ActivitiesBpmnHosting":{"AdmitNewExecutions":True},"ActivitiesBpmnHostingApi":{}})
+            if args.model_cancel_before_admission:features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":300}
             # This first model profile qualifies the built-in single-node actor, as the hosting tests do.
             for name in ("WorkflowsRuntimeDistributed", "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence", "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence"):
                 features.pop(name, None)
@@ -190,6 +192,66 @@ def main():
                 "serviceBindings":[{"bindingId":"pipeline","executable":worker_pin,"businessErrorCode":"etl.rows-rejected"}]}})
             executed=api.request("/bpmn/executions",{"requestId":"start-model","sourceReferenceId":model_publication["sourceReferenceId"]})
             model_execution=executed["executionId"]
+            if args.model_cancel_before_admission:
+                def admission_view():
+                    return {"model":api.request("/bpmn/executions/"+model_execution),
+                        "native":api.request("/runtime/workflows/instances"),"runs":api.request("/etl/runs?limit=100")}
+                def admission_checked():
+                    return json.loads(subprocess.check_output(["dotnet",str(reader),"--read-bpmn-retirement",str(root/"elsa.db"),model_execution],text=True,timeout=30))
+                def quiesce():
+                    os.kill(host.pid,signal.SIGSTOP)
+                    wait_for(lambda:q.process_field(host.pid,"stat"),lambda value:"T" in value,"The owned Workbench did not quiesce.",5)
+                try:
+                    before=admission_view();before_wire=wire();quiesce()
+                    before_stores=snapshots("before");before_checked=admission_checked()
+                    q.write_json(output/"before.json",before);q.write_json(output/"before-checked.json",before_checked);q.write_json(output/"before-wire.json",before_wire)
+                    if (before["model"]["status"]!="Running" or before["native"] or before["runs"]["items"] or
+                            before_checked["worker"] is not None or before_checked["model"]["revision"]!=1 or len(before_checked["sources"])!=1 or
+                            before_checked["sources"][0]["status"]==2):
+                        raise ValueError("The actual native worker was already admitted before the cancellation cut.")
+                    os.kill(host.pid,signal.SIGCONT)
+                    cancellation=api.request("/bpmn/executions/"+model_execution+"/cancel",
+                        {"requestId":"cancel-before-native-admission","reason":"Retire the original native start before admission."})
+                    pending=admission_view();quiesce();pending_stores=snapshots("pending");pending_checked=admission_checked()
+                    q.write_json(output/"cancel-response.json",cancellation);q.write_json(output/"pending.json",pending);q.write_json(output/"pending-checked.json",pending_checked)
+                    if (cancellation["pending"] or cancellation["result"]["status"]!="Accepted" or pending["model"]["status"]!="TerminalPendingSettlement" or
+                            pending_checked["model"]["revision"]!=2 or pending_checked["worker"] is not None or pending["native"] or pending["runs"]["items"] or
+                            len(pending_checked["sources"])!=2 or any(item["status"]==2 for item in pending_checked["sources"])):
+                        raise ValueError("The actual pending cancellation/start responsibility was not retained before process loss.")
+                    stop(host,crash=True);exit_code=host.returncode
+                    if exit_code!=-signal.SIGKILL:raise ValueError("The owned predecessor did not lose its actual process.")
+                    print("Actual BPMN cancellation retained before native admission; owned predecessor killed.",flush=True)
+                    features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":.2};q.write_json(root/"shells.json",shells)
+                    api=launch()
+                    finished_checked=wait_for(admission_checked,lambda value:value["model"]["lifecycle"]==3 and
+                        len(value["inputs"])==3 and len(value["sources"])==2 and all(item["status"]==2 for item in value["sources"]) and
+                        not value["queuedNativeWork"] and not value["queuedModelInputs"],"The real cancelled native start did not retire after restart.",90)
+                    finished=admission_view();finished_wire=wire();stop(host)
+                    finished_checked=admission_checked();finished_stores=snapshots("finished")
+                    q.write_json(output/"finished.json",finished);q.write_json(output/"finished-checked.json",finished_checked);q.write_json(output/"finished-wire.json",finished_wire)
+                    if finished["native"] or finished["runs"]["items"] or finished_checked["worker"] is not None or finished_wire!=before_wire:
+                        raise ValueError("A retired native start created a worker, ETL run or external effect.")
+                    api=launch();until=time.monotonic()+2
+                    while time.monotonic()<until:
+                        if admission_view()!=finished or wire()!=finished_wire:raise ValueError("The retired native start revived across another host.")
+                        time.sleep(.2)
+                    retained=admission_view();retained_wire=wire();stop(host);retained_checked=admission_checked()
+                    q.write_json(output/"retained.json",retained);q.write_json(output/"retained-checked.json",retained_checked);q.write_json(output/"retained-wire.json",retained_wire)
+                    if retained_checked!=finished_checked:raise ValueError("The actual start retirement proof changed after another host.")
+                    q.write_json(output/"process.json",{"schemaVersion":1,"kind":"actual-bpmn-cancellation-before-native-admission","sourceRevision":source,
+                        "products":products,"processes":processes,"predecessorExitCode":exit_code,"modelPublication":model_publication,"publication":publication,
+                        "etlPublication":published,"modelExecutionId":model_execution,"origin":before_checked["origin"],"beforeStores":before_stores,
+                        "pendingStores":pending_stores,"finishedStores":finished_stores,"sweepIntervalsSeconds":[300,.2,.2],
+                        "controllerSha256":q.digest(Path(__file__)),"fixtureSha256":q.digest(fixture_script),
+                        "scopeLimits":["Original native start source owed before first delivery; positive model retirement across actual SIGKILL and fresh standard hosts.",
+                            "The real ETL worker is published and pinned, but no native workflow, ETL run or HTTP effect is admitted.",
+                            "Queued native-start checkpoint/admission races, pending result crashes, embedding, held retry and final upgrade/Studio remain separate gates."]})
+                    print("Original native start retired after process loss; no worker or ETL run across a third host.",flush=True)
+                except Exception as failure:
+                    stop(host);failed_stores=snapshots("failed")
+                    q.write_json(output/"failure.json",{"sourceRevision":source,"failureType":type(failure).__name__,"failedStores":failed_stores,"processes":processes,"products":products})
+                    raise
+                return
             instances=wait_for(lambda:api.request("/runtime/workflows/instances"),lambda value:len(value)==1,"The BPMN binding did not admit its real native worker.")
             execution=instances[0]["workflowExecutionId"]
         else:

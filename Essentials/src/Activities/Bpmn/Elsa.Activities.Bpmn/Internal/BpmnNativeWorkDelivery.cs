@@ -27,8 +27,13 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
             var origin = cancellation.Origin;
             var worker = await boundary.FindWorkerAsync(origin, cancellationToken);
             if (worker is null)
-                // Absence alone is not cancellation-before-admission proof. Keep the exact source owed.
-                throw Pending("bpmn.native-cancel.admission-pending", "The native start still requires durable retirement before cancellation can settle.");
+            {
+                var retained = BpmnDirectExecutionDriver.Read(model).Cancellations!.Single(item => origin.IsEquivalentTo(item.Origin));
+                if (!await boundary.HasRetirementReceiptAsync(model, retained, cancellationToken) ||
+                    (await boundary.RequireStartSourceAsync(origin, cancellationToken)).Status != RuntimePostCommitOutboxStatus.Delivered)
+                    throw Pending("bpmn.native-cancel.admission-pending", "The original native start and its exact retirement receipt remain owed.");
+                return;
+            }
             if (worker.TenantId != model.TenantId || worker.Authority is null ||
                 !WorkflowExecutionAuthoritySnapshot.Matches(model.Authority, worker.Authority.SystemIdentity,
                     worker.Authority.RootInitiator, worker.Authority.Metadata))
@@ -61,6 +66,14 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
                 origin.Scope != source.Scope || origin.ExecutionId != source.Intent.WorkflowExecutionId)
                 throw new BpmnModelValidationException("The native work start does not belong to this actual source.");
             if (await boundary.FindWorkerAsync(origin, cancellationToken) is not null) return;
+            if (await boundary.FindCancellationAsync(origin, cancellationToken) is { } cancelled)
+            {
+                if (await boundary.HasRetirementReceiptAsync(cancelled.Model, cancelled.Cancellation, cancellationToken)) return;
+                await boundary.RequireNoQueuedStartAsync(origin, cancellationToken);
+                await QueueModelAsync(BpmnNativeWorkBoundary.RetirementCommand(cancelled.Model, cancelled.Cancellation),
+                    cancelled.Model.ExecutionId, source, cancellationToken);
+                throw Pending("bpmn.native-start.retirement-pending", "The exact cancelled native start awaits model retirement consumption.");
+            }
             var model = await boundary.RequireLiveAsync(origin, cancellationToken);
             var identity = BpmnNativeWorkBoundary.WorkerIdentity(origin.Scope, origin.ExecutionId, origin.InvocationId, origin.AttemptId, origin.WorkerExecutable);
             if (identity.WorkflowExecutionId != origin.WorkerExecutionId)
@@ -106,4 +119,15 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
 
     private static RuntimePostCommitDeliveryException Pending(string code, string message) =>
         new(PostCommitFailureKind.Transient, code, message);
+
+    private async ValueTask QueueModelAsync(RuntimeModelExecutionCommand command, string executionId,
+        PostCommitDeliveryContext source, CancellationToken cancellationToken)
+    {
+        if (!queue.SupportsClaimTransitions || !queue.SupportsClaimValidation)
+            throw new NotSupportedException("Native start retirement requires the qualified protected model input queue.");
+        var envelope = "bpmn-retire-native:" + BpmnModelIdentity.Create(executionId, command.InputId);
+        await queue.EnqueueAsync(new(RuntimeModelExecutionCommand.CreateSchedulerWorkItemId(command.InputId), executionId, command.InputId,
+            WorkflowExecutionCommandKind.ExecuteModel, envelope, envelope, source.Intent.RecordedAt, clock.GetUtcNow(),
+            payload: JsonSerializer.SerializeToElement(command, BpmnNativeWorkBoundary.Web)), cancellationToken);
+    }
 }
