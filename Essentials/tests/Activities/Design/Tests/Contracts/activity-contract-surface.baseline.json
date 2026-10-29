@@ -77,6 +77,36 @@
       }
     },
     {
+      "alias": "Elsa.Activities.Bpmn.Activities.RunBpmn",
+      "activityTypeKey": "Elsa.Activities.Bpmn.Activities.RunBpmn",
+      "version": "1.0.0",
+      "category": "BPMN",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "Model",
+          "name": "Model",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [],
+      "outcomes": {
+        "declared": true,
+        "ports": [
+          "Done"
+        ],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
       "alias": "Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow",
       "activityTypeKey": "Elsa.Activities.DispatchWorkflow.Runtime.Activities.DispatchWorkflow",
       "version": "1.0.0",

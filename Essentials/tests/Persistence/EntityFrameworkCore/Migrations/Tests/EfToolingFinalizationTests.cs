@@ -142,7 +142,7 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
         Assert.Equal(JsonValueKind.Null, model.GetProperty("finalizedVersion").ValueKind);
         Assert.Equal(["1.0.0"], model.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
         var queue = families.Single(family => family.GetProperty("family").GetString() == "RuntimeSchedulerWork");
-        Assert.Equal(["1.0.0", "2.0.0"], queue.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
+        Assert.Equal(["1.0.0", "2.0.0", "3.0.0"], queue.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
         var secrets = families.Single(family => family.GetProperty("family").GetString() == SecretsEfModule.SchemaFamily);
         Assert.Single(secrets.GetProperty("holds").EnumerateArray());
         var runtime = families.Single(family => family.GetProperty("family").GetString() == RuntimeArtifactEfModule.SchemaFamily);

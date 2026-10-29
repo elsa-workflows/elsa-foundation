@@ -8,13 +8,14 @@ using Elsa.Workflows.Runtime.Services.Executions;
 namespace Elsa.Activities.Bpmn.Internal;
 
 internal sealed class BpmnEmbeddingDelivery(BpmnEmbeddingBoundary boundary, BpmnNativeWorkBoundary native,
-    IRuntimeModelExecutionReader models, IWorkflowSchedulerWorkQueue queue, IBookmarkResumeDispatcher resumes,
-    IWorkflowExecutionActorProvider actors, TimeProvider clock) : IRuntimePostCommitDurableSourceIntentHandler
+    IWorkflowSchedulerWorkQueue queue, IBookmarkResumeDispatcher resumes,
+    IWorkflowExecutionActorProvider actors, TimeProvider clock, IRuntimeModelExecutionReader? models = null) : IRuntimePostCommitDurableSourceIntentHandler
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
     public async ValueTask HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
     {
         boundary.EnsureQualified(); await native.RevalidateSourceAsync(source, cancellationToken);
+        var reader = models ?? throw new NotSupportedException("RunBpmn requires qualified model state persistence.");
         if (actors is not InProcessWorkflowExecutionActorProvider) throw new NotSupportedException("RunBpmn requires the qualified built-in actor provider.");
         BpmnEmbeddedInvocation invocation; string inputKind;
         if (source.Intent.Kind == BpmnEmbeddingBoundary.ResultKind)
@@ -41,7 +42,7 @@ internal sealed class BpmnEmbeddingDelivery(BpmnEmbeddingBoundary boundary, Bpmn
             if (source.Intent.WorkflowExecutionId != invocation.NativeExecutionId || source.Intent.ActivityExecutionId != invocation.NativeInvocationId ||
                 !source.Intent.IsEquivalentTo(BpmnEmbeddingCheckpointEnricher.Intent(invocation, source.Intent.Kind == BpmnEmbeddingBoundary.CancelKind, source.Intent.RecordedAt)))
                 throw BpmnEmbeddingJson.Invalid();
-            if (await models.FindAsync(invocation.ExecutionId, cancellationToken) is { } retained)
+            if (await reader.FindAsync(invocation.ExecutionId, cancellationToken) is { } retained)
             {
                 await boundary.RequireModelAsync(invocation, cancellationToken);
                 if (source.Intent.Kind == BpmnEmbeddingBoundary.StartKind || retained.TerminalResult is not null) return;
@@ -54,7 +55,7 @@ internal sealed class BpmnEmbeddingDelivery(BpmnEmbeddingBoundary boundary, Bpmn
         var command = new RuntimeModelExecutionCommand(invocation.Model.Executable, invocation.Model.MaterialIncarnationId, inputId, inputKind,
             JsonSerializer.SerializeToElement(new BpmnEmbeddedInput(BpmnEmbeddingJson.Write(invocation), source.SourceOutboxItemId), Web),
             workflow.Authority ?? throw BpmnEmbeddingJson.Invalid(), workflow.TenantId);
-        if (await models.FindInputAsync(invocation.ExecutionId, inputId, cancellationToken) is { } receipt)
+        if (await reader.FindInputAsync(invocation.ExecutionId, inputId, cancellationToken) is { } receipt)
         {
             if (receipt.ContentFingerprint != RuntimeCheckpointCommitFingerprint.ComputeModelInput(command)) throw new RuntimeCheckpointReplayConflictException(inputId);
             return;

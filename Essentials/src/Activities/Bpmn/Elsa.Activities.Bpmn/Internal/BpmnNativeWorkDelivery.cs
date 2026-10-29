@@ -10,12 +10,13 @@ namespace Elsa.Activities.Bpmn.Internal;
 
 /// <summary>Transports existing model/native outbox responsibility through the shared native start and model queues.</summary>
 internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IWorkflowStartDispatcher starts,
-    IRuntimeModelExecutionReader models, IWorkflowSchedulerWorkQueue queue, IWorkflowExecutionActorProvider actors,
-    TimeProvider clock) : IRuntimePostCommitDurableSourceIntentHandler
+    IWorkflowSchedulerWorkQueue queue, IWorkflowExecutionActorProvider actors,
+    TimeProvider clock, IRuntimeModelExecutionReader? models = null) : IRuntimePostCommitDurableSourceIntentHandler
 {
     public async ValueTask HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
     {
         await boundary.RevalidateSourceAsync(source, cancellationToken);
+        var reader = models ?? throw new NotSupportedException("Native BPMN work requires qualified model state persistence.");
         if (actors is not InProcessWorkflowExecutionActorProvider)
             throw new NotSupportedException("This native BPMN binding requires the qualified built-in actor provider.");
         if (source.Intent.Kind == BpmnNativeWorkBoundary.StartKind)
@@ -46,14 +47,14 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
         if (result.SourceOutboxItemId != source.SourceOutboxItemId || result.Origin.WorkerExecutionId != source.Intent.WorkflowExecutionId ||
             result.Origin.Scope != source.Scope)
             throw new BpmnModelValidationException("The native result does not belong to this actual terminal source.");
-        var current = await models.FindAsync(result.Origin.ExecutionId, cancellationToken)
+        var current = await reader.FindAsync(result.Origin.ExecutionId, cancellationToken)
             ?? throw BpmnNativeWorkBoundary.Unavailable("The destination model execution is unavailable.");
         if (!result.Origin.MatchesModel(current)) throw new BpmnModelValidationException("The native result model pin changed.");
         var inputId = BpmnNativeWorkBoundary.ResultInputId(result.Origin);
         var command = new RuntimeModelExecutionCommand(current.Executable, current.MaterialIncarnationId, inputId, "native-result",
             JsonSerializer.SerializeToElement(result, BpmnNativeWorkBoundary.Web), current.Authority, current.TenantId);
         var fingerprint = RuntimeCheckpointCommitFingerprint.ComputeModelInput(command);
-        if (await models.FindInputAsync(current.ExecutionId, inputId, cancellationToken) is { } accepted)
+        if (await reader.FindInputAsync(current.ExecutionId, inputId, cancellationToken) is { } accepted)
         {
             if (accepted.ContentFingerprint != fingerprint) throw new RuntimeCheckpointReplayConflictException(inputId);
             return;
