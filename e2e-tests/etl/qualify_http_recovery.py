@@ -65,7 +65,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--parent", choices=("Sequence", "Flowchart", "RunEtl", "BpmnModel"), default="Sequence")
     parser.add_argument("--embedded-parent", choices=("Root", "Sequence", "Flowchart", "CompensationScope"), help="Invoke the published service model through a real native RunBpmn parent.")
-    parser.add_argument("--business-error-boundary", choices=("matching", "different"), help="Attach a coded error boundary to the actual service task; requires --business-error.")
+    parser.add_argument("--business-error-boundary", choices=("matching", "different"), help="Attach a coded business-error boundary; requires a business-error or technical-fault journey.")
     parser.add_argument("--queued-native-stage", choices=("start", "checkpoint"), help="With cancellation before admission, use the actual SDK to retain the selected native queue stage first.")
     parser.add_argument("--dispatcher-assembly", type=Path, help="Built owned SDK client required for the queued-native cut.")
     parser.add_argument("--admission-race-order", choices=("cancel-first", "admit-first"), help="Gate an unchanged actual proposal before its provider transaction, commit the competitor, then cold-recover both writers' obligations.")
@@ -75,6 +75,7 @@ def main():
     parser.add_argument("--successful-parent-result-crash", choices=("pending","consumed","settled"), help="After actual ETL success, capture a second process loss before native parent consumption, after consumption, or after model settlement while source ACK remains owed.")
     outcome_group = parser.add_mutually_exclusive_group()
     outcome_group.add_argument("--business-error", action="store_true", help="Reject one actual HTTP record through its declared Int64 schema.")
+    outcome_group.add_argument("--technical-fault", action="store_true", help="After the real HTTP429/process-loss cut, reject the original source retry with HTTP400.")
     outcome_group.add_argument("--pipeline-cancel", action="store_true", help="Cancel the actual ETL run after host recovery and observe native/BPMN cancellation.")
     outcome_group.add_argument("--native-cancel", action="store_true", help="Cancel the actual native worker after recovery and verify cancellation reaches ETL and BPMN.")
     outcome_group.add_argument("--native-parent-cancel", action="store_true", help="Cancel the real outer native RunBpmn parent after recovery.")
@@ -82,16 +83,17 @@ def main():
     outcome_group.add_argument("--model-cancel-before-admission", action="store_true", help="Cancel the model while its original native start is owed, kill the host and recover positive retirement without admitting a worker.")
     args = parser.parse_args()
     cancelling=args.pipeline_cancel or args.native_cancel or args.native_parent_cancel or args.model_cancel or args.model_cancel_before_admission
-    if args.business_error_boundary and (not args.business_error or args.parent!='BpmnModel'):
-        parser.error("A business-error boundary requires --parent BpmnModel and --business-error.")
-    caught_business_error=args.business_error_boundary=='matching'
+    if args.technical_fault and args.parent!='BpmnModel':parser.error("Technical fault currently qualifies the direct BPMN/native RunEtl root.")
+    if args.business_error_boundary and (not (args.business_error or args.technical_fault) or args.parent!='BpmnModel'):
+        parser.error("A business-error boundary requires --parent BpmnModel and a business-error or technical-fault journey.")
+    caught_business_error=args.business_error and args.business_error_boundary=='matching'
     if cancelling and args.parent != "BpmnModel":parser.error("Cancellation currently qualifies the direct BPMN/native RunEtl root only.")
     if args.embedded_parent and (args.parent!='BpmnModel' or args.model_cancel_before_admission or args.pending_cancellation_crash):
         parser.error("Embedding requires --parent BpmnModel and the normal admitted-worker recovery journey.")
     if args.native_parent_cancel and not args.embedded_parent:parser.error("Native parent cancellation requires --embedded-parent.")
     if args.pending_parent_result_crash and (not args.native_parent_cancel or args.dispatcher_assembly is None):
         parser.error("The pending native-parent result cut requires --native-parent-cancel and --dispatcher-assembly.")
-    if args.successful_parent_result_crash and (not args.embedded_parent or args.dispatcher_assembly is None or cancelling or args.business_error or args.pending_cancellation_crash):
+    if args.successful_parent_result_crash and (not args.embedded_parent or args.dispatcher_assembly is None or cancelling or args.business_error or args.technical_fault or args.pending_cancellation_crash):
         parser.error("The successful native-parent cut requires --embedded-parent, --dispatcher-assembly and the normal successful admitted-worker journey.")
     if args.queued_native_stage and (not args.model_cancel_before_admission or args.dispatcher_assembly is None):
         parser.error("A queued native stage requires --model-cancel-before-admission and --dispatcher-assembly.")
@@ -167,7 +169,7 @@ def main():
     try:
         fixture_script=REPO/"e2e-tests/etl/EtlHttpFixture.mjs";ready=root/"http-ready.json"
         retry_after=60 if cancelling else 20
-        fixture=start(["node",str(fixture_script),"--ready-file",str(ready),"--source-retry-after-seconds",str(retry_after)]+(["--invalid-last-id"] if args.business_error else []),"http-fixture")
+        fixture=start(["node",str(fixture_script),"--ready-file",str(ready),"--source-retry-after-seconds",str(retry_after)]+(["--invalid-last-id"] if args.business_error else [])+(["--reject-recovered-source"] if args.technical_fault else []),"http-fixture")
         wait_for(lambda:ready.exists(),bool,"The owned HTTP fixture did not start.",15)
         fixture_url="http://127.0.0.1:"+str(json.loads(ready.read_text())["port"])
         def wire():
@@ -220,7 +222,7 @@ def main():
                 "sequenceFlows":[{"flowId":"to-service","sourceRef":"start","targetRef":"service"},{"flowId":"to-end","sourceRef":"service","targetRef":"end"}]}
             if args.business_error_boundary:
                 process['elements'] += [{'elementId':'error','elementType':'boundaryEvent','attachedToRef':'service','cancelActivity':True,
-                    'eventDefinitions':[{'type':'error','properties':{'code':'etl.rows-rejected' if caught_business_error else 'etl.other-error'}}]},
+                    'eventDefinitions':[{'type':'error','properties':{'code':'etl.rows-rejected' if args.business_error_boundary=='matching' else 'etl.other-error'}}]},
                     {'elementId':'error-end','elementType':'endEvent'}]
                 process['sequenceFlows'].append({'flowId':'caught-end','sourceRef':'error','targetRef':'error-end'})
             model_publication=api.request("/bpmn/artifacts",{"requestId":"publish-model","definition":{"formatVersion":2,"process":process,"humanBindings":[],
@@ -566,9 +568,9 @@ def main():
                 q.write_json(output/"failure.json",{"sourceRevision":source,"failureType":type(failure).__name__,"processes":processes,"products":products,
                     "pendingCancellationStage":"model-command" if args.model_cancel else "native-terminal","beforeStores":before_stores,"failedStores":failed_stores})
                 raise
-        outcome="cancelled" if cancelling else "businessError" if args.business_error else "succeeded"
-        native_terminal="Cancelled" if cancelling else "Completed"
-        model_terminal="Cancelled" if cancelling else "Faulted" if args.business_error and not caught_business_error else "Completed"
+        outcome="cancelled" if cancelling else "faulted" if args.technical_fault else "businessError" if args.business_error else "succeeded"
+        native_terminal="Cancelled" if cancelling else "Faulted" if args.technical_fault else "Completed"
+        model_terminal="Cancelled" if cancelling else "Faulted" if args.technical_fault or args.business_error and not caught_business_error else "Completed"
         faulted=model_terminal=='Faulted'
         absorbed=faulted and args.embedded_parent=='CompensationScope'
         parent_terminal='Completed' if absorbed else model_terminal
@@ -614,16 +616,24 @@ def main():
                 raise ValueError('The real native RunBpmn parent did not preserve its completion/fault/cancellation behavior.')
         result=finished["run"];rows=finished["partitions"]["items"];native_view=finished["native"]
         if (result["formatVersion"]!=2 or result["selection"]!=selection or result["terminalResult"]["outcome"]!=outcome or
-                result["acceptedRecords"]!=(2 if cancelling else 3 if args.business_error else 4) or result["rejectedRecords"]!=(1 if args.business_error else 0) or result["filteredRecords"]!=0 or result["outstandingRecords"]!=0 or result["outstandingBytes"]!=0 or
+                result["acceptedRecords"]!=(2 if cancelling or args.technical_fault else 3 if args.business_error else 4) or result["rejectedRecords"]!=(1 if args.business_error else 0) or result["filteredRecords"]!=0 or result["outstandingRecords"]!=0 or result["outstandingBytes"]!=0 or
                 len(rows)!=2 or finished["partitions"]["nextCursor"] is not None or any(item["owedBatch"] is not None for item in rows) or
-                not cancelling and any(not item["http"]["exhausted"] or item["http"]["pageSequence"]!=1 for item in rows)):
+                not cancelling and not args.technical_fault and any(not item["http"]["exhausted"] or item["http"]["pageSequence"]!=1 for item in rows)):
             raise ValueError("The recovered ETL run did not retain the expected output accounting and exact partitions.")
-        if native_view["incidents"] or len(native_view["activities"])!=(1 if args.parent in ("RunEtl","BpmnModel") else 3) or any(item["status"]!=native_terminal for item in native_view["activities"]):
+        if (not args.technical_fault and native_view["incidents"] or len(native_view["activities"])!=(1 if args.parent in ("RunEtl","BpmnModel") else 3) or any(item["status"]!=native_terminal for item in native_view["activities"])):
             raise ValueError("The recovered native parent did not execute RunEtl and its successor once.")
         old_activities={(item.get("authoredActivityId") or item["executableNodeId"]):item for item in before["native"]["activities"]}
         etl_activity=next(item for item in native_view["activities"] if (item.get("authoredActivityId") or item["executableNodeId"])=="etl")
-        if etl_activity["outcomeNames"]!=([] if cancelling else ["BusinessError" if args.business_error else "Done"]):
+        if etl_activity["outcomeNames"]!=([] if cancelling or args.technical_fault else ["BusinessError" if args.business_error else "Done"]):
             raise ValueError("The real RunEtl activity did not preserve its typed terminal outcome.")
+        if args.technical_fault:
+            incident,=native_view['incidents']
+            failed=[r['http']['fetch'] for r in rows if r['http']['fetch'] is not None]
+            if (incident['activityExecutionId']!=etl_activity['activityExecutionId'] or incident['status']!='Blocking' or
+                    incident['failureType']!='ActivityReturnedFault' or incident['resolutionOutcome']['actionKind']!='FaultWorkflow' or
+                    result['terminalResult']['diagnostic']['code']!='etl.http.source-response-rejected' or
+                    len(failed)!=1 or failed[0]['phase']!='failed' or failed[0]['lastStatusCode']!=400 or failed[0]['attemptCount']!=2):
+                raise ValueError('The actual technical failure lost its original rejected source retry or native fault incident.')
         if "after" in old_activities or old_activities["etl"]["activityExecutionId"]!=next(item["activityExecutionId"] for item in native_view["activities"] if (item.get("authoredActivityId") or item["executableNodeId"])=="etl"):
             raise ValueError("The native RunEtl invocation was recreated or its successor ran before the cut.")
         for field in ("artifactId","artifactHash","artifactVersion","definitionId","definitionVersionId"):
@@ -631,10 +641,10 @@ def main():
         q.write_json(output/"finished.json",finished);finished_wire=wire();q.write_json(output/"finished-wire.json",finished_wire)
         b_requests=[item for item in finished_wire["requests"] if item.get("shard")=="shard-b"]
         if (cancelling and (len(b_requests)!=1 or b_requests[0]["status"]!=429) or
-                not cancelling and (len(b_requests)!=3 or [item["status"] for item in b_requests]!=[429,200,200] or b_requests[1]["receivedAtMs"]-b_requests[0]["receivedAtMs"]<20000)):
+                not cancelling and (len(b_requests)!=(2 if args.technical_fault else 3) or [item["status"] for item in b_requests]!=([429,400] if args.technical_fault else [429,200,200]) or b_requests[1]["receivedAtMs"]-b_requests[0]["receivedAtMs"]<20000)):
             raise ValueError("The actual source retried early or failed to resume its original two-page shard.")
         records=[item for post in finished_wire["outputPosts"] for item in post["records"]]
-        expected_records={1:"Ada",2:"Grace"} if cancelling else {1:"Ada",2:"Grace",3:"Linus"} if args.business_error else {1:"Ada",2:"Grace",3:"Linus",4:"Margaret"}
+        expected_records={1:"Ada",2:"Grace"} if cancelling or args.technical_fault else {1:"Ada",2:"Grace",3:"Linus"} if args.business_error else {1:"Ada",2:"Grace",3:"Linus",4:"Margaret"}
         if {item["id"]:item["name"] for item in records}!=expected_records or any(not post["hasIdempotencyKey"] for post in finished_wire["outputPosts"]):
             raise ValueError("The actual HTTP receiver lacks mapped output or idempotency headers.")
         errors=[json.loads(line) for file in (root/"errors").glob("*.jsonl") for line in file.read_text().splitlines() if line.strip()]
@@ -658,6 +668,7 @@ def main():
             "definition":definition,"selection":selection,"workflowExecutionId":execution,"runId":run,"publication":publication,"etlPublication":published,"bindings":bindings,
             "fixtureSha256":q.digest(fixture_script),"controllerSha256":q.digest(Path(__file__)),"cutAtUtc":cut_at,"businessError":args.business_error,"pipelineCancel":args.pipeline_cancel,"nativeCancel":args.native_cancel,"modelCancel":args.model_cancel,"retryAfterSeconds":retry_after,"beforeStores":before_stores,"finishedStores":finished_stores,
             **({'businessErrorBoundary':args.business_error_boundary} if args.business_error_boundary else {}),
+            **({'technicalFault':True,'technicalFaultPolicy':'FinalFault'} if args.technical_fault else {}),
             **({'resumptionSweepIntervalSeconds':.2} if args.business_error_boundary else {}),
             **({"observedCancelledAfterRetryDeadlineAtUtc":observed_cancelled_after_deadline} if cancelling else {}),
             **({"modelPublication":model_publication,"modelExecutionId":model_execution} if direct_bpmn else {}),

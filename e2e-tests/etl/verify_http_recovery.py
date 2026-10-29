@@ -38,6 +38,7 @@ def encoded_tree(value):
 
 
 def model_bridge(read,process,before,finished,business_error,cancelled=False,model_cancel=False,embedded=False):
+    technical=process.get('technicalFault') is True
     checked={phase:read(phase+"-checked-model.json") for phase in ("before","finished","retained")}
     if checked["finished"]!=checked["retained"]:raise ValueError("The actual native/model return proof changed after another process.")
     first,last=checked["before"],checked["finished"];origin=first["worker"]["modelWorkOrigin"]
@@ -60,8 +61,8 @@ def model_bridge(read,process,before,finished,business_error,cancelled=False,mod
             [item["nativeWork"] for item in first["model"]["payload"]["work"]]!=[origin] or first["resultInput"] is not None or first["resultSource"] is not None):
         raise ValueError("The actual crash cut lost its live model invocation.")
     result,=last["model"]["payload"]["nativeResults"];receipt=last["resultInput"];source=last["resultSource"]
-    expected="Cancelled" if cancelled else "Faulted" if business_error and process.get('businessErrorBoundary')!='matching' else "Completed"
-    native_status=5 if cancelled else 3
+    expected="Cancelled" if cancelled else "Faulted" if technical or business_error and process.get('businessErrorBoundary')!='matching' else "Completed"
+    native_status=5 if cancelled else 4 if technical else 3
     if (last["model"]["lifecycle"]!=3 or last["model"]["revision"]!=((3 if model_cancel else 2)+int(embedded)) or last["model"]["payload"]["work"] or last["worker"]["status"]!=native_status or
             result["origin"]!=origin or result["status"]!=native_status or last["model"]["terminalResult"]["status"]!=expected or
             before["model"]["status"]!="Running" or finished["model"]["status"]!="TerminalSettled" or finished["model"]["result"]["status"]!=expected):
@@ -75,6 +76,11 @@ def model_bridge(read,process,before,finished,business_error,cancelled=False,mod
     if cancelled:
         if completion is not None or result["faultCode"] is not None:raise ValueError("The actual cancelled worker was relabeled as completed or faulted.")
         return checked,origin,result
+    if technical:
+        if (completion is not None or result['faultCode']!='etl.http.source-response-rejected' or result.get('cancellationSources') is not None or
+                last['model']['terminalResult'].get('errorCode') is not None or last['model']['terminalResult']['code']!='bpmn.work.faulted'):
+            raise ValueError('The actual technical worker fault was relabeled as a business error or completion.')
+        return checked,origin,result
     typed=completion["result"]
     if (completion["isRedacted"] or completion["resultType"]["alias"]!="Elsa.Etl.Workflows.Runtime.Models.RunEtlResult" or
             completion["outcomeKey"]!=("BusinessError" if business_error else "Done") or typed!={"runId":process["runId"],"outcome":1 if business_error else 0,
@@ -83,7 +89,7 @@ def model_bridge(read,process,before,finished,business_error,cancelled=False,mod
     return checked,origin,result
 
 
-def physical_business_error_boundary(connection,phase,checked,origin,mode):
+def physical_business_error_boundary(connection,phase,checked,origin,mode,technical=False):
     model=checked[phase]['model']
     material,=[json.loads(row[0])['material'] for row in connection.execute('SELECT ContentJson FROM elsa_runtime_workflow_executable')
         if json.loads(row[0]).get('material') and json.loads(row[0])['material']['identity']==encoded_tree(model['executable'])]
@@ -100,7 +106,10 @@ def physical_business_error_boundary(connection,phase,checked,origin,mode):
     if phase=='finished':
         terminal=model['terminalResult'];diagnostics=model['payload']['state']['diagnostics']
         catches=[d for d in diagnostics if d['elementId']=='error' and d['details'].get('errorCode')=='etl.rows-rejected' and d['details'].get('match')=='exact']
-        if (mode=='matching' and (terminal['status']!='Completed' or len(catches)!=1) or
+        if technical:
+            if terminal['status']!='Faulted' or terminal.get('errorCode') is not None or terminal.get('code')!='bpmn.work.faulted' or catches:
+                raise ValueError('The actual technical fault entered a coded business-error catch.')
+        elif (mode=='matching' and (terminal['status']!='Completed' or len(catches)!=1) or
                 mode=='different' and (terminal['status']!='Faulted' or terminal.get('errorCode')!='etl.rows-rejected' or terminal.get('code')!='bpmn.work.faulted' or catches)):
             raise ValueError('The actual interpreter lost its exact matched or unmatched business-error disposition.')
 
@@ -138,6 +147,11 @@ def physical_model_bridge(connection,phase,checked,origin,result,model_cancel=Fa
         completion=json.loads(activity[1])["completion"];expected=result["completion"]
         if result["status"]==5:
             if activity[0]!="Cancelled" or completion is not None:raise ValueError("The physical native root lost its actual cancellation.")
+            return
+        if result['status']==4:
+            state=json.loads(activity[1])
+            if activity[0]!='Faulted' or completion is not None or state['fault']['code']!=key(result['faultCode']):
+                raise ValueError('The physical native root lost its actual technical fault.')
             return
         if (completion["invocationId"]!=key(expected["invocationId"]) or completion["attemptId"]!=key(expected["attemptId"]) or
                 completion["contractFingerprint"]!=key(expected["contractFingerprint"]) or completion["outcomeKey"]!=key(expected["outcomeKey"]) or
@@ -324,7 +338,7 @@ def embedded_etl_parent(read,root,process,bridge,parent_cancel):
     phases={p:read(p+'-checked-embedding.json') for p in ('before','finished','retained')}
     before=phases['before'];after=phases['finished'];model=before['model'];final=after['model'];native=before['nativeParent']
     parent=process['embeddedParent'];parent_id=process['nativeParentExecutionId'];parent_pin={k:process['nativeParentPublication'][k] for k in ('artifactId','artifactHash','artifactVersion','definitionId','definitionVersionId')}
-    faulted=process['businessError'] and process.get('businessErrorBoundary')!='matching'
+    faulted=process.get('technicalFault') is True or process['businessError'] and process.get('businessErrorBoundary')!='matching'
     absorbed=faulted and parent=='CompensationScope'
     def invocation(value):
         if isinstance(value,str):
@@ -423,7 +437,7 @@ def embedded_etl_parent(read,root,process,bridge,parent_cancel):
                         raise ValueError('The embedded cancellation lost its pending worker/parent settlement decisions.')
                 if phase=='finished' and c.execute('SELECT COUNT(*) FROM elsa_runtime_scheduler_work_item').fetchone()[0]:raise ValueError('The actual embedded ETL journey left native/model work queued.')
                 if phase=='finished':
-                    stored=[json.loads(r[0]) for r in c.execute('SELECT ContentJson FROM elsa_runtime_incident_state')]
+                    stored=[json.loads(r[0]) for r in c.execute('SELECT ContentJson FROM elsa_runtime_incident_state WHERE WorkflowExecutionId=?',(key(parent_id),))]
                     if faulted:
                         if len(stored)!=len(incidents):raise ValueError('The physical parent lost its default fault incident inventory.')
                         for observed_incident in incidents:
@@ -671,6 +685,30 @@ def successful_embedded_parent_return(read,root,process,bridge):
 
 def verify(path):
     manifest=json.loads(path.read_text());root=path.parent
+    if manifest.get('kind')=='actual-bpmn-etl-technical-fault-matrix':
+        cases=manifest['cases'];parents={'Direct','Root','Sequence','Flowchart','CompensationScope'}
+        if manifest.get('schemaVersion')!=1 or len(cases)!=5 or len({c['name'] for c in cases})!=5 or {c['parent'] for c in cases}!=parents:
+            raise ValueError('The technical-fault matrix lacks every unique direct/native parent.')
+        products=None;traces={}
+        for case in cases:
+            if case['manifest']!=case['name']+'/manifest.json':raise ValueError('A technical-fault case changed its evidence path.')
+            file=q.evidence_file(root,case['manifest'])
+            if q.digest(file)!=case['sha256']:raise ValueError('A technical-fault case manifest differs.')
+            result=verify(file)
+            if result['sourceRevision']!=manifest['sourceRevision'] or result.get('embeddedParent','Direct')!=case['parent'] or not result['technicalFinalFaultProved']:
+                raise ValueError('A technical-fault case changed its executing source or actual parent.')
+            capture=json.loads(file.read_text())['case'];process=json.loads((file.parent/capture/'process.json').read_text())
+            if products is None:products=process['products']
+            elif process['products']!=products:raise ValueError('The technical-fault cases differ in captured first-party host products.')
+            for phase in ('before','finished'):
+                model=json.loads((file.parent/capture/(phase+'-checked-model.json')).read_text())['model'];state=deepcopy(model['payload']['state'])
+                for token in state['tokens']:
+                    if token.get('producingWorkHandle')==model['executionId']:token['producingWorkHandle']='<model-execution>'
+                if phase in traces and traces[phase]!=state:raise ValueError('The same-source direct/embedded technical-fault interpreter traces differ.')
+                traces[phase]=state
+        return {'sourceRevision':manifest['sourceRevision'],'actualTechnicalFinalFaultJourneys':5,'wholeStoresVerified':30,'actualWorkbenchProcesses':15,'actualHttpProcesses':5,
+            'technicalFinalFaultProved':True,'technicalFaultRefusesCodedBusinessCatch':True,'sameSourceInterpreterTechnicalFaultTracesCompared':True,
+            'modelHeldFaultRetryProved':False,'finalFaultRetryRefusalProved':False,'nativeCompositeFaultStatusDecisionResolved':False}
     if manifest.get('kind')=='actual-bpmn-etl-business-error-matrix':
         cases=manifest['cases'];parents=('Direct','Root','Sequence','Flowchart','CompensationScope');modes=('matching','different')
         if (manifest.get('schemaVersion')!=1 or len(cases)!=10 or len({c['name'] for c in cases})!=10 or
@@ -759,9 +797,10 @@ def verify(path):
             'allNativeParentCompletionAndCancellationProved':{(r['parent'],r['cancel']) for r in results}=={(p,c) for p in ('Root','Sequence','Flowchart','CompensationScope') for c in (False,True)},
             'pendingParentResultCrashProved':False,'modelHeldFaultRetryProved':False}
     business=manifest.get('kind') in ('actual-direct-bpmn-native-etl-business-error','actual-native-runbpmn-etl-business-error')
+    technical=manifest.get('kind') in ('actual-direct-bpmn-native-etl-technical-fault','actual-native-runbpmn-etl-technical-fault')
     boundary=manifest.get('businessErrorBoundary')
-    if (business and boundary not in ('matching','different')) or (not business and boundary is not None):raise ValueError('Unknown actual business-error boundary qualification.')
-    embedded=manifest.get('kind') in ('actual-native-runbpmn-etl-http-recovery','actual-native-runbpmn-etl-parent-cancellation','actual-native-runbpmn-etl-business-error')
+    if ((business or technical) and boundary not in ('matching','different')) or (not business and not technical and boundary is not None) or technical and boundary!='matching':raise ValueError('Unknown actual business-error boundary qualification.')
+    embedded=manifest.get('kind') in ('actual-native-runbpmn-etl-http-recovery','actual-native-runbpmn-etl-parent-cancellation','actual-native-runbpmn-etl-business-error','actual-native-runbpmn-etl-technical-fault')
     counterpart=manifest.get('kind')=='actual-direct-bpmn-native-etl-success-counterpart'
     parent_cancel=manifest.get('kind')=='actual-native-runbpmn-etl-parent-cancellation'
     success_parent=manifest.get('successfulParentResultCrashStage')
@@ -772,14 +811,14 @@ def verify(path):
     pipeline_cancel=manifest.get("kind")=="actual-direct-bpmn-native-etl-pipeline-cancellation"
     worker_cancel=manifest.get("kind")=="actual-direct-bpmn-native-etl-worker-cancellation"
     cancelling=pipeline_cancel or worker_cancel or model_cancel or parent_cancel
-    direct=embedded or counterpart or cancelling or business or manifest.get("kind")=="actual-direct-bpmn-native-etl-recovery"
-    if manifest.get("schemaVersion")!=1 or manifest.get("kind") not in ("actual-native-etl-recovery-reference","actual-direct-bpmn-native-etl-recovery","actual-direct-bpmn-native-etl-success-counterpart","actual-direct-bpmn-native-etl-pipeline-cancellation","actual-direct-bpmn-native-etl-worker-cancellation","actual-direct-bpmn-native-etl-model-cancellation","actual-native-runbpmn-etl-http-recovery","actual-native-runbpmn-etl-parent-cancellation","actual-direct-bpmn-native-etl-business-error","actual-native-runbpmn-etl-business-error"):raise ValueError("Unknown ETL recovery reference evidence.")
+    direct=embedded or counterpart or cancelling or business or technical or manifest.get("kind")=="actual-direct-bpmn-native-etl-recovery"
+    if manifest.get("schemaVersion")!=1 or manifest.get("kind") not in ("actual-native-etl-recovery-reference","actual-direct-bpmn-native-etl-recovery","actual-direct-bpmn-native-etl-success-counterpart","actual-direct-bpmn-native-etl-pipeline-cancellation","actual-direct-bpmn-native-etl-worker-cancellation","actual-direct-bpmn-native-etl-model-cancellation","actual-native-runbpmn-etl-http-recovery","actual-native-runbpmn-etl-parent-cancellation","actual-direct-bpmn-native-etl-business-error","actual-native-runbpmn-etl-business-error","actual-direct-bpmn-native-etl-technical-fault","actual-native-runbpmn-etl-technical-fault"):raise ValueError("Unknown ETL recovery reference evidence.")
     source=manifest["sourceRevision"];assets=manifest["assets"]
     stage=manifest.get('pendingCancellationStage');pending_crash=stage is not None;post_ack=manifest.get('postConsumptionPreAck') is True
     if post_ack and not pending_crash:raise ValueError('A consumed-before-ACK case requires its actual pending cancellation source.')
     if pending_crash and stage!=('model-command' if model_cancel else 'native-terminal' if worker_cancel else None):raise ValueError('Unknown pending cancellation stage.')
     if len(source)!=40 or any(c not in "0123456789abcdef" for c in source):raise ValueError("The ETL reference lacks an exact source.")
-    expected_cases={manifest["case"]:("BpmnModel",business)} if embedded or counterpart or business else {"model-cancel":("BpmnModel",False)} if model_cancel else {"native-cancel":("BpmnModel",False)} if worker_cancel else {"direct-cancel":("BpmnModel",False)} if pipeline_cancel else {"direct-success":("BpmnModel",False),"direct-business":("BpmnModel",True)} if direct else {"sequence":("Sequence",False),"flowchart":("Flowchart",False),"worker-business":("RunEtl",True)}
+    expected_cases={manifest["case"]:("BpmnModel",business)} if embedded or counterpart or business or technical else {"model-cancel":("BpmnModel",False)} if model_cancel else {"native-cancel":("BpmnModel",False)} if worker_cancel else {"direct-cancel":("BpmnModel",False)} if pipeline_cancel else {"direct-success":("BpmnModel",False),"direct-business":("BpmnModel",True)} if direct else {"sequence":("Sequence",False),"flowchart":("Flowchart",False),"worker-business":("RunEtl",True)}
     names={"before.json","recovered.json","finished.json","retained.json","before-wire.json","finished-wire.json","retained-wire.json","safe-errors.json","process.json"}
     names|={phase+"-"+store+".sqlite.gz" for phase in ("before","finished") for store in ("elsa","etl-runtime","etl-design")}
     if direct:names|={phase+"-checked-model.json" for phase in ("before","finished","retained")}
@@ -800,7 +839,8 @@ def verify(path):
         def read(name):return json.loads(q.evidence_file(root,case+"/"+name).read_text())
         process=read("process.json");products=process["products"]
         if process.get('businessErrorBoundary')!=boundary:raise ValueError('The actual business-error boundary differs from its declared case.')
-        if business and process.get('resumptionSweepIntervalSeconds')!=.2:raise ValueError('The actual business-error recovery lost its declared production resumption configuration.')
+        if process.get('technicalFault',False) is not technical or technical and process.get('technicalFaultPolicy')!='FinalFault':raise ValueError('The actual technical-fault classification or default policy differs.')
+        if (business or technical) and process.get('resumptionSweepIntervalSeconds')!=.2:raise ValueError('The actual error recovery lost its declared production resumption configuration.')
         if (process["sourceRevision"]!=source or process["parent"]!=parent or process["businessError"] is not business_error or process["predecessorExitCode"]!=-9 or
                 [item["role"] for item in process["processes"]]!=(["http-fixture","workbench","workbench","consumption-sdk","workbench","workbench"] if post_ack or parent_pending or success_parent is not None else ["http-fixture"]+["workbench"]*(4 if pending_crash else 3)) or len({item["processId"] for item in process["processes"]})!=(6 if post_ack or parent_pending or success_parent is not None else 5 if pending_crash else 4)):raise ValueError("The actual ETL reference lacks its distinct process-loss/restart provenance.")
         if products["sourceCommit"]!=source or products["metadataOnly"] is not True or len(products["actualProductVersions"])!=(12 if direct else 6) or any(not item["productVersion"].endswith("+"+source) for item in products["actualProductVersions"]):raise ValueError("The actual Workbench and ETL products differ from their declared source.")
@@ -816,9 +856,14 @@ def verify(path):
         identity=process["workflowExecutionId"];run_id=process["runId"];selection=process["selection"]
         old={node(item):item for item in before["native"]["activities"]};current={node(item):item for item in finished["native"]["activities"]}
         if before["native"]["instance"]["status"]!="Running" or before["run"]["status"]!="running" or "after" in old or old["etl"]["status"]!="Suspended":raise ValueError("The actual predecessor was not held at the real RunEtl wait.")
-        terminal_status="Cancelled" if cancelling else "Completed"
-        if current["etl"]["activityExecutionId"]!=old["etl"]["activityExecutionId"] or len(current)!=(1 if parent in ("RunEtl","BpmnModel") else 3) or any(item["status"]!=terminal_status for item in current.values()) or current["etl"]["outcomeNames"]!=([] if cancelling else ["BusinessError" if business_error else "Done"]):raise ValueError("The actual native continuation changed its invocation or typed outcome.")
-        if finished["native"]["instance"]["status"]!=terminal_status or finished["native"]["incidents"]:raise ValueError("The actual native parent did not settle without incidents.")
+        terminal_status="Cancelled" if cancelling else "Faulted" if technical else "Completed"
+        if current["etl"]["activityExecutionId"]!=old["etl"]["activityExecutionId"] or len(current)!=(1 if parent in ("RunEtl","BpmnModel") else 3) or any(item["status"]!=terminal_status for item in current.values()) or current["etl"]["outcomeNames"]!=([] if cancelling or technical else ["BusinessError" if business_error else "Done"]):raise ValueError("The actual native continuation changed its invocation or typed outcome.")
+        if finished["native"]["instance"]["status"]!=terminal_status or not technical and finished["native"]["incidents"]:raise ValueError("The actual native parent did not settle without incidents.")
+        if technical:
+            incidents=finished['native']['incidents']
+            if (len(incidents)!=1 or incidents[0]['activityExecutionId']!=current['etl']['activityExecutionId'] or incidents[0]['workflowExecutionId']!=process['workflowExecutionId'] or
+                    incidents[0]['failureType']!='ActivityReturnedFault' or incidents[0]['status']!='Blocking' or incidents[0]['resolutionOutcome']['actionKind']!='FaultWorkflow'):
+                raise ValueError('The actual RunEtl technical fault lost its default native incident.')
         pin={name:before["native"]["instance"][name] for name in ("artifactId","artifactHash","artifactVersion","definitionId","definitionVersionId")}
         for view in (before,recovered,finished):
             if (view["native"]["instance"]["workflowExecutionId"]!=identity or view["run"]["runId"]!=run_id or view["run"]["selection"]!=selection or
@@ -833,19 +878,23 @@ def verify(path):
                     instant(process["observedCancelledAfterRetryDeadlineAtUtc"])<=instant(retry["notBefore"])):
                 raise ValueError("The actual pipeline cancellation lacks its accepted request and post-deadline observation.")
         if not any(item["http"]["exhausted"] and item["owedBatch"] is None for item in before["partitions"]["items"]):raise ValueError("The sibling had not completed before the actual crash cut.")
-        accepted,rejected=(2,0) if cancelling else (3,1) if business_error else (4,0);outcome="cancelled" if cancelling else "businessError" if business_error else "succeeded"
+        accepted,rejected=(2,0) if cancelling or technical else (3,1) if business_error else (4,0);outcome="cancelled" if cancelling else "faulted" if technical else "businessError" if business_error else "succeeded"
         result=finished["run"];rows=finished["partitions"]["items"]
         if (result["formatVersion"]!=2 or result["status"]!=outcome or result["terminalResult"]["outcome"]!=outcome or result["acceptedRecords"]!=accepted or result["rejectedRecords"]!=rejected or result["filteredRecords"]!=0 or
                 result["outstandingRecords"]!=0 or result["outstandingBytes"]!=0 or len(rows)!=2 or any(item["owedBatch"] is not None for item in rows) or
-                not cancelling and any(not item["http"]["exhausted"] or item["http"]["pageSequence"]!=1 for item in rows)):raise ValueError("The actual ETL terminal or partition accounting differs.")
+                not cancelling and not technical and any(not item["http"]["exhausted"] or item["http"]["pageSequence"]!=1 for item in rows)):raise ValueError("The actual ETL terminal or partition accounting differs.")
+        if technical:
+            failed=[r['http']['fetch'] for r in rows if r['http']['fetch'] is not None]
+            if (result['terminalResult']['diagnostic']['code']!='etl.http.source-response-rejected' or len(failed)!=1 or failed[0]['phase']!='failed' or failed[0]['lastStatusCode']!=400 or failed[0]['attemptCount']!=2):
+                raise ValueError('The actual terminal source rejection lost its retained HTTP retry state.')
         if business_error and result["terminalResult"]["diagnostic"]["code"]!="etl.rows-rejected":raise ValueError("The actual ETL business-error key differs.")
         if wire["overflow"] or before_wire["overflow"]:raise ValueError("The physical HTTP observations exceeded their bounds.")
         earlier=[item for item in before_wire["requests"] if item.get("shard")=="shard-b"];later=[item for item in wire["requests"] if item.get("shard")=="shard-b"]
         if cancelling:
             if len(earlier)!=1 or later!=earlier or later[0]["status"]!=429:raise ValueError("The physically cancelled HTTP shard resumed its saved retry.")
-        elif len(earlier)!=1 or len(later)!=3 or [item["status"] for item in later]!=[429,200,200] or later[0]!=earlier[0] or later[1]["receivedAtMs"]-later[0]["receivedAtMs"]<20000:raise ValueError("The physical source retried early or changed its saved page sequence.")
+        elif len(earlier)!=1 or len(later)!=(2 if technical else 3) or [item["status"] for item in later]!=([429,400] if technical else [429,200,200]) or later[0]!=earlier[0] or later[1]["receivedAtMs"]-later[0]["receivedAtMs"]<20000:raise ValueError("The physical source retried early or changed its saved page sequence.")
         records=[record for post in wire["outputPosts"] for record in post["records"]];expected_records={1:"Ada",2:"Grace",3:"Linus"}
-        if cancelling:expected_records.pop(3)
+        if cancelling or technical:expected_records.pop(3)
         elif not business_error:expected_records[4]="Margaret"
         if {item["id"]:item["name"] for item in records}!=expected_records or any(not post["hasIdempotencyKey"] for post in wire["outputPosts"]):raise ValueError("The physical HTTP receiver lacks the actual mapped effects.")
         errors=read("safe-errors.json")
@@ -863,10 +912,10 @@ def verify(path):
                             if post_ack and phase=='finished' and connection.execute('SELECT COUNT(*) FROM elsa_runtime_scheduler_work_item').fetchone()[0]:
                                 raise ValueError('The recovered pre-ACK journey retained native/model scheduler work.')
                             if bridge is not None:physical_model_bridge(connection,phase,*bridge,model_cancel=model_cancel or parent_cancel,embedded=embedded)
-                            if business:physical_business_error_boundary(connection,phase,bridge[0],bridge[1],boundary)
+                            if business or technical:physical_business_error_boundary(connection,phase,bridge[0],bridge[1],boundary,technical)
                             if model_cancel and phase=="finished":physical_model_cancellation(connection,read,*bridge)
                             row=connection.execute("SELECT Status,ContentJson FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId=?",(key(identity),)).fetchone()
-                            if row is None or row[0]!=(1 if phase=="before" else 5 if cancelling else 3) or json.loads(row[1])["pinnedExecutable"]!={name:key(value) for name,value in pin.items()}:raise ValueError("The physical native ETL workflow lost its exact pin or state.")
+                            if row is None or row[0]!=(1 if phase=="before" else 5 if cancelling else 4 if technical else 3) or json.loads(row[1])["pinnedExecutable"]!={name:key(value) for name,value in pin.items()}:raise ValueError("The physical native ETL workflow lost its exact pin or state.")
                             bookmarks=connection.execute("SELECT BookmarkId FROM elsa_runtime_bookmark_state WHERE WorkflowExecutionId=?",(identity,)).fetchall()
                             if len(bookmarks)!=(1 if phase=="before" else 0):raise ValueError("The physical RunEtl wait was recreated or not consumed.")
                             if phase=="before":native_bookmark=bookmarks[0][0]
@@ -889,7 +938,7 @@ def verify(path):
                             if artifact["formatVersion"]!=2 or artifact["definitionVersion"]!=version["definitionVersion"] or decoded(artifact["definitionId"])!=version["definitionId"] or decoded(artifact["contentHash"])!=version["contentHash"]:raise ValueError("The physical ETL artifact lost its exact published pin.")
                             terminal=connection.execute("SELECT Outcome FROM elsa_etl_runtime_terminals").fetchall();outbox=connection.execute("SELECT Attempts,Disposition,AcknowledgedAtUtcTicks FROM elsa_etl_runtime_outbox").fetchall()
                             if phase=="before" and (terminal or outbox or row[1]!=1):raise ValueError("The actual retry cut already carried a terminal result.")
-                            if phase=="finished" and (row[1]!=(5 if cancelling else 3 if business_error else 2) or row[2:]!=(accepted,rejected,0,0) or terminal!=[(3 if cancelling else 1 if business_error else 0,)] or len(outbox)!=1 or outbox[0][0]<1 or outbox[0][1] is None or outbox[0][2] is None):raise ValueError("The physical ETL terminal or owed native result did not settle.")
+                            if phase=="finished" and (row[1]!=(5 if cancelling else 4 if technical else 3 if business_error else 2) or row[2:]!=(accepted,rejected,0,0) or terminal!=[(3 if cancelling else 2 if technical else 1 if business_error else 0,)] or len(outbox)!=1 or outbox[0][0]<1 or outbox[0][1] is None or outbox[0][2] is None):raise ValueError("The physical ETL terminal or owed native result did not settle.")
                             if phase=="finished" and (worker_cancel or model_cancel or parent_cancel) and outbox[0][1]!=2:
                                 raise ValueError("The native-origin ETL result lacks its actual proven-parent-terminal disposition.")
         if (native_bookmark!=decoded(invocation["resultAddress"]["bookmarkId"]) or native_bookmark!=decoded(invocation["resultAddress"]["registrationId"]) or
@@ -915,6 +964,7 @@ def verify(path):
     if success_parent is not None:result['successfulParentResultCrashStage']=success_parent
     if counterpart:result['directSuccessCounterpartVerified']=True
     if business:result['businessErrorBoundary']=boundary
+    if technical:result.update(technicalFinalFaultProved=True,finalFaultRetryRefusalProved=False)
     if not direct:result["directOrRunBpmnEtlIntegrationProved"]=False
     if cancelling:result.update(pipelineOriginatedCancellationProved=pipeline_cancel,nativeWorkerOriginatedCancellationProved=worker_cancel,modelToWorkerCancellationProved=model_cancel,modelCancellationBeforeAdmissionProved=False)
     return result
