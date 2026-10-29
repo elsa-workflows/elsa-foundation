@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "438001406d980051584234e5d656eb8e6a67f47f",
+  "last_publish_commit": "e0cc6433ab675175570d2112fcfddbe1e2891a6b",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -19,8 +19,8 @@
     },
     {
       "package_id": "Elsa.Activities.ControlFlow",
-      "version": "4.0.13-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.14-preview",
+      "commit": "e0cc6433ab675175570d2112fcfddbe1e2891a6b"
     },
     {
       "package_id": "Elsa.Activities.Design.Api",
@@ -734,8 +734,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime",
-      "version": "4.0.68-preview",
-      "commit": "438001406d980051584234e5d656eb8e6a67f47f"
+      "version": "4.0.69-preview",
+      "commit": "e0cc6433ab675175570d2112fcfddbe1e2891a6b"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Api",
