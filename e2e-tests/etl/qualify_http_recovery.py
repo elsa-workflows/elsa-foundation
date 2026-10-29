@@ -543,7 +543,10 @@ def main():
                 'The real held retry did not complete the replacement worker/model/native parent.',120)
             checked_final=wait_for(checked_native_model,lambda value:len(value['model']['payload']['nativeResults'])==2 and value['model']['revision']==(5 if native_parent_execution else 4),
                 'The actual successful retry lost its original failed attempt or model settlement.',90)
-            checked_replacement=json.loads(subprocess.check_output(['dotnet',str(reader),'--read-bpmn-native',str(root/'elsa.db'),model_execution,replacement['origin']['workerExecutionId']],text=True,timeout=30))
+            def checked_retry_worker():
+                return json.loads(subprocess.check_output(['dotnet',str(reader),'--read-bpmn-native',str(root/'elsa.db'),model_execution,replacement['origin']['workerExecutionId']],text=True,timeout=30))
+            checked_replacement=wait_for(checked_retry_worker,lambda value:value['resultInput'] is not None and value['resultSource'] is not None and value['resultSource']['status']==2,
+                'The replacement worker result did not retain its original source acknowledgment.',90)
             original_final=checked_final['model']['payload'];resolved,=original_final['failures'];results=original_final['nativeResults']
             if (final['original']['run']!=held['execution']['run'] or final['original']['native']!=held['execution']['native'] or results[0]!=old_result or
                     resolved['semanticState']!=failure['semanticState'] or resolved['status']!='Retried' or resolved['retryAttemptId']!=replacement['origin']['attemptId'] or
