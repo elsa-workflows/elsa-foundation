@@ -71,7 +71,7 @@ def main():
     service_policy=parser.add_mutually_exclusive_group()
     service_policy.add_argument('--hold-service-retry',action='store_true',help='Pin HoldForRetry/2 and recover one authorized physical retry after a second process loss.')
     service_policy.add_argument('--final-service-fault',action='store_true',help='Pin explicit FinalFault/1 and prove a real current incident cannot retry after semantic finality.')
-    parser.add_argument('--held-action',choices=('retry','cancel'),default='retry',help='After the held failure survives its second process loss, authorize retry or cancel the still-active model work.')
+    parser.add_argument('--held-action',choices=('retry','cancel','exhaust'),default='retry',help='After the held failure survives its second process loss, retry successfully, cancel, or exhaust its budget through a real unavailable bound input.')
     parser.add_argument("--queued-native-stage", choices=("start", "checkpoint"), help="With cancellation before admission, use the actual SDK to retain the selected native queue stage first.")
     parser.add_argument("--dispatcher-assembly", type=Path, help="Built owned SDK client required for the queued-native cut.")
     parser.add_argument("--admission-race-order", choices=("cancel-first", "admit-first"), help="Gate an unchanged actual proposal before its provider transaction, commit the competitor, then cold-recover both writers' obligations.")
@@ -124,7 +124,7 @@ def main():
     for name in ("appsettings.json", "appsettings.Development.json", "shells.json"):
         shutil.copyfile(REPO / "Essentials/apps/Elsa.Workbench" / name, root / name)
     for name in ("packages", "etl-snapshots", "errors"): (root / name).mkdir()
-    processes = []; children = []; logs = []; host = None
+    processes = []; children = []; logs = []; host = None; retry_input_unavailable = None
 
     def start(command, role):
         log = (root / f"{role}-{len(processes)}.log").open("w"); logs.append(log)
@@ -501,7 +501,7 @@ def main():
             if lookup_snapshot.exists() or q.digest(unavailable)!=snapshot_unavailability['snapshotSha256Before']:
                 raise ValueError('The retained lookup changed while its failed attempt was held.')
             unavailable.rename(lookup_snapshot)
-            snapshot_unavailability.update(**{'restoredBeforeAuthorizedRetry' if args.held_action=='retry' else 'restoredBeforeAuthorizedCancellation':True},
+            snapshot_unavailability.update(**{'restoredBeforeAuthorizedCancellation' if args.held_action=='cancel' else 'restoredBeforeAuthorizedRetry':True},
                 restoredAtUtc=datetime.now(timezone.utc).isoformat(),restoredSha256=q.digest(lookup_snapshot))
             q.write_json(output/'snapshot-unavailability.json',snapshot_unavailability)
             api=launch()
@@ -570,6 +570,16 @@ def main():
                         'Remaining timer/concurrent-input/obsolete-result/auth/provider/retention/rollback/final upgrade/Studio acceptance remains separate.']})
                 print('Actual held failure survived second SIGKILL; model cancellation retired its semantic work and refused retry without another worker or effect.',flush=True)
                 return
+            if args.held_action=='exhaust':
+                retry_input_unavailable=root/'lookup.csv.unavailable'
+                if q.digest(root/'lookup.csv')!=snapshot_unavailability['sourceSha256'] or retry_input_unavailable.exists():
+                    raise ValueError('The original bound lookup input is not the unchanged owned source.')
+                (root/'lookup.csv').rename(retry_input_unavailable)
+                input_unavailability={'schemaVersion':1,'kind':'actual-owned-bound-lookup-input-unavailability','sourceRevision':source,
+                    'sourceFile':'lookup.csv','unavailableFile':retry_input_unavailable.name,'sourceSha256Before':q.digest(retry_input_unavailable),
+                    'sourceSha256WhileUnavailable':q.digest(retry_input_unavailable),'originalBoundReadPathMissing':not (root/'lookup.csv').exists(),
+                    'originalRetainedSnapshotStillAvailable':lookup_snapshot.is_file(),'inducedAtUtc':datetime.now(timezone.utc).isoformat()}
+                q.write_json(output/'retry-input-unavailability.json',input_unavailability)
             request={'requestId':'retry-actual-held-service','incidentId':incident['incidentId'],'invocationId':incident['invocationId'],'failedAttemptId':incident['failedAttemptId']}
             submitted=api.request(route+'/retry-service',request)
             accepted=wait_for(lambda:api.request(route+'/commands/'+request['requestId']),lambda value:not value['pending'],
@@ -598,6 +608,74 @@ def main():
                 second_run=replacement['runId'];worker=replacement['origin']['workerExecutionId'];escaped_second=urllib.parse.quote(second_run,safe='')
                 return {'original':view(),'replacement':{'native':api.view(worker),'run':api.request('/etl/runs/'+escaped_second),
                     'partitions':api.request('/etl/runs/'+escaped_second+'/connector-partitions?limit=50')},'incidents':api.request(route+'/incidents?limit=10')}
+            if args.held_action=='exhaust':
+                absorbed=native_parent_execution and args.embedded_parent=='CompensationScope'
+                final=wait_for(pair,lambda value:value['replacement']['run']['status']=='faulted' and value['replacement']['native']['instance']['status']=='Faulted' and
+                    value['original']['model']['status']=='TerminalSettled' and value['original']['model']['result']['status']=='Faulted' and
+                    (not native_parent_execution or value['original']['embedding']['instance']['status']==('Completed' if absorbed else 'Faulted')),
+                    'The actual second technical fault did not exhaust the pinned attempt budget.',120)
+                checked_final=wait_for(checked_native_model,lambda value:len(value['model']['payload']['nativeResults'])==2 and value['model']['revision']==(5 if native_parent_execution else 4),
+                    'Budget exhaustion lost an original attempt or final model settlement.',90)
+                def checked_exhausted_worker():
+                    return json.loads(subprocess.check_output(['dotnet',str(reader),'--read-bpmn-native',str(root/'elsa.db'),model_execution,replacement['origin']['workerExecutionId']],text=True,timeout=30))
+                checked_replacement=wait_for(checked_exhausted_worker,lambda value:value['resultInput'] is not None and value['resultSource'] is not None and value['resultSource']['status']==2,
+                    'The exhausted worker fault did not retain its original source acknowledgment.',90)
+                document=checked_final['model']['payload'];first_failure,second_failure=document['failures'];old_final,new_result=document['nativeResults']
+                final_incident,=[i for i in final['incidents']['items'] if i['workerExecutionId']==replacement['origin']['workerExecutionId']]
+                if (final['original']['run']!=held['execution']['run'] or final['original']['native']!=held['execution']['native'] or old_final!=old_result or
+                        first_failure!={**failure,'status':'Retried','retryAttemptId':replacement['origin']['attemptId'],'resolutionInputId':request['requestId']} or
+                        second_failure['status']!='Final' or second_failure['attemptNumber']!=2 or second_failure['maxAttempts']!=2 or second_failure['semanticState']!=failure['semanticState'] or
+                        second_failure['invocationId']!=incident['invocationId'] or second_failure['failedAttemptId']!=replacement['origin']['attemptId'] or
+                        final_incident['status']!='Final' or final_incident['attemptNumber']!=2 or final_incident['maxAttempts']!=2 or document['work'] or
+                        replacement['origin']['invocationId']!=incident['invocationId'] or replacement['origin']['attemptId']==incident['failedAttemptId'] or
+                        checked_replacement['worker']['pinnedExecutable']!=worker_pin or checked_replacement['worker']['modelWorkOrigin']!=replacement['origin'] or
+                        new_result['origin']!=replacement['origin'] or new_result['status']!=4 or new_result['faultCode']!='etl.binding-read-failed' or new_result['completion'] is not None or
+                        final['replacement']['run']['terminalResult']['diagnostic']['code']!='etl.binding-read-failed' or final['replacement']['run']['selection']!=selection or
+                        final['replacement']['run']['acceptedRecords']!=0 or final['replacement']['run']['rejectedRecords']!=0 or final['replacement']['partitions']['items'] or wire()!=before_wire):
+                    raise ValueError('The exhausted budget lost its genuine preparation fault, immutable old failure, exact physical attempts or prior effects.')
+                refused={'requestId':'retry-actual-exhausted-service','incidentId':final_incident['incidentId'],'invocationId':final_incident['invocationId'],'failedAttemptId':final_incident['failedAttemptId']}
+                forbidden=urllib.request.Request(api.base+route+'/retry-service',data=json.dumps(refused).encode(),headers={'Content-Type':'application/json'})
+                try:
+                    with api.opener.open(forbidden,timeout=30):raise ValueError('An exhausted service budget admitted another physical attempt.')
+                except urllib.error.HTTPError as error:
+                    if error.code!=409:raise
+                refusal=api.request(route+'/commands/'+refused['requestId'])
+                if refusal['pending'] or refusal['result']['status']!='Rejected' or refusal['result']['code']!='execution-terminal':
+                    raise ValueError('Budget exhaustion lost its exact terminal retry refusal.')
+                q.write_json(output/'exhausted-retry-refusal.json',{'request':refused,'incident':final_incident,'httpStatus':409,'command':refusal})
+                if native_parent_execution:
+                    outer=wait_for(checked_embedding,lambda value:not value['queuedModelInputs'] and all(s['status']==2 for s in value['sources']),
+                        'Budget exhaustion left native parent settlement or source ACK owed.',90)
+                    run_bpmn,=[a for a in final['original']['embedding']['activities'] if a['activityType']=='Elsa.Activities.Bpmn.Activities.RunBpmn']
+                    if run_bpmn['status']!='Faulted' or any((a.get('authoredActivityId') or a['executableNodeId'])=='after' for a in final['original']['embedding']['activities']):
+                        raise ValueError('The native parent advanced after the model exhausted its service budget.')
+                    q.write_json(output/'finished-checked-embedding.json',outer)
+                q.write_json(output/'finished.json',final);q.write_json(output/'finished-checked-model.json',checked_final)
+                q.write_json(output/'finished-checked-replacement.json',checked_replacement);q.write_json(output/'finished-wire.json',wire())
+                stop(host);finished_stores=snapshots('finished')
+                if (root/'lookup.csv').exists() or q.digest(retry_input_unavailable)!=input_unavailability['sourceSha256Before']:
+                    raise ValueError('The unavailable original bound input changed during the genuine retry preparation fault.')
+                retry_input_unavailable.rename(root/'lookup.csv')
+                input_unavailability.update(restoredAfterFailedHostStopped=True,restoredAtUtc=datetime.now(timezone.utc).isoformat(),restoredSha256=q.digest(root/'lookup.csv'))
+                q.write_json(output/'retry-input-unavailability.json',input_unavailability)
+                api=launch();retained=pair();retained_wire=wire();retained_checked=checked_native_model();retained_replacement=checked_exhausted_worker()
+                q.write_json(output/'retained.json',retained);q.write_json(output/'retained-wire.json',retained_wire);q.write_json(output/'retained-checked-model.json',retained_checked)
+                q.write_json(output/'retained-checked-replacement.json',retained_replacement)
+                if native_parent_execution:q.write_json(output/'retained-checked-embedding.json',checked_embedding())
+                stop(host)
+                if retained!=final or retained_wire!=before_wire or retained_checked!=checked_final or retained_replacement!=checked_replacement:
+                    raise ValueError('Repairing the bound input or restarting revived an exhausted service attempt.')
+                q.write_json(output/'process.json',{'schemaVersion':1,'kind':'actual-model-service-budget-exhaustion','sourceRevision':source,'products':products,'parent':args.parent,'embeddedParent':args.embedded_parent,
+                    'modelExecutionId':model_execution,'workflowExecutionId':execution,'runId':run,'replacementWorkerExecutionId':replacement['origin']['workerExecutionId'],'replacementRunId':replacement['runId'],
+                    'processes':processes,'predecessorExitCode':exit_code,'heldPredecessorExitCode':held_exit,'heldCutAtUtc':held_cut,'cutAtUtc':cut_at,
+                    'beforeStores':before_stores,'heldStores':held_stores,'finishedStores':finished_stores,'publication':publication,'modelPublication':model_publication,'etlPublication':published,
+                    'nativeParentExecutionId':native_parent_execution,'nativeParentPublication':native_parent_publication,'selection':selection,'bindings':bindings,
+                    'fixtureSha256':q.digest(fixture_script),'controllerSha256':q.digest(Path(__file__)),'technicalFaultPolicy':'HoldForRetry','maxServiceAttempts':2,
+                    'retryAfterSeconds':retry_after,'resumptionSweepIntervalSeconds':.2,'scopeLimits':['Actual final technical fault on physical attempt2 exhausts the pinned budget after two process losses; one immutable original fault and one genuine preparation fault remain.',
+                        'The owned bound lookup input is temporarily renamed without changing bytes and restored after the failed host stops. No SQL state, clock or classifier is changed.',
+                        'Timer/competing-input/obsolete-result/auth/provider/retention/rollback/final upgrade/Studio remain separate.']})
+                print('Actual second worker fault exhausted its pinned budget; further retry refused and repaired input did not revive either attempt.',flush=True)
+                return
             final=wait_for(pair,lambda value:value['replacement']['run']['status']=='succeeded' and value['replacement']['native']['instance']['status']=='Completed' and
                 value['original']['model']['status']=='TerminalSettled' and value['original']['model']['result']['status']=='Completed' and
                 (not native_parent_execution or value['original']['embedding']['instance']['status']=='Completed'),
@@ -910,6 +988,7 @@ def main():
                 if child is host and "T" in q.process_field(child.pid,"stat"):os.kill(child.pid,signal.SIGCONT)
                 stop(child)
         for log in logs:log.close()
+        if retry_input_unavailable is not None and retry_input_unavailable.exists() and not (root/'lookup.csv').exists():retry_input_unavailable.rename(root/'lookup.csv')
         print("Owned private diagnostic root: "+str(root),flush=True)
 
 
