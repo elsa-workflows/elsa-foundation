@@ -180,7 +180,7 @@ def main():
         if direct_bpmn:
             features.update({"ActivitiesBpmnHosting":{"AdmitNewExecutions":True},"ActivitiesBpmnHostingApi":{}})
             if args.model_cancel_before_admission:features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":300}
-            elif args.pending_cancellation_crash:features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":.2}
+            elif args.pending_cancellation_crash or args.pending_parent_result_crash:features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":.2}
             # This first model profile qualifies the built-in single-node actor, as the hosting tests do.
             for name in ("WorkflowsRuntimeDistributed", "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence", "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence"):
                 features.pop(name, None)
