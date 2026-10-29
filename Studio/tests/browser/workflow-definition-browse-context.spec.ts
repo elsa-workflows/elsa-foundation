@@ -168,6 +168,7 @@ for (const width of [320, 390]) {
     await primaryCopy.focus();
     await page.keyboard.press("Enter");
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("workflow-page-two");
+    await expect(row.getByRole("status")).toHaveText("Definition ID copied");
     expect(new URL(page.url()).searchParams.has("definition")).toBe(false);
 
     const trigger = row.getByRole("button", { name: "Identifiers for Second page renewal", exact: true });
@@ -196,6 +197,7 @@ for (const width of [320, 390]) {
     await details.getByRole("button", { name: "Copy Draft ID", exact: true }).focus();
     await page.keyboard.press("Space");
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(`draft-${"immutable-identifier-".repeat(7)}`);
+    await expect(details.getByRole("status").filter({ hasText: "Draft ID copied" })).toHaveText("Draft ID copied");
     expect(new URL(page.url()).searchParams.has("definition")).toBe(false);
     await page.keyboard.press("Escape");
     await expect(details).toHaveCount(0);
