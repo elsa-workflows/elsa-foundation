@@ -1,0 +1,37 @@
+{
+  "kind": "Actual runtime-only direct parallel recovery; no Design storage",
+  "sourceCommit": "58309bd997494bbe7e3f31fd7025c53d004c2a7c",
+  "sourceBinding": "Whole host suite rebuilt/rerun after this committed source with asserted product revision and binary hashes. Composition selection ran over identical source before commit. Later evidence commit only adds receipts/spec progress.",
+  "positiveChecks": 13,
+  "results": [
+    {
+      "scope": "Exact-source whole production host suite",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "3a2feb11a12cdf4cb8e975294c817866aed9c4964b5b8f509c583bdd8db04ad2"
+    },
+    {
+      "scope": "Committed composition, assembly discovery and catalog links",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "2ec2be71f84148a748f2cd43009ab1b1f7f2ec0adaba0679db2274ac8843f0c9"
+    }
+  ],
+  "wholeHostSuiteDiscovery": 3,
+  "profile": "foundation-direct-v1 / production Workbench / single-node mailbox / EF SQLite / no Design storage",
+  "observations": "Complete left, process exit/restart, unchanged partial state/right invocation, replay left, complete right, exactly one post-join human wait, replay right without new work, complete post-join wait, one terminal result at revision4. Four input receipts/checkpoint markers; zero native execution/activity/bookmark rows.",
+  "noDesignStorage": "17 requested runtime/authentication features, no Design/publication feature. Metadata for all three owned SQLite databases contains no Design or definition table; design.db absent. Only Runtime store content is exported.",
+  "compositionCorrections": [
+    "Include the existing file-system lock provider required by the real Tasks pump.",
+    "Explicit Workbench discovery of BPMN implementation assembly as well as API assembly; no reliance on legacy authoring features.",
+    "Fixture reports authoritative failed shell activation promptly and retains diagnostics instead of hiding it behind an observation timeout."
+  ],
+  "remaining": [
+    "Same-source process restart; no changed-binary or legacy-upgrade acceptance.",
+    "Clustered placement, timer/broadcast/cancellation/settlement, native/ETL bindings and Studio remain open."
+  ],
+  "fullPrReviewRounds": 0,
+  "gitGuardian": "Owner deferred resolution; still an open failed check and merge gate."
+}

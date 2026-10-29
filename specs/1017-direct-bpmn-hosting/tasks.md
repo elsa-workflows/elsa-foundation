@@ -12,6 +12,8 @@
 
 ## Phase 1: Setup and actual baseline capture
 
+**Current process qualification:** [runtime-only partial fork/join](evidence/direct-recovery/runtime-only-parallel/README.md) now runs through authenticated production Workbench HTTP: complete one branch, exit/restart, preserve the other exact wait, observe one post-join wait, then one terminal result with no Design storage or native enclosing execution. [Rejected/terminal-input receipts](evidence/direct-recovery/retained-input/README.md) preserve state and still compare the physical revision. T019/T031 remain open for their remaining crash/upgrade/provider criteria; no generic settlement, real native/ETL binding, changed-host/legacy or Studio acceptance is inferred.
+
 **Hard ordering**: No affected production writer, schema or payload change before T002. New capture tooling may be implemented first because it operates through the current product commands and does not alter those writers.
 
 - [x] T001 Implement the portable owned-host capture runner in `tools/bpmn/qualify-hosting.py`, reusing `e2e-tests/bpmn/run_owned_broadcast_probe.py` process-ownership conventions; verify source/assembly/config/scope identities, consistent backups, output hashes and normal-command fixture creation without stored-state edits or secrets in evidence. Actual first-family capture and twelve controls/tests: [receipt](evidence/baseline/partial-forks/capture.md). The complete writer-family map is verified under T002.
