@@ -7,7 +7,7 @@ Workbench and Node children are stopped; original/user stores are never opened.
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import gzip
 import importlib.util
 import json
@@ -266,13 +266,22 @@ def main():
         if len(errors)!=(1 if args.business_error else 0):raise ValueError("The real safe-error destination differs from the rejected record count.")
         q.write_json(output/"safe-errors.json",errors)
         stop(host);finished_stores=snapshots("finished")
-        api=launch();retained=view();retained_wire=wire();q.write_json(output/"retained.json",retained);q.write_json(output/"retained-wire.json",retained_wire)
+        api=launch()
+        observed_cancelled_after_deadline=None
+        if args.pipeline_cancel:
+            deadline=utc_instant(retry["notBefore"])+timedelta(seconds=2)
+            while datetime.now(timezone.utc)<deadline:
+                if view()!=finished or wire()!=finished_wire:raise ValueError("Cancelled work changed while its original HTTP retry became due.")
+                time.sleep(.25)
+            observed_cancelled_after_deadline=datetime.now(timezone.utc).isoformat()
+        retained=view();retained_wire=wire();q.write_json(output/"retained.json",retained);q.write_json(output/"retained-wire.json",retained_wire)
         if direct_bpmn:q.write_json(output/"retained-checked-model.json",checked_native_model())
         stop(host)
         if retained!=finished or retained_wire!=finished_wire:raise ValueError("The terminal pair or physical HTTP observations changed after another process.")
         q.write_json(output/"process.json",{"schemaVersion":1,"kind":"actual-direct-bpmn-native-etl-pipeline-cancellation" if args.pipeline_cancel else "actual-direct-bpmn-native-etl-http-recovery" if direct_bpmn else "actual-native-etl-http-recovery","sourceRevision":source,"products":products,"parent":args.parent,"processes":processes,"predecessorExitCode":exit_code,
             "definition":definition,"selection":selection,"workflowExecutionId":execution,"runId":run,"publication":publication,"etlPublication":published,"bindings":bindings,
             "fixtureSha256":q.digest(fixture_script),"controllerSha256":q.digest(Path(__file__)),"cutAtUtc":cut_at,"businessError":args.business_error,"pipelineCancel":args.pipeline_cancel,"retryAfterSeconds":retry_after,"beforeStores":before_stores,"finishedStores":finished_stores,
+            **({"observedCancelledAfterRetryDeadlineAtUtc":observed_cancelled_after_deadline} if args.pipeline_cancel else {}),
             **({"modelPublication":model_publication,"modelExecutionId":model_execution} if direct_bpmn else {}),
             "scopeLimits":["Pipeline-originated cancellation through one actual direct BPMN/native RunEtl root only; reverse model-to-worker cancellation, embedding, held fault retry and final upgrade/Studio remain unproved." if args.pipeline_cancel else "Direct start/service/end with one real closed native RunEtl worker; embedding, broader service/event shapes, cancellation propagation and held terminal-fault retry remain unproved." if direct_bpmn else "Real transient HTTP retry and native RunEtl recovery only; no BPMN/model worker bridge or held terminal-fault retry is proved.","The crash cut uses SIGSTOP only to copy committed stores, then SIGKILL; no persisted state or clock is edited.","External HTTP effects remain at least once."]})
         print("Actual ETL/native"+("/BPMN chain" if direct_bpmn else " journey")+" completed and survived another Workbench process.",flush=True)
