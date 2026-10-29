@@ -32,7 +32,7 @@ internal sealed class RuntimeExecutionProtocolRouter(RuntimeExecutionProtocolSel
         {
             var input = envelope.Command.Payload?.Deserialize<RuntimeModelExecutionCommand>(new JsonSerializerOptions(JsonSerializerDefaults.Web))
                 ?? throw new InvalidOperationException("A model command requires its typed payload.");
-            var work = new RuntimeSchedulerWorkItem(QueueIdentity(input.InputId), envelope.WorkflowExecutionId,
+            var work = new RuntimeSchedulerWorkItem(RuntimeModelExecutionCommand.CreateSchedulerWorkItemId(input.InputId), envelope.WorkflowExecutionId,
                 envelope.Command.CommandId, envelope.Command.Kind, envelope.EnvelopeId, envelope.IdempotencyKey,
                 envelope.EnqueuedAt, timeProvider.GetUtcNow(), envelope.Sequence, envelope.Command.Payload,
                 envelope.Command.Metadata, envelope.Metadata);
@@ -56,11 +56,4 @@ internal sealed class RuntimeExecutionProtocolRouter(RuntimeExecutionProtocolSel
         return WorkflowExecutionCommandProcessResult.FromDrain(result);
     }
 
-    private static string QueueIdentity(string inputId)
-    {
-        var bytes = new byte[checked(inputId.Length * sizeof(char))];
-        for (var index = 0; index < inputId.Length; index++)
-            System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(index * sizeof(char), sizeof(char)), inputId[index]);
-        return "model-input:" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes));
-    }
 }

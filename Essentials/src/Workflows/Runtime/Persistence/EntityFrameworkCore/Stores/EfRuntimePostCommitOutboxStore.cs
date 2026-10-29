@@ -26,6 +26,8 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
     IStimulusDeliveryStore
 {
     private readonly RuntimeDbContext context;
+    internal bool Uses(RuntimeDbContext expected, PersistenceScope scope) =>
+        ReferenceEquals(context, expected) && accessContextAccessor.Current.Scope == scope;
     private readonly IPersistenceAccessContextAccessor accessContextAccessor;
     private readonly TimeProvider timeProvider;
     private readonly WorkflowExecutableStartSourceResolver? retentionSources;

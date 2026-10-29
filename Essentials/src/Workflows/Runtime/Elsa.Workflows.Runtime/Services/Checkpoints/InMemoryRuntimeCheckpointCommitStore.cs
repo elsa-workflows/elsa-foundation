@@ -155,8 +155,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     {
         ArgumentNullException.ThrowIfNull(commit);
         cancellationToken.ThrowIfCancellationRequested();
-        if (commit.ModelState is not null)
-            throw new NotSupportedException("The in-memory checkpoint writer does not support model decisions.");
+        if (commit.ModelState is not null || commit.ExpectedModelExecution is not null)
+            throw new NotSupportedException("The in-memory checkpoint writer does not support model decisions or model-owned native worker admission.");
         try { return await CommitWithParticipantsAsync(commit, decision, cancellationToken); }
         catch (Exception exception) when (commit.ExpectedBookmarkResume is not null && exception is
             WorkflowExecutableRootWriteLeaseUnavailableException or WorkflowExecutableRootWriteLeaseLostException)

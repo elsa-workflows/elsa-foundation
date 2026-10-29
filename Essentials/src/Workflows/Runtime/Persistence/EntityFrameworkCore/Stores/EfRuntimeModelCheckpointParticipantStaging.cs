@@ -8,6 +8,20 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
 internal static class EfRuntimeModelCheckpointParticipantStaging
 {
+    public static async ValueTask StageAdmissionAsync(RuntimeDbContext context, RuntimeModelExecutionState expected,
+        string scope, CancellationToken cancellationToken)
+    {
+        var id = CompositeId(scope, expected.ExecutionId);
+        var row = await context.Set<RuntimeModelExecutionEntity>().SingleOrDefaultAsync(x => x.Id == id, cancellationToken)
+            ?? throw new DbUpdateConcurrencyException("The native worker's authorizing model execution is absent.");
+        var current = EfRuntimeModelExecutionReader.Read(row, scope, expected.ExecutionId);
+        if (RuntimeArtifactJson.Serialize(current) != RuntimeArtifactJson.Serialize(expected))
+            throw new DbUpdateConcurrencyException("The model decision changed before native worker admission.");
+        // A read alone cannot order a concurrent cancellation against admission. Force the same physical
+        // revision compare as model decisions while retaining the model's exact bytes and semantic revision.
+        context.Entry(row).Property(item => item.Revision).IsModified = true;
+    }
+
     public static async ValueTask StageAsync(RuntimeDbContext context, RuntimeModelStateChange change,
         string scope, CancellationToken cancellationToken)
     {

@@ -61,12 +61,18 @@ public sealed class EfWorkflowExecutionStateStore(
             await LockWorkflowExecutionForWriteAsync(context, scope, state.WorkflowExecutionId, cancellationToken);
             await EfExecutionLivenessStateStore.EnsureWorkflowExecutionNotDeletedAsync(context, scope, state.WorkflowExecutionId, cancellationToken);
             var row = await context.WorkflowExecutionStates.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+            var writeVersion = RuntimeNativeModelWorkWriteVersion.For(context, state, row?.SchemaVersion);
+            if (row is null && state.ModelWorkOrigin is not null)
+                throw new NotSupportedException("Model-owned native workers require initial admission through the conditional runtime checkpoint.");
+            if (row is not null && state.ModelWorkOrigin is not null && state.Status.IsTerminal() &&
+                !ReadChecked(row, scope, state.WorkflowExecutionId).Status.IsTerminal())
+                throw new NotSupportedException("Native model work requires its terminal result in the same checkpoint transaction.");
             if (row is null)
-                context.WorkflowExecutionStates.Add(ToEntity(state, scope, id, NewRevision()));
+                context.WorkflowExecutionStates.Add(ToEntityForWriteVersion(state, scope, id, NewRevision(), writeVersion));
             else
             {
                 _ = ReadChecked(row, scope, state.WorkflowExecutionId);
-                CopyToEntity(row, state, scope, id, checked(row.Revision + 1));
+                CopyToEntityForWriteVersion(row, state, scope, id, checked(row.Revision + 1), writeVersion);
             }
 
             await context.SaveChangesAsync(cancellationToken);
@@ -771,15 +777,31 @@ public sealed class EfWorkflowExecutionStateStore(
 
     // Internal checkpoint staging reuses the same projection as the direct store. Keeping this seam internal
     // prevents the atomic writer from growing a second, subtly different workflow-execution envelope.
-    internal static WorkflowExecutionStateEntity ToEntity(WorkflowExecutionState state, string scope, string id, long revision)
+    internal static WorkflowExecutionStateEntity ToEntity(WorkflowExecutionState state, string scope, string id, long revision) =>
+        ToEntityForWriteVersion(state, scope, id, revision, null);
+
+    internal static WorkflowExecutionStateEntity ToEntityForWriteVersion(WorkflowExecutionState state, string scope, string id, long revision, string? schemaVersion)
     {
         var row = new WorkflowExecutionStateEntity();
-        CopyToEntity(row, state, scope, id, revision);
+        CopyToEntityForWriteVersion(row, state, scope, id, revision, schemaVersion);
         return row;
     }
 
-    internal static void CopyToEntity(WorkflowExecutionStateEntity row, WorkflowExecutionState state, string scope, string id, long revision)
+    internal static void CopyToEntity(WorkflowExecutionStateEntity row, WorkflowExecutionState state, string scope, string id, long revision) =>
+        CopyToEntityForWriteVersion(row, state, scope, id, revision, null);
+
+    internal static void CopyToEntityForWriteVersion(WorkflowExecutionStateEntity row, WorkflowExecutionState state, string scope, string id, long revision, string? schemaVersion)
     {
+        if (!string.IsNullOrEmpty(row.ContentJson))
+        {
+            var previous = ReadChecked(row, scope, state.WorkflowExecutionId);
+            if (previous.ModelWorkOrigin is { } origin ? !origin.IsEquivalentTo(state.ModelWorkOrigin) : state.ModelWorkOrigin is not null)
+                throw new InvalidOperationException("A native worker cannot replace or discard its immutable model invocation address.");
+        }
+        if (state.ModelWorkOrigin is { } work && (work.Scope.Value != scope || work.WorkerExecutionId != state.WorkflowExecutionId ||
+            state.Partition?.Value != scope || state.ParentWorkflowExecutionId is not null ||
+            !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(work.WorkerExecutable, state.PinnedExecutable)))
+            throw new InvalidOperationException("The native worker state differs from its model invocation address.");
         var timestamp = WorkflowExecutionStateHistory.SortTimestamp(state);
         var tenant = state.TenantId;
         var correlation = state.CorrelationId;
@@ -791,7 +813,9 @@ public sealed class EfWorkflowExecutionStateStore(
         row.CorrelationId = correlation is null ? null : Encode(correlation); row.CorrelationIdHash = correlation is null ? null : Hash(correlation);
         row.ArtifactId = Encode(state.PinnedExecutable.ArtifactId); row.ArtifactIdHash = Hash(state.PinnedExecutable.ArtifactId); row.ArtifactIdOrderKey = OrderKey(state.PinnedExecutable.ArtifactId);
         row.AuthorityPartitionKey = state.Authority is { } authority ? WorkflowExecutionAuthoritySnapshot.PartitionKey(authority.SystemIdentity, authority.RootInitiator, authority.Metadata) : null;
-        row.ContentJson = RuntimeArtifactJson.Serialize(state); row.SchemaVersion = RuntimeWorkflowExecutionEfModule.SchemaVersion; row.Revision = revision;
+        row.ContentJson = RuntimeArtifactJson.Serialize(state);
+        row.SchemaVersion = schemaVersion ?? (state.ModelWorkOrigin is null ? RuntimeWorkflowExecutionEfModule.SchemaVersion : RuntimeWorkflowExecutionEfModule.ModelWorkSchemaVersion);
+        row.Revision = revision;
     }
 
     internal static WorkflowExecutionState ReadChecked(WorkflowExecutionStateEntity row, string scope, string expectedId)

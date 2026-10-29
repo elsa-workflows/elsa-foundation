@@ -26,6 +26,12 @@ public class ActivitiesBpmnHostingFeature : IShellFeature
     {
         services.AddRuntimeModelHosting();
         services.TryAddScoped<BpmnDirectExecutionDriver>();
+        services.TryAddScoped<BpmnNativeWorkBoundary>();
+        services.TryAddScoped<BpmnNativeWorkDelivery>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, BpmnNativeWorkCheckpointEnricher>());
+        foreach (var kind in new[] { BpmnNativeWorkBoundary.StartKind, BpmnNativeWorkBoundary.ResultKind })
+            services.AddSingleton(new RuntimePostCommitIntentHandlerContribution(kind, typeof(BpmnNativeWorkDelivery),
+                RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)), requiresDurableSource: true));
         services.TryAddSingleton(new BpmnModelHostingOptions(AdmitNewExecutions));
         services.TryAddScoped<IBpmnModelRuntime, BpmnModelRuntime>();
         services.AddSingleton<IShellInitializer>(new BpmnModelHostingRegistrationInitializer(services));
@@ -37,7 +43,7 @@ public class ActivitiesBpmnHostingFeature : IShellFeature
         public BpmnProtocolContributor() { }
         public IEnumerable<RuntimeExecutionProtocolRegistration> GetProtocols() =>
             [new(new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), typeof(BpmnDirectExecutionDriver))
-                { InputKinds = ["start", "complete-human"] }];
+                { InputKinds = ["start", "complete-human", "native-result"] }];
     }
 }
 

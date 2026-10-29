@@ -35,17 +35,18 @@ internal static class EfRuntimeCheckpointParticipantStaging
             candidate.WorkflowExecutionIdHash == EfRuntimeOperationalStoreSupport.Hash(change.StateId) &&
             candidate.WorkflowExecutionId == EfRuntimeOperationalStoreSupport.Encode(change.StateId),
             cancellationToken);
+        var writeVersion = RuntimeNativeModelWorkWriteVersion.For(context, change.State, row?.SchemaVersion);
 
         if (row is null)
         {
             if (WorkflowTestScopeAdmission.ScopeRequiredToStart(change.State, executionExists: false) is { } testScope)
                 await EfRuntimeCheckpointTestScopeParticipantStaging.AssertOpenAndStageAsync(
                     context, testScope, occurredAt, scope, touchedTestScopes, cancellationToken);
-            context.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntity(
+            context.WorkflowExecutionStates.Add(EfWorkflowExecutionStateStore.ToEntityForWriteVersion(
                 change.State,
                 scope,
                 id,
-                1));
+                1, writeVersion));
             return;
         }
 
@@ -53,7 +54,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
             await EfRuntimeCheckpointTestScopeParticipantStaging.AssertOpenAndStageAsync(
                 context, resumeScope, occurredAt, scope, touchedTestScopes, cancellationToken);
         _ = EfWorkflowExecutionStateStore.ReadChecked(row, scope, change.StateId);
-        EfWorkflowExecutionStateStore.CopyToEntity(row, change.State, scope, id, checked(row.Revision + 1));
+        EfWorkflowExecutionStateStore.CopyToEntityForWriteVersion(row, change.State, scope, id, checked(row.Revision + 1), writeVersion);
     }
 
     public static async ValueTask StageSchedulerAsync(

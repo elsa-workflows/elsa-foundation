@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -14,6 +15,128 @@ public sealed class RuntimeModelCheckpointTests
 {
     private static readonly DateTimeOffset At = new(2026, 10, 28, 12, 0, 0, TimeSpan.Zero);
     private static readonly WorkflowExecutableIdentity Pin = new("artifact", "definition", "version", "1.0.0", "hash");
+
+    [Fact]
+    public void Native_model_work_round_trips_its_exact_scope_attempt_pin_and_return_address()
+    {
+        var origin = new RuntimeModelNativeWorkOrigin(1, new("tenant"), "execution", new("test.model", 1), Pin,
+            "incarnation", "service", "invocation", "attempt", Pin with { ArtifactId = "worker-artifact" },
+            "worker", "model-commit:start", "start", "test.result", "result-input");
+        var authority = WorkflowExecutableStartAuthority.FromModelWork(origin);
+        var roundTrip = JsonSerializer.Deserialize<WorkflowExecutableStartAuthority>(JsonSerializer.Serialize(authority))!;
+        Assert.Equal(WorkflowExecutableStartAuthorityKind.ModelWork, roundTrip.Kind);
+        Assert.True(origin.IsEquivalentTo(roundTrip.ModelWork));
+        Assert.Equal("result-input", roundTrip.ModelWork!.ResultInputId);
+        Assert.Null(roundTrip.RetainedDependency);
+        Assert.Null(roundTrip.StimulusDelivery);
+        Assert.True(origin.MatchesModel(Change().State));
+        var legacy = JsonSerializer.SerializeToElement(WorkflowExecutableStartAuthority.FromRetainedDependency("parent", "hash", "dispatch"),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.False(legacy.TryGetProperty("modelWork", out _));
+    }
+
+    [Fact]
+    public void Model_queue_identity_preserves_the_existing_exact_UTF16_recipe()
+    {
+        var id = "command-\ud800";
+        Assert.Equal("model-input:bc6890f494587ab76163b407d14f0562e2c3741571c5cc4665e53d2da40995e8",
+            RuntimeModelExecutionCommand.CreateSchedulerWorkItemId(id));
+        Assert.NotEqual(RuntimeModelExecutionCommand.CreateSchedulerWorkItemId("command-\ufffd"),
+            RuntimeModelExecutionCommand.CreateSchedulerWorkItemId(id));
+    }
+
+    [Theory]
+    [InlineData(RuntimeCheckpointPersistenceMode.Skip)]
+    [InlineData(RuntimeCheckpointPersistenceMode.Deferred)]
+    public async Task Model_owned_native_admission_always_reaches_the_physical_writer_immediately(RuntimeCheckpointPersistenceMode policy)
+    {
+        var store = new Writer();
+        var committer = new RuntimeCheckpointCommitter(new Policy(policy), store, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
+        var admission = Admission();
+        await committer.CommitAsync(admission);
+        Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, store.Decision!.Mode);
+        Assert.Same(admission.ExpectedModelExecution, store.Seen!.ExpectedModelExecution);
+    }
+
+    [Fact]
+    public async Task Model_owned_native_admission_is_never_silently_accepted_by_legacy_or_in_memory_writers()
+    {
+        var legacy = new LegacyWriter();
+        var committer = new RuntimeCheckpointCommitter(new Policy(RuntimeCheckpointPersistenceMode.Immediate), legacy,
+            new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []);
+        await Assert.ThrowsAsync<NotSupportedException>(() => committer.CommitAsync(Admission()).AsTask());
+        Assert.False(legacy.Called);
+        await Assert.ThrowsAsync<NotSupportedException>(() => new InMemoryRuntimeCheckpointCommitStore()
+            .CommitAsync(Admission(), new(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+    }
+
+    [Fact]
+    public async Task Coalescing_preserves_the_native_admission_condition_and_refuses_to_fold_prior_changes_into_it()
+    {
+        var physical = new Writer();
+        var sessions = new AsyncLocalRuntimeCoalescingSessionAccessor();
+        IRuntimeCheckpointCommitStore store = new CoalescingRuntimeCheckpointCommitStore(new(physical), sessions);
+        Assert.True(store.SupportsModelAdmission);
+        var admission = Admission();
+        await store.CommitAsync(admission, new(RuntimeCheckpointPersistenceMode.Immediate));
+        Assert.Same(admission.ExpectedModelExecution, physical.Seen!.ExpectedModelExecution);
+        physical.Seen = null;
+        var session = new RuntimeCoalescingSession("worker", new InMemoryWorkflowSchedulerWorkQueue(), new PersistenceModeOptions());
+        session.BufferDeferred(admission with { ExpectedModelExecution = null });
+        using (sessions.Push(session))
+            await Assert.ThrowsAsync<NotSupportedException>(() => store.CommitAsync(admission, new(RuntimeCheckpointPersistenceMode.Immediate)).AsTask());
+        Assert.Null(physical.Seen);
+    }
+
+    [Theory]
+    [InlineData("fence")]
+    [InlineData("scope")]
+    [InlineData("tenant")]
+    [InlineData("authority")]
+    [InlineData("parent")]
+    [InlineData("checkpoint")]
+    public void Model_owned_native_admission_requires_its_real_initial_scope_authority_and_fence(string changed)
+    {
+        var admission = Admission();
+        var native = admission.StateChanges.WorkflowExecution!;
+        var state = changed switch
+        {
+            "scope" => native.State with { Partition = new("foreign") },
+            "tenant" => native.State with { TenantId = "foreign" },
+            "authority" => native.State with { Authority = new("foreign", "initiator") },
+            "parent" => native.State with { ParentWorkflowExecutionId = "fabricated-model-parent" },
+            _ => native.State
+        };
+        admission = admission with
+        {
+            ExpectedFence = changed == "fence" ? null : admission.ExpectedFence,
+            Checkpoint = changed == "checkpoint" ? admission.Checkpoint with { Name = "LaterCheckpoint" } : admission.Checkpoint,
+            StateChanges = new(native with { State = state }, null, [], [], [], [], [])
+        };
+        Assert.Throws<InvalidOperationException>(admission.EnsureModelAdmissionShape);
+    }
+
+    [Fact]
+    public void Absent_native_admission_retains_old_wire_and_a_refreshed_read_condition_does_not_change_decision_identity()
+    {
+        var admission = Admission();
+        var ordinary = admission with { ExpectedModelExecution = null };
+        Assert.False(JsonSerializer.SerializeToElement(ordinary, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+            .TryGetProperty("expectedModelExecution", out _));
+        Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(ordinary),
+            RuntimeCheckpointCommitFingerprint.Compute(ordinary with { ExpectedModelExecution = null }));
+        Assert.Equal(RuntimeCheckpointCommitFingerprint.Compute(ordinary), RuntimeCheckpointCommitFingerprint.Compute(admission));
+    }
+
+    private static RuntimeCheckpointCommit Admission()
+    {
+        var model = Change().State;
+        var native = new WorkflowExecutionState("worker", Pin, WorkflowExecutionStatus.Running, null, At, At, At.AddSeconds(1),
+            null, null, null, model.TenantId, new Dictionary<string, string>()) { Partition = new(model.Scope.Value), Authority = model.Authority };
+        return new("admission", new("admission", RuntimeCheckpointNames.WorkflowStarted, "worker", At.AddSeconds(1), [], new Dictionary<string, string>()),
+            new(new("worker", RuntimeStateChangeOperation.Upsert, native, new Dictionary<string, string>()), null, [], [], [], [], []), [], new Dictionary<string, string>())
+            { ExpectedModelExecution = model, ExpectedFence = new("worker-lease", "owner", 1) };
+    }
 
     [Fact]
     public void Model_state_and_input_keep_detached_payloads_and_round_trip_without_native_execution()
@@ -110,6 +233,7 @@ public sealed class RuntimeModelCheckpointTests
     private sealed class Writer : IRuntimeCheckpointCommitStore
     {
         public bool SupportsModelCheckpoint => true;
+        public bool SupportsModelAdmission => true;
         public RuntimeCheckpointCommit? Seen { get; set; }
         public RuntimeCheckpointPersistenceDecision? Decision { get; private set; }
         public ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)

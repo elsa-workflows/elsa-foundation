@@ -5,12 +5,41 @@ using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed partial class EfSchedulerWorkQueueStoreTests
 {
+    [Theory]
+    [InlineData(WorkflowExecutionCommandKind.Start, "1.0.0")]
+    [InlineData(WorkflowExecutionCommandKind.Start, "2.0.0")]
+    [InlineData(WorkflowExecutionCommandKind.Checkpoint, "1.0.0")]
+    [InlineData(WorkflowExecutionCommandKind.Checkpoint, "2.0.0")]
+    public async Task Native_model_work_uses_its_protected_family_and_cannot_hide_in_an_earlier_stamp(
+        WorkflowExecutionCommandKind kind, string forgedStamp)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("tenant-a");
+        var now = DateTimeOffset.UtcNow;
+        // The queue's responsibility here is protecting opaque command content before any claim;
+        // native admission itself validates the complete typed model-work address.
+        var payload = kind == WorkflowExecutionCommandKind.Start
+            ? JsonSerializer.SerializeToElement(new { startAuthority = new { kind = WorkflowExecutableStartAuthorityKind.ModelWork } })
+            : JsonSerializer.SerializeToElement(new { modelWorkOrigin = new { formatVersion = 1 } });
+        await fixture.Store.EnqueueAsync(new("native-model", "worker", "command", kind, "envelope", "key", now, now, payload: payload));
+        Assert.Equal("3.0.0", (await fixture.Context.SchedulerWorkItems.AsNoTracking().SingleAsync()).SchemaVersion);
+        await fixture.Context.SchedulerWorkItems.ExecuteUpdateAsync(set => set.SetProperty(row => row.SchemaVersion, forgedStamp));
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Store.ListAsync(new("worker")).AsTask());
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Store.ClaimAsync(new("worker", "owner", now, TimeSpan.FromMinutes(1))).AsTask());
+        await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Store.DequeueAsync("worker").AsTask());
+        var row = await fixture.Context.SchedulerWorkItems.AsNoTracking().SingleAsync();
+        Assert.Equal(0, row.ClaimToken);
+        Assert.Equal(1, row.Revision);
+        Assert.Equal(forgedStamp, row.SchemaVersion);
+    }
+
     [Fact]
     public async Task Model_input_uses_a_predecessor_unreadable_stamp_and_survives_missing_driver_without_a_claim()
     {

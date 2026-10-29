@@ -25,6 +25,16 @@ public sealed class RuntimeModelExecutionCommand
     public JsonElement Payload { get; }
     public WorkflowExecutionAuthoritySnapshot Authority { get; }
     public string? TenantId { get; }
+
+    /// <summary>Stable identity shared by mailbox admission and committed native-result producers.</summary>
+    public static string CreateSchedulerWorkItemId(string inputId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(inputId);
+        var bytes = new byte[checked(inputId.Length * sizeof(char))];
+        for (var index = 0; index < inputId.Length; index++)
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(index * sizeof(char), sizeof(char)), inputId[index]);
+        return "model-input:" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes));
+    }
 }
 
 /// <summary>Verified physical material and current scoped state supplied to one model decision.</summary>

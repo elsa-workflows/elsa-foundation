@@ -15,7 +15,8 @@ internal sealed class RuntimeSchedulerWorkV1Upcaster : IEfSchemaUpcaster
     {
         var item = RuntimeArtifactJson.Deserialize<RuntimeSchedulerWorkItem>(
             row[nameof(SchedulerWorkItemEntity.ContentJson)] ?? throw new InvalidDataException("Scheduler work content is missing."));
-        if (item.CommandKind == WorkflowExecutionCommandKind.ExecuteModel || !Enum.IsDefined(item.CommandKind))
+        if (item.CommandKind == WorkflowExecutionCommandKind.ExecuteModel || !Enum.IsDefined(item.CommandKind) ||
+            RuntimeSchedulerWorkWriteVersion.IsModelWorker(item))
             throw new InvalidDataException("The native scheduler-work format cannot carry model or unknown commands.");
         return row;
     }

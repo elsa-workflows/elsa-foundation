@@ -9374,3 +9374,36 @@ static Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext.operator 
 Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocolRegistration.InputKinds.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
 Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocolRegistration.InputKinds.init -> void
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeExecutionProtocolDriver.ValidateInputAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.CanCommitModelAdmission(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeModelExecutionReader! reader, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! executions, Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionStateStore! activities, Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitOutboxStore! outbox) -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.SupportsModelAdmission.get -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.EnsureModelAdmissionShape() -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.ExpectedModelExecution.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionState?
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.ExpectedModelExecution.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommandPayload.ModelWorkOrigin.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin?
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommandPayload.ModelWorkOrigin.init -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.AttemptId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.BindingId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.ExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.FormatVersion.get -> int
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.InvocationId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.MaterialIncarnationId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.Protocol.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.RuntimeModelNativeWorkOrigin(int formatVersion, Elsa.Workflows.Runtime.Core.Models.PersistenceScope! scope, string! executionId, Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocol! protocol, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! executable, string! materialIncarnationId, string! bindingId, string! invocationId, string! attemptId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! workerExecutable, string! workerExecutionId, string! sourceOutboxItemId, string! sourceIntentId, string! resultIntentKind, string! resultInputId) -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.Scope.get -> Elsa.Workflows.Runtime.Core.Models.PersistenceScope!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.SourceIntentId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.SourceOutboxItemId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.WorkerExecutable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.WorkerExecutionId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStartAuthority.ModelWork.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStartAuthority.WorkflowExecutableStartAuthority(Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStartAuthorityKind kind, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableRetainedDependencyAuthority? retainedDependency, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStimulusDeliveryAuthority? stimulusDelivery, Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin? modelWork) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStartAuthorityKind.ModelWork = 3 -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStartAuthorityKind
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState.ModelWorkOrigin.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin?
+Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionState.ModelWorkOrigin.init -> void
+static Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStartAuthority.FromModelWork(Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin! origin) -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableStartAuthority!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.IsEquivalentTo(Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.MatchesModel(Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionState! state) -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.ResultIntentKind.get -> string!
+static Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionCommand.CreateSchedulerWorkItemId(string! inputId) -> string!
+Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.ResultInputId.get -> string!

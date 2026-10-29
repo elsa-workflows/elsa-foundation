@@ -138,7 +138,7 @@ public sealed class StimulusDeliverySchemaGateTests
         await using (var verify = fixture.Open()) Assert.Empty(await verify.SchedulerWorkItems.ToArrayAsync());
         await fixture.Finalize();
         await store.EnqueueAsync(Input("model", WorkflowExecutionCommandKind.ExecuteModel));
-        Assert.Equal("2.0.0", (await context.SchedulerWorkItems.AsNoTracking().SingleAsync()).SchemaVersion);
+        Assert.Equal(RuntimeSchedulerWorkEfModule.SchemaVersion, (await context.SchedulerWorkItems.AsNoTracking().SingleAsync()).SchemaVersion);
         Assert.Equal("1.0.0", fixture.Gate.StateOf(RuntimeOperationalStateEfModule.SchemaFamily)!.WriteVersion);
     }
 
@@ -221,7 +221,7 @@ public sealed class StimulusDeliverySchemaGateTests
             var record = (await store.FindAsync(family))!;
             await store.ReleaseHoldAsync(family, record.Revision, null, "test");
             await Gate.EvaluateAsync(context); await Gate.RefreshAsync(context);
-            Assert.Equal("2.0.0", Gate.StateOf(family)!.WriteVersion);
+            Assert.Equal(Gate.Families.Chains.Single(chain => chain.Family == family).CurrentVersion, Gate.StateOf(family)!.WriteVersion);
         }
         public async ValueTask DisposeAsync() { await services.DisposeAsync(); await connection.DisposeAsync(); }
     }

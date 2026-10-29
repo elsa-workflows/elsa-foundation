@@ -104,12 +104,14 @@ public sealed class RuntimeCheckpointCommitter
 
         if (commit.ModelState is not null && !_checkpointCommitStore.SupportsModelCheckpoint)
             throw new NotSupportedException("The selected checkpoint store cannot atomically persist model state and accepted inputs.");
+        if (commit.ExpectedModelExecution is not null && !_checkpointCommitStore.SupportsModelAdmission)
+            throw new NotSupportedException("The selected checkpoint store cannot atomically validate model-owned native worker admission.");
         if (commit.ExpectedBookmarkResume is not null && !_checkpointCommitStore.SupportsExactBookmarkResume)
             throw new NotSupportedException("The selected checkpoint store cannot enforce exact bookmark resume admission.");
         var decision = await _persistencePolicy.DecideAsync(commit.Checkpoint, cancellationToken);
-        if (commit.ModelState is not null)
+        if (commit.ModelState is not null || commit.ExpectedModelExecution is not null)
             decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate,
-                "Model decisions require an atomic physical checkpoint.");
+                "Model decisions and native worker admission require an atomic physical checkpoint.");
         else if (commit.ExpectedBookmarkResume is not null)
             decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate,
                 "Exact bookmark admission requires an atomic physical checkpoint.");
@@ -265,6 +267,7 @@ public sealed class RuntimeCheckpointCommitter
         commit.PostCommitIntents.Any(intent => intent.IsDelayedPast(commit.Checkpoint.OccurredAt));
 
     private static bool IsMandatoryCheckpoint(RuntimeCheckpointCommit commit) =>
+        commit.ExpectedModelExecution is not null ||
         !commit.StateChanges.BackgroundActivityWork.IsEmpty ||
         HasDelayedIntent(commit) ||
         commit.Checkpoint.Metadata.TryGetValue(RuntimeMetadataKeys.CheckpointRequirement, out var requirement) &&

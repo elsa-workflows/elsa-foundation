@@ -11,11 +11,46 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 
 // Closed, coherent fixture snapshots only. Every runtime row is read through the actual checked provider.
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 try
 {
+    if (args.Length == 4 && args[0] == "--read-bpmn-native")
+    {
+        var boundDatabase = Path.GetFullPath(args[1]);
+        var boundConnectionString = new SqliteConnectionStringBuilder
+            { DataSource = boundDatabase, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString();
+        var boundAccess = new ScopedAccess(new("default"));
+        var boundServices = new ServiceCollection();
+        boundServices.AddWorkflowRuntime();
+        boundServices.AddSingleton<IPersistenceAccessContextAccessor>(boundAccess);
+        boundServices.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite", ConnectionString = boundConnectionString, Pooling = false, CacheWorkflowExecutables = false,
+            RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('r', 32)
+        });
+        await using var boundProvider = boundServices.BuildServiceProvider();
+        await using var boundScope = boundProvider.CreateAsyncScope();
+        var boundModels = boundScope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>();
+        var boundModel = await boundModels.FindAsync(args[2]) ?? throw new InvalidDataException("The actual model execution is absent.");
+        var boundWorker = await boundScope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(args[3])
+            ?? throw new InvalidDataException("The actual native worker is absent.");
+        var boundOrigin = boundWorker.ModelWorkOrigin ?? throw new InvalidDataException("The native worker has no actual model origin.");
+        if (!boundOrigin.MatchesModel(boundModel)) throw new InvalidDataException("The actual model and worker pins differ.");
+        var boundOutbox = boundScope.ServiceProvider.GetRequiredService<IPostCommitOutboxLookupStore>();
+        var boundStart = await boundOutbox.FindDurableAsync(boundOrigin.SourceOutboxItemId);
+        var boundInput = await boundModels.FindInputAsync(boundModel.ExecutionId, boundOrigin.ResultInputId);
+        RuntimePostCommitOutboxItem? boundResult = null;
+        if (boundModel.Payload.TryGetProperty("nativeResults", out var boundResults) && boundResults.GetArrayLength() != 0)
+            boundResult = await boundOutbox.FindDurableAsync(boundResults[0].GetProperty("sourceOutboxItemId").GetString()!);
+        Console.WriteLine(JsonSerializer.Serialize(new { ReadOnly = true, Model = boundModel, Worker = boundWorker,
+            StartSource = boundStart, ResultSource = boundResult, ResultInput = boundInput }, json));
+        return 0;
+    }
     if (args.Length == 3 && args[0] == "--backup-sqlite")
     {
         var backupSourceFile = Path.GetFullPath(args[1]);
@@ -36,11 +71,15 @@ try
             SnapshotSha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(backupTargetFile))) }, json));
         return 0;
     }
-    if (args.Length == 2 && args[0] is "--inspect-studio-products" or "--inspect-etl-products")
+    if (args.Length == 2 && args[0] is "--inspect-studio-products" or "--inspect-etl-products" or "--inspect-native-bpmn-products")
     {
         var directory = Path.GetDirectoryName(Path.GetFullPath(args[1]))!;
         var names = args[0] == "--inspect-studio-products"
             ? new[] { "Elsa.Studio.Web.dll", "Elsa.Studio.Hosting.dll", "Elsa.Studio.Core.dll", "Elsa.Studio.Workflows.dll" }
+            : args[0] == "--inspect-native-bpmn-products"
+            ? new[] { "Elsa.Workbench.dll", "Elsa.Activities.Bpmn.Core.dll", "Elsa.Activities.Bpmn.dll", "Elsa.Activities.Bpmn.Api.dll",
+                "Elsa.Workflows.Runtime.Core.dll", "Elsa.Workflows.Runtime.dll", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+                "Elsa.Etl.Core.dll", "Elsa.Etl.Runtime.dll", "Elsa.Etl.Workflows.Runtime.dll", "Elsa.Etl.Persistence.EntityFrameworkCore.dll", "Elsa.Etl.Runtime.Api.dll" }
             : new[] { "Elsa.Workbench.dll", "Elsa.Etl.Core.dll", "Elsa.Etl.Runtime.dll", "Elsa.Etl.Workflows.Runtime.dll", "Elsa.Etl.Persistence.EntityFrameworkCore.dll", "Elsa.Etl.Runtime.Api.dll" };
         var products = names.Select(name =>
         {

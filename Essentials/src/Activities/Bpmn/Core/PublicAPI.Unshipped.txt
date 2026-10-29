@@ -93,3 +93,11 @@ static Elsa.Activities.Bpmn.Core.BpmnPublishedModel.operator !=(Elsa.Activities.
 static Elsa.Activities.Bpmn.Core.BpmnPublishedModel.operator ==(Elsa.Activities.Bpmn.Core.BpmnPublishedModel? left, Elsa.Activities.Bpmn.Core.BpmnPublishedModel? right) -> bool
 Elsa.Activities.Bpmn.Core.BpmnModelValidationException
 Elsa.Activities.Bpmn.Core.BpmnModelValidationException.BpmnModelValidationException(string! message, System.Exception? innerException = null) -> void
+Elsa.Activities.Bpmn.Core.BpmnModelDefinition.BpmnModelDefinition(int formatVersion, System.Text.Json.JsonElement process, System.Collections.Generic.IReadOnlyList<string!>! humanBindings, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding!>? serviceBindings) -> void
+Elsa.Activities.Bpmn.Core.BpmnModelDefinition.ServiceBindings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding!>?
+Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding
+Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding.BindingId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding.BpmnNativeServiceBinding(string! bindingId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! executable, string! businessErrorCode) -> void
+Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding.BusinessErrorCode.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
+const Elsa.Activities.Bpmn.Core.BpmnModelProtocol.NativeWorkProfile = "foundation-native-work-v1" -> string!

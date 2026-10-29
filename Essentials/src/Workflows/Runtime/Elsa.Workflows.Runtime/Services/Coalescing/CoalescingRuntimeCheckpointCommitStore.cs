@@ -58,6 +58,9 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     public bool SupportsExactBookmarkResume => _inner.SupportsExactBookmarkResume;
     bool IRuntimeCheckpointCommitStore.SupportsModelCheckpoint => _inner.SupportsModelCheckpoint;
     bool IRuntimeCheckpointCommitStore.CanCommitModelState(IRuntimeModelExecutionReader reader) => _inner.CanCommitModelState(reader);
+    bool IRuntimeCheckpointCommitStore.SupportsModelAdmission => _inner.SupportsModelAdmission;
+    bool IRuntimeCheckpointCommitStore.CanCommitModelAdmission(IRuntimeModelExecutionReader reader, IWorkflowExecutionStateStore executions,
+        IActivityExecutionStateStore activities, IRuntimePostCommitOutboxStore outbox) => _inner.CanCommitModelAdmission(reader, executions, activities, outbox);
     public bool CanCommitExactBookmarkResume(IBookmarkStateStore bookmarks, IWorkflowExecutionStateStore physicalExecutions,
         IActivityExecutionStateStore activities) => _inner.CanCommitExactBookmarkResume(bookmarks, physicalExecutions, activities);
 
@@ -66,6 +69,14 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     {
         ArgumentNullException.ThrowIfNull(commit);
         ArgumentNullException.ThrowIfNull(decision);
+
+        if (commit.ExpectedModelExecution is not null)
+        {
+            if (!_inner.SupportsModelAdmission || decision.Mode != RuntimeCheckpointPersistenceMode.Immediate ||
+                sessionAccessor.Current is { HasBufferedChanges: true } admissionSession && admissionSession.AppliesTo(commit.WorkflowExecutionId))
+                throw new NotSupportedException("Initial model-owned native worker admission requires its own immediate physical checkpoint.");
+            commit.EnsureModelAdmissionShape();
+        }
 
         if (commit.ModelState is not null)
         {
@@ -326,6 +337,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     // Operational (lease/heartbeat/ownership — condition E), incident, and bookmark writes must never be buffered:
     // they are durability-critical and are flushed immediately even if they ride on a deferrable checkpoint name.
     private static bool HasBoundaryState(RuntimeCheckpointCommit commit) =>
+        commit.ExpectedModelExecution is not null ||
         commit.ExpectedBookmarkResume is not null ||
         commit.StateChanges.Operational.Count > 0 ||
         commit.StateChanges.Incidents.Count > 0 ||

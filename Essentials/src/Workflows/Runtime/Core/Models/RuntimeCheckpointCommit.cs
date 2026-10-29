@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Elsa.Workflows.Runtime.Core.Constants;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
 
@@ -18,6 +19,33 @@ public sealed record RuntimeCheckpointCommit(
     /// <summary>Optional model decision written with the fence, consumed input and outbox in one transaction.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeModelStateChange? ModelState { get; init; }
+
+    /// <summary>The exact model decision authorizing initial native worker admission, checked in the same transaction.</summary>
+    /// <remarks>A refreshed concurrency condition is excluded from logical replay identity; the native state retains its immutable model-work origin.</remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeModelExecutionState? ExpectedModelExecution { get; init; }
+
+    /// <summary>Only an initial native worker checkpoint may depend on another execution's live model decision.</summary>
+    public void EnsureModelAdmissionShape()
+    {
+        if (ExpectedModelExecution is not { } expected) return;
+        if (ModelState is not null || ExpectedBookmarkResume is not null || ExpectedFence is null ||
+            Checkpoint.Name != RuntimeCheckpointNames.WorkflowStarted ||
+            expected.ExecutionId == WorkflowExecutionId || expected.Lifecycle != RuntimeModelLifecycle.Running ||
+            StateChanges.WorkflowExecution is not { Operation: RuntimeStateChangeOperation.Upsert,
+                State.Status: WorkflowExecutionStatus.Running } native ||
+            native.State.StartedAt is not { } startedAt || startedAt > Checkpoint.OccurredAt || native.State.CreatedAt != startedAt ||
+            native.State.ParentWorkflowExecutionId is not null ||
+            native.State.TenantId != expected.TenantId || native.State.Partition?.Value != expected.Scope.Value ||
+            native.State.Authority is not { } authority ||
+            !WorkflowExecutionAuthoritySnapshot.Matches(expected.Authority, authority.SystemIdentity,
+                authority.RootInitiator, authority.Metadata))
+            throw new InvalidOperationException("Native worker admission requires its matching initial state, authority and exact live model decision.");
+        if (native.State.ModelWorkOrigin is { } origin && (!origin.MatchesModel(expected) ||
+            origin.WorkerExecutionId != WorkflowExecutionId ||
+            !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(origin.WorkerExecutable, native.State.PinnedExecutable)))
+            throw new InvalidOperationException("The native worker's model invocation differs from its admission condition.");
+    }
 
     /// <summary>Reject a model decision that could alias native state or escape its execution fence.</summary>
     public void EnsureModelStateShape()

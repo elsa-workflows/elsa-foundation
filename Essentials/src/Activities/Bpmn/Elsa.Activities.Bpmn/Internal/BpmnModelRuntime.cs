@@ -29,12 +29,16 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         if (!materials.SupportsModelMaterial || !sources.CanWriteRootReferences(materials))
             throw new NotSupportedException("The selected artifact/source providers cannot publish model material safely.");
         var seed = new WorkflowExecutableIdentity("pending", "pending", "pending", "1.0.0", "pending");
-        var material = new RuntimeModelMaterial(1, seed, new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), BpmnModelProtocol.Profile,
-            JsonSerializer.SerializeToElement(definition, Web), new(1, []), [], [], []);
+        var dependencies = (definition.ServiceBindings ?? []).Select(binding => new RuntimeModelDependency(binding.BindingId, binding.Executable)).ToArray();
+        foreach (var binding in definition.ServiceBindings ?? [])
+            await ValidatePublishedWorkerAsync(binding, caller, cancellationToken);
+        var profile = definition.FormatVersion == 1 ? BpmnModelProtocol.Profile : BpmnModelProtocol.NativeWorkProfile;
+        var material = new RuntimeModelMaterial(1, seed, new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), profile,
+            JsonSerializer.SerializeToElement(definition, Web), new(1, []), [], dependencies, []);
         await driver.ValidateMaterialAsync(material, cancellationToken);
         var hash = material.ComputeContentHash();
         var pin = new WorkflowExecutableIdentity(hash, "bpmn-model:" + hash, hash, "1.0.0", hash);
-        material = new(1, pin, material.Protocol, material.Profile, material.Definition, material.InputContract, [], [], []);
+        material = new(1, pin, material.Protocol, material.Profile, material.Definition, material.InputContract, [], dependencies, []);
         var sourceId = "bpmn-source:" + BpmnModelIdentity.Create(caller.TenantId ?? "", caller.ActorId, requestId);
         if (await sources.FindAsync(sourceId, cancellationToken) is { } prior &&
             (prior.ArtifactId != hash || prior.TenantId != caller.TenantId || prior.SourceKind != SourceKind || !prior.IsLive(clock.GetUtcNow())))
@@ -91,7 +95,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
             after = cursor.After;
         }
         var document = state.Payload.Deserialize<BpmnDirectExecutionDriver.Document>(Web) ?? throw new BpmnModelValidationException("BPMN state is missing.");
-        var items = document.Work.OrderBy(item => item.InvocationId, StringComparer.Ordinal)
+        var items = document.Work.Where(item => item.NativeWork is null).OrderBy(item => item.InvocationId, StringComparer.Ordinal)
             .Where(item => after is null || string.CompareOrdinal(item.InvocationId, after) > 0).Take(request.Limit + 1).ToArray();
         var more = items.Length > request.Limit;
         if (more) items = items[..request.Limit];
@@ -199,6 +203,28 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         if (caller.TenantId is not null) ArgumentException.ThrowIfNullOrWhiteSpace(caller.TenantId);
         access.Current.EnsureTenantScope(caller.TenantId);
         return access.Current.Scope ?? throw new BpmnModelValidationException("A model operation requires an explicit persistence scope.");
+    }
+
+    private async ValueTask ValidatePublishedWorkerAsync(BpmnNativeServiceBinding binding, BpmnModelCaller caller,
+        CancellationToken cancellationToken)
+    {
+        var native = await materials.FindMaterialAsync(binding.Executable.ArtifactId, cancellationToken);
+        if (native?.NativeWorkflow is not { } worker || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(native.Identity, binding.Executable) ||
+            worker.InputContract.Inputs.Count != 0)
+            throw new BpmnModelValidationException("A native service binding requires its complete native pin and a closed worker input contract.");
+        var query = new WorkflowExecutableSourceReferenceArtifactPageQuery(binding.Executable.ArtifactId);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        while (true)
+        {
+            var page = await sources.ListByArtifactPageAsync(query, cancellationToken);
+            if (page.Items.Any(source => source.Scope == WorkflowExecutableReferenceScope.Published && source.TenantId == caller.TenantId &&
+                source.IsLive(clock.GetUtcNow()) && source.DefinitionId == binding.Executable.DefinitionId &&
+                source.DefinitionVersionId == binding.Executable.DefinitionVersionId && source.ArtifactVersion == binding.Executable.ArtifactVersion)) return;
+            if (page.NextContinuationToken is null) break;
+            if (!seen.Add(page.NextContinuationToken)) throw new BpmnModelValidationException("The worker publication source page did not advance.");
+            query = new(binding.Executable.ArtifactId, continuationToken: page.NextContinuationToken);
+        }
+        throw new BpmnModelValidationException("The native worker pin has no live published source in this tenant.");
     }
     private static void InputId(string value)
     {

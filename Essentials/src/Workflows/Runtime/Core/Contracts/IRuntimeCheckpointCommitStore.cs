@@ -10,6 +10,13 @@ public interface IRuntimeCheckpointCommitStore
     /// <summary>Qualifies the actual scoped reader used by the selected model checkpoint provider.</summary>
     bool CanCommitModelState(IRuntimeModelExecutionReader reader) => false;
 
+    /// <summary>Whether native admission can atomically compare its authorizing model execution snapshot.</summary>
+    bool SupportsModelAdmission => false;
+
+    /// <summary>Qualifies the physical model reader used to decide native worker admission.</summary>
+    bool CanCommitModelAdmission(IRuntimeModelExecutionReader reader, IWorkflowExecutionStateStore executions,
+        IActivityExecutionStateStore activities, IRuntimePostCommitOutboxStore outbox) => false;
+
     /// <summary>Whether this implementation can atomically enforce exact physical bookmark resume conditions.</summary>
     /// <remarks>Callers must qualify selected stores; legacy providers and decorators refuse by default.</remarks>
     bool SupportsExactBookmarkResume => false;

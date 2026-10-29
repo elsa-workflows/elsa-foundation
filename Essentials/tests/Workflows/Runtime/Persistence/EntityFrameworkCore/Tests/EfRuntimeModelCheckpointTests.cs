@@ -5,6 +5,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -27,6 +28,187 @@ public sealed class EfRuntimeModelCheckpointTests
     private string materialIncarnation = null!;
     private static readonly RuntimeExecutionLease Lease = new("lease", "execution", "owner", Now, Now.AddMinutes(10), 1);
     private static readonly RuntimeCheckpointPersistenceDecision Immediate = new(RuntimeCheckpointPersistenceMode.Immediate);
+
+    [Fact]
+    public async Task Native_admission_compares_the_exact_model_decision_without_rewriting_it()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var admission = await PrepareAdmissionAsync(database);
+        string before;
+        await using (var context = database.Open())
+        {
+            before = (await context.Set<RuntimeModelExecutionEntity>().SingleAsync()).ContentJson;
+            await Store(context).CommitAsync(admission, Immediate);
+        }
+        await using var restarted = database.Open();
+        Assert.Equal(before, (await restarted.Set<RuntimeModelExecutionEntity>().SingleAsync()).ContentJson);
+        Assert.Equal(1, (await Reader(restarted).FindAsync("execution"))!.Revision);
+        Assert.Equal(WorkflowExecutionStatus.Running,
+            (await new EfWorkflowExecutionStateStore(restarted, new Access("tenant-a"), new Codec()).FindAsync("native-worker"))!.Status);
+        Assert.Single(await restarted.RuntimePostCommitOutbox.ToArrayAsync());
+        Assert.Equal(2, await restarted.RuntimeCheckpointCommits.CountAsync());
+        Assert.Single(await restarted.Set<RuntimeModelInputEntity>().ToArrayAsync());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_changed_model_decision_cannot_admit_native_work(bool changeWithoutRevision)
+    {
+        await using var database = await CreateDatabaseAsync();
+        var admission = await PrepareAdmissionAsync(database);
+        await using (var context = database.Open())
+        {
+            if (changeWithoutRevision)
+            {
+                var row = await context.Set<RuntimeModelExecutionEntity>().SingleAsync();
+                row.ContentJson = row.ContentJson.Replace("human-wait", "cancelled", StringComparison.Ordinal);
+                await context.SaveChangesAsync();
+            }
+            else await Store(context).CommitAsync(Commit(2, RuntimeModelLifecycle.TerminalSettled), Immediate);
+        }
+        await using (var context = database.Open())
+            Assert.IsType<DbUpdateConcurrencyException>((await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() =>
+                Store(context).CommitAsync(admission, Immediate).AsTask())).InnerException);
+        await using var restarted = database.Open();
+        Assert.Empty(await restarted.WorkflowExecutionStates.ToArrayAsync());
+        Assert.Empty(await restarted.RuntimePostCommitOutbox.ToArrayAsync());
+        Assert.False(await restarted.RuntimeCheckpointCommits.AnyAsync(row => row.CommitId == Encode(admission.CommitId)));
+    }
+
+    [Fact]
+    public async Task Native_admission_still_compares_the_physical_model_revision_after_its_read()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var admission = await PrepareAdmissionAsync(database);
+        var advance = new AdvanceBeforeModelCompare();
+        await using (var context = database.Open(advance))
+            Assert.IsType<DbUpdateConcurrencyException>((await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() =>
+                Store(context).CommitAsync(admission, Immediate).AsTask())).InnerException);
+        Assert.True(advance.Changed);
+        await using var restarted = database.Open();
+        Assert.Equal(1, (await Reader(restarted).FindAsync("execution"))!.Revision);
+        Assert.Empty(await restarted.WorkflowExecutionStates.ToArrayAsync());
+        Assert.Empty(await restarted.RuntimePostCommitOutbox.ToArrayAsync());
+        Assert.Single(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Failed_native_admission_marker_rolls_back_native_work_outbox_and_the_model_compare()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var admission = await PrepareAdmissionAsync(database);
+        await using (var context = database.Open(new FailMarker()))
+            Assert.IsType<DbUpdateException>((await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() =>
+                Store(context).CommitAsync(admission, Immediate).AsTask())).InnerException);
+        await using var restarted = database.Open();
+        Assert.Equal(1, (await Reader(restarted).FindAsync("execution"))!.Revision);
+        Assert.Empty(await restarted.WorkflowExecutionStates.ToArrayAsync());
+        Assert.Empty(await restarted.RuntimePostCommitOutbox.ToArrayAsync());
+        Assert.Single(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Native_admission_replay_precedes_later_model_progress()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var admission = await PrepareAdmissionAsync(database);
+        await using (var context = database.Open()) await Store(context).CommitAsync(admission, Immediate);
+        await using (var context = database.Open()) await Store(context).CommitAsync(Commit(2), Immediate);
+        await using (var context = database.Open()) await Store(context).CommitAsync(admission with
+            { ExpectedModelExecution = await Reader(context).FindAsync("execution") }, Immediate);
+        await using var restarted = database.Open();
+        Assert.Equal(2, (await Reader(restarted).FindAsync("execution"))!.Revision);
+        Assert.Single(await restarted.WorkflowExecutionStates.ToArrayAsync());
+        Assert.Single(await restarted.RuntimePostCommitOutbox.ToArrayAsync());
+        Assert.Equal(3, await restarted.RuntimeCheckpointCommits.CountAsync());
+    }
+
+    private async Task<RuntimeCheckpointCommit> PrepareAdmissionAsync(Database database)
+    {
+        await using var context = database.Open();
+        await Store(context).CommitAsync(Commit(1), Immediate);
+        var expected = (await Reader(context).FindAsync("execution"))!;
+        var lease = new RuntimeExecutionLease("worker-lease", "native-worker", "owner", Now, Now.AddMinutes(10), 1);
+        await new EfExecutionLivenessStateStore(context, new Access("tenant-a"), new Codec())
+            .SaveAsync(new("ownership:native-worker", "native-worker", lease, null, null, null));
+        var pin = new WorkflowExecutableIdentity("native-artifact", "worker", "worker-v1", "1.0.0", "worker-hash");
+        var at = Now.AddSeconds(3);
+        var workflow = new WorkflowExecutionState("native-worker", pin, WorkflowExecutionStatus.Running,
+            null, at, at, at, null, null, null, expected.TenantId, new Dictionary<string, string>())
+            { Partition = new(expected.Scope.Value), Authority = expected.Authority };
+        var intent = new RuntimePostCommitIntent("start-root", workflow.WorkflowExecutionId, "test.start-root", at, null,
+            "start-root", JsonSerializer.SerializeToElement(new { node = "root" }));
+        var outbox = new RuntimePostCommitOutboxItem("start-root", intent, RuntimePostCommitOutboxStatus.Pending, at, at);
+        return new("native-admission", new("native-admission", RuntimeCheckpointNames.WorkflowStarted,
+                workflow.WorkflowExecutionId, at, [], new Dictionary<string, string>()),
+            new(new(workflow.WorkflowExecutionId, RuntimeStateChangeOperation.Upsert, workflow, new Dictionary<string, string>()),
+                null, [], [], [], [], [], postCommitOutbox:
+                [new(outbox.OutboxItemId, RuntimeStateChangeOperation.Upsert, outbox, new Dictionary<string, string>())]),
+            [intent], new Dictionary<string, string>())
+            { ExpectedFence = lease.ToFence(), ExpectedModelExecution = expected };
+    }
+
+    [Fact]
+    public async Task Model_owned_native_header_requires_admission_and_cannot_hide_in_the_legacy_family()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var admission = WithOrigin(await PrepareAdmissionAsync(database));
+        await using (var context = database.Open())
+        {
+            await Assert.ThrowsAsync<NotSupportedException>(() => Store(context)
+                .CommitAsync(admission with { ExpectedModelExecution = null }, Immediate).AsTask());
+            Assert.Empty(await context.WorkflowExecutionStates.ToArrayAsync());
+            await Store(context).CommitAsync(admission, Immediate);
+            var row = await context.WorkflowExecutionStates.AsNoTracking().SingleAsync();
+            Assert.Equal("2.0.0", row.SchemaVersion);
+            var worker = await new EfWorkflowExecutionStateStore(context, new Access("tenant-a"), new Codec()).FindAsync("native-worker");
+            Assert.True(admission.StateChanges.WorkflowExecution!.State.ModelWorkOrigin!.IsEquivalentTo(worker!.ModelWorkOrigin));
+            await context.WorkflowExecutionStates.ExecuteUpdateAsync(set => set.SetProperty(state => state.SchemaVersion, "1.0.0"));
+        }
+        await using var restarted = database.Open();
+        await Assert.ThrowsAsync<InvalidDataException>(() => new EfWorkflowExecutionStateStore(restarted, new Access("tenant-a"), new Codec())
+            .FindAsync("native-worker").AsTask());
+    }
+
+    [Fact]
+    public async Task Model_owned_native_work_cannot_drop_its_address_or_terminal_result_responsibility()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var admission = WithOrigin(await PrepareAdmissionAsync(database));
+        await using (var context = database.Open()) await Store(context).CommitAsync(admission, Immediate);
+        var worker = admission.StateChanges.WorkflowExecution!.State;
+        var terminal = worker with { Status = WorkflowExecutionStatus.Completed, UpdatedAt = Now.AddSeconds(4), CompletedAt = Now.AddSeconds(4) };
+        await using (var context = database.Open())
+        {
+            var executions = new EfWorkflowExecutionStateStore(context, new Access("tenant-a"), new Codec());
+            await Assert.ThrowsAsync<InvalidOperationException>(() => executions.SaveAsync(worker with { ModelWorkOrigin = null }).AsTask());
+            await Assert.ThrowsAsync<NotSupportedException>(() => executions.SaveAsync(terminal).AsTask());
+        }
+        var finished = new RuntimeCheckpointCommit("worker-complete", new("worker-complete", RuntimeCheckpointNames.WorkflowCompleted,
+                "native-worker", Now.AddSeconds(4), [], new Dictionary<string, string>()),
+            new(new("native-worker", RuntimeStateChangeOperation.Upsert, terminal, new Dictionary<string, string>()), null, [], [], [], [], []),
+            [], new Dictionary<string, string>()) { ExpectedFence = admission.ExpectedFence };
+        await using (var context = database.Open())
+            await Assert.ThrowsAsync<NotSupportedException>(() => Store(context).CommitAsync(finished, Immediate).AsTask());
+        await using var restarted = database.Open();
+        var retained = (await new EfWorkflowExecutionStateStore(restarted, new Access("tenant-a"), new Codec()).FindAsync("native-worker"))!;
+        Assert.Equal(WorkflowExecutionStatus.Running, retained.Status);
+        Assert.True(worker.ModelWorkOrigin!.IsEquivalentTo(retained.ModelWorkOrigin));
+        Assert.Equal(2, await restarted.RuntimeCheckpointCommits.CountAsync());
+        Assert.Single(await restarted.RuntimePostCommitOutbox.ToArrayAsync());
+    }
+
+    private static RuntimeCheckpointCommit WithOrigin(RuntimeCheckpointCommit admission)
+    {
+        var model = admission.ExpectedModelExecution!;
+        var native = admission.StateChanges.WorkflowExecution!;
+        var origin = new RuntimeModelNativeWorkOrigin(1, model.Scope, model.ExecutionId, model.Protocol, model.Executable,
+            model.MaterialIncarnationId, "service", "invocation", "attempt", native.State.PinnedExecutable, native.State.WorkflowExecutionId,
+            "source-commit:start", "start", "test.native-result", "result-input");
+        return admission with { StateChanges = new(native with { State = native.State with { ModelWorkOrigin = origin } },
+            null, [], [], [], [], [], postCommitOutbox: admission.StateChanges.PostCommitOutbox) };
+    }
 
     [Theory]
     [InlineData(RuntimeModelLifecycle.Running)]

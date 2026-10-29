@@ -56,14 +56,15 @@ def main():
     parser.add_argument("--workbench-assembly", type=Path, required=True)
     parser.add_argument("--reader-assembly", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--parent", choices=("Sequence", "Flowchart", "RunEtl"), default="Sequence")
+    parser.add_argument("--parent", choices=("Sequence", "Flowchart", "RunEtl", "BpmnModel"), default="Sequence")
     parser.add_argument("--business-error", action="store_true", help="Reject one actual HTTP record through its declared Int64 schema.")
     args = parser.parse_args()
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
     if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True).strip():
         raise ValueError("Commit the journey source before recording exact-source evidence.")
     assembly = args.workbench_assembly.resolve(strict=True); reader = args.reader_assembly.resolve(strict=True)
-    products = json.loads(subprocess.check_output(["dotnet", str(reader), "--inspect-etl-products", str(assembly)], text=True))
+    direct_bpmn = args.parent == "BpmnModel"
+    products = json.loads(subprocess.check_output(["dotnet", str(reader), "--inspect-native-bpmn-products" if direct_bpmn else "--inspect-etl-products", str(assembly)], text=True))
     if products["sourceCommit"] != source: raise ValueError("Build the actual Workbench/ETL products from this exact committed source.")
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False)
     root = Path(tempfile.mkdtemp(prefix="elsa-etl-http-recovery-"))
@@ -140,6 +141,8 @@ def main():
                     {**common,"Alias":"http-output","Role":"MainOutput","Revision":"http-output-v1","Endpoint":fixture_url+output_path,"AllowedPaths":[output_path],"Shards":[]}]},
             "EtlRuntimeEntityFrameworkCore":{"Provider":"Sqlite","ConnectionString":"Data Source=etl-runtime.db;Pooling=False"},
             "EtlRuntimeApi":{"CursorSigningKey":"owned-etl-recovery-runtime-cursor-signing-key"},"EtlWorkflowsDesign":{},"EtlWorkflowsRuntime":{}})
+        if direct_bpmn:
+            features.update({"ActivitiesBpmnHosting":{"AdmitNewExecutions":True},"ActivitiesBpmnHostingApi":{}})
         q.write_json(root/"shells.json",shells)
         api=launch();definition="recovery-"+uuid.uuid4().hex[:12]
         bindings=api.request("/etl/v2/bindings?limit=100")
@@ -158,14 +161,31 @@ def main():
         elif args.parent=="Flowchart":
             structure={"kind":"elsa.flowchart.structure","schemaVersion":"1.0.0","payload":{"startNodeId":"etl","activities":[etl,after],"connections":[{"source":{"nodeId":"etl","port":port},"target":{"nodeId":"after","port":"Done"}} for port in ("Done","BusinessError")]}}
             key="Elsa.Activities.Flowchart.Activities.Flowchart"
-        root_node=etl if args.parent=="RunEtl" else node("root",key,structure=structure)
+        root_node=etl if args.parent in ("RunEtl","BpmnModel") else node("root",key,structure=structure)
         native=api.request("/design/workflows/definitions/submit",{"name":"Actual ETL recovery "+args.parent+" "+definition,"state":{"variables":[],"inputs":[],"outputs":[],"rootActivity":root_node}})
         publication=api.request("/publishing/workflows/"+native["version"]["id"]+"/publish",{})
-        executed=api.request("/runtime/workflows/executables/"+publication["artifactId"]+"/execute",{"sourceReferenceId":publication["sourceReferenceId"]})
-        execution=executed["workflowExecutionId"]
+        model_publication=None;model_execution=None
+        if direct_bpmn:
+            worker_pin={field:publication[field] for field in ("artifactId","artifactHash","artifactVersion","definitionId","definitionVersionId")}
+            process={"id":"direct-etl","elements":[{"id":"start","elementType":"startEvent"},{"id":"service","elementType":"serviceTask","bindingRef":"pipeline"},{"id":"end","elementType":"endEvent"}],
+                "sequenceFlows":[{"id":"to-service","sourceRef":"start","targetRef":"service"},{"id":"to-end","sourceRef":"service","targetRef":"end"}]}
+            model_publication=api.request("/bpmn/artifacts",{"requestId":"publish-model","definition":{"formatVersion":2,"process":process,"humanBindings":[],
+                "serviceBindings":[{"bindingId":"pipeline","executable":worker_pin,"businessErrorCode":"etl.rows-rejected"}]}})
+            executed=api.request("/bpmn/executions",{"requestId":"start-model","sourceReferenceId":model_publication["sourceReferenceId"]})
+            model_execution=executed["executionId"]
+            instances=wait_for(lambda:api.request("/runtime/workflows/instances"),lambda value:len(value)==1,"The BPMN binding did not admit its real native worker.")
+            execution=instances[0]["workflowExecutionId"]
+        else:
+            executed=api.request("/runtime/workflows/executables/"+publication["artifactId"]+"/execute",{"sourceReferenceId":publication["sourceReferenceId"]})
+            execution=executed["workflowExecutionId"]
         summaries=wait_for(lambda:api.request("/etl/runs?limit=100"),lambda value:len(value["items"])==1,"The real RunEtl activity did not admit its run.")
         run=summaries["items"][0]["runId"];escaped=urllib.parse.quote(run,safe="")
-        def view():return {"native":api.view(execution),"run":api.request("/etl/runs/"+escaped),"partitions":api.request("/etl/runs/"+escaped+"/connector-partitions?limit=50")}
+        def view():
+            value={"native":api.view(execution),"run":api.request("/etl/runs/"+escaped),"partitions":api.request("/etl/runs/"+escaped+"/connector-partitions?limit=50")}
+            if direct_bpmn:value["model"]=api.request("/bpmn/executions/"+model_execution)
+            return value
+        def checked_native_model():
+            return json.loads(subprocess.check_output(["dotnet",str(reader),"--read-bpmn-native",str(root/"elsa.db"),model_execution,execution],text=True,timeout=30))
         def cut_ready(value):
             rows=value["partitions"]["items"]
             return len(rows)==2 and any(item["http"]["fetch"] and item["http"]["fetch"]["lastStatusCode"]==429 and item["http"]["fetch"]["phase"]=="waiting" for item in rows) and any(item["http"]["exhausted"] and item["owedBatch"] is None for item in rows)
@@ -183,18 +203,24 @@ def main():
         if len([item for item in before_wire["requests"] if item.get("shard")=="shard-b"])!=1:
             raise ValueError("The actual source already retried before the recorded crash cut.")
         before_stores=snapshots("before")
+        if direct_bpmn:q.write_json(output/"before-checked-model.json",checked_native_model())
         stop(host,crash=True);exit_code=host.returncode
         if exit_code!=-signal.SIGKILL:raise ValueError("The predecessor did not exit through actual process loss.")
         print("Observed durable 429 and completed sibling; owned predecessor terminated.",flush=True)
         api=launch();recovered=view();q.write_json(output/"recovered.json",recovered)
         outcome="businessError" if args.business_error else "succeeded"
-        finished=wait_for(view,lambda value:value["run"]["status"]==outcome and value["native"]["instance"]["status"]=="Completed","The actual ETL/native pair did not finish after process loss.",120)
+        finished=wait_for(view,lambda value:value["run"]["status"]==outcome and value["native"]["instance"]["status"]=="Completed" and
+            (not direct_bpmn or value["model"]["status"]=="TerminalSettled" and value["model"]["result"]["status"]==("Faulted" if args.business_error else "Completed")),"The actual ETL/native/model chain did not finish after process loss.",120)
+        if direct_bpmn:
+            checked=wait_for(checked_native_model,lambda value:value["resultSource"] is not None and value["resultSource"]["status"]==2 and value["resultInput"] is not None,
+                "The native result remained unacknowledged after model consumption.",90)
+            q.write_json(output/"finished-checked-model.json",checked)
         result=finished["run"];rows=finished["partitions"]["items"];native_view=finished["native"]
         if (result["formatVersion"]!=2 or result["selection"]!=selection or result["terminalResult"]["outcome"]!=outcome or
                 result["acceptedRecords"]!=(3 if args.business_error else 4) or result["rejectedRecords"]!=(1 if args.business_error else 0) or result["filteredRecords"]!=0 or result["outstandingRecords"]!=0 or result["outstandingBytes"]!=0 or
                 len(rows)!=2 or finished["partitions"]["nextCursor"] is not None or any(not item["http"]["exhausted"] or item["http"]["pageSequence"]!=1 or item["owedBatch"] is not None for item in rows)):
             raise ValueError("The recovered ETL run did not settle four accepted records and both exact partitions.")
-        if native_view["incidents"] or len(native_view["activities"])!=(1 if args.parent=="RunEtl" else 3) or any(item["status"]!="Completed" for item in native_view["activities"]):
+        if native_view["incidents"] or len(native_view["activities"])!=(1 if args.parent in ("RunEtl","BpmnModel") else 3) or any(item["status"]!="Completed" for item in native_view["activities"]):
             raise ValueError("The recovered native parent did not execute RunEtl and its successor once.")
         old_activities={(item.get("authoredActivityId") or item["executableNodeId"]):item for item in before["native"]["activities"]}
         etl_activity=next(item for item in native_view["activities"] if (item.get("authoredActivityId") or item["executableNodeId"])=="etl")
@@ -216,13 +242,16 @@ def main():
         if len(errors)!=(1 if args.business_error else 0):raise ValueError("The real safe-error destination differs from the rejected record count.")
         q.write_json(output/"safe-errors.json",errors)
         stop(host);finished_stores=snapshots("finished")
-        api=launch();retained=view();retained_wire=wire();q.write_json(output/"retained.json",retained);q.write_json(output/"retained-wire.json",retained_wire);stop(host)
+        api=launch();retained=view();retained_wire=wire();q.write_json(output/"retained.json",retained);q.write_json(output/"retained-wire.json",retained_wire)
+        if direct_bpmn:q.write_json(output/"retained-checked-model.json",checked_native_model())
+        stop(host)
         if retained!=finished or retained_wire!=finished_wire:raise ValueError("The terminal pair or physical HTTP observations changed after another process.")
-        q.write_json(output/"process.json",{"schemaVersion":1,"kind":"actual-native-etl-http-recovery","sourceRevision":source,"products":products,"parent":args.parent,"processes":processes,"predecessorExitCode":exit_code,
+        q.write_json(output/"process.json",{"schemaVersion":1,"kind":"actual-direct-bpmn-native-etl-http-recovery" if direct_bpmn else "actual-native-etl-http-recovery","sourceRevision":source,"products":products,"parent":args.parent,"processes":processes,"predecessorExitCode":exit_code,
             "definition":definition,"selection":selection,"workflowExecutionId":execution,"runId":run,"publication":publication,"etlPublication":published,"bindings":bindings,
             "fixtureSha256":q.digest(fixture_script),"controllerSha256":q.digest(Path(__file__)),"cutAtUtc":cut_at,"businessError":args.business_error,"beforeStores":before_stores,"finishedStores":finished_stores,
-            "scopeLimits":["Real transient HTTP retry and native RunEtl recovery only; no BPMN/model worker bridge or held terminal-fault retry is proved.","The crash cut uses SIGSTOP only to copy committed stores, then SIGKILL; no persisted state or clock is edited.","External HTTP effects remain at least once."]})
-        print("Actual ETL and native successor completed and survived another Workbench process.",flush=True)
+            **({"modelPublication":model_publication,"modelExecutionId":model_execution} if direct_bpmn else {}),
+            "scopeLimits":["Direct start/service/end with one real closed native RunEtl worker; embedding, broader service/event shapes, cancellation propagation and held terminal-fault retry remain unproved." if direct_bpmn else "Real transient HTTP retry and native RunEtl recovery only; no BPMN/model worker bridge or held terminal-fault retry is proved.","The crash cut uses SIGSTOP only to copy committed stores, then SIGKILL; no persisted state or clock is edited.","External HTTP effects remain at least once."]})
+        print("Actual ETL/native"+("/BPMN chain" if direct_bpmn else " journey")+" completed and survived another Workbench process.",flush=True)
     finally:
         for child in reversed(children):
             if child.poll() is None:

@@ -31,6 +31,21 @@ public sealed class EfRuntimeCheckpointCommitStore(
     bool IRuntimeCheckpointCommitStore.SupportsModelCheckpoint => true;
     bool IRuntimeCheckpointCommitStore.CanCommitModelState(IRuntimeModelExecutionReader reader) =>
         reader is EfRuntimeModelExecutionReader selected && selected.Uses(context, accessContextAccessor);
+    bool IRuntimeCheckpointCommitStore.SupportsModelAdmission => true;
+    bool IRuntimeCheckpointCommitStore.CanCommitModelAdmission(IRuntimeModelExecutionReader reader, IWorkflowExecutionStateStore executions,
+        IActivityExecutionStateStore activities, IRuntimePostCommitOutboxStore outbox)
+    {
+        if (reader is not EfRuntimeModelExecutionReader selected || !selected.Uses(context, accessContextAccessor) ||
+            executions is not EfWorkflowExecutionStateStore native || activities is not EfActivityExecutionStateStore activity ||
+            outbox is not EfRuntimePostCommitOutboxStore source || !ReferenceEquals(native.Context, context) ||
+            !ReferenceEquals(activity.Context, context)) return false;
+        try
+        {
+            var scope = accessContextAccessor.Current.RequireScope();
+            return native.AccessContext.RequireScope() == scope && activity.AccessContext.RequireScope() == scope && source.Uses(context, scope);
+        }
+        catch (InvalidOperationException) { return false; }
+    }
 
     bool IRuntimeCheckpointCommitStore.CanCommitExactBookmarkResume(IBookmarkStateStore bookmarks,
         IWorkflowExecutionStateStore physicalExecutions, IActivityExecutionStateStore activities)
@@ -98,6 +113,15 @@ public sealed class EfRuntimeCheckpointCommitStore(
     {
         ArgumentNullException.ThrowIfNull(commit);
         try { return await CommitCoreAsync(commit, decision, cancellationToken); }
+        catch (Exception exception) when (commit.ExpectedModelExecution is not null &&
+            (exception is IOException or DbUpdateConcurrencyException or
+                WorkflowExecutableRootWriteLeaseLostException or WorkflowExecutableRootWriteLeaseUnavailableException ||
+             exception is OperationCanceledException && !cancellationToken.IsCancellationRequested ||
+             EfRelationalExceptionClassifier.IsProviderFailure(exception)))
+        {
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.model.native-admission-unavailable",
+                "The authorizing model decision changed or is unavailable; native worker admission remains owed.", exception);
+        }
         catch (Exception exception) when (commit.ExpectedBookmarkResume is not null &&
             (exception is IOException or DbUpdateConcurrencyException or
                 WorkflowExecutableRootWriteLeaseLostException or WorkflowExecutableRootWriteLeaseUnavailableException ||
@@ -119,6 +143,15 @@ public sealed class EfRuntimeCheckpointCommitStore(
         cancellationToken.ThrowIfCancellationRequested();
 
         commit.EnsureModelStateShape();
+        commit.EnsureModelAdmissionShape();
+        if (commit.ExpectedModelExecution is { } expectedModel)
+        {
+            accessContextAccessor.Current.EnsureScope(expectedModel.Scope);
+            accessContextAccessor.Current.EnsureTenantScope(expectedModel.TenantId);
+            EfRuntimeOperationalStoreSupport.ValidateIdentity(expectedModel.ExecutionId, nameof(expectedModel.ExecutionId));
+            if (decision.Mode != RuntimeCheckpointPersistenceMode.Immediate)
+                throw new NotSupportedException("Model-owned native worker admission requires an immediate physical checkpoint.");
+        }
         if (commit.ModelState is { } model)
         {
             accessContextAccessor.Current.EnsureScope(model.State.Scope);
@@ -161,7 +194,12 @@ public sealed class EfRuntimeCheckpointCommitStore(
             return replay;
         }
 
-        if ((commit.ExpectedBookmarkResume is not null || commit.ModelState is not null) && (context.ChangeTracker.HasChanges() || context.Database.CurrentTransaction is not null ||
+        if (commit.StateChanges.WorkflowExecution?.State.ModelWorkOrigin is not null &&
+            commit.Checkpoint.Name == Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.WorkflowStarted &&
+            commit.ExpectedModelExecution is null)
+            throw new NotSupportedException("Initial native model work requires its authorizing model checkpoint condition.");
+
+        if ((commit.ExpectedBookmarkResume is not null || commit.ModelState is not null || commit.ExpectedModelExecution is not null) && (context.ChangeTracker.HasChanges() || context.Database.CurrentTransaction is not null ||
             context.Database.GetEnlistedTransaction() is not null || System.Transactions.Transaction.Current is not null))
             throw new InvalidOperationException("Exact bookmark checkpoint admission requires a clean context and its own transaction.");
 
@@ -223,11 +261,20 @@ public sealed class EfRuntimeCheckpointCommitStore(
 
                 await StageExactBookmarkResumeAsync(commit, scope, touchedTestScopes, writeCancellationToken);
 
+                if (commit.ExpectedModelExecution is { } admission)
+                {
+                    var nativeId = EfWorkflowExecutionStateStore.CreateId(scope, commit.WorkflowExecutionId);
+                    if (await context.WorkflowExecutionStates.AnyAsync(row => row.Id == nativeId, writeCancellationToken))
+                        throw new InvalidOperationException("Model-owned native worker admission cannot replace an existing native execution.");
+                    await EfRuntimeModelCheckpointParticipantStaging.StageAdmissionAsync(context, admission, scope, writeCancellationToken);
+                }
+
                 if (commit.ModelState is { } modelChange)
                     await EfRuntimeModelCheckpointParticipantStaging.StageAsync(context, modelChange, scope, writeCancellationToken);
 
                 if (commit.StateChanges.WorkflowExecution is { } workflowChange)
                 {
+                    await EnsureNativeModelResultAsync(commit, workflowChange.State, scope, writeCancellationToken);
                     await EfRuntimeCheckpointParticipantStaging.StageWorkflowExecutionAsync(
                         context,
                         workflowChange,
@@ -385,6 +432,19 @@ public sealed class EfRuntimeCheckpointCommitStore(
         var row = await context.RuntimeCheckpointCommits.AsNoTracking()
             .SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
         return row is null ? null : ReadChecked(row, scope, commitId);
+    }
+
+    private async ValueTask EnsureNativeModelResultAsync(RuntimeCheckpointCommit commit, WorkflowExecutionState state,
+        string scope, CancellationToken cancellationToken)
+    {
+        if (state.ModelWorkOrigin is not { } origin || !state.Status.IsTerminal()) return;
+        var id = EfWorkflowExecutionStateStore.CreateId(scope, state.WorkflowExecutionId);
+        var prior = await context.WorkflowExecutionStates.SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
+        if (prior is not null && EfWorkflowExecutionStateStore.ReadChecked(prior, scope, state.WorkflowExecutionId).Status.IsTerminal()) return;
+        if (!commit.PostCommitIntents.Any(intent => intent.Kind == origin.ResultIntentKind &&
+            intent.WorkflowExecutionId == state.WorkflowExecutionId && intent.RecordedAt == commit.Checkpoint.OccurredAt &&
+            intent.Payload is { ValueKind: JsonValueKind.Object }))
+            throw new NotSupportedException("Native model work cannot become terminal without its atomic result-delivery responsibility.");
     }
 
     private static void ValidateThinSlice(RuntimeCheckpointCommit commit)
