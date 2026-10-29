@@ -150,6 +150,9 @@ with the version and digest it saw, and is committed with the input snapshot. Th
 no regular expressions) and checks it. It adds no parameter bindings.
 - A statically resolvable name that resolves to nothing visible is a publish diagnostic.
 - A computed name is allowed. Publish reports it conservatively: "may read any visible variable".
+- A computed name that resolves to no visible variable at run time reads as `undefined` in JavaScript, and a warning
+  is recorded with the read marked absent (question 3; ADR 0045 §2 as amended in
+  [#3388](https://github.com/elsa-workflows/elsa-foundation/pull/3388)).
 - A statically resolvable name that now resolves to a different declaration than in the previously published version
   is a publish warning (kept from the Consequences below).
 - A transient (non-durable) variable is readable, because only the expression's result is persisted. It enters the
@@ -205,7 +208,9 @@ and ADR 0090.
    A3 and A6 do not cover?
 2. Renames (A7): ids in the source, or rename updates every reference?
 3. A computed name that resolves to no visible variable at run time: does it read `null` and record a warning, as Elsa
-   3's `getVariable` returned, or does it fault the evaluation?
+   3's `getVariable` returned, or does it fault the evaluation? **Proposed by @FransVanEk and agreed by @j03y-nxxbz
+   (2026-10-29): neither.** It reads as `undefined`, JavaScript's own "not there", and a warning is recorded with the
+   read marked absent (A4). `null` would erase the difference between null and missing. @sfmskywalker: agreed?
 4. `activities.<name>.<output>`: addressed by name or by id in the source (ties to question 2)?
 5. @FransVanEk: your §5 answer (pinning plus a run-time fallback is fine if the reads are part of the step's input
    snapshot) and your answers on matrix rows 12 and 13: do they hold under A2 and A3?
