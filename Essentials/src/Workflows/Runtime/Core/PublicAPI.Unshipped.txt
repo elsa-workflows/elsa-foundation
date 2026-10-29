@@ -1,4 +1,5 @@
 #nullable enable
+const Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.NativeModelWorkStartRetired = "NativeModelWorkStartRetired" -> string!
 Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext!
 Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext? other) -> bool
 override Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.Equals(object? obj) -> bool

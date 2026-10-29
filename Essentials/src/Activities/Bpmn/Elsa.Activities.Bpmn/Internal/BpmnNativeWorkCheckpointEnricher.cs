@@ -12,7 +12,7 @@ namespace Elsa.Activities.Bpmn.Internal;
 internal sealed class BpmnNativeWorkCheckpointEnricher(BpmnNativeWorkBoundary boundary,
     IRuntimeCoalescingSessionAccessor? sessions = null) : IRuntimeCheckpointCommitEnricher
 {
-    internal const string RetiredCheckpoint = "BpmnNativeWorkStartRetired";
+    internal const string RetiredCheckpoint = RuntimeCheckpointNames.NativeModelWorkStartRetired;
     private const string RetirementMetadata = "bpmn.nativeWorkStartRetirement";
     // Capture every child-cancellation delivery contributed by native activity integrations, including older handlers.
     // ValidateFinalAsync refuses any later contributor that changes that inventory.
