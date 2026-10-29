@@ -412,6 +412,8 @@ def verify_upgrade(path: Path) -> dict:
         return verify_called_ack_upgrade(path)
     if manifest.get("kind") == "actual-legacy-broadcast-upgrade":
         return verify_broadcast_upgrade(path)
+    if manifest.get("kind") == "actual-legacy-controls-upgrade":
+        return verify_controls_upgrade(path)
     if manifest.get("schemaVersion") != 1 or manifest.get("kind") != "actual-legacy-partial-fork-upgrade":
         raise ValueError("Unknown upgrade manifest.")
     root = path.parent
@@ -512,6 +514,8 @@ def resume_upgrade(args) -> dict:
         return resume_called_ack_upgrade(args)
     if args.family == "broadcast":
         return resume_broadcast_upgrade(args)
+    if args.family == "controls":
+        return resume_controls_upgrade(args)
     baseline = args.manifest.resolve(strict=True)
     verify_capture(baseline)
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True, timeout=5).strip()
@@ -1013,6 +1017,161 @@ def resume_broadcast_upgrade(args) -> dict:
     return verify_broadcast_upgrade(output / "manifest.json")
 
 
+def verify_controls_inputs(path: Path) -> dict:
+    matrix = json.loads(path.read_text())
+    if matrix.get("kind") != "actual-pre-writer-baseline-matrix" or matrix.get("gateAComplete") is not True or matrix.get("frozenAuthoringFingerprint") != FROZEN:
+        raise ValueError("Control recovery requires the actual frozen pre-writer matrix.")
+    names = {"legacy-controls/" + name for name in ("runtime.sqlite.gz", "design.sqlite.gz", "called-control-prepare.json", "concurrent-prepare.json", "compensation-handler-b.json", "escalations-checked.json", "concurrent-checked.json", "compensation-checked.json")}
+    selected = {asset["path"]: asset["sha256"] for asset in matrix["assets"] if asset["path"] in names}
+    if set(selected) != names or len([asset for asset in matrix["assets"] if asset["path"] in names]) != len(names): raise ValueError("The actual coupled control inputs are incomplete or duplicated.")
+    for name, sha in selected.items():
+        if digest(evidence_file(path.parent, name)) != sha: raise ValueError("An original control input differs: " + name)
+    return selected
+
+
+def controls_stage_records(stage):
+    workflows, activities, bookmarks, sources = {}, {}, {}, {}
+    def put(target, identity, item):
+        if identity in target and target[identity] != item: raise ValueError("Two checked copies disagree about the same control record.")
+        target[identity] = item
+    def add_workflow(item): put(workflows, item["workflowExecutionId"], item)
+    def add_activities(items):
+        for item in items: put(activities, (item["execution"]["workflowExecutionId"], item["invocationId"]), item)
+    def add_bookmarks(items):
+        for item in items: put(bookmarks, (item["state"]["workflowExecutionId"], item["state"]["bookmarkId"]), item)
+    def add_sources(items):
+        for item in items: put(sources, item["outboxItemId"], item)
+    for case in stage["escalationsProof"]["calledWorkflows"]:
+        add_workflow(case["parent"]); add_workflow(case["child"]); add_activities(case["parentActivities"]); add_activities(case["childActivities"])
+        add_bookmarks(case["physicalBookmarks"]); add_sources(case["sources"])
+    for case in stage["concurrentProof"]["calledWorkflows"]:
+        add_workflow(case["parent"]); add_activities(case["parentActivities"]); add_bookmarks(case["physicalBookmarks"])
+        for child in (case["selected"], case["other"]):
+            add_workflow(child["child"]); add_activities(child["activities"]); add_sources(child["sources"]); add_sources([child["startSource"]])
+    compensation = stage["compensationProof"]["compensation"]
+    add_workflow(compensation["workflow"]); add_activities(compensation["activities"]); add_bookmarks(compensation["physicalBookmarks"]); add_sources(compensation["sources"])
+    return workflows, activities, bookmarks, sources
+
+
+def verify_controls_upgrade(path: Path) -> dict:
+    manifest = json.loads(path.read_text()); root = path.parent
+    if manifest.get("schemaVersion") != 1 or manifest.get("kind") != "actual-legacy-controls-upgrade": raise ValueError("Unknown control upgrade evidence.")
+    stages = ("recovered", "intermediate", "resumed", "settled", "finished")
+    names = {"legacy-controls/process.json", "legacy-controls/finished-design.sqlite.gz", "frozen-contract.json"} | {"legacy-controls/" + name + ".sqlite.gz" for name in stages}
+    assets = {asset["path"]: asset for asset in manifest["assets"]}
+    if set(assets) != names or len(assets) != len(manifest["assets"]): raise ValueError("The control evidence is incomplete or duplicated.")
+    for name, asset in assets.items():
+        if digest(evidence_file(root, name)) != asset["sha256"]: raise ValueError("A control upgrade asset differs.")
+    process = json.loads(evidence_file(root, "legacy-controls/process.json").read_text()); source = manifest.get("sourceRevision", "")
+    if (not re.fullmatch(r"[0-9a-f]{40}", source) or process.get("sourceRevision") != source or process.get("kind") != manifest["kind"] or process.get("formatVersion") != 1 or
+            not re.fullmatch(r"[0-9a-f]{40}", process.get("baselineSourceRevision", "")) or source == process["baselineSourceRevision"] or
+            process.get("baselineManifestSha256") != manifest.get("baselineManifestSha256") or process.get("baselineAssets") != manifest.get("baselineAssets") or
+            process.get("testOnlyRecoveryProbePresent") is not False or len(process.get("processIds", [])) != 4 or len(set(process["processIds"])) != 4 or
+            not process.get("reader", {}).get("productVersion", "").endswith("+" + source) or not any(binary["file"] == "Elsa.Workbench.dll" and binary["productVersion"].endswith("+" + source) for binary in process.get("binaries", []))):
+        raise ValueError("The actual control upgrade lacks its distinct baseline/standard host/reader/process identity.")
+    if tuple(stage["name"] for stage in process["stages"]) != stages: raise ValueError("The original compensation/sibling continuation stages are incomplete or reordered.")
+    key = lambda value: base64.b64encode(value.encode("utf-16-le", errors="surrogatepass")).decode()
+    expected_registers = None
+    for index, stage in enumerate(process["stages"]):
+        for family, member in (("escalations", "calledWorkflows"), ("concurrent", "calledWorkflows"), ("compensation", "compensation")):
+            proof = stage[family + "Proof"]
+            if proof.get("providerChecked") is not True or proof.get("readOnly") is not True or proof["snapshotSha256"] != stage["snapshot"]["databaseSha256"] or stage[family + "Api"].get("passed") is not True or stage[family + "Api"].get("sourceRevision") != source:
+                raise ValueError("A control stage lacks its actual checked provider/API snapshot binding.")
+        escalations = stage["escalationsProof"]["calledWorkflows"]; concurrent = stage["concurrentProof"]["calledWorkflows"]; compensation = stage["compensationProof"]["compensation"]
+        if len(escalations) != 6 or {(case["kind"], case["interrupting"]) for case in escalations} != {(kind, policy) for kind in ("RunningEscalation", "TerminalEscalation", "SignalAndFailure") for policy in (False, True)}:
+            raise ValueError("The six original escalation policies are incomplete.")
+        if len(concurrent) != 2 or {case["interrupting"] for case in concurrent} != {False, True}: raise ValueError("Both same-binding sibling policies are required.")
+        for case in concurrent:
+            if case.get("exactSameBindingSecondSemanticSelectionVerified") is not True: raise ValueError("The actual second semantic token selection is unproved.")
+            selected = case["selected"]["call"]; other = case["other"]["call"]
+            selected_token = selected["provenance"]["executionPathId"]; other_token = other["provenance"]["executionPathId"]
+            if selected["iterationId"] is not None or other["iterationId"] is not None or selected["invocationId"] == other["invocationId"] or selected_token == other_token:
+                raise ValueError("The actual concurrent calls lost their independent non-iteration token identities.")
+            expected_tokens = [other_token, selected_token] if index == 0 else [other_token] if index < 3 else []
+            if case["activeCallTokens"] != expected_tokens: raise ValueError("The selected control consumed or retained the wrong semantic sibling.")
+            if index in (1, 2):
+                expected_child_status = 5 if case["interrupting"] else 3
+                if case["selected"]["child"]["status"] != expected_child_status or case["other"]["child"]["status"] != 1:
+                    raise ValueError("The actual selected and held sibling outcomes differ.")
+        if compensation.get("exactHandlerAndReplayOrderVerified") is not True: raise ValueError("The actual compensation replay order is unproved.")
+        root_activity = next(activity for activity in compensation["activities"] if activity["execution"]["executableNodeId"] == "compensation-bpmn")
+        if index == 4:
+            if root_activity["privateState"] is not None or compensation["workflow"]["status"] != 3: raise ValueError("Finished compensation retained semantic structural work.")
+        else:
+            state = root_activity["privateState"]["value"]["inlineValue"]; registers = state["compensables"]
+            if len(registers) != 2 or [(item["hostElementId"], item["handlerElementId"]) for item in registers] != [("host-a", "handler-a"), ("host-b", "handler-b")]:
+                raise ValueError("The original bound-task compensation registrations changed.")
+            ids = [item["compensableId"] for item in registers]
+            if expected_registers is None: expected_registers = ids
+            if ids != expected_registers: raise ValueError("The original compensation registration identities changed during continuation.")
+            expected_pending = [ids[1], ids[0]] if index == 0 else [ids[0]] if index < 3 else []
+            runs = state["compensationRuns"]
+            if (len(runs) != (1 if index < 3 else 0) or runs and runs[0]["pendingCompensableIds"] != expected_pending):
+                raise ValueError("The real compensation handlers lost their reverse registration order.")
+        workflows, activities, bookmarks, sources = controls_stage_records(stage)
+        if len(workflows) != 19 or set(stage["views"]) != set(workflows): raise ValueError("The original nine control scenarios lack their nineteen actual workflow observations.")
+        with checked_upgrade_snapshot(root, "legacy-controls", stage["snapshot"]) as connection:
+            verify_retained_native_material(connection, process)
+            for identity, workflow in workflows.items():
+                view = stage["views"][identity]["instance"]
+                if any(view[field] != workflow["pinnedExecutable"][field] for field in ("artifactId", "artifactHash", "artifactVersion", "definitionId", "definitionVersionId")):
+                    raise ValueError("An actual control API view changed its complete executable pin.")
+                rows = connection.execute("SELECT Status, ContentJson FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId = ?", (key(identity),)).fetchall()
+                if len(rows) != 1 or rows[0][0] != workflow["status"] or json.loads(rows[0][1])["pinnedExecutable"] != {field: key(value) for field, value in workflow["pinnedExecutable"].items()}:
+                    raise ValueError("A physical control workflow differs from its checked outcome/full pin.")
+                physical = dict(connection.execute("SELECT BookmarkId, Revision FROM elsa_runtime_bookmark_state WHERE WorkflowExecutionId = ?", (identity,)))
+                expected = {bookmark: item["generation"] for (owner, bookmark), item in bookmarks.items() if owner == identity}
+                if physical != expected: raise ValueError("A physical control bookmark identity/generation differs.")
+            for (workflow_id, invocation), activity in activities.items():
+                rows = connection.execute("SELECT Status, ContentJson FROM elsa_runtime_activity_execution_state WHERE WorkflowExecutionId = ? AND ActivityExecutionId = ?", (key(workflow_id), key(invocation))).fetchall()
+                expected_status = ("Scheduled", "Running", "Waiting", "Suspended", "Completed", "Faulted", "Cancelled", "Recovered", "Superseded")[activity["status"]]
+                if len(rows) != 1 or rows[0][0] != expected_status: raise ValueError("A physical control activity lost its truthful checked status.")
+                stored = json.loads(rows[0][1]); private, original_private = stored.get("privateState"), activity["privateState"]
+                if ((private is None) != (original_private is None) or private is not None and (private["stateVersion"] != original_private["stateVersion"] or private["value"]["inlineValue"] != original_private["value"]["inlineValue"])):
+                    raise ValueError("Physical compensation/sibling semantic state differs from checked recovery.")
+                inbox = activity.get("childControlInbox")
+                if inbox is not None:
+                    physical_inbox = stored.get("childControlInbox")
+                    if (physical_inbox is None or any(physical_inbox[field] != inbox[field] for field in ("version", "nextOrdinal", "isTerminalConsumed")) or
+                            physical_inbox["target"]["parentExecutable"] != {field: key(value) for field, value in inbox["target"]["parentExecutable"].items()}):
+                        raise ValueError("A physical called-control inbox lacks its exact committed acceptance.")
+            for identity, item in sources.items():
+                rows = connection.execute("SELECT Status, ContentJson FROM elsa_runtime_post_commit_outbox WHERE OutboxItemId = ?", (key(identity),)).fetchall()
+                if len(rows) != 1: raise ValueError("An original actual control source disappeared.")
+                stored = json.loads(rows[0][1])
+                if (rows[0][0] != 2 or item["status"] != 2 or stored["status"] != "Delivered" or stored["intent"]["payload"] != item["intent"]["payload"] or
+                        stored["intent"]["intentId"] != key(item["intent"]["intentId"]) or stored["intent"]["kind"] != key(item["intent"]["kind"])):
+                    raise ValueError("A physical control source lacks its exact immutable delivered intent.")
+    middle, resumed = process["stages"][1:3]
+    if middle["views"] != resumed["views"] or middle["compensationProof"]["compensation"] != resumed["compensationProof"]["compensation"] or middle["concurrentProof"]["calledWorkflows"] != resumed["concurrentProof"]["calledWorkflows"]:
+        raise ValueError("A new process changed the held sibling/handler or repeated completed control work.")
+    with checked_upgrade_snapshot(root, "legacy-controls", process["designSnapshot"]): pass
+    frozen = json.loads(evidence_file(root, "frozen-contract.json").read_text())
+    if frozen.get("sourceRevision") != source or frozen.get("oracleSha256") != FROZEN or frozen.get("matchesFrozenFingerprint") is not True or frozen.get("immutableSnapshot") is not True or frozen.get("closedSnapshotSha256") != process["designSnapshot"]["databaseSha256"]:
+        raise ValueError("The coupled upgraded control Design store has no frozen authoring proof.")
+    return {"actualEscalationCasesRecovered": 6, "actualSameBindingSiblingPoliciesRecovered": 2, "actualCompensationReplayRecovered": 1, "managedWorkflowExecutions": 19,
+        "wholeStoresVerified": 6, "frozenAuthoringPreserved": True, "sourceRevision": source, "allLegacyFamiliesRecovered": False, "studioAcceptanceProved": False, "directModelSettlementProved": False}
+
+
+def resume_controls_upgrade(args) -> dict:
+    baseline = args.manifest.resolve(strict=True); inputs = verify_controls_inputs(baseline)
+    source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True, timeout=5).strip()
+    if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True, timeout=5).strip(): raise ValueError("Commit the qualification source before recording exact-source upgrade evidence.")
+    output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False); env = os.environ.copy()
+    env.update(ELSA_BPMN_LEGACY_MATRIX_DIRECTORY=str(baseline.parent), ELSA_BPMN_HOST_EVIDENCE_DIRECTORY=str(output), ELSA_BPMN_HOST_SOURCE_REVISION=source)
+    command = ["dotnet", "test", str(REPO / "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"), "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyControlsUpgradeTests", "--logger", "trx;LogFileName=legacy-controls-upgrade.trx"]
+    if args.artifacts_path is not None: command += ["--artifacts-path", str(args.artifacts_path.resolve())]
+    with (output / "run.log").open("w") as log: subprocess.run(command, cwd=REPO, env=env, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=3600)
+    if inputs != verify_controls_inputs(baseline): raise ValueError("Control upgrade changed an original input.")
+    with tempfile.TemporaryDirectory(prefix="elsa-controls-upgraded-design-") as temporary:
+        database = Path(temporary) / "design.sqlite"; database.write_bytes(gzip.decompress((output / "legacy-controls/finished-design.sqlite.gz").read_bytes()))
+        subprocess.run([sys.executable, str(REPO / "e2e-tests/bpmn/verify_published_contracts.py"), "--database", str(database), "--source-revision", source, "--closed-snapshot", "--output", str(output / "frozen-contract.json")], check=True, timeout=60)
+    names = ["legacy-controls/process.json", "legacy-controls/finished-design.sqlite.gz", "frozen-contract.json"] + ["legacy-controls/" + name + ".sqlite.gz" for name in ("recovered", "intermediate", "resumed", "settled", "finished")]
+    write_json(output / "manifest.json", {"schemaVersion": 1, "kind": "actual-legacy-controls-upgrade", "sourceRevision": source, "baselineManifestSha256": digest(baseline), "baselineAssets": inputs,
+        "assets": [{"path": name, "sha256": digest(output / name)} for name in names]})
+    return verify_controls_upgrade(output / "manifest.json")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     phases = parser.add_subparsers(dest="phase", required=True)
@@ -1026,7 +1185,7 @@ def main() -> int:
     upgrade.add_argument("--manifest", type=Path, required=True)
     upgrade.add_argument("--output", type=Path, required=True)
     upgrade.add_argument("--artifacts-path", type=Path)
-    upgrade.add_argument("--family", choices=("partial-forks", "native-parents", "called-ack", "broadcast"), default="partial-forks")
+    upgrade.add_argument("--family", choices=("partial-forks", "native-parents", "called-ack", "broadcast", "controls"), default="partial-forks")
     verified_upgrade = phases.add_parser("verify-upgrade")
     verified_upgrade.add_argument("--manifest", type=Path, required=True)
     args = parser.parse_args()

@@ -52,7 +52,17 @@ python3 tools/bpmn/qualify-hosting.py verify-upgrade \
   --manifest /tmp/elsa-bpmn-broadcast-upgrade/manifest.json
 ```
 
-Active multi-instance/compensation/control recovery and actual Studio behavior remain separate qualification families. These legacy tests do not establish new direct-model settlement/broadcast dispatch or the real native/ETL bridge.
+The controls family restores its coupled separate Runtime and Design captures. It checks all six escalation policies, both policies for two concurrent non-iteration tokens at the same call binding, and ordinary-task compensation paused in handler B. Existing checked readers verify the original committed inboxes, full pins, exact source transports and native fault/cancellation projections. Normal correlated Events finish the escalation paths, handle the second semantic call token before its sibling and replay compensation B then A. A process restart between sibling/handler continuations must preserve the completed work and remaining work exactly. Final recovery preserves all nineteen observed workflow views. The store's eight other active partial-fork runs have their own earlier qualification.
+
+```sh
+python3 tools/bpmn/qualify-hosting.py resume-upgrade --family controls \
+  --manifest specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json \
+  --output /tmp/elsa-bpmn-controls-upgrade
+python3 tools/bpmn/qualify-hosting.py verify-upgrade \
+  --manifest /tmp/elsa-bpmn-controls-upgrade/manifest.json
+```
+
+Active multi-instance recovery and actual Studio behavior remain separate qualification families. These legacy tests do not establish new direct-model settlement/broadcast dispatch or the real native/ETL bridge.
 
 ```sh
 dotnet test Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj -c Release

@@ -135,27 +135,6 @@ public sealed class LegacyCalledAcknowledgmentUpgradeTests
 
     private static string ReaderAssembly() => typeof(LegacyCalledAcknowledgmentUpgradeTests).Assembly.GetCustomAttributes<System.Reflection.AssemblyMetadataAttribute>()
         .Single(attribute => attribute.Key == "BpmnHostingReaderAssembly").Value!;
-    private static void SameView(JsonNode expected, JsonNode actual)
-    {
-        var differences = new List<string>();
-        Compare(expected, actual, "$", differences);
-        Assert.True(differences.Count == 0, string.Join(Environment.NewLine, differences.Take(20)));
-        static void Compare(JsonNode? before, JsonNode? after, string path, List<string> differences)
-        {
-            if (JsonNode.DeepEquals(before, after)) return;
-            // Rehydrated native timestamps may render UTC instead of the original offset; preserve the exact instant.
-            var field = path[(path.LastIndexOf('.') + 1)..];
-            if (field is "createdAt" or "startedAt" or "updatedAt" or "scheduledAt" or "lastCommittedAt" or "completedAt" &&
-                before is JsonValue oldValue && after is JsonValue newValue && oldValue.TryGetValue<string>(out var oldText) &&
-                newValue.TryGetValue<string>(out var newText) && DateTimeOffset.TryParse(oldText, out var oldTime) &&
-                DateTimeOffset.TryParse(newText, out var newTime) && oldTime.UtcTicks == newTime.UtcTicks) return;
-            if (before is JsonObject left && after is JsonObject right)
-                foreach (var key in left.Select(pair => pair.Key).Union(right.Select(pair => pair.Key))) Compare(left[key], right[key], path + "." + key, differences);
-            else if (before is JsonArray first && after is JsonArray second && first.Count == second.Count)
-                for (var i = 0; i < first.Count; i++) Compare(first[i], second[i], path + "[" + i + "]", differences);
-            else differences.Add(path + ": " + before?.ToJsonString() + " -> " + after?.ToJsonString());
-        }
-    }
     private static JsonNode Receipt(JsonNode original, JsonNode parent, JsonNode child, string stage, string phase)
     {
         var item = original.DeepClone(); item["parent"] = parent.DeepClone(); item["child"] = child.DeepClone();
