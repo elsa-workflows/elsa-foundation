@@ -73,7 +73,7 @@ export interface WorkflowTestRunWaitDraftState {
 
 export interface WorkflowTestDriveSetupState {
   snapshot: { draft: WorkflowDraft; signature: string; snapshotId: string };
-  selectedOptionId: string;
+  selectedOptionId: string | null; // null until options load; an empty string selects Direct start.
   selectedModeId: string;
   inputDrafts: WorkflowRunInputDrafts;
   stimulusDraft: string;
