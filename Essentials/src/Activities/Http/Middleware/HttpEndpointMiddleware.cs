@@ -353,38 +353,52 @@ public sealed class HttpEndpointMiddleware(
             .Select(resume => resume.WorkflowExecutionId)
             .ToArray();
 
-        // Canonical sync delivery happens after the inline drain: WriteHttpResponse returned one typed instruction,
-        // the activity checkpoint committed it, and this request-owned adapter now delivers that durable result.
-        // The HttpContext never enters the activity activation or its isolated per-attempt DI scope.
-        if (sync && context.RequestServices?.GetService<HttpResponseInstructionDelivery>() is { } delivery)
+        var responseHandlingFinished = false;
+        try
         {
-            var dispatchedIds = startedIds.Concat(resumedIds).ToArray();
-            if (await delivery.TryDeliverAsync(context.Response, dispatchedIds, context.RequestAborted))
+            // Canonical sync delivery happens after the inline drain: WriteHttpResponse returned one typed instruction,
+            // the activity checkpoint committed it, and this request-owned adapter now delivers that durable result.
+            // The HttpContext never enters the activity activation or its isolated per-attempt DI scope.
+            if (sync && context.RequestServices?.GetService<HttpResponseInstructionDelivery>() is { } delivery)
             {
-                responseSink?.MarkResponseWritten();
-                return;
+                var dispatchedIds = startedIds.Concat(resumedIds).ToArray();
+                if (await delivery.TryDeliverAsync(context.Response, dispatchedIds, context.RequestAborted, requestModel.ResponseExchangeId))
+                {
+                    responseHandlingFinished = true;
+                    responseSink?.MarkResponseWritten();
+                    return;
+                }
             }
+
+            var response = sync
+                ? new
+                {
+                    mode = "sync",
+                    reason = "workflow-response-not-produced",
+                    message = "The workflow may have suspended, reached no response activity, or continued on another worker. Inspect the run."
+                }
+                : new
+                {
+                    mode = "async",
+                    reason = "background-accepted",
+                    message = "The endpoint accepts work in the background and returns 202 before the workflow responds."
+                };
+
+            context.Response.StatusCode = StatusCodes.Status202Accepted;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync(
+                JsonSerializer.Serialize(new { started = startedIds, resumed = resumedIds, response }),
+                context.RequestAborted);
+            responseHandlingFinished = true;
+        }
+        finally
+        {
+            if (context.RequestServices?.GetService<HttpResponseDeliveryEvidence>() is { } evidence)
+                foreach (var executionId in startedIds.Concat(resumedIds).Distinct(StringComparer.Ordinal))
+                    await evidence.RecordClosedAsync(executionId, requestModel.ResponseExchangeId,
+                        responseHandlingFinished ? sync ? "sync" : "async" : "unknown", CancellationToken.None);
         }
 
-        var response = sync
-            ? new
-            {
-                mode = "sync",
-                reason = "workflow-response-not-produced",
-                message = "The workflow may have suspended, reached no response activity, or continued on another worker. Inspect the run."
-            }
-            : new
-            {
-                mode = "async",
-                reason = "background-accepted",
-                message = "The endpoint accepts work in the background and returns 202 before the workflow responds."
-            };
-
-        context.Response.StatusCode = StatusCodes.Status202Accepted;
-        context.Response.ContentType = "application/json";
-        await context.Response.WriteAsync(
-            JsonSerializer.Serialize(new { started = startedIds, resumed = resumedIds, response }),
-            context.RequestAborted);
     }
 
     /// <summary>

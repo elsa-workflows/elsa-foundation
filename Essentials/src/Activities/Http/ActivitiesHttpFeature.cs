@@ -105,6 +105,8 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
         // The sink remains the scoped marker for a custom response that already started during dispatch.
         services.AddScoped<SyncHttpResponseSink>();
         services.AddScoped<HttpResponseInstructionDelivery>();
+        services.AddScoped<HttpResponseDeliveryEvidence>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowSchedulerDrainObserver, HttpResponseDeliveryDrainObserver>());
     }
 
     /// <summary>

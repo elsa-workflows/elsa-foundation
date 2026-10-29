@@ -26,6 +26,29 @@ public sealed partial class EfActivityExecutionInspectionStore(
 {
     private const string ContinuationPurpose = "elsa-runtime-activity-execution-inspection-summary-page-v1";
 
+    public async ValueTask<bool> TryAppendObservationAsync(string workflowExecutionId, string activityExecutionId,
+        ActivityExecutionObservation observation, CancellationToken cancellationToken = default)
+    {
+        ValidateIdentity(workflowExecutionId, activityExecutionId);
+        var scope = ActivityExecutionEfSupport.RequireScope(accessContextAccessor);
+        var id = ActivityExecutionEfSupport.CreateId("inspection", scope, workflowExecutionId, activityExecutionId);
+        // Bounded CAS retry affects only the observation append, never activity execution or HTTP delivery.
+        for (var attempt = 0; attempt < 4; attempt++)
+        {
+            var row = await context.ActivityExecutionInspections.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
+            if (row is null) return false;
+            var previous = ReadChecked(row, scope, workflowExecutionId, activityExecutionId);
+            var merged = ActivityExecutionObservation.Merge(previous.Observations, [observation]);
+            if (merged.Count == previous.Observations.Count) return true;
+            var content = RuntimeArtifactJson.Serialize(previous with { Observations = merged });
+            var updated = await context.ActivityExecutionInspections.Where(candidate => candidate.Id == id && candidate.Revision == row.Revision)
+                .ExecuteUpdateAsync(update => update.SetProperty(candidate => candidate.ContentJson, content)
+                    .SetProperty(candidate => candidate.Revision, checked(row.Revision + 1)), cancellationToken);
+            if (updated == 1) return true;
+        }
+        throw new DbUpdateConcurrencyException("The activity inspection changed during observation capture.");
+    }
+
     public async ValueTask SaveAsync(ActivityExecutionInspectionProjection projection, CancellationToken cancellationToken = default)
     {
         ActivityExecutionEfSupport.Validate(projection);
@@ -160,6 +183,7 @@ public sealed partial class EfActivityExecutionInspectionStore(
         if (previous is not null && (!StringComparer.Ordinal.Equals(previous.WorkflowExecutionId, projection.WorkflowExecutionId) ||
                                      !StringComparer.Ordinal.Equals(previous.ActivityExecutionId, projection.ActivityExecutionId)))
             throw new InvalidDataException("The persisted activity execution inspection identity changed during replacement.");
+        projection = projection with { Observations = ActivityExecutionObservation.Merge(previous?.Observations ?? [], projection.Observations) };
         var executionScope = ActivityExecutionEfSupport.EffectiveExecutionScope(projection);
         if (executionScope is not null)
             ActivityExecutionEfSupport.ValidateIdentityLength(executionScope, nameof(projection.ExecutionScopeId));

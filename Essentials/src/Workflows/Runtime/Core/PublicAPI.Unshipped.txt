@@ -9235,3 +9235,33 @@ Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntentHandlerContribution.Ru
 Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitIntentHandlerContribution.StimulusDeliveryProtocolVersion.get -> int?
 static Elsa.Workflows.Runtime.Core.Extensions.RuntimePostCommitIntentHandlerServiceCollectionExtensions.AddRuntimePostCommitIntentHandler<THandler>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! intentKind, Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitRetryPolicy! retryPolicy, bool requiresDurableSource, int? stimulusDeliveryProtocolVersion) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitEnricher.ValidateFinalAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit! commit, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionInspectionWriter.TryAppendObservationAsync(string! workflowExecutionId, string! activityExecutionId, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation! observation, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionInspectionProjection.Observations.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation!>!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionInspectionProjection.Observations.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionInspectionSummaryProjection.Observations.get -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation!>!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionInspectionSummaryProjection.Observations.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.ActivityExecutionObservation(string! ObservationId, string! Kind, string! Code, Elsa.Workflows.Runtime.Core.Models.IncidentSeverity Severity, string! Message, System.DateTimeOffset OccurredAt, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Metadata) -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.Code.get -> string!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.Code.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.Deconstruct(out string! ObservationId, out string! Kind, out string! Code, out Elsa.Workflows.Runtime.Core.Models.IncidentSeverity Severity, out string! Message, out System.DateTimeOffset OccurredAt, out System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Metadata) -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.Equals(Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation? other) -> bool
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.Kind.get -> string!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.Kind.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.Message.get -> string!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.Message.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.Metadata.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.Metadata.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.ObservationId.get -> string!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.ObservationId.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.OccurredAt.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.OccurredAt.init -> void
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.Severity.get -> Elsa.Workflows.Runtime.Core.Models.IncidentSeverity
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.Severity.init -> void
+override Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.Equals(object? obj) -> bool
+override Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.GetHashCode() -> int
+override Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.ToString() -> string!
+static Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.Merge(System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation!>! retained, System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation!>! incoming) -> System.Collections.Generic.IReadOnlyList<Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation!>!
+static Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.operator !=(Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation? left, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation? right) -> bool
+static Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation.operator ==(Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation? left, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation? right) -> bool

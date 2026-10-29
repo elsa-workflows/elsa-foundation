@@ -17,6 +17,59 @@ public sealed class EfRuntimeCheckpointInspectionParticipantTests
     private static readonly DateTimeOffset CapturedAt = new(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
 
     [Fact]
+    public async Task A_stale_projection_write_cannot_overwrite_a_concurrently_appended_observation()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var checkpoint = database.Open("tenant-a");
+        var projection = Projection("workflow-a", "activity-a", 1, "root-a");
+        await checkpoint.Inspection.SaveAsync(projection);
+        var staleRow = await checkpoint.Context.ActivityExecutionInspections.SingleAsync();
+        staleRow.Revision++;
+        checkpoint.Context.Entry(staleRow).Property(row => row.ContentJson).IsModified = true;
+        var fact = new ActivityExecutionObservation("concurrent-fact", "test", "test.warning", IncidentSeverity.Warning,
+            "A retained observation.", CapturedAt, new Dictionary<string, string>());
+        await using (var transport = database.Open("tenant-a"))
+            Assert.True(await transport.Inspection.TryAppendObservationAsync("workflow-a", "activity-a", fact));
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => checkpoint.Context.SaveChangesAsync());
+        checkpoint.Context.ChangeTracker.Clear();
+        // Retrying only projection staging reads and preserves the appended fact.
+        await using var transaction = await checkpoint.Context.Database.BeginTransactionAsync();
+        await StageAsync(checkpoint.Context, Change(RuntimeStateChangeOperation.Upsert, projection), "tenant-a", "workflow-a");
+        await checkpoint.Context.SaveChangesAsync();
+        await transaction.CommitAsync();
+        Assert.Equal("concurrent-fact", Assert.Single((await checkpoint.Inspection.FindAsync("workflow-a", "activity-a"))!.Observations).ObservationId);
+    }
+
+    [Fact]
+    public async Task Observations_survive_reload_stale_projection_writes_and_tenant_boundaries()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var projection = Projection("workflow-a", "activity-a", 1, "root-a");
+        var fact = new ActivityExecutionObservation("fact-1", "http.response.delivery", "http.response.undelivered",
+            IncidentSeverity.Warning, "The original request ended.", CapturedAt, new Dictionary<string, string>());
+        await using (var fixture = database.Open("tenant-a"))
+        {
+            await fixture.Inspection.SaveAsync(projection);
+            Assert.True(await fixture.Inspection.TryAppendObservationAsync("workflow-a", "activity-a", fact));
+            Assert.True(await fixture.Inspection.TryAppendObservationAsync("workflow-a", "activity-a", fact));
+            await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                await fixture.Inspection.TryAppendObservationAsync("workflow-a", "activity-a", fact with { Message = "conflict" }));
+            // A checkpoint may have built this snapshot before the transport appended its observation.
+            await fixture.Inspection.SaveAsync(projection);
+        }
+        await using var reopened = database.Open("tenant-a");
+        var restored = await reopened.Inspection.FindAsync("workflow-a", "activity-a");
+        Assert.Equal("fact-1", Assert.Single(restored!.Observations).ObservationId);
+        Assert.Equal(ActivityExecutionStatus.Completed, restored.Status);
+        Assert.Empty(restored.Incidents);
+        var page = await reopened.Inspection.ListSummariesPageAsync(new("workflow-a"));
+        Assert.Single(Assert.Single(page.Items).Observations);
+        Assert.False(await reopened.Inspection.TryAppendObservationAsync("workflow-a", "missing", fact));
+        await using var otherTenant = database.Open("tenant-b");
+        Assert.False(await otherTenant.Inspection.TryAppendObservationAsync("workflow-a", "activity-a", fact));
+    }
+
+    [Fact]
     public async Task Upsert_stages_inspection_hierarchy_and_sibling_in_the_callers_transaction()
     {
         await using var database = await TestDatabase.CreateAsync();

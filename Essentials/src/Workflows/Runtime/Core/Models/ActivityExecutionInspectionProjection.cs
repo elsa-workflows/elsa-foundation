@@ -30,6 +30,9 @@ public sealed record ActivityExecutionInspectionProjection(
     string? SupersededByActivityExecutionId = null,
     DateTimeOffset? SupersededAt = null)
 {
+    /// <summary>Retained observational facts, independent of runtime continuation and incident strategy.</summary>
+    public IReadOnlyList<ActivityExecutionObservation> Observations { get; init; } = [];
+
     /// <summary>The hierarchy scope containing this projection when its own execution scope is nested.</summary>
     public string? EnclosingExecutionScopeId { get; init; }
 
@@ -239,6 +242,8 @@ public sealed record ActivityExecutionInspectionSummaryProjection(
     string? ExecutionScopeId = null,
     ActivityExecutionAttemptLineage? Attempt = null)
 {
+    public IReadOnlyList<ActivityExecutionObservation> Observations { get; init; } = [];
+
     public static ActivityExecutionInspectionSummaryProjection FromProjection(ActivityExecutionInspectionProjection projection)
     {
         ArgumentNullException.ThrowIfNull(projection);
@@ -266,6 +271,6 @@ public sealed record ActivityExecutionInspectionSummaryProjection(
             projection.ValueSnapshots.Count,
             projection.Metadata,
             projection.ExecutionScopeId,
-            projection.Attempt);
+            projection.Attempt) { Observations = projection.Observations };
     }
 }

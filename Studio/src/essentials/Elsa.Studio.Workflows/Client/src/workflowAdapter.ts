@@ -94,6 +94,7 @@ export interface WorkflowRuntimeNodeOverlay {
   faultCount: number;
   incidentCount: number;
   historicalIncidentCount?: number;
+  warningMessages?: string[];
   primaryIncidentId?: string;
   hasBlockingIncident: boolean;
   containedIncidentCount?: number;

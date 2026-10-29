@@ -73,6 +73,19 @@ public sealed class InMemoryActivityExecutionInspectionStore : IActivityExecutio
         }
     }
 
+    public ValueTask<bool> TryAppendObservationAsync(string workflowExecutionId, string activityExecutionId,
+        ActivityExecutionObservation observation, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_syncRoot)
+        {
+            var key = new ActivityExecutionInspectionProjectionKey(workflowExecutionId, activityExecutionId);
+            if (!_projections.TryGetValue(key, out var projection)) return ValueTask.FromResult(false);
+            _projections[key] = projection with { Observations = ActivityExecutionObservation.Merge(projection.Observations, [observation]) };
+            return ValueTask.FromResult(true);
+        }
+    }
+
     public ValueTask SaveAsync(ActivityExecutionInspectionProjection projection, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(projection);
@@ -81,7 +94,8 @@ public sealed class InMemoryActivityExecutionInspectionStore : IActivityExecutio
         lock (_syncRoot)
         {
             var key = new ActivityExecutionInspectionProjectionKey(projection.WorkflowExecutionId, projection.ActivityExecutionId);
-            _projections[key] = projection;
+            _projections.TryGetValue(key, out var previous);
+            _projections[key] = projection with { Observations = ActivityExecutionObservation.Merge(previous?.Observations ?? [], projection.Observations) };
             return ValueTask.CompletedTask;
         }
     }

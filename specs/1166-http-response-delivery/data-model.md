@@ -1,0 +1,3 @@
+# Data model
+ActivityExecutionObservation: stable ObservationId, Kind, Code, Severity, Message, OccurredAt, bounded non-secret Metadata. Immutable facts append by ID; a repeat identical fact is a no-op, a conflicting ID is rejected. Inspection projections retain observations under the existing activity execution identity, tenant scope, authorization and retention.
+HTTP exchange observations carry only opaque exchange IDs and outcome facts, never body/header/query values. Exact response invocation write facts override uncertainty; closed-origin warnings require a unique attributable endpoint. Completion and incident state are unchanged.

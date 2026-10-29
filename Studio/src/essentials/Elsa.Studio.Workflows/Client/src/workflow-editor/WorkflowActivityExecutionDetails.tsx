@@ -1,3 +1,4 @@
+import { ActivityObservationsPanel } from "./ActivityObservationsPanel";
 import { Component, lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { Activity as ActivityIcon, ChevronRight, Undo2 } from "lucide-react";
 import type { StudioActivityInputDescriptor, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext } from "@elsa-workflows/studio-sdk";
@@ -249,6 +250,7 @@ export function WorkflowActivityExecutionDetails({
 
         {copyStatus ? <p className="wf-copy-status" role="status" aria-live="polite">{copyStatus}</p> : null}
       </section>
+      <ActivityObservationsPanel activityType={activity.activityType} observations={currentInspectionState.inspection?.observations ?? activity.observations} />
       {executionNavigation}
       {childExecutions}
       {currentInspectionState.status === "ready" && (!compact || recordedIncidents === null || recordedIncidents.length > 0) ? <section className="wf-instance-section" aria-label="Activity incidents">

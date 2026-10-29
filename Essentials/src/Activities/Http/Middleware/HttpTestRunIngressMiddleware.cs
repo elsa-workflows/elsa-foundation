@@ -244,19 +244,35 @@ internal sealed class HttpTestRunIngressMiddleware(
             return;
         }
 
-        if (authoredOptions.ResponseMode == ResponseMode.Sync
-            && context.RequestServices.GetService<HttpResponseInstructionDelivery>() is { } delivery
-            && await delivery.TryDeliverAsync(context.Response, [dispatchResult.Dispatch.WorkflowExecutionId], cancellationToken))
-            return;
-
-        context.Response.StatusCode = StatusCodes.Status202Accepted;
-        context.Response.ContentType = "application/json";
-        await context.Response.WriteAsync(JsonSerializer.Serialize(new
+        var responseWasAlreadyStarted = context.Response.HasStarted;
+        var responseHandlingFinished = false;
+        try
         {
-            testRunId,
-            workflowExecutionId = dispatchResult.Dispatch.WorkflowExecutionId,
-            alreadyDispatched = dispatchResult.AlreadyDispatched
-        }), context.RequestAborted);
+            if (authoredOptions.ResponseMode == ResponseMode.Sync
+                && context.RequestServices.GetService<HttpResponseInstructionDelivery>() is { } delivery
+                && await delivery.TryDeliverAsync(context.Response, [dispatchResult.Dispatch.WorkflowExecutionId], cancellationToken, requestModel.ResponseExchangeId))
+            {
+                responseHandlingFinished = true;
+                return;
+            }
+
+            context.Response.StatusCode = StatusCodes.Status202Accepted;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync(JsonSerializer.Serialize(new
+            {
+                testRunId,
+                workflowExecutionId = dispatchResult.Dispatch.WorkflowExecutionId,
+                alreadyDispatched = dispatchResult.AlreadyDispatched
+            }), context.RequestAborted);
+            responseHandlingFinished = true;
+        }
+        finally
+        {
+            if (context.RequestServices.GetService<HttpResponseDeliveryEvidence>() is { } evidence)
+                await evidence.RecordClosedAsync(dispatchResult.Dispatch.WorkflowExecutionId, requestModel.ResponseExchangeId,
+                    responseHandlingFinished && !responseWasAlreadyStarted ? authoredOptions.ResponseMode == ResponseMode.Sync ? "sync" : "async" : "unknown", CancellationToken.None);
+        }
+
     }
 
     private static async ValueTask<bool> EnsureAuthenticatedAsync(HttpContext context)

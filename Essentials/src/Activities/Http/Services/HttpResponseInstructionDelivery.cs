@@ -17,7 +17,8 @@ namespace Elsa.Activities.Http.Services;
 /// </summary>
 public sealed class HttpResponseInstructionDelivery(
     IActivityExecutionStateStore activityExecutionStateStore,
-    IEnumerable<IHttpContentFactory> contentFactories)
+    IEnumerable<IHttpContentFactory> contentFactories,
+    HttpResponseDeliveryEvidence? evidence = null)
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private static readonly JsonWriterOptions BodyWriterOptions = new()
@@ -33,7 +34,8 @@ public sealed class HttpResponseInstructionDelivery(
     public async ValueTask<bool> TryDeliverAsync(
         HttpResponse response,
         IReadOnlyCollection<string> workflowExecutionIds,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? exchangeId = null)
     {
         ArgumentNullException.ThrowIfNull(response);
         ArgumentNullException.ThrowIfNull(workflowExecutionIds);
@@ -54,6 +56,7 @@ public sealed class HttpResponseInstructionDelivery(
                     ?? throw new InvalidOperationException(
                         $"Committed HTTP response instruction '{state.InvocationId}' resolved to null.");
                 await WriteAsync(response, instruction, cancellationToken);
+                if (evidence is not null) await evidence.RecordWrittenAsync(state, exchangeId, CancellationToken.None);
                 return true;
             }
         }
