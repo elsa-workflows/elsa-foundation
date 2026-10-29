@@ -164,8 +164,9 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
         var model = await models!.FindAsync(origin.ExecutionId, cancellationToken)
             ?? throw Unavailable("The cancelling model execution is unavailable.");
         access.Current.EnsureTenantScope(model.TenantId);
-        var retained = BpmnDirectExecutionDriver.Read(model).Cancellations?.SingleOrDefault(item => origin.IsEquivalentTo(item.Origin));
-        if (!origin.MatchesModel(model) || model.TerminalResult?.GetProperty("status").GetString() != "Cancelled" ||
+        var document = BpmnDirectExecutionDriver.Read(model);
+        var retained = document.Cancellations?.SingleOrDefault(item => origin.IsEquivalentTo(item.Origin));
+        if (!origin.MatchesModel(model) || document.FormatVersion is not (11 or 12) && model.TerminalResult?.GetProperty("status").GetString() != "Cancelled" ||
             source.Scope != origin.Scope || source.Intent.WorkflowExecutionId != origin.ExecutionId ||
             cancellation.SourceOutboxItemId != source.SourceOutboxItemId || cancellation.Settled ||
             retained is null || retained.SourceOutboxItemId != cancellation.SourceOutboxItemId ||
@@ -189,11 +190,12 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
             ?? throw Unavailable("The model execution authorizing this native start is unavailable.");
         access.Current.EnsureTenantScope(model.TenantId);
         if (!origin.MatchesModel(model)) throw new BpmnModelValidationException("The native start's model pin changed.");
-        var cancellation = BpmnDirectExecutionDriver.Read(model).Cancellations?.SingleOrDefault(item => origin.IsEquivalentTo(item.Origin));
+        var document = BpmnDirectExecutionDriver.Read(model);
+        var cancellation = document.Cancellations?.SingleOrDefault(item => origin.IsEquivalentTo(item.Origin));
         if (cancellation is null) return null;
         var source = await PhysicalLookup.FindDurableAsync(cancellation.SourceOutboxItemId, cancellationToken)
             ?? throw Unavailable("The model's committed cancellation source is unavailable.");
-        if (model.TerminalResult?.GetProperty("status").GetString() != "Cancelled" || source.StimulusDeliverySourceScope != origin.Scope ||
+        if (document.FormatVersion is not (11 or 12) && model.TerminalResult?.GetProperty("status").GetString() != "Cancelled" || source.StimulusDeliverySourceScope != origin.Scope ||
             source.Intent.Kind != CancelKind || source.Intent.WorkflowExecutionId != model.ExecutionId ||
             source.Intent.IntentId != CancellationIntentId(origin) || source.Intent.Payload is not { } payload ||
             !JsonElement.DeepEquals(payload, JsonSerializer.SerializeToElement(cancellation with { Settled = false, NotAdmitted = false }, Web)))

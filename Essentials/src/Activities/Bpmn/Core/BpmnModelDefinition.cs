@@ -10,28 +10,41 @@ public sealed class BpmnModelDefinition
     public BpmnModelDefinition(int formatVersion, JsonElement process, IReadOnlyList<string> humanBindings)
         : this(formatVersion, process, humanBindings, null) { }
 
-    [JsonConstructor]
     public BpmnModelDefinition(int formatVersion, JsonElement process, IReadOnlyList<string> humanBindings,
         IReadOnlyList<BpmnNativeServiceBinding>? serviceBindings)
+        : this(formatVersion, process, humanBindings, serviceBindings, null) { }
+
+    [JsonConstructor]
+    public BpmnModelDefinition(int formatVersion, JsonElement process, IReadOnlyList<string> humanBindings,
+        IReadOnlyList<BpmnNativeServiceBinding>? serviceBindings, IReadOnlyList<string>? timerBindings)
     {
-        if (formatVersion is not (1 or 2 or 3)) throw new NotSupportedException("The BPMN model definition format is unsupported.");
+        if (formatVersion is not (1 or 2 or 3 or 4)) throw new NotSupportedException("The BPMN model definition format is unsupported.");
         if (process.ValueKind != JsonValueKind.Object) throw new ArgumentException("A BPMN process must be an object.", nameof(process));
         ArgumentNullException.ThrowIfNull(humanBindings);
         if (humanBindings.Any(string.IsNullOrWhiteSpace) || humanBindings.Distinct(StringComparer.Ordinal).Count() != humanBindings.Count)
             throw new ArgumentException("BPMN human binding identities must be nonblank and unique.", nameof(humanBindings));
         FormatVersion = formatVersion; Process = process.Clone();
         HumanBindings = Array.AsReadOnly(humanBindings.Order(StringComparer.Ordinal).ToArray());
+        if (formatVersion == 4 ? timerBindings is not { Count: > 0 } : timerBindings is not null)
+            throw new ArgumentException("Duration timers require model format 4 and its complete binding inventory.", nameof(timerBindings));
+        if (timerBindings is not null)
+        {
+            if (timerBindings.Any(string.IsNullOrWhiteSpace) || timerBindings.Distinct(StringComparer.Ordinal).Count() != timerBindings.Count ||
+                timerBindings.Any(binding => HumanBindings.Contains(binding, StringComparer.Ordinal)))
+                throw new ArgumentException("Duration timer binding identities must be nonblank, unique and distinct from human work.", nameof(timerBindings));
+            TimerBindings = Array.AsReadOnly(timerBindings.Order(StringComparer.Ordinal).ToArray());
+        }
         if (formatVersion == 1 && serviceBindings is not null || formatVersion is 2 or 3 && serviceBindings is not { Count: > 0 })
             throw new ArgumentException("The native service profile requires its explicit versioned binding inventory.", nameof(serviceBindings));
         if (serviceBindings is not null)
         {
             if (serviceBindings.Any(binding => binding is null) ||
                 serviceBindings.Select(binding => binding.BindingId).Distinct(StringComparer.Ordinal).Count() != serviceBindings.Count ||
-                serviceBindings.Any(binding => HumanBindings.Contains(binding.BindingId, StringComparer.Ordinal)))
+                serviceBindings.Any(binding => HumanBindings.Contains(binding.BindingId, StringComparer.Ordinal) || TimerBindings?.Contains(binding.BindingId, StringComparer.Ordinal) == true))
                 throw new ArgumentException("Human and native service binding identities must be distinct.", nameof(serviceBindings));
             ServiceBindings = Array.AsReadOnly(serviceBindings.OrderBy(binding => binding.BindingId, StringComparer.Ordinal).ToArray());
             if (formatVersion == 2 && ServiceBindings.Any(binding => binding.FaultPolicy is not null) ||
-                formatVersion == 3 && ServiceBindings.Any(binding => binding.FaultPolicy is null))
+                formatVersion is 3 or 4 && ServiceBindings.Any(binding => binding.FaultPolicy is null))
                 throw new ArgumentException("Explicit service fault policies require model format 3 and its complete policy inventory.", nameof(serviceBindings));
         }
     }
@@ -40,6 +53,8 @@ public sealed class BpmnModelDefinition
     public IReadOnlyList<string> HumanBindings { get; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<BpmnNativeServiceBinding>? ServiceBindings { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? TimerBindings { get; }
 }
 
 /// <summary>One service task's complete published native worker pin and modeled business-error code.</summary>

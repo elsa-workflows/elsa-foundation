@@ -20,7 +20,7 @@ using Xunit;
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>Actual feature/mailbox/EF/interpreter decisions. Service-provider restart is not process-host proof.</summary>
-public sealed class BpmnDirectExecutionTests : IDisposable
+public sealed partial class BpmnDirectExecutionTests : IDisposable
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
     private readonly string database = Path.Combine(Path.GetTempPath(), "elsa-direct-bpmn-" + Guid.NewGuid().ToString("N") + ".sqlite");

@@ -20,7 +20,7 @@ var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 try
 {
     if (args.Length == 4 && args[0] == "--read-bpmn-native" || args.Length is 4 or 5 && args[0] == "--read-bpmn-embedding" ||
-        args.Length == 3 && args[0] == "--read-bpmn-retirement")
+        args.Length == 3 && args[0] is "--read-bpmn-retirement" or "--read-bpmn-direct")
     {
         var boundDatabase = Path.GetFullPath(args[1]);
         var boundConnectionString = new SqliteConnectionStringBuilder
@@ -38,6 +38,41 @@ try
         await using var boundScope = boundProvider.CreateAsyncScope();
         var boundModels = boundScope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>();
         var boundModel = await boundModels.FindAsync(args[2]);
+        if (args[0] == "--read-bpmn-direct")
+        {
+            if (boundModel is null) throw new InvalidDataException("The actual direct model is absent.");
+            var inputIds = new List<string>(); var sourceIds = new List<string>();
+            await using (var index = new SqliteConnection(boundConnectionString))
+            {
+                await index.OpenAsync();
+                foreach (var selection in new[] { (Table: "elsa_runtime_model_input", Column: "InputId", Owner: "ExecutionId"),
+                             (Table: "elsa_runtime_post_commit_outbox", Column: "OutboxItemId", Owner: "WorkflowExecutionId") })
+                {
+                    await using var command = index.CreateCommand();
+                    command.CommandText = $"SELECT {selection.Column} FROM {selection.Table} WHERE {selection.Owner}=$model ORDER BY {selection.Column}";
+                    command.Parameters.AddWithValue("$model", Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(boundModel.ExecutionId)));
+                    await using var rows = await command.ExecuteReaderAsync();
+                    while (await rows.ReadAsync()) (selection.Column == "InputId" ? inputIds : sourceIds)
+                        .Add(System.Text.Encoding.Unicode.GetString(Convert.FromBase64String(rows.GetString(0))));
+                }
+            }
+            var inputs = new List<RuntimeModelInputReceipt>(); var sources = new List<RuntimePostCommitOutboxItem>();
+            foreach (var id in inputIds) inputs.Add(await boundModels.FindInputAsync(boundModel.ExecutionId, id) ?? throw new InvalidDataException("An indexed input is absent."));
+            foreach (var id in sourceIds) sources.Add(await boundScope.ServiceProvider.GetRequiredService<IPostCommitOutboxLookupStore>()
+                .FindDurableAsync(id) ?? throw new InvalidDataException("An indexed source is absent."));
+            var queued = new List<RuntimeSchedulerWorkItem>(); string? cursor = null;
+            do
+            {
+                var page = await boundScope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAsync(new(boundModel.ExecutionId, continuationToken: cursor));
+                queued.AddRange(page.Items); cursor = page.NextContinuationToken;
+            } while (cursor is not null);
+            var directContext = boundScope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
+            Console.WriteLine(JsonSerializer.Serialize(new { readOnly = true, model = boundModel, inputs, sources, queuedModelInputs = queued,
+                nativeWorkflowRows = await directContext.WorkflowExecutionStates.AsNoTracking().CountAsync(),
+                nativeActivityRows = await directContext.ActivityExecutionStates.AsNoTracking().CountAsync(),
+                nativeBookmarkRows = await directContext.Bookmarks.AsNoTracking().CountAsync() }, json));
+            return 0;
+        }
         if (args[0] == "--read-bpmn-retirement")
         {
             if (boundModel is null) throw new InvalidDataException("The actual cancelling model is absent.");

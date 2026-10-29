@@ -30,6 +30,9 @@ public class ActivitiesBpmnHostingFeature : IShellFeature
         services.TryAddScoped<BpmnDirectExecutionDriver>();
         services.TryAddScoped<BpmnNativeWorkBoundary>();
         services.TryAddScoped<BpmnNativeWorkDelivery>();
+        services.TryAddScoped<BpmnDurationTimerDelivery>();
+        services.AddSingleton(new RuntimePostCommitIntentHandlerContribution(BpmnDurationTimer.Kind, typeof(BpmnDurationTimerDelivery),
+            RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)), requiresDurableSource: true));
         services.TryAddScoped<BpmnEmbeddingBoundary>();
         services.TryAddScoped<BpmnEmbeddingDelivery>();
         services.TryAddScoped<IBpmnModelActivityRuntime, BpmnModelActivityRuntime>();
@@ -53,7 +56,7 @@ public class ActivitiesBpmnHostingFeature : IShellFeature
         public BpmnProtocolContributor() { }
         public IEnumerable<RuntimeExecutionProtocolRegistration> GetProtocols() =>
             [new(new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), typeof(BpmnDirectExecutionDriver))
-                { InputKinds = ["start", "complete-human", "cancel", "retry-service", "native-result", "native-start-retired", "start-embedded", "cancel-embedded", "native-parent-settled"] }];
+                { InputKinds = ["start", "complete-human", "cancel", "retry-service", "native-result", "native-start-retired", "timer-elapsed", "start-embedded", "cancel-embedded", "native-parent-settled"] }];
     }
 }
 

@@ -96,7 +96,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
             after = cursor.After;
         }
         var document = state.Payload.Deserialize<BpmnDirectExecutionDriver.Document>(Web) ?? throw new BpmnModelValidationException("BPMN state is missing.");
-        var items = document.Work.Where(item => item.NativeWork is null).OrderBy(item => item.InvocationId, StringComparer.Ordinal)
+        var items = document.Work.Where(item => item.NativeWork is null && item.Timer is null).OrderBy(item => item.InvocationId, StringComparer.Ordinal)
             .Where(item => after is null || string.CompareOrdinal(item.InvocationId, after) > 0).Take(request.Limit + 1).ToArray();
         var more = items.Length > request.Limit;
         if (more) items = items[..request.Limit];
