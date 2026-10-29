@@ -47,6 +47,34 @@ public sealed class ForEachItemResolutionRuntimeTests
         run.AssertWorkflowCompleted();
     }
 
+    // An Elsa.Any body input receives a JSON number item with its exact text (#3421): the item is never
+    // narrowed to a CLR double between the collection and the body.
+    [Fact]
+    public async Task Body_receives_exact_number_text_through_an_any_input()
+    {
+        await using var harness = NewHarness("actexec-foreach", "actexec-body-0", "actexec-body-1", "actexec-body-2", "actexec-body-3");
+        string[] numbers = ["9007199254740993", "12345678901234567890", "1234567890.123456789012345", "1.0"];
+
+        var run = await harness.RunAsync(NewExecutable(JsonArray(numbers), ForEachActivity.CurrentItemVariableName, "Elsa.Any", typeof(ForEachAnyItemCaptureActivity)));
+
+        Assert.Equal(numbers, CapturedValuesInIterationOrder(run));
+        run.AssertWorkflowCompleted();
+    }
+
+    // ForEach hands the item on as written, so an integral number written as 1.0 is refused when the Int32
+    // body input is materialized; ForEach no longer normalizes it to 1 on the way (#3421).
+    [Fact]
+    public async Task Int32_body_input_refuses_an_item_written_with_a_fraction()
+    {
+        await using var harness = NewHarness("actexec-foreach", "actexec-body-0");
+
+        var run = await harness.RunAsync(NewExecutable(JsonArray("1.0"), ForEachActivity.CurrentItemVariableName, "Int32", typeof(ForEachIndexCaptureActivity)));
+
+        var body = run.State(BodyNodeId);
+        Assert.Equal(ActivityExecutionStatus.Faulted, body.Status);
+        Assert.Contains("cannot be materialized as 'System.Int32'", body.Fault!.Message, StringComparison.Ordinal);
+    }
+
     private static IReadOnlyList<string?> CapturedValuesInIterationOrder(WorkflowExecutionRun run) =>
         run.States(BodyNodeId)
             .Select(state => state.Completion!.Result.InlineValue!.Value.GetProperty("captured").GetString())
@@ -62,6 +90,11 @@ public sealed class ForEachItemResolutionRuntimeTests
         var capturesIndex = StringComparer.Ordinal.Equals(bodyReferenceKey, ForEachActivity.CurrentIndexVariableName);
         var targetAlias = capturesIndex ? "Int32" : "String";
         var captureActivityType = capturesIndex ? typeof(ForEachIndexCaptureActivity) : typeof(ForEachItemCaptureActivity);
+        return NewExecutable(JsonSerializer.SerializeToElement(collection), bodyReferenceKey, targetAlias, captureActivityType);
+    }
+
+    private static WorkflowExecutable NewExecutable(JsonElement collection, string bodyReferenceKey, string targetAlias, Type captureActivityType)
+    {
         var body = new ExecutableNode(
             executableNodeId: BodyNodeId,
             authoredActivityId: "authored-body",
@@ -101,7 +134,7 @@ public sealed class ForEachItemResolutionRuntimeTests
         return WorkflowExecutionHarness.NewExecutable(root);
     }
 
-    private static RuntimeInputBinding CollectionBinding(IReadOnlyCollection<string> collection)
+    private static RuntimeInputBinding CollectionBinding(JsonElement collection)
     {
         var type = new ValueTypeDescriptor("Object");
         var policy = ValueProtectionPolicy.InstanceInline;
@@ -110,7 +143,13 @@ public sealed class ForEachItemResolutionRuntimeTests
             type,
             policy,
             RuntimeInputBindingSource.Literal,
-            literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(collection), policy));
+            literal: ValueEnvelope.Inline(type, collection, policy));
+    }
+
+    private static JsonElement JsonArray(params string[] items)
+    {
+        using var document = JsonDocument.Parse($"[{string.Join(",", items)}]");
+        return document.RootElement.Clone();
     }
 }
 
@@ -121,6 +160,16 @@ public sealed class ForEachItemCaptureActivity : Activity<ForEachCaptureResult>
 
     protected override ValueTask<ActivityTransition<ForEachCaptureResult>> ExecuteAsync(ActivityExecutionContext context) =>
         ValueTask.FromResult(ActivityTransition.Complete(new ForEachCaptureResult(Value)));
+}
+
+public sealed class ForEachAnyItemCaptureActivity : Activity<ForEachCaptureResult>
+{
+    [ActivityInput]
+    public object? Value { get; set; }
+
+    protected override ValueTask<ActivityTransition<ForEachCaptureResult>> ExecuteAsync(ActivityExecutionContext context) =>
+        ValueTask.FromResult(ActivityTransition.Complete(new ForEachCaptureResult(
+            Value is JsonElement element ? element.GetRawText() : JsonSerializer.Serialize(Value))));
 }
 
 public sealed class ForEachIndexCaptureActivity : Activity<ForEachCaptureResult>
