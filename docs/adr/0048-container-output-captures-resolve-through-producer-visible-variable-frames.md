@@ -238,7 +238,11 @@ enforcement:
 - Merge and Reduce currently overwrite exactly like Set, so they are not exempt.
 
 Elsa provides guardrails and diagnostics; it does not restrict what the engineer builds. §5 therefore
-warns, and "last commit wins" is defined behaviour. The same warning covers the intrinsic writes,
+warns, and "last commit wins" is defined behaviour for plain writes: captures, and Set, Merge and
+Reduce as they work today. A write based on an earlier read of the same variable (a stale
+read-modify-write) is not covered here; analysis A-2 and ADR 0092
+([#3411](https://github.com/elsa-workflows/elsa-foundation/pull/3411)) define it, so the two rules do not
+contradict each other. The same warning covers the intrinsic writes,
 which draft validation previously refused. Each structure declares how its children relate in time,
 so the warning does not depend on structure kinds the validator knows.
 
