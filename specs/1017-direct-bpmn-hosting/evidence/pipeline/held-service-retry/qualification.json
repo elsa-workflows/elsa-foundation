@@ -51,7 +51,7 @@
   "completeTaskOrProgramAcceptance": false,
   "validationLogs": [
     {
-      "path": "validation/bpmn-tests.log",
+      "path": "validation/bpmn-tests.txt",
       "sha256": "8487bf2fca47b91393c099a71c343bdb87ef67ebd28236a64c76d7cbafd0c345"
     },
     {
@@ -63,23 +63,23 @@
       "sha256": "b2e5da9a35d4ff6a5aba9a2eed1f35d89e7a70da67b22b052fda215ea5d0060c"
     },
     {
-      "path": "validation/human-host-tests.log",
+      "path": "validation/human-host-tests.txt",
       "sha256": "ee7f79ab052c9339c8705b5b5fbb9ae82daad39fd5d9be5e28a34e2cf133242d"
     },
     {
-      "path": "validation/maps.log",
+      "path": "validation/maps.txt",
       "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
     },
     {
-      "path": "validation/portable-tests.log",
+      "path": "validation/portable-tests.txt",
       "sha256": "996767b6c0210411753c5f16035926d69fd4817e41f1a8520f4a95512121c068"
     },
     {
-      "path": "validation/standard-host-build.log",
+      "path": "validation/standard-host-build.txt",
       "sha256": "36eea62e8c711b19dd35aca20e4d4cabe8425452fa490bfc5694bca23bf6572e"
     },
     {
-      "path": "validation/test-tiers.log",
+      "path": "validation/test-tiers.txt",
       "sha256": "91cc02f2f85c466bbc3d5d675d3bf055059b2c0e5e185229a4c4d99b174f25c4"
     }
   ]
