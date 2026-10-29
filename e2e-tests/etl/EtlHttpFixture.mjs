@@ -8,6 +8,7 @@ if (!readyPath) {
 }
 const retryDelayIndex = process.argv.indexOf('--source-retry-after-seconds');
 const sourceRetryAfterSeconds = retryDelayIndex >= 0 ? Number(process.argv[retryDelayIndex + 1]) : 3;
+const invalidLastId = process.argv.includes('--invalid-last-id');
 if (!Number.isSafeInteger(sourceRetryAfterSeconds) || sourceRetryAfterSeconds < 1 || sourceRetryAfterSeconds > 60) {
     throw new Error('Source Retry-After must be an integer from 1 to 60 seconds.');
 }
@@ -95,6 +96,7 @@ const server = http.createServer(async (request, response) => {
         const item = page === 0
             ? { id: firstId, name: shard === 'shard-a' ? 'Ada' : 'Linus' }
             : { id: firstId + 1, name: shard === 'shard-a' ? 'Grace' : 'Margaret' };
+        if (invalidLastId && shard === 'shard-b' && page === 1) item.id = 'invalid';
         const body = page === 0
             ? { items: [item], next: expectedToken }
             : { items: [item], next: null };

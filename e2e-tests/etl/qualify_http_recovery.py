@@ -56,7 +56,8 @@ def main():
     parser.add_argument("--workbench-assembly", type=Path, required=True)
     parser.add_argument("--reader-assembly", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--parent", choices=("Sequence", "Flowchart"), default="Sequence")
+    parser.add_argument("--parent", choices=("Sequence", "Flowchart", "RunEtl"), default="Sequence")
+    parser.add_argument("--business-error", action="store_true", help="Reject one actual HTTP record through its declared Int64 schema.")
     args = parser.parse_args()
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
     if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True).strip():
@@ -122,7 +123,7 @@ def main():
 
     try:
         fixture_script=REPO/"e2e-tests/etl/EtlHttpFixture.mjs";ready=root/"http-ready.json"
-        fixture=start(["node",str(fixture_script),"--ready-file",str(ready),"--source-retry-after-seconds","20"],"http-fixture")
+        fixture=start(["node",str(fixture_script),"--ready-file",str(ready),"--source-retry-after-seconds","20"]+(["--invalid-last-id"] if args.business_error else []),"http-fixture")
         wait_for(lambda:ready.exists(),bool,"The owned HTTP fixture did not start.",15)
         fixture_url="http://127.0.0.1:"+str(json.loads(ready.read_text())["port"])
         def wire():
@@ -154,10 +155,11 @@ def main():
         if args.parent=="Sequence":
             structure={"kind":"elsa.sequence.structure","schemaVersion":"1.0.0","payload":{"activities":[etl,after]}}
             key="Elsa.Activities.Sequence.Activities.Sequence"
-        else:
+        elif args.parent=="Flowchart":
             structure={"kind":"elsa.flowchart.structure","schemaVersion":"1.0.0","payload":{"startNodeId":"etl","activities":[etl,after],"connections":[{"source":{"nodeId":"etl","port":port},"target":{"nodeId":"after","port":"Done"}} for port in ("Done","BusinessError")]}}
             key="Elsa.Activities.Flowchart.Activities.Flowchart"
-        native=api.request("/design/workflows/definitions/submit",{"name":"Actual ETL recovery "+args.parent+" "+definition,"state":{"variables":[],"inputs":[],"outputs":[],"rootActivity":node("root",key,structure=structure)}})
+        root_node=etl if args.parent=="RunEtl" else node("root",key,structure=structure)
+        native=api.request("/design/workflows/definitions/submit",{"name":"Actual ETL recovery "+args.parent+" "+definition,"state":{"variables":[],"inputs":[],"outputs":[],"rootActivity":root_node}})
         publication=api.request("/publishing/workflows/"+native["version"]["id"]+"/publish",{})
         executed=api.request("/runtime/workflows/executables/"+publication["artifactId"]+"/execute",{"sourceReferenceId":publication["sourceReferenceId"]})
         execution=executed["workflowExecutionId"]
@@ -176,6 +178,7 @@ def main():
         if host.poll() is not None or int(q.process_field(host.pid,"ppid"))!=os.getpid():raise ValueError("The cut no longer belongs to this live controller child.")
         os.kill(host.pid,signal.SIGSTOP)
         wait_for(lambda:q.process_field(host.pid,"stat"),lambda value:"T" in value,"The owned Workbench did not stop at its actual cut.",5)
+        cut_at=datetime.now(timezone.utc).isoformat()
         before_wire=wire();q.write_json(output/"before.json",before);q.write_json(output/"before-wire.json",before_wire)
         if len([item for item in before_wire["requests"] if item.get("shard")=="shard-b"])!=1:
             raise ValueError("The actual source already retried before the recorded crash cut.")
@@ -184,15 +187,19 @@ def main():
         if exit_code!=-signal.SIGKILL:raise ValueError("The predecessor did not exit through actual process loss.")
         print("Observed durable 429 and completed sibling; owned predecessor terminated.",flush=True)
         api=launch();recovered=view();q.write_json(output/"recovered.json",recovered)
-        finished=wait_for(view,lambda value:value["run"]["status"]=="succeeded" and value["native"]["instance"]["status"]=="Completed","The actual ETL/native pair did not finish after process loss.",120)
+        outcome="businessError" if args.business_error else "succeeded"
+        finished=wait_for(view,lambda value:value["run"]["status"]==outcome and value["native"]["instance"]["status"]=="Completed","The actual ETL/native pair did not finish after process loss.",120)
         result=finished["run"];rows=finished["partitions"]["items"];native_view=finished["native"]
-        if (result["formatVersion"]!=2 or result["selection"]!=selection or result["terminalResult"]["outcome"]!="succeeded" or
-                result["acceptedRecords"]!=4 or result["rejectedRecords"]!=0 or result["filteredRecords"]!=0 or result["outstandingRecords"]!=0 or result["outstandingBytes"]!=0 or
+        if (result["formatVersion"]!=2 or result["selection"]!=selection or result["terminalResult"]["outcome"]!=outcome or
+                result["acceptedRecords"]!=(3 if args.business_error else 4) or result["rejectedRecords"]!=(1 if args.business_error else 0) or result["filteredRecords"]!=0 or result["outstandingRecords"]!=0 or result["outstandingBytes"]!=0 or
                 len(rows)!=2 or finished["partitions"]["nextCursor"] is not None or any(not item["http"]["exhausted"] or item["http"]["pageSequence"]!=1 or item["owedBatch"] is not None for item in rows)):
             raise ValueError("The recovered ETL run did not settle four accepted records and both exact partitions.")
-        if native_view["incidents"] or len(native_view["activities"])!=3 or any(item["status"]!="Completed" for item in native_view["activities"]):
+        if native_view["incidents"] or len(native_view["activities"])!=(1 if args.parent=="RunEtl" else 3) or any(item["status"]!="Completed" for item in native_view["activities"]):
             raise ValueError("The recovered native parent did not execute RunEtl and its successor once.")
         old_activities={(item.get("authoredActivityId") or item["executableNodeId"]):item for item in before["native"]["activities"]}
+        etl_activity=next(item for item in native_view["activities"] if (item.get("authoredActivityId") or item["executableNodeId"])=="etl")
+        if etl_activity["outcomeNames"]!=["BusinessError" if args.business_error else "Done"]:
+            raise ValueError("The real RunEtl activity did not preserve its typed terminal outcome.")
         if "after" in old_activities or old_activities["etl"]["activityExecutionId"]!=next(item["activityExecutionId"] for item in native_view["activities"] if (item.get("authoredActivityId") or item["executableNodeId"])=="etl"):
             raise ValueError("The native RunEtl invocation was recreated or its successor ran before the cut.")
         for field in ("artifactId","artifactHash","artifactVersion","definitionId","definitionVersionId"):
@@ -202,14 +209,18 @@ def main():
         if len(b_requests)!=3 or [item["status"] for item in b_requests]!=[429,200,200] or b_requests[1]["receivedAtMs"]-b_requests[0]["receivedAtMs"]<20000:
             raise ValueError("The actual source retried early or failed to resume its original two-page shard.")
         records=[item for post in finished_wire["outputPosts"] for item in post["records"]]
-        if {item["id"]:item["name"] for item in records}!={1:"Ada",2:"Grace",3:"Linus",4:"Margaret"} or any(not post["hasIdempotencyKey"] for post in finished_wire["outputPosts"]):
+        expected_records={1:"Ada",2:"Grace",3:"Linus"} if args.business_error else {1:"Ada",2:"Grace",3:"Linus",4:"Margaret"}
+        if {item["id"]:item["name"] for item in records}!=expected_records or any(not post["hasIdempotencyKey"] for post in finished_wire["outputPosts"]):
             raise ValueError("The actual HTTP receiver lacks mapped output or idempotency headers.")
+        errors=[json.loads(line) for file in (root/"errors").glob("*.jsonl") for line in file.read_text().splitlines() if line.strip()]
+        if len(errors)!=(1 if args.business_error else 0):raise ValueError("The real safe-error destination differs from the rejected record count.")
+        q.write_json(output/"safe-errors.json",errors)
         stop(host);finished_stores=snapshots("finished")
         api=launch();retained=view();retained_wire=wire();q.write_json(output/"retained.json",retained);q.write_json(output/"retained-wire.json",retained_wire);stop(host)
         if retained!=finished or retained_wire!=finished_wire:raise ValueError("The terminal pair or physical HTTP observations changed after another process.")
         q.write_json(output/"process.json",{"schemaVersion":1,"kind":"actual-native-etl-http-recovery","sourceRevision":source,"products":products,"parent":args.parent,"processes":processes,"predecessorExitCode":exit_code,
             "definition":definition,"selection":selection,"workflowExecutionId":execution,"runId":run,"publication":publication,"etlPublication":published,"bindings":bindings,
-            "fixtureSha256":q.digest(fixture_script),"controllerSha256":q.digest(Path(__file__)),"beforeStores":before_stores,"finishedStores":finished_stores,
+            "fixtureSha256":q.digest(fixture_script),"controllerSha256":q.digest(Path(__file__)),"cutAtUtc":cut_at,"businessError":args.business_error,"beforeStores":before_stores,"finishedStores":finished_stores,
             "scopeLimits":["Real transient HTTP retry and native RunEtl recovery only; no BPMN/model worker bridge or held terminal-fault retry is proved.","The crash cut uses SIGSTOP only to copy committed stores, then SIGKILL; no persisted state or clock is edited.","External HTTP effects remain at least once."]})
         print("Actual ETL and native successor completed and survived another Workbench process.",flush=True)
     finally:
