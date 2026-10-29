@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-bpmn-etl-technical-fault-matrix",
+  "sourceRevision": "5533b8367c7fe78850677fcebf5c7fcb0f2e7e27",
+  "cases": [
+    {
+      "name": "direct",
+      "parent": "Direct",
+      "manifest": "direct/manifest.json",
+      "sha256": "b0c455aac8272680cf4f714cd5a447f7ade458010b2a61451d509de79c104d07"
+    },
+    {
+      "name": "root",
+      "parent": "Root",
+      "manifest": "root/manifest.json",
+      "sha256": "dce0e546a8a0c9945cac4a8279f6f5dd65bb2c77dbbf144a07890553fbe1969b"
+    },
+    {
+      "name": "sequence",
+      "parent": "Sequence",
+      "manifest": "sequence/manifest.json",
+      "sha256": "f1bcdeff28c2a906d882f362c0b224310efe45654c0424a8abbf98dac7f818fd"
+    },
+    {
+      "name": "flowchart",
+      "parent": "Flowchart",
+      "manifest": "flowchart/manifest.json",
+      "sha256": "a33abeceba5c31e02ddf5b9feeac8f76b94fcc988427f09582a1ba9abf96ac23"
+    },
+    {
+      "name": "compensationscope",
+      "parent": "CompensationScope",
+      "manifest": "compensationscope/manifest.json",
+      "sha256": "c2dccc6890dc478f4f50bcbb379de95cac59c59dac9842d757b262cc6d7a399f"
+    }
+  ]
+}

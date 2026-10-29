@@ -1,0 +1,20 @@
+{
+  "sourceRevision": "5533b8367c7fe78850677fcebf5c7fcb0f2e7e27",
+  "actualJourneys": 5,
+  "qualifyingRawAssets": 117,
+  "wholeStores": 30,
+  "allQualifiedListedChildrenStopped": 20,
+  "allRejectedListedChildrenStopped": 30,
+  "diagnostics": [
+    {
+      "name": "http400-is-business-error",
+      "source": "dc45b0b79ffa4a2ecc4b5edc15f9f67c698a3acc",
+      "assets": 14
+    },
+    {
+      "name": "captured-and-waiting-fetches-differ",
+      "source": "9c9a5d8618eae6c046782d193bf215db36a01d1b",
+      "assets": 14
+    }
+  ]
+}

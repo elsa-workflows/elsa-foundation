@@ -952,6 +952,16 @@ def verify(path):
                             row=connection.execute("SELECT InvocationJson,Status,AcceptedRecords,RejectedRecords,OutstandingRecords,OutstandingBytes FROM elsa_etl_runtime_runs WHERE RunId=?",(key(run_id),)).fetchone()
                             if row is None:raise ValueError("The physical ETL run is absent.")
                             current_invocation=json.loads(row[0]);address=current_invocation["resultAddress"]
+                            if technical:
+                                binding_json,prepared_json=connection.execute('SELECT BindingsJson,PreparedJson FROM elsa_etl_connector_runs').fetchone()
+                                binding=json.loads(binding_json)['lookup'];prepared=json.loads(prepared_json)['lookup']
+                                lookup_definition=current_invocation['artifact']['pipeline']['lookup']
+                                if (binding['kind']!='csv' or decoded(binding['revision']['alias'])!='lookup' or decoded(binding['revision']['revision'])!='lookup-v1' or
+                                        decoded(binding['revision']['expectedSha256'])!=content or decoded(prepared['contentHash'])!=content or
+                                        decoded(prepared['key'])!=availability['snapshotKey'] or prepared['byteLength']!=source_file.stat().st_size or
+                                        lookup_definition!={'binding':'lookup','schema':[{'name':'id','type':'int64','required':True},{'name':'tag','type':'string','required':True}],
+                                            'sourceKeyField':'id','lookupKeyField':'id'}):
+                                    raise ValueError('The physical technical fault lost its actual pinned and prepared lookup dependency.')
                             if (decoded(current_invocation["scope"]["tenantId"])!="default" or decoded(current_invocation["scope"]["persistencePartition"])!="default" or
                                     decoded(current_invocation["runId"])!=run_id or decoded(address["workflowExecutionId"])!=identity or decoded(address["activityExecutionId"])!=old["etl"]["activityExecutionId"] or
                                     decoded(address["executableId"])!=pin["artifactId"] or decoded(address["executableHash"])!=pin["artifactHash"]):raise ValueError("The physical ETL result address does not name its real native invocation.")
