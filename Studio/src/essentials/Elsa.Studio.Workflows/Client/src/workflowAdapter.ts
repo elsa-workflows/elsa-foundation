@@ -64,6 +64,8 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   isStartNode?: boolean;
   /** True when this activity can start a workflow (its `CanStartWorkflow` input is a literal true). */
   canStartWorkflow?: boolean;
+  /** Declared literal start setting, including the catalog default; absent on ordinary activities. */
+  workflowStartEnabled?: boolean;
   /** Authored HTTP Endpoint response behavior, surfaced as a canvas badge. */
   httpEndpointResponseMode?: HttpEndpointResponseMode;
   // Set by the Executable Inspector for activity-catalog misses: the node renders as an honest

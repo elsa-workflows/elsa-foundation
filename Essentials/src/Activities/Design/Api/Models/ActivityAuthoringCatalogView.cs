@@ -27,7 +27,9 @@ public sealed record ActivityAuthoringDescriptorView(
     /// Optional designer icon from <c>[Activity(Icon)]</c>: a lucide name, <c>asset:package/path</c>,
     /// or <c>ext:name</c>. Null when the activity does not declare one or the value was unsafe.
     /// </summary>
-    string? IconName = null);
+    string? IconName = null,
+    /// <summary>Optional v1 elsa.activity-palette presentation hints; never runtime admission rules.</summary>
+    JsonElement? PaletteHints = null);
 
 /// <summary>
 /// Provenance of a persisted catalog entry: which reconciliation source produced the version

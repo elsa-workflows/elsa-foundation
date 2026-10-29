@@ -1,3 +1,5 @@
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import { writeAppearancePreferences, type ThemeModePreference } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
 import React, { useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type {
@@ -10,6 +12,7 @@ import { ActivityGraphImplementationEditor } from "../../src/essentials/Elsa.Stu
 import { WorkflowEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor";
 import { WorkflowInstanceDetailsWorkbench } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
 import {
+  bpmnActivity,
   flowchartActivity,
   flowchartNode,
   sequenceActivity,
@@ -21,7 +24,8 @@ import {
 } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/fixtures";
 import { JavaScriptExpandedEditor, JavaScriptInlineEditor } from "../../../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/module";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
-import { getChildSlots } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
+import { createActivityNode, getChildSlots } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
+import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 
@@ -46,7 +50,25 @@ const writeLineCatalog: ActivityCatalogItem = {
   available: true
 };
 
-const notifyBuyer: ActivityNode = {
+const workflowStartFixture = new URLSearchParams(window.location.search).has("workflow-start");
+const httpEndpointCatalog: ActivityCatalogItem = {
+  ...writeLineCatalog,
+  activityVersionId: "http-endpoint-v1",
+  activityTypeKey: "Elsa.HttpEndpoint",
+  displayName: "Http Endpoint",
+  inputs: [
+    { name: "CanStartWorkflow", referenceKey: "CanStartWorkflow", displayName: "Start new workflows", typeName: "System.Boolean", isWrapped: true, defaultSyntax: "Literal", isBrowsable: true, tier: "Setting" },
+    { name: "Path", referenceKey: "Path", displayName: "Path", typeName: "System.String", isWrapped: true, defaultSyntax: "Literal", isBrowsable: true }
+  ]
+};
+
+const notifyBuyer: ActivityNode = workflowStartFixture ? {
+  nodeId: "write-one", activityVersionId: "http-endpoint-v1", outputs: [],
+  inputs: [
+    { referenceKey: "CanStartWorkflow", value: { expressionType: "Literal", value: "true" } },
+    { referenceKey: "Path", value: { expressionType: "Literal", value: "/hello" } }
+  ]
+} : {
   ...leafNode("write-one"),
   inputs: [{
     referenceKey: "text",
@@ -55,11 +77,12 @@ const notifyBuyer: ActivityNode = {
 };
 
 function editorDraft(): WorkflowDraft {
-  const sequence = new URLSearchParams(window.location.search).get("composition") === "sequence";
-  const root = sequence
+  const composition = new URLSearchParams(window.location.search).get("composition");
+  const sequence = composition === "sequence";
+  const root = composition === "bpmn" ? createActivityNode(bpmnActivity, "bpmn-root") : sequence
     ? sequenceRootActivity()
     : flowchartNode("flow-root", [notifyBuyer, leafNode("write-two")]);
-  if (!sequence) root.structure!.payload.connections = [{
+  if (!sequence && composition !== "bpmn") root.structure!.payload.connections = [{
     id: "flow-write-one-write-two",
     source: { nodeId: "write-one", port: "Done" },
     target: { nodeId: "write-two" }
@@ -72,7 +95,7 @@ function editorDraft(): WorkflowDraft {
       { nodeId: "write-one", x: 420, y: 180 },
       { nodeId: "write-two", x: 720, y: 180 }
     ],
-    activityPresentation: [{ nodeId: "write-one", displayName: "Notify buyer" }],
+    activityPresentation: [{ nodeId: "write-one", displayName: workflowStartFixture ? "Http Endpoint" : "Notify buyer" }],
     validationErrors: []
   };
 }
@@ -88,7 +111,7 @@ function sequenceRootActivity(): ActivityNode {
 function activityGraphSequenceValue(): StudioActivityDefinitionImplementationEditorProps["value"] {
   return {
     payload: {
-      rootActivity: sequenceRootActivity(),
+      rootActivity: new URLSearchParams(window.location.search).get("composition") === "bpmn" ? createActivityNode(bpmnActivity, "bpmn-root") : sequenceRootActivity(),
       variables: [],
       outputMappings: [],
       outcomeMappings: []
@@ -103,7 +126,14 @@ const expressionEditors: StudioExpressionEditorContribution[] = [{
   surfaces: { inline: JavaScriptInlineEditor, expanded: JavaScriptExpandedEditor }
 }];
 
+const paletteTheme = new URLSearchParams(window.location.search).get("palette-theme");
+if (paletteTheme) writeAppearancePreferences({ themeId: paletteTheme, mode: (new URLSearchParams(window.location.search).get("appearance") ?? "light") as ThemeModePreference, navigation: "left" });
+
 export function ActivityDuplicateEditorFixture() {
+  return paletteTheme ? <ThemeProvider><ActivityDuplicateEditorFixtureContent /></ThemeProvider> : <ActivityDuplicateEditorFixtureContent />;
+}
+
+function ActivityDuplicateEditorFixtureContent() {
   const instanceHost = new URLSearchParams(window.location.search).get("host") === "instance";
   const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");
   const live = useRef({ status: "Running", disconnected: false });
@@ -126,7 +156,7 @@ export function ActivityDuplicateEditorFixture() {
               context={context}
               definitionId="definition-1"
               ai={ai}
-              propertyEditors={[]}
+              propertyEditors={workflowStartFixture ? builtInPropertyEditors : []}
               expressionEditors={expressionEditors}
               runInputEditors={[]}
               workflowDesignerPanels={[]}
@@ -163,7 +193,12 @@ function createEditorContext(live?: { status: string; disconnected: boolean }): 
   const draft = editorDraft();
   const runCanvas = new URLSearchParams(window.location.search).get("run-canvas");
   const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");
-  const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity];
+  const paletteFixtures: ActivityCatalogItem[] = new URLSearchParams(window.location.search).has("palette-context") ? [
+    bpmnActivity,
+    { ...writeLineCatalog, activityVersionId: "decision-v1", activityTypeKey: "Elsa.BpmnDecision", displayName: "BPMN Decision", category: "BPMN", paletteHints: { containerModes: ["bpmn"], description: "BPMN Decision is intended for a gateway in a BPMN Process." } },
+    { ...writeLineCatalog, activityVersionId: "complete-v1", activityTypeKey: "Elsa.Complete", displayName: "Complete", paletteHints: { resourceKinds: ["activity-definition-graph"] } }
+  ] : [];
+  const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity, ...paletteFixtures, ...(workflowStartFixture ? [httpEndpointCatalog] : [])];
   const compiled = (node: ActivityNode): object => ({
     executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
     activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown",
@@ -255,7 +290,7 @@ function createEditorContext(live?: { status: string; disconnected: boolean }): 
           };
         }
         if (url === "/design/activities/catalog") {
-          return { activities: [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity] };
+          return { activities: catalog };
         }
         if (url === "/expressions/descriptors") {
           return {

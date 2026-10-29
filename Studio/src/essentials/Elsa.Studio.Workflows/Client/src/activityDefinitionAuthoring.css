@@ -136,7 +136,7 @@
 .ad-interface-suggestions[open] > summary { margin-bottom: 1rem; }
 .ad-draft-editor .ad-publication-toolbar-trigger { color: var(--studio-accent-text); }
 
-/* Keep the two routine authoring tasks visually separate from technical controls. */
+/* Keep routine authoring views visually separate from technical controls. */
 .ad-draft-editor .ad-authoring-view-tabs {
   gap: 4px;
   margin: 16px 0;

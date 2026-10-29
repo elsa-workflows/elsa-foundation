@@ -73,6 +73,8 @@ interface InspectorPanelProps {
   // the container whose contents the canvas displays, e.g. the flowchart a slot entry descended into.
   inspectingScopeOwner?: boolean;
   catalog: ActivityCatalogItem[];
+  choicesForSlot?(owner: ActivityNode, slot: ChildSlot): ActivityCatalogItem[];
+  placementNotice?: string;
   catalogByVersion?: Map<string, ActivityCatalogItem>;
   selectedSupportsScopedVariables: boolean;
   variablesPanel?: ReactNode;
@@ -125,6 +127,8 @@ export function InspectorPanel({
   selectedSlots,
   inspectingScopeOwner = false,
   catalog,
+  choicesForSlot,
+  placementNotice,
   catalogByVersion,
   selectedSupportsScopedVariables,
   variablesPanel,
@@ -291,6 +295,7 @@ export function InspectorPanel({
           </div>
         ) : null}
       </div>
+      {placementNotice ? <p className="wf-muted" role="note">{placementNotice} This existing activity is preserved.</p> : null}
       <StudioTabs
         baseId={tabBaseId}
         className="wf-inspector-tabs"
@@ -371,7 +376,10 @@ export function InspectorPanel({
               <ConnectMenu
                 clientX={slotPicker.clientX}
                 clientY={slotPicker.clientY}
-                activities={catalog}
+                activities={(() => {
+                  const slot = selectedSlots.find(candidate => candidate.id === slotPicker.slotId);
+                  return slot && selectedNode && choicesForSlot ? choicesForSlot(selectedNode, slot) : catalog;
+                })()}
                 onPick={activity => {
                   setSlotPicker(null);
                   const slot = selectedSlots.find(candidate => candidate.id === slotPicker.slotId);

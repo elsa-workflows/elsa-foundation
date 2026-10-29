@@ -98,7 +98,8 @@ public sealed class ClrAssemblyScannerTests
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
         { typeof(TriggerFixtureActivity), "10C41B96E22D85F9A598D30A6AE51D2FAA0F4EF5AA9909D23932EBC3CD00D80E" },
-        { typeof(HttpEndpoint), "3432C91C232D91852818ED02A289497FD4DD17112199328DC65BBE1239FA84DA" }
+        // Approved UX wording change: Start new workflows plus its help text.
+        { typeof(HttpEndpoint), "9E51C9A62A34D0953536D79C15C947C7E3CDDE704B3595DC7CCB7812E4AE0EB9" }
     };
 
     [Theory]
@@ -716,6 +717,20 @@ public sealed class ClrAssemblyScannerTests
         Assert.Contains("BaseOutcome", portNames);
     }
 
+    [Fact]
+    public void PaletteHints_AreReadWithoutExecutingAttributeConstructors()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(PaletteFixtureActivity).Assembly);
+        var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == typeof(PaletteFixtureActivity).FullName);
+        var facet = Assert.Single(model.DesignFacets, candidate => candidate.Kind == "elsa.activity-palette");
+        Assert.Equal("1", facet.SchemaVersion);
+        Assert.Equal("bpmn", facet.Payload.GetProperty("containerModes")[0].GetString());
+        Assert.Equal("Bpmn.Activities", facet.Payload.GetProperty("slotIds")[0].GetString());
+        Assert.Equal("Acme.Owner", facet.Payload.GetProperty("ancestorActivityTypes")[0].GetString());
+        Assert.Equal("activity-definition-graph", facet.Payload.GetProperty("resourceKinds")[0].GetString());
+        Assert.Equal("Use in a BPMN scope.", facet.Payload.GetProperty("description").GetString());
+    }
+
     [Theory]
     [InlineData(typeof(LucideIconFixtureActivity), "Rocket")]
     [InlineData(typeof(KebabLucideIconFixtureActivity), "git-branch")]
@@ -788,7 +803,8 @@ public sealed class ClrAssemblyScannerTests
         // declares tiers; #3064 promotes only its Connection tier to Essential. Those catalog changes move
         // their snapshots with their owning changes. Icon facets are present
         // on the descriptors but excluded from descriptor hashes.
-        { typeof(HttpEndpoint), "3432C91C232D91852818ED02A289497FD4DD17112199328DC65BBE1239FA84DA" },
+        // Approved UX wording change: Start new workflows plus its help text.
+        { typeof(HttpEndpoint), "9E51C9A62A34D0953536D79C15C947C7E3CDDE704B3595DC7CCB7812E4AE0EB9" },
         { typeof(WriteLine), "618BB61870A3FADC2551123EA520F7F5852CB0D00CD4AE5E6DB8A80D7677EF2C" },
         { typeof(ParallelActivity), "A466AC1D4873108D85B6BA08D2058ACD9FD51A60571E8BA043043A17B20CCC82" },
         { typeof(SendHttpRequest), "833CA49E624946FFF5E504A53B84354334501EE7E45F20505C34B48525B376A5" }

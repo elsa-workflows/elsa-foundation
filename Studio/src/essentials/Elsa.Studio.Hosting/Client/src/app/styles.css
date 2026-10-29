@@ -230,6 +230,85 @@ textarea:focus {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 15%, transparent);
 }
 
+/* Shared native selects, including module controls without a field-specific class. */
+select {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  min-block-size: 32px;
+  padding: 6px 10px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background-color: var(--studio-surface);
+  color: var(--studio-text);
+  font: inherit;
+  line-height: 1.4;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+select:not([multiple]):not([size]),
+select:not([multiple])[size="1"] {
+  appearance: none;
+  padding-inline-end: 32px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: right 15px center, right 10px center;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+select:not([multiple]):dir(rtl) {
+  background-position: left 10px center, left 15px center;
+}
+
+select:hover:not(:disabled) {
+  border-color: var(--studio-accent);
+}
+
+select:focus-visible {
+  outline: 2px solid var(--studio-accent);
+  outline-offset: 2px;
+  border-color: var(--studio-accent);
+  box-shadow: 0 0 0 3px var(--studio-focus);
+}
+
+select:disabled {
+  background-color: var(--studio-surface-muted);
+  color: var(--studio-text-muted);
+  cursor: not-allowed;
+}
+
+select option,
+select optgroup {
+  background-color: var(--studio-surface);
+  color: var(--studio-text);
+}
+
+select option:checked {
+  background-color: var(--studio-accent);
+  color: var(--studio-accent-text);
+}
+
+select option:disabled {
+  color: var(--studio-text-muted);
+}
+
+@media (forced-colors: active) {
+  select:not([multiple]):not([size]),
+  select:not([multiple])[size="1"] {
+    appearance: auto;
+    background-image: none;
+    padding-inline-end: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  select {
+    transition: none;
+  }
+}
+
 .studio-shell {
   display: grid;
   grid-template-columns: 236px minmax(0, 1fr);
