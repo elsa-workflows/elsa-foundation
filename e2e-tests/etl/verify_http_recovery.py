@@ -83,7 +83,7 @@ def model_bridge(read,process,before,finished,business_error,cancelled=False,mod
     return checked,origin,result
 
 
-def physical_model_bridge(connection,phase,checked,origin,result,model_cancel=False,embedded=False):
+def physical_model_bridge(connection,phase,checked,origin,result,model_cancel=False,embedded=False,parent_settlement_owed=False):
     observed=checked[phase];model=observed["model"]
     row=connection.execute("SELECT Lifecycle,Revision,ContentJson FROM elsa_runtime_model_execution WHERE ExecutionId=?",(key(model["executionId"]),)).fetchone()
     stored=json.loads(row[2]) if row else None
@@ -105,7 +105,7 @@ def physical_model_bridge(connection,phase,checked,origin,result,model_cancel=Fa
         if row is None or row[0]!=source["status"] or stored["intent"]["payload"]!=source["intent"]["payload"] or stored["deliveredAt"]!=source["deliveredAt"]:
             raise ValueError("The physical native/model delivery source differs from its consumption proof.")
     rows=connection.execute("SELECT InputId,ContentJson FROM elsa_runtime_model_input WHERE ExecutionId=?",(key(model["executionId"]),)).fetchall()
-    if len(rows)!=(1 if phase=="before" else (3 if model_cancel else 2)+int(embedded)):raise ValueError("The physical model accepted an unexpected input.")
+    if len(rows)!=(1 if phase=="before" else (3 if model_cancel else 2)+int(embedded)-int(parent_settlement_owed)):raise ValueError("The physical model accepted an unexpected input.")
     receipt=observed["resultInput"]
     if receipt is not None:
         stored,=[json.loads(row[1]) for row in rows if row[0]==key(receipt["inputId"])]
@@ -435,6 +435,81 @@ def direct_embedded_trace_comparison(root,manifest):
     return result,compared
 
 
+def pending_embedded_parent_return(read,root,process,bridge):
+    checked,origin,native_result=bridge
+    pending=read('parent-pending-checked-model.json');embedding=read('parent-pending-checked-embedding.json');sdk=read('sdk-consume.json')
+    model=pending['model'];last=checked['finished'];after=read('finished-checked-embedding.json')
+    original=read('before-checked-embedding.json');parent_id=process['nativeParentExecutionId']
+    sources={s['intent']['kind']:s for s in embedding['sources']};final_sources={s['intent']['kind']:s for s in after['sources']}
+    parent=sources['Elsa.Bpmn.ResumeNativeParent.v1'];final_parent=final_sources['Elsa.Bpmn.ResumeNativeParent.v1']
+    if (process['pendingParentResultCrash'] is not True or process['parentPendingPredecessorExitCode']!=-9 or process['sweepIntervalsSeconds']!=[.2,300,.2,.2] or
+            model['lifecycle']!=2 or model['revision']!=3 or model['payload']['formatVersion']!=6 or model['payload']!=last['model']['payload'] or
+            model['terminalResult']!=last['model']['terminalResult'] or model['authority']!=last['model']['authority'] or model['executable']!=last['model']['executable'] or
+            model['materialIncarnationId']!=last['model']['materialIncarnationId'] or model['scope']!=last['model']['scope'] or model['executionId']!=origin['executionId'] or
+            pending['worker']['status']!=5 or pending['worker']['modelWorkOrigin']!=origin or embedding['model']!=model or
+            pending['resultInput']!=last['resultInput'] or pending['resultInput']['acceptedRevision']!=3 or pending['resultInput']['result']['lifecycle']!='TerminalPendingSettlement' or
+            embedding['queuedModelInputs'] or any(not c['settled'] for c in model['payload']['cancellations'])):
+        raise ValueError('The actual parent-pending cut lost its terminal model, exact worker consumption or settled downstream responsibility.')
+    if (sdk['operation']!='--consume-native-result' or sdk['embeddedParentExecutionId']!=parent_id or sdk['model']!=model or sdk['worker']!=pending['worker'] or
+            sdk['receipt']!=pending['resultInput'] or sdk['resultSource']!=pending['resultSource'] or sdk['origin']!=origin or
+            len(sdk['products'])!=8 or len({p['name'] for p in sdk['products']})!=8 or any(not p['informationalVersion'].endswith('+'+process['sourceRevision']) for p in sdk['products'])):
+        raise ValueError('The actual pending-parent SDK receipt differs from the original source-matched production consumption.')
+    operations=['deliver-embedded-cancel','consume-embedded-cancel','deliver-model-cancel','drain-native-cancel','deliver-etl-cancel','queue-native-result','consume-native-result']
+    if [s['operation'] for s in sdk['steps']]!=operations:raise ValueError('The actual pending-parent SDK did not retain its complete delivery/consumption chain.')
+    for step in sdk['steps']:
+        if 'delivery' in step:
+            d=step['delivery']
+            if d['attemptedCount']!=1 or d['deliveredCount']!=int(step['operation']=='deliver-etl-cancel'):
+                raise ValueError('The pending-parent SDK acknowledged a source instead of retaining actual consumption responsibility.')
+        elif step['drain']['status']!=0:raise ValueError('The pending-parent SDK did not use an accepted real recovery mailbox.')
+    if (pending['resultSource']['status']!=3 or pending['resultSource']['deliveryFencingToken']<=0 or pending['resultSource']['deliveredAt'] is not None or
+            pending['resultSource']['intent']!=last['resultSource']['intent'] or pending['resultSource']['outboxItemId']!=last['resultSource']['outboxItemId'] or
+            parent['status']!=0 or parent['deliveredAt'] is not None or parent['outboxItemId']!=final_parent['outboxItemId'] or parent['intent']!=final_parent['intent'] or
+            any(r['inputKind']=='native-parent-settled' for r in embedding['inputs']) or
+            sorted(embedding['inputs'],key=lambda r:r['inputId'])!=sorted([r for r in after['inputs'] if r['inputKind']!='native-parent-settled'],key=lambda r:r['inputId'])):
+        raise ValueError('The actual pending-parent cut lacks original unacknowledged result sources and an absent parent-settlement receipt.')
+    if (embedding['nativeParent']['workflowExecutionId']!=parent_id or embedding['nativeParent']['status']!=5 or embedding['nativeParent']['pinnedExecutable']!=original['nativeParent']['pinnedExecutable'] or
+            embedding['bookmarks'] or any(a['execution']['executableNodeId']=='after' for a in embedding['activities']) or
+            len([a for a in embedding['activities'] if a['execution']['activityType']=='Elsa.Activities.Bpmn.Activities.RunBpmn' and a['status']==6])!=1 or
+            read('parent-pending-wire.json')!=read('before-wire.json') or read('parent-pending.json')['run']['status']!='cancelled'):
+        raise ValueError('The actual pending-parent cut lost its cancelled native parent or original HTTP effects.')
+    if set(process['parentPendingStores'])!={'elsa','etl-runtime','etl-design'}:raise ValueError('The actual parent-pending cut lacks all three coupled stores.')
+    for kind in ('Elsa.Bpmn.CancelEmbedded.v1','Elsa.Bpmn.CancelNativeWork.v1'):
+        source=sources[kind];final_source=final_sources[kind]
+        if source['status']!=3 or source['deliveryFencingToken']<=0 or source['deliveredAt'] is not None or source['outboxItemId']!=final_source['outboxItemId'] or source['intent']!=final_source['intent']:
+            raise ValueError('The actual pending embedded cancellation lost its original fenced source acknowledgment responsibility.')
+    observations={**checked,'parentPending':pending}
+    for store,snapshot in process['parentPendingStores'].items():
+        file=q.evidence_file(root,snapshot['file']);raw=gzip.decompress(file.read_bytes())
+        if q.digest(file)!=snapshot['gzipSha256'] or hashlib.sha256(raw).hexdigest()!=snapshot['databaseSha256'] or snapshot['observer']['snapshotSha256']!=snapshot['databaseSha256'] or snapshot['observer']['readOnly'] is not True:
+            raise ValueError('An actual parent-pending coupled store differs from its read-only provider backup.')
+        with tempfile.TemporaryDirectory(prefix='elsa-parent-pending-read-') as temporary:
+            database=Path(temporary)/'snapshot.sqlite';database.write_bytes(raw)
+            with closing(sqlite3.connect(database.as_uri()+'?mode=ro&immutable=1',uri=True)) as c:
+                if c.execute('PRAGMA integrity_check').fetchall()!=[('ok',)]:raise ValueError('An actual parent-pending store failed integrity.')
+                if store=='elsa':
+                    physical_model_bridge(c,'parentPending',observations,origin,native_result,model_cancel=True,embedded=True,parent_settlement_owed=True)
+                    row=c.execute('SELECT Status,ContentJson FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId=?',(key(parent_id),)).fetchone()
+                    if row is None or row[0]!=5 or json.loads(row[1])['pinnedExecutable']!=encoded_tree(embedding['nativeParent']['pinnedExecutable']):raise ValueError('The physical pending native parent lost its cancellation or pin.')
+                    rows=[json.loads(r[0]) for r in c.execute('SELECT ContentJson FROM elsa_runtime_model_input')]
+                    if len(rows)!=3 or any(r['inputKind']==key('native-parent-settled') for r in rows):raise ValueError('The physical pending model already accepted native-parent settlement.')
+                    for receipt in embedding['inputs']:
+                        row,=[r for r in rows if r['inputId']==key(receipt['inputId'])]
+                        if row['contentFingerprint']!=key(receipt['contentFingerprint']) or row['result']!=receipt['result'] or row['acceptedRevision']!=receipt['acceptedRevision']:raise ValueError('The physical pending model changed an exact accepted receipt.')
+                    rows=[json.loads(r[0]) for r in c.execute('SELECT ContentJson FROM elsa_runtime_post_commit_outbox')]
+                    for source in embedding['sources']:
+                        row,=[r for r in rows if r['outboxItemId']==key(source['outboxItemId'])]
+                        if row['intent']['payload']!=source['intent']['payload'] or row['deliveredAt']!=source['deliveredAt'] or row['status']!=['Pending','Delivering','Delivered','FailedRetryable','FailedFinal'][source['status']]:raise ValueError('The physical pending native-parent source differs from its actual ACK state.')
+                    etl,=[r for r in rows if r['intent']['kind']==key('Elsa.Etl.Cancel.v1')]
+                    if etl['status']!='Delivered' or instant(etl['deliveredAt'])>instant(pending['resultInput']['acceptedAt']) or native_result['cancellationSources']!=[base64.b64decode(etl['outboxItemId']).decode('utf-16le')]:raise ValueError('The physical parent-pending model consumed before its actual ETL cancellation settled.')
+                elif store=='etl-runtime':
+                    row,=c.execute('SELECT InvocationJson,Status,AcceptedRecords,RejectedRecords,OutstandingRecords,OutstandingBytes FROM elsa_etl_runtime_runs').fetchall()
+                    invocation=json.loads(row[0])
+                    if row[1:]!=(5,2,0,0,0) or c.execute('SELECT Outcome FROM elsa_etl_runtime_terminals').fetchall()!=[(3,)] or decoded(invocation['runId'])!=process['runId'] or decoded(invocation['resultAddress']['workflowExecutionId'])!=origin['workerExecutionId']:
+                        raise ValueError('The actual parent-pending ETL store lost cancellation, accounting or its original native result address.')
+
+
+
 def verify(path):
     manifest=json.loads(path.read_text());root=path.parent
     if manifest.get('kind') in ('actual-bpmn-pending-cancellation-matrix','actual-bpmn-consumed-before-ack-matrix'):
@@ -451,6 +526,21 @@ def verify(path):
         return {'sourceRevision':manifest['sourceRevision'],'actualPendingCancellationStages':['model-command','native-terminal'],'pendingCancellationCrashProved':not consumed_matrix,
             'wholeStoresVerified':24 if consumed_matrix else 18,'actualWorkbenchProcesses':8,'actualHttpProcesses':2,'actualSdkProcesses':2 if consumed_matrix else 0,'postConsumptionPreAckCrashProved':consumed_matrix,
             'runBpmnEtlIntegrationProved':False,'modelHeldFaultRetryProved':False}
+    if manifest.get('kind')=='actual-native-runbpmn-etl-pending-parent-matrix':
+        cases=manifest['cases']
+        if manifest.get('schemaVersion')!=1 or len(cases)!=4 or {c['parent'] for c in cases}!={'Root','Sequence','Flowchart','CompensationScope'} or len({c['name'] for c in cases})!=4:
+            raise ValueError('The pending-parent matrix lacks all unique native parent shapes.')
+        for case in cases:
+            if case['manifest']!=case['name']+'/manifest.json':raise ValueError('A pending-parent case changed its bound evidence path.')
+            file=q.evidence_file(root,case['manifest'])
+            if q.digest(file)!=case['sha256']:raise ValueError('A pending-parent case manifest differs.')
+            result=verify(file)
+            if result['sourceRevision']!=manifest['sourceRevision'] or result['embeddedParent']!=case['parent'] or not result['nativeParentToPipelineCancellationProved'] or not result['pendingParentResultCrashProved']:
+                raise ValueError('A pending-parent case changed its source, native parent or actual crash cut.')
+        return {'sourceRevision':manifest['sourceRevision'],'actualCancelledNativeParentShapes':[c['parent'] for c in cases],
+            'wholeStoresVerified':9*len(cases),'actualWorkbenchProcesses':16,'actualSdkProcesses':4,'actualHttpProcesses':4,
+            'runBpmnEtlIntegrationProved':True,'pendingParentResultCrashProved':True,'allNativeParentCancellationPendingReturnProved':True,
+            'successParentResultCrashProved':False,'modelHeldFaultRetryProved':False}
     if manifest.get('kind')=='actual-native-runbpmn-etl-matrix':
         if manifest.get('schemaVersion')!=1 or len(manifest['cases'])!=8 or {(c['parent'],c['cancel']) for c in manifest['cases']}!={(p,c) for p in ('Root','Sequence','Flowchart','CompensationScope') for c in (False,True)} or len({c['name'] for c in manifest['cases']})!=8:raise ValueError('The embedded ETL matrix lacks all unique parent/completion/cancellation cases.')
         results=[]
@@ -470,6 +560,8 @@ def verify(path):
     embedded=manifest.get('kind') in ('actual-native-runbpmn-etl-http-recovery','actual-native-runbpmn-etl-parent-cancellation')
     counterpart=manifest.get('kind')=='actual-direct-bpmn-native-etl-success-counterpart'
     parent_cancel=manifest.get('kind')=='actual-native-runbpmn-etl-parent-cancellation'
+    parent_pending=manifest.get('pendingParentResultCrash') is True
+    if parent_pending and not parent_cancel:raise ValueError('A pending-parent result crash requires actual embedded parent cancellation.')
     model_cancel=manifest.get("kind")=="actual-direct-bpmn-native-etl-model-cancellation"
     pipeline_cancel=manifest.get("kind")=="actual-direct-bpmn-native-etl-pipeline-cancellation"
     worker_cancel=manifest.get("kind")=="actual-direct-bpmn-native-etl-worker-cancellation"
@@ -490,6 +582,7 @@ def verify(path):
     if model_cancel:names|={"model-cancel-response.json","model-cancel-command.json"}
     if embedded:names|={p+'-checked-embedding.json' for p in ('before','finished','retained')}
     if parent_cancel:names.add('native-parent-cancel-response.json')
+    if parent_pending:names|={'sdk-consume.json','parent-pending.json','parent-pending-wire.json','parent-pending-checked-model.json','parent-pending-checked-embedding.json'}|{'parent-pending-'+s+'.sqlite.gz' for s in ('elsa','etl-runtime','etl-design')}
     if pending_crash:names|={'pending.json','pending-checked.json','pending-wire.json'}|{'pending-'+s+'.sqlite.gz' for s in ('elsa','etl-runtime','etl-design')}
     if post_ack:names|={'sdk-consume.json','consumed.json','consumed-checked.json','consumed-wire.json'}|{'consumed-'+s+'.sqlite.gz' for s in ('elsa','etl-runtime','etl-design')}
     declared={asset["path"] for asset in assets}
@@ -501,12 +594,13 @@ def verify(path):
         def read(name):return json.loads(q.evidence_file(root,case+"/"+name).read_text())
         process=read("process.json");products=process["products"]
         if (process["sourceRevision"]!=source or process["parent"]!=parent or process["businessError"] is not business_error or process["predecessorExitCode"]!=-9 or
-                [item["role"] for item in process["processes"]]!=(["http-fixture","workbench","workbench","consumption-sdk","workbench","workbench"] if post_ack else ["http-fixture"]+["workbench"]*(4 if pending_crash else 3)) or len({item["processId"] for item in process["processes"]})!=(6 if post_ack else 5 if pending_crash else 4)):raise ValueError("The actual ETL reference lacks its distinct process-loss/restart provenance.")
+                [item["role"] for item in process["processes"]]!=(["http-fixture","workbench","workbench","consumption-sdk","workbench","workbench"] if post_ack or parent_pending else ["http-fixture"]+["workbench"]*(4 if pending_crash else 3)) or len({item["processId"] for item in process["processes"]})!=(6 if post_ack or parent_pending else 5 if pending_crash else 4)):raise ValueError("The actual ETL reference lacks its distinct process-loss/restart provenance.")
         if products["sourceCommit"]!=source or products["metadataOnly"] is not True or len(products["actualProductVersions"])!=(12 if direct else 6) or any(not item["productVersion"].endswith("+"+source) for item in products["actualProductVersions"]):raise ValueError("The actual Workbench and ETL products differ from their declared source.")
         before=read("before.json");finished=read("finished.json");recovered=read("recovered.json")
         before_wire=read("before-wire.json");wire=read("finished-wire.json")
         bridge=model_bridge(read,process,before,finished,business_error,cancelling,model_cancel or parent_cancel,embedded) if direct else None
         if embedded:embedded_etl_parent(read,q.evidence_file(root,case+'/process.json').parent,process,bridge,parent_cancel)
+        if parent_pending:pending_embedded_parent_return(read,q.evidence_file(root,case+'/process.json').parent,process,bridge)
         if pending_crash:pending_cancellation(read,q.evidence_file(root,case+'/process.json').parent,process,bridge,model_cancel)
         if post_ack:consumed_before_ack(read,q.evidence_file(root,case+'/process.json').parent,process,bridge,model_cancel)
         if finished!=read("retained.json") or wire!=read("retained-wire.json"):raise ValueError("The terminal native/ETL views or physical effects changed after another process.")
@@ -604,10 +698,10 @@ def verify(path):
                     cancel_id[:-len(cancel_suffix)]!=result_source["outboxItemId"][:-len(result_suffix)]):
                 raise ValueError("The native cancellation lost its exact ETL address or same-checkpoint result responsibility.")
         results.append({"case":case,"acceptedRecords":accepted,"rejectedRecords":rejected,"physicalOutputRecords":len(records),"businessErrorPreserved":business_error})
-    result={"actualReferenceJourneys":results,"wholeStoresVerified":len(expected_cases)*(12 if post_ack else 9 if pending_crash else 6),"sourceRevision":source,"directBpmnClosedWorkerIntegrationProved":direct and not embedded,
+    result={"actualReferenceJourneys":results,"wholeStoresVerified":len(expected_cases)*(12 if post_ack else 9 if pending_crash or parent_pending else 6),"sourceRevision":source,"directBpmnClosedWorkerIntegrationProved":direct and not embedded,
         "runBpmnEtlIntegrationProved":embedded,"modelHeldFaultRetryProved":False}
     result.update(pendingCancellationCrashProved=pending_crash and not post_ack,pendingCancellationStage=stage,postConsumptionPreAckCrashProved=post_ack)
-    if embedded:result.update(embeddedParent=process['embeddedParent'],nativeParentToPipelineCancellationProved=parent_cancel,pendingParentResultCrashProved=False)
+    if embedded:result.update(embeddedParent=process['embeddedParent'],nativeParentToPipelineCancellationProved=parent_cancel,pendingParentResultCrashProved=parent_pending)
     if counterpart:result['directSuccessCounterpartVerified']=True
     if not direct:result["directOrRunBpmnEtlIntegrationProved"]=False
     if cancelling:result.update(pipelineOriginatedCancellationProved=pipeline_cancel,nativeWorkerOriginatedCancellationProved=worker_cancel,modelToWorkerCancellationProved=model_cancel,modelCancellationBeforeAdmissionProved=False)

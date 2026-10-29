@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-native-runbpmn-etl-parent-cancellation",
+  "sourceRevision": "ef833d12dc288202bf6e538884837b6e2526dc7e",
+  "case": "capture",
+  "pendingParentResultCrash": true,
+  "assets": [
+    {
+      "path": "capture/before-checked-embedding.json",
+      "sha256": "48a8121d61c5f96a581b903123c1de1779f6f5e428d0a839b4262371f84f9a95"
+    },
+    {
+      "path": "capture/before-checked-model.json",
+      "sha256": "343e7e11d1a94c6c9cb26056b287cfd796a02d6542360b23b540f76ab8701255"
+    },
+    {
+      "path": "capture/before-elsa.sqlite.gz",
+      "sha256": "5543349dce754c0f8400febe83eac5c4a49b9071225f81d4277bce4009cfb226"
+    },
+    {
+      "path": "capture/before-etl-design.sqlite.gz",
+      "sha256": "1db550297993f5483c3647c76c3db642a39736cf66b06b8190e57e4b8982b510"
+    },
+    {
+      "path": "capture/before-etl-runtime.sqlite.gz",
+      "sha256": "eeb949edb1f5a9ffe553384937be79a212f81d80ce1c0759d778e8cb5226b286"
+    },
+    {
+      "path": "capture/before-wire.json",
+      "sha256": "02c4befdbd433a865b2658e0a45406306c8f29034bf3b535cff07654bd86d9bf"
+    },
+    {
+      "path": "capture/before.json",
+      "sha256": "dfe75e54b07bd1b1ad07504693a2f4affe6d867cf48e7b86e233fd5f6781c93b"
+    },
+    {
+      "path": "capture/finished-checked-embedding.json",
+      "sha256": "c44ae3735a5ad2ddfe465c80f7fb06326f6719d77dd0ace3c387e4df6b8a6c8b"
+    },
+    {
+      "path": "capture/finished-checked-model.json",
+      "sha256": "a265d102f66a3720090789a167253ca8eae230abf96287546a3b2fc458517415"
+    },
+    {
+      "path": "capture/finished-elsa.sqlite.gz",
+      "sha256": "4ebdd0a247cfc9126943555232af81884247ac7ceed1877b219a9c674b7c4b47"
+    },
+    {
+      "path": "capture/finished-etl-design.sqlite.gz",
+      "sha256": "ade2884874fcbf29f77d180441f048b30c8836d32b81aa52e3dafdcbc9f55060"
+    },
+    {
+      "path": "capture/finished-etl-runtime.sqlite.gz",
+      "sha256": "74974e0894649a156d8a8923f8a5ecf4eb0a97b2e370ca2d35319681f65277fb"
+    },
+    {
+      "path": "capture/finished-wire.json",
+      "sha256": "02c4befdbd433a865b2658e0a45406306c8f29034bf3b535cff07654bd86d9bf"
+    },
+    {
+      "path": "capture/finished.json",
+      "sha256": "79a72bd3da16ee5499f9489be1a4cad7a8f29a59281cd62d8b0678c72d2db387"
+    },
+    {
+      "path": "capture/native-parent-cancel-response.json",
+      "sha256": "27a1974f00ea9fc781dbf917d081c28953784ce529e05b272936eaacf9466827"
+    },
+    {
+      "path": "capture/parent-pending-checked-embedding.json",
+      "sha256": "e88d4ccbd81c4346be125bf7989033e113d2969a122bb09bb01a691b962fc155"
+    },
+    {
+      "path": "capture/parent-pending-checked-model.json",
+      "sha256": "006166e79ea89ec13103abaaa94405220a102c3c791e8146f5e157d3523001d5"
+    },
+    {
+      "path": "capture/parent-pending-elsa.sqlite.gz",
+      "sha256": "507986a998ca42d7e976e4ce5446eda5cce14dfd0ff49e6ab7c761509815b06a"
+    },
+    {
+      "path": "capture/parent-pending-etl-design.sqlite.gz",
+      "sha256": "4cd1ae9f19e32f3cfc2f126bba82aac4f06523724739dacfde91274b9c1088ac"
+    },
+    {
+      "path": "capture/parent-pending-etl-runtime.sqlite.gz",
+      "sha256": "b38a6fcb78372ed5bb14f0a64402937884ec287fdfc588ede71bee741b7077f7"
+    },
+    {
+      "path": "capture/parent-pending-wire.json",
+      "sha256": "02c4befdbd433a865b2658e0a45406306c8f29034bf3b535cff07654bd86d9bf"
+    },
+    {
+      "path": "capture/parent-pending.json",
+      "sha256": "bee78442088801d58b15f1d347274d18a89052b0701565252d9ab8a69429df4b"
+    },
+    {
+      "path": "capture/process.json",
+      "sha256": "84712793caa128563b4fd8ddc185cb02bc8dfe6a7404c4737af53ffc26dc4952"
+    },
+    {
+      "path": "capture/recovered.json",
+      "sha256": "dfe75e54b07bd1b1ad07504693a2f4affe6d867cf48e7b86e233fd5f6781c93b"
+    },
+    {
+      "path": "capture/retained-checked-embedding.json",
+      "sha256": "c44ae3735a5ad2ddfe465c80f7fb06326f6719d77dd0ace3c387e4df6b8a6c8b"
+    },
+    {
+      "path": "capture/retained-checked-model.json",
+      "sha256": "a265d102f66a3720090789a167253ca8eae230abf96287546a3b2fc458517415"
+    },
+    {
+      "path": "capture/retained-wire.json",
+      "sha256": "02c4befdbd433a865b2658e0a45406306c8f29034bf3b535cff07654bd86d9bf"
+    },
+    {
+      "path": "capture/retained.json",
+      "sha256": "79a72bd3da16ee5499f9489be1a4cad7a8f29a59281cd62d8b0678c72d2db387"
+    },
+    {
+      "path": "capture/safe-errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "path": "capture/sdk-consume.json",
+      "sha256": "1d785592ac80de5cf07951b8ff02c74d94552c5f8ae951954434f3f2598e0e3a"
+    }
+  ]
+}

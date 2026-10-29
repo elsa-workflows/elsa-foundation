@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-native-runbpmn-etl-pending-parent-matrix",
+  "sourceRevision": "ef833d12dc288202bf6e538884837b6e2526dc7e",
+  "cases": [
+    {
+      "name": "root",
+      "parent": "Root",
+      "manifest": "root/manifest.json",
+      "sha256": "b89ba7d88cde07502a2a1936fc89684112fb87cf6433cbba7f6873a7e1b4e87a"
+    },
+    {
+      "name": "sequence",
+      "parent": "Sequence",
+      "manifest": "sequence/manifest.json",
+      "sha256": "87eacbafb7d25badfeb44505f678e36b85574024b54546d097afef56a37f8664"
+    },
+    {
+      "name": "flowchart",
+      "parent": "Flowchart",
+      "manifest": "flowchart/manifest.json",
+      "sha256": "b10fbe640bc78c4a0b206184ed820c5ec2177e19436f904afe1a0a5da02536f9"
+    },
+    {
+      "name": "compensationscope",
+      "parent": "CompensationScope",
+      "manifest": "compensationscope/manifest.json",
+      "sha256": "29aa40f6289b86453922d7b9bb62e43ecd8cc53e92c58bb36adbbc1d2b204736"
+    }
+  ]
+}
