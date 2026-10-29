@@ -169,10 +169,12 @@ data requires an explicit optional value, union, or branch merge.
 JavaScript, Liquid, and other expression languages remain first-class. Their canonical definition
 contains a language identifier, source string, expected result type, explicit named parameter
 bindings, and evaluator options. Input-binding expressions cannot retain CLR delegates or captured
-closures, discover workflow values through ambient name-based accessors, or change engine-owned workflow state:
-variables, workflow outputs, correlation ID, instance name or outcomes. They evaluate against a read-only Elsa
-context. ([ADR 0089](0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md),
-proposed, settles how a name such as `variables.X` becomes a declared read.)
+closures, or change engine-owned workflow state: variables, workflow outputs, correlation ID, instance name or
+outcomes. They read workflow values only through the read surface defined in
+[ADR 0089](0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md), and evaluate against
+a read-only Elsa context. (ADR 0089 is proposed, and its A-4 amendment,
+[#3420](https://github.com/elsa-workflows/elsa-foundation/pull/3420), is in review. This section stays neutral on how
+that read surface works until both are agreed.)
 
 Stateful scripts are activities that receive inputs and return typed results. Their results can feed
 an explicit `Set` operation. This decision supersedes the canonical-model portion of ADR 0030 that
@@ -200,19 +202,29 @@ so a value an expression produced, once committed, does not change.
   time, generate random values and create GUIDs.
   - Evaluators run in UTC with the invariant culture. The current time comes from the host's `TimeProvider`, so tests
     can control it.
+  - UTC is the engine's clock, not a restriction on what a workflow stores: a time with its offset
+    (`DateTimeOffset`) keeps that offset (ADR 0046 amendment, *Dates*,
+    [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422)).
   - The engine provides built-in helpers for dates and GUIDs. Elsa 3 functions for the same purpose, such as
     `newGuid()` and `new Date()`, convert directly, and their names alone never cause a refusal.
   - An evaluation that was never durably recorded may produce different values when it runs again. A deliberately
     repeated evaluation, such as a loop condition on each pass, produces fresh values.
 - **D-5: functions implemented in .NET.** A host may install functions into an expression engine whose
   implementation is .NET code, as `getVariable` already is. By default only JSON values cross the boundary between
-  the script and such a function. Whether live .NET objects may also cross it, and under which mode, is analysis A-1
-  on epic #3052 and is not decided here.
-- **D-6: function profiles are guidance.** A function may carry an effect profile, such as `Repeatable` (safe to run
-  any number of times) or `External` (its effect must not repeat; the default for an unclassified function).
-  - Profiles drive diagnostics and persistence decisions. A call is never refused because of its profile.
-  - An effect outside Elsa's own state, such as an HTTP call or a .NET service call, cannot be rolled back by Elsa.
-    The workflow designer owns its idempotency (D-2).
+  the script and such a function. Whether live .NET objects may also cross it is settled by analysis A-1 on epic
+  #3052: off by default, opt-in through a separate script profile, registered objects only. The ADR 0046 amendment
+  ([#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422), V10) states the rule.
+  - **Names.** Installed functions follow one naming rule, modelled on the type alias registry (ADR 0035):
+    - reserved: the read roots (`variables`, `input`, `activities`, `workflow`, `args`) and Elsa's built-in functions;
+    - module and host functions use a namespace prefix, and a duplicate registration fails at startup instead of
+      silently overriding another;
+    - a script that declares a reserved name (`const variables = …`, the #3296 class) gets a publish diagnostic.
+- **D-6: idempotency belongs to the designer.** An effect outside Elsa's own state, such as an HTTP call or a .NET
+  service call, cannot be rolled back by Elsa. The engine supplies stable invocation identities; the workflow designer
+  owns idempotency (D-2). A call is never refused or skipped because of what it does.
+  - Functions carry no effect profile. A profile would change nothing about execution: a recorded step is not run
+    again at all, and an unrecorded one runs again completely, so no call is ever partly skipped. Diagnostics for
+    effects during input evaluation, if wanted, belong with the D-2 follow-up.
 
 *Unchanged by this amendment:*
 - the canonical serialized definition;
@@ -224,7 +236,8 @@ so a value an expression produced, once committed, does not change.
 
 *Follow-ups owned elsewhere* (each listed on epic #3052):
 - **ADR 0083 and spec 095's expression contract:** a new capability-profile name or version. `binding-pure-v1` still
-  forbids time and randomness and is replaced there.
+  forbids time and randomness and is replaced there. The function effect profiles of spec 095 (R115 to R119) go with
+  it (D-6), in the same amendment ([#3390](https://github.com/elsa-workflows/elsa-foundation/pull/3390)).
 - **The D-2 details of §3 and ADR 0032:**
   - a stable identity for an input evaluation that may have effects;
   - the durability boundary around it;
