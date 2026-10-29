@@ -36,7 +36,7 @@ using Elsa.Etl.Workflows.Runtime;
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 try
 {
-    if (args.Length is not (4 or 6) || args[0] is not ("--enqueue-start" or "--enqueue-checkpoint" or "--drain-checkpoint" or "--cancel-model" or "--consume-native-result" or "--consume-native-success") ||
+    if (args.Length is not (4 or 6) || args[0] is not ("--enqueue-start" or "--enqueue-checkpoint" or "--drain-checkpoint" or "--cancel-model" or "--consume-native-result" or "--consume-native-success" or "--create-auth-probe-users") ||
         args.Length == 6 && args[4] != (args[0] == "--consume-native-success" ? "--parent-return-stage" : "--gate"))
         throw new ArgumentException("Select an owned enqueue/drain/cancel operation, content root, model id, nonce and optional --gate directory.");
     var race = args[0] is "--drain-checkpoint" or "--cancel-model";
@@ -55,6 +55,12 @@ try
         throw new InvalidOperationException("The caller has not identified this controller-owned journey.");
     var database = Path.Combine(root, "elsa.db");
     if (!File.Exists(database)) throw new FileNotFoundException("The owned Workbench must create its store first.");
+    if (args[0] == "--create-auth-probe-users")
+    {
+        if (args.Length != 4) throw new ArgumentException("The owned identity setup does not use a gate.");
+        await AuthProbeSetup.CreateAsync(root, args[3], json);
+        return 0;
+    }
     var services = new ServiceCollection();
     services.AddLogging(); services.AddWorkflowRuntime();
     services.AddSingleton<IPersistenceAccessContextAccessor>(new ScopedAccess());

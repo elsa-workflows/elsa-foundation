@@ -72,6 +72,7 @@ def main():
     service_policy.add_argument('--hold-service-retry',action='store_true',help='Pin HoldForRetry/2 and recover one authorized physical retry after a second process loss.')
     service_policy.add_argument('--final-service-fault',action='store_true',help='Pin explicit FinalFault/1 and prove a real current incident cannot retry after semantic finality.')
     parser.add_argument('--held-action',choices=('retry','cancel','exhaust'),default='retry',help='After the held failure survives its second process loss, retry successfully, cancel, or exhaust its budget through a real unavailable bound input.')
+    parser.add_argument('--retry-auth-controls',action='store_true',help='Use real owned Identity accounts to verify retry/inspection permissions and foreign-tenant refusal before and after replay.')
     parser.add_argument("--queued-native-stage", choices=("start", "checkpoint"), help="With cancellation before admission, use the actual SDK to retain the selected native queue stage first.")
     parser.add_argument("--dispatcher-assembly", type=Path, help="Built owned SDK client required for the queued-native cut.")
     parser.add_argument("--admission-race-order", choices=("cancel-first", "admit-first"), help="Gate an unchanged actual proposal before its provider transaction, commit the competitor, then cold-recover both writers' obligations.")
@@ -93,6 +94,8 @@ def main():
     if (args.hold_service_retry or args.final_service_fault) and (not args.technical_fault or args.business_error_boundary!='matching'):
         parser.error('The explicit service fault policy journey requires --technical-fault --business-error-boundary matching.')
     if args.held_action!='retry' and not args.hold_service_retry:parser.error('--held-action requires --hold-service-retry.')
+    if args.retry_auth_controls and (not args.hold_service_retry or args.held_action!='retry' or args.dispatcher_assembly is None):
+        parser.error('Retry authorization controls require --hold-service-retry --held-action retry and --dispatcher-assembly.')
     if args.business_error_boundary and (not (args.business_error or args.technical_fault) or args.parent!='BpmnModel'):
         parser.error("A business-error boundary requires --parent BpmnModel and a business-error or technical-fault journey.")
     caught_business_error=args.business_error and args.business_error_boundary=='matching'
@@ -124,7 +127,7 @@ def main():
     for name in ("appsettings.json", "appsettings.Development.json", "shells.json"):
         shutil.copyfile(REPO / "Essentials/apps/Elsa.Workbench" / name, root / name)
     for name in ("packages", "etl-snapshots", "errors"): (root / name).mkdir()
-    processes = []; children = []; logs = []; host = None; retry_input_unavailable = None
+    processes = []; children = []; logs = []; host = None; retry_input_unavailable = None; auth_accounts = None
 
     def start(command, role):
         log = (root / f"{role}-{len(processes)}.log").open("w"); logs.append(log)
@@ -174,6 +177,45 @@ def main():
             with backup.open("rb") as raw,gzip.open(target,"wb") as zipped:shutil.copyfileobj(raw,zipped)
             result[name]={"file":target.name,"databaseSha256":q.digest(backup),"gzipSha256":q.digest(target),"observer":observed}
         return result
+
+    def auth_controls(stage,route,request,expected_command):
+        sessions=[];outcomes=[]
+        def observe(client,profile,operation,path,value,expected):
+            call=urllib.request.Request(client.base+path,data=None if value is None else json.dumps(value).encode(),headers={'Content-Type':'application/json'})
+            try:
+                with client.opener.open(call,timeout=30) as response:status=response.status;raw=response.read()
+            except urllib.error.HTTPError as error:
+                status=error.code;raw=error.read();error.close()
+            try:body=json.loads(raw) if raw else {}
+            except json.JSONDecodeError:body={}
+            has_outcome=isinstance(body,dict) and any(k in body for k in ('result','replay','pending','executionId','items'))
+            if status!=expected or expected!=200 and has_outcome:
+                raise ValueError(f'Actual authorization control {stage}/{profile}/{operation} returned HTTP {status}, expected {expected}, outcome={has_outcome}.')
+            if expected==200 and operation=='read-command' and (body.get('inputId')!=expected_command['inputId'] or body.get('result')!=expected_command['result']):
+                raise ValueError('The read-authorized principal did not inspect the exact retained command result.')
+            if expected==200 and operation=='retry-replay' and (not body.get('replay') or body.get('pending') or body.get('result')!=expected_command['result']):
+                raise ValueError('The retry-authorized principal did not replay its exact already-accepted result.')
+            outcomes.append({'profile':profile,'operation':operation,'httpStatus':status,'returnedOutcome':has_outcome})
+        anonymous=q.Api(api.base)
+        clients=[('anonymous',anonymous,401,401)]
+        for account in auth_accounts:
+            client=q.Api(api.base);session=client.request('/_elsa/identity/login',{'username':account['userName'],'password':account['password'],'tenantId':account['tenantId']})
+            if session['status']!='authenticated' or session['tenantId']!=account['tenantId'] or set(session['permissions'])!=set(account['permissions']):
+                raise ValueError('The real sign-in did not produce the owned account\'s exact tenant and bounded permission set.')
+            sessions.append({'profile':account['profile'],'session':session})
+            clients.append((account['profile'],client,404 if account['profile']=='foreign' else 200 if account['profile']=='reader' else 403,
+                404 if account['profile']=='foreign' else 200 if account['profile']=='retrier' else 403))
+        for profile,client,read_status,retry_status in clients:
+            observe(client,profile,'read-execution',route,None,read_status)
+            observe(client,profile,'read-incidents',route+'/incidents?limit=10',None,read_status)
+            observe(client,profile,'read-command',route+'/commands/'+urllib.parse.quote(expected_command['inputId'],safe=''),None,read_status)
+            if stage!='before' or profile!='retrier':observe(client,profile,'retry-replay' if stage!='before' else 'retry-before-admission',route+'/retry-service',request,retry_status)
+            if profile in ('anonymous','nobody','retrier','foreign'):
+                observe(client,profile,'read-unknown-command',route+'/commands/unknown-auth-command',None,read_status)
+        evidence={'schemaVersion':1,'kind':'actual-bpmn-retry-http-authorization','sourceRevision':source,'stage':stage,'modelExecutionId':model_execution,
+            'principals':sessions,'outcomes':outcomes,'expectedCommand':expected_command,'credentialsIncluded':False,'mockAuthenticationUsed':False}
+        q.write_json(output/('auth-'+stage+'.json'),evidence)
+        return evidence
 
     try:
         fixture_script=REPO/"e2e-tests/etl/EtlHttpFixture.mjs";ready=root/"http-ready.json"
@@ -498,6 +540,20 @@ def main():
             if native_parent_execution:q.write_json(output/'held-checked-embedding.json',checked_embedding())
             stop(host,crash=True);held_exit=host.returncode
             if held_exit!=-signal.SIGKILL:raise ValueError('The actual held incident did not survive a second process loss.')
+            if args.retry_auth_controls:
+                dispatcher=args.dispatcher_assembly.resolve(strict=True);nonce=uuid.uuid4().hex
+                q.write_json(root/'owned-bpmn-recovery.json',{'schemaVersion':1,'controllerProcessId':os.getpid(),'modelExecutionId':model_execution,'nonce':nonce})
+                auth_accounts=[{'profile':name,'userName':'bpmn-probe-'+name,'tenantId':'bpmn-probe-foreign' if name=='foreign' else 'default',
+                    'password':'Probe-'+uuid.uuid4().hex+'a1!','permissions':permissions}
+                    for name,permissions in [('reader',['bpmn:read']),('retrier',['bpmn:retry-service']),('nobody',[]),('foreign',['bpmn:read','bpmn:retry-service'])]]
+                private=root/'owned-auth-probe-request.json';q.write_json(private,{'nonce':nonce,'users':auth_accounts});private.chmod(0o600)
+                sdk=start(['dotnet',str(dispatcher),'--create-auth-probe-users',str(root),model_execution,nonce],'auth-sdk')
+                sdk.wait(timeout=60);private.unlink()
+                if sdk.returncode!=0:raise ValueError('The production Identity SDK could not create its bounded owned test accounts; see private diagnostics.')
+                setup=json.loads((root/f'auth-sdk-{len(processes)-1}.log').read_text().splitlines()[-1])
+                if setup['credentialsIncluded'] or setup['executionStateSeeded'] or any(not item['informationalVersion'].endswith('+'+source) for item in setup['products']):
+                    raise ValueError('The Identity setup is not source-matched normal production-service work.')
+                q.write_json(output/'auth-probe-users.json',setup)
             if lookup_snapshot.exists() or q.digest(unavailable)!=snapshot_unavailability['snapshotSha256Before']:
                 raise ValueError('The retained lookup changed while its failed attempt was held.')
             unavailable.rename(lookup_snapshot)
@@ -581,6 +637,11 @@ def main():
                     'originalRetainedSnapshotStillAvailable':lookup_snapshot.is_file(),'inducedAtUtc':datetime.now(timezone.utc).isoformat()}
                 q.write_json(output/'retry-input-unavailability.json',input_unavailability)
             request={'requestId':'retry-actual-held-service','incidentId':incident['incidentId'],'invocationId':incident['invocationId'],'failedAttemptId':incident['failedAttemptId']}
+            if args.retry_auth_controls:
+                expected={'inputId':old_result['origin']['resultInputId'],'result':checked_held['resultInput']['result']}
+                auth_controls('before',route,request,expected)
+                if checked_native_model()!=checked_held or wire()!=before_wire:
+                    raise ValueError('A denied principal changed the held execution before the authorized retry.')
             submitted=api.request(route+'/retry-service',request)
             accepted=wait_for(lambda:api.request(route+'/commands/'+request['requestId']),lambda value:not value['pending'],
                 'The authorized retry did not retain its exact command result.',90)
@@ -595,6 +656,7 @@ def main():
             except urllib.error.HTTPError as error:
                 if error.code!=409:raise
             q.write_json(output/'retry-command.json',{'request':request,'submitted':submitted,'accepted':accepted,'duplicate':duplicate,'conflictingContentHttpStatus':409})
+            if args.retry_auth_controls:auth_controls('after',route,request,accepted)
             def retried_run():
                 runs=api.request('/etl/runs?limit=100')['items']
                 if len(runs)!=2:return None
@@ -702,6 +764,7 @@ def main():
             q.write_json(output/'finished-checked-model.json',checked_final);q.write_json(output/'finished-checked-replacement.json',checked_replacement)
             if native_parent_execution:q.write_json(output/'finished-checked-embedding.json',checked_embedding())
             stop(host);finished_stores=snapshots('finished');api=launch()
+            if args.retry_auth_controls:auth_controls('retained',route,request,accepted)
             retained=pair();retained_wire=wire();q.write_json(output/'retained.json',retained);q.write_json(output/'retained-wire.json',retained_wire)
             q.write_json(output/'retained-checked-model.json',checked_native_model())
             q.write_json(output/'retained-checked-replacement.json',json.loads(subprocess.check_output(['dotnet',str(reader),'--read-bpmn-native',str(root/'elsa.db'),model_execution,replacement['origin']['workerExecutionId']],text=True,timeout=30)))
@@ -714,6 +777,7 @@ def main():
                 'beforeStores':before_stores,'heldStores':held_stores,'finishedStores':finished_stores,'publication':publication,'modelPublication':model_publication,'etlPublication':published,
                 'nativeParentExecutionId':native_parent_execution,'nativeParentPublication':native_parent_publication,'selection':selection,'bindings':bindings,
                 'fixtureSha256':q.digest(fixture_script),'controllerSha256':q.digest(Path(__file__)),'businessError':False,'technicalFault':True,
+                **({'authorizationControls':True,'dispatcherSha256':q.digest(dispatcher)} if args.retry_auth_controls else {}),
                 'technicalFaultPolicy':'HoldForRetry','maxServiceAttempts':2,'retryAfterSeconds':retry_after,'resumptionSweepIntervalSeconds':.2,
                 'scopeLimits':['Actual one authorized held-service retry after process loss; old failed state stays terminal, with one new physical worker/run for the same semantic work. Prior effects may repeat.',
                     'Snapshot availability is repaired externally without changing bytes or SQL state. Budget exhaustion, cancellation while held, old-result controls, provider/retention/rollback and final upgrade/Studio remain separate gates.']})
