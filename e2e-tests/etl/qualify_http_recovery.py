@@ -167,8 +167,8 @@ def main():
         model_publication=None;model_execution=None
         if direct_bpmn:
             worker_pin={field:publication[field] for field in ("artifactId","artifactHash","artifactVersion","definitionId","definitionVersionId")}
-            process={"id":"direct-etl","elements":[{"id":"start","elementType":"startEvent"},{"id":"service","elementType":"serviceTask","bindingRef":"pipeline"},{"id":"end","elementType":"endEvent"}],
-                "sequenceFlows":[{"id":"to-service","sourceRef":"start","targetRef":"service"},{"id":"to-end","sourceRef":"service","targetRef":"end"}]}
+            process={"processId":"direct-etl","elements":[{"elementId":"start","elementType":"startEvent"},{"elementId":"service","elementType":"serviceTask","bindingRef":"pipeline"},{"elementId":"end","elementType":"endEvent"}],
+                "sequenceFlows":[{"flowId":"to-service","sourceRef":"start","targetRef":"service"},{"flowId":"to-end","sourceRef":"service","targetRef":"end"}]}
             model_publication=api.request("/bpmn/artifacts",{"requestId":"publish-model","definition":{"formatVersion":2,"process":process,"humanBindings":[],
                 "serviceBindings":[{"bindingId":"pipeline","executable":worker_pin,"businessErrorCode":"etl.rows-rejected"}]}})
             executed=api.request("/bpmn/executions",{"requestId":"start-model","sourceReferenceId":model_publication["sourceReferenceId"]})
