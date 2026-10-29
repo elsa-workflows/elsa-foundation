@@ -2,7 +2,7 @@
 
 Status: revised (2026-10-19), implementation [#3009](https://github.com/elsa-workflows/elsa-foundation/issues/3009).
 Amended (2026-10-27, [epic #3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052) decisions D-1 and
-D-11): new capability profile `binding-readonly-v2`, and the undefined-as-null policy. See *Amendment* below.
+D-11): new capability profile `binding-readonly-v1`, and the undefined-as-null policy. See *Amendment* below.
 
 This replaces the unimplemented 5 August proposal for host-selected grammars in
 [spec 146](../../specs/146-javascript-binding-grammar/spec.md), following the owner's request to
@@ -41,20 +41,23 @@ statement body returning an object, use `return { total: 42 };`.
 
 Both forms remain strict, use the same read-only `args` and visible-variable snapshot, and have
 identical sandbox restrictions, cancellation, execution limits and JSON result materialization. They
-share one capability profile, `binding-readonly-v2` (see the amendment below; originally
+share one capability profile, `binding-readonly-v1` (see the amendment below; originally
 `binding-pure-v1`). Statements introduce local computation, not permission to change workflow
 state. A result of `undefined` remains an error with guidance to produce or return a value, unless
 the workflow selects the undefined-as-null policy (amendment below).
 
 ## Amendment (epic #3052, decisions D-1 and D-11, 2026-10-27)
 
-**Capability profile `binding-readonly-v2` replaces `binding-pure-v1`.**
+**Capability profile `binding-readonly-v1` replaces `binding-pure-v1`.**
 [ADR 0045 §5](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md#5-make-expressions-serialized-explicit-and-pure),
 as amended for D-1, D-5 and D-6, no longer requires bindings to be deterministic. `binding-pure-v1` forbids time,
 randomness and GUIDs by definition, so it is retired rather than redefined. A profile name must always mean the same
 behaviour.
 - **The new name says what still holds:** a binding reads, it never changes engine-owned workflow state.
-- **It allows** the current time (UTC, invariant culture, from the host's `TimeProvider`), random values and GUIDs.
+- **It allows** the current time (UTC, invariant culture, from an injectable clock), random values and GUIDs. Date and
+  time-zone rules are the ADR 0046 amendment's (*Dates*, [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422)).
+- **The name starts a new family at v1.** The succession from `binding-pure-v1` is recorded here, not in the version
+  number.
 - **It also allows functions implemented in .NET** that are registered for the profile and exchange only JSON values
   with the script (D-5). Functions carry no effect profile; a call is never refused or skipped because of what it
   does (D-6).
@@ -82,7 +85,7 @@ as amended for D-10 and D-11, adds a visible workflow policy, pinned in the exec
 *Left to the implementing specs* (S-1 and S-2 on the epic):
 - **renaming the profile constant** and removing the replay justification that `Inline` derives from
   `binding-pure-v1`;
-- **the registration API** that marks a function as allowed in `binding-readonly-v2`;
+- **the registration API** that marks a function as allowed in `binding-readonly-v1`;
 - **the editor guidance** shown for an `undefined` result when the policy is not selected.
 
 The JavaScript editor keeps a single language choice. The expanded editor explains that users can

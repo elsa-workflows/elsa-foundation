@@ -55,7 +55,7 @@ pinned as part of the consumer invocation's complete input snapshot.
   "language": "JavaScript",
   "source": "args.subtotal + args.tax",
   "resultType": { "alias": "Decimal", "collection": "None" },
-  "capabilityProfile": "binding-readonly-v2",
+  "capabilityProfile": "binding-readonly-v1",
   "parameters": [
     {
       "name": "subtotal",
@@ -106,7 +106,7 @@ Both engines MUST materialize dynamic `Any` parameters consistently from fresh `
 `JsonElement` forms. Mutation of the engine-local object MUST NOT write workflow state and SHOULD be
 prevented/frozen where supported.
 
-The `binding-readonly-v2` capability profile (ADR 0083 amendment, epic #3052 decisions D-1, D-5, D-6
+The `binding-readonly-v1` capability profile (ADR 0083 amendment, epic #3052 decisions D-1, D-5, D-6
 and D-11; it replaces `binding-pure-v1`) permits value transforms that read workflow values and never
 change engine-owned workflow state. They need not be deterministic.
 
