@@ -6,6 +6,8 @@ The later [held-service retry journeys](../../specs/1017-direct-bpmn-hosting/evi
 
 [Cancellation while held](../../specs/1017-direct-bpmn-hosting/evidence/pipeline/held-service-cancellation/README.md) is a separate real journey under the same five shapes. `verify_held_service_cancellation.py` checks retirement, unchanged failed native/ETL truth, terminal retry refusal, original native parent cancellation and no additional worker/run/HTTP effects after two process losses. Budget exhaustion, timer/competing-input/authorization and final upgrade/Studio gates remain open.
 
+[Service budget exhaustion](../../specs/1017-direct-bpmn-hosting/evidence/pipeline/service-budget-exhaustion/README.md) proves the two-total-attempt boundary under all five shapes. `verify_service_budget_exhaustion.py` checks a genuine second preparation fault, both immutable failed attempts, terminal refusal of further retry, exact native parent fault/compensation settlement, and no new effect after restoring the bound input and restarting. Remaining timer/competing-input/obsolete-result/authorization and final upgrade/Studio acceptance remains open.
+
 `Test-FiniteFileEtl.ps1` exercises the finite CSV-to-JSONL path through an isolated, owned
 Workbench process. It uses the normal HTTP APIs to inspect host bindings, create/validate/publish
 an ETL definition, publish native workflow definitions, and execute the resulting artifacts. The

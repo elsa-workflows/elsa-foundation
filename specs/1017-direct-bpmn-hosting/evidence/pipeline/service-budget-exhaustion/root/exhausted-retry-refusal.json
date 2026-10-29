@@ -1,0 +1,35 @@
+{
+  "request": {
+    "requestId": "retry-actual-exhausted-service",
+    "incidentId": "bpmn-incident:d224212fef483eefd8d889c679e5868f56788f38f414968ce25cf608a442c92d",
+    "invocationId": "bpmn-work:01ac506cfefd8c70f31335fd9058fcba56a5c0d4f09c3e23bd58311773daefd4",
+    "failedAttemptId": "attempt:9746c5868b21fb4f4a912dffa05ae1facfe0e43c7f4a94ee523626b13d6a5b6a"
+  },
+  "incident": {
+    "incidentId": "bpmn-incident:d224212fef483eefd8d889c679e5868f56788f38f414968ce25cf608a442c92d",
+    "elementId": "service",
+    "bindingId": "pipeline",
+    "invocationId": "bpmn-work:01ac506cfefd8c70f31335fd9058fcba56a5c0d4f09c3e23bd58311773daefd4",
+    "failedAttemptId": "attempt:9746c5868b21fb4f4a912dffa05ae1facfe0e43c7f4a94ee523626b13d6a5b6a",
+    "workerExecutionId": "wfexec:start:v1:308e37045f5ed2dc81b3eb2c6b3f2635cdef77e39038b8e25dea84ca7a4f7e13",
+    "faultCode": "etl.binding-read-failed",
+    "failedAt": "2026-10-29T20:46:56.999623+00:00",
+    "attemptNumber": 2,
+    "maxAttempts": 2,
+    "status": "Final",
+    "retryAttemptId": null
+  },
+  "httpStatus": 409,
+  "command": {
+    "executionId": "bpmn-embedded:51afd7f1990d6a4ca675e6890012bd087efa9d431c979db4977e965e36ef0ba7",
+    "inputId": "retry-actual-exhausted-service",
+    "replay": true,
+    "pending": false,
+    "result": {
+      "status": "Rejected",
+      "code": "execution-terminal",
+      "revision": 5,
+      "lifecycle": "TerminalSettled"
+    }
+  }
+}
