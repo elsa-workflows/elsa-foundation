@@ -15,8 +15,10 @@
   },
   "assets": [
     {
-      "path": "legacy-controls/process.json",
-      "sha256": "4b848b5ef800211723e8b6f79fbf1e3b8ff9c745bcb4e7aba6fb4d5d69e87c4d"
+      "path": "legacy-controls/process.json.gz",
+      "sha256": "19141d1a3bb285d88503818e2f96925b6343a8fd439da93dfc6a24fdee494ea7",
+      "encoding": "gzip",
+      "uncompressedSha256": "4b848b5ef800211723e8b6f79fbf1e3b8ff9c745bcb4e7aba6fb4d5d69e87c4d"
     },
     {
       "path": "legacy-controls/finished-design.sqlite.gz",

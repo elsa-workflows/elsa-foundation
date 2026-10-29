@@ -5,6 +5,7 @@ from contextlib import closing
 from datetime import datetime, timezone
 import json
 import gzip
+import hashlib
 import os
 from pathlib import Path
 import signal
@@ -483,8 +484,8 @@ class ActualControlsUpgradeControls(unittest.TestCase):
         capture.verify_upgrade(self.original); self.before = capture.digest(self.original)
         self.directory = tempfile.TemporaryDirectory(); self.bundle = Path(self.directory.name) / "upgrade"
         shutil.copytree(self.original.parent, self.bundle); self.path = self.bundle / "manifest.json"
-        self.manifest = json.loads(self.path.read_text()); self.process_path = self.bundle / "legacy-controls/process.json"
-        self.process = json.loads(self.process_path.read_text())
+        self.manifest = json.loads(self.path.read_text()); self.process_path = self.bundle / "legacy-controls/process.json.gz"
+        self.process = json.loads(gzip.decompress(self.process_path.read_bytes()))
 
     def tearDown(self):
         self.assertEqual(self.before, capture.digest(self.original)); capture.verify_upgrade(self.original)
@@ -495,7 +496,10 @@ class ActualControlsUpgradeControls(unittest.TestCase):
         name = path.relative_to(self.bundle).as_posix()
         next(asset for asset in self.manifest["assets"] if asset["path"] == name)["sha256"] = capture.digest(path)
         capture.write_json(self.path, self.manifest)
-    def save_process(self): capture.write_json(self.process_path, self.process); self.rehash(self.process_path)
+    def save_process(self):
+        raw = json.dumps(self.process).encode(); self.process_path.write_bytes(gzip.compress(raw, mtime=0))
+        next(asset for asset in self.manifest["assets"] if asset["path"] == "legacy-controls/process.json.gz")["uncompressedSha256"] = hashlib.sha256(raw).hexdigest()
+        self.rehash(self.process_path)
     def mutate_snapshot(self, stage, mutate):
         snapshot = stage["snapshot"]; path = self.bundle / "legacy-controls" / snapshot["file"]
         database = Path(self.directory.name) / "changed.sqlite"; database.write_bytes(gzip.decompress(path.read_bytes()))
@@ -505,6 +509,11 @@ class ActualControlsUpgradeControls(unittest.TestCase):
         path.write_bytes(gzip.compress(database.read_bytes(), mtime=0)); snapshot["databaseSha256"] = capture.digest(database); snapshot["gzipSha256"] = capture.digest(path)
         for family in ("escalations", "concurrent", "compensation"): stage[family + "Proof"]["snapshotSha256"] = capture.digest(database)
         self.rehash(path); self.save_process()
+
+    def test_compressed_receipt_must_keep_its_declared_decoded_bytes(self):
+        next(asset for asset in self.manifest["assets"] if asset["path"] == "legacy-controls/process.json.gz")["uncompressedSha256"] = "0" * 64
+        capture.write_json(self.path, self.manifest)
+        with self.assertRaisesRegex(ValueError, "exact decoded bytes"): capture.verify_upgrade(self.path)
 
     def test_second_semantic_token_cannot_consume_its_sibling(self):
         case = self.stage("intermediate")["concurrentProof"]["calledWorkflows"][0]

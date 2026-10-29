@@ -12,13 +12,13 @@
     "trxSha256": "9cb7465e8ee16fb6548680488fa00aa7f3668ab18c57255630b9398142cb5dbf"
   },
   "verifierControls": {
-    "passed": 45,
+    "passed": 46,
     "failed": 0,
     "skipped": 0,
-    "newControlRefusalControls": 8,
+    "newControlRefusalControls": 9,
     "command": "ELSA_BPMN_CAPTURE_MANIFEST=specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/manifest.json python3 -m unittest discover -s e2e-tests/bpmn -p test_qualify_hosting.py -v",
-    "verifierSha256": "16e3086fa16704f51d9121f42d2230c47474fb6fe83d0ef20e33c33f19d73d26",
-    "controlsSha256": "5f4ba09433accf8fd6cc5a0c4134bbf570383d991630be03c37ce936fd6b7448"
+    "verifierSha256": "f3fb63981a125be630f3ce393ce0b0560fbc037359954281885fb1fa15b826a3",
+    "controlsSha256": "4bc6f89179e245c969c793f15dc35b33346613dc4489c5264efc750f654cf708"
   },
   "projectGraphAndTierChecks": {
     "solutionFilters": "pass",
@@ -43,5 +43,11 @@
     "Active multi-instance and actual Studio qualification remain open.",
     "New direct-model/RunBpmn settlement, native/ETL integration and remaining operational/clustered acceptance remain open.",
     "T030, #2898, #2907 and Program #2892 are not complete."
-  ]
+  ],
+  "losslessReceiptEncoding": {
+    "encoding": "gzip",
+    "decodedBytes": 12632565,
+    "compressedBytes": 957159,
+    "decodedSha256BoundInManifest": true
+  }
 }

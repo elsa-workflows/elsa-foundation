@@ -1057,12 +1057,15 @@ def verify_controls_upgrade(path: Path) -> dict:
     manifest = json.loads(path.read_text()); root = path.parent
     if manifest.get("schemaVersion") != 1 or manifest.get("kind") != "actual-legacy-controls-upgrade": raise ValueError("Unknown control upgrade evidence.")
     stages = ("recovered", "intermediate", "resumed", "settled", "finished")
-    names = {"legacy-controls/process.json", "legacy-controls/finished-design.sqlite.gz", "frozen-contract.json"} | {"legacy-controls/" + name + ".sqlite.gz" for name in stages}
+    names = {"legacy-controls/process.json.gz", "legacy-controls/finished-design.sqlite.gz", "frozen-contract.json"} | {"legacy-controls/" + name + ".sqlite.gz" for name in stages}
     assets = {asset["path"]: asset for asset in manifest["assets"]}
     if set(assets) != names or len(assets) != len(manifest["assets"]): raise ValueError("The control evidence is incomplete or duplicated.")
     for name, asset in assets.items():
         if digest(evidence_file(root, name)) != asset["sha256"]: raise ValueError("A control upgrade asset differs.")
-    process = json.loads(evidence_file(root, "legacy-controls/process.json").read_text()); source = manifest.get("sourceRevision", "")
+    raw_process = gzip.decompress(evidence_file(root, "legacy-controls/process.json.gz").read_bytes())
+    process_asset = assets["legacy-controls/process.json.gz"]
+    if process_asset.get("encoding") != "gzip" or process_asset.get("uncompressedSha256") != hashlib.sha256(raw_process).hexdigest(): raise ValueError("The compressed control receipt lost its exact decoded bytes.")
+    process = json.loads(raw_process); source = manifest.get("sourceRevision", "")
     if (not re.fullmatch(r"[0-9a-f]{40}", source) or process.get("sourceRevision") != source or process.get("kind") != manifest["kind"] or process.get("formatVersion") != 1 or
             not re.fullmatch(r"[0-9a-f]{40}", process.get("baselineSourceRevision", "")) or source == process["baselineSourceRevision"] or
             process.get("baselineManifestSha256") != manifest.get("baselineManifestSha256") or process.get("baselineAssets") != manifest.get("baselineAssets") or
@@ -1173,9 +1176,12 @@ def resume_controls_upgrade(args) -> dict:
     with tempfile.TemporaryDirectory(prefix="elsa-controls-upgraded-design-") as temporary:
         database = Path(temporary) / "design.sqlite"; database.write_bytes(gzip.decompress((output / "legacy-controls/finished-design.sqlite.gz").read_bytes()))
         subprocess.run([sys.executable, str(REPO / "e2e-tests/bpmn/verify_published_contracts.py"), "--database", str(database), "--source-revision", source, "--closed-snapshot", "--output", str(output / "frozen-contract.json")], check=True, timeout=60)
-    names = ["legacy-controls/process.json", "legacy-controls/finished-design.sqlite.gz", "frozen-contract.json"] + ["legacy-controls/" + name + ".sqlite.gz" for name in ("recovered", "intermediate", "resumed", "settled", "finished")]
-    write_json(output / "manifest.json", {"schemaVersion": 1, "kind": "actual-legacy-controls-upgrade", "sourceRevision": source, "baselineManifestSha256": digest(baseline), "baselineAssets": inputs,
-        "assets": [{"path": name, "sha256": digest(output / name)} for name in names]})
+    process_path = output / "legacy-controls/process.json"
+    (output / "legacy-controls/process.json.gz").write_bytes(gzip.compress(process_path.read_bytes(), mtime=0))
+    names = ["legacy-controls/process.json.gz", "legacy-controls/finished-design.sqlite.gz", "frozen-contract.json"] + ["legacy-controls/" + name + ".sqlite.gz" for name in ("recovered", "intermediate", "resumed", "settled", "finished")]
+    assets = [{"path": name, "sha256": digest(output / name)} for name in names]
+    assets[0].update(encoding="gzip", uncompressedSha256=digest(process_path))
+    write_json(output / "manifest.json", {"schemaVersion": 1, "kind": "actual-legacy-controls-upgrade", "sourceRevision": source, "baselineManifestSha256": digest(baseline), "baselineAssets": inputs, "assets": assets})
     return verify_controls_upgrade(output / "manifest.json")
 
 
