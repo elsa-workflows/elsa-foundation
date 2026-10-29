@@ -142,7 +142,9 @@ with the version and digest it saw, and is committed with the input snapshot. Th
 - **protection:** a result inherits the strongest protection policy of what it read, as A-1 proposes, checked on the
   actual reads instead of refused at publish;
 - **inspection:** "which invocations read this variable, and which version";
-- **lost-update detection** in ADR 0092 (a read-modify-write needs its base).
+- **lost-update detection** in ADR 0092 (a read-modify-write needs its base). This also replaces ADR 0090 §7's
+  comparison of serialized values: conflicts are checked on the recorded versions (ADR 0090 amendment, [#3425](https://github.com/elsa-workflows/elsa-foundation/pull/3425),
+  C5).
 
 **A4. Publish validates; it does not add.** Publish parses each script with the language's parser (decision 2's rule,
 no regular expressions) and checks it. It adds no parameter bindings.
