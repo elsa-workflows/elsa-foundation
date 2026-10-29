@@ -6,6 +6,7 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
@@ -38,6 +39,7 @@ try
         Provider = "Sqlite", ConnectionString = new SqliteConnectionStringBuilder { DataSource = database, Mode = SqliteOpenMode.ReadWrite, Pooling = false }.ToString(),
         Pooling = false, CacheWorkflowExecutables = false, RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('r', 32)
     });
+    services.AddPersistenceModes();
     services.Replace(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainPolicy>(new CaptureDrainPolicy(checkpointCut)));
     await using var provider = services.BuildServiceProvider();
     await using var scope = provider.CreateAsyncScope();

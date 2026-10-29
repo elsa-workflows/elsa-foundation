@@ -3,5 +3,6 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <ProjectReference Include="../../../Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../Essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
   </ItemGroup>
 </Project>
