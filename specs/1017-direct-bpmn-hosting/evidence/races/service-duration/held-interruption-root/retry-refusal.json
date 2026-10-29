@@ -1,0 +1,21 @@
+{
+  "request": {
+    "requestId": "retry-after-actual-held-timeout",
+    "incidentId": "bpmn-incident:814c6ba57ff0f4941dd71d21a70cdf0b3ea280ab6ae443f5b4997f405fdf09df",
+    "invocationId": "bpmn-work:b2b15dfa1054a6f9701164f26f3dd3b1da8117d9be01906ace7c8383cdaffb5d",
+    "failedAttemptId": "attempt:7c1dec002107ac6220cbb2653709393f62a50d6e67071ed532f1ab7a56d10e65"
+  },
+  "httpStatus": 409,
+  "outcome": {
+    "executionId": "bpmn-embedded:1532c5840f159ee079eb8a40dd02c122b5e2d64249b9fa4e8fa02dcf9d48b304",
+    "inputId": "retry-after-actual-held-timeout",
+    "replay": false,
+    "pending": false,
+    "result": {
+      "status": "Rejected",
+      "code": "execution-terminal",
+      "revision": 4,
+      "lifecycle": "TerminalSettled"
+    }
+  }
+}

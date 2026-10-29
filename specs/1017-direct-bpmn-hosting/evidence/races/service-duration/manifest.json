@@ -1,0 +1,2064 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-service-duration-matrix",
+  "sourceRevision": "8dc088bae4463b8a9279a1f25036ac14b1715cd6",
+  "cases": [
+    {
+      "name": "worker-first-direct",
+      "parent": "direct",
+      "order": "worker-first",
+      "assets": [
+        {
+          "path": "worker-first-direct/before-checked-model.json",
+          "sha256": "8d6ecf48f6dc85d45534f4a22257613d78f7ba0970db41cf9664e1f624582a40"
+        },
+        {
+          "path": "worker-first-direct/before-checked-timers.json",
+          "sha256": "9e5d8911f8626ed206cd46760495f639e6c88ad649083df62b386c1c2a63c97e"
+        },
+        {
+          "path": "worker-first-direct/before-elsa.sqlite.gz",
+          "sha256": "527bfa139d9fee9e725f1ef84e034e4fa6244d4c2551907e3cf276ecee2f6a22"
+        },
+        {
+          "path": "worker-first-direct/before-etl-design.sqlite.gz",
+          "sha256": "e52fe2c0c9ee81395fa542476e4e1196a9e3e69bd0bd820774fc1e5f06af2780"
+        },
+        {
+          "path": "worker-first-direct/before-etl-runtime.sqlite.gz",
+          "sha256": "c02346e11d8238aada60104a63acf36ddffb0442a1bd00f13414ebb72abac844"
+        },
+        {
+          "path": "worker-first-direct/before-wire.json",
+          "sha256": "8bb6efd89cbb217af876ab84170f05fce58190685028dc174c4d6f65b8135ba4"
+        },
+        {
+          "path": "worker-first-direct/before.json",
+          "sha256": "c3c1fb8c0220f13115e8e610fbb9c1d5257e1a271366f707d38480e044e53fb3"
+        },
+        {
+          "path": "worker-first-direct/finished-checked-model.json",
+          "sha256": "2256c0ffc0d0d03aee3c747d1c14316a0cf7c328c413c76352f1db0babf1e8b7"
+        },
+        {
+          "path": "worker-first-direct/finished-checked-timers.json",
+          "sha256": "a062512c3be70b3ff0537738da083cedefb5bf3ced7f7a97b2f05ca192023ea8"
+        },
+        {
+          "path": "worker-first-direct/finished-elsa.sqlite.gz",
+          "sha256": "d1a1e55f3ab9dba8c418f44d6f81fa16ceec95d82f9703e816acb63fbe2a59ae"
+        },
+        {
+          "path": "worker-first-direct/finished-etl-design.sqlite.gz",
+          "sha256": "4160cf24f5d0f16a9b8d53df1cac8c26954acc9f7ca0a8157bee95af646dbdc7"
+        },
+        {
+          "path": "worker-first-direct/finished-etl-runtime.sqlite.gz",
+          "sha256": "d8d85569b6626d887828090b4f08395c6024e561eb009e82689fe3f6621029ef"
+        },
+        {
+          "path": "worker-first-direct/finished-wire.json",
+          "sha256": "8a22ae3f983ccc52d2cfae71bde7bf77f3a6e61c8d863216152e09916910ba60"
+        },
+        {
+          "path": "worker-first-direct/finished.json",
+          "sha256": "29d6af4c38b5c76efeedf7421b4bbdedee7ce6b0ddd5373d11baab5b6491dd2c"
+        },
+        {
+          "path": "worker-first-direct/middle-after-restart.json",
+          "sha256": "29d6af4c38b5c76efeedf7421b4bbdedee7ce6b0ddd5373d11baab5b6491dd2c"
+        },
+        {
+          "path": "worker-first-direct/middle-checked-model.json",
+          "sha256": "2256c0ffc0d0d03aee3c747d1c14316a0cf7c328c413c76352f1db0babf1e8b7"
+        },
+        {
+          "path": "worker-first-direct/middle-checked-timers.json",
+          "sha256": "a32f0f47961fd063bcc4c5560d0c9c90f3a683d81223cfa58c8e36b4f00234a4"
+        },
+        {
+          "path": "worker-first-direct/middle-elsa.sqlite.gz",
+          "sha256": "1e2913d28823aa5ec9a7270ea3fb2a800050c444fbf0331a2181b4a300a0ea37"
+        },
+        {
+          "path": "worker-first-direct/middle-etl-design.sqlite.gz",
+          "sha256": "5346f3f9d780d4a92b0fcb11701580f94356028386563ea325e893ac9529f2c8"
+        },
+        {
+          "path": "worker-first-direct/middle-etl-runtime.sqlite.gz",
+          "sha256": "54224bb759d56fad6633d2bd98c2f72068eebc1e0c370db128c2e116fbe86a57"
+        },
+        {
+          "path": "worker-first-direct/middle-wire.json",
+          "sha256": "8a22ae3f983ccc52d2cfae71bde7bf77f3a6e61c8d863216152e09916910ba60"
+        },
+        {
+          "path": "worker-first-direct/middle.json",
+          "sha256": "29d6af4c38b5c76efeedf7421b4bbdedee7ce6b0ddd5373d11baab5b6491dd2c"
+        },
+        {
+          "path": "worker-first-direct/process.json",
+          "sha256": "d344f8a6b4d5bb6e4da43832151ca73df984f72e850ad6648bc90f17e958e95d"
+        },
+        {
+          "path": "worker-first-direct/recovered.json",
+          "sha256": "c3c1fb8c0220f13115e8e610fbb9c1d5257e1a271366f707d38480e044e53fb3"
+        },
+        {
+          "path": "worker-first-direct/retained-checked-model.json",
+          "sha256": "2256c0ffc0d0d03aee3c747d1c14316a0cf7c328c413c76352f1db0babf1e8b7"
+        },
+        {
+          "path": "worker-first-direct/retained-checked-timers.json",
+          "sha256": "a062512c3be70b3ff0537738da083cedefb5bf3ced7f7a97b2f05ca192023ea8"
+        },
+        {
+          "path": "worker-first-direct/retained-wire.json",
+          "sha256": "8a22ae3f983ccc52d2cfae71bde7bf77f3a6e61c8d863216152e09916910ba60"
+        },
+        {
+          "path": "worker-first-direct/retained.json",
+          "sha256": "29d6af4c38b5c76efeedf7421b4bbdedee7ce6b0ddd5373d11baab5b6491dd2c"
+        }
+      ]
+    },
+    {
+      "name": "timer-first-direct",
+      "parent": "direct",
+      "order": "timer-first",
+      "assets": [
+        {
+          "path": "timer-first-direct/before-checked-model.json",
+          "sha256": "0836867ae4966317c26f815a215616efd9811aa3459ed5daa4c935e00389b824"
+        },
+        {
+          "path": "timer-first-direct/before-checked-timers.json",
+          "sha256": "f95d2990a3d38b1d743b2c90991719c601223cbd61da39e9f47ac21c3ef08e74"
+        },
+        {
+          "path": "timer-first-direct/before-elsa.sqlite.gz",
+          "sha256": "33145937ffbe09fedb904a1a4030cb731567e7906313c976663c8d01ae6e88c6"
+        },
+        {
+          "path": "timer-first-direct/before-etl-design.sqlite.gz",
+          "sha256": "8ebf5924e6faf47cba1a8164ee256397c2e6f73725d64d988ed05cdd2a393d73"
+        },
+        {
+          "path": "timer-first-direct/before-etl-runtime.sqlite.gz",
+          "sha256": "4567434f4bcaa436bdf0b34aa7f48b1ec3ee9acc9f492840e11bafcca6fcb08e"
+        },
+        {
+          "path": "timer-first-direct/before-wire.json",
+          "sha256": "38ce47aafde7ea34584e9b7bc16e773c20ab87aafe8fb692ed933a5b18bc02a0"
+        },
+        {
+          "path": "timer-first-direct/before.json",
+          "sha256": "040f64c45cd641d935fbd5090171ca02f47035f338b0fa8fed227dadc44f087b"
+        },
+        {
+          "path": "timer-first-direct/finished-checked-model.json",
+          "sha256": "dd65010cc04bf515bbd4af1b47d4000316230c5600c3922974d88cdb912d31e3"
+        },
+        {
+          "path": "timer-first-direct/finished-checked-timers.json",
+          "sha256": "80a8aa1e9cae9f019fdc6b48338ba7fc077a4a0e759aec5b38d8a6794b9c7ae8"
+        },
+        {
+          "path": "timer-first-direct/finished-elsa.sqlite.gz",
+          "sha256": "703373adeddb5dadfccfbaae804d555b063e1de894ee6504ba60dab40f763b4e"
+        },
+        {
+          "path": "timer-first-direct/finished-etl-design.sqlite.gz",
+          "sha256": "4282115150d19b469af95e1fe29078e2f6e54081ffb6fd578b3eaf3ea98e60af"
+        },
+        {
+          "path": "timer-first-direct/finished-etl-runtime.sqlite.gz",
+          "sha256": "bc397d76604bf17c1cd4f83b994aa05b30bd355f27c636c130adbb5ff36c7d9c"
+        },
+        {
+          "path": "timer-first-direct/finished-wire.json",
+          "sha256": "38ce47aafde7ea34584e9b7bc16e773c20ab87aafe8fb692ed933a5b18bc02a0"
+        },
+        {
+          "path": "timer-first-direct/finished.json",
+          "sha256": "6ec26668a5e6c7796de1a5bf9282d250a4ec17934952eb72e3c4228d4dbf3c35"
+        },
+        {
+          "path": "timer-first-direct/middle-after-restart.json",
+          "sha256": "6ec26668a5e6c7796de1a5bf9282d250a4ec17934952eb72e3c4228d4dbf3c35"
+        },
+        {
+          "path": "timer-first-direct/middle-checked-model.json",
+          "sha256": "dd65010cc04bf515bbd4af1b47d4000316230c5600c3922974d88cdb912d31e3"
+        },
+        {
+          "path": "timer-first-direct/middle-checked-timers.json",
+          "sha256": "80a8aa1e9cae9f019fdc6b48338ba7fc077a4a0e759aec5b38d8a6794b9c7ae8"
+        },
+        {
+          "path": "timer-first-direct/middle-elsa.sqlite.gz",
+          "sha256": "80b30d96dce662d4d039c8c53beccd93b826c43d3f818c2864e0b93faae141b6"
+        },
+        {
+          "path": "timer-first-direct/middle-etl-design.sqlite.gz",
+          "sha256": "db7a1e9105447f1136b76c63ec30ae5b6292ce0f7eea55a5ad1d9402061cf954"
+        },
+        {
+          "path": "timer-first-direct/middle-etl-runtime.sqlite.gz",
+          "sha256": "7984f6877aa63abc2cc896e9ccb6ddf1cb2b74d613a4382171d8817f1e07455e"
+        },
+        {
+          "path": "timer-first-direct/middle-wire.json",
+          "sha256": "38ce47aafde7ea34584e9b7bc16e773c20ab87aafe8fb692ed933a5b18bc02a0"
+        },
+        {
+          "path": "timer-first-direct/middle.json",
+          "sha256": "6ec26668a5e6c7796de1a5bf9282d250a4ec17934952eb72e3c4228d4dbf3c35"
+        },
+        {
+          "path": "timer-first-direct/process.json",
+          "sha256": "d785f542973f25daa749191b1192f040a600a4121a84386650f76b45ca661fb6"
+        },
+        {
+          "path": "timer-first-direct/recovered.json",
+          "sha256": "040f64c45cd641d935fbd5090171ca02f47035f338b0fa8fed227dadc44f087b"
+        },
+        {
+          "path": "timer-first-direct/retained-checked-model.json",
+          "sha256": "dd65010cc04bf515bbd4af1b47d4000316230c5600c3922974d88cdb912d31e3"
+        },
+        {
+          "path": "timer-first-direct/retained-checked-timers.json",
+          "sha256": "80a8aa1e9cae9f019fdc6b48338ba7fc077a4a0e759aec5b38d8a6794b9c7ae8"
+        },
+        {
+          "path": "timer-first-direct/retained-wire.json",
+          "sha256": "38ce47aafde7ea34584e9b7bc16e773c20ab87aafe8fb692ed933a5b18bc02a0"
+        },
+        {
+          "path": "timer-first-direct/retained.json",
+          "sha256": "6ec26668a5e6c7796de1a5bf9282d250a4ec17934952eb72e3c4228d4dbf3c35"
+        }
+      ]
+    },
+    {
+      "name": "held-interruption-direct",
+      "parent": "direct",
+      "order": "held-interruption",
+      "assets": [
+        {
+          "path": "held-interruption-direct/before-checked-model.json",
+          "sha256": "24eadc9a89aae183770791acc143c96bf38b43f2f664a57e61866a601d674800"
+        },
+        {
+          "path": "held-interruption-direct/before-checked-timers.json",
+          "sha256": "e73da96be7d0a9de648bd7146ea068e919d632dbb074bce851c70b77f6076d2c"
+        },
+        {
+          "path": "held-interruption-direct/before-elsa.sqlite.gz",
+          "sha256": "2598e01ef90615542e606070880b620aa70cc213022f8cbd9548fc9131376068"
+        },
+        {
+          "path": "held-interruption-direct/before-etl-design.sqlite.gz",
+          "sha256": "893b69dfeeaaef0b3723b017078d609dd343bcedb01b8aa74c0730f60103bb53"
+        },
+        {
+          "path": "held-interruption-direct/before-etl-runtime.sqlite.gz",
+          "sha256": "3f57d06ac276da56782d5efb59a9b3cffd9d9e398ed377540af4e50662ba5c5d"
+        },
+        {
+          "path": "held-interruption-direct/before-wire.json",
+          "sha256": "f8f87bbaf0eaa284e838f81cff5459ce8993f071f5b1f107baad314354ea5870"
+        },
+        {
+          "path": "held-interruption-direct/before.json",
+          "sha256": "3d5ad96fd23fe486c744c7d497f4d6eb270ea67ec43200100b46841f0074aa6e"
+        },
+        {
+          "path": "held-interruption-direct/finished-checked-model.json",
+          "sha256": "1566336d4cbe646024211260998e09e3e80bb852dfd2190d5f789fd1ecaaf303"
+        },
+        {
+          "path": "held-interruption-direct/finished-checked-timers.json",
+          "sha256": "5a7831138a2db0e7347517c917c7678e31c651aa7f138945246d745300269ee3"
+        },
+        {
+          "path": "held-interruption-direct/finished-elsa.sqlite.gz",
+          "sha256": "469f4730f03f47b31d276ccb88950c43a10470d16fa56f819591a73a75e8e48b"
+        },
+        {
+          "path": "held-interruption-direct/finished-etl-design.sqlite.gz",
+          "sha256": "c809709c860285e0061157520b52137703daa355f76912d2c85dd6d1b93b4f2d"
+        },
+        {
+          "path": "held-interruption-direct/finished-etl-runtime.sqlite.gz",
+          "sha256": "4de1e60b426dc0c41a81a3cbc1dbce9060819dc6bd29dc4238b5b1235ffc85ce"
+        },
+        {
+          "path": "held-interruption-direct/finished-wire.json",
+          "sha256": "f8f87bbaf0eaa284e838f81cff5459ce8993f071f5b1f107baad314354ea5870"
+        },
+        {
+          "path": "held-interruption-direct/finished.json",
+          "sha256": "060ae4bf9c92f1d3c26052fce0952d86bf710f9fc1f94da29ef329caf463460f"
+        },
+        {
+          "path": "held-interruption-direct/lookup-snapshot.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "held-interruption-direct/lookup-source.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "held-interruption-direct/middle-after-restart.json",
+          "sha256": "cf51a354deaa13b6db94737cffdd306468046526fbd25ce1d652bce95b85aa36"
+        },
+        {
+          "path": "held-interruption-direct/middle-checked-model.json",
+          "sha256": "79209d0571fe33cefbe3586626cb812ce7f6e356fff0427e5b09be3b7b5b3564"
+        },
+        {
+          "path": "held-interruption-direct/middle-checked-timers.json",
+          "sha256": "eea33ecb1cd7b7dfc3719251a9cb0eecb85977f48e57e1678277f0130dfaa6ac"
+        },
+        {
+          "path": "held-interruption-direct/middle-elsa.sqlite.gz",
+          "sha256": "8956f91ac1f8ec78c0394064ed916e6aeb5996197d0b0576a25be27e5158159f"
+        },
+        {
+          "path": "held-interruption-direct/middle-etl-design.sqlite.gz",
+          "sha256": "efdd38ac313c02efc550df50a4b8cdac0bfacbba06bff7f1ebc33743b3b424e3"
+        },
+        {
+          "path": "held-interruption-direct/middle-etl-runtime.sqlite.gz",
+          "sha256": "396614d678e72bfca9f08af7a710961a6949902a1a3c6a407d8a8a73c433363a"
+        },
+        {
+          "path": "held-interruption-direct/middle-wire.json",
+          "sha256": "f8f87bbaf0eaa284e838f81cff5459ce8993f071f5b1f107baad314354ea5870"
+        },
+        {
+          "path": "held-interruption-direct/middle.json",
+          "sha256": "cf51a354deaa13b6db94737cffdd306468046526fbd25ce1d652bce95b85aa36"
+        },
+        {
+          "path": "held-interruption-direct/process.json",
+          "sha256": "cb9febef2a70c617b35e65ee970eb9b919d4fc01ec0c2ace7b505b20fe69fce4"
+        },
+        {
+          "path": "held-interruption-direct/recovered.json",
+          "sha256": "3d5ad96fd23fe486c744c7d497f4d6eb270ea67ec43200100b46841f0074aa6e"
+        },
+        {
+          "path": "held-interruption-direct/retained-checked-model.json",
+          "sha256": "1566336d4cbe646024211260998e09e3e80bb852dfd2190d5f789fd1ecaaf303"
+        },
+        {
+          "path": "held-interruption-direct/retained-checked-timers.json",
+          "sha256": "5a7831138a2db0e7347517c917c7678e31c651aa7f138945246d745300269ee3"
+        },
+        {
+          "path": "held-interruption-direct/retained-wire.json",
+          "sha256": "f8f87bbaf0eaa284e838f81cff5459ce8993f071f5b1f107baad314354ea5870"
+        },
+        {
+          "path": "held-interruption-direct/retained.json",
+          "sha256": "060ae4bf9c92f1d3c26052fce0952d86bf710f9fc1f94da29ef329caf463460f"
+        },
+        {
+          "path": "held-interruption-direct/retry-refusal.json",
+          "sha256": "30e6fd6e210784156ed83601438e422d896bd99c17f6f874eafec7a7c19c223f"
+        },
+        {
+          "path": "held-interruption-direct/snapshot-unavailability.json",
+          "sha256": "e029c08a782637d09f3c147ca51e4f6aa260b232d001c913fab8e4dc2ad80027"
+        }
+      ]
+    },
+    {
+      "name": "worker-first-root",
+      "parent": "root",
+      "order": "worker-first",
+      "assets": [
+        {
+          "path": "worker-first-root/before-checked-embedding.json",
+          "sha256": "87f6df31f7231d1c6f0623228a20b9991cc5d956d9f3dc053b74d25d67194f9e"
+        },
+        {
+          "path": "worker-first-root/before-checked-model.json",
+          "sha256": "207be1e6e8a3032177b4349e84512c897f2257b90096c2d2afdf3eb6d7be2897"
+        },
+        {
+          "path": "worker-first-root/before-checked-timers.json",
+          "sha256": "c820ea4e4f7c1d0dfc019812293d1067eeee37822d6fb0b31e63d3e6f0570215"
+        },
+        {
+          "path": "worker-first-root/before-elsa.sqlite.gz",
+          "sha256": "23aaf0f045a3c265a0adb41e7e2b4a480a78606366a7ce32c1bd56e10db4ddf1"
+        },
+        {
+          "path": "worker-first-root/before-etl-design.sqlite.gz",
+          "sha256": "8b8fc8c628ed987a43f8a0c15f5caf078b4093c44bb07dc623fa62d5c4dba0e5"
+        },
+        {
+          "path": "worker-first-root/before-etl-runtime.sqlite.gz",
+          "sha256": "6bd79e38bc87b3280f5dfa89b7f9332a0be10073c5d0a004dccb0d0b69508bd1"
+        },
+        {
+          "path": "worker-first-root/before-wire.json",
+          "sha256": "d64b2a941f3f35a8d1b650783a9057a39a0dea2adfb16a5c0afe952e8fec89a0"
+        },
+        {
+          "path": "worker-first-root/before.json",
+          "sha256": "e681703448a00d6f27671fae6961aa22b86103195be149b9f3f6cce09ce2043e"
+        },
+        {
+          "path": "worker-first-root/finished-checked-embedding.json",
+          "sha256": "5c225290ae94a54456192a45c23b5dededad3b2f0e0936f14193dd6765f1bb3c"
+        },
+        {
+          "path": "worker-first-root/finished-checked-model.json",
+          "sha256": "6f3f914fde93d651520948603a5dfbff2af14a7d1e4a408f7832ce4621e3a93d"
+        },
+        {
+          "path": "worker-first-root/finished-checked-timers.json",
+          "sha256": "33743adc75c9638aaa3c9795043be598c08e97e21d413b6350f57fefa757b75b"
+        },
+        {
+          "path": "worker-first-root/finished-elsa.sqlite.gz",
+          "sha256": "56a3e28786c72dd210bee98cbce33206599a90faabb91146d5cd331367bda196"
+        },
+        {
+          "path": "worker-first-root/finished-etl-design.sqlite.gz",
+          "sha256": "891630633ca42a74308f0abf871bcd1314ac91dec0a6ce6d79493bb955da4255"
+        },
+        {
+          "path": "worker-first-root/finished-etl-runtime.sqlite.gz",
+          "sha256": "2e42827a0da4b4fbdf1cfa5909c3dc6737f1fad32038c276cadcffa997febc8c"
+        },
+        {
+          "path": "worker-first-root/finished-wire.json",
+          "sha256": "a2acbdab0708246da5ea1d138daa6d1eb6f54e59e54689c5610b9b2c7e4c6c97"
+        },
+        {
+          "path": "worker-first-root/finished.json",
+          "sha256": "7d420b612f39ad6c5bf1f073ac02103013aef4a99bbaeac24d11b01b7bc66c24"
+        },
+        {
+          "path": "worker-first-root/middle-after-restart.json",
+          "sha256": "7d420b612f39ad6c5bf1f073ac02103013aef4a99bbaeac24d11b01b7bc66c24"
+        },
+        {
+          "path": "worker-first-root/middle-checked-embedding.json",
+          "sha256": "ea4c53feddea1a7463afcd967d91c5ebfbee737b5b339610c06a1b1841cabd10"
+        },
+        {
+          "path": "worker-first-root/middle-checked-model.json",
+          "sha256": "6f3f914fde93d651520948603a5dfbff2af14a7d1e4a408f7832ce4621e3a93d"
+        },
+        {
+          "path": "worker-first-root/middle-checked-timers.json",
+          "sha256": "3fe829ffaa64b1da11322491eaeb3e788c9fc0bb96b464354178c81834c7f63e"
+        },
+        {
+          "path": "worker-first-root/middle-elsa.sqlite.gz",
+          "sha256": "f201cb2cd199b4952aac988843d379fac712f1e6f70f451484040dedd02e601e"
+        },
+        {
+          "path": "worker-first-root/middle-etl-design.sqlite.gz",
+          "sha256": "0da73f8eb737d9c629e85411cf6b8454173cfe7bc0813d84c56e376445fee9e2"
+        },
+        {
+          "path": "worker-first-root/middle-etl-runtime.sqlite.gz",
+          "sha256": "f2a65820ff9022ac9e58710494bfe073ffabf989c09713461fa9b376904cf876"
+        },
+        {
+          "path": "worker-first-root/middle-wire.json",
+          "sha256": "a2acbdab0708246da5ea1d138daa6d1eb6f54e59e54689c5610b9b2c7e4c6c97"
+        },
+        {
+          "path": "worker-first-root/middle.json",
+          "sha256": "7d420b612f39ad6c5bf1f073ac02103013aef4a99bbaeac24d11b01b7bc66c24"
+        },
+        {
+          "path": "worker-first-root/process.json",
+          "sha256": "18bf561443f65d4e7505a527e5e0cdcbe220d43c80371870e3f91a547f7a1489"
+        },
+        {
+          "path": "worker-first-root/recovered.json",
+          "sha256": "8031f486acca29491eee1a824762208f545fc64305c291b2039a5bcbb8eb108a"
+        },
+        {
+          "path": "worker-first-root/retained-checked-embedding.json",
+          "sha256": "5c225290ae94a54456192a45c23b5dededad3b2f0e0936f14193dd6765f1bb3c"
+        },
+        {
+          "path": "worker-first-root/retained-checked-model.json",
+          "sha256": "6f3f914fde93d651520948603a5dfbff2af14a7d1e4a408f7832ce4621e3a93d"
+        },
+        {
+          "path": "worker-first-root/retained-checked-timers.json",
+          "sha256": "33743adc75c9638aaa3c9795043be598c08e97e21d413b6350f57fefa757b75b"
+        },
+        {
+          "path": "worker-first-root/retained-wire.json",
+          "sha256": "a2acbdab0708246da5ea1d138daa6d1eb6f54e59e54689c5610b9b2c7e4c6c97"
+        },
+        {
+          "path": "worker-first-root/retained.json",
+          "sha256": "7d420b612f39ad6c5bf1f073ac02103013aef4a99bbaeac24d11b01b7bc66c24"
+        }
+      ]
+    },
+    {
+      "name": "timer-first-root",
+      "parent": "root",
+      "order": "timer-first",
+      "assets": [
+        {
+          "path": "timer-first-root/before-checked-embedding.json",
+          "sha256": "cd7b50ea9e17bcaf65cdd9cdc8ff3f2f9c8754a88b3b14b7cd7eed78d06d8627"
+        },
+        {
+          "path": "timer-first-root/before-checked-model.json",
+          "sha256": "cc9d47a0a0f6788951572b1dd007f2af8411599572e2c38eec4dc83e320a8897"
+        },
+        {
+          "path": "timer-first-root/before-checked-timers.json",
+          "sha256": "b5a23f7af6c78961afbadd3be70effd5874437b7a9e7ca19e9e00ee34e196aa4"
+        },
+        {
+          "path": "timer-first-root/before-elsa.sqlite.gz",
+          "sha256": "ac2029ee8cd8f9f0b75ef72672dd487ee1c6c376503bbc2ba48b108ccbf1278f"
+        },
+        {
+          "path": "timer-first-root/before-etl-design.sqlite.gz",
+          "sha256": "34f450138e9f63e1b6c19765dc984bbef2ad00fa2150c9a7b882bd9d4e186840"
+        },
+        {
+          "path": "timer-first-root/before-etl-runtime.sqlite.gz",
+          "sha256": "e17f6681d884ec405cae8199d84a393d95a4b024eea74016741d1713940d4d08"
+        },
+        {
+          "path": "timer-first-root/before-wire.json",
+          "sha256": "4574792b9a4457737bdf1b8075b0ef05d6492c1c52f08e3424160260aa45151c"
+        },
+        {
+          "path": "timer-first-root/before.json",
+          "sha256": "e749bddf456b41fe09399ec7a1c8bd6df122815520c6c45f438182c8832a6983"
+        },
+        {
+          "path": "timer-first-root/finished-checked-embedding.json",
+          "sha256": "78cdff7d134a356e497b5d085cc8bcdde0af248be87c5c2d4d594ac90a26f3e5"
+        },
+        {
+          "path": "timer-first-root/finished-checked-model.json",
+          "sha256": "0e1bf4b6cc400770f712f14836335bba96963a0bd94fa518beafef4c4d53b61c"
+        },
+        {
+          "path": "timer-first-root/finished-checked-timers.json",
+          "sha256": "96e544cb54f64c5690320b33debb1765b9f556810290a4de6a8da1f3268b2391"
+        },
+        {
+          "path": "timer-first-root/finished-elsa.sqlite.gz",
+          "sha256": "65c997827b5d626733990ffaa11d7c07c42b2a6359026907e5ae1ad4f8711392"
+        },
+        {
+          "path": "timer-first-root/finished-etl-design.sqlite.gz",
+          "sha256": "ce714c332832ed17d7dcce92a36d5679adc75896e0be1869b1a9787ed58a17f6"
+        },
+        {
+          "path": "timer-first-root/finished-etl-runtime.sqlite.gz",
+          "sha256": "611cd4ca119ae5737b723debf03fdca62ded617a9ad9f513886e024cad976e48"
+        },
+        {
+          "path": "timer-first-root/finished-wire.json",
+          "sha256": "4574792b9a4457737bdf1b8075b0ef05d6492c1c52f08e3424160260aa45151c"
+        },
+        {
+          "path": "timer-first-root/finished.json",
+          "sha256": "3b2e62153b877b42a3b232b480559424286117f068f895622de5720d324ebaee"
+        },
+        {
+          "path": "timer-first-root/middle-after-restart.json",
+          "sha256": "3b2e62153b877b42a3b232b480559424286117f068f895622de5720d324ebaee"
+        },
+        {
+          "path": "timer-first-root/middle-checked-embedding.json",
+          "sha256": "757c31bc1f0548ad4b8b6cfd2139d859c6b167384a52ac50c8abc36d4cc39d9a"
+        },
+        {
+          "path": "timer-first-root/middle-checked-model.json",
+          "sha256": "0e1bf4b6cc400770f712f14836335bba96963a0bd94fa518beafef4c4d53b61c"
+        },
+        {
+          "path": "timer-first-root/middle-checked-timers.json",
+          "sha256": "aeff0424ea3dce575b3d40983e48b998fbf6923b800d3c20ae07b71579e2a559"
+        },
+        {
+          "path": "timer-first-root/middle-elsa.sqlite.gz",
+          "sha256": "4e2285caed4a6398f441c2bca6e7e9d538e844282116a2e95c222e4c8c195cc7"
+        },
+        {
+          "path": "timer-first-root/middle-etl-design.sqlite.gz",
+          "sha256": "5d8d2213b9384f2be6157633e350615e05ee194f1170e274973fed841aed7e97"
+        },
+        {
+          "path": "timer-first-root/middle-etl-runtime.sqlite.gz",
+          "sha256": "7782c237d44064c9e4341c8717738e2b7ad83bec908fe9af207b138f624e0ec8"
+        },
+        {
+          "path": "timer-first-root/middle-wire.json",
+          "sha256": "4574792b9a4457737bdf1b8075b0ef05d6492c1c52f08e3424160260aa45151c"
+        },
+        {
+          "path": "timer-first-root/middle.json",
+          "sha256": "3b2e62153b877b42a3b232b480559424286117f068f895622de5720d324ebaee"
+        },
+        {
+          "path": "timer-first-root/process.json",
+          "sha256": "3ec53a7a4fc2fb18ff361c18e35b53532c59fdd621ee891460ae0acf2615aef7"
+        },
+        {
+          "path": "timer-first-root/recovered.json",
+          "sha256": "e749bddf456b41fe09399ec7a1c8bd6df122815520c6c45f438182c8832a6983"
+        },
+        {
+          "path": "timer-first-root/retained-checked-embedding.json",
+          "sha256": "78cdff7d134a356e497b5d085cc8bcdde0af248be87c5c2d4d594ac90a26f3e5"
+        },
+        {
+          "path": "timer-first-root/retained-checked-model.json",
+          "sha256": "0e1bf4b6cc400770f712f14836335bba96963a0bd94fa518beafef4c4d53b61c"
+        },
+        {
+          "path": "timer-first-root/retained-checked-timers.json",
+          "sha256": "96e544cb54f64c5690320b33debb1765b9f556810290a4de6a8da1f3268b2391"
+        },
+        {
+          "path": "timer-first-root/retained-wire.json",
+          "sha256": "4574792b9a4457737bdf1b8075b0ef05d6492c1c52f08e3424160260aa45151c"
+        },
+        {
+          "path": "timer-first-root/retained.json",
+          "sha256": "3b2e62153b877b42a3b232b480559424286117f068f895622de5720d324ebaee"
+        }
+      ]
+    },
+    {
+      "name": "held-interruption-root",
+      "parent": "root",
+      "order": "held-interruption",
+      "assets": [
+        {
+          "path": "held-interruption-root/before-checked-embedding.json",
+          "sha256": "8651b563904d08a2908f1263f0353fedf748e5f8fa7a0507fe185399b98fd2dc"
+        },
+        {
+          "path": "held-interruption-root/before-checked-model.json",
+          "sha256": "ec9a29c18d9792f1e23b8b1832ad20ad9bcf23366e7223e598458da1b09d367d"
+        },
+        {
+          "path": "held-interruption-root/before-checked-timers.json",
+          "sha256": "ad0c4f97580ccfe5457a13ae20c4845ad38643f40c8c83826139a5b53daf3b14"
+        },
+        {
+          "path": "held-interruption-root/before-elsa.sqlite.gz",
+          "sha256": "fc07e12311d0204303c5bd57e627e846fec888a65550f2b11198963b29ec9d4b"
+        },
+        {
+          "path": "held-interruption-root/before-etl-design.sqlite.gz",
+          "sha256": "119f829cd729be69d2c7e50db04d15243329b8bf891b5bf3a4a9274962c20825"
+        },
+        {
+          "path": "held-interruption-root/before-etl-runtime.sqlite.gz",
+          "sha256": "9bdca7e7d21002b37e76124df14e06062a4832a9b84b5c564ad1cae6b7579d83"
+        },
+        {
+          "path": "held-interruption-root/before-wire.json",
+          "sha256": "d45f264e893406285ff51812267649f79b06373626e2668f9217661f228dc20b"
+        },
+        {
+          "path": "held-interruption-root/before.json",
+          "sha256": "442107939a2745ff5e467807a0c7f75898419663aab698a8bb29aebf64d8e850"
+        },
+        {
+          "path": "held-interruption-root/finished-checked-embedding.json",
+          "sha256": "d888fa1869808372d4bc319d1414db175bacc7468e452886497be6b48a097175"
+        },
+        {
+          "path": "held-interruption-root/finished-checked-model.json",
+          "sha256": "231cfd009c0b87751bb2dd83443cb98ffa32d9074517738325acead16aa463b2"
+        },
+        {
+          "path": "held-interruption-root/finished-checked-timers.json",
+          "sha256": "01bad9afed80ddd7210134bf37e03770217959c5c451a7a52e42928d957c8f86"
+        },
+        {
+          "path": "held-interruption-root/finished-elsa.sqlite.gz",
+          "sha256": "65967f08d1aa5ee392a6bbb362ad899477a61afd10160b9de3516dfc3c5db379"
+        },
+        {
+          "path": "held-interruption-root/finished-etl-design.sqlite.gz",
+          "sha256": "780918e7b8b6a16f409b19e54cf7536c755aba5d083a6f5a63c7a5a1a7e802bb"
+        },
+        {
+          "path": "held-interruption-root/finished-etl-runtime.sqlite.gz",
+          "sha256": "e1d17d2221629e690128edd1b4436a5ee25fd895212276f71661a60606fd254d"
+        },
+        {
+          "path": "held-interruption-root/finished-wire.json",
+          "sha256": "d45f264e893406285ff51812267649f79b06373626e2668f9217661f228dc20b"
+        },
+        {
+          "path": "held-interruption-root/finished.json",
+          "sha256": "8796767a0227d34a25f2fef63e9499aaa66ad2232439bf00b1549e3e4e4b7d67"
+        },
+        {
+          "path": "held-interruption-root/lookup-snapshot.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "held-interruption-root/lookup-source.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "held-interruption-root/middle-after-restart.json",
+          "sha256": "b1615929fbea1f43a082ad486cac168e6c03b0d97d0910c22d555d1ce7bc5e22"
+        },
+        {
+          "path": "held-interruption-root/middle-checked-embedding.json",
+          "sha256": "aeaa9a7d62073caa0cf8e31b24f4a426faea4ad6e0cbd8e31b3cead979b75f6c"
+        },
+        {
+          "path": "held-interruption-root/middle-checked-model.json",
+          "sha256": "63364e75d96e655f0ea222d9c14b33e54c12d812675ed84e882634ab5578f76c"
+        },
+        {
+          "path": "held-interruption-root/middle-checked-timers.json",
+          "sha256": "5600e2c42598cc064e1f2c8126b021d51cde897d73ba99daed7bd2a52f2fc82d"
+        },
+        {
+          "path": "held-interruption-root/middle-elsa.sqlite.gz",
+          "sha256": "312a65778877bfd0fcb33eab865059e8bc922742aae8afd0cfa292bf466dfa74"
+        },
+        {
+          "path": "held-interruption-root/middle-etl-design.sqlite.gz",
+          "sha256": "a3c36f42a6da1b735b0c787134cee0681139023406a6f72f0ad251b2b2081103"
+        },
+        {
+          "path": "held-interruption-root/middle-etl-runtime.sqlite.gz",
+          "sha256": "24ca1ec5927c91eaa9544ba0b7919bc7c28d454c5ff42d9e7c2ef8351b5845b2"
+        },
+        {
+          "path": "held-interruption-root/middle-wire.json",
+          "sha256": "d45f264e893406285ff51812267649f79b06373626e2668f9217661f228dc20b"
+        },
+        {
+          "path": "held-interruption-root/middle.json",
+          "sha256": "b1615929fbea1f43a082ad486cac168e6c03b0d97d0910c22d555d1ce7bc5e22"
+        },
+        {
+          "path": "held-interruption-root/process.json",
+          "sha256": "2254f727e7e398122ac65fa9d7920a91cda3e4f04bbd1e27642e2375df9b50fc"
+        },
+        {
+          "path": "held-interruption-root/recovered.json",
+          "sha256": "442107939a2745ff5e467807a0c7f75898419663aab698a8bb29aebf64d8e850"
+        },
+        {
+          "path": "held-interruption-root/retained-checked-embedding.json",
+          "sha256": "d888fa1869808372d4bc319d1414db175bacc7468e452886497be6b48a097175"
+        },
+        {
+          "path": "held-interruption-root/retained-checked-model.json",
+          "sha256": "231cfd009c0b87751bb2dd83443cb98ffa32d9074517738325acead16aa463b2"
+        },
+        {
+          "path": "held-interruption-root/retained-checked-timers.json",
+          "sha256": "01bad9afed80ddd7210134bf37e03770217959c5c451a7a52e42928d957c8f86"
+        },
+        {
+          "path": "held-interruption-root/retained-wire.json",
+          "sha256": "d45f264e893406285ff51812267649f79b06373626e2668f9217661f228dc20b"
+        },
+        {
+          "path": "held-interruption-root/retained.json",
+          "sha256": "8796767a0227d34a25f2fef63e9499aaa66ad2232439bf00b1549e3e4e4b7d67"
+        },
+        {
+          "path": "held-interruption-root/retry-refusal.json",
+          "sha256": "814529804d8bfffe7c59848d250e7b35d42eb7826357411c84c427bac7b3127c"
+        },
+        {
+          "path": "held-interruption-root/snapshot-unavailability.json",
+          "sha256": "535b8d3b4208b64fb7168c61267a38b5dbc78acd3d37389fa0c9b04b98958df0"
+        }
+      ]
+    },
+    {
+      "name": "worker-first-sequence",
+      "parent": "sequence",
+      "order": "worker-first",
+      "assets": [
+        {
+          "path": "worker-first-sequence/before-checked-embedding.json",
+          "sha256": "defba8e3f7d6841809b92f5205779eb7bab7c40746f87aade1b6e8df619bf26a"
+        },
+        {
+          "path": "worker-first-sequence/before-checked-model.json",
+          "sha256": "c52c7442d86721d9acb08f5800ef85379a775bd6ace37d043824cee358d6dbf7"
+        },
+        {
+          "path": "worker-first-sequence/before-checked-timers.json",
+          "sha256": "dd3804a198cbe6179b5e228431865d491335fb78e2bc9f5665b97b37ee2d1a27"
+        },
+        {
+          "path": "worker-first-sequence/before-elsa.sqlite.gz",
+          "sha256": "923aed005ab495de19cc8206c1e71fa537d7018f9a49ddfa8543757663e49fb3"
+        },
+        {
+          "path": "worker-first-sequence/before-etl-design.sqlite.gz",
+          "sha256": "0b0d7405f899c20cb1c91a8f47ea7f1437d42a4ae1ad2899e61ae2b7d64b10ee"
+        },
+        {
+          "path": "worker-first-sequence/before-etl-runtime.sqlite.gz",
+          "sha256": "027efb77c12d1c101f42254768b9817fa441a9b705f39f5c093b1c2c0df40b76"
+        },
+        {
+          "path": "worker-first-sequence/before-wire.json",
+          "sha256": "425365554f858f7bbd1cc036bbebe367c1f44dac6366f3d1a3293ae812bd736c"
+        },
+        {
+          "path": "worker-first-sequence/before.json",
+          "sha256": "8fbf662d0a6d87151cd8550aba46d3d5eda87408d6b113bb34ca5df1b8b6f86e"
+        },
+        {
+          "path": "worker-first-sequence/finished-checked-embedding.json",
+          "sha256": "46b1b5f30577660620b8708181f1ff25a23c1c0d70a49e934a4223402f9b17a4"
+        },
+        {
+          "path": "worker-first-sequence/finished-checked-model.json",
+          "sha256": "b23bfae4e93cdeec78874145b548021c95b2e9032bd12769a29ec0bb0162f9c5"
+        },
+        {
+          "path": "worker-first-sequence/finished-checked-timers.json",
+          "sha256": "1b398159c8a1a471736e4e425119a6fb07726e4448716cd21a79991c649cd882"
+        },
+        {
+          "path": "worker-first-sequence/finished-elsa.sqlite.gz",
+          "sha256": "e1f33cb6436d3e643cb656717d25f320d3bc336654809f2ef5eb616daec85184"
+        },
+        {
+          "path": "worker-first-sequence/finished-etl-design.sqlite.gz",
+          "sha256": "5d6059c64bef93a5792731d2a0874874a678aec15619e52429c58f93c744336c"
+        },
+        {
+          "path": "worker-first-sequence/finished-etl-runtime.sqlite.gz",
+          "sha256": "1763f88623e3fba5f24ebd1553d45dfc01504a752995c6c0c1f9996acf60ef6d"
+        },
+        {
+          "path": "worker-first-sequence/finished-wire.json",
+          "sha256": "10bfc3107115c43eb98278b206028a0fbe5e9fd1858b02d5b8d723c91ca0f25d"
+        },
+        {
+          "path": "worker-first-sequence/finished.json",
+          "sha256": "92b9b29e9df07e786236235a89318f0d88bffa161eea82c845bf2d9ea4a55137"
+        },
+        {
+          "path": "worker-first-sequence/middle-after-restart.json",
+          "sha256": "92b9b29e9df07e786236235a89318f0d88bffa161eea82c845bf2d9ea4a55137"
+        },
+        {
+          "path": "worker-first-sequence/middle-checked-embedding.json",
+          "sha256": "7522fd99d9eb39801d05fe4efc6044395007bc25baf54d0384431cdb5589866f"
+        },
+        {
+          "path": "worker-first-sequence/middle-checked-model.json",
+          "sha256": "b23bfae4e93cdeec78874145b548021c95b2e9032bd12769a29ec0bb0162f9c5"
+        },
+        {
+          "path": "worker-first-sequence/middle-checked-timers.json",
+          "sha256": "7355caa5d30f0053ddc6b9f208ebb3b3e32f06f2881423754df339c894b745c2"
+        },
+        {
+          "path": "worker-first-sequence/middle-elsa.sqlite.gz",
+          "sha256": "f2a8d041c65db2cd2fddaee20a628ef54167791b892b6d566189dca0d7028d96"
+        },
+        {
+          "path": "worker-first-sequence/middle-etl-design.sqlite.gz",
+          "sha256": "92d6c3ec9cc14d3cfde29ccc35b900dbe76ea7dcd439d9e04ad7aeeea8a1d6be"
+        },
+        {
+          "path": "worker-first-sequence/middle-etl-runtime.sqlite.gz",
+          "sha256": "8d496af2edbf5eeab2b4a7e3246c86bc9c3f9412f317492799e0fe53c7095cdd"
+        },
+        {
+          "path": "worker-first-sequence/middle-wire.json",
+          "sha256": "10bfc3107115c43eb98278b206028a0fbe5e9fd1858b02d5b8d723c91ca0f25d"
+        },
+        {
+          "path": "worker-first-sequence/middle.json",
+          "sha256": "92b9b29e9df07e786236235a89318f0d88bffa161eea82c845bf2d9ea4a55137"
+        },
+        {
+          "path": "worker-first-sequence/process.json",
+          "sha256": "de778dbeff4ec4758c810134f7a478a9e7407b10aeef5536e843e6dfbbd3aa36"
+        },
+        {
+          "path": "worker-first-sequence/recovered.json",
+          "sha256": "d0ae354733f9ac4e8729097c17184a56182e34a30b8d63d58df03ecc84c2b920"
+        },
+        {
+          "path": "worker-first-sequence/retained-checked-embedding.json",
+          "sha256": "46b1b5f30577660620b8708181f1ff25a23c1c0d70a49e934a4223402f9b17a4"
+        },
+        {
+          "path": "worker-first-sequence/retained-checked-model.json",
+          "sha256": "b23bfae4e93cdeec78874145b548021c95b2e9032bd12769a29ec0bb0162f9c5"
+        },
+        {
+          "path": "worker-first-sequence/retained-checked-timers.json",
+          "sha256": "1b398159c8a1a471736e4e425119a6fb07726e4448716cd21a79991c649cd882"
+        },
+        {
+          "path": "worker-first-sequence/retained-wire.json",
+          "sha256": "10bfc3107115c43eb98278b206028a0fbe5e9fd1858b02d5b8d723c91ca0f25d"
+        },
+        {
+          "path": "worker-first-sequence/retained.json",
+          "sha256": "92b9b29e9df07e786236235a89318f0d88bffa161eea82c845bf2d9ea4a55137"
+        }
+      ]
+    },
+    {
+      "name": "timer-first-sequence",
+      "parent": "sequence",
+      "order": "timer-first",
+      "assets": [
+        {
+          "path": "timer-first-sequence/before-checked-embedding.json",
+          "sha256": "4a3337f0bd1854a50ffcef085899a3d15a154c516d1f4ac42fc0bfaba46d6205"
+        },
+        {
+          "path": "timer-first-sequence/before-checked-model.json",
+          "sha256": "bedbd745888b9785aee81fc033320d4f964fe11e1ac8e8545557f1144c652951"
+        },
+        {
+          "path": "timer-first-sequence/before-checked-timers.json",
+          "sha256": "64ca52d338a1034bcbfe02b90558a27c56e81629f7035b9890b3e0639033de06"
+        },
+        {
+          "path": "timer-first-sequence/before-elsa.sqlite.gz",
+          "sha256": "06107f71b34418abd6ab653b8039c14d3beb310c72fe6863779c619f79ba2a94"
+        },
+        {
+          "path": "timer-first-sequence/before-etl-design.sqlite.gz",
+          "sha256": "5b9229b5d9528c1dd7c24b75d80bc5aa8de13513b6f155dc69e57016dc4e759c"
+        },
+        {
+          "path": "timer-first-sequence/before-etl-runtime.sqlite.gz",
+          "sha256": "60413854ba0db665b14f609f0706c815fc251117ea06bd4785fc5570eaf1c77e"
+        },
+        {
+          "path": "timer-first-sequence/before-wire.json",
+          "sha256": "a1d79f0ec035d571161a138e71d28d37a8c84dc98d5979184c0e117e090c3380"
+        },
+        {
+          "path": "timer-first-sequence/before.json",
+          "sha256": "04885149ea9b7cf6cd0774ce08eed8bf8eab0e33158a4ce9041c150fb39db9aa"
+        },
+        {
+          "path": "timer-first-sequence/finished-checked-embedding.json",
+          "sha256": "a1b00384fcaf1ee1dc24470a644f1b033e2aedc2fba818265dadd4c7b9a75710"
+        },
+        {
+          "path": "timer-first-sequence/finished-checked-model.json",
+          "sha256": "b03593537145c4a2269e5f5acadc84831049b91efe03fa18a3242b9c9dfec887"
+        },
+        {
+          "path": "timer-first-sequence/finished-checked-timers.json",
+          "sha256": "5d779f25913386b3c0798926543c6f119e69db0db241376070a75303ece3ea49"
+        },
+        {
+          "path": "timer-first-sequence/finished-elsa.sqlite.gz",
+          "sha256": "f481e63e581b713782f7d95322fb9d8f1abc2f13c654d96f282ff2b45d136ad3"
+        },
+        {
+          "path": "timer-first-sequence/finished-etl-design.sqlite.gz",
+          "sha256": "096a6b85e697b603238adf2167a317fd4735dd3d96b846585d329da562092fb6"
+        },
+        {
+          "path": "timer-first-sequence/finished-etl-runtime.sqlite.gz",
+          "sha256": "48ca1d2801bd4fce413d97218c089fd082b305db39c31efc1d27f3d492b496a1"
+        },
+        {
+          "path": "timer-first-sequence/finished-wire.json",
+          "sha256": "a1d79f0ec035d571161a138e71d28d37a8c84dc98d5979184c0e117e090c3380"
+        },
+        {
+          "path": "timer-first-sequence/finished.json",
+          "sha256": "2bab07e03e95d547a6a8560c5b547f89d719e3b375638b670feb5ca503d320a8"
+        },
+        {
+          "path": "timer-first-sequence/middle-after-restart.json",
+          "sha256": "2bab07e03e95d547a6a8560c5b547f89d719e3b375638b670feb5ca503d320a8"
+        },
+        {
+          "path": "timer-first-sequence/middle-checked-embedding.json",
+          "sha256": "73933eb8923afdd521d4d19860f7b281eb4cb8c14c42e890fd7ca953b255a2d8"
+        },
+        {
+          "path": "timer-first-sequence/middle-checked-model.json",
+          "sha256": "b03593537145c4a2269e5f5acadc84831049b91efe03fa18a3242b9c9dfec887"
+        },
+        {
+          "path": "timer-first-sequence/middle-checked-timers.json",
+          "sha256": "54495e67b2d5a86021318b7b547e46052d0113a0fdf76be94173399ef43f7e05"
+        },
+        {
+          "path": "timer-first-sequence/middle-elsa.sqlite.gz",
+          "sha256": "6e982a01d2531236542ada835f31dd34c91afd50c8cc92921d7db8aa820c72b0"
+        },
+        {
+          "path": "timer-first-sequence/middle-etl-design.sqlite.gz",
+          "sha256": "8170f4b1c3690e8c821ef3d19ef2016a4ab4563bff0cfda1290ad5207cfea934"
+        },
+        {
+          "path": "timer-first-sequence/middle-etl-runtime.sqlite.gz",
+          "sha256": "5cfe088d31853ce6c7ea4d848f2944aaca3c1f3a5bad9bd367669f11acc9388c"
+        },
+        {
+          "path": "timer-first-sequence/middle-wire.json",
+          "sha256": "a1d79f0ec035d571161a138e71d28d37a8c84dc98d5979184c0e117e090c3380"
+        },
+        {
+          "path": "timer-first-sequence/middle.json",
+          "sha256": "2bab07e03e95d547a6a8560c5b547f89d719e3b375638b670feb5ca503d320a8"
+        },
+        {
+          "path": "timer-first-sequence/process.json",
+          "sha256": "ed9c96153d64013ffc84a9a1cb3867ea92bd17ad34d84d0b2f27bff611b08d1b"
+        },
+        {
+          "path": "timer-first-sequence/recovered.json",
+          "sha256": "f65c4c68c4e8ed8e656088cae264812aed533ae373661c1303d2090fe1350dbf"
+        },
+        {
+          "path": "timer-first-sequence/retained-checked-embedding.json",
+          "sha256": "a1b00384fcaf1ee1dc24470a644f1b033e2aedc2fba818265dadd4c7b9a75710"
+        },
+        {
+          "path": "timer-first-sequence/retained-checked-model.json",
+          "sha256": "b03593537145c4a2269e5f5acadc84831049b91efe03fa18a3242b9c9dfec887"
+        },
+        {
+          "path": "timer-first-sequence/retained-checked-timers.json",
+          "sha256": "5d779f25913386b3c0798926543c6f119e69db0db241376070a75303ece3ea49"
+        },
+        {
+          "path": "timer-first-sequence/retained-wire.json",
+          "sha256": "a1d79f0ec035d571161a138e71d28d37a8c84dc98d5979184c0e117e090c3380"
+        },
+        {
+          "path": "timer-first-sequence/retained.json",
+          "sha256": "2bab07e03e95d547a6a8560c5b547f89d719e3b375638b670feb5ca503d320a8"
+        }
+      ]
+    },
+    {
+      "name": "held-interruption-sequence",
+      "parent": "sequence",
+      "order": "held-interruption",
+      "assets": [
+        {
+          "path": "held-interruption-sequence/before-checked-embedding.json",
+          "sha256": "05f02eff209d32fc1c0d17d85ec6b783af1d87984ab1dce32a3928e196c6150c"
+        },
+        {
+          "path": "held-interruption-sequence/before-checked-model.json",
+          "sha256": "f5d1752c1aefacd0816305defacbce7b2220b556a0dadcdddb9899eb924c9f25"
+        },
+        {
+          "path": "held-interruption-sequence/before-checked-timers.json",
+          "sha256": "18124d52d641daa8645f1a7d5ffa2f45fbfe382c8d0413190a40ffe4fef2f5b4"
+        },
+        {
+          "path": "held-interruption-sequence/before-elsa.sqlite.gz",
+          "sha256": "0da47f511afa05556acfa7ffab7747927164f078ee1abc61b1cef3105c62bcb7"
+        },
+        {
+          "path": "held-interruption-sequence/before-etl-design.sqlite.gz",
+          "sha256": "56d86edd34b3d13e58cc502127a8544e256943a973549056b6d64e2b45511807"
+        },
+        {
+          "path": "held-interruption-sequence/before-etl-runtime.sqlite.gz",
+          "sha256": "26c76b0f02f8f1b5dfd761e79f7005defddd57c43bac37f93c0bb4542c1a93fa"
+        },
+        {
+          "path": "held-interruption-sequence/before-wire.json",
+          "sha256": "62f26e7be72884d6c5ff4b248a3cf3c8d640159266ea5818b4f21627fd4acdc2"
+        },
+        {
+          "path": "held-interruption-sequence/before.json",
+          "sha256": "f287358450bded42440ed8ea143a1bed88f2d6273d5d2633c321fbc1c4e33d65"
+        },
+        {
+          "path": "held-interruption-sequence/finished-checked-embedding.json",
+          "sha256": "86ae50826384ee03b40991e47c2aa34d42a3a3c15effbc4d7993c51ef151a740"
+        },
+        {
+          "path": "held-interruption-sequence/finished-checked-model.json",
+          "sha256": "490897d3657602bac43b73a524be69367d3d52dd30522f59b9cb134267575003"
+        },
+        {
+          "path": "held-interruption-sequence/finished-checked-timers.json",
+          "sha256": "6125eba3d9ae3f953d844ee3f7c1e763d15ef7fd73bd79d08b0a7384f0160ad5"
+        },
+        {
+          "path": "held-interruption-sequence/finished-elsa.sqlite.gz",
+          "sha256": "e974690798d60f1e960b1e10890be1be0c8dbdfafd5a1e13371c4bd5799a5612"
+        },
+        {
+          "path": "held-interruption-sequence/finished-etl-design.sqlite.gz",
+          "sha256": "82ed85b0155055ee35ad0ef7cd3c429a62b20a7e220d44fb01ffd683b0c4999d"
+        },
+        {
+          "path": "held-interruption-sequence/finished-etl-runtime.sqlite.gz",
+          "sha256": "88f96bceab816c154337944428b24d032252ffa97fe4e99984a2ca56c32ef2b3"
+        },
+        {
+          "path": "held-interruption-sequence/finished-wire.json",
+          "sha256": "62f26e7be72884d6c5ff4b248a3cf3c8d640159266ea5818b4f21627fd4acdc2"
+        },
+        {
+          "path": "held-interruption-sequence/finished.json",
+          "sha256": "d127c2f84cd5121991aad23d20f4c2485e49c8e5811cadd7c78f46175d2d3a1c"
+        },
+        {
+          "path": "held-interruption-sequence/lookup-snapshot.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "held-interruption-sequence/lookup-source.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "held-interruption-sequence/middle-after-restart.json",
+          "sha256": "b2f9415d689716148f644e20408513dcbf95cdff69bb11c5758d2e3cbe05f975"
+        },
+        {
+          "path": "held-interruption-sequence/middle-checked-embedding.json",
+          "sha256": "6c297f47917ba821b4dc11c7030f1ade7a6e88dbacbc6b432b0d279b4b6cd417"
+        },
+        {
+          "path": "held-interruption-sequence/middle-checked-model.json",
+          "sha256": "2a7f942ed78e1a4e14622bc76682528087fd9970ecdd091c9862b3752d828a6d"
+        },
+        {
+          "path": "held-interruption-sequence/middle-checked-timers.json",
+          "sha256": "10306fbc669adb8d1cc470a6a4efdc77962c1c55a0819d176b8c983c5a8f99f3"
+        },
+        {
+          "path": "held-interruption-sequence/middle-elsa.sqlite.gz",
+          "sha256": "904f46ea518796ba3d3134bc140c777c1d5cf9fc3a043dfeede3d8b7d0f88567"
+        },
+        {
+          "path": "held-interruption-sequence/middle-etl-design.sqlite.gz",
+          "sha256": "0cbf40cd0fde346239af5e47087f6c5b0a8282e1f97a2897f2fae5f899deccc2"
+        },
+        {
+          "path": "held-interruption-sequence/middle-etl-runtime.sqlite.gz",
+          "sha256": "634623b4f39548f36c09b8f00d5566ace275d9a3b8196ac31a3c973a28a19343"
+        },
+        {
+          "path": "held-interruption-sequence/middle-wire.json",
+          "sha256": "62f26e7be72884d6c5ff4b248a3cf3c8d640159266ea5818b4f21627fd4acdc2"
+        },
+        {
+          "path": "held-interruption-sequence/middle.json",
+          "sha256": "b2f9415d689716148f644e20408513dcbf95cdff69bb11c5758d2e3cbe05f975"
+        },
+        {
+          "path": "held-interruption-sequence/process.json",
+          "sha256": "8a7d436ec9da9cb6e887e0f1ac0a07e79e01effcaa8481a17a77747871aa7a42"
+        },
+        {
+          "path": "held-interruption-sequence/recovered.json",
+          "sha256": "f287358450bded42440ed8ea143a1bed88f2d6273d5d2633c321fbc1c4e33d65"
+        },
+        {
+          "path": "held-interruption-sequence/retained-checked-embedding.json",
+          "sha256": "86ae50826384ee03b40991e47c2aa34d42a3a3c15effbc4d7993c51ef151a740"
+        },
+        {
+          "path": "held-interruption-sequence/retained-checked-model.json",
+          "sha256": "490897d3657602bac43b73a524be69367d3d52dd30522f59b9cb134267575003"
+        },
+        {
+          "path": "held-interruption-sequence/retained-checked-timers.json",
+          "sha256": "6125eba3d9ae3f953d844ee3f7c1e763d15ef7fd73bd79d08b0a7384f0160ad5"
+        },
+        {
+          "path": "held-interruption-sequence/retained-wire.json",
+          "sha256": "62f26e7be72884d6c5ff4b248a3cf3c8d640159266ea5818b4f21627fd4acdc2"
+        },
+        {
+          "path": "held-interruption-sequence/retained.json",
+          "sha256": "d127c2f84cd5121991aad23d20f4c2485e49c8e5811cadd7c78f46175d2d3a1c"
+        },
+        {
+          "path": "held-interruption-sequence/retry-refusal.json",
+          "sha256": "338767a4a1a2944a5a47f15e9f0695d01249d6d902bebdea98fe799de173b172"
+        },
+        {
+          "path": "held-interruption-sequence/snapshot-unavailability.json",
+          "sha256": "7bb4f4d4e25c8aa6fc6a370b88fbd4fc5210167d1c5f9eab304e90575d500f2f"
+        }
+      ]
+    },
+    {
+      "name": "worker-first-flowchart",
+      "parent": "flowchart",
+      "order": "worker-first",
+      "assets": [
+        {
+          "path": "worker-first-flowchart/before-checked-embedding.json",
+          "sha256": "3b32c10e920c1786f1d1e9112d62892a63e467a76d56e87e4312e910283654c7"
+        },
+        {
+          "path": "worker-first-flowchart/before-checked-model.json",
+          "sha256": "4a7fcb398f4eafe7ad4324e7c142e40ad73132ce5ee10d4a7b61c119d70548f3"
+        },
+        {
+          "path": "worker-first-flowchart/before-checked-timers.json",
+          "sha256": "01565d86cba7c6354f37c199e95964c4f0f579936e10fd4b3a1d8784eef613aa"
+        },
+        {
+          "path": "worker-first-flowchart/before-elsa.sqlite.gz",
+          "sha256": "03643a408c434f86c660bb6ca3426230635703d8e9802fe0a03955b59b953b9d"
+        },
+        {
+          "path": "worker-first-flowchart/before-etl-design.sqlite.gz",
+          "sha256": "098a3d4a90220291c9a45fb6a6f5d08e3b16f620b7c996f8c0a5169848c2d5f2"
+        },
+        {
+          "path": "worker-first-flowchart/before-etl-runtime.sqlite.gz",
+          "sha256": "600c7cfdda091861316fb61f70036926023fdfaee13ce62404b73eb35d0636f0"
+        },
+        {
+          "path": "worker-first-flowchart/before-wire.json",
+          "sha256": "90e61b1235dfa5c58991237e273f717b8a5f5aee8abd8e36e52296f33fb4ddcb"
+        },
+        {
+          "path": "worker-first-flowchart/before.json",
+          "sha256": "5f50a9c47a99513f03c873173736a6e1ffa0972390e99c1cb0e7420ce0be7525"
+        },
+        {
+          "path": "worker-first-flowchart/finished-checked-embedding.json",
+          "sha256": "216c96d351a38bfc4bad0757342d109f00f888c600e70507ff55d7f8932e4f5f"
+        },
+        {
+          "path": "worker-first-flowchart/finished-checked-model.json",
+          "sha256": "bd8342eeff15350a0335c5a069477b38066dddbab685beda7d22f9779507129a"
+        },
+        {
+          "path": "worker-first-flowchart/finished-checked-timers.json",
+          "sha256": "66eef74e9361fd7c2e82916a0c7e460c0cea257f047c77fd3ae17e440293230b"
+        },
+        {
+          "path": "worker-first-flowchart/finished-elsa.sqlite.gz",
+          "sha256": "f23f2a919c913850e47d5a38a62d0293f986c9a7bf24a0785f3e69e0b885e8b1"
+        },
+        {
+          "path": "worker-first-flowchart/finished-etl-design.sqlite.gz",
+          "sha256": "5529e0cd988f507a5c4980f8f8a0bfd833dd08f374faeda21728180f2f000986"
+        },
+        {
+          "path": "worker-first-flowchart/finished-etl-runtime.sqlite.gz",
+          "sha256": "4bf3bdb211148a821598f331f65017ae7bccd1f1e4189796827a6ee4de4431dc"
+        },
+        {
+          "path": "worker-first-flowchart/finished-wire.json",
+          "sha256": "d155d0497d84e899a2c29e59d42b22016e0b8c34ed022467a5347ac7faa2716f"
+        },
+        {
+          "path": "worker-first-flowchart/finished.json",
+          "sha256": "b35aff366295add8309684f39e3277a51e57ac9374847950514a8e1f4d39a902"
+        },
+        {
+          "path": "worker-first-flowchart/middle-after-restart.json",
+          "sha256": "b35aff366295add8309684f39e3277a51e57ac9374847950514a8e1f4d39a902"
+        },
+        {
+          "path": "worker-first-flowchart/middle-checked-embedding.json",
+          "sha256": "328ea73b2e3e36e5354b03f150622996e47ae2fba8e14d0ed29ea148d511bd68"
+        },
+        {
+          "path": "worker-first-flowchart/middle-checked-model.json",
+          "sha256": "bd8342eeff15350a0335c5a069477b38066dddbab685beda7d22f9779507129a"
+        },
+        {
+          "path": "worker-first-flowchart/middle-checked-timers.json",
+          "sha256": "744c9c52ebc0e00b2439e745b45dcb2fc64e03b5086ecf9a4ccb980a0ca60f22"
+        },
+        {
+          "path": "worker-first-flowchart/middle-elsa.sqlite.gz",
+          "sha256": "b2effac7bc22c889da48094ba0bdc7ccfbecabe468bbafdc4665a2eb3990ff6c"
+        },
+        {
+          "path": "worker-first-flowchart/middle-etl-design.sqlite.gz",
+          "sha256": "8366a19a9de8fdf2098cedfab3ca38917aa4d7028bfd81c3405c29e10222f2be"
+        },
+        {
+          "path": "worker-first-flowchart/middle-etl-runtime.sqlite.gz",
+          "sha256": "4bac5dc766eb7efdaa461d21359d530f26566193126e0510e21755d2be844551"
+        },
+        {
+          "path": "worker-first-flowchart/middle-wire.json",
+          "sha256": "d155d0497d84e899a2c29e59d42b22016e0b8c34ed022467a5347ac7faa2716f"
+        },
+        {
+          "path": "worker-first-flowchart/middle.json",
+          "sha256": "b35aff366295add8309684f39e3277a51e57ac9374847950514a8e1f4d39a902"
+        },
+        {
+          "path": "worker-first-flowchart/process.json",
+          "sha256": "d85fb75c1f3efc21f619a83e3209c802f7be2c128f8ca9d7b22d80e697e3374b"
+        },
+        {
+          "path": "worker-first-flowchart/recovered.json",
+          "sha256": "5f50a9c47a99513f03c873173736a6e1ffa0972390e99c1cb0e7420ce0be7525"
+        },
+        {
+          "path": "worker-first-flowchart/retained-checked-embedding.json",
+          "sha256": "216c96d351a38bfc4bad0757342d109f00f888c600e70507ff55d7f8932e4f5f"
+        },
+        {
+          "path": "worker-first-flowchart/retained-checked-model.json",
+          "sha256": "bd8342eeff15350a0335c5a069477b38066dddbab685beda7d22f9779507129a"
+        },
+        {
+          "path": "worker-first-flowchart/retained-checked-timers.json",
+          "sha256": "66eef74e9361fd7c2e82916a0c7e460c0cea257f047c77fd3ae17e440293230b"
+        },
+        {
+          "path": "worker-first-flowchart/retained-wire.json",
+          "sha256": "d155d0497d84e899a2c29e59d42b22016e0b8c34ed022467a5347ac7faa2716f"
+        },
+        {
+          "path": "worker-first-flowchart/retained.json",
+          "sha256": "b35aff366295add8309684f39e3277a51e57ac9374847950514a8e1f4d39a902"
+        }
+      ]
+    },
+    {
+      "name": "timer-first-flowchart",
+      "parent": "flowchart",
+      "order": "timer-first",
+      "assets": [
+        {
+          "path": "timer-first-flowchart/before-checked-embedding.json",
+          "sha256": "30e4d994b25610cd7bf64aa4259aa72ad341b253bfe82776bee62d77596b3318"
+        },
+        {
+          "path": "timer-first-flowchart/before-checked-model.json",
+          "sha256": "f73d511064f99d3162bda55b6f58c00061b53353a2bb4107f9755796b0e33cfc"
+        },
+        {
+          "path": "timer-first-flowchart/before-checked-timers.json",
+          "sha256": "7be93325f7c87a4abf565f82bfbee225838f391216039612518672ab7db610d5"
+        },
+        {
+          "path": "timer-first-flowchart/before-elsa.sqlite.gz",
+          "sha256": "bf5a17a24a7e423e23e1ff8e5deeb81b413070709b277973556cf043b26f710b"
+        },
+        {
+          "path": "timer-first-flowchart/before-etl-design.sqlite.gz",
+          "sha256": "029e9edc16e0101aac8bf60f580b7436dc9048c8755a5f6b44094c2bba8c092d"
+        },
+        {
+          "path": "timer-first-flowchart/before-etl-runtime.sqlite.gz",
+          "sha256": "3a2d8aa1af5a1528942b49819a07b7f44a7b0d29632314a7e7ead4e484b79824"
+        },
+        {
+          "path": "timer-first-flowchart/before-wire.json",
+          "sha256": "3518a399561d4513ce61d40dabd2d0cabb43646dec129523c1a0eed6078048f0"
+        },
+        {
+          "path": "timer-first-flowchart/before.json",
+          "sha256": "b69e58997a415a93953a11cd8a895a936879084a33cb05cd2027b734496f6bae"
+        },
+        {
+          "path": "timer-first-flowchart/finished-checked-embedding.json",
+          "sha256": "630b9acc1265009a91c863ce60ce1c4f8bc0f2d790b574adbf8089107c2cca20"
+        },
+        {
+          "path": "timer-first-flowchart/finished-checked-model.json",
+          "sha256": "9159ae6dcf6378168e94503ad8c4997eac97088192c1794f96cbb355df6505df"
+        },
+        {
+          "path": "timer-first-flowchart/finished-checked-timers.json",
+          "sha256": "2205239d6c6aaa225f9001b2b0abcf801fab0781a848e1fabe76f505d04611ef"
+        },
+        {
+          "path": "timer-first-flowchart/finished-elsa.sqlite.gz",
+          "sha256": "1905aaff87165d7a99a2946d1a6d924504da88e39db875973c0faf434dcdde05"
+        },
+        {
+          "path": "timer-first-flowchart/finished-etl-design.sqlite.gz",
+          "sha256": "3227a1322b7710ffee932ed13f25b24c69d6699882d1be809777f70dfd584f58"
+        },
+        {
+          "path": "timer-first-flowchart/finished-etl-runtime.sqlite.gz",
+          "sha256": "a22b89f439afa6d5025fd9b3aa8f741afdf191b06ab6529bb147ce3e76427af2"
+        },
+        {
+          "path": "timer-first-flowchart/finished-wire.json",
+          "sha256": "3518a399561d4513ce61d40dabd2d0cabb43646dec129523c1a0eed6078048f0"
+        },
+        {
+          "path": "timer-first-flowchart/finished.json",
+          "sha256": "521f92cb3d2fb65d8bb93100e82d58df3c97ea373406a2f976cd300478865978"
+        },
+        {
+          "path": "timer-first-flowchart/middle-after-restart.json",
+          "sha256": "521f92cb3d2fb65d8bb93100e82d58df3c97ea373406a2f976cd300478865978"
+        },
+        {
+          "path": "timer-first-flowchart/middle-checked-embedding.json",
+          "sha256": "6b266e53a7df6296ec5d80c3a33875e2fbecde42a52f28b6cbd1ab86615ca54e"
+        },
+        {
+          "path": "timer-first-flowchart/middle-checked-model.json",
+          "sha256": "9159ae6dcf6378168e94503ad8c4997eac97088192c1794f96cbb355df6505df"
+        },
+        {
+          "path": "timer-first-flowchart/middle-checked-timers.json",
+          "sha256": "5f22597e2c9bccec19b37ee6603bbfdbb8ce4bdd9312ce497f3bbe1279c5e78f"
+        },
+        {
+          "path": "timer-first-flowchart/middle-elsa.sqlite.gz",
+          "sha256": "e51e32eca3ebd90b45fc843f1d826bea74684e16222f45f5a77a3b1ec1c22e06"
+        },
+        {
+          "path": "timer-first-flowchart/middle-etl-design.sqlite.gz",
+          "sha256": "fab9190350f48316b25447b570b20c5ac867aa4285b81e40e7acd56e783703c5"
+        },
+        {
+          "path": "timer-first-flowchart/middle-etl-runtime.sqlite.gz",
+          "sha256": "fc91bc559d4d20f18c6aabaa3c07ea3b26650532fc18fd61f7d53d2eca87d429"
+        },
+        {
+          "path": "timer-first-flowchart/middle-wire.json",
+          "sha256": "3518a399561d4513ce61d40dabd2d0cabb43646dec129523c1a0eed6078048f0"
+        },
+        {
+          "path": "timer-first-flowchart/middle.json",
+          "sha256": "521f92cb3d2fb65d8bb93100e82d58df3c97ea373406a2f976cd300478865978"
+        },
+        {
+          "path": "timer-first-flowchart/process.json",
+          "sha256": "d15d2a181ad898a84c9f57a98e64ee9643e88540d53f153dd9f91e1e03eb6a9d"
+        },
+        {
+          "path": "timer-first-flowchart/recovered.json",
+          "sha256": "b69e58997a415a93953a11cd8a895a936879084a33cb05cd2027b734496f6bae"
+        },
+        {
+          "path": "timer-first-flowchart/retained-checked-embedding.json",
+          "sha256": "630b9acc1265009a91c863ce60ce1c4f8bc0f2d790b574adbf8089107c2cca20"
+        },
+        {
+          "path": "timer-first-flowchart/retained-checked-model.json",
+          "sha256": "9159ae6dcf6378168e94503ad8c4997eac97088192c1794f96cbb355df6505df"
+        },
+        {
+          "path": "timer-first-flowchart/retained-checked-timers.json",
+          "sha256": "2205239d6c6aaa225f9001b2b0abcf801fab0781a848e1fabe76f505d04611ef"
+        },
+        {
+          "path": "timer-first-flowchart/retained-wire.json",
+          "sha256": "3518a399561d4513ce61d40dabd2d0cabb43646dec129523c1a0eed6078048f0"
+        },
+        {
+          "path": "timer-first-flowchart/retained.json",
+          "sha256": "521f92cb3d2fb65d8bb93100e82d58df3c97ea373406a2f976cd300478865978"
+        }
+      ]
+    },
+    {
+      "name": "held-interruption-flowchart",
+      "parent": "flowchart",
+      "order": "held-interruption",
+      "assets": [
+        {
+          "path": "held-interruption-flowchart/before-checked-embedding.json",
+          "sha256": "7e032fb043b68903d36a38aca24ba002e639ddd93fa0a6eb56e089543c77efe0"
+        },
+        {
+          "path": "held-interruption-flowchart/before-checked-model.json",
+          "sha256": "ce18a3c6417d6252700537fec7a4f0b41acf0e5571e739f324b76808a17af1bb"
+        },
+        {
+          "path": "held-interruption-flowchart/before-checked-timers.json",
+          "sha256": "ea4bdc9416054c072b4e26f415b710de065d68ed7b802696ef08802c0638ac1a"
+        },
+        {
+          "path": "held-interruption-flowchart/before-elsa.sqlite.gz",
+          "sha256": "04b16a557a8e6caaa09f5600c659143a62dd005bdb87e617e1e064ab22f4f4ae"
+        },
+        {
+          "path": "held-interruption-flowchart/before-etl-design.sqlite.gz",
+          "sha256": "b0219a213310c214029ea55a303ac0ede913cff77d1c5180bd34fe95b09b70dc"
+        },
+        {
+          "path": "held-interruption-flowchart/before-etl-runtime.sqlite.gz",
+          "sha256": "6675c2a0d7a5e3049f2209686685338b5523dc0a8ab58edab6f7233dc0705d83"
+        },
+        {
+          "path": "held-interruption-flowchart/before-wire.json",
+          "sha256": "45f9e421bf77c425dd07c9f48cca36c20476029b9063d53772adade806587559"
+        },
+        {
+          "path": "held-interruption-flowchart/before.json",
+          "sha256": "2fdba38d649ca436e05162935588dd4422973a99cc23f2ba4a8924e33d9099ba"
+        },
+        {
+          "path": "held-interruption-flowchart/finished-checked-embedding.json",
+          "sha256": "7f461d5a97eb036793b6c2f7668475ceb67e8e8e735b7eb0e201a4278f84f52d"
+        },
+        {
+          "path": "held-interruption-flowchart/finished-checked-model.json",
+          "sha256": "3429178c6185cca3d69282b0c8e10e8dd4139843f356f3af6ff4b089a6e46380"
+        },
+        {
+          "path": "held-interruption-flowchart/finished-checked-timers.json",
+          "sha256": "94545bbec22bfcac7d6b2d1cdfd2d32adabf77cf3ed167f9b630bcb65040f61b"
+        },
+        {
+          "path": "held-interruption-flowchart/finished-elsa.sqlite.gz",
+          "sha256": "f702906c9f6d96ff58287e97cf9430fde96defc71fe4e27f5a85d81c15aacc6c"
+        },
+        {
+          "path": "held-interruption-flowchart/finished-etl-design.sqlite.gz",
+          "sha256": "a90b192c72868f4857151ba566fa2e3f061f25a63537ee2d5a1e738c2e57c331"
+        },
+        {
+          "path": "held-interruption-flowchart/finished-etl-runtime.sqlite.gz",
+          "sha256": "94f3b01f25f3ddd61696fa64bb551562ea3c2e753bd42c0cdde0858a7d85b9c6"
+        },
+        {
+          "path": "held-interruption-flowchart/finished-wire.json",
+          "sha256": "45f9e421bf77c425dd07c9f48cca36c20476029b9063d53772adade806587559"
+        },
+        {
+          "path": "held-interruption-flowchart/finished.json",
+          "sha256": "3fc61d82fb52423b67a452828dc0d0dee36d1b5ff0ddfb648b19a34b543b4d49"
+        },
+        {
+          "path": "held-interruption-flowchart/lookup-snapshot.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "held-interruption-flowchart/lookup-source.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "held-interruption-flowchart/middle-after-restart.json",
+          "sha256": "9c47fae6823cc712c4e3bb80b18e1a216e0a25c0162903a215cde4f619d41a11"
+        },
+        {
+          "path": "held-interruption-flowchart/middle-checked-embedding.json",
+          "sha256": "2bb7b28991bb82bad884fb59395b80076b5725152955ab4da37d54bef6b2a0c6"
+        },
+        {
+          "path": "held-interruption-flowchart/middle-checked-model.json",
+          "sha256": "905ce61f10a52dacc0145766201294e760661c1261dd2a84b9eae8d9916c4974"
+        },
+        {
+          "path": "held-interruption-flowchart/middle-checked-timers.json",
+          "sha256": "8901885210b4e1029ff87586546e1343f795de8f85690becf633889dc5c93da8"
+        },
+        {
+          "path": "held-interruption-flowchart/middle-elsa.sqlite.gz",
+          "sha256": "d9273e46e189f529721afca9c4bc932fc52d33a8d58a92966472ccae7f7af188"
+        },
+        {
+          "path": "held-interruption-flowchart/middle-etl-design.sqlite.gz",
+          "sha256": "5fd0e5d9d939175e2824cc172f6b5f356ce887273bfe003aa0b98bd95202c4a5"
+        },
+        {
+          "path": "held-interruption-flowchart/middle-etl-runtime.sqlite.gz",
+          "sha256": "60d6ddc262f9bd4192eec99353073caf04e35a956adaf55e866f17efeefc7f4f"
+        },
+        {
+          "path": "held-interruption-flowchart/middle-wire.json",
+          "sha256": "45f9e421bf77c425dd07c9f48cca36c20476029b9063d53772adade806587559"
+        },
+        {
+          "path": "held-interruption-flowchart/middle.json",
+          "sha256": "9c47fae6823cc712c4e3bb80b18e1a216e0a25c0162903a215cde4f619d41a11"
+        },
+        {
+          "path": "held-interruption-flowchart/process.json",
+          "sha256": "04b87f0faf8050c8d6dfdeb50301ebf0b71751c49c1c787c6ac18e22f54ed39c"
+        },
+        {
+          "path": "held-interruption-flowchart/recovered.json",
+          "sha256": "2fdba38d649ca436e05162935588dd4422973a99cc23f2ba4a8924e33d9099ba"
+        },
+        {
+          "path": "held-interruption-flowchart/retained-checked-embedding.json",
+          "sha256": "7f461d5a97eb036793b6c2f7668475ceb67e8e8e735b7eb0e201a4278f84f52d"
+        },
+        {
+          "path": "held-interruption-flowchart/retained-checked-model.json",
+          "sha256": "3429178c6185cca3d69282b0c8e10e8dd4139843f356f3af6ff4b089a6e46380"
+        },
+        {
+          "path": "held-interruption-flowchart/retained-checked-timers.json",
+          "sha256": "94545bbec22bfcac7d6b2d1cdfd2d32adabf77cf3ed167f9b630bcb65040f61b"
+        },
+        {
+          "path": "held-interruption-flowchart/retained-wire.json",
+          "sha256": "45f9e421bf77c425dd07c9f48cca36c20476029b9063d53772adade806587559"
+        },
+        {
+          "path": "held-interruption-flowchart/retained.json",
+          "sha256": "3fc61d82fb52423b67a452828dc0d0dee36d1b5ff0ddfb648b19a34b543b4d49"
+        },
+        {
+          "path": "held-interruption-flowchart/retry-refusal.json",
+          "sha256": "57c052d8e604bd408dba8eaaff4695660c742066a8d7f1cdb6215f5e7082eb64"
+        },
+        {
+          "path": "held-interruption-flowchart/snapshot-unavailability.json",
+          "sha256": "3bc7dd89c2aa575d3895b233073f94dbf746727d14279206d5f743c4ec00c1c0"
+        }
+      ]
+    },
+    {
+      "name": "worker-first-compensationscope",
+      "parent": "compensationscope",
+      "order": "worker-first",
+      "assets": [
+        {
+          "path": "worker-first-compensationscope/before-checked-embedding.json",
+          "sha256": "fada09d03ad21a495a34a5f467b92435f278014078a32b38bd857039240251aa"
+        },
+        {
+          "path": "worker-first-compensationscope/before-checked-model.json",
+          "sha256": "5864ecc42992747724b71231dbe11c4ef7d537b3a8ba1962f4e7fb2b3c199a41"
+        },
+        {
+          "path": "worker-first-compensationscope/before-checked-timers.json",
+          "sha256": "71abaf107325cc33e70afd981858c7dca1e43a4915767b11c2ca13b77811b8be"
+        },
+        {
+          "path": "worker-first-compensationscope/before-elsa.sqlite.gz",
+          "sha256": "fc10062cfadbc749394fc440fc12a259a76ed8f58e99c43b113a16754bc095b6"
+        },
+        {
+          "path": "worker-first-compensationscope/before-etl-design.sqlite.gz",
+          "sha256": "4a776751fb01fcdc43ad3dd57799e8c59c29c07f3ad3b22d56f126be3244fdd6"
+        },
+        {
+          "path": "worker-first-compensationscope/before-etl-runtime.sqlite.gz",
+          "sha256": "a9d31c578bd272f110d1de4501cef990039de49fde7501ddca27b310d9107912"
+        },
+        {
+          "path": "worker-first-compensationscope/before-wire.json",
+          "sha256": "c688596b2ce5915f03dd0f7000cc2bbcdea03194c834368073daa0ea79c6ce5f"
+        },
+        {
+          "path": "worker-first-compensationscope/before.json",
+          "sha256": "2927861517fe60ce53102ba07a75cc68367b465d64eba5094a944924430876ca"
+        },
+        {
+          "path": "worker-first-compensationscope/finished-checked-embedding.json",
+          "sha256": "4cc72223505c48738ec30eae7d4b780a506fc278d8dab0cf21b393ce8f67c13e"
+        },
+        {
+          "path": "worker-first-compensationscope/finished-checked-model.json",
+          "sha256": "0724a276164c41f24d1eea77b85dfcf35151fd10f7d1502f3cda3783a36f9bee"
+        },
+        {
+          "path": "worker-first-compensationscope/finished-checked-timers.json",
+          "sha256": "27fd4d3bd12434f37621b4e618d58c0b1a684f5cb7fd49d5a92536dd583430c7"
+        },
+        {
+          "path": "worker-first-compensationscope/finished-elsa.sqlite.gz",
+          "sha256": "b44bb195cf32bec4d81ebf483f2c1ae81de944bb4bf0f4d8a73349ea4021129b"
+        },
+        {
+          "path": "worker-first-compensationscope/finished-etl-design.sqlite.gz",
+          "sha256": "f4c88bdb49bee2c22920849f69671a92e608cb8bef127fda0fb38167be51b340"
+        },
+        {
+          "path": "worker-first-compensationscope/finished-etl-runtime.sqlite.gz",
+          "sha256": "3304fc73b09c53db92b32da808eb7d7fb66ab321fba7f77b8cdf3829aa154fff"
+        },
+        {
+          "path": "worker-first-compensationscope/finished-wire.json",
+          "sha256": "34d2f3801122c2b58e1faba7392a4779052e5821783541bdf35d61772cfded5d"
+        },
+        {
+          "path": "worker-first-compensationscope/finished.json",
+          "sha256": "a8a85c3ae711afe0578accd04345ace035fd9ff9b277c4317a7ccff8e824dc67"
+        },
+        {
+          "path": "worker-first-compensationscope/middle-after-restart.json",
+          "sha256": "a8a85c3ae711afe0578accd04345ace035fd9ff9b277c4317a7ccff8e824dc67"
+        },
+        {
+          "path": "worker-first-compensationscope/middle-checked-embedding.json",
+          "sha256": "7c1629d86bf43d5882fc8bfcc0427722b44e5d88616af0e637826f2ad543d789"
+        },
+        {
+          "path": "worker-first-compensationscope/middle-checked-model.json",
+          "sha256": "0724a276164c41f24d1eea77b85dfcf35151fd10f7d1502f3cda3783a36f9bee"
+        },
+        {
+          "path": "worker-first-compensationscope/middle-checked-timers.json",
+          "sha256": "5f72f022212976362f068a9062555ea864cade1c1d5f6c75f602474de9659021"
+        },
+        {
+          "path": "worker-first-compensationscope/middle-elsa.sqlite.gz",
+          "sha256": "daac85872c52bbe86962705af84974eddfa4b352e587c67c903f83f060eac857"
+        },
+        {
+          "path": "worker-first-compensationscope/middle-etl-design.sqlite.gz",
+          "sha256": "26f9ef5b9c89b0a4986401ec2a5a04ed817e21faf5d4fd78c267bb320b53240b"
+        },
+        {
+          "path": "worker-first-compensationscope/middle-etl-runtime.sqlite.gz",
+          "sha256": "390c6b961dcb23bca6ba54c8f513afaf38ca854cbc347b19962e8316ffd65c17"
+        },
+        {
+          "path": "worker-first-compensationscope/middle-wire.json",
+          "sha256": "34d2f3801122c2b58e1faba7392a4779052e5821783541bdf35d61772cfded5d"
+        },
+        {
+          "path": "worker-first-compensationscope/middle.json",
+          "sha256": "a8a85c3ae711afe0578accd04345ace035fd9ff9b277c4317a7ccff8e824dc67"
+        },
+        {
+          "path": "worker-first-compensationscope/process.json",
+          "sha256": "ffe4b759f4e251eed9a70a5fb2acc3a3145de62ca33b04de9c288f971dd0afdb"
+        },
+        {
+          "path": "worker-first-compensationscope/recovered.json",
+          "sha256": "2927861517fe60ce53102ba07a75cc68367b465d64eba5094a944924430876ca"
+        },
+        {
+          "path": "worker-first-compensationscope/retained-checked-embedding.json",
+          "sha256": "4cc72223505c48738ec30eae7d4b780a506fc278d8dab0cf21b393ce8f67c13e"
+        },
+        {
+          "path": "worker-first-compensationscope/retained-checked-model.json",
+          "sha256": "0724a276164c41f24d1eea77b85dfcf35151fd10f7d1502f3cda3783a36f9bee"
+        },
+        {
+          "path": "worker-first-compensationscope/retained-checked-timers.json",
+          "sha256": "27fd4d3bd12434f37621b4e618d58c0b1a684f5cb7fd49d5a92536dd583430c7"
+        },
+        {
+          "path": "worker-first-compensationscope/retained-wire.json",
+          "sha256": "34d2f3801122c2b58e1faba7392a4779052e5821783541bdf35d61772cfded5d"
+        },
+        {
+          "path": "worker-first-compensationscope/retained.json",
+          "sha256": "a8a85c3ae711afe0578accd04345ace035fd9ff9b277c4317a7ccff8e824dc67"
+        }
+      ]
+    },
+    {
+      "name": "timer-first-compensationscope",
+      "parent": "compensationscope",
+      "order": "timer-first",
+      "assets": [
+        {
+          "path": "timer-first-compensationscope/before-checked-embedding.json",
+          "sha256": "1fbf20e5f9cf72f3d60720e597186b32d68a3119c4462028c519e73ca4854277"
+        },
+        {
+          "path": "timer-first-compensationscope/before-checked-model.json",
+          "sha256": "5d8fb417c2e6cda9ff682fe8c48da99fad259d78390ccfadbb34cf67e678d9cf"
+        },
+        {
+          "path": "timer-first-compensationscope/before-checked-timers.json",
+          "sha256": "12a38bbade2ddcd5991a3afe528a912895b57ffcd35f6893b898f0b1a506df3e"
+        },
+        {
+          "path": "timer-first-compensationscope/before-elsa.sqlite.gz",
+          "sha256": "0a19a68e7e5c81ec9af0ab5efa88eaf8a472f97028ef6fae79344c20f594dcdc"
+        },
+        {
+          "path": "timer-first-compensationscope/before-etl-design.sqlite.gz",
+          "sha256": "c9de3a6e3761f03284ea5075e36c91337dabc9292337cc0c4775713447f77193"
+        },
+        {
+          "path": "timer-first-compensationscope/before-etl-runtime.sqlite.gz",
+          "sha256": "5bb7ee2e41a21b8574926bc462e7ed441aa8604ca390113041f376c97fb1569d"
+        },
+        {
+          "path": "timer-first-compensationscope/before-wire.json",
+          "sha256": "e2ea90aa671f84507e0dd54f63878d33c13e716599819ad93f74b6a24d65ea5e"
+        },
+        {
+          "path": "timer-first-compensationscope/before.json",
+          "sha256": "9997986288d73c31d5b731725fb0bc9292e47e924ab050613c7ddfe8de024555"
+        },
+        {
+          "path": "timer-first-compensationscope/finished-checked-embedding.json",
+          "sha256": "6e77e3d628572ed1188649449e4d81d77f0e0bf48eeba519e8881a0edc1f791e"
+        },
+        {
+          "path": "timer-first-compensationscope/finished-checked-model.json",
+          "sha256": "5e1e3db8e42d986fd54bd2f0636c090a942d0585c2051919f8e315a1c291d173"
+        },
+        {
+          "path": "timer-first-compensationscope/finished-checked-timers.json",
+          "sha256": "1a131db6d07b73196d6a0efe94a6b06a4cb2cb9d83dd1b04f1234c99aba877f2"
+        },
+        {
+          "path": "timer-first-compensationscope/finished-elsa.sqlite.gz",
+          "sha256": "f152c7ded51f28792f47f49bdefdf7e6925312265a51521aa4bab724f73e9ccc"
+        },
+        {
+          "path": "timer-first-compensationscope/finished-etl-design.sqlite.gz",
+          "sha256": "edd08223717169e494e2253198f9fbb68562ddef1bb4ed5aec12f36abc06f888"
+        },
+        {
+          "path": "timer-first-compensationscope/finished-etl-runtime.sqlite.gz",
+          "sha256": "34b770f4ea275f066a8278ca5a6cd98d02b23b219266508c2d43af8cc6afa7a5"
+        },
+        {
+          "path": "timer-first-compensationscope/finished-wire.json",
+          "sha256": "e2ea90aa671f84507e0dd54f63878d33c13e716599819ad93f74b6a24d65ea5e"
+        },
+        {
+          "path": "timer-first-compensationscope/finished.json",
+          "sha256": "929db38cf0ef024ee383078f9195dbf4c4022138d32cd79540acc66898c44bbb"
+        },
+        {
+          "path": "timer-first-compensationscope/middle-after-restart.json",
+          "sha256": "929db38cf0ef024ee383078f9195dbf4c4022138d32cd79540acc66898c44bbb"
+        },
+        {
+          "path": "timer-first-compensationscope/middle-checked-embedding.json",
+          "sha256": "c2a1896a2be1bf277f606f03530776b8fb2917e8b2467e2658522dba7fb44029"
+        },
+        {
+          "path": "timer-first-compensationscope/middle-checked-model.json",
+          "sha256": "5e1e3db8e42d986fd54bd2f0636c090a942d0585c2051919f8e315a1c291d173"
+        },
+        {
+          "path": "timer-first-compensationscope/middle-checked-timers.json",
+          "sha256": "29c1a729d406af3d96504e6cabcd8a648445db6d88b591d7c2b1b9934a9f81c5"
+        },
+        {
+          "path": "timer-first-compensationscope/middle-elsa.sqlite.gz",
+          "sha256": "e880db520844c4b92aa2902ce0b9430906954a43e0d11b312e657dba57083372"
+        },
+        {
+          "path": "timer-first-compensationscope/middle-etl-design.sqlite.gz",
+          "sha256": "316c22bdc565e7cafbb1af09294785b78af217544ac83220bcaf45910abcf9e3"
+        },
+        {
+          "path": "timer-first-compensationscope/middle-etl-runtime.sqlite.gz",
+          "sha256": "52b7019374c8a01aa5762833e56d492742fd8dec7cdc1c26c0a17acc71114fc2"
+        },
+        {
+          "path": "timer-first-compensationscope/middle-wire.json",
+          "sha256": "e2ea90aa671f84507e0dd54f63878d33c13e716599819ad93f74b6a24d65ea5e"
+        },
+        {
+          "path": "timer-first-compensationscope/middle.json",
+          "sha256": "929db38cf0ef024ee383078f9195dbf4c4022138d32cd79540acc66898c44bbb"
+        },
+        {
+          "path": "timer-first-compensationscope/process.json",
+          "sha256": "6653722ae8eefda83c4d0b81249d238903edcff1b875ef3bf45f512c67607682"
+        },
+        {
+          "path": "timer-first-compensationscope/recovered.json",
+          "sha256": "9997986288d73c31d5b731725fb0bc9292e47e924ab050613c7ddfe8de024555"
+        },
+        {
+          "path": "timer-first-compensationscope/retained-checked-embedding.json",
+          "sha256": "6e77e3d628572ed1188649449e4d81d77f0e0bf48eeba519e8881a0edc1f791e"
+        },
+        {
+          "path": "timer-first-compensationscope/retained-checked-model.json",
+          "sha256": "5e1e3db8e42d986fd54bd2f0636c090a942d0585c2051919f8e315a1c291d173"
+        },
+        {
+          "path": "timer-first-compensationscope/retained-checked-timers.json",
+          "sha256": "1a131db6d07b73196d6a0efe94a6b06a4cb2cb9d83dd1b04f1234c99aba877f2"
+        },
+        {
+          "path": "timer-first-compensationscope/retained-wire.json",
+          "sha256": "e2ea90aa671f84507e0dd54f63878d33c13e716599819ad93f74b6a24d65ea5e"
+        },
+        {
+          "path": "timer-first-compensationscope/retained.json",
+          "sha256": "929db38cf0ef024ee383078f9195dbf4c4022138d32cd79540acc66898c44bbb"
+        }
+      ]
+    },
+    {
+      "name": "held-interruption-compensationscope",
+      "parent": "compensationscope",
+      "order": "held-interruption",
+      "assets": [
+        {
+          "path": "held-interruption-compensationscope/before-checked-embedding.json",
+          "sha256": "31f565d9ba352d1a15aa2f1bdf19bbc0b198bcd2da0d87e4268ad1d6607d28e4"
+        },
+        {
+          "path": "held-interruption-compensationscope/before-checked-model.json",
+          "sha256": "478087b4c95a738c368e601ab7e1d504326520f40d45cddbc67077296d55f50f"
+        },
+        {
+          "path": "held-interruption-compensationscope/before-checked-timers.json",
+          "sha256": "860cdc1bea85b8f3f4a373fcfbd6acab330009693039726ee00d42315a6023f5"
+        },
+        {
+          "path": "held-interruption-compensationscope/before-elsa.sqlite.gz",
+          "sha256": "e794fc41321be0d58381199c399593e5f42e4b46efc3a4b19721c07f5644796d"
+        },
+        {
+          "path": "held-interruption-compensationscope/before-etl-design.sqlite.gz",
+          "sha256": "94de6b68dcf7aa28fbf5fcb101f01cda8496ff4246f05cf8c90369c49a38c7ee"
+        },
+        {
+          "path": "held-interruption-compensationscope/before-etl-runtime.sqlite.gz",
+          "sha256": "3f4f529c6ff78c74a9f1d8adcb6084b3fd7372c19cca57c463105c9fa3c75eef"
+        },
+        {
+          "path": "held-interruption-compensationscope/before-wire.json",
+          "sha256": "284909ac9357b641871d2076a61a3a3c68d7d47169a6034485b07e52cac50885"
+        },
+        {
+          "path": "held-interruption-compensationscope/before.json",
+          "sha256": "a9d67f01d3c188170005dbfa8eeae8280c0a15a900dae722675a643ab499f6d3"
+        },
+        {
+          "path": "held-interruption-compensationscope/finished-checked-embedding.json",
+          "sha256": "d4829439b77ea6db21614241cd74c562911f0e819f038eaef0ff00a16e4b9874"
+        },
+        {
+          "path": "held-interruption-compensationscope/finished-checked-model.json",
+          "sha256": "70f732ae68186d4fbd4e485b5bcabeb41783e886c9787f499da7b9ffc7dae17a"
+        },
+        {
+          "path": "held-interruption-compensationscope/finished-checked-timers.json",
+          "sha256": "a7d7db3367b3cf146d16d50501ad02366f926d0c89c3c0f709eabbbd933aca79"
+        },
+        {
+          "path": "held-interruption-compensationscope/finished-elsa.sqlite.gz",
+          "sha256": "d06a328badcff5847f6fd02245cc08fb91092e9e695081c6eabf1b85505817e9"
+        },
+        {
+          "path": "held-interruption-compensationscope/finished-etl-design.sqlite.gz",
+          "sha256": "9256b50e5aaa8990b8badb1952e2385c240802e5752f1ae93317c2f5a2242413"
+        },
+        {
+          "path": "held-interruption-compensationscope/finished-etl-runtime.sqlite.gz",
+          "sha256": "1e7d886b36ce89c8b799b8341b8ee322d89040e86660d10af3d9f7944d781b1b"
+        },
+        {
+          "path": "held-interruption-compensationscope/finished-wire.json",
+          "sha256": "284909ac9357b641871d2076a61a3a3c68d7d47169a6034485b07e52cac50885"
+        },
+        {
+          "path": "held-interruption-compensationscope/finished.json",
+          "sha256": "bf371e8d99bf1be07088be867645e68102317d441dcce1f11ec95567afc84d69"
+        },
+        {
+          "path": "held-interruption-compensationscope/lookup-snapshot.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "held-interruption-compensationscope/lookup-source.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "held-interruption-compensationscope/middle-after-restart.json",
+          "sha256": "47964dc00e1859714f35035179786350e53e76c3e38092b45b9c9e31b7caef2c"
+        },
+        {
+          "path": "held-interruption-compensationscope/middle-checked-embedding.json",
+          "sha256": "7c10fa1ef05de1e5235f48ff13eb1048b2a6ad18b65214c300bd7d5e206bc8ef"
+        },
+        {
+          "path": "held-interruption-compensationscope/middle-checked-model.json",
+          "sha256": "566b2cbf10539f7f1641b64755cc200e377dceea2549948c189939aea9fc1f4b"
+        },
+        {
+          "path": "held-interruption-compensationscope/middle-checked-timers.json",
+          "sha256": "7c2c0cdf9707256e61eaa91674d94efe0b474dd534a634ccfe43d67d8d9bddc2"
+        },
+        {
+          "path": "held-interruption-compensationscope/middle-elsa.sqlite.gz",
+          "sha256": "b0ff639a830dc5ed1811d88356b48789181824e2bb033eecb09b9a216795b389"
+        },
+        {
+          "path": "held-interruption-compensationscope/middle-etl-design.sqlite.gz",
+          "sha256": "8fd96a7d1cce24e42d3cf079ec790c1e56fdce7c0f7345ea7478e89992bdda91"
+        },
+        {
+          "path": "held-interruption-compensationscope/middle-etl-runtime.sqlite.gz",
+          "sha256": "33650ae9d3e3ca8e6f361efcbcd3c7527b70927ab5c814c27141b634df6c63c3"
+        },
+        {
+          "path": "held-interruption-compensationscope/middle-wire.json",
+          "sha256": "284909ac9357b641871d2076a61a3a3c68d7d47169a6034485b07e52cac50885"
+        },
+        {
+          "path": "held-interruption-compensationscope/middle.json",
+          "sha256": "47964dc00e1859714f35035179786350e53e76c3e38092b45b9c9e31b7caef2c"
+        },
+        {
+          "path": "held-interruption-compensationscope/process.json",
+          "sha256": "89d221912b11e337f7f63a3e8342b3f12e0d735c7e42fe8906f900a33e75b1bf"
+        },
+        {
+          "path": "held-interruption-compensationscope/recovered.json",
+          "sha256": "a9d67f01d3c188170005dbfa8eeae8280c0a15a900dae722675a643ab499f6d3"
+        },
+        {
+          "path": "held-interruption-compensationscope/retained-checked-embedding.json",
+          "sha256": "d4829439b77ea6db21614241cd74c562911f0e819f038eaef0ff00a16e4b9874"
+        },
+        {
+          "path": "held-interruption-compensationscope/retained-checked-model.json",
+          "sha256": "70f732ae68186d4fbd4e485b5bcabeb41783e886c9787f499da7b9ffc7dae17a"
+        },
+        {
+          "path": "held-interruption-compensationscope/retained-checked-timers.json",
+          "sha256": "a7d7db3367b3cf146d16d50501ad02366f926d0c89c3c0f709eabbbd933aca79"
+        },
+        {
+          "path": "held-interruption-compensationscope/retained-wire.json",
+          "sha256": "284909ac9357b641871d2076a61a3a3c68d7d47169a6034485b07e52cac50885"
+        },
+        {
+          "path": "held-interruption-compensationscope/retained.json",
+          "sha256": "bf371e8d99bf1be07088be867645e68102317d441dcce1f11ec95567afc84d69"
+        },
+        {
+          "path": "held-interruption-compensationscope/retry-refusal.json",
+          "sha256": "2da8e28558bb4971125d5d4d96d36d3a6bd59cdd04678550ec26d9d3a88d503b"
+        },
+        {
+          "path": "held-interruption-compensationscope/snapshot-unavailability.json",
+          "sha256": "e8cd1d26aea352c60540c19f3e17828bc2af3d19d6dd2ba6efa506befc14679b"
+        }
+      ]
+    }
+  ]
+}
