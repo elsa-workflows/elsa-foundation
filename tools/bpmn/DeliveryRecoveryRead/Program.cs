@@ -25,11 +25,11 @@ try
             return new { Name = name, ProductVersion = System.Diagnostics.FileVersionInfo.GetVersionInfo(path).ProductVersion,
                 Sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))) };
         }).ToArray();
-        var source = products[0].ProductVersion?.Split('+').Last();
-        if (source?.Length != 40 || source.Any(character => !char.IsAsciiHexDigitLower(character)) ||
-            products.Any(product => product.ProductVersion?.EndsWith("+" + source, StringComparison.Ordinal) != true))
+        var studioSourceCommit = products[0].ProductVersion?.Split('+').Last();
+        if (studioSourceCommit?.Length != 40 || studioSourceCommit.Any(character => !char.IsAsciiHexDigitLower(character)) ||
+            products.Any(product => product.ProductVersion?.EndsWith("+" + studioSourceCommit, StringComparison.Ordinal) != true))
             throw new InvalidDataException("The actual Studio products do not share one full source commit.");
-        Console.WriteLine(JsonSerializer.Serialize(new { SourceCommit = source, MetadataOnly = true, ActualProductVersions = products }, json));
+        Console.WriteLine(JsonSerializer.Serialize(new { SourceCommit = studioSourceCommit, MetadataOnly = true, ActualProductVersions = products }, json));
         return 0;
     }
     if (args.Length == 3 && args[0] == "--check-predecessor-queue-reader")
