@@ -71,6 +71,7 @@ def main():
     service_policy=parser.add_mutually_exclusive_group()
     service_policy.add_argument('--hold-service-retry',action='store_true',help='Pin HoldForRetry/2 and recover one authorized physical retry after a second process loss.')
     service_policy.add_argument('--final-service-fault',action='store_true',help='Pin explicit FinalFault/1 and prove a real current incident cannot retry after semantic finality.')
+    parser.add_argument('--held-action',choices=('retry','cancel'),default='retry',help='After the held failure survives its second process loss, authorize retry or cancel the still-active model work.')
     parser.add_argument("--queued-native-stage", choices=("start", "checkpoint"), help="With cancellation before admission, use the actual SDK to retain the selected native queue stage first.")
     parser.add_argument("--dispatcher-assembly", type=Path, help="Built owned SDK client required for the queued-native cut.")
     parser.add_argument("--admission-race-order", choices=("cancel-first", "admit-first"), help="Gate an unchanged actual proposal before its provider transaction, commit the competitor, then cold-recover both writers' obligations.")
@@ -91,6 +92,7 @@ def main():
     if args.technical_fault and args.parent!='BpmnModel':parser.error("Technical fault currently qualifies the direct BPMN/native RunEtl root.")
     if (args.hold_service_retry or args.final_service_fault) and (not args.technical_fault or args.business_error_boundary!='matching'):
         parser.error('The explicit service fault policy journey requires --technical-fault --business-error-boundary matching.')
+    if args.held_action!='retry' and not args.hold_service_retry:parser.error('--held-action requires --hold-service-retry.')
     if args.business_error_boundary and (not (args.business_error or args.technical_fault) or args.parent!='BpmnModel'):
         parser.error("A business-error boundary requires --parent BpmnModel and a business-error or technical-fault journey.")
     caught_business_error=args.business_error and args.business_error_boundary=='matching'
@@ -499,7 +501,8 @@ def main():
             if lookup_snapshot.exists() or q.digest(unavailable)!=snapshot_unavailability['snapshotSha256Before']:
                 raise ValueError('The retained lookup changed while its failed attempt was held.')
             unavailable.rename(lookup_snapshot)
-            snapshot_unavailability.update(restoredBeforeAuthorizedRetry=True,restoredAtUtc=datetime.now(timezone.utc).isoformat(),restoredSha256=q.digest(lookup_snapshot))
+            snapshot_unavailability.update(**{'restoredBeforeAuthorizedRetry' if args.held_action=='retry' else 'restoredBeforeAuthorizedCancellation':True},
+                restoredAtUtc=datetime.now(timezone.utc).isoformat(),restoredSha256=q.digest(lookup_snapshot))
             q.write_json(output/'snapshot-unavailability.json',snapshot_unavailability)
             api=launch()
             after_restart={'execution':view(),'incidents':api.request(route+'/incidents?limit=10')}
@@ -509,6 +512,64 @@ def main():
                 if view()!=held['execution'] or wire()!=before_wire:raise ValueError('The held failed attempt revived at its original HTTP retry deadline.')
                 time.sleep(.25)
             q.write_json(output/'held-after-restart.json',after_restart)
+            if args.held_action=='cancel':
+                cancel_request={'requestId':'cancel-actual-held-service','reason':'Retire the actual held service failure.'}
+                submitted=api.request(route+'/cancel',cancel_request)
+                accepted=wait_for(lambda:api.request(route+'/commands/'+cancel_request['requestId']),lambda value:not value['pending'],
+                    'The actual held cancellation did not retain its exact command result.',90)
+                if (accepted['result']['status']!='Accepted' or accepted['result']['revision']!=3 or
+                        accepted['result']['lifecycle']!=('TerminalPendingSettlement' if native_parent_execution else 'TerminalSettled')):
+                    raise ValueError('Held cancellation did not accept one terminal semantic decision.')
+                final=wait_for(view,lambda value:value['model']['status']=='TerminalSettled' and value['model']['result']['status']=='Cancelled' and
+                    (not native_parent_execution or value['embedding']['instance']['status']=='Cancelled'),
+                    'The cancelled held model did not settle its actual native parent.',90)
+                current_incidents=api.request(route+'/incidents?limit=10')
+                retired,=current_incidents['items']
+                refused={'requestId':'retry-actual-retired-service','incidentId':incident['incidentId'],'invocationId':incident['invocationId'],'failedAttemptId':incident['failedAttemptId']}
+                request=urllib.request.Request(api.base+route+'/retry-service',data=json.dumps(refused).encode(),headers={'Content-Type':'application/json'})
+                try:
+                    with api.opener.open(request,timeout=30):raise ValueError('A retired held service was allowed to retry.')
+                except urllib.error.HTTPError as error:
+                    if error.code!=409:raise
+                refusal=api.request(route+'/commands/'+refused['requestId'])
+                if refusal['pending'] or refusal['result']['status']!='Rejected' or refusal['result']['code']!='execution-terminal':
+                    raise ValueError('Retired held service lost its durable terminal retry refusal.')
+                checked_final=checked_native_model();document=checked_final['model']['payload'];record,=document['failures']
+                if (checked_final['model']['revision']!=(4 if native_parent_execution else 3) or document['work'] or
+                        checked_final['model']['terminalResult']!={'status':'Cancelled','reason':cancel_request['reason']} or
+                        document['state']!=failure['semanticState'] or document['nativeResults']!=[old_result] or
+                        record!={**failure,'status':'Retired','resolutionInputId':cancel_request['requestId']} or retired!={**incident,'status':'Retired'} or
+                        final['run']!=held['execution']['run'] or final['native']!=held['execution']['native'] or wire()!=before_wire or
+                        len(api.request('/etl/runs?limit=100')['items'])!=1 or checked_final['resultInput']!=checked_held['resultInput'] or
+                        document.get('cancellations') is not None):
+                    raise ValueError('Held cancellation rewrote the failed attempt, restarted work or owed cancellation to an already terminal worker.')
+                if native_parent_execution:
+                    outer=wait_for(checked_embedding,lambda value:not value['queuedModelInputs'] and all(s['status']==2 for s in value['sources']),
+                        'The held model cancellation left native parent settlement or source ACK owed.',90)
+                    run_bpmn,=[a for a in final['embedding']['activities'] if a['activityType']=='Elsa.Activities.Bpmn.Activities.RunBpmn']
+                    if run_bpmn['status']!='Cancelled' or final['embedding']['incidents'] or any((a.get('authoredActivityId') or a['executableNodeId'])=='after' for a in final['embedding']['activities']):
+                        raise ValueError('The native parent advanced or faulted after the held model was cancelled.')
+                    q.write_json(output/'finished-checked-embedding.json',outer)
+                q.write_json(output/'held-cancel-command.json',{'request':cancel_request,'submitted':submitted,'accepted':accepted,'retiredIncident':retired})
+                q.write_json(output/'retired-retry-refusal.json',{'request':refused,'httpStatus':409,'command':refusal})
+                q.write_json(output/'finished.json',final);q.write_json(output/'finished-checked-model.json',checked_final);q.write_json(output/'finished-wire.json',wire())
+                stop(host);finished_stores=snapshots('finished');api=launch()
+                retained=view();retained_checked=checked_native_model();retained_incidents=api.request(route+'/incidents?limit=10');retained_wire=wire()
+                q.write_json(output/'retained.json',retained);q.write_json(output/'retained-checked-model.json',retained_checked);q.write_json(output/'retained-wire.json',retained_wire)
+                q.write_json(output/'retained-incidents.json',retained_incidents)
+                if native_parent_execution:q.write_json(output/'retained-checked-embedding.json',checked_embedding())
+                stop(host)
+                if retained!=final or retained_checked!=checked_final or retained_incidents!=current_incidents or retained_wire!=before_wire:
+                    raise ValueError('The cancelled held failure or its original worker revived in another standard process.')
+                q.write_json(output/'process.json',{'schemaVersion':1,'kind':'actual-model-held-service-cancellation','sourceRevision':source,'products':products,'parent':args.parent,'embeddedParent':args.embedded_parent,
+                    'modelExecutionId':model_execution,'workflowExecutionId':execution,'runId':run,'processes':processes,'predecessorExitCode':exit_code,'heldPredecessorExitCode':held_exit,
+                    'cutAtUtc':cut_at,'heldCutAtUtc':held_cut,'beforeStores':before_stores,'heldStores':held_stores,'finishedStores':finished_stores,
+                    'publication':publication,'modelPublication':model_publication,'etlPublication':published,'nativeParentExecutionId':native_parent_execution,'nativeParentPublication':native_parent_publication,
+                    'selection':selection,'bindings':bindings,'fixtureSha256':q.digest(fixture_script),'controllerSha256':q.digest(Path(__file__)),'technicalFaultPolicy':'HoldForRetry','maxServiceAttempts':2,
+                    'retryAfterSeconds':retry_after,'resumptionSweepIntervalSeconds':.2,'scopeLimits':['Actual cancellation of a held technical fault after two process losses; original failed ETL/native truth and prior two effects remain unchanged.',
+                        'Remaining timer/concurrent-input/obsolete-result/auth/provider/retention/rollback/final upgrade/Studio acceptance remains separate.']})
+                print('Actual held failure survived second SIGKILL; model cancellation retired its semantic work and refused retry without another worker or effect.',flush=True)
+                return
             request={'requestId':'retry-actual-held-service','incidentId':incident['incidentId'],'invocationId':incident['invocationId'],'failedAttemptId':incident['failedAttemptId']}
             submitted=api.request(route+'/retry-service',request)
             accepted=wait_for(lambda:api.request(route+'/commands/'+request['requestId']),lambda value:not value['pending'],
