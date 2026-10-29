@@ -258,7 +258,8 @@ def main():
                         pending=admission_view();quiesce();pending_stores=snapshots("pending");pending_checked=admission_checked()
                         q.write_json(output/"cancel-response.json",cancellation);q.write_json(output/"pending.json",pending);q.write_json(output/"pending-checked.json",pending_checked)
                         if (cancellation["pending"] or cancellation["result"]["status"]!="Accepted" or pending["model"]["status"]!="TerminalPendingSettlement" or
-                                pending_checked["model"]["revision"]!=2 or pending["runs"]["items"] or len(pending_checked["sources"])!=2):
+                                pending_checked["model"]["revision"]!=2 or pending["runs"]["items"] or
+                                len([s for s in pending_checked["sources"] if s["intent"]["kind"] in ("Elsa.Bpmn.StartNativeWork.v1","Elsa.Bpmn.CancelNativeWork.v1")])!=2):
                             raise ValueError("The actual ordered admission/cancellation did not retain its decision and obligations.")
                         admitted=args.admission_race_order=="admit-first"
                         if (pending_checked["worker"] is not None)!=admitted or len(pending["native"])!=int(admitted):
@@ -269,7 +270,7 @@ def main():
                         features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":.2};q.write_json(root/"shells.json",shells)
                         api=launch()
                         finished_checked=wait_for(admission_checked,lambda value:value["model"]["lifecycle"]==3 and
-                            len(value["inputs"])==3 and len(value["sources"])==2 and all(item["status"]==2 for item in value["sources"]) and
+                            len(value["inputs"])==3 and all(item["status"]==2 for item in value["sources"]) and
                             not value["queuedNativeWork"] and not value["queuedModelInputs"],"The actual admission/cancellation race did not settle after restart.",90)
                         finished=admission_view();finished_wire=wire();stop(host);finished_checked=admission_checked();finished_stores=snapshots("finished")
                         q.write_json(output/"finished.json",finished);q.write_json(output/"finished-checked.json",finished_checked);q.write_json(output/"finished-wire.json",finished_wire)

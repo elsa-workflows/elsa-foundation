@@ -6,6 +6,7 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
@@ -64,6 +65,10 @@ try
         }
     }
     services.Replace(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainPolicy>(new CaptureDrainPolicy(checkpointCut || race)));
+    // The orchestration loop follows delivered continuations even when each scheduler pass has a one-item budget.
+    // Two existing cycle-budget slots cover the durable-claim handoff and actual admission checkpoint only.
+    if (args[0] == "--drain-checkpoint")
+        services.Replace(ServiceDescriptor.Singleton(new WorkflowDrainOrchestratorOptions(maxTotalDrainCycles: 2)));
     await using var provider = services.BuildServiceProvider();
     if (race)
         foreach (var initializer in provider.GetServices<IShellInitializer>()) await initializer.InitializeAsync();
@@ -106,8 +111,16 @@ try
             var envelope = new WorkflowExecutionCommandEnvelope(id, origin.WorkerExecutionId,
                 new(id, origin.WorkerExecutionId, WorkflowExecutionCommandKind.RunSchedulerWork, started, null, new Dictionary<string, string>()),
                 id, WorkflowExecutionCommandDeliveryMode.AtLeastOnce, started, partition: new(origin.Scope.Value));
-            outcome = await sdk.GetRequiredService<IWorkflowDrainOrchestrator>().DrainAsync(envelope,
-                new(origin.WorkerExecutionId, maxWorkItems: 1));
+            try
+            {
+                outcome = await sdk.GetRequiredService<IWorkflowDrainOrchestrator>().DrainAsync(envelope,
+                    new(origin.WorkerExecutionId, maxWorkItems: 1));
+            }
+            catch (DrainCycleLimitExceededException exception) when (exception.WorkflowExecutionId == origin.WorkerExecutionId &&
+                exception.Limit == DrainCycleLimit.TotalCycles && exception.MaxCycles == 2 && exception.Cycles == 2)
+            {
+                outcome = new { status = "TotalCycleBudgetReached", exception.WorkflowExecutionId, exception.MaxCycles, exception.Cycles };
+            }
         }
         Console.WriteLine(JsonSerializer.Serialize(new { operation = args[0], startedAtUtc = started, completedAtUtc = DateTimeOffset.UtcNow,
             origin, outcome, model = await models.FindAsync(model.ExecutionId), worker = await workflows.FindAsync(origin.WorkerExecutionId),
