@@ -74,6 +74,7 @@ def main():
     parser.add_argument('--held-action',choices=('retry','cancel','exhaust'),default='retry',help='After the held failure survives its second process loss, retry successfully, cancel, or exhaust its budget through a real unavailable bound input.')
     parser.add_argument('--retry-auth-controls',action='store_true',help='Use real owned Identity accounts to verify retry/inspection permissions and foreign-tenant refusal before and after replay.')
     parser.add_argument('--obsolete-result-controls',action='store_true',help='Replay the actual old native result and reject modified/misaddressed inputs while the replacement is in a real HTTP429 wait.')
+    parser.add_argument('--service-timer',choices=('worker-first','timer-first','held-interruption'),help='Qualify the actual native ETL worker against its interrupting duration boundary.')
     parser.add_argument("--queued-native-stage", choices=("start", "checkpoint"), help="With cancellation before admission, use the actual SDK to retain the selected native queue stage first.")
     parser.add_argument("--dispatcher-assembly", type=Path, help="Built owned SDK client required for the queued-native cut.")
     parser.add_argument("--admission-race-order", choices=("cancel-first", "admit-first"), help="Gate an unchanged actual proposal before its provider transaction, commit the competitor, then cold-recover both writers' obligations.")
@@ -91,6 +92,13 @@ def main():
     outcome_group.add_argument("--model-cancel-before-admission", action="store_true", help="Cancel the model while its original native start is owed, kill the host and recover positive retirement without admitting a worker.")
     args = parser.parse_args()
     cancelling=args.pipeline_cancel or args.native_cancel or args.native_parent_cancel or args.model_cancel or args.model_cancel_before_admission
+    if args.service_timer and (args.parent!='BpmnModel' or cancelling or args.business_error or args.retry_auth_controls or args.obsolete_result_controls or
+            args.pending_cancellation_crash or args.pending_parent_result_crash or args.successful_parent_result_crash or args.queued_native_stage):
+        parser.error('Service/timer journeys require the normal BPMN/native ETL path, separately from other capture controls.')
+    if args.service_timer and ((args.service_timer=='held-interruption') != bool(args.technical_fault and args.hold_service_retry)):
+        parser.error('Held interruption requires --technical-fault --hold-service-retry; other service/timer orders use the successful worker.')
+    if args.service_timer in ('worker-first','timer-first') and (args.technical_fault or args.hold_service_retry or args.final_service_fault or args.business_error_boundary):
+        parser.error('The worker/timer orders use the successful finite ETL worker without fault controls.')
     if args.technical_fault and args.parent!='BpmnModel':parser.error("Technical fault currently qualifies the direct BPMN/native RunEtl root.")
     if (args.hold_service_retry or args.final_service_fault) and (not args.technical_fault or args.business_error_boundary!='matching'):
         parser.error('The explicit service fault policy journey requires --technical-fault --business-error-boundary matching.')
@@ -255,7 +263,7 @@ def main():
             features.update({"ActivitiesBpmnHosting":{"AdmitNewExecutions":True},"ActivitiesBpmnHostingApi":{}})
             if args.model_cancel_before_admission:features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":300}
             elif args.pending_cancellation_crash or args.pending_parent_result_crash or args.successful_parent_result_crash:features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":.2}
-            elif args.business_error_boundary:features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":.2}
+            elif args.business_error_boundary or args.service_timer:features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":.2}
             # This first model profile qualifies the built-in single-node actor, as the hosting tests do.
             for name in ("WorkflowsRuntimeDistributed", "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence", "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence"):
                 features.pop(name, None)
@@ -293,8 +301,15 @@ def main():
             service_binding={'bindingId':'pipeline','executable':worker_pin,'businessErrorCode':'etl.rows-rejected'}
             if args.hold_service_retry or args.final_service_fault:
                 service_binding['faultPolicy']={'formatVersion':1,'disposition':'HoldForRetry' if args.hold_service_retry else 'FinalFault','maxAttempts':2 if args.hold_service_retry else 1}
-            model_publication=api.request("/bpmn/artifacts",{"requestId":"publish-model","definition":{"formatVersion":3 if args.hold_service_retry or args.final_service_fault else 2,"process":process,"humanBindings":[],
-                "serviceBindings":[service_binding]}})
+            timer_duration=10 if args.service_timer=='timer-first' else 40
+            if args.service_timer:
+                service_binding.setdefault('faultPolicy',{'formatVersion':1,'disposition':'FinalFault','maxAttempts':1})
+                process['elements'] += [{'elementId':'timeout','elementType':'boundaryEvent','bindingRef':'timeout-work','attachedToRef':'service','cancelActivity':True,
+                    'eventDefinitions':[{'type':'timer','properties':{'interval':'PT'+str(timer_duration)+'S'}}]}, {'elementId':'timeout-end','elementType':'endEvent'}]
+                process['sequenceFlows'].append({'flowId':'to-timeout-end','sourceRef':'timeout','targetRef':'timeout-end'})
+            model_definition={"formatVersion":4 if args.service_timer else 3 if args.hold_service_retry or args.final_service_fault else 2,"process":process,"humanBindings":[],"serviceBindings":[service_binding]}
+            if args.service_timer:model_definition['timerBindings']=['timeout-work']
+            model_publication=api.request("/bpmn/artifacts",{"requestId":"publish-model","definition":model_definition})
             if args.embedded_parent:
                 outer=node("run-bpmn","Elsa.Activities.Bpmn.Activities.RunBpmn",[q.literal("Model",model_publication["sourceReferenceId"])])
                 if args.embedded_parent!='Root':
@@ -486,6 +501,8 @@ def main():
             return value
         def checked_native_model():
             return json.loads(subprocess.check_output(["dotnet",str(reader),"--read-bpmn-native",str(root/"elsa.db"),model_execution,execution],text=True,timeout=30))
+        def checked_timers():
+            return json.loads(subprocess.check_output(['dotnet',str(reader),'--read-bpmn-direct',str(root/'elsa.db'),model_execution],text=True,timeout=30))
         def checked_embedding():
             return json.loads(subprocess.check_output(['dotnet',str(reader),'--read-bpmn-embedding',str(root/'elsa.db'),model_execution,native_parent_execution],text=True,timeout=30))
         def cut_ready(value):
@@ -506,6 +523,7 @@ def main():
             raise ValueError("The actual source already retried before the recorded crash cut.")
         before_stores=snapshots("before")
         if direct_bpmn:q.write_json(output/"before-checked-model.json",checked_native_model())
+        if args.service_timer:q.write_json(output/'before-checked-timers.json',checked_timers())
         if native_parent_execution:q.write_json(output/'before-checked-embedding.json',checked_embedding())
         stop(host,crash=True);exit_code=host.returncode
         if exit_code!=-signal.SIGKILL:raise ValueError("The predecessor did not exit through actual process loss.")
@@ -527,6 +545,92 @@ def main():
         if args.pending_cancellation_crash or args.pending_parent_result_crash or args.successful_parent_result_crash:
             features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":300};q.write_json(root/"shells.json",shells)
         api=launch();recovered=view();q.write_json(output/"recovered.json",recovered)
+        if args.service_timer:
+            route='/bpmn/executions/'+urllib.parse.quote(model_execution,safe='')
+            first_timer,=[w['timer'] for w in json.loads((output/'before-checked-timers.json').read_text())['model']['payload']['work'] if w.get('timer')]
+            def timed_view():return {'execution':view(),'incidents':api.request(route+'/incidents?limit=10')}
+            expected_worker='Faulted' if args.service_timer=='held-interruption' else 'Cancelled' if args.service_timer=='timer-first' else 'Completed'
+            expected_etl='faulted' if args.service_timer=='held-interruption' else 'cancelled' if args.service_timer=='timer-first' else 'succeeded'
+            if args.service_timer=='held-interruption':
+                middle=wait_for(timed_view,lambda v:v['execution']['model']['status']=='WaitingIncident' and v['execution']['native']['instance']['status']=='Faulted' and
+                    v['execution']['run']['status']=='faulted' and len(v['incidents']['items'])==1,'The actual timed worker did not retain its held failure.',90)
+                middle_kind='held'
+            else:
+                middle=wait_for(timed_view,lambda v:v['execution']['model']['status']=='TerminalSettled' and v['execution']['native']['instance']['status']==expected_worker and
+                    v['execution']['run']['status']==expected_etl,'The real worker/timer order did not reach its original terminal result.',120)
+                middle_kind='winner'
+            checked_middle=wait_for(checked_native_model,lambda v:v['resultInput'] is not None and v['resultSource'] is not None and v['resultSource']['status']==2,
+                'The actual timed worker result still owes its exact consumption/ACK.',90)
+            if args.service_timer!='timer-first' and datetime.now(timezone.utc)>=utc_instant(first_timer['dueAt']):
+                raise ValueError('The intended worker/held cut did not precede its real timer deadline.')
+            os.kill(host.pid,signal.SIGSTOP)
+            wait_for(lambda:q.process_field(host.pid,'stat'),lambda v:'T' in v,'The timed worker host did not quiesce.',5)
+            middle_cut=datetime.now(timezone.utc).isoformat();middle_stores=snapshots('middle')
+            q.write_json(output/'middle.json',middle);q.write_json(output/'middle-checked-model.json',checked_native_model())
+            q.write_json(output/'middle-checked-timers.json',checked_timers());q.write_json(output/'middle-wire.json',wire())
+            if native_parent_execution:q.write_json(output/'middle-checked-embedding.json',checked_embedding())
+            stop(host,crash=True);middle_exit=host.returncode
+            if middle_exit!=-signal.SIGKILL:raise ValueError('The retained timed worker decision did not lose its actual process.')
+            if args.service_timer=='held-interruption':
+                if lookup_snapshot.exists() or q.digest(unavailable)!=snapshot_unavailability['snapshotSha256Before']:
+                    raise ValueError('The timed held failure lost its original immutable lookup snapshot.')
+                unavailable.rename(lookup_snapshot)
+                snapshot_unavailability.update(restoredBeforeTimerInterruption=True,restoredAtUtc=datetime.now(timezone.utc).isoformat(),restoredSha256=q.digest(lookup_snapshot))
+                q.write_json(output/'snapshot-unavailability.json',snapshot_unavailability)
+            api=launch();after_restart=timed_view();q.write_json(output/'middle-after-restart.json',after_restart)
+            if after_restart!=middle:raise ValueError('The timed worker decision or held failure changed at process recovery.')
+            final=wait_for(timed_view,lambda v:v['execution']['model']['status']=='TerminalSettled' and v['execution']['model']['result']['status']=='Completed' and
+                v['execution']['native']['instance']['status']==expected_worker and v['execution']['run']['status']==expected_etl and
+                (not native_parent_execution or v['execution']['embedding']['instance']['status']=='Completed'),
+                'The actual timer did not settle the original model/native parent.',120)
+            timer_checked=wait_for(checked_timers,lambda v:all(s['status']==2 for s in v['sources']) and not v['queuedModelInputs'],
+                'The original duration source still owes its actual model receipt or ACK.',90)
+            timer_receipt,=[r for r in timer_checked['inputs'] if r['inputKind']=='timer-elapsed']
+            if timer_receipt['result']['status']!=('Rejected' if args.service_timer=='worker-first' else 'Accepted'):
+                raise ValueError('The original worker/timer winner was not retained in its exact elapsed input receipt.')
+            terminal=timer_checked['model']['payload'];expected_end='end' if args.service_timer=='worker-first' else 'timeout-end'
+            if not any(d['elementId']==expected_end for d in terminal['state']['diagnostics']) or any(d['elementId']==('timeout-end' if expected_end=='end' else 'end') for d in terminal['state']['diagnostics']):
+                raise ValueError('The real worker/timer journey followed the wrong semantic route.')
+            if args.service_timer=='held-interruption':
+                failure,=terminal['failures'];incident,=final['incidents']['items']
+                if failure['status']!='Retired' or incident['status']!='Retired' or failure['resolutionInputId']!=timer_receipt['inputId'] or len(terminal['nativeResults'])!=1:
+                    raise ValueError('Timer interruption revived or lost the original held failure evidence.')
+                request={'requestId':'retry-after-actual-held-timeout','incidentId':incident['incidentId'],'invocationId':incident['invocationId'],'failedAttemptId':incident['failedAttemptId']}
+                call=urllib.request.Request(api.base+route+'/retry-service',data=json.dumps(request).encode(),headers={'Content-Type':'application/json'})
+                try:
+                    with api.opener.open(call,timeout=30):raise ValueError('A timer-retired held attempt reopened through retry.')
+                except urllib.error.HTTPError as error:
+                    if error.code!=409:raise
+                    refused=json.loads(error.read())
+                q.write_json(output/'retry-refusal.json',{'request':request,'httpStatus':409,'outcome':refused})
+            # Real timer cancellation must suppress a delayed HTTP retry after its original deadline.
+            while datetime.now(timezone.utc)<utc_instant(retry['notBefore'])+timedelta(seconds=2):
+                if timed_view()!=final:raise ValueError('The timer winner changed while the original HTTP retry became due.')
+                time.sleep(.25)
+            final_wire=wire();checked_final=checked_native_model();timer_checked=checked_timers()
+            if args.service_timer!='worker-first' and final_wire!=before_wire:raise ValueError('The interrupted/held worker performed late HTTP work.')
+            q.write_json(output/'finished.json',final);q.write_json(output/'finished-wire.json',final_wire)
+            q.write_json(output/'finished-checked-model.json',checked_final);q.write_json(output/'finished-checked-timers.json',timer_checked)
+            if native_parent_execution:q.write_json(output/'finished-checked-embedding.json',checked_embedding())
+            stop(host);finished_stores=snapshots('finished');api=launch()
+            retained=timed_view();retained_checked=checked_native_model();retained_timers=checked_timers();retained_wire=wire()
+            q.write_json(output/'retained.json',retained);q.write_json(output/'retained-checked-model.json',retained_checked)
+            q.write_json(output/'retained-checked-timers.json',retained_timers);q.write_json(output/'retained-wire.json',retained_wire)
+            if native_parent_execution:q.write_json(output/'retained-checked-embedding.json',checked_embedding())
+            stop(host)
+            if retained!=final or retained_checked!=checked_final or retained_timers!=timer_checked or retained_wire!=final_wire:
+                raise ValueError('The actual worker/timer result changed in a fourth standard host.')
+            q.write_json(output/'process.json',{'schemaVersion':1,'kind':'actual-bpmn-etl-duration-race','sourceRevision':source,'products':products,
+                'order':args.service_timer,'durationSeconds':timer_duration,'timer':first_timer,'parent':args.parent,'embeddedParent':args.embedded_parent,
+                'modelExecutionId':model_execution,'workflowExecutionId':execution,'runId':run,'nativeParentExecutionId':native_parent_execution,
+                'publication':publication,'modelPublication':model_publication,'nativeParentPublication':native_parent_publication,'etlPublication':published,
+                'processes':processes,'predecessorExitCode':exit_code,'middleExitCode':middle_exit,'cutAtUtc':cut_at,'middleCutAtUtc':middle_cut,'middleKind':middle_kind,
+                'beforeStores':before_stores,'middleStores':middle_stores,'finishedStores':finished_stores,'selection':selection,'bindings':bindings,
+                'fixtureSha256':q.digest(fixture_script),'controllerSha256':q.digest(Path(__file__)),'retryAfterSeconds':retry_after,'resumptionSweepIntervalSeconds':.2,
+                'scopeLimits':['Actual ETL/native worker against its original duration boundary after process loss. No SQL state or clock edits.',
+                    'Simultaneous commit orders, direct-model broadcast/provider/retention/rollback and final upgrade/Studio remain separate.']})
+            print('Actual '+args.service_timer+' preserved its original worker and timer through process loss and a fourth host.',flush=True)
+            return
         if args.hold_service_retry:
             route='/bpmn/executions/'+urllib.parse.quote(model_execution,safe='')
             held=wait_for(lambda:{'execution':view(),'incidents':api.request(route+'/incidents?limit=10')},
