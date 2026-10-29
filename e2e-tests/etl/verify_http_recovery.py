@@ -185,7 +185,7 @@ def verify(path):
         if {item["id"]:item["name"] for item in records}!=expected_records or any(not post["hasIdempotencyKey"] for post in wire["outputPosts"]):raise ValueError("The physical HTTP receiver lacks the actual mapped effects.")
         errors=read("safe-errors.json")
         if errors!=([{"recordOrdinal":1,"code":"etl.invalid-value","field":"id"}] if business_error else []):raise ValueError("The actual safe-error file output differs.")
-        invocation=None;native_bookmark=None
+        invocation=None;native_bookmark=None;native_consumption=[]
         for phase,stores in (("before",process["beforeStores"]),("finished",process["finishedStores"])):
             for store,snapshot in stores.items():
                 file=q.evidence_file(root,case+"/"+snapshot["file"]);raw=gzip.decompress(file.read_bytes())
@@ -201,6 +201,9 @@ def verify(path):
                             bookmarks=connection.execute("SELECT BookmarkId FROM elsa_runtime_bookmark_state WHERE WorkflowExecutionId=?",(identity,)).fetchall()
                             if len(bookmarks)!=(1 if phase=="before" else 0):raise ValueError("The physical RunEtl wait was recreated or not consumed.")
                             if phase=="before":native_bookmark=bookmarks[0][0]
+                            elif pipeline_cancel:
+                                activity,=connection.execute("SELECT ContentJson FROM elsa_runtime_activity_execution_state").fetchall()
+                                native_consumption=json.loads(activity[0]).get("triggerDeliveries") or []
                         if store=="etl-runtime":
                             row=connection.execute("SELECT InvocationJson,Status,AcceptedRecords,RejectedRecords,OutstandingRecords,OutstandingBytes FROM elsa_etl_runtime_runs WHERE RunId=?",(key(run_id),)).fetchone()
                             if row is None:raise ValueError("The physical ETL run is absent.")
@@ -217,6 +220,9 @@ def verify(path):
                             if phase=="finished" and (row[1]!=(5 if pipeline_cancel else 3 if business_error else 2) or row[2:]!=(accepted,rejected,0,0) or terminal!=[(3 if pipeline_cancel else 1 if business_error else 0,)] or len(outbox)!=1 or outbox[0][0]<1 or outbox[0][1] is None or outbox[0][2] is None):raise ValueError("The physical ETL terminal or owed native result did not settle.")
         if (native_bookmark!=decoded(invocation["resultAddress"]["bookmarkId"]) or native_bookmark!=decoded(invocation["resultAddress"]["registrationId"]) or
                 decoded(invocation["resultAddress"]["nodeId"])!=old["etl"]["executableNodeId"]):raise ValueError("The ETL result address did not retain its actual native bookmark.")
+        if pipeline_cancel and not any(receipt["status"]=="Consumed" and receipt["registrationId"]==key(decoded(invocation["resultAddress"]["registrationId"])) and
+                receipt["providerId"]==key(decoded(invocation["resultAddress"]["providerId"])) and receipt["payloadType"]["alias"]==key("Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion")
+                for receipt in native_consumption):raise ValueError("The cancelled native root lacks its exact typed ETL consumption receipt.")
         results.append({"case":case,"acceptedRecords":accepted,"rejectedRecords":rejected,"physicalOutputRecords":len(records),"businessErrorPreserved":business_error})
     result={"actualReferenceJourneys":results,"wholeStoresVerified":len(expected_cases)*6,"sourceRevision":source,"directBpmnClosedWorkerIntegrationProved":direct,
         "runBpmnEtlIntegrationProved":False,"modelHeldFaultRetryProved":False}

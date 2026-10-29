@@ -123,4 +123,49 @@ class ActualDirectBpmnEtlRecoveryControls(_ActualRecoveryControls):
         with self.assertRaisesRegex(ValueError,"physical worker lost its protected exact model origin"):self.verify()
 
 
+class ActualDirectPipelineCancellationControls(_ActualRecoveryControls):
+    evidence=EVIDENCE.parent/"direct-cancellation"
+
+    def test_actual_cancelled_pipeline_worker_and_model_keep_bounded_claims(self):
+        result=self.verify();self.assertEqual(6,result["wholeStoresVerified"])
+        self.assertTrue(result["pipelineOriginatedCancellationProved"])
+        self.assertFalse(result["modelToWorkerCancellationProved"]);self.assertFalse(result["runBpmnEtlIntegrationProved"])
+        self.assertFalse(result["modelHeldFaultRetryProved"])
+        self.assertEqual(2,result["actualReferenceJourneys"][0]["physicalOutputRecords"])
+
+    def test_cancelled_native_work_cannot_be_relabeled_as_completed(self):
+        def completed(value):
+            value["worker"]["status"]=3;value["model"]["payload"]["nativeResults"][0]["status"]=3
+        for phase in ("finished","retained"):self.change("direct-cancel/"+phase+"-checked-model.json",completed)
+        with self.assertRaisesRegex(ValueError,"typed terminal outcome"):self.verify()
+
+    def test_cancellation_cannot_erase_already_delivered_record_accounting(self):
+        for phase in ("finished","retained"):
+            self.change("direct-cancel/"+phase+".json",lambda value:value["run"].update(acceptedRecords=0))
+        with self.assertRaisesRegex(ValueError,"terminal or partition accounting"):self.verify()
+
+    def test_an_early_read_cannot_prove_stability_after_the_retry_deadline(self):
+        self.change("direct-cancel/process.json",lambda value:value.update(observedCancelledAfterRetryDeadlineAtUtc=value["cutAtUtc"]))
+        with self.assertRaisesRegex(ValueError,"accepted request and post-deadline observation"):self.verify()
+
+    def test_cancelled_http_work_cannot_resume_its_saved_retry(self):
+        def retry(value):
+            original=next(item for item in value["requests"] if item.get("shard")=="shard-b")
+            value["requests"].append({**original,"status":200,"receivedAtMs":original["receivedAtMs"]+60000})
+        for phase in ("finished","retained"):self.change("direct-cancel/"+phase+"-wire.json",retry)
+        with self.assertRaisesRegex(ValueError,"cancelled HTTP shard resumed"):self.verify()
+
+    def test_physical_native_cancellation_cannot_borrow_a_completed_header(self):
+        self.change_store("direct-cancel",lambda connection:connection.execute("UPDATE elsa_runtime_workflow_execution_state SET Status=3"))
+        with self.assertRaisesRegex(ValueError,"physical native ETL workflow lost its exact pin or state"):self.verify()
+
+    def test_cancelled_header_cannot_replace_the_typed_etl_consumption_receipt(self):
+        def unconsumed(connection):
+            value=json.loads(connection.execute("SELECT ContentJson FROM elsa_runtime_activity_execution_state").fetchone()[0])
+            value["triggerDeliveries"][0]["status"]="Recorded"
+            connection.execute("UPDATE elsa_runtime_activity_execution_state SET ContentJson=?",(json.dumps(value),))
+        self.change_store("direct-cancel",unconsumed)
+        with self.assertRaisesRegex(ValueError,"exact typed ETL consumption receipt"):self.verify()
+
+
 if __name__=="__main__":unittest.main()
