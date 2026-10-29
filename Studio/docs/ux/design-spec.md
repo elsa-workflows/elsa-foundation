@@ -112,7 +112,7 @@ hierarchy is a presentation rule, not a shared data-grid or filtering framework.
 
 - **Exact identity:** Keep each row's human-readable name and one exact, copyable primary ID
   visible by default. Put additional technical IDs in the existing keyboard-accessible
-  `AdvancedSection`, with exact copy values and display-only truncation. A copy or disclosure
+  `AdvancedSection` (or the Workflow Definitions identity popover), with exact copy values and display-only truncation. A copy or disclosure
   action must not open its containing row. A row reacts to Enter or Space only when the row
   itself is the event target. In Workflow Definitions, previous search results retained while a
   new query is pending stay non-actionable and do not expose their secondary identifiers.
@@ -127,7 +127,7 @@ hierarchy is a presentation rule, not a shared data-grid or filtering framework.
   expired snapshot recovery remain distinct from a generic request failure.
 - **Workflow Definitions exception:** Preserve lifecycle tabs, folder and Unfiled scope,
   selection, move, delete, restore, permanent-delete confirmations, and the current browse-session
-  behavior. Folder navigation and Move require the host's advertised relations; the normal Workbench does not currently provide them. Bookmarked unsupported folder scopes show a truthful fallback rather than guessed requests. Secondary IDs remain unavailable while stale previous-query rows are displayed. At narrow widths, constrain Name-cell identifiers and complete copy-button hitboxes to the visible scroll container, including the shell content inset; retain horizontal access to later table columns.
+  behavior. Folder navigation and Move require the host's advertised relations; the normal Workbench does not currently provide them. Bookmarked unsupported folder scopes show a truthful fallback rather than guessed requests. Secondary IDs remain unavailable while stale previous-query rows are displayed. Keep Name cells to the workflow name, show Definition ID in a separate copyable column, and use a compact icon column for an anchored identity popover. Descriptions and result-folder breadcrumbs remain available inside that popover; deleted state stays visible with the version status. Escape closes the popover and restores its trigger focus; outside clicks dismiss without stealing focus. At narrow widths retain horizontal table scrolling and clamp the popover and complete copy-button hitboxes to the viewport, including the shell content inset.
 - **Runs exception:** Keep workflow name as the first scan target and the exact execution ID
   visible and copyable. Reveal artifact, definition, and version IDs on demand. Keep applied and
   advanced filters, cursor navigation, row selection, and capability-gated deletion unchanged.

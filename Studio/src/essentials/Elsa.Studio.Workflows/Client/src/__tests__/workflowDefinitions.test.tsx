@@ -25,7 +25,7 @@ afterEach(() => {
 });
 
 describe("workflow definition list", () => {
-  it("keeps the definition ID primary and isolates copy and disclosure actions from row navigation", async () => {
+  it("separates names and IDs and isolates the identity popover from row navigation", async () => {
     const definition = {
       id: "definition-exact-0123456789abcdef0123456789abcdef",
       name: "Invoice evaluator",
@@ -50,23 +50,28 @@ describe("workflow definition list", () => {
 
     await waitFor(() => expect(container.querySelector(".wf-definition-primary-identifier .studio-copyable-identifier__value")?.getAttribute("aria-label")).toBe(`Definition ID: ${definition.id}`));
     const row = container.querySelector<HTMLElement>(".wf-definition-grid .wf-grid-row")!;
-    const disclosure = row.querySelector<HTMLButtonElement>(".wf-definition-secondary-identifiers .studio-disclosure-fold-trigger")!;
+    expect(row.querySelector(".wf-definition-name")?.textContent).toBe(definition.name);
+    expect(container.querySelector('[role="columnheader"].wf-definition-id-header')?.textContent).toBe("Definition ID");
+    const disclosure = row.querySelector<HTMLButtonElement>('button[aria-label="Identifiers for Invoice evaluator"]')!;
     const copyDefinitionId = row.querySelector<HTMLButtonElement>('button[aria-label="Copy Definition ID"]')!;
-    const details = row.querySelector<HTMLElement>(".wf-definition-secondary-identifiers .studio-disclosure-fold-body")!;
-    expect(details.hasAttribute("hidden")).toBe(true);
-    expect(details.querySelector('[aria-label="Draft ID: draft-exact-id"]')).toBeTruthy();
-
-    for (const key of ["Enter", " "]) {
-      flushSync(() => disclosure.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
-      flushSync(() => copyDefinitionId.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
-    }
-    expect(navigate).not.toHaveBeenCalled();
+    expect(row.querySelector(".wf-definition-id")?.contains(copyDefinitionId)).toBe(true);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
 
     click(disclosure);
     expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    const details = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Workflow definition identifiers for Invoice evaluator"]')!;
     for (const identifier of [definition.draftId, definition.draftSourceVersionId, definition.latestVersionId, definition.publishedVersionId]) {
       expect(details.textContent).toContain(identifier);
     }
+    expect(details.textContent).toContain(definition.description);
+    click(details.querySelector('[aria-label="Draft ID: draft-exact-id"]')!);
+    expect(navigate).not.toHaveBeenCalled();
+    click(details.querySelector('button[aria-label="Copy Draft ID"]')!);
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(definition.draftId));
+    flushSync(() => details.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(disclosure.getAttribute("aria-expanded")).toBe("false");
 
     const copyIconPath = copyDefinitionId.querySelector("svg path")!;
     flushSync(() => copyIconPath.dispatchEvent(new MouseEvent("click", { bubbles: true })));
