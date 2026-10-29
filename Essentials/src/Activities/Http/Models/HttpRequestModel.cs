@@ -70,6 +70,10 @@ public sealed class HttpRequestModel
         this.RouteData = Snapshot(RouteData);
     }
 
+    /// <summary>Opaque transport observation identity. Null on legacy or non-HTTP starts.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ResponseExchangeId { get; init; }
+
     public string Path { get; }
     public string Method { get; }
     public IReadOnlyDictionary<string, IReadOnlyList<string>> Headers { get; }

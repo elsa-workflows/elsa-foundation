@@ -149,6 +149,8 @@ public sealed record ActivityExecutionInspectionView(
     ActivityExecutionBoundaryView? Boundary,
     IReadOnlyDictionary<string, string> Metadata)
 {
+    public IReadOnlyList<ActivityExecutionObservationView> Observations { get; init; } = [];
+
     public static ActivityExecutionInspectionView From(
         ActivityExecutionInspectionProjection projection,
         ActivityExecutionBoundary? boundary = null,
@@ -183,7 +185,8 @@ public sealed record ActivityExecutionInspectionView(
                 canResolveValuePayloads)).ToArray(),
             ActivityExecutionAttemptView.From(attemptNavigation, projection.Attempt ?? projection.Provenance.Attempt),
             ActivityExecutionBoundaryView.From(boundary),
-            ActivityExecutionInspectionDisclosure.Metadata(projection.Metadata, canInspectSensitiveValues));
+            ActivityExecutionInspectionDisclosure.Metadata(projection.Metadata, canInspectSensitiveValues))
+        { Observations = projection.Observations.Select(ActivityExecutionObservationView.From).ToArray() };
 }
 
 public sealed record ActivityExecutionAttemptView(
@@ -478,6 +481,8 @@ public sealed record ActivityExecutionInspectionSummaryView(
     int ValueSnapshotCount,
     IReadOnlyDictionary<string, string> Metadata)
 {
+    public IReadOnlyList<ActivityExecutionObservationView> Observations { get; init; } = [];
+
     public static ActivityExecutionInspectionSummaryView From(ActivityExecutionInspectionSummaryProjection projection) =>
         new(
             projection.ActivityExecutionId,
@@ -500,7 +505,8 @@ public sealed record ActivityExecutionInspectionSummaryView(
             projection.BookmarkCount,
             projection.IncidentCount,
             projection.ValueSnapshotCount,
-            ActivityExecutionInspectionDisclosure.EmptyMetadata);
+            ActivityExecutionInspectionDisclosure.EmptyMetadata)
+        { Observations = projection.Observations.Select(ActivityExecutionObservationView.From).ToArray() };
 }
 
 public sealed record ActivityExecutionStateView(
@@ -670,4 +676,12 @@ public sealed record WorkflowExecutionStartDispatchView(
         int.TryParse(seconds, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : null;
+}
+
+/// <summary>Non-sensitive retained inspection evidence; module-private correlation metadata is not exposed.</summary>
+public sealed record ActivityExecutionObservationView(string ObservationId, string Kind, string Code, string Severity,
+    string Message, DateTimeOffset OccurredAt)
+{
+    public static ActivityExecutionObservationView From(ActivityExecutionObservation value) => new(
+        value.ObservationId, value.Kind, value.Code, value.Severity.ToString(), value.Message, value.OccurredAt);
 }

@@ -1,0 +1,3 @@
+# Observation contract
+Inspection writes merge retained observations from the previous row. Append operations target an existing workflow/activity projection and never create a synthetic invocation. Unavailable providers report unsupported; callers preserve Unknown. API exact and summary reads expose observation facts subject to existing structure-inspection permissions; observation metadata cannot carry sensitive values.
+Codes: http.response.written; http.response.exchange-closed; http.response.undelivered. Missing delivery facts mean Unknown. Facts report server-side transport behavior and cannot prove client receipt.

@@ -50,6 +50,7 @@ const writeLineCatalog: ActivityCatalogItem = {
   available: true
 };
 
+const httpDeliveryFixture = new URLSearchParams(window.location.search).get("http-delivery");
 const workflowStartFixture = new URLSearchParams(window.location.search).has("workflow-start");
 const httpEndpointCatalog: ActivityCatalogItem = {
   ...writeLineCatalog,
@@ -95,7 +96,7 @@ function editorDraft(): WorkflowDraft {
       { nodeId: "write-one", x: 420, y: 180 },
       { nodeId: "write-two", x: 720, y: 180 }
     ],
-    activityPresentation: [{ nodeId: "write-one", displayName: workflowStartFixture ? "Http Endpoint" : "Notify buyer" }],
+    activityPresentation: [{ nodeId: "write-one", displayName: httpDeliveryFixture ? "Write HTTP Response" : workflowStartFixture ? "Http Endpoint" : "Notify buyer" }],
     validationErrors: []
   };
 }
@@ -201,7 +202,7 @@ function createEditorContext(live?: { status: string; disconnected: boolean }): 
   const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity, ...paletteFixtures, ...(workflowStartFixture ? [httpEndpointCatalog] : [])];
   const compiled = (node: ActivityNode): object => ({
     executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
-    activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown",
+    activityType: httpDeliveryFixture && node.nodeId === "write-one" ? "Elsa.WriteHttpResponse" : catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown",
     activityTypeVersion: "1.0.0", inputBindings: [], structureKind: node.structure?.kind,
     childSlots: getChildSlots(node, catalog).map(slot => ({ name: `${catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey.split(".").at(-1)}.${slot.id.split(":").at(-1)!.replace(/^./, value => value.toUpperCase())}`, activities: slot.activities.map(compiled) })),
     ...(node.structure?.kind === "elsa.flowchart.structure" ? { connections: node.structure.payload.connections } : {})
@@ -218,11 +219,18 @@ function createEditorContext(live?: { status: string; disconnected: boolean }): 
   const records = runtimeNodes.flatMap(({ node, parent }) => Array.from({ length: runCanvas === "repeated" && node.nodeId === "write-one" ? 10 : 1 }, (_, index) => ({
     activityExecutionId: `activity-exec-${node.nodeId}${runCanvas === "repeated" && node.nodeId === "write-one" ? `-${index + 1}` : ""}`,
     workflowExecutionId: "editor-execution", executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
-    activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown", activityTypeVersion: "1.0.0",
+    activityType: httpDeliveryFixture && node.nodeId === "write-one" ? "Elsa.WriteHttpResponse" : catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown", activityTypeVersion: "1.0.0",
     parentActivityExecutionId: parent ? `activity-exec-${parent}` : null,
     ...(motionFixture ? { outcomeNames: ["Done"], provenance: { parentActivityExecutionId: parent ? `activity-exec-${parent}` : null,
       schedulingActivityExecutionId: `activity-exec-${predecessors.get(node.nodeId) ?? parent}`,
       schedulingCause: draft.state.rootActivity?.structure?.kind === "elsa.sequence.structure" ? "ActivityCompletion" : "continuation" } } : {}),
+    observations: httpDeliveryFixture && httpDeliveryFixture !== "unknown" && node.nodeId === "write-one" ? [{
+      observationId: "http-fixture-exact-invocation", kind: "http.response.delivery",
+      code: httpDeliveryFixture === "warning" ? "http.response.undelivered" : "http.response.written",
+      severity: httpDeliveryFixture === "warning" ? "Warning" : "Information",
+      message: httpDeliveryFixture === "warning" ? "Response prepared but not sent: the original HTTP exchange is closed." : "Written to the HTTP response. This records the server write, not acknowledgement by the client.",
+      occurredAt: "2026-10-27T10:00:01Z"
+    }] : [],
     scheduledAt: "2026-10-27T10:00:00Z", status: runCanvas === "incident" && node.nodeId === "write-two" ? "Faulted" : "Completed", metadata: {}, position: index + 1
   })));
   const observedRecords = () => records.filter(record => !motionFixture || live?.status !== "Running" || record.authoredActivityId === draft.state.rootActivity?.nodeId || record.authoredActivityId === "write-one")

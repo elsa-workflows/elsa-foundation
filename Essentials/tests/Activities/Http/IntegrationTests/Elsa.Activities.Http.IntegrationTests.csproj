@@ -35,6 +35,8 @@
     <ProjectReference Include="..\..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
     <!-- The Sequence composite so spec 089 D scenario 2 can sequence two HttpEndpoints in one workflow. -->
     <ProjectReference Include="..\..\..\..\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
     <!-- The Flowchart composite so spec 238 can publish a Flowchart with two start-trigger HttpEndpoints. -->
     <ProjectReference Include="..\..\..\..\src\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
     <ProjectReference Include="..\..\..\..\src\Events\Elsa.Events\Elsa.Events.csproj" />
@@ -55,6 +57,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../../Scheduling/Tests/DelayTestExecutable.cs" Link="DelayTestExecutable.cs" />
     <Compile Include="../Fixtures/ResponseReplayHost/ResponseReplayObservation.Core.cs" Link="ResponseReplayObservation.Core.cs" />
     <!-- Counts the runtime's EF commands for the command budgets. -->
     <Compile Include="../../../Persistence/EntityFramework/Tests/CommandCaptureInterceptor.cs" Link="CommandCaptureInterceptor.cs" />

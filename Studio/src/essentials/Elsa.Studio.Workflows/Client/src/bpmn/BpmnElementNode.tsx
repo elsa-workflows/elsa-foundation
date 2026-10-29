@@ -1,3 +1,4 @@
+import { RuntimeObservationWarning } from "../workflow-editor/RuntimeObservationWarning";
 import React from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { renderActivityIcon } from "../activityIconView";
@@ -28,6 +29,7 @@ export function BpmnElementNode({ data, selected }: NodeProps) {
       <ExecutionActivityPulse pulse={nodeData.executionPulse} status={nodeData.runtime?.status} />
       {acceptsInbound ? <Handle type="target" position={Position.Left} /> : null}
       {renderBpmnShape(nodeData)}
+      <RuntimeObservationWarning messages={nodeData.runtime?.warningMessages} className="wf-bpmn-observation-warning" />
       {nodeData.runtime ? <RuntimeIncidentAction runtime={nodeData.runtime} onOpenIncident={nodeData.onIncidentClick} activityLabel={element.name?.trim() || nodeData.boundActivity?.label || typeLabel} className="wf-bpmn-incident-action" /> : null}
       {producesOutbound ? <Handle type="source" position={Position.Right} id="flow" /> : null}
     </div>

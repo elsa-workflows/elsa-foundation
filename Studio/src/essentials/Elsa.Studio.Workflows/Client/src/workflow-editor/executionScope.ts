@@ -20,6 +20,7 @@ export type IncidentActivityInspection = Pick<ActivityExecutionInspection,
   | "bookmarks"
   | "incidents"
   | "metadata"
+  | "observations"
 >;
 
 export function activityExecutionSummaryFromInspection(inspection: IncidentActivityInspection): ActivityExecutionStateSummary {
@@ -41,6 +42,7 @@ export function activityExecutionSummaryFromInspection(inspection: IncidentActiv
     bookmarkIds: bookmarks?.map(bookmark => bookmark.bookmarkId),
     incidentCount: incidents?.length ?? null,
     incidentIds: incidents?.map(incident => incident.incidentId),
+    observations: inspection.observations,
     metadata: inspection.metadata
   };
 }

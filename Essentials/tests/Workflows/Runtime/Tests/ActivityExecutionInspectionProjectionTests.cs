@@ -20,6 +20,30 @@ namespace Elsa.Workflows.Runtime.Tests;
 public class ActivityExecutionInspectionProjectionTests
 {
     [Fact]
+    public async Task Observation_append_is_immutable_idempotent_and_preserved_by_later_inspection_writes()
+    {
+        var store = new InMemoryActivityExecutionInspectionStore();
+        var projection = Projection("response", "node", null, 1, ActivityExecutionStatus.Completed);
+        var fact = new ActivityExecutionObservation("response-warning", "http.response.delivery", "http.response.undelivered",
+            IncidentSeverity.Warning, "The original HTTP request ended.", DateTimeOffset.UnixEpoch,
+            new Dictionary<string, string> { ["exchangeId"] = "opaque" });
+        await store.SaveAsync(projection);
+        Assert.True(await store.TryAppendObservationAsync(projection.WorkflowExecutionId, projection.ActivityExecutionId, fact));
+        Assert.True(await store.TryAppendObservationAsync(projection.WorkflowExecutionId, projection.ActivityExecutionId, fact));
+        await store.SaveAsync(projection);
+        var stored = await store.FindAsync(projection.WorkflowExecutionId, projection.ActivityExecutionId);
+        Assert.Single(stored!.Observations);
+        Assert.Empty(stored.Incidents);
+        Assert.Equal(ActivityExecutionStatus.Completed, stored.Status);
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await store.TryAppendObservationAsync(projection.WorkflowExecutionId, projection.ActivityExecutionId, fact with { Code = "changed" }));
+        var view = ActivityExecutionInspectionView.From(stored);
+        Assert.Equal("Warning", Assert.Single(view.Observations).Severity);
+        Assert.Equal(fact.Code, Assert.Single(ActivityExecutionInspectionSummaryView.From(
+            ActivityExecutionInspectionSummaryProjection.FromProjection(stored)).Observations).Code);
+    }
+
+    [Fact]
     public void Detail_Projects_Attempt_Boundary_Aggregate_And_Explicit_Value_Redaction()
     {
         var baseRoot = Projection("outer", "outer", null, 1, ActivityExecutionStatus.Completed, boundary: true);

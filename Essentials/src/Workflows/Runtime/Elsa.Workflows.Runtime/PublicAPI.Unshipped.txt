@@ -1876,3 +1876,4 @@ virtual Elsa.Workflows.Runtime.Services.Claims.FencedClaimRenewal<TClaim>.Invoke
 ~override Elsa.Workflows.Runtime.Services.Values.RuntimeInputBindingStateProjectionSet.ToString() -> string
 ~override Elsa.Workflows.Runtime.Services.Values.RuntimeWorkflowIdentity.Equals(object obj) -> bool
 ~override Elsa.Workflows.Runtime.Services.Values.RuntimeWorkflowIdentity.ToString() -> string
+Elsa.Workflows.Runtime.Services.ActivityExecutions.InMemoryActivityExecutionInspectionStore.TryAppendObservationAsync(string! workflowExecutionId, string! activityExecutionId, Elsa.Workflows.Runtime.Core.Models.ActivityExecutionObservation! observation, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>

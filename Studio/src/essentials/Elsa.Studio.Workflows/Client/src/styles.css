@@ -8238,3 +8238,19 @@ html[data-theme-material] .availability-search .wf-search {
   color: var(--studio-danger);
   font-size: var(--studio-label-size, .8125rem);
 }
+
+/* Retained observational warnings do not imply a fault or an incident strategy. */
+.wf-observation-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid color-mix(in srgb, var(--studio-warning) 45%, transparent);
+  border-radius: var(--wf-radius-sm);
+  background: color-mix(in srgb, var(--studio-warning) 10%, transparent);
+  color: var(--studio-warning-fg);
+  padding: 2px 6px;
+  font-size: 11px;
+}
+.wf-activity-observations p { margin: 8px 0; }
+.wf-activity-observations [data-severity="warning"] { color: var(--studio-warning-fg); }
+.wf-bpmn-observation-warning { position: absolute; top: -24px; right: 0; white-space: nowrap; }

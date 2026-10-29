@@ -42,7 +42,8 @@ internal static class HttpEndpointRequestModelReader
             Headers: headers,
             Query: query,
             Body: body,
-            RouteData: new Dictionary<string, string>(routeValues, StringComparer.OrdinalIgnoreCase));
+            RouteData: new Dictionary<string, string>(routeValues, StringComparer.OrdinalIgnoreCase))
+        { ResponseExchangeId = Guid.NewGuid().ToString("N") };
     }
 
     private static async ValueTask<string?> ReadBodyBoundedAsync(Stream body, long maxBodyBytes, CancellationToken cancellationToken)

@@ -123,6 +123,7 @@ export function applyRuntimeOverlays<TNodeData extends Record<string, unknown>>(
       faultCount: nodeActivities.reduce((sum, activity) => sum + (activity.faultCount ?? 0) + (activity.aggregateFaultCount ?? 0), 0),
       incidentCount: activeIncidents.length,
       historicalIncidentCount: historicalIncidents.length,
+      warningMessages: latestActivity?.observations?.filter(fact => fact.severity.toLowerCase() === "warning").map(fact => fact.message),
       primaryIncidentId: primaryIncident?.incidentId,
       hasBlockingIncident: activeIncidents.some(incident => incident.isBlocking),
       containedIncidentCount: uniqueContainedIncidents.length,

@@ -917,7 +917,17 @@ export interface ActivityStateView {
   view?: unknown;
 }
 
+export interface ActivityExecutionObservation {
+  observationId: string;
+  kind: string;
+  code: string;
+  severity: string;
+  message: string;
+  occurredAt: string;
+}
+
 export interface ActivityExecutionInspection {
+  observations?: ActivityExecutionObservation[];
   activityExecutionId: string;
   workflowExecutionId: string;
   executableNodeId: string;
@@ -1245,6 +1255,7 @@ export interface RuntimeValueTypeDescriptor {
 }
 
 export interface ActivityExecutionStateSummary {
+  observations?: ActivityExecutionObservation[];
   executionSequence?: number;
   activityExecutionId: string;
   workflowExecutionId: string;
