@@ -36,10 +36,11 @@ using Elsa.Etl.Workflows.Runtime;
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 try
 {
-    if (args.Length is not (4 or 6) || args[0] is not ("--enqueue-start" or "--enqueue-checkpoint" or "--drain-checkpoint" or "--cancel-model" or "--consume-native-result" or "--consume-native-success" or "--create-auth-probe-users" or "--probe-obsolete-result") ||
+    if (args.Length is not (4 or 6) || args[0] is not ("--enqueue-start" or "--enqueue-checkpoint" or "--drain-checkpoint" or "--cancel-model" or "--retry-held-model" or "--cancel-held-model" or "--consume-native-result" or "--consume-native-success" or "--create-auth-probe-users" or "--probe-obsolete-result") ||
         args.Length == 6 && args[4] != (args[0] == "--consume-native-success" ? "--parent-return-stage" : "--gate"))
         throw new ArgumentException("Select an owned enqueue/drain/cancel operation, content root, model id, nonce and optional --gate directory.");
-    var race = args[0] is "--drain-checkpoint" or "--cancel-model";
+    var heldRace = args[0] is "--retry-held-model" or "--cancel-held-model";
+    var race = heldRace || args[0] is "--drain-checkpoint" or "--cancel-model";
     var obsolete = args[0] == "--probe-obsolete-result";
     if (obsolete && args.Length != 4) throw new ArgumentException("Obsolete-result controls use the normal model mailbox without a proposal gate.");
     var success = args[0] == "--consume-native-success";
@@ -127,6 +128,35 @@ try
         foreach (var task in sdk.GetServices<IStartupTask>()) await task.ExecuteAsync(CancellationToken.None);
     var models = sdk.GetRequiredService<IRuntimeModelExecutionReader>();
     var model = await models.FindAsync(args[2]) ?? throw new InvalidOperationException("The actual model execution is absent.");
+    if (heldRace)
+    {
+        if (model.Lifecycle != RuntimeModelLifecycle.WaitingIncident || model.Revision != 2 || model.TerminalResult is not null ||
+            model.Protocol != new RuntimeExecutionProtocol("elsa.bpmn", 1))
+            throw new InvalidOperationException("Competing held commands require the actual original revision-two failure.");
+        var runtime = sdk.GetRequiredService<IBpmnModelRuntime>();
+        var caller = new BpmnModelCaller("owned-held-race", model.TenantId);
+        var incident = (await runtime.ListIncidentsAsync(model.ExecutionId, new(10), caller)).Items.Single();
+        if (incident.Status != "Open" || incident.AttemptNumber != 1 || incident.MaxAttempts != 2)
+            throw new InvalidOperationException("The original failed attempt is not held for one bounded retry.");
+        var started = DateTimeOffset.UtcNow;
+        var outcome = args[0] == "--retry-held-model"
+            ? await runtime.RetryServiceAsync(model.ExecutionId, "retry-competing-held-service", incident.IncidentId,
+                incident.InvocationId, incident.FailedAttemptId, caller)
+            : await runtime.CancelAsync(model.ExecutionId, "cancel-competing-held-service", "Cancel the actual competing held service.", caller);
+        object HeldProduct(Assembly assembly)
+        {
+            var path = assembly.Location;
+            return new { name = assembly.GetName().Name, informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion,
+                sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))) };
+        }
+        Console.WriteLine(JsonSerializer.Serialize(new { operation = args[0], startedAtUtc = started, completedAtUtc = DateTimeOffset.UtcNow,
+            incident, outcome, before = model, model = await models.FindAsync(model.ExecutionId),
+            queuedModelInputs = (await sdk.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAsync(new(model.ExecutionId))).Items,
+            products = new[] { HeldProduct(Assembly.GetExecutingAssembly()), HeldProduct(typeof(IWorkflowStartDispatcher).Assembly),
+                HeldProduct(typeof(Elsa.Workflows.Runtime.Services.Executions.WorkflowStartDispatcher).Assembly), HeldProduct(typeof(RuntimeEntityFrameworkCoreOptions).Assembly),
+                HeldProduct(typeof(ActivitiesBpmnHostingFeature).Assembly) } }, json));
+        return 0;
+    }
     if (obsolete)
     {
         await ObsoleteResultProbe.RunAsync(sdk, model, json);
@@ -388,14 +418,18 @@ internal sealed class CaptureDrainPolicy(bool checkpointCut) : IWorkflowSchedule
 internal sealed record GateOptions(string Directory, string Operation);
 
 /// <summary>Coordinates actual writers at the existing hook; it returns every proposal unchanged.</summary>
-internal sealed class AdmissionGate(GateOptions options, IRuntimeModelExecutionReader models) : IRuntimeCheckpointCommitEnricher
+internal sealed class AdmissionGate(GateOptions options, IRuntimeModelExecutionReader models,
+    IRuntimeExecutionOwnershipContextAccessor ownership) : IRuntimeCheckpointCommitEnricher
 {
     private bool observed;
     public int Order => int.MaxValue;
     public ValueTask<RuntimeCheckpointCommit> EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default) => ValueTask.FromResult(commit);
     public async ValueTask ValidateFinalAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
     {
-        if (observed || (options.Operation == "--drain-checkpoint" ? commit.ExpectedModelExecution is null :
+        var held = options.Operation is "--retry-held-model" or "--cancel-held-model";
+        if (observed || (held ? commit.ModelState is not { ExpectedRevision: 2 } ||
+            commit.ModelState.Input.InputKind != (options.Operation == "--retry-held-model" ? "retry-service" : "cancel") :
+            options.Operation == "--drain-checkpoint" ? commit.ExpectedModelExecution is null :
             commit.ModelState is not { ExpectedRevision: 1, State.TerminalResult: not null })) return;
         observed = true;
         var execution = commit.ExpectedModelExecution?.ExecutionId ?? commit.ModelState!.State.ExecutionId;
@@ -405,7 +439,8 @@ internal sealed class AdmissionGate(GateOptions options, IRuntimeModelExecutionR
         var ready = Path.Combine(options.Directory, "ready.json");
         var temporary = ready + ".tmp";
         await File.WriteAllTextAsync(temporary, JsonSerializer.Serialize(new { processId = Environment.ProcessId, observedAtUtc = DateTimeOffset.UtcNow,
-            operation = options.Operation, observedModel = await models.FindAsync(execution, cancellationToken), proposal = commit, proposalFingerprint = before }, json), cancellationToken);
+            operation = options.Operation, observedModel = await models.FindAsync(execution, cancellationToken),
+            ownership = ownership.Current, proposal = commit, proposalFingerprint = before }, json), cancellationToken);
         File.Move(temporary, ready);
         var deadline = DateTimeOffset.UtcNow.AddSeconds(90);
         while (!File.Exists(Path.Combine(options.Directory, "release")))

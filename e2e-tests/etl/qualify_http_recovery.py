@@ -75,6 +75,7 @@ def main():
     parser.add_argument('--retry-auth-controls',action='store_true',help='Use real owned Identity accounts to verify retry/inspection permissions and foreign-tenant refusal before and after replay.')
     parser.add_argument('--obsolete-result-controls',action='store_true',help='Replay the actual old native result and reject modified/misaddressed inputs while the replacement is in a real HTTP429 wait.')
     parser.add_argument('--service-timer',choices=('worker-first','timer-first','held-interruption'),help='Qualify the actual native ETL worker against its interrupting duration boundary.')
+    parser.add_argument('--held-race-order',choices=('retry-first','cancel-first'),help='Submit both actual held commands in separate SDK processes while the first unchanged proposal is gated; recover the retained FIFO after stale ownership refusal.')
     parser.add_argument("--queued-native-stage", choices=("start", "checkpoint"), help="With cancellation before admission, use the actual SDK to retain the selected native queue stage first.")
     parser.add_argument("--dispatcher-assembly", type=Path, help="Built owned SDK client required for the queued-native cut.")
     parser.add_argument("--admission-race-order", choices=("cancel-first", "admit-first"), help="Gate an unchanged actual proposal before its provider transaction, commit the competitor, then cold-recover both writers' obligations.")
@@ -107,6 +108,8 @@ def main():
         parser.error('Retry authorization controls require --hold-service-retry --held-action retry and --dispatcher-assembly.')
     if args.obsolete_result_controls and (not args.hold_service_retry or args.held_action!='retry' or args.dispatcher_assembly is None or args.retry_auth_controls):
         parser.error('Obsolete-result controls require --hold-service-retry --held-action retry and --dispatcher-assembly, separately from authorization controls.')
+    if args.held_race_order and (not args.hold_service_retry or args.held_action!='retry' or args.dispatcher_assembly is None or args.retry_auth_controls or args.obsolete_result_controls or args.service_timer):
+        parser.error('Held command races require --hold-service-retry --held-action retry and --dispatcher-assembly, separately from other controls.')
     if args.business_error_boundary and (not (args.business_error or args.technical_fault) or args.parent!='BpmnModel'):
         parser.error("A business-error boundary requires --parent BpmnModel and a business-error or technical-fault journey.")
     caught_business_error=args.business_error and args.business_error_boundary=='matching'
@@ -673,6 +676,79 @@ def main():
             snapshot_unavailability.update(**{'restoredBeforeAuthorizedCancellation' if args.held_action=='cancel' else 'restoredBeforeAuthorizedRetry':True},
                 restoredAtUtc=datetime.now(timezone.utc).isoformat(),restoredSha256=q.digest(lookup_snapshot))
             q.write_json(output/'snapshot-unavailability.json',snapshot_unavailability)
+            if args.held_race_order:
+                dispatcher=args.dispatcher_assembly.resolve(strict=True);nonce=uuid.uuid4().hex;gate=root/'held-command-gate'
+                q.write_json(root/'owned-bpmn-recovery.json',{'schemaVersion':1,'controllerProcessId':os.getpid(),'modelExecutionId':model_execution,'nonce':nonce})
+                first_op='--retry-held-model' if args.held_race_order=='retry-first' else '--cancel-held-model'
+                second_op='--cancel-held-model' if args.held_race_order=='retry-first' else '--retry-held-model'
+                def full_checked():
+                    return json.loads(subprocess.check_output(['dotnet',str(reader),'--read-bpmn-direct',str(root/'elsa.db'),model_execution],text=True,timeout=30))
+                first=start(['dotnet',str(dispatcher),first_op,str(root),model_execution,nonce,'--gate',str(gate)],'gated-held-sdk')
+                first_log=root/f'gated-held-sdk-{len(processes)-1}.log'
+                def reached():
+                    if first.poll() is not None:raise ValueError('The actual held writer left before its proposal gate: '+first_log.read_text())
+                    return (gate/'ready.json').is_file()
+                wait_for(reached,bool,'The first held command did not reach its unchanged proposal gate.',90)
+                proposal=json.loads((gate/'ready.json').read_text());q.write_json(output/'race-proposal.json',proposal)
+                second=start(['dotnet',str(dispatcher),second_op,str(root),model_execution,nonce],'competing-held-sdk')
+                second_log=root/f'competing-held-sdk-{len(processes)-1}.log';second.wait(timeout=60)
+                if second.returncode!=0:raise ValueError('The actual competing held writer failed: '+second_log.read_text())
+                competing=json.loads(second_log.read_text());q.write_json(output/'race-competitor.json',competing)
+                competing_checked=full_checked();q.write_json(output/'race-competing-checked.json',competing_checked)
+                (gate/'release').write_text(datetime.now(timezone.utc).isoformat());first.wait(timeout=60)
+                if first.returncode!=0:raise ValueError('The stale actual held writer failed outside retained admission: '+first_log.read_text())
+                gated=json.loads(first_log.read_text());q.write_json(output/'race-gated.json',gated)
+                release=json.loads((gate/'released.json').read_text());q.write_json(output/'race-release.json',release)
+                raced=full_checked();q.write_json(output/'raced-checked-model.json',raced)
+                for receipt,operation in ((competing,second_op),(gated,first_op)):
+                    if receipt['operation']!=operation or not receipt['outcome']['pending'] or receipt['outcome']['result'] is not None or receipt['before']!=checked_held['model'] or receipt['model']!=checked_held['model'] or any(not item['informationalVersion'].endswith('+'+source) for item in receipt['products']):
+                        raise ValueError('A concurrent SDK either advanced the gated failure or lost its source-matched durable pending command.')
+                expected_ids=['retry-competing-held-service','cancel-competing-held-service'] if args.held_race_order=='retry-first' else ['cancel-competing-held-service','retry-competing-held-service']
+                if raced['model']!=checked_held['model'] or competing_checked['model']!=raced['model'] or [x['commandId'] for x in raced['queuedModelInputs']]!=expected_ids or not release['proposalUnchanged'] or release['proposalFingerprint']!=proposal['proposalFingerprint'] or wire()!=before_wire:
+                    raise ValueError('The concurrent held commands did not retain unchanged revision-two state and their actual FIFO order.')
+                raced_stores=snapshots('raced')
+                print('Actual '+args.held_race_order+' concurrent submissions retained after stale proposal refusal; cold recovery follows.',flush=True)
+                api=launch()
+                def race_view():
+                    return {'execution':view(),'incidents':api.request(route+'/incidents?limit=10'),
+                        'retry':api.request(route+'/commands/retry-competing-held-service'),'cancel':api.request(route+'/commands/cancel-competing-held-service')}
+                final=wait_for(race_view,lambda value:value['execution']['model']['status']=='TerminalSettled' and
+                    value['execution']['model']['result']['status']=='Cancelled' and not value['retry']['pending'] and not value['cancel']['pending'] and
+                    (not native_parent_execution or value['execution']['embedding']['instance']['status']=='Cancelled'),
+                    'Cold recovery did not consume both competing held commands and settle cancellation.',120)
+                full_final=wait_for(full_checked,lambda value:not value['queuedModelInputs'] and all(s['status']==2 for s in value['sources']),
+                    'The concurrent held commands left exact sources or inputs owed.',90)
+                checked_final=checked_native_model()
+                retirement=json.loads(subprocess.check_output(['dotnet',str(reader),'--read-bpmn-retirement',str(root/'elsa.db'),model_execution],text=True,timeout=30))
+                retry_result=final['retry']['result'];cancel_result=final['cancel']['result'];fm=full_final['model'];resolved,=fm['payload']['failures']
+                if cancel_result['status']!='Accepted' or cancel_result['revision']!=(4 if args.held_race_order=='retry-first' else 3) or (
+                    retry_result['status']!=('Accepted' if args.held_race_order=='retry-first' else 'Rejected')) or retry_result['revision']!=3 or (
+                    args.held_race_order=='cancel-first' and retry_result['code']!='execution-terminal') or (
+                    final['execution']['native']!=held['execution']['native'] or final['execution']['run']!=held['execution']['run'] or wire()!=before_wire or len(api.request('/etl/runs?limit=100')['items'])!=1 or
+                    fm['payload']['state']!=failure['semanticState'] or fm['payload']['nativeResults']!=[old_result] or
+                    resolved['status']!=('Retried' if args.held_race_order=='retry-first' else 'Retired')):
+                    raise ValueError('Competing retry/cancel rewrote the old fault, admitted duplicate work or lost exact FIFO command outcomes.')
+                q.write_json(output/'finished.json',final);q.write_json(output/'finished-checked-model.json',checked_final)
+                q.write_json(output/'finished-checked-inputs.json',full_final);q.write_json(output/'finished-checked-retirement.json',retirement);q.write_json(output/'finished-wire.json',wire())
+                if native_parent_execution:q.write_json(output/'finished-checked-embedding.json',checked_embedding())
+                stop(host);finished_stores=snapshots('finished');api=launch()
+                retained=race_view();retained_checked=checked_native_model();retained_full=full_checked();retained_wire=wire()
+                q.write_json(output/'retained.json',retained);q.write_json(output/'retained-checked-model.json',retained_checked)
+                q.write_json(output/'retained-checked-inputs.json',retained_full);q.write_json(output/'retained-wire.json',retained_wire)
+                if native_parent_execution:q.write_json(output/'retained-checked-embedding.json',checked_embedding())
+                stop(host)
+                if retained!=final or retained_checked!=checked_final or retained_full!=full_final or retained_wire!=before_wire:
+                    raise ValueError('Competing held decisions or physical fault truth changed in another standard process.')
+                q.write_json(output/'process.json',{'schemaVersion':1,'kind':'actual-held-retry-cancel-submission-race','sourceRevision':source,'products':products,
+                    'order':args.held_race_order,'parent':args.parent,'embeddedParent':args.embedded_parent,'modelExecutionId':model_execution,'workflowExecutionId':execution,'runId':run,
+                    'processes':processes,'predecessorExitCode':exit_code,'heldPredecessorExitCode':held_exit,'cutAtUtc':cut_at,'heldCutAtUtc':held_cut,
+                    'beforeStores':before_stores,'heldStores':held_stores,'racedStores':raced_stores,'finishedStores':finished_stores,'publication':publication,'modelPublication':model_publication,
+                    'etlPublication':published,'nativeParentExecutionId':native_parent_execution,'nativeParentPublication':native_parent_publication,'selection':selection,'bindings':bindings,
+                    'fixtureSha256':q.digest(fixture_script),'controllerSha256':q.digest(Path(__file__)),'technicalFaultPolicy':'HoldForRetry','maxServiceAttempts':2,
+                    'retryAfterSeconds':retry_after,'resumptionSweepIntervalSeconds':.2,'scopeLimits':['Actual same-model concurrent durable submissions, unchanged gated proposal and successor ownership; protected FIFO prevents a second proposal before first-input recovery.',
+                    'Both semantic commit orders are checked through exact receipts after cold recovery. Provider/rollback/direct-model broadcast/final upgrade and Studio acceptance remain separate.']})
+                print('Actual '+args.held_race_order+' concurrent held commands settled with original fault and prior effects unchanged.',flush=True)
+                return
             api=launch()
             after_restart={'execution':view(),'incidents':api.request(route+'/incidents?limit=10')}
             if after_restart!=held or checked_native_model()!=checked_held or wire()!=before_wire:
