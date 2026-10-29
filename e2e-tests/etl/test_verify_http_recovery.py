@@ -207,7 +207,6 @@ class ActualNativeWorkerCancellationControls(_ActualRecoveryControls):
         with self.assertRaisesRegex(ValueError,"exact ETL address or same-checkpoint result responsibility"):self.verify()
 
 
-if __name__=="__main__":unittest.main()
 
 
 class ActualModelCancellationControls(_ActualRecoveryControls):
@@ -260,3 +259,6 @@ class ActualModelCancellationControls(_ActualRecoveryControls):
                     c.execute("UPDATE elsa_runtime_post_commit_outbox SET ContentJson=? WHERE OutboxItemId=?",(json.dumps(value),identity))
         self.change_store("model-cancel",physical)
         with self.assertRaisesRegex(ValueError,"complete downstream cancellation inventory"):self.verify()
+
+
+if __name__=="__main__":unittest.main()

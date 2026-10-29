@@ -37,7 +37,7 @@
     "positiveFamilies": 5,
     "negativeControls": 21,
     "verifierSha256": "3e768e93ebbc9fa4cfc6546207f35515ee7447bed615aaee416b821cf37e3b27",
-    "testSha256": "1b10a1fe7574a3695d21bc231fa2b735dc55938d0078a5e0af5bafeabad37106"
+    "testSha256": "6cf1669ab2b8ae1fc3bbe3e825d950d3b8039156eb2f4781a006c2c56e076581"
   },
   "firstCaptureRejected": {
     "source": "571e9997c",
