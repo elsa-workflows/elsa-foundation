@@ -189,13 +189,17 @@ def main():
             try:body=json.loads(raw) if raw else {}
             except json.JSONDecodeError:body={}
             has_outcome=isinstance(body,dict) and any(k in body for k in ('result','replay','pending','executionId','items'))
-            if status!=expected or expected!=200 and has_outcome:
+            # Middleware can forbid before binding (403); the BPMN resource authorizer
+            # conceals unavailable/denied executions (404). Neither may disclose an outcome.
+            permitted={403,404} if expected in (403,404) else {expected}
+            outcomes.append({'profile':profile,'operation':operation,'httpStatus':status,'returnedOutcome':has_outcome,'permittedHttpStatuses':sorted(permitted)})
+            if status not in permitted or expected!=200 and has_outcome:
+                q.write_json(output/('auth-'+stage+'-partial.json'),{'schemaVersion':1,'sourceRevision':source,'stage':stage,'principals':sessions,'outcomes':outcomes,'credentialsIncluded':False})
                 raise ValueError(f'Actual authorization control {stage}/{profile}/{operation} returned HTTP {status}, expected {expected}, outcome={has_outcome}.')
             if expected==200 and operation=='read-command' and (body.get('inputId')!=expected_command['inputId'] or body.get('result')!=expected_command['result']):
                 raise ValueError('The read-authorized principal did not inspect the exact retained command result.')
             if expected==200 and operation=='retry-replay' and (not body.get('replay') or body.get('pending') or body.get('result')!=expected_command['result']):
                 raise ValueError('The retry-authorized principal did not replay its exact already-accepted result.')
-            outcomes.append({'profile':profile,'operation':operation,'httpStatus':status,'returnedOutcome':has_outcome})
         anonymous=q.Api(api.base)
         clients=[('anonymous',anonymous,401,401)]
         for account in auth_accounts:
@@ -212,6 +216,8 @@ def main():
             if stage!='before' or profile!='retrier':observe(client,profile,'retry-replay' if stage!='before' else 'retry-before-admission',route+'/retry-service',request,retry_status)
             if profile in ('anonymous','nobody','retrier','foreign'):
                 observe(client,profile,'read-unknown-command',route+'/commands/unknown-auth-command',None,read_status)
+                pair=[o['httpStatus'] for o in outcomes if o['profile']==profile and o['operation'] in ('read-command','read-unknown-command')]
+                if len(set(pair))!=1:raise ValueError('Denied existing/missing command requests exposed a resource-existence distinction.')
         evidence={'schemaVersion':1,'kind':'actual-bpmn-retry-http-authorization','sourceRevision':source,'stage':stage,'modelExecutionId':model_execution,
             'principals':sessions,'outcomes':outcomes,'expectedCommand':expected_command,'credentialsIncluded':False,'mockAuthenticationUsed':False}
         q.write_json(output/('auth-'+stage+'.json'),evidence)
