@@ -83,7 +83,11 @@ try
             Console.WriteLine(JsonSerializer.Serialize(new { readOnly = true, model = boundModel, origin,
                 worker = await boundScope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(origin.WorkerExecutionId),
                 inputs, sources, queuedNativeWork = await Queue(origin.WorkerExecutionId), queuedModelInputs = await Queue(boundModel.ExecutionId),
-                workerMaterial = await boundScope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().FindMaterialAsync(origin.WorkerExecutable.ArtifactId) }, json));
+                workerMaterial = await boundScope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>().FindMaterialAsync(origin.WorkerExecutable.ArtifactId),
+                nativeMarkers = await boundScope.ServiceProvider.GetRequiredService<RuntimeDbContext>().RuntimeCheckpointCommits.AsNoTracking()
+                    .Where(row => row.WorkflowExecutionId == Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(origin.WorkerExecutionId)) &&
+                        row.ScopeKey == Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(origin.Scope.Value)))
+                    .OrderBy(row => row.CommitId).ToArrayAsync() }, json));
             return 0;
         }
         var boundWorker = await boundScope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(args[3])

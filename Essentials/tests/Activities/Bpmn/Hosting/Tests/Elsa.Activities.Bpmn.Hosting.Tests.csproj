@@ -14,6 +14,7 @@
     <ProjectReference Include="../../../../../src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj" />
     <ProjectReference Include="../../../../../apps/Elsa.Workbench/Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../../../tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../../../tools/bpmn/NativeWorkDispatch/NativeWorkDispatch.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
   <ItemGroup>
     <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json"

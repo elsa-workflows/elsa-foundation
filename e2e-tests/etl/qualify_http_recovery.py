@@ -64,6 +64,8 @@ def main():
     parser.add_argument("--reader-assembly", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--parent", choices=("Sequence", "Flowchart", "RunEtl", "BpmnModel"), default="Sequence")
+    parser.add_argument("--queued-native-stage", choices=("start", "checkpoint"), help="With cancellation before admission, use the actual SDK to retain the selected native queue stage first.")
+    parser.add_argument("--dispatcher-assembly", type=Path, help="Built owned SDK client required for the queued-native cut.")
     outcome_group = parser.add_mutually_exclusive_group()
     outcome_group.add_argument("--business-error", action="store_true", help="Reject one actual HTTP record through its declared Int64 schema.")
     outcome_group.add_argument("--pipeline-cancel", action="store_true", help="Cancel the actual ETL run after host recovery and observe native/BPMN cancellation.")
@@ -73,6 +75,8 @@ def main():
     args = parser.parse_args()
     cancelling=args.pipeline_cancel or args.native_cancel or args.model_cancel or args.model_cancel_before_admission
     if cancelling and args.parent != "BpmnModel":parser.error("Cancellation currently qualifies the direct BPMN/native RunEtl root only.")
+    if args.queued_native_stage and (not args.model_cancel_before_admission or args.dispatcher_assembly is None):
+        parser.error("A queued native stage requires --model-cancel-before-admission and --dispatcher-assembly.")
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
     if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True).strip():
         raise ValueError("Commit the journey source before recording exact-source evidence.")
@@ -202,6 +206,17 @@ def main():
                     os.kill(host.pid,signal.SIGSTOP)
                     wait_for(lambda:q.process_field(host.pid,"stat"),lambda value:"T" in value,"The owned Workbench did not quiesce.",5)
                 try:
+                    dispatch=None
+                    if args.queued_native_stage:
+                        dispatcher=args.dispatcher_assembly.resolve(strict=True);nonce=uuid.uuid4().hex
+                        q.write_json(root/"owned-bpmn-recovery.json",{"schemaVersion":1,"controllerProcessId":os.getpid(),"modelExecutionId":model_execution,"nonce":nonce})
+                        sdk=start(["dotnet",str(dispatcher),"--enqueue-"+args.queued_native_stage,str(root),model_execution,nonce],"native-sdk")
+                        sdk_log=root/f"native-sdk-{len(processes)-1}.log"
+                        sdk.wait(timeout=90)
+                        dispatch=json.loads(sdk_log.read_text())
+                        q.write_json(output/"sdk-dispatch.json",dispatch)
+                        if sdk.returncode!=0 or not dispatch.get("modelUnchanged") or dispatch.get("nativeWorkerAdmitted") is not False or any(source not in p["informationalVersion"] for p in dispatch["products"]):
+                            raise ValueError("The actual SDK did not retain a source-matched, unadmitted native queue item.")
                     before=admission_view();before_wire=wire();quiesce()
                     before_stores=snapshots("before");before_checked=admission_checked()
                     q.write_json(output/"before.json",before);q.write_json(output/"before-checked.json",before_checked);q.write_json(output/"before-wire.json",before_wire)
@@ -209,6 +224,10 @@ def main():
                             before_checked["worker"] is not None or before_checked["model"]["revision"]!=1 or len(before_checked["sources"])!=1 or
                             before_checked["sources"][0]["status"]==2):
                         raise ValueError("The actual native worker was already admitted before the cancellation cut.")
+                    if args.queued_native_stage:
+                        queued=before_checked["queuedNativeWork"]
+                        if len(queued)!=1 or queued!=dispatch["queuedWork"] or queued[0]["commandKind"]!=(0 if args.queued_native_stage=="start" else 11):
+                            raise ValueError("The actual native start/checkpoint was not queued before cancellation.")
                     os.kill(host.pid,signal.SIGCONT)
                     cancellation=api.request("/bpmn/executions/"+model_execution+"/cancel",
                         {"requestId":"cancel-before-native-admission","reason":"Retire the original native start before admission."})
@@ -218,6 +237,8 @@ def main():
                             pending_checked["model"]["revision"]!=2 or pending_checked["worker"] is not None or pending["native"] or pending["runs"]["items"] or
                             len(pending_checked["sources"])!=2 or any(item["status"]==2 for item in pending_checked["sources"])):
                         raise ValueError("The actual pending cancellation/start responsibility was not retained before process loss.")
+                    if args.queued_native_stage and pending_checked["queuedNativeWork"]!=before_checked["queuedNativeWork"]:
+                        raise ValueError("The actual queued native work advanced before the pending-cancellation crash cut.")
                     stop(host,crash=True);exit_code=host.returncode
                     if exit_code!=-signal.SIGKILL:raise ValueError("The owned predecessor did not lose its actual process.")
                     print("Actual BPMN cancellation retained before native admission; owned predecessor killed.",flush=True)
@@ -238,14 +259,15 @@ def main():
                     retained=admission_view();retained_wire=wire();stop(host);retained_checked=admission_checked()
                     q.write_json(output/"retained.json",retained);q.write_json(output/"retained-checked.json",retained_checked);q.write_json(output/"retained-wire.json",retained_wire)
                     if retained_checked!=finished_checked:raise ValueError("The actual start retirement proof changed after another host.")
-                    q.write_json(output/"process.json",{"schemaVersion":1,"kind":"actual-bpmn-cancellation-before-native-admission","sourceRevision":source,
+                    q.write_json(output/"process.json",{"schemaVersion":1,"kind":"actual-bpmn-queued-native-start-cancellation" if args.queued_native_stage else "actual-bpmn-cancellation-before-native-admission","sourceRevision":source,
                         "products":products,"processes":processes,"predecessorExitCode":exit_code,"modelPublication":model_publication,"publication":publication,
                         "etlPublication":published,"modelExecutionId":model_execution,"origin":before_checked["origin"],"beforeStores":before_stores,
                         "pendingStores":pending_stores,"finishedStores":finished_stores,"sweepIntervalsSeconds":[300,.2,.2],
                         "controllerSha256":q.digest(Path(__file__)),"fixtureSha256":q.digest(fixture_script),
-                        "scopeLimits":["Original native start source owed before first delivery; positive model retirement across actual SIGKILL and fresh standard hosts.",
+                        **({"queuedNativeStage":args.queued_native_stage,"dispatcherSha256":q.digest(dispatcher)} if args.queued_native_stage else {}),
+                        "scopeLimits":["Actual SDK queues the original pinned native start/checkpoint through the existing drain-policy seam; standard Workbench hosts recover it after SIGKILL." if args.queued_native_stage else "Original native start source owed before first delivery; positive model retirement across actual SIGKILL and fresh standard hosts.",
                             "The real ETL worker is published and pinned, but no native workflow, ETL run or HTTP effect is admitted.",
-                            "Queued native-start checkpoint/admission races, pending result crashes, embedding, held retry and final upgrade/Studio remain separate gates."]})
+                            "Simultaneous native admission/cancellation, pending result crashes, embedding, held retry and final upgrade/Studio remain separate gates." if args.queued_native_stage else "Queued native-start checkpoint/admission races, pending result crashes, embedding, held retry and final upgrade/Studio remain separate gates."]})
                     print("Original native start retired after process loss; no worker or ETL run across a third host.",flush=True)
                 except Exception as failure:
                     stop(host);failed_stores=snapshots("failed")
