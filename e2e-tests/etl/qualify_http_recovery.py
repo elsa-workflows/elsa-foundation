@@ -236,7 +236,7 @@ def main():
 
     try:
         fixture_script=REPO/"e2e-tests/etl/EtlHttpFixture.mjs";ready=root/"http-ready.json"
-        retry_after=60 if cancelling else 20
+        retry_after=60 if cancelling or args.service_timer=='timer-first' else 20
         fixture=start(["node",str(fixture_script),"--ready-file",str(ready),"--source-retry-after-seconds",str(retry_after)]+(["--invalid-last-id"] if args.business_error else [])+(['--allow-retry-rearm'] if args.obsolete_result_controls else []),"http-fixture")
         wait_for(lambda:ready.exists(),bool,"The owned HTTP fixture did not start.",15)
         fixture_url="http://127.0.0.1:"+str(json.loads(ready.read_text())["port"])
@@ -301,7 +301,7 @@ def main():
             service_binding={'bindingId':'pipeline','executable':worker_pin,'businessErrorCode':'etl.rows-rejected'}
             if args.hold_service_retry or args.final_service_fault:
                 service_binding['faultPolicy']={'formatVersion':1,'disposition':'HoldForRetry' if args.hold_service_retry else 'FinalFault','maxAttempts':2 if args.hold_service_retry else 1}
-            timer_duration=10 if args.service_timer=='timer-first' else 40
+            timer_duration=10 if args.service_timer=='timer-first' else 90 if args.service_timer=='held-interruption' else 60
             if args.service_timer:
                 service_binding.setdefault('faultPolicy',{'formatVersion':1,'disposition':'FinalFault','maxAttempts':1})
                 process['elements'] += [{'elementId':'timeout','elementType':'boundaryEvent','bindingRef':'timeout-work','attachedToRef':'service','cancelActivity':True,

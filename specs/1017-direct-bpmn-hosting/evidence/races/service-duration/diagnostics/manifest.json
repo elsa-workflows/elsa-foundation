@@ -1,0 +1,176 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-service-duration-observation-diagnostics",
+  "cases": [
+    {
+      "name": "held-deadline-window",
+      "sourceRevision": "ffc00efa4512e798b23a3dfd7b8c3747e1751ca8",
+      "scope": "The real timer retired the held failure during third-host recovery. A torn HTTP observation changed only incident Open to Retired; the actual store retains revision3/TerminalSettled and Retired. Not qualifying the intended recovered-held observation.",
+      "wholeStores": 9,
+      "listedChildrenStopped": 4,
+      "assets": [
+        {
+          "path": "held-deadline-window/before-checked-model.json",
+          "sha256": "f8fceed47dbf62741f40aa8406b3cd42be023b3c06f67fa0c0023f7381305dc0"
+        },
+        {
+          "path": "held-deadline-window/before-checked-timers.json",
+          "sha256": "09476692513b824c5d84781f75d4d30ad0b0a57d08fae0ca3c65013c3ee8e531"
+        },
+        {
+          "path": "held-deadline-window/before-elsa.sqlite.gz",
+          "sha256": "cb724640726142b13528827cd019b93fc64b8079d718a328942870b5333b9546"
+        },
+        {
+          "path": "held-deadline-window/before-etl-design.sqlite.gz",
+          "sha256": "60da7cd920dd9f0733c42bee2c651ae9be61a568ac9516b347ee3fc32f952218"
+        },
+        {
+          "path": "held-deadline-window/before-etl-runtime.sqlite.gz",
+          "sha256": "efe408f464aa40bc65bbb721b02fc4ca2e9a7bd8f52067c4427d8fb3ce87f98e"
+        },
+        {
+          "path": "held-deadline-window/before-wire.json",
+          "sha256": "58066572da1ff2f297346fb3a05bd8c34055adaf4907fa3ff32afc82f01800fb"
+        },
+        {
+          "path": "held-deadline-window/before.json",
+          "sha256": "446d3a934d14c0958ad429dcc26dce9bbf5f96eb0ab1c466374abfb7265984fa"
+        },
+        {
+          "path": "held-deadline-window/controller.txt",
+          "sha256": "8233d92225d077f0d4fdc0dbb8825261eb33374a832e69d2f627a5f398db8742"
+        },
+        {
+          "path": "held-deadline-window/failed-elsa.sqlite.gz",
+          "sha256": "0a587db10c3f8407273f71b83c2fa58248369041a73cff2a990c08485b422799"
+        },
+        {
+          "path": "held-deadline-window/failed-etl-design.sqlite.gz",
+          "sha256": "ae41b5ec7d9e1d13763209ada6241ec993aed2198806b9c048f0eeefcc961034"
+        },
+        {
+          "path": "held-deadline-window/failed-etl-runtime.sqlite.gz",
+          "sha256": "f7041217cf1b1bfe9ed07478c8695cf79fa5c14d2668759be555e7a47a55537b"
+        },
+        {
+          "path": "held-deadline-window/failure.json",
+          "sha256": "cd5ac1a204039158bbb7590de3671b489fe64fb44429f6d247b56ca877a17498"
+        },
+        {
+          "path": "held-deadline-window/lookup-snapshot.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "held-deadline-window/lookup-source.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "held-deadline-window/middle-after-restart.json",
+          "sha256": "a55e48ff24f0f7ce6e3e5bc3cae56c48d303aa70d8fd9adf888bd57a2db62b34"
+        },
+        {
+          "path": "held-deadline-window/middle-checked-model.json",
+          "sha256": "f8a16b36788b60ab57bf2afbbaf76c2376e9b5ff88070989f614a22a62eb8af8"
+        },
+        {
+          "path": "held-deadline-window/middle-checked-timers.json",
+          "sha256": "de87c9f3b7e1d98699a9f073f74bade4f2496e1922af9066420ebf7217d7798d"
+        },
+        {
+          "path": "held-deadline-window/middle-elsa.sqlite.gz",
+          "sha256": "59098b1c8e1427b03e2f2f576e5cd2ef663a2b33b2aad2dd94da32b9b0aec401"
+        },
+        {
+          "path": "held-deadline-window/middle-etl-design.sqlite.gz",
+          "sha256": "fa12913484163e76a2ea4b482f87fee75c079f23af6af0e08e2a8e5a74044c04"
+        },
+        {
+          "path": "held-deadline-window/middle-etl-runtime.sqlite.gz",
+          "sha256": "85f975d9f80c61a33300d126db1144a58e2ce078037809d0bcc4192ffef76990"
+        },
+        {
+          "path": "held-deadline-window/middle-wire.json",
+          "sha256": "58066572da1ff2f297346fb3a05bd8c34055adaf4907fa3ff32afc82f01800fb"
+        },
+        {
+          "path": "held-deadline-window/middle.json",
+          "sha256": "76e68b8d1da0f64fa06d754efb32cccc39c5bdcbb61b389ea5a6ead3156e4d04"
+        },
+        {
+          "path": "held-deadline-window/recovered.json",
+          "sha256": "446d3a934d14c0958ad429dcc26dce9bbf5f96eb0ab1c466374abfb7265984fa"
+        },
+        {
+          "path": "held-deadline-window/snapshot-unavailability.json",
+          "sha256": "19b584b4cab17838d5ac307eff064aa7d38948d1d17d5d82fd255393a136a57f"
+        }
+      ]
+    },
+    {
+      "name": "already-terminal-worker",
+      "sourceRevision": "ffc00efa4512e798b23a3dfd7b8c3747e1751ca8",
+      "scope": "The timer was accepted first at model revision2 after host recovery; the original HTTP wait had already become due and its physical worker completed before cancellation arrived. The actual Completed result was retained for settlement at revision3 and native parent settled revision4. Not qualifying suppression of the original HTTP retry.",
+      "wholeStores": 6,
+      "listedChildrenStopped": 3,
+      "assets": [
+        {
+          "path": "already-terminal-worker/before-checked-embedding.json",
+          "sha256": "499848adb807afd5d6d5e0bb444cd50e65a498f2e91671c093588c037b5bebec"
+        },
+        {
+          "path": "already-terminal-worker/before-checked-model.json",
+          "sha256": "cc0d956b70e6054f27c0c8e6fabd1084533b18e88fe4ab0000bf9881a78413e2"
+        },
+        {
+          "path": "already-terminal-worker/before-checked-timers.json",
+          "sha256": "f16548e465b7419114e692c209b6f2b685066ee740847e7e9d251749076b934f"
+        },
+        {
+          "path": "already-terminal-worker/before-elsa.sqlite.gz",
+          "sha256": "aaac20d2b8185676dcc4bef8a2623afb977a73fe618e248207b958fedfa87abf"
+        },
+        {
+          "path": "already-terminal-worker/before-etl-design.sqlite.gz",
+          "sha256": "97dd1dfbb34a6ff4627499414a103c6b44c953480e3936978b61320034fbb9a5"
+        },
+        {
+          "path": "already-terminal-worker/before-etl-runtime.sqlite.gz",
+          "sha256": "00371362897f5ccbbeb0c89c44ee21adfb2b30e0d96eda572afa48f00c42d86e"
+        },
+        {
+          "path": "already-terminal-worker/before-wire.json",
+          "sha256": "01aff5a56a990e8f91b2f15482417810ee441c27161731dc89d774e2a52dbb6c"
+        },
+        {
+          "path": "already-terminal-worker/before.json",
+          "sha256": "14e57e190697977ffea673a04bb777f8741088a73bb7774dfa73d98226f4a37e"
+        },
+        {
+          "path": "already-terminal-worker/controller.txt",
+          "sha256": "b16cc1db98f17c22dc6ae59cafae149e843ffaa58a8418a352044c169c779bb2"
+        },
+        {
+          "path": "already-terminal-worker/failed-elsa.sqlite.gz",
+          "sha256": "8334de678e06da36fb38354bcb26cdaecb9337041635d574e08a6318041f4faa"
+        },
+        {
+          "path": "already-terminal-worker/failed-etl-design.sqlite.gz",
+          "sha256": "2858159b2a474809cf4d69010c650370f8f2655f6ce9d41030eb5017f5015178"
+        },
+        {
+          "path": "already-terminal-worker/failed-etl-runtime.sqlite.gz",
+          "sha256": "d9b5b2658f7e7da5cb5386d9869525365943de02e798ec721c63c3e0ac1a9bb5"
+        },
+        {
+          "path": "already-terminal-worker/failure.json",
+          "sha256": "eaa7aaaa22fccded07b6aa71ae081fa5a79c30cff4d2e2976809ed1cb6e3572a"
+        },
+        {
+          "path": "already-terminal-worker/recovered.json",
+          "sha256": "fe53aea76dface9c4e377bfe965057102ed20b226c9ffa7a72708f1d4517280c"
+        }
+      ]
+    }
+  ]
+}
