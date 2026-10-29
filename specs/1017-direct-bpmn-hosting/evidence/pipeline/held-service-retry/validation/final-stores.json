@@ -1,0 +1,21 @@
+{
+  "actualReferenceJourneys": [
+    {
+      "case": "capture",
+      "acceptedRecords": 2,
+      "rejectedRecords": 0,
+      "physicalOutputRecords": 2,
+      "businessErrorPreserved": false
+    }
+  ],
+  "wholeStoresVerified": 6,
+  "sourceRevision": "6f532c6edfe4931ce0d574e0c98c5d93cb012d81",
+  "directBpmnClosedWorkerIntegrationProved": true,
+  "runBpmnEtlIntegrationProved": false,
+  "modelHeldFaultRetryProved": false,
+  "pendingCancellationCrashProved": false,
+  "pendingCancellationStage": null,
+  "postConsumptionPreAckCrashProved": false,
+  "technicalFinalFaultProved": true,
+  "finalFaultRetryRefusalProved": true
+}
