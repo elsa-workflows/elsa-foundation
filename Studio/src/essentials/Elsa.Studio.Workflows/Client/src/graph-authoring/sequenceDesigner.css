@@ -283,8 +283,7 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  align-self: flex-start;
-  margin-left: .5rem;
+  align-self: center;
   margin-block: .1875rem;
   border: 1px dashed var(--studio-border);
   border-radius: 999px;
@@ -300,8 +299,6 @@
 }
 
 .wf-sequence-insert-empty {
-  align-self: center;
-  margin-left: 0;
   width: auto;
   min-height: 2.25rem;
   height: auto;
@@ -315,8 +312,6 @@
 }
 
 .wf-sequence-insert-end {
-  align-self: center;
-  margin-left: 0;
   width: auto;
   min-height: 1.875rem;
   height: auto;

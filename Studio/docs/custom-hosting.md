@@ -19,6 +19,8 @@ app.MapElsaStudio();
 app.Run();
 ```
 
+That C# is the whole composition root. The sample still needs the downloaded `CustomStudio.csproj`, `shells.json` (enabling `StudioApi` and `DashboardStudio`), `appsettings.json` and `NuGet.Config`. `AddElsaStudio` loads `shells.json` from the content root unless you set `ShellsFile = null`.
+
 ## Choose packages
 
 | Package | When to use it |
@@ -38,7 +40,7 @@ These commands use a .NET 10 SDK and a Bash-compatible shell. The producer curre
 
 This is a **preview candidate recipe**. Program #3340 validates actual NuGet archives in Studio CI; it does not publish a release or activate a feed publisher. Obtain a retained successful **main** Studio CI artifact, or matching packages from a maintainer-provided feed. CI artifacts expire after 14 days: choose a current verified run rather than treating an old run ID as a permanent distribution.
 
-1. In [Studio CI](https://github.com/elsa-workflows/elsa-foundation/actions/workflows/studio-ci.yml), choose a successful main run that contains `tools/studio/PackageHost.Sample` and download `studio-package-qualification-<run-id>-<attempt>`. Check `studio-consumer-qualification/report.json`: `status` must be `passed`; use its exact `version` and producer revision. [Program delivery receipts](https://github.com/elsa-workflows/elsa-foundation/issues/3340) identify verified runs.
+1. In [Studio CI](https://github.com/elsa-workflows/elsa-foundation/actions/workflows/studio-ci.yml), choose a successful main run that contains `tools/studio/PackageHost.Sample` and download `studio-package-qualification-<run-id>-<attempt>`. Check `studio-consumer-qualification/report.json`: `status` must be `passed`; use its exact `version` and `toolSourceRevision` (the producer commit). [Program delivery receipts](https://github.com/elsa-workflows/elsa-foundation/issues/3340) identify verified runs.
 2. Keep the extracted artifact **outside the application directory**. It includes retained test programs and private mutated control packages. Those are evidence, not consumer source or feed contents.
 3. Copy only the original archives from `studio-nuget/` and `studio-modularity-nuget/` into the application's `packages/` folder. Do not recursively collect every `.nupkg` from the artifact.
 
