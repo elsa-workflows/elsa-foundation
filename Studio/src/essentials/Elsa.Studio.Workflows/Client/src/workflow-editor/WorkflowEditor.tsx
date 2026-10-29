@@ -25,7 +25,8 @@ import {
 } from "../activityPresentation";
 import { buildDraftFromJson } from "../workflowSerialization";
 import { WorkflowCodeView } from "../WorkflowCodeView";
-import { withWorkflowStartEnabled } from "../workflowStart";
+import { withWorkflowStartEnabled } from "../workflowStartEditing";
+import { getWorkflowStartEnabled } from "../workflowStart";
 import { WorkflowPropertiesView } from "../WorkflowPropertiesView";
 import { loadActivityIconRegistry } from "../activityIconView";
 import { weaverUnavailableTitle } from "./constants";
@@ -419,7 +420,15 @@ export function WorkflowEditor({
       }
       setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false);
     } });
-  const nodes = runCanvas.nodes;
+  const nodes = useMemo(() => {
+    const activities = new Map((scope?.slot.activities ?? (scopeOwner ? [scopeOwner] : [])).map(activity => [activity.nodeId, activity]));
+    return runCanvas.nodes.map(node => {
+      const activity = activities.get(node.id);
+      return activity ? { ...node, data: { ...node.data,
+        workflowStartEnabled: getWorkflowStartEnabled(activity, catalogByVersion.get(activity.activityVersionId))
+      } } : node;
+    });
+  }, [catalogByVersion, runCanvas.nodes, scope?.slot.activities, scopeOwner]);
   const edges = runCanvas.edges;
   const selectEditorNode = (nodeId: string | null) => {
     select(nodeId);

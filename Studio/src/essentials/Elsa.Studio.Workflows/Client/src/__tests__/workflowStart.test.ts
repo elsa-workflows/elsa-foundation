@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
-import { getWorkflowStartEnabled, withWorkflowStartEnabled } from "../workflowStart";
+import { getWorkflowStartEnabled } from "../workflowStart";
+import { withWorkflowStartEnabled } from "../workflowStartEditing";
 import { writeLine } from "./fixtures";
 import type { ActivityNode } from "../workflowTypes";
 

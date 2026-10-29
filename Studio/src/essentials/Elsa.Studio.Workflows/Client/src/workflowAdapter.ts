@@ -12,7 +12,6 @@ import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "./intrinsicAct
 import { getActivityDisplay } from "./activityDisplay";
 import { indexActivityPresentation, resolveActivityLabel } from "./activityPresentation";
 import { getHttpEndpointResponseMode, type HttpEndpointResponseMode } from "./httpEndpointResponseMode";
-import { getWorkflowStartEnabled } from "./workflowStart";
 import type { ActivityIconTone, WorkflowNodeIcon } from "./activityIcons";
 
 export { getActivityDisplay } from "./activityDisplay";
@@ -899,7 +898,6 @@ function createWorkflowNode(
       suppressFlowPorts: options.suppressFlowPorts,
       isStartNode: options.isStartNode,
       canStartWorkflow: activityCanStartWorkflow(activity),
-      workflowStartEnabled: getWorkflowStartEnabled(activity, catalogItem),
       httpEndpointResponseMode: getHttpEndpointResponseMode(activity, catalogItem) ?? undefined
     }
   };
