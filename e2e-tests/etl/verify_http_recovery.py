@@ -77,7 +77,7 @@ def model_bridge(read,process,before,finished,business_error,cancelled=False,mod
         if completion is not None or result["faultCode"] is not None:raise ValueError("The actual cancelled worker was relabeled as completed or faulted.")
         return checked,origin,result
     if technical:
-        if (completion is not None or result['faultCode']!='etl.http.source-response-rejected' or result.get('cancellationSources') is not None or
+        if (completion is not None or result['faultCode']!='etl.snapshot-read-failed' or result.get('cancellationSources') is not None or
                 last['model']['terminalResult'].get('errorCode') is not None or last['model']['terminalResult']['code']!='bpmn.work.faulted'):
             raise ValueError('The actual technical worker fault was relabeled as a business error or completion.')
         return checked,origin,result
@@ -826,6 +826,7 @@ def verify(path):
     if worker_cancel:names.add("native-cancel-response.json")
     if model_cancel:names|={"model-cancel-response.json","model-cancel-command.json"}
     if embedded:names|={p+'-checked-embedding.json' for p in ('before','finished','retained')}
+    if technical:names|={'lookup-source.csv','lookup-snapshot.csv','snapshot-unavailability.json'}
     if parent_cancel:names.add('native-parent-cancel-response.json')
     if parent_pending or success_parent is not None:names|={'sdk-consume.json','parent-pending.json','parent-pending-wire.json','parent-pending-checked-model.json','parent-pending-checked-embedding.json'}|{'parent-pending-'+s+'.sqlite.gz' for s in ('elsa','etl-runtime','etl-design')}
     if pending_crash:names|={'pending.json','pending-checked.json','pending-wire.json'}|{'pending-'+s+'.sqlite.gz' for s in ('elsa','etl-runtime','etl-design')}
@@ -839,13 +840,24 @@ def verify(path):
         def read(name):return json.loads(q.evidence_file(root,case+"/"+name).read_text())
         process=read("process.json");products=process["products"]
         if process.get('businessErrorBoundary')!=boundary:raise ValueError('The actual business-error boundary differs from its declared case.')
-        if process.get('technicalFault',False) is not technical or technical and process.get('technicalFaultPolicy')!='FinalFault':raise ValueError('The actual technical-fault classification or default policy differs.')
+        if process.get('technicalFault',False) is not technical or technical and (process.get('technicalFaultPolicy')!='FinalFault' or process.get('technicalFaultSource')!='retained-lookup-snapshot-unavailable'):raise ValueError('The actual technical-fault classification or default policy differs.')
         if (business or technical) and process.get('resumptionSweepIntervalSeconds')!=.2:raise ValueError('The actual error recovery lost its declared production resumption configuration.')
         if (process["sourceRevision"]!=source or process["parent"]!=parent or process["businessError"] is not business_error or process["predecessorExitCode"]!=-9 or
                 [item["role"] for item in process["processes"]]!=(["http-fixture","workbench","workbench","consumption-sdk","workbench","workbench"] if post_ack or parent_pending or success_parent is not None else ["http-fixture"]+["workbench"]*(4 if pending_crash else 3)) or len({item["processId"] for item in process["processes"]})!=(6 if post_ack or parent_pending or success_parent is not None else 5 if pending_crash else 4)):raise ValueError("The actual ETL reference lacks its distinct process-loss/restart provenance.")
         if products["sourceCommit"]!=source or products["metadataOnly"] is not True or len(products["actualProductVersions"])!=(12 if direct else 6) or any(not item["productVersion"].endswith("+"+source) for item in products["actualProductVersions"]):raise ValueError("The actual Workbench and ETL products differ from their declared source.")
         before=read("before.json");finished=read("finished.json");recovered=read("recovered.json")
         before_wire=read("before-wire.json");wire=read("finished-wire.json")
+        if technical:
+            availability=read('snapshot-unavailability.json');source_file=q.evidence_file(root,case+'/lookup-source.csv');snapshot_file=q.evidence_file(root,case+'/lookup-snapshot.csv')
+            content=q.digest(source_file)
+            if (availability['kind']!='actual-owned-lookup-snapshot-unavailability' or availability['schemaVersion']!=1 or availability['sourceRevision']!=source or
+                    q.digest(snapshot_file)!=content or availability['sourceSha256']!=content or availability['snapshotSha256Before']!=content or
+                    availability['snapshotSha256WhileUnavailable']!=content or availability['restoredSha256']!=content or
+                    re.fullmatch('[a-f0-9]{64}\\.csv',availability['snapshotKey']) is None or availability['unavailableKey']!=availability['snapshotKey']+'.unavailable' or
+                    availability['predecessorExitCode']!=-9 or not availability['sourceStillAvailable'] or not availability['originalSnapshotReadPathMissing'] or
+                    not availability['restoredAfterOwnedHostsStopped'] or instant(availability['inducedAtUtc'])<=instant(process['cutAtUtc']) or
+                    instant(availability['restoredAtUtc'])<=instant(finished['run']['terminalResult']['settledAt'])):
+                raise ValueError('The actual technical fault lacks its unchanged, temporarily unavailable retained lookup snapshot.')
         bridge=model_bridge(read,process,before,finished,business_error,cancelling,model_cancel or parent_cancel,embedded) if direct else None
         if embedded:embedded_etl_parent(read,q.evidence_file(root,case+'/process.json').parent,process,bridge,parent_cancel)
         if success_parent is not None:successful_embedded_parent_return(read,q.evidence_file(root,case+'/process.json').parent,process,bridge)
@@ -885,14 +897,15 @@ def verify(path):
                 not cancelling and not technical and any(not item["http"]["exhausted"] or item["http"]["pageSequence"]!=1 for item in rows)):raise ValueError("The actual ETL terminal or partition accounting differs.")
         if technical:
             failed=[r['http']['fetch'] for r in rows if r['http']['fetch'] is not None]
-            if (result['terminalResult']['diagnostic']['code']!='etl.http.source-response-rejected' or len(failed)!=1 or failed[0]['phase']!='failed' or failed[0]['lastStatusCode']!=400 or failed[0]['attemptCount']!=2):
+            if (result['terminalResult']['diagnostic']['code']!='etl.snapshot-read-failed' or len(failed)!=1 or failed[0]!=retry):
                 raise ValueError('The actual terminal source rejection lost its retained HTTP retry state.')
         if business_error and result["terminalResult"]["diagnostic"]["code"]!="etl.rows-rejected":raise ValueError("The actual ETL business-error key differs.")
         if wire["overflow"] or before_wire["overflow"]:raise ValueError("The physical HTTP observations exceeded their bounds.")
         earlier=[item for item in before_wire["requests"] if item.get("shard")=="shard-b"];later=[item for item in wire["requests"] if item.get("shard")=="shard-b"]
         if cancelling:
             if len(earlier)!=1 or later!=earlier or later[0]["status"]!=429:raise ValueError("The physically cancelled HTTP shard resumed its saved retry.")
-        elif len(earlier)!=1 or len(later)!=(2 if technical else 3) or [item["status"] for item in later]!=([429,400] if technical else [429,200,200]) or later[0]!=earlier[0] or later[1]["receivedAtMs"]-later[0]["receivedAtMs"]<20000:raise ValueError("The physical source retried early or changed its saved page sequence.")
+        elif technical and (len(earlier)!=1 or wire!=before_wire or instant(process['observedFaultedAfterRetryDeadlineAtUtc'])<=instant(retry['notBefore'])):raise ValueError('The actual faulted HTTP wait revived at its original retry deadline.')
+        elif not technical and (len(earlier)!=1 or len(later)!=3 or [item["status"] for item in later]!=[429,200,200] or later[0]!=earlier[0] or later[1]["receivedAtMs"]-later[0]["receivedAtMs"]<20000):raise ValueError("The physical source retried early or changed its saved page sequence.")
         records=[record for post in wire["outputPosts"] for record in post["records"]];expected_records={1:"Ada",2:"Grace",3:"Linus"}
         if cancelling or technical:expected_records.pop(3)
         elif not business_error:expected_records[4]="Margaret"
@@ -914,6 +927,16 @@ def verify(path):
                             if bridge is not None:physical_model_bridge(connection,phase,*bridge,model_cancel=model_cancel or parent_cancel,embedded=embedded)
                             if business or technical:physical_business_error_boundary(connection,phase,bridge[0],bridge[1],boundary,technical)
                             if model_cancel and phase=="finished":physical_model_cancellation(connection,read,*bridge)
+                            if technical and phase=='finished':
+                                expected_incidents=finished['native']['incidents']+(finished['embedding']['incidents'] if embedded else [])
+                                incident_rows=[json.loads(r[0]) for r in connection.execute('SELECT ContentJson FROM elsa_runtime_incident_state')]
+                                if len(incident_rows)!=len(expected_incidents) or {r['incidentId'] for r in incident_rows}!={key(i['incidentId']) for i in expected_incidents}:
+                                    raise ValueError('The physical technical-fault incident inventory differs from its actual native owners.')
+                                for i in expected_incidents:
+                                    row,=[r for r in incident_rows if r['incidentId']==key(i['incidentId'])]
+                                    if (row['workflowExecutionId']!=key(i['workflowExecutionId']) or row['activityExecutionId']!=key(i['activityExecutionId']) or row['status']!=i['status'] or
+                                            row['failureType']!=key('ActivityReturnedFault') or row['resolutionOutcome']['actionKind']!=key(i['resolutionOutcome']['actionKind'])):
+                                        raise ValueError('The physical technical-fault incident lost its exact native disposition.')
                             row=connection.execute("SELECT Status,ContentJson FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId=?",(key(identity),)).fetchone()
                             if row is None or row[0]!=(1 if phase=="before" else 5 if cancelling else 4 if technical else 3) or json.loads(row[1])["pinnedExecutable"]!={name:key(value) for name,value in pin.items()}:raise ValueError("The physical native ETL workflow lost its exact pin or state.")
                             bookmarks=connection.execute("SELECT BookmarkId FROM elsa_runtime_bookmark_state WHERE WorkflowExecutionId=?",(identity,)).fetchall()

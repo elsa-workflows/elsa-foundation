@@ -44,11 +44,13 @@ def utc_instant(value):
     return datetime.fromisoformat(normalized)
 
 
-def pipeline():
+def pipeline(with_lookup=False):
     return {"source": {"kind": "httpJson", "binding": "http-source", "recordsPointer": "/items",
         "fields": [{"name": "id", "pointer": "/id", "type": "int64", "required": True}, {"name": "name", "pointer": "/name", "type": "string", "required": True}],
         "pagination": {"kind": "token", "continuationPointer": "/next", "queryParameter": "pageToken"}},
-        "lookup": None, "routes": {"main": {"kind": "http", "binding": "http-output"}, "errors": {"kind": "jsonl", "binding": "errors"}},
+        "lookup": {"binding":"lookup","schema":[{"name":"id","type":"int64","required":True},{"name":"tag","type":"string","required":True}],
+            "sourceKeyField":"id","lookupKeyField":"id"} if with_lookup else None,
+        "routes": {"main": {"kind": "http", "binding": "http-output"}, "errors": {"kind": "jsonl", "binding": "errors"}},
         "mapping": [{"name": name, "origin": "source", "field": name} for name in ("id", "name")], "filters": [],
         "limits": {"filePartitionCount": 2, "maxPartitions": 8, "maxRecordBytes": 65536, "maxFields": 64, "maxBatchRecords": 100,
             "maxBatchBytes": 4194304, "maxOutstandingRecords": 100, "maxOutstandingBytes": 4194304, "maxLookupRecords": 100,
@@ -75,7 +77,7 @@ def main():
     parser.add_argument("--successful-parent-result-crash", choices=("pending","consumed","settled"), help="After actual ETL success, capture a second process loss before native parent consumption, after consumption, or after model settlement while source ACK remains owed.")
     outcome_group = parser.add_mutually_exclusive_group()
     outcome_group.add_argument("--business-error", action="store_true", help="Reject one actual HTTP record through its declared Int64 schema.")
-    outcome_group.add_argument("--technical-fault", action="store_true", help="After the real HTTP429/process-loss cut, reject the original source retry with HTTP400.")
+    outcome_group.add_argument("--technical-fault", action="store_true", help="After HTTP429/process loss, temporarily make the original retained CSV lookup snapshot unavailable without changing its bytes.")
     outcome_group.add_argument("--pipeline-cancel", action="store_true", help="Cancel the actual ETL run after host recovery and observe native/BPMN cancellation.")
     outcome_group.add_argument("--native-cancel", action="store_true", help="Cancel the actual native worker after recovery and verify cancellation reaches ETL and BPMN.")
     outcome_group.add_argument("--native-parent-cancel", action="store_true", help="Cancel the real outer native RunBpmn parent after recovery.")
@@ -169,7 +171,7 @@ def main():
     try:
         fixture_script=REPO/"e2e-tests/etl/EtlHttpFixture.mjs";ready=root/"http-ready.json"
         retry_after=60 if cancelling else 20
-        fixture=start(["node",str(fixture_script),"--ready-file",str(ready),"--source-retry-after-seconds",str(retry_after)]+(["--invalid-last-id"] if args.business_error else [])+(["--reject-recovered-source"] if args.technical_fault else []),"http-fixture")
+        fixture=start(["node",str(fixture_script),"--ready-file",str(ready),"--source-retry-after-seconds",str(retry_after)]+(["--invalid-last-id"] if args.business_error else []),"http-fixture")
         wait_for(lambda:ready.exists(),bool,"The owned HTTP fixture did not start.",15)
         fixture_url="http://127.0.0.1:"+str(json.loads(ready.read_text())["port"])
         def wire():
@@ -186,6 +188,11 @@ def main():
                     {**common,"Alias":"http-output","Role":"MainOutput","Revision":"http-output-v1","Endpoint":fixture_url+output_path,"AllowedPaths":[output_path],"Shards":[]}]},
             "EtlRuntimeEntityFrameworkCore":{"Provider":"Sqlite","ConnectionString":"Data Source=etl-runtime.db;Pooling=False"},
             "EtlRuntimeApi":{"CursorSigningKey":"owned-etl-recovery-runtime-cursor-signing-key"},"EtlWorkflowsDesign":{},"EtlWorkflowsRuntime":{}})
+        if args.technical_fault:
+            lookup=root/'lookup.csv';lookup.write_bytes(b'id,tag\n1,one\n2,two\n3,three\n4,four\n')
+            shutil.copyfile(lookup,output/'lookup-source.csv')
+            features['EtlRuntime']['FileBindings'].append({'TenantId':'default','PersistencePartition':'default','Alias':'lookup','Role':'Lookup','Revision':'lookup-v1',
+                'Path':str(lookup),'ExpectedSha256':q.digest(lookup),'IsCurrent':True,'ImmutableInput':True,'AtomicPublication':False})
         if direct_bpmn:
             features.update({"ActivitiesBpmnHosting":{"AdmitNewExecutions":True},"ActivitiesBpmnHostingApi":{}})
             if args.model_cancel_before_admission:features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":300}
@@ -197,7 +204,7 @@ def main():
         q.write_json(root/"shells.json",shells)
         api=launch();definition="recovery-"+uuid.uuid4().hex[:12]
         bindings=api.request("/etl/v2/bindings?limit=100")
-        draft=api.request("/etl/v2/definitions",{"id":definition,"pipeline":pipeline()})
+        draft=api.request("/etl/v2/definitions",{"id":definition,"pipeline":pipeline(args.technical_fault)})
         validation=api.request(f"/etl/v2/definitions/{definition}/validate",{"expectedRevision":draft["revision"]})
         if validation["diagnostics"]:raise ValueError("The actual ETL definition did not validate.")
         published=api.request(f"/etl/v2/definitions/{definition}/publish",{key:validation[key] for key in ("definitionVersion","contentHash")} | {"expectedRevision":validation["revision"]})
@@ -442,6 +449,19 @@ def main():
         stop(host,crash=True);exit_code=host.returncode
         if exit_code!=-signal.SIGKILL:raise ValueError("The predecessor did not exit through actual process loss.")
         print("Observed durable 429 and completed sibling; owned predecessor terminated.",flush=True)
+        snapshot_unavailability=None
+        if args.technical_fault:
+            lookup_snapshot,=list((root/'etl-snapshots').glob('*.csv'))
+            if lookup_snapshot.is_symlink() or q.digest(lookup_snapshot)!=q.digest(root/'lookup.csv'):
+                raise ValueError('The actual prepared lookup snapshot does not match its immutable source.')
+            shutil.copyfile(lookup_snapshot,output/'lookup-snapshot.csv')
+            unavailable=lookup_snapshot.with_name(lookup_snapshot.name+'.unavailable')
+            lookup_snapshot.rename(unavailable)
+            snapshot_unavailability={'schemaVersion':1,'kind':'actual-owned-lookup-snapshot-unavailability','sourceRevision':source,
+                'snapshotKey':lookup_snapshot.name,'unavailableKey':unavailable.name,'sourceSha256':q.digest(root/'lookup.csv'),
+                'snapshotSha256Before':q.digest(output/'lookup-snapshot.csv'),'snapshotSha256WhileUnavailable':q.digest(unavailable),
+                'sourceStillAvailable':(root/'lookup.csv').is_file(),'originalSnapshotReadPathMissing':not lookup_snapshot.exists(),
+                'inducedAtUtc':datetime.now(timezone.utc).isoformat(),'predecessorExitCode':exit_code}
         pending_cancellation_evidence=None
         if args.pending_cancellation_crash or args.pending_parent_result_crash or args.successful_parent_result_crash:
             features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":300};q.write_json(root/"shells.json",shells)
@@ -631,9 +651,8 @@ def main():
             failed=[r['http']['fetch'] for r in rows if r['http']['fetch'] is not None]
             if (incident['activityExecutionId']!=etl_activity['activityExecutionId'] or incident['status']!='Blocking' or
                     incident['failureType']!='ActivityReturnedFault' or incident['resolutionOutcome']['actionKind']!='FaultWorkflow' or
-                    result['terminalResult']['diagnostic']['code']!='etl.http.source-response-rejected' or
-                    len(failed)!=1 or failed[0]['phase']!='failed' or failed[0]['lastStatusCode']!=400 or failed[0]['attemptCount']!=2):
-                raise ValueError('The actual technical failure lost its original rejected source retry or native fault incident.')
+                    result['terminalResult']['diagnostic']['code']!='etl.snapshot-read-failed' or len(failed)!=1 or failed[0]!=retry):
+                raise ValueError('The actual technical failure lost its original waiting HTTP retry or native fault incident.')
         if "after" in old_activities or old_activities["etl"]["activityExecutionId"]!=next(item["activityExecutionId"] for item in native_view["activities"] if (item.get("authoredActivityId") or item["executableNodeId"])=="etl"):
             raise ValueError("The native RunEtl invocation was recreated or its successor ran before the cut.")
         for field in ("artifactId","artifactHash","artifactVersion","definitionId","definitionVersionId"):
@@ -641,7 +660,8 @@ def main():
         q.write_json(output/"finished.json",finished);finished_wire=wire();q.write_json(output/"finished-wire.json",finished_wire)
         b_requests=[item for item in finished_wire["requests"] if item.get("shard")=="shard-b"]
         if (cancelling and (len(b_requests)!=1 or b_requests[0]["status"]!=429) or
-                not cancelling and (len(b_requests)!=(2 if args.technical_fault else 3) or [item["status"] for item in b_requests]!=([429,400] if args.technical_fault else [429,200,200]) or b_requests[1]["receivedAtMs"]-b_requests[0]["receivedAtMs"]<20000)):
+                args.technical_fault and finished_wire!=before_wire or
+                not cancelling and not args.technical_fault and (len(b_requests)!=3 or [item["status"] for item in b_requests]!=[429,200,200] or b_requests[1]["receivedAtMs"]-b_requests[0]["receivedAtMs"]<20000)):
             raise ValueError("The actual source retried early or failed to resume its original two-page shard.")
         records=[item for post in finished_wire["outputPosts"] for item in post["records"]]
         expected_records={1:"Ada",2:"Grace"} if cancelling or args.technical_fault else {1:"Ada",2:"Grace",3:"Linus"} if args.business_error else {1:"Ada",2:"Grace",3:"Linus",4:"Margaret"}
@@ -653,10 +673,10 @@ def main():
         stop(host);finished_stores=snapshots("finished")
         api=launch()
         observed_cancelled_after_deadline=None
-        if cancelling:
+        if cancelling or args.technical_fault:
             deadline=utc_instant(retry["notBefore"])+timedelta(seconds=2)
             while datetime.now(timezone.utc)<deadline:
-                if view()!=finished or wire()!=finished_wire:raise ValueError("Cancelled work changed while its original HTTP retry became due.")
+                if view()!=finished or wire()!=finished_wire:raise ValueError("Terminal work changed while its original HTTP retry became due.")
                 time.sleep(.25)
             observed_cancelled_after_deadline=datetime.now(timezone.utc).isoformat()
         retained=view();retained_wire=wire();q.write_json(output/"retained.json",retained);q.write_json(output/"retained-wire.json",retained_wire)
@@ -664,17 +684,24 @@ def main():
         if native_parent_execution:q.write_json(output/'retained-checked-embedding.json',checked_embedding())
         stop(host)
         if retained!=finished or retained_wire!=finished_wire:raise ValueError("The terminal pair or physical HTTP observations changed after another process.")
+        if args.technical_fault:
+            if lookup_snapshot.exists() or q.digest(unavailable)!=snapshot_unavailability['snapshotSha256Before']:
+                raise ValueError('The unavailable original snapshot was rewritten during actual fault recovery.')
+            unavailable.rename(lookup_snapshot)
+            snapshot_unavailability.update(restoredAfterOwnedHostsStopped=True,restoredAtUtc=datetime.now(timezone.utc).isoformat(),restoredSha256=q.digest(lookup_snapshot))
+            q.write_json(output/'snapshot-unavailability.json',snapshot_unavailability)
         q.write_json(output/"process.json",{"schemaVersion":1,"kind":("actual-native-runbpmn-etl-parent-cancellation" if args.native_parent_cancel else "actual-native-runbpmn-etl-http-recovery") if native_parent_execution else "actual-direct-bpmn-native-etl-model-cancellation" if args.model_cancel else "actual-direct-bpmn-native-etl-worker-cancellation" if args.native_cancel else "actual-direct-bpmn-native-etl-pipeline-cancellation" if args.pipeline_cancel else "actual-direct-bpmn-native-etl-http-recovery" if direct_bpmn else "actual-native-etl-http-recovery","sourceRevision":source,"products":products,"parent":args.parent,"processes":processes,"predecessorExitCode":exit_code,
             "definition":definition,"selection":selection,"workflowExecutionId":execution,"runId":run,"publication":publication,"etlPublication":published,"bindings":bindings,
             "fixtureSha256":q.digest(fixture_script),"controllerSha256":q.digest(Path(__file__)),"cutAtUtc":cut_at,"businessError":args.business_error,"pipelineCancel":args.pipeline_cancel,"nativeCancel":args.native_cancel,"modelCancel":args.model_cancel,"retryAfterSeconds":retry_after,"beforeStores":before_stores,"finishedStores":finished_stores,
             **({'businessErrorBoundary':args.business_error_boundary} if args.business_error_boundary else {}),
-            **({'technicalFault':True,'technicalFaultPolicy':'FinalFault'} if args.technical_fault else {}),
+            **({'technicalFault':True,'technicalFaultPolicy':'FinalFault','technicalFaultSource':'retained-lookup-snapshot-unavailable',
+                'observedFaultedAfterRetryDeadlineAtUtc':observed_cancelled_after_deadline} if args.technical_fault else {}),
             **({'resumptionSweepIntervalSeconds':.2} if args.business_error_boundary else {}),
             **({"observedCancelledAfterRetryDeadlineAtUtc":observed_cancelled_after_deadline} if cancelling else {}),
             **({"modelPublication":model_publication,"modelExecutionId":model_execution} if direct_bpmn else {}),
             **({'embeddedParent':args.embedded_parent,'nativeParentExecutionId':native_parent_execution,'nativeParentPublication':native_parent_publication,'nativeParentCancel':args.native_parent_cancel} if native_parent_execution else {}),
             **(pending_cancellation_evidence or {}),
-            "scopeLimits":["Actual successful native RunBpmn parent return across a second SIGKILL at the selected consumption/settlement/ACK boundary; the source and receipts remain original, with broader fault/retry/provider/upgrade/Studio acceptance separate." if args.successful_parent_result_crash else "Actual native RunBpmn parent, embedded service model and published native RunEtl worker over the real HTTP429 recovery journey; broader outcomes/parent races, held retry and final upgrade/Studio remain separate acceptance." if native_parent_execution else "Actual model consumption of the original admitted RunEtl cancellation result, followed by second SIGKILL with native result/model-cancel ACK still owed; fresh standard hosts finish acknowledgment. Embedding, held retry, other providers and final upgrade/Studio remain open." if args.consumed_before_ack_crash else "Actual admitted RunEtl/HTTP429 recovery followed by a second process loss with cancellation/result delivery still owed; post-consumption/pre-ACK, embedding, held retry and final upgrade/Studio remain separate gates." if args.pending_cancellation_crash else "BPMN-originated cancellation of an admitted native RunEtl worker after process recovery; cancellation before admission, pending cancel/result crashes, embedding, held retry and final upgrade/Studio remain unproved." if args.model_cancel else "Native-worker-originated cancellation into the actual ETL run and direct BPMN only; model-to-worker cancellation, embedding, held retry and final upgrade/Studio remain unproved." if args.native_cancel else "Pipeline-originated cancellation through one actual direct BPMN/native RunEtl root only; reverse model-to-worker cancellation, embedding, held fault retry and final upgrade/Studio remain unproved." if args.pipeline_cancel else "Direct start/service/end with one real closed native RunEtl worker; embedding, broader service/event shapes, cancellation propagation and held terminal-fault retry remain unproved." if direct_bpmn else "Real transient HTTP retry and native RunEtl recovery only; no BPMN/model worker bridge or held terminal-fault retry is proved.","The crash cut uses SIGSTOP only to copy committed stores, then SIGKILL; no persisted state or clock is edited.","External HTTP effects remain at least once."]})
+            "scopeLimits":["Actual successful native RunBpmn parent return across a second SIGKILL at the selected consumption/settlement/ACK boundary; the source and receipts remain original, with broader fault/retry/provider/upgrade/Studio acceptance separate." if args.successful_parent_result_crash else "Actual native RunBpmn parent, embedded service model and published native RunEtl worker over the real HTTP429 recovery journey; broader outcomes/parent races, held retry and final upgrade/Studio remain separate acceptance." if native_parent_execution else "Actual model consumption of the original admitted RunEtl cancellation result, followed by second SIGKILL with native result/model-cancel ACK still owed; fresh standard hosts finish acknowledgment. Embedding, held retry, other providers and final upgrade/Studio remain open." if args.consumed_before_ack_crash else "Actual admitted RunEtl/HTTP429 recovery followed by a second process loss with cancellation/result delivery still owed; post-consumption/pre-ACK, embedding, held retry and final upgrade/Studio remain separate gates." if args.pending_cancellation_crash else "BPMN-originated cancellation of an admitted native RunEtl worker after process recovery; cancellation before admission, pending cancel/result crashes, embedding, held retry and final upgrade/Studio remain unproved." if args.model_cancel else "Native-worker-originated cancellation into the actual ETL run and direct BPMN only; model-to-worker cancellation, embedding, held retry and final upgrade/Studio remain unproved." if args.native_cancel else "Pipeline-originated cancellation through one actual direct BPMN/native RunEtl root only; reverse model-to-worker cancellation, embedding, held fault retry and final upgrade/Studio remain unproved." if args.pipeline_cancel else "Direct start/service/end with one real closed native RunEtl worker; embedding, broader service/event shapes, cancellation propagation and held terminal-fault retry remain unproved." if direct_bpmn else "Real transient HTTP retry and native RunEtl recovery only; no BPMN/model worker bridge or held terminal-fault retry is proved.","The crash cut uses SIGSTOP to copy committed stores, then SIGKILL. SQL state and clocks are unchanged; only the owned retained lookup snapshot path is temporarily renamed, with identical bytes restored after all hosts stop." if args.technical_fault else "The crash cut uses SIGSTOP only to copy committed stores, then SIGKILL; no persisted state or clock is edited.","External HTTP effects remain at least once."]})
         print("Actual ETL/native"+("/BPMN chain" if direct_bpmn else " journey")+" completed and survived another Workbench process.",flush=True)
     except Exception as failure:
         if not (output/'failure.json').exists():

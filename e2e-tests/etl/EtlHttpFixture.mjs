@@ -9,7 +9,6 @@ if (!readyPath) {
 const retryDelayIndex = process.argv.indexOf('--source-retry-after-seconds');
 const sourceRetryAfterSeconds = retryDelayIndex >= 0 ? Number(process.argv[retryDelayIndex + 1]) : 3;
 const invalidLastId = process.argv.includes('--invalid-last-id');
-const rejectRecoveredSource = process.argv.includes('--reject-recovered-source');
 if (!Number.isSafeInteger(sourceRetryAfterSeconds) || sourceRetryAfterSeconds < 1 || sourceRetryAfterSeconds > 60) {
     throw new Error('Source Retry-After must be an integer from 1 to 60 seconds.');
 }
@@ -82,11 +81,6 @@ const server = http.createServer(async (request, response) => {
         if (shard === 'shard-b' && !hasContinuation && shardBAttempts++ === 0) {
             trackRequest(request, 429, { shard, page: 0 });
             sendJson(response, 429, { error: 'retry' }, { 'retry-after': String(sourceRetryAfterSeconds) });
-            return;
-        }
-        if (rejectRecoveredSource && shard === 'shard-b') {
-            trackRequest(request, 400, { shard, page: 0 });
-            sendJson(response, 400, { error: 'source-rejected' });
             return;
         }
 
