@@ -29,6 +29,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
 
     bool IRuntimeCheckpointCommitStore.SupportsExactBookmarkResume => true;
     bool IRuntimeCheckpointCommitStore.SupportsModelCheckpoint => true;
+    bool IRuntimeCheckpointCommitStore.SupportsModelParentAdmission => true;
     bool IRuntimeCheckpointCommitStore.CanCommitModelState(IRuntimeModelExecutionReader reader) =>
         reader is EfRuntimeModelExecutionReader selected && selected.Uses(context, accessContextAccessor);
     bool IRuntimeCheckpointCommitStore.SupportsModelAdmission => true;
@@ -100,10 +101,41 @@ public sealed class EfRuntimeCheckpointCommitStore(
 
     private void EnsureExactBookmarkDeadline(RuntimeCheckpointCommit commit)
     {
-        if (commit.ExpectedBookmarkResume is not { } expected) return;
+        var expected = commit.ExpectedBookmarkResume ?? commit.ExpectedModelParentWait;
+        if (expected is null) return;
         var now = _timeProvider.GetUtcNow();
         if (expected.ExpiresAt <= now || expected.RegistrationCapture?.Scope.TestScope?.IsExpired(now) == true)
             throw new BookmarkResumeSupersededException(expected.WorkflowExecutionId, expected.BookmarkId);
+    }
+
+    private async ValueTask StageModelParentWaitAsync(RuntimeCheckpointCommit commit, string scope,
+        Dictionary<string, WorkflowTestScopeRecord> touchedTestScopes, CancellationToken cancellationToken)
+    {
+        if (commit.ExpectedModelParentWait is not { } expected) return;
+        commit.EnsureModelParentAdmissionShape();
+        var bookmarkId = EfBookmarkStateStore.CreateId(scope, expected.WorkflowExecutionId, expected.BookmarkId);
+        var bookmarkRow = await context.Bookmarks.SingleOrDefaultAsync(row => row.Id == bookmarkId, cancellationToken);
+        var workflowId = EfWorkflowExecutionStateStore.CreateId(scope, expected.WorkflowExecutionId);
+        var workflowRow = await context.WorkflowExecutionStates.SingleOrDefaultAsync(row => row.Id == workflowId, cancellationToken);
+        var activityId = ActivityExecutionEfSupport.CreateId("state", scope, expected.WorkflowExecutionId, expected.ActivityExecutionId);
+        var activityRow = await context.ActivityExecutionStates.SingleOrDefaultAsync(row => row.Id == activityId, cancellationToken);
+        if (bookmarkRow is null || workflowRow is null || activityRow is null)
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.model.parent-wait-unavailable", "The native parent wait is no longer available for model admission.");
+        var workflow = EfWorkflowExecutionStateStore.ReadChecked(workflowRow, scope, expected.WorkflowExecutionId);
+        var activity = EfActivityExecutionStateStore.ReadChecked(activityRow, scope, expected.WorkflowExecutionId, expected.ActivityExecutionId);
+        var bookmark = EfBookmarkStateStore.MapChecked(bookmarkRow, scope, expected.WorkflowExecutionId, expected.BookmarkId, bookmarkId);
+        var state = commit.ModelState!.State;
+        if (!expected.MatchesAdmission(new(bookmark, bookmarkRow.Revision, new(scope)), workflow, activity, new(scope), _timeProvider.GetUtcNow()) ||
+            workflow.TenantId != state.TenantId || workflow.Authority is not { } authority ||
+            !WorkflowExecutionAuthoritySnapshot.Matches(state.Authority, authority.SystemIdentity, authority.RootInitiator, authority.Metadata))
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.model.parent-wait-unavailable", "The native parent wait changed before model admission.");
+        if (workflow.TestScope is { } testScope)
+            await EfRuntimeCheckpointTestScopeParticipantStaging.AssertOpenAndStageAsync(context, testScope,
+                _timeProvider.GetUtcNow(), scope, touchedTestScopes, cancellationToken);
+        // Order cancellation and child admission without consuming or changing the real parent wait's generation.
+        context.Entry(bookmarkRow).Property(row => row.Revision).IsModified = true;
+        context.Entry(workflowRow).Property(row => row.Revision).IsModified = true;
+        context.Entry(activityRow).Property(row => row.Revision).IsModified = true;
     }
 
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(
@@ -113,14 +145,15 @@ public sealed class EfRuntimeCheckpointCommitStore(
     {
         ArgumentNullException.ThrowIfNull(commit);
         try { return await CommitCoreAsync(commit, decision, cancellationToken); }
-        catch (Exception exception) when (commit.ExpectedModelExecution is not null &&
+        catch (Exception exception) when ((commit.ExpectedModelExecution is not null || commit.ExpectedModelParentWait is not null) &&
             (exception is IOException or DbUpdateConcurrencyException or
                 WorkflowExecutableRootWriteLeaseLostException or WorkflowExecutableRootWriteLeaseUnavailableException ||
              exception is OperationCanceledException && !cancellationToken.IsCancellationRequested ||
              EfRelationalExceptionClassifier.IsProviderFailure(exception)))
         {
-            throw new RuntimeSchedulerWorkUnavailableException("runtime.model.native-admission-unavailable",
-                "The authorizing model decision changed or is unavailable; native worker admission remains owed.", exception);
+            throw new RuntimeSchedulerWorkUnavailableException(commit.ExpectedModelParentWait is null
+                    ? "runtime.model.native-admission-unavailable" : "runtime.model.parent-admission-unavailable",
+                "The authorizing execution changed or is unavailable; cross-model admission remains owed.", exception);
         }
         catch (Exception exception) when (commit.ExpectedBookmarkResume is not null &&
             (exception is IOException or DbUpdateConcurrencyException or
@@ -144,6 +177,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
 
         commit.EnsureModelStateShape();
         commit.EnsureModelAdmissionShape();
+        commit.EnsureModelParentAdmissionShape();
         if (commit.ExpectedModelExecution is { } expectedModel)
         {
             accessContextAccessor.Current.EnsureScope(expectedModel.Scope);
@@ -260,6 +294,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 }
 
                 await StageExactBookmarkResumeAsync(commit, scope, touchedTestScopes, writeCancellationToken);
+                await StageModelParentWaitAsync(commit, scope, touchedTestScopes, writeCancellationToken);
 
                 if (commit.ExpectedModelExecution is { } admission)
                 {
@@ -365,7 +400,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
                 var winner = await ReconcileMarkerAsync(exception, writeCancellationToken);
                 if (winner is not null)
                     return ResolveReplay(commit, fingerprint, winner);
-                if (commit.ExpectedBookmarkResume is not null)
+                if (commit.ExpectedBookmarkResume is not null || commit.ExpectedModelParentWait is not null)
                     throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable", "Exact bookmark admission changed concurrently.", exception);
                 throw;
             }

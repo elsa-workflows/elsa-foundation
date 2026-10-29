@@ -62,6 +62,7 @@
           "Elsa.Activities.Bpmn.Core": "[4.0.0-dev, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
@@ -121,6 +122,12 @@
       "elsa.foundation.identity.core": {
         "type": "Project"
       },
+      "elsa.mediator.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Pipelines.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.pipelines.core": {
         "type": "Project"
       },
@@ -152,6 +159,17 @@
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Expressions.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.workflows.publishing.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Mediator.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.workflows.runtime": {

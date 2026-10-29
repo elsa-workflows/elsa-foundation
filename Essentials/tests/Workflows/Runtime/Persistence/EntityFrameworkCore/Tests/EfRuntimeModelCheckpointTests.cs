@@ -639,6 +639,107 @@ public sealed class EfRuntimeModelCheckpointTests
         }
     }
 
+    [Fact]
+    public async Task Model_parent_admission_preserves_the_real_wait_and_replays_after_parent_cancellation()
+    {
+        await using var database = await CreateDatabaseAsync();
+        var expected = await PrepareNativeParentAsync(database);
+        var commit = Commit(1) with { ExpectedModelParentWait = expected };
+        await using (var context = database.Open()) await Store(context).CommitAsync(commit, Immediate);
+        await using var restarted = database.Open();
+        var bookmarks = new EfBookmarkStateStore(restarted, new Access("tenant-a"));
+        Assert.Equal(expected.RegistrationCapture!.Generation, (await bookmarks.ObserveAsync("parent", "wait"))!.Generation);
+        Assert.Equal(ActivityExecutionStatus.Suspended, (await new EfActivityExecutionStateStore(restarted, new Access("tenant-a"), new Codec()).FindAsync("parent", "activity"))!.Status);
+        var executions = new EfWorkflowExecutionStateStore(restarted, new Access("tenant-a"), new Codec());
+        await executions.SaveAsync((await executions.FindAsync("parent"))! with { Status = WorkflowExecutionStatus.Cancelled });
+        await Store(restarted).CommitAsync(commit, Immediate);
+        Assert.Equal(1, (await Reader(restarted).FindAsync("execution"))!.Revision);
+        Assert.Single(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Theory]
+    [InlineData("parent-cancelled")]
+    [InlineData("activity-cancelled")]
+    [InlineData("rearmed")]
+    public async Task A_changed_native_parent_cannot_admit_its_model_child(string change)
+    {
+        await using var database = await CreateDatabaseAsync();
+        var expected = await PrepareNativeParentAsync(database);
+        await using var context = database.Open();
+        var access = new Access("tenant-a");
+        if (change == "parent-cancelled")
+        {
+            var executions = new EfWorkflowExecutionStateStore(context, access, new Codec());
+            await executions.SaveAsync((await executions.FindAsync("parent"))! with { Status = WorkflowExecutionStatus.Cancelled });
+        }
+        if (change == "activity-cancelled")
+        {
+            var activities = new EfActivityExecutionStateStore(context, access, new Codec());
+            await activities.SaveAsync((await activities.FindAsync("parent", "activity"))! with { Status = ActivityExecutionStatus.Cancelled });
+        }
+        if (change == "rearmed")
+        {
+            var bookmarks = new EfBookmarkStateStore(context, access);
+            await bookmarks.SaveAsync((await bookmarks.FindAsync("parent", "wait"))!);
+        }
+        await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => Store(context).CommitAsync(Commit(1) with { ExpectedModelParentWait = expected }, Immediate).AsTask());
+        await using var restarted = database.Open();
+        Assert.Null(await Reader(restarted).FindAsync("execution"));
+        Assert.Empty(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Theory]
+    [InlineData("elsa_runtime_bookmark_state")]
+    [InlineData("elsa_runtime_workflow_execution_state")]
+    [InlineData("elsa_runtime_activity_execution_state")]
+    public async Task Model_parent_admission_physically_compares_each_live_native_participant(string table)
+    {
+        await using var database = await CreateDatabaseAsync();
+        var expected = await PrepareNativeParentAsync(database);
+        var advance = new AdvanceBeforeParentCompare(table);
+        await using (var context = database.Open(advance))
+            await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => Store(context).CommitAsync(Commit(1) with { ExpectedModelParentWait = expected }, Immediate).AsTask());
+        Assert.True(advance.Changed);
+        await using var restarted = database.Open();
+        Assert.Null(await Reader(restarted).FindAsync("execution"));
+        Assert.Empty(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    private async Task<StimulusResumeRecipient> PrepareNativeParentAsync(Database database)
+    {
+        await using var context = database.Open();
+        var access = new Access("tenant-a");
+        var parent = new WorkflowExecutionState("parent", new("native-parent", "parent", "parent-v1", "1.0.0", "parent-hash"),
+            WorkflowExecutionStatus.Running, null, Now, Now, Now, null, null, null, "tenant-a", new Dictionary<string, string>())
+            { Partition = new("tenant-a"), Authority = Change(1).State.Authority, RunKind = WorkflowRunKind.PublishedRun };
+        await new EfWorkflowExecutionStateStore(context, access, new Codec()).SaveAsync(parent);
+        var activity = new ActivityExecutionState(new("activity", "parent", "node", "node", "Test.RunModel", "1"),
+            ActivityExecutionStatus.Suspended, null, 1, Now, Now, null, null, null, null, null,
+            ActivitySchedulingProvenance.From("parent", null, null, null, null, null, null, "fixture"), null, ["wait"], [], 0, 0, new Dictionary<string, string>());
+        await new EfActivityExecutionStateStore(context, access, new Codec()).SaveAsync(activity);
+        var bookmarks = new EfBookmarkStateStore(context, access);
+        await bookmarks.SaveAsync(new("wait", "parent", "activity", "node", "resume", "test-model-result", "execution", null,
+            new Dictionary<string, string>(), Now, Now.AddMinutes(5)));
+        return StimulusResumeRecipient.From((await bookmarks.ObserveAsync("parent", "wait"))!, parent, new("tenant-a"));
+    }
+
+    private sealed class AdvanceBeforeParentCompare(string table) : DbCommandInterceptor
+    {
+        public bool Changed { get; private set; }
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (!Changed && command.CommandText.StartsWith("UPDATE", StringComparison.Ordinal) && command.CommandText.Contains('"' + table + '"', StringComparison.Ordinal))
+            {
+                Changed = true;
+                await using var advance = command.Connection!.CreateCommand(); advance.Transaction = command.Transaction;
+                advance.CommandText = "UPDATE \"" + table + "\" SET Revision = Revision + 1";
+                await advance.ExecuteNonQueryAsync(cancellationToken);
+            }
+            return result;
+        }
+    }
+
     private RuntimeCheckpointCommit Commit(long revision, RuntimeModelLifecycle lifecycle = RuntimeModelLifecycle.Running) =>
         new($"commit-{revision}", new($"checkpoint-{revision}", "ModelDecision", "execution", Now.AddSeconds(revision), [], new Dictionary<string, string>()),
             new(null, null, [], [], [], [], []), [], new Dictionary<string, string>())

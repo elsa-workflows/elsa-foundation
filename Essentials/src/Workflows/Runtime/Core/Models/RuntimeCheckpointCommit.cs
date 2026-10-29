@@ -25,6 +25,23 @@ public sealed record RuntimeCheckpointCommit(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeModelExecutionState? ExpectedModelExecution { get; init; }
 
+    /// <summary>The observed native parent wait that must remain live when its model child is first admitted.</summary>
+    /// <remarks>A concurrency condition, not source authority. Admission preserves the parent bookmark and its generation.</remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public StimulusResumeRecipient? ExpectedModelParentWait { get; init; }
+
+    /// <summary>Only a first model decision may depend on another execution's exact native wait.</summary>
+    public void EnsureModelParentAdmissionShape()
+    {
+        if (ExpectedModelParentWait is not { } expected) return;
+        if (ModelState is not { ExpectedRevision: null, State.Lifecycle: RuntimeModelLifecycle.Running } model ||
+            ExpectedFence is null || ExpectedModelExecution is not null || ExpectedBookmarkResume is not null ||
+            expected.WorkflowExecutionId == WorkflowExecutionId || expected.RegistrationCapture is not { } capture ||
+            capture.Scope.PersistenceScope != model.State.Scope || capture.Scope.TenantId != model.State.TenantId ||
+            StateChanges.WorkflowExecution is not null || StateChanges.Bookmarks.Count != 0 || StateChanges.ActivityExecutions.Count != 0)
+            throw new InvalidOperationException("Model child admission requires its initial decision and captured live native parent wait.");
+    }
+
     /// <summary>Only an initial native worker checkpoint may depend on another execution's live model decision.</summary>
     public void EnsureModelAdmissionShape()
     {

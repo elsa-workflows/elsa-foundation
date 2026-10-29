@@ -10,6 +10,9 @@ public interface IRuntimeCheckpointCommitStore
     /// <summary>Qualifies the actual scoped reader used by the selected model checkpoint provider.</summary>
     bool CanCommitModelState(IRuntimeModelExecutionReader reader) => false;
 
+    /// <summary>Whether initial model admission can atomically preserve and compare its exact live native parent wait.</summary>
+    bool SupportsModelParentAdmission => false;
+
     /// <summary>Whether native admission can atomically compare its authorizing model execution snapshot.</summary>
     bool SupportsModelAdmission => false;
 

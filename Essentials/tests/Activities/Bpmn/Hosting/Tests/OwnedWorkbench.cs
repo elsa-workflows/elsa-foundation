@@ -27,6 +27,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
     public string DesignDatabase => designSharesRuntime ? RuntimeDatabase : Path.Combine(ContentRoot, "design.db");
     internal string AssemblyPath => Metadata("BpmnHostingWorkbenchAssembly");
     internal string ReaderAssemblyPath => Metadata("BpmnHostingReaderAssembly");
+    internal int? LastStoppedExitCode { get; private set; }
 
     public static async Task<OwnedWorkbench> StartAsync(bool directBpmn = false, bool runtimeOnly = false,
         string? legacySnapshotDirectory = null, string? runtimeSnapshotPath = null, double? recoverySweepSeconds = null,
@@ -100,6 +101,12 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         return await ReadAsync(response, path, expected);
     }
 
+    public async Task<JsonNode?> FindAsync(string path)
+    {
+        using var response = await client.GetAsync(path);
+        return response.StatusCode == HttpStatusCode.NotFound ? null : await ReadAsync(response, path, null);
+    }
+
     public async Task<JsonNode> PostAsync(string path, object value, HttpStatusCode? expected = null, string? idempotencyKey = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(value) };
@@ -114,16 +121,32 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         await LaunchAsync();
     }
 
-    internal object[] DescribeBinaries(string? sourceRevision)
+    internal object[] DescribeBinaries(string? sourceRevision, bool includePublishing = false)
     {
         var binaries = new[] { "Elsa.Workbench", "Elsa.Workflows.Runtime.Core", "Elsa.Workflows.Runtime", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
             "Elsa.Activities.Bpmn.Core", "Elsa.Activities.Bpmn", "Elsa.Activities.Bpmn.Api", "Bpmn.Model", "Bpmn.Semantics" }
+            .Concat(includePublishing ? new[] { "Elsa.Workflows.Publishing.Core", "Elsa.Workflows.Publishing" } : [])
             .Select(name => Path.Combine(Path.GetDirectoryName(AssemblyPath)!, name + ".dll"))
             .Select(path => new { file = Path.GetFileName(path), productVersion = FileVersionInfo.GetVersionInfo(path).ProductVersion,
                 sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))) }).ToArray();
         if (sourceRevision is not null && binaries.Single(binary => binary.file == "Elsa.Workbench.dll").productVersion?.Contains(sourceRevision, StringComparison.Ordinal) != true)
             throw Failure("The owned Workbench product revision does not match its expected evidence source.");
         return binaries.Cast<object>().ToArray();
+    }
+
+    internal async Task<JsonNode> ReadEmbeddingAsync(string model, string parent, string? directCounterpart = null)
+    {
+        var info = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
+            { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        foreach (var argument in new[] { ReaderAssemblyPath, "--read-bpmn-embedding", RuntimeDatabase, model, parent }) info.ArgumentList.Add(argument);
+        if (directCounterpart is not null) info.ArgumentList.Add(directCounterpart);
+        using var reader = Process.Start(info) ?? throw Failure("The owned embedding reader did not start");
+        var output = reader.StandardOutput.ReadToEndAsync(); var error = reader.StandardError.ReadToEndAsync();
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        try { await reader.WaitForExitAsync(limit.Token); }
+        catch { if (!reader.HasExited) { reader.Kill(entireProcessTree: true); await reader.WaitForExitAsync(); } throw; }
+        if (reader.ExitCode != 0) throw Failure("The read-only embedding observer failed: " + await error);
+        return JsonNode.Parse(await output) ?? throw Failure("The read-only embedding observer returned no document");
     }
 
     internal async Task<object?> SnapshotAsync(string name, string? subdirectory = null, bool design = false)
@@ -162,6 +185,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
                 using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                 await owned.WaitForExitAsync(limit.Token);
             }
+            LastStoppedExitCode = owned.ExitCode;
         }
         finally { owned.Dispose(); }
     }

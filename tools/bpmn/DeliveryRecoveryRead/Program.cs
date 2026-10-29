@@ -19,7 +19,7 @@ using Microsoft.Extensions.DependencyInjection;
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 try
 {
-    if (args.Length == 4 && args[0] == "--read-bpmn-native")
+    if (args.Length == 4 && args[0] == "--read-bpmn-native" || args.Length is 4 or 5 && args[0] == "--read-bpmn-embedding")
     {
         var boundDatabase = Path.GetFullPath(args[1]);
         var boundConnectionString = new SqliteConnectionStringBuilder
@@ -39,6 +39,63 @@ try
         var boundModel = await boundModels.FindAsync(args[2]) ?? throw new InvalidDataException("The actual model execution is absent.");
         var boundWorker = await boundScope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(args[3])
             ?? throw new InvalidDataException("The actual native worker is absent.");
+        if (args[0] == "--read-bpmn-embedding")
+        {
+            var embeddingActivities = new List<ActivityExecutionState>();
+            var embeddingBookmarks = new List<BookmarkState>();
+            string? cursor = null;
+            do
+            {
+                var page = await boundScope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>()
+                    .ListPageAsync(new(boundWorker.WorkflowExecutionId, continuationToken: cursor));
+                embeddingActivities.AddRange(page.Items); cursor = page.NextContinuationToken;
+            } while (cursor is not null);
+            do
+            {
+                var page = await boundScope.ServiceProvider.GetRequiredService<IBookmarkStateStore>()
+                    .ListPageAsync(new(boundWorker.WorkflowExecutionId, continuationToken: cursor));
+                embeddingBookmarks.AddRange(page.Items); cursor = page.NextContinuationToken;
+            } while (cursor is not null);
+            var inputIds = new List<string>(); var sourceIds = new List<string>();
+            await using (var indexConnection = new SqliteConnection(boundConnectionString))
+            {
+                await indexConnection.OpenAsync();
+                foreach (var selection in new[] { (Table: "elsa_runtime_model_input", Column: "InputId", Targets: new[] { boundModel.ExecutionId }),
+                             (Table: "elsa_runtime_post_commit_outbox", Column: "OutboxItemId", Targets: new[] { boundModel.ExecutionId, boundWorker.WorkflowExecutionId }) })
+                {
+                    await using var command = indexConnection.CreateCommand();
+                    var column = selection.Column == "InputId" ? "ExecutionId" : "WorkflowExecutionId";
+                    var projected = selection.Column == "InputId" ? "InputId" : "ContentJson";
+                    command.CommandText = $"SELECT {projected} FROM {selection.Table} WHERE {column} IN ({string.Join(',', selection.Targets.Select((_, index) => "$p" + index))})";
+                    for (var index = 0; index < selection.Targets.Length; index++)
+                        command.Parameters.AddWithValue("$p" + index, Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(selection.Targets[index])));
+                    await using var reader = await command.ExecuteReaderAsync();
+                    while (await reader.ReadAsync())
+                    {
+                        // Outbox index identities may be bounded projections. Read the retained full logical ID,
+                        // then require the normal checked provider to resolve the actual source below.
+                        using var sourceDocument = selection.Column == "InputId" ? null : JsonDocument.Parse(reader.GetString(0));
+                        var storedIdentity = sourceDocument is null ? reader.GetString(0) : sourceDocument.RootElement.GetProperty("outboxItemId").GetString()!;
+                        var identity = System.Text.Encoding.Unicode.GetString(Convert.FromBase64String(storedIdentity));
+                        (selection.Column == "InputId" ? inputIds : sourceIds).Add(identity);
+                    }
+                }
+            }
+            var embeddingInputs = new List<RuntimeModelInputReceipt>();
+            foreach (var identity in inputIds.Order(StringComparer.Ordinal))
+                embeddingInputs.Add(await boundModels.FindInputAsync(boundModel.ExecutionId, identity) ?? throw new InvalidDataException("A physical model receipt disappeared."));
+            var embeddingSources = new List<RuntimePostCommitOutboxItem>();
+            var lookup = boundScope.ServiceProvider.GetRequiredService<IPostCommitOutboxLookupStore>();
+            foreach (var identity in sourceIds.Order(StringComparer.Ordinal))
+            {
+                var embeddingSource = await lookup.FindDurableAsync(identity) ?? throw new InvalidDataException("A physical delivery source disappeared.");
+                if (embeddingSource.Intent.Kind.StartsWith("Elsa.Bpmn.", StringComparison.Ordinal)) embeddingSources.Add(embeddingSource);
+            }
+            var directCounterpart = args.Length == 5 ? await boundModels.FindAsync(args[4]) ?? throw new InvalidDataException("The actual direct counterpart is absent.") : null;
+            Console.WriteLine(JsonSerializer.Serialize(new { ReadOnly = true, Model = boundModel, DirectCounterpart = directCounterpart, NativeParent = boundWorker,
+                Activities = embeddingActivities, Bookmarks = embeddingBookmarks, Inputs = embeddingInputs, Sources = embeddingSources }, json));
+            return 0;
+        }
         var boundOrigin = boundWorker.ModelWorkOrigin ?? throw new InvalidDataException("The native worker has no actual model origin.");
         if (!boundOrigin.MatchesModel(boundModel)) throw new InvalidDataException("The actual model and worker pins differ.");
         var boundOutbox = boundScope.ServiceProvider.GetRequiredService<IPostCommitOutboxLookupStore>();

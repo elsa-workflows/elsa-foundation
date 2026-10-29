@@ -5,6 +5,8 @@ using Bpmn.Model.State;
 using Bpmn.Semantics;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Exceptions;
+using RunBpmnCompletion = Elsa.Activities.Bpmn.Models.RunBpmnCompletion;
+using RunBpmnState = Elsa.Activities.Bpmn.Models.RunBpmnState;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -15,13 +17,14 @@ namespace Elsa.Activities.Bpmn.Internal;
 /// <summary>The first direct profile uses library semantics and model-owned human work, without native activities.</summary>
 internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter committer,
     TimeProvider clock, BpmnModelHostingOptions options, IRuntimeModelExecutionReader? reader = null,
-    BpmnNativeWorkBoundary? nativeWork = null) : IRuntimeExecutionProtocolDriver
+    BpmnNativeWorkBoundary? nativeWork = null, BpmnEmbeddingBoundary? embedding = null) : IRuntimeExecutionProtocolDriver
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
     private static readonly JsonSerializerOptions Strict = new(JsonSerializerDefaults.Web) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
     private IRuntimeModelExecutionReader Reader => reader ?? throw new RuntimeSchedulerWorkUnavailableException(
         "bpmn.state-unavailable", "The selected host has no model state reader.");
     private BpmnNativeWorkBoundary NativeWork => nativeWork ?? throw new NotSupportedException("The native BPMN work binding is not installed.");
+    private BpmnEmbeddingBoundary Embedding => embedding ?? throw new NotSupportedException("The native RunBpmn binding is not installed.");
 
     public ValueTask ValidateMaterialAsync(RuntimeModelMaterial material, CancellationToken cancellationToken = default)
     {
@@ -43,6 +46,11 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         cancellationToken.ThrowIfCancellationRequested();
         switch (context.Command.InputKind)
         {
+            case "start-embedded":
+            case "cancel-embedded":
+            case "native-parent-settled":
+                await Embedding.ValidateInputAsync(context, cancellationToken);
+                break;
             case "start":
                 var start = context.Command.Payload.Deserialize<Start>(Strict) ?? throw new BpmnModelValidationException("BPMN start input is missing.");
                 if (start.Inputs is { Count: > 0 }) throw new BpmnModelValidationException("This direct profile has no declared workflow inputs.");
@@ -78,8 +86,12 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         await ValidateShapeAndReplayAsync(context, cancellationToken);
         var graph = Graph(context.Material.Model!);
         var current = context.State;
+        var isEmbeddedInput = command.InputKind is "start-embedded" or "cancel-embedded" or "native-parent-settled";
+        var embedded = isEmbeddedInput ? await Embedding.ValidateInputAsync(context, cancellationToken) : ((BpmnEmbeddedInvocation Invocation, StimulusResumeRecipient? Wait)?)null;
         var document = current is null ? new Document(context.Material.Model!.Profile == BpmnModelProtocol.NativeWorkProfile ? 2 : 1,
             new BpmnExecutionState(), []) : Read(current);
+        if (current is null && embedded is { } parent)
+            document = document with { FormatVersion = 3, NativeParent = new(BpmnEmbeddingJson.Write(parent.Invocation)) };
         if (current is null && command.InputKind == "start")
             document = document with { SourceReferenceId = command.Payload.Deserialize<Start>(Strict)!.SourceReferenceId };
         BpmnEvaluation? evaluation = null;
@@ -87,9 +99,19 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         CompletionInput? completion = null;
         BpmnNativeWorkResult? nativeResult = null;
         var cancelled = false;
-        if (command.InputKind == "start")
+        if (command.InputKind == "native-parent-settled")
+        {
+            if (current?.Lifecycle != RuntimeModelLifecycle.TerminalPendingSettlement) rejection = "parent-already-settled";
+        }
+        else if (command.InputKind == "cancel-embedded")
+        {
+            if (current?.TerminalResult is not null) rejection = "execution-terminal";
+            else { cancelled = true; document = document with { Work = [] }; }
+        }
+        else if (command.InputKind is "start" or "start-embedded")
         {
             if (current is not null) rejection = "already-started";
+            else if (embedded is { Wait: null }) cancelled = true;
             else evaluation = Evaluate(() => BpmnEvaluationComponent.Interpreter.Start(
                 new(graph, null, BpmnHostSnapshot.Root(executionId), null)));
         }
@@ -158,6 +180,8 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                 terminal = JsonSerializer.SerializeToElement(new { status = "Faulted", fault.Code, fault.Message, fault.ErrorCode }, Web);
             }
         }
+        if (terminal is not null && document.NativeParent is not null && rejection is null)
+            lifecycle = command.InputKind == "native-parent-settled" ? RuntimeModelLifecycle.TerminalSettled : RuntimeModelLifecycle.TerminalPendingSettlement;
         var now = clock.GetUtcNow();
         if (current is not null && now < current.UpdatedAt) now = current.UpdatedAt;
         var revision = rejection is null ? checked((current?.Revision ?? 0) + 1) : current!.Revision;
@@ -165,16 +189,24 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             context.Material.Model!.Protocol, context.Material.Identity, context.Material.IncarnationId, revision, lifecycle,
             command.Authority, current?.CreatedAt ?? now, now, JsonSerializer.SerializeToElement(document, Web), terminal);
         var receipt = new RuntimeModelInputReceipt(context.Scope, executionId, command.InputId, command.InputKind,
-            fingerprint, revision, now, completion?.InvocationId, completion?.AttemptId,
+            fingerprint, revision, now, completion?.InvocationId ?? embedded?.Invocation.NativeInvocationId,
+            completion?.AttemptId ?? embedded?.Invocation.NativeAttemptId,
             JsonSerializer.SerializeToElement(new { status = rejection is null ? "Accepted" : "Rejected", code = rejection,
                 revision, lifecycle = lifecycle.ToString() }, Web));
         var starts = rejection is null ? document.Work.Where(work => work.NativeWork is not null &&
             !(current is null ? [] : Read(current).Work).Any(old => old.InvocationId == work.InvocationId))
             .Select(work => new RuntimePostCommitIntent(work.NativeWork!.SourceIntentId, executionId, BpmnNativeWorkBoundary.StartKind,
                 now, null, work.NativeWork.SourceIntentId, JsonSerializer.SerializeToElement(work.NativeWork, Web))).ToArray() : [];
+        var intents = starts.ToList();
+        if (rejection is null && current?.TerminalResult is null && terminal is not null && document.NativeParent is { } nativeParent)
+        {
+            var intent = "bpmn-native-parent:" + BpmnModelIdentity.Create(executionId);
+            intents.Add(new(intent, executionId, BpmnEmbeddingBoundary.ResultKind, now, null, intent,
+                JsonSerializer.SerializeToElement(new RunBpmnCompletion(1, nativeParent.Invocation, terminal.Value))));
+        }
         var commit = new RuntimeCheckpointCommit(commitId, new(commitId, "ModelDecision", executionId, now, [], new Dictionary<string, string>()),
-            new(null, null, [], [], [], [], []), starts, new Dictionary<string, string>())
-        { ModelState = new(current?.Revision, state, receipt) };
+            new(null, null, [], [], [], [], []), intents, new Dictionary<string, string>())
+        { ModelState = new(current?.Revision, state, receipt), ExpectedModelParentWait = current is null && !cancelled ? embedded?.Wait : null };
         var accepted = await committer.CommitAsync(commit, cancellationToken);
         if (!accepted.Succeeded) throw new BpmnModelValidationException($"BPMN execution '{executionId}' did not commit input '{command.InputId}': {accepted.FailureCode}.");
     }
@@ -210,8 +242,16 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
     internal static Document Read(RuntimeModelExecutionState state)
     {
         var result = state.Payload.Deserialize<Document>(Web) ?? throw new BpmnModelValidationException("BPMN model state is missing.");
+        if (result.NativeParent is { } parent)
+        {
+            var invocation = BpmnEmbeddingBoundary.Read(new RunBpmnState(1, parent.Invocation));
+            if (invocation.ExecutionId != state.ExecutionId || invocation.Scope != state.Scope || invocation.RegistrationId is null ||
+                invocation.NativeAttemptId is null || invocation.Model.MaterialIncarnationId != state.MaterialIncarnationId ||
+                !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(invocation.Model.Executable, state.Executable)) throw BpmnEmbeddingJson.Invalid();
+        }
         var cancelled = state.TerminalResult is { } terminal && terminal.TryGetProperty("status", out var status) && status.GetString() == "Cancelled";
-        if (result.FormatVersion is not (1 or 2) || (cancelled ? result.Work.Count != 0 : result.Work.Count != result.State.ActiveWork.Count) ||
+        if (result.FormatVersion is not (1 or 2 or 3) || (result.FormatVersion == 3) != (result.NativeParent is not null) ||
+            (cancelled ? result.Work.Count != 0 : result.Work.Count != result.State.ActiveWork.Count) ||
             result.Work.Select(item => item.InvocationId).Distinct(StringComparer.Ordinal).Count() != result.Work.Count ||
             result.Work.Select(item => item.TokenId).Distinct(StringComparer.Ordinal).Count() != result.Work.Count ||
             result.Work.Any(item => !result.State.ActiveWork.Any(active => active.TokenId == item.TokenId &&
@@ -273,7 +313,8 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         ?? throw new BpmnModelValidationException("Native work completion is missing.");
 
     internal sealed record Document(int FormatVersion, BpmnExecutionState State, IReadOnlyList<Work> Work, string? SourceReferenceId = null,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<BpmnNativeWorkResult>? NativeResults = null);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<BpmnNativeWorkResult>? NativeResults = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BpmnEmbeddedParent? NativeParent = null);
     internal sealed record Work(string ElementId, string BindingId, string TokenId, string? IterationId, string InvocationId, string AttemptId,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RuntimeModelNativeWorkOrigin? NativeWork = null);
     private sealed record Start(IReadOnlyDictionary<string, JsonElement>? Inputs = null, string? SourceReferenceId = null);

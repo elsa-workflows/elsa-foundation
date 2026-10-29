@@ -9376,6 +9376,10 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocolRegistration.InputKin
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeExecutionProtocolDriver.ValidateInputAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.CanCommitModelAdmission(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeModelExecutionReader! reader, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! executions, Elsa.Workflows.Runtime.Core.Contracts.IActivityExecutionStateStore! activities, Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitOutboxStore! outbox) -> bool
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.SupportsModelAdmission.get -> bool
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.SupportsModelParentAdmission.get -> bool
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.EnsureModelParentAdmissionShape() -> void
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.ExpectedModelParentWait.get -> Elsa.Workflows.Runtime.Core.Models.StimulusResumeRecipient?
+Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.ExpectedModelParentWait.init -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.EnsureModelAdmissionShape() -> void
 Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.ExpectedModelExecution.get -> Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionState?
 Elsa.Workflows.Runtime.Core.Models.RuntimeCheckpointCommit.ExpectedModelExecution.init -> void

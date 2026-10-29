@@ -2,6 +2,8 @@ using CShells.Features;
 using CShells.Lifecycle;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Internal;
+using Elsa.Activities.Bpmn.Contracts;
+using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -28,6 +30,14 @@ public class ActivitiesBpmnHostingFeature : IShellFeature
         services.TryAddScoped<BpmnDirectExecutionDriver>();
         services.TryAddScoped<BpmnNativeWorkBoundary>();
         services.TryAddScoped<BpmnNativeWorkDelivery>();
+        services.TryAddScoped<BpmnEmbeddingBoundary>();
+        services.TryAddScoped<BpmnEmbeddingDelivery>();
+        services.TryAddScoped<IBpmnModelActivityRuntime, BpmnModelActivityRuntime>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IExecutableCompilationSource, BpmnEmbeddingPinSource>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, BpmnEmbeddingCheckpointEnricher>());
+        foreach (var kind in new[] { BpmnEmbeddingBoundary.StartKind, BpmnEmbeddingBoundary.CancelKind, BpmnEmbeddingBoundary.ResultKind })
+            services.AddSingleton(new RuntimePostCommitIntentHandlerContribution(kind, typeof(BpmnEmbeddingDelivery),
+                RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)), requiresDurableSource: true));
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, BpmnNativeWorkCheckpointEnricher>());
         foreach (var kind in new[] { BpmnNativeWorkBoundary.StartKind, BpmnNativeWorkBoundary.ResultKind })
             services.AddSingleton(new RuntimePostCommitIntentHandlerContribution(kind, typeof(BpmnNativeWorkDelivery),
@@ -43,7 +53,7 @@ public class ActivitiesBpmnHostingFeature : IShellFeature
         public BpmnProtocolContributor() { }
         public IEnumerable<RuntimeExecutionProtocolRegistration> GetProtocols() =>
             [new(new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), typeof(BpmnDirectExecutionDriver))
-                { InputKinds = ["start", "complete-human", "native-result"] }];
+                { InputKinds = ["start", "complete-human", "native-result", "start-embedded", "cancel-embedded", "native-parent-settled"] }];
     }
 }
 
@@ -53,9 +63,12 @@ internal sealed class BpmnModelHostingRegistrationInitializer(IServiceCollection
 {
     public Task InitializeAsync(CancellationToken cancellationToken)
     {
-        var services = registrations.Where(item => item.ServiceType == typeof(IBpmnModelRuntime)).ToArray();
-        if (services is not [{ Lifetime: ServiceLifetime.Scoped }])
-            throw new InvalidOperationException("BPMN model hosting requires exactly one scoped IBpmnModelRuntime.");
+        foreach (var contract in new[] { typeof(IBpmnModelRuntime), typeof(IBpmnModelActivityRuntime) })
+        {
+            var services = registrations.Where(item => item.ServiceType == contract).ToArray();
+            if (services is not [{ Lifetime: ServiceLifetime.Scoped }])
+                throw new InvalidOperationException($"BPMN model hosting requires exactly one scoped {contract.Name}.");
+        }
         return Task.CompletedTask;
     }
 }

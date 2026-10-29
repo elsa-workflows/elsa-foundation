@@ -56,6 +56,7 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     private readonly IRuntimeCheckpointCommitStore _inner;
 
     public bool SupportsExactBookmarkResume => _inner.SupportsExactBookmarkResume;
+    bool IRuntimeCheckpointCommitStore.SupportsModelParentAdmission => _inner.SupportsModelParentAdmission;
     bool IRuntimeCheckpointCommitStore.SupportsModelCheckpoint => _inner.SupportsModelCheckpoint;
     bool IRuntimeCheckpointCommitStore.CanCommitModelState(IRuntimeModelExecutionReader reader) => _inner.CanCommitModelState(reader);
     bool IRuntimeCheckpointCommitStore.SupportsModelAdmission => _inner.SupportsModelAdmission;
@@ -69,6 +70,13 @@ public sealed class CoalescingRuntimeCheckpointCommitStore : IRuntimeCheckpointC
     {
         ArgumentNullException.ThrowIfNull(commit);
         ArgumentNullException.ThrowIfNull(decision);
+
+        if (commit.ExpectedModelParentWait is not null)
+        {
+            if (!_inner.SupportsModelParentAdmission)
+                throw new NotSupportedException("The physical writer cannot compare a model child's live native parent wait.");
+            commit.EnsureModelParentAdmissionShape();
+        }
 
         if (commit.ExpectedModelExecution is not null)
         {

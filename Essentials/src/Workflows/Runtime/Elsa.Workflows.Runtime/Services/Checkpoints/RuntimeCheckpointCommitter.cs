@@ -106,10 +106,12 @@ public sealed class RuntimeCheckpointCommitter
             throw new NotSupportedException("The selected checkpoint store cannot atomically persist model state and accepted inputs.");
         if (commit.ExpectedModelExecution is not null && !_checkpointCommitStore.SupportsModelAdmission)
             throw new NotSupportedException("The selected checkpoint store cannot atomically validate model-owned native worker admission.");
+        if (commit.ExpectedModelParentWait is not null && !_checkpointCommitStore.SupportsModelParentAdmission)
+            throw new NotSupportedException("The selected checkpoint store cannot atomically validate a model child's native parent wait.");
         if (commit.ExpectedBookmarkResume is not null && !_checkpointCommitStore.SupportsExactBookmarkResume)
             throw new NotSupportedException("The selected checkpoint store cannot enforce exact bookmark resume admission.");
         var decision = await _persistencePolicy.DecideAsync(commit.Checkpoint, cancellationToken);
-        if (commit.ModelState is not null || commit.ExpectedModelExecution is not null)
+        if (commit.ModelState is not null || commit.ExpectedModelExecution is not null || commit.ExpectedModelParentWait is not null)
             decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate,
                 "Model decisions and native worker admission require an atomic physical checkpoint.");
         else if (commit.ExpectedBookmarkResume is not null)

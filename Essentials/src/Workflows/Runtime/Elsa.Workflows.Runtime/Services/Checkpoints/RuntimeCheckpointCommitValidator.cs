@@ -47,6 +47,7 @@ public static class RuntimeCheckpointCommitValidator
         ArgumentException.ThrowIfNullOrWhiteSpace(commit.WorkflowExecutionId);
         RequireModelRule(commit.EnsureModelStateShape);
         RequireModelRule(commit.EnsureModelAdmissionShape);
+        RequireModelRule(commit.EnsureModelParentAdmissionShape);
 
         var changes = commit.StateChanges;
 

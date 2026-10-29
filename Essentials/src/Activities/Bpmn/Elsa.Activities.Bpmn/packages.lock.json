@@ -77,6 +77,13 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.mediator.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Pipelines.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.10, )"
+        }
+      },
       "elsa.pipelines.core": {
         "type": "Project",
         "dependencies": {
@@ -115,6 +122,18 @@
           "Elsa.Events.Core": "[4.0.0-dev, )",
           "Elsa.Expressions.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.10, )"
+        }
+      },
+      "elsa.workflows.publishing.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Mediator.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.10, )"
         }
       },

@@ -23,13 +23,13 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
     internal const string StartKind = "Elsa.Bpmn.StartNativeWork.v1";
     internal const string ResultKind = "Elsa.Bpmn.NativeWorkResult.v1";
     internal static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
-    private IWorkflowExecutionStateStore PhysicalWorkflows => workflows.GetType() == typeof(CoalescingWorkflowExecutionStateStore)
+    internal IWorkflowExecutionStateStore PhysicalWorkflows => workflows.GetType() == typeof(CoalescingWorkflowExecutionStateStore)
         ? physicalWorkflows?.Value ?? throw new NotSupportedException("The physical native workflow reader is unavailable.") : workflows;
-    private IActivityExecutionStateStore PhysicalActivities => activities.GetType() == typeof(CoalescingActivityExecutionStateStore)
+    internal IActivityExecutionStateStore PhysicalActivities => activities.GetType() == typeof(CoalescingActivityExecutionStateStore)
         ? physicalActivities?.Value ?? throw new NotSupportedException("The physical native activity reader is unavailable.") : activities;
     private IRuntimePostCommitOutboxStore PhysicalOutbox => outboxStore.GetType() == typeof(CoalescingRuntimePostCommitOutboxStore)
         ? physicalOutbox?.Value ?? throw new NotSupportedException("The physical native outbox is unavailable.") : outboxStore;
-    private IPostCommitOutboxLookupStore PhysicalLookup => physicalLookup?.Value ?? outbox;
+    internal IPostCommitOutboxLookupStore PhysicalLookup => physicalLookup?.Value ?? outbox;
 
     internal void EnsureQualified()
     {

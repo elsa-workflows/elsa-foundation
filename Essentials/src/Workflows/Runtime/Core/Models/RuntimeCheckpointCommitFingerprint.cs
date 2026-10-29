@@ -280,6 +280,8 @@ public static class RuntimeCheckpointCommitFingerprint
         // ExpectedModelExecution, like ExpectedFence, is an attempt's concurrency condition. A retry can
         // validate a newer snapshot with the same live work. Its immutable semantic address is retained
         // in WorkflowExecutionState.ModelWorkOrigin, which already participates in the decision identity.
+        // ExpectedModelParentWait is likewise only a refreshed physical condition. The model-owned state
+        // retains its immutable native invocation/result address and participates in this fingerprint.
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
             WriteCanonical(element, writer);
