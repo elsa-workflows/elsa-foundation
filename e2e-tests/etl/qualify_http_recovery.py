@@ -162,8 +162,10 @@ def main():
         def view():return {"native":api.view(execution),"run":api.request("/etl/runs/"+escaped),"partitions":api.request("/etl/runs/"+escaped+"/connector-partitions?limit=50")}
         def cut_ready(value):
             rows=value["partitions"]["items"]
-            return len(rows)==2 and any(item["http"]["fetch"] and item["http"]["fetch"]["lastStatusCode"]==429 and item["http"]["fetch"]["phase"].casefold()=="retryscheduled" for item in rows) and any(item["http"]["exhausted"] and item["owedBatch"] is None for item in rows)
-        before=wait_for(view,cut_ready,"No real 429 wait with a completed sibling was observed.",30)
+            return len(rows)==2 and any(item["http"]["fetch"] and item["http"]["fetch"]["lastStatusCode"]==429 and item["http"]["fetch"]["phase"]=="waiting" for item in rows) and any(item["http"]["exhausted"] and item["owedBatch"] is None for item in rows)
+        try:before=wait_for(view,cut_ready,"No real 429 wait with a completed sibling was observed.",30)
+        except TimeoutError:
+            q.write_json(output/"failed-before.json",view());q.write_json(output/"failed-wire.json",wire());raise
         retry=next(item["http"]["fetch"] for item in before["partitions"]["items"] if item["http"]["fetch"] and item["http"]["fetch"]["lastStatusCode"]==429)
         if retry["attemptCount"]!=1 or datetime.fromisoformat(retry["notBefore"].replace("Z","+00:00"))<=datetime.now(timezone.utc):
             raise ValueError("The crash cut did not retain its original future retry deadline.")
