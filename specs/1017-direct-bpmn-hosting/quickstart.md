@@ -61,6 +61,8 @@ The runner's `resume-upgrade` phase opens Gate A's actual backups on the changed
 
 Use the authorized browser harness against the owned Studio pair: open the actual saved definition, inspect retained authored payload and diagram, edit/save/export/publish, run it and inspect the exact resulting execution. Compare frozen authoring fingerprint `41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92` and explicit XML/layout boundaries. Save and inspect screenshots where they substantiate the journey. Preserve user tabs and hosts. This is existing Studio compatibility, not #2907 direct-model Studio acceptance.
 
+The [actual existing Studio upgrade receipt](evidence/studio/README.md) qualifies both captured versions, saved layout, Published Runs and Test Runs at its named source. `tools/bpmn/run_owned_studio_upgrade.py` owns a fresh pair over either actual store; `tools/bpmn/verify_studio_upgrade.py` verifies the retained inputs, browser observations and twelve upgraded whole stores. Repeat against final affected source under T041.
+
 ## Delivery receipt
 
 One concise receipt maps FR-001–FR-022, SC-001–SC-006 and all #2898 criteria to committed assets/commands/results, explains provider/profile limits and lists remaining #2907/program obligations. Verify every recorded asset hash and relative link. Complete the independent full-PR loop within six rounds, green exact-head required checks and protected merge, then verify actual resulting main. Keep issue/PR/Project62 current and release only the completed specific claim.

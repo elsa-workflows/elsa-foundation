@@ -1,0 +1,148 @@
+- complementary:
+  - link "Elsa Studio Foundation":
+    - /url: /
+    - strong: Elsa Studio
+    - generic: Foundation
+  - button "Collapse navigation" [expanded]:
+  - searchbox "Search modules"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard
+      - generic: Home
+    - link "Workflows":
+      - /url: /workflows/definitions
+      - generic: Workflows
+    - link "Runs":
+      - /url: /workflows/instances
+      - generic: Runs
+  - navigation "More tools":
+    - button "More tools":
+      - generic: More tools
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings
+      - generic: Settings
+  - group "Environment and account":
+    - 'group "Configured backend endpoint: 127.0.0.1:64053"':
+      - strong: Backend API
+      - generic: 127.0.0.1:64053
+    - 'button "Account: Administrator"':
+      - generic: A
+      - generic: Administrator
+- banner:
+  - generic: Studio / Runs
+  - heading "Runs" [level=1]
+  - button "Weaver":
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation-studio
+  - link "Designer source":
+    - /url: https://github.com/elsa-workflows/elsa-foundation-designer
+  - radiogroup "Colour mode":
+    - radio "Light":
+    - radio "Dark" [checked]:
+    - radio "Dim":
+  - button "Select theme":
+- main:
+  - text: Workflow management
+  - heading "Run" [level=2]
+  - generic: Workflow Instance ID
+  - code: 14kN4ufaKjg
+  - button "Runs":
+    - text: Runs
+  - 'button "Open run incidents: No active incidents"':
+    - text: No active incidents
+  - button "Review workflow definition":
+    - text: Review workflow definition
+  - button "Refresh":
+    - text: Refresh
+  - button "Pause following" [pressed]
+  - status: Execution on this canvas
+  - button "Explain":
+    - text: Explain
+  - status
+  - region "Workflow run canvas":
+    - text: Pinned Runtime executable
+    - heading "BPMN execution model · reviewed host 4.0.0" [level=3]
+    - generic: Completed
+    - button "Root"
+    - navigation "Execution scope":
+      - button "All executions"
+    - application:
+      - 'button "Start. Node ID: start. Activity type: unknown. State: authoring. Not selected."':
+        - generic "Start event":
+          - generic: Start
+      - 'button "Upgraded route layout. Node ID: route. Activity type: unknown. State: authoring. Not selected."':
+        - generic "Exclusive gateway":
+          - generic: ×
+          - generic: Upgraded route layout
+      - 'button "Default timer. Node ID: wait. Activity type: unknown. Run state: Completed. Not selected."':
+        - generic "Intermediate catch event":
+          - strong: Default timer
+          - generic: Intermediate catch event
+      - 'button "Default complete. Node ID: end. Activity type: unknown. State: authoring. Not selected."':
+        - generic "End event":
+          - generic: Default complete
+      - 'button "Other complete. Node ID: other-end. Activity type: unknown. State: authoring. Not selected."':
+        - generic "End event":
+          - generic: Other complete
+      - img "Mini Map"
+      - generic "Control Panel":
+        - button "Zoom In":
+        - button "Zoom Out":
+        - button "Fit View" [active]:
+        - button "Toggle Interactivity":
+      - link "React Flow attribution":
+        - /url: https://reactflow.dev
+        - text: React Flow
+  - separator "Resize run details panel"
+  - complementary "Run details panel":
+    - tablist "Run details tabs":
+      - tab "Timeline":
+        - generic: Timeline
+      - tab "Activity":
+        - generic: Activity
+      - tab "Issues":
+        - generic: Issues
+      - tab "Details" [selected]:
+        - generic: Details
+    - button "Collapse run details panel":
+    - button "Maximize run details panel":
+    - term: Status
+    - definition:
+      - generic: Completed
+    - term: Run Kind
+    - definition: Published Run
+    - term: Artifact
+    - definition: artifact-ab58de69c318 4.0.0
+    - term: Definition
+    - definition:
+      - generic "BPMN execution model · reviewed host (14iBsLEuiJS · 14kN4OlNBX4)":
+        - strong: BPMN execution model · reviewed host
+        - generic: 14iBsLEuiJS · 14kN4OlNBX4
+    - term: Created
+    - definition: 10/29/2026, 10:15:03 AM
+    - term: Started
+    - definition: 10/29/2026, 10:15:03 AM
+    - term: Completed
+    - definition: 10/29/2026, 10:15:13 AM
+    - term: Correlation
+    - definition: None
+    - term: Checkpoint cadence
+    - definition:
+      - generic: Balanced
+      - generic: This run checkpoints at boundaries, so inspection shows boundary-level detail.
+    - term: Inspection detail
+    - definition:
+      - generic: Boundary-level
+    - note: Per-activity evidence inside a segment is folded to the commit boundary, so timeline values reflect the durable boundary.
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - generic "Bottom panel controls":
+    - button "Expand bottom panel":
+    - button "Maximize bottom panel":
+  - option "All sources" [selected]
+  - option "Elsa Studio · Sipkes-Mac-Mini:27071"
