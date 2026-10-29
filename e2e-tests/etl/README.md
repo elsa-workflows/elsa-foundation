@@ -1,5 +1,7 @@
 # Finite file ETL end-to-end journey
 
+For the execution-model program's source-bound **actual process-loss recovery** of the delivered native ETL path, see [the native HTTP reference](../../specs/1017-direct-bpmn-hosting/evidence/pipeline/native-http-reference/README.md). `qualify_http_recovery.py` uses the normal Workbench/ETL APIs and this directory's loopback fixture; `verify_http_recovery.py` compares its retained whole stores and observations. It covers Sequence/Flowchart success and a real root RunEtl BusinessError without claiming BPMN/model integration.
+
 `Test-FiniteFileEtl.ps1` exercises the finite CSV-to-JSONL path through an isolated, owned
 Workbench process. It uses the normal HTTP APIs to inspect host bindings, create/validate/publish
 an ETL definition, publish native workflow definitions, and execute the resulting artifacts. The
