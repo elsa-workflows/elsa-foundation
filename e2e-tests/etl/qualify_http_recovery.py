@@ -143,6 +143,9 @@ def main():
             "EtlRuntimeApi":{"CursorSigningKey":"owned-etl-recovery-runtime-cursor-signing-key"},"EtlWorkflowsDesign":{},"EtlWorkflowsRuntime":{}})
         if direct_bpmn:
             features.update({"ActivitiesBpmnHosting":{"AdmitNewExecutions":True},"ActivitiesBpmnHostingApi":{}})
+            # This first model profile qualifies the built-in single-node actor, as the hosting tests do.
+            for name in ("WorkflowsRuntimeDistributed", "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence", "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence"):
+                features.pop(name, None)
         q.write_json(root/"shells.json",shells)
         api=launch();definition="recovery-"+uuid.uuid4().hex[:12]
         bindings=api.request("/etl/v2/bindings?limit=100")
