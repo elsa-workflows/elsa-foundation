@@ -151,6 +151,21 @@ SpecKit artifact tree. Consequential new runtime observation contracts still req
 decision. Execution ownership, persistence policy, model semantics, capture policy and authorization are
 preserved. Releases, deployments and publisher activation are not included. The remaining decisions apply.
 
+**Owner amendment, 29 October 2026:** [Weaver across Studio #3428](../program-goals/weaver-across-studio.md)
+is authorized as an active program. After source analysis and the M0–M5 proposal, the owner instructed:
+"Approved. Additionally, create a Project with a Kanban board view to track WIP." The program establishes
+module-owned context, tools, guidance, review UI and supported effects across current Studio contexts,
+with an independent future-module extension requiring no changes to Weaver core, the Studio host or
+provider adapters. Sequencing: M0 baseline and activation, M1 candidate contract plus independent module
+witness before contract freeze, M2 shared lifecycle, M3 workflow and M4 current-module journeys, then
+M5 integrated qualification. Run beside the active programs, displace none, coordinate shared Studio
+paths with their owners and reactivate no parked backlog. Runtime agent composition remains under
+#2892; reuse the delivered Hosting #3340 and Unified Workspace #3392 seams. The native issue hierarchy
+and [Project #65](https://github.com/orgs/elsa-workflows/projects/65/views/1) track the approved roadmap,
+with one implementation leaf at a time. Establishment does not constitute product delivery; scoped
+issues retain normal triage, contract decisions and review gates. Releases, deployments, provider
+purchases and publisher activation are not included. The remaining decisions apply.
+
 ### D1 — Risk-based testing
 
 - Test observable behaviour at the cheapest level that proves it; unit-test logic that carries real risk.
