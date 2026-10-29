@@ -325,6 +325,7 @@ def embedded_etl_parent(read,root,process,bridge,parent_cancel):
     before=phases['before'];after=phases['finished'];model=before['model'];final=after['model'];native=before['nativeParent']
     parent=process['embeddedParent'];parent_id=process['nativeParentExecutionId'];parent_pin={k:process['nativeParentPublication'][k] for k in ('artifactId','artifactHash','artifactVersion','definitionId','definitionVersionId')}
     faulted=process['businessError'] and process.get('businessErrorBoundary')!='matching'
+    absorbed=faulted and parent=='CompensationScope'
     def invocation(value):
         if isinstance(value,str):
             if not value.startswith('u16:'):raise ValueError('The embedded native invocation lost its exact opaque encoding.')
@@ -346,7 +347,7 @@ def embedded_etl_parent(read,root,process,bridge,parent_cancel):
     if (activity['invocationId']!=origin['nativeInvocationId'] or activity['status']!=3 or activity['privateState']['producedByAttemptId']!=origin['nativeAttemptId'] or
             activity['privateState']['value']['inlineValue']['Invocation']!=encoded or bookmark['bookmarkId']!=origin['registrationId'] or bookmark['stimulusHash']!=model['executionId'] or
             current['invocationId']!=activity['invocationId'] or current['status']!=(6 if parent_cancel else 5 if faulted else 4) or after['bookmarks'] or after['queuedModelInputs'] or
-            after['nativeParent']['status']!=(5 if parent_cancel else 4 if faulted else 3) or model['authority']!=native['authority'] or final['authority']!=after['nativeParent']['authority']):
+            after['nativeParent']['status']!=(5 if parent_cancel else 4 if faulted and not absorbed else 3) or model['authority']!=native['authority'] or final['authority']!=after['nativeParent']['authority']):
         raise ValueError('The real RunBpmn wait/result did not retain its actual native registration and parent terminal truth.')
     if not parent_cancel and ((not faulted and current['completion']['result']['inlineValue']!={'executionId':model['executionId'],'result':final['terminalResult']}) or
             (faulted and current['completion'] is not None) or not any(r['status']==1 and r['registrationId']==origin['registrationId'] and r['providerId']=='elsa.bpmn.native-parent.v1' and r['payloadType']['alias']=='Elsa.Activities.Bpmn.Models.RunBpmnCompletion' for r in current['triggerDeliveries'])):
@@ -355,12 +356,18 @@ def embedded_etl_parent(read,root,process,bridge,parent_cancel):
     if (parent_cancel or faulted) and successors or not parent_cancel and not faulted and parent!='Root' and (len(successors)!=1 or successors[0]['status']!=4):raise ValueError('The actual native parent successor did not preserve completion/fault/cancellation behavior.')
     outer=read('finished.json')['embedding'];api_run,=[a for a in outer['activities'] if a['activityType']=='Elsa.Activities.Bpmn.Activities.RunBpmn']
     incidents=outer['incidents']
-    if (outer['instance']['status']!=('Cancelled' if parent_cancel else 'Faulted' if faulted else 'Completed') or
+    faulted_ids={a['invocationId'] for a in after['activities'] if a['status']==5}
+    if (outer['instance']['status']!=('Cancelled' if parent_cancel else 'Faulted' if faulted and not absorbed else 'Completed') or
             api_run['status']!=('Cancelled' if parent_cancel else 'Faulted' if faulted else 'Completed') or
-            (faulted and (len(incidents)!=1 or incidents[0]['workflowExecutionId']!=parent_id or incidents[0]['activityExecutionId']!=current['invocationId'] or
-                incidents[0]['status']!='Blocking' or incidents[0]['failureType']!='ActivityReturnedFault' or
-                incidents[0]['resolutionOutcome']['actionKind']!='FaultWorkflow')) or (not faulted and incidents)):
+            (faulted and (len(incidents)!=len(faulted_ids) or {i['activityExecutionId'] for i in incidents}!=faulted_ids or
+                any(i['workflowExecutionId']!=parent_id or i['status']!=('Resolved' if absorbed else 'Blocking') or
+                    i['failureType']!='ActivityReturnedFault' or i['resolutionOutcome']['actionKind']!=('AbsorbFault' if absorbed else 'FaultWorkflow') for i in incidents))) or (not faulted and incidents)):
         raise ValueError('The actual native parent lost its default fault incident or terminal API truth.')
+    if absorbed:
+        composite,=[a for a in after['activities'] if a['execution']['activityType']=='Elsa.Activities.Compensation.Activities.CompensationScope']
+        if (composite['status']!=4 or composite['completion']['outcomeKey']!='Compensated' or
+                incidents[0]['isBlocking'] or incidents[0]['resolvedAt'] is None or incidents[0]['metadata'].get('runtime.faultAbsorbedBy')!=composite['invocationId']):
+            raise ValueError('The actual compensation scope lost its default Compensated outcome or absorbed-fault proof.')
     inputs=after['inputs'];settlement,=[r for r in inputs if r['inputKind']=='native-parent-settled'];start,=[r for r in inputs if r['inputKind']=='start-embedded']
     if (settlement['acceptedRevision']!=final['revision'] or settlement['result']['status']!='Accepted' or settlement['invocationId']!=origin['nativeInvocationId'] or
             settlement['attemptId']!=origin['nativeAttemptId'] or start['acceptedRevision']!=1 or len(inputs)!=(4 if parent_cancel else 3)):
@@ -382,7 +389,7 @@ def embedded_etl_parent(read,root,process,bridge,parent_cancel):
             db=Path(temporary)/'s.sqlite';db.write_bytes(raw)
             with closing(sqlite3.connect(db.as_uri()+'?mode=ro&immutable=1',uri=True)) as c:
                 observed=phases[phase];row=c.execute('SELECT Status,ContentJson FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId=?',(key(parent_id),)).fetchone()
-                if row is None or row[0]!=(1 if phase=='before' else 5 if parent_cancel else 4 if faulted else 3) or json.loads(row[1])['pinnedExecutable']!=encoded_tree(parent_pin):raise ValueError('The physical RunBpmn parent lost its exact pin or terminal state.')
+                if row is None or row[0]!=(1 if phase=='before' else 5 if parent_cancel else 4 if faulted and not absorbed else 3) or json.loads(row[1])['pinnedExecutable']!=encoded_tree(parent_pin):raise ValueError('The physical RunBpmn parent lost its exact pin or terminal state.')
                 for activity in observed['activities']:
                     row=c.execute('SELECT Status,ContentJson FROM elsa_runtime_activity_execution_state WHERE WorkflowExecutionId=? AND ActivityExecutionId=?',(key(parent_id),key(activity['invocationId']))).fetchone()
                     if row is None or row[0]!=('Scheduled','Running','Waiting','Suspended','Completed','Faulted','Cancelled','Recovered','Superseded')[activity['status']]:raise ValueError('The physical native parent differs from its actual activity status.')
@@ -418,12 +425,17 @@ def embedded_etl_parent(read,root,process,bridge,parent_cancel):
                 if phase=='finished':
                     stored=[json.loads(r[0]) for r in c.execute('SELECT ContentJson FROM elsa_runtime_incident_state')]
                     if faulted:
-                        if len(stored)!=1:raise ValueError('The physical parent lost its single default fault incident.')
-                        incident=stored[0]
-                        if (incident['incidentId']!=key(incidents[0]['incidentId']) or incident['workflowExecutionId']!=key(parent_id) or
-                                incident['activityExecutionId']!=key(current['invocationId']) or incident['status']!='Blocking' or
-                                incident['failureType']!=key('ActivityReturnedFault') or incident['resolutionOutcome']['actionKind']!=key('FaultWorkflow')):
-                            raise ValueError('The physical parent lost its exact default fault incident.')
+                        if len(stored)!=len(incidents):raise ValueError('The physical parent lost its default fault incident inventory.')
+                        for observed_incident in incidents:
+                            incident,=[i for i in stored if i['incidentId']==key(observed_incident['incidentId'])]
+                            if (incident['workflowExecutionId']!=key(parent_id) or incident['activityExecutionId']!=key(observed_incident['activityExecutionId']) or
+                                    incident['status']!=observed_incident['status'] or incident['resolvedAt']!=observed_incident['resolvedAt'] or
+                                    incident['failureType']!=key('ActivityReturnedFault') or incident['resolutionOutcome']['actionKind']!=key(observed_incident['resolutionOutcome']['actionKind'])):
+                                raise ValueError('The physical parent lost its exact default fault incident.')
+                        if absorbed:
+                            root,=[a for a in observed['activities'] if a['execution']['activityType']=='Elsa.Activities.Compensation.Activities.CompensationScope']
+                            row,=c.execute('SELECT ContentJson FROM elsa_runtime_activity_execution_state WHERE ActivityExecutionId=?',(key(root['invocationId']),)).fetchall()
+                            if json.loads(row[0])['completion']['outcomeKey']!=key('Compensated'):raise ValueError('The physical compensation scope lost its default Compensated outcome.')
                     elif stored:raise ValueError('The physical completed/cancelled parent acquired an incident.')
 
 
@@ -672,11 +684,12 @@ def verify(path):
             result=verify(file)
             if (result['sourceRevision']!=manifest['sourceRevision'] or result['businessErrorBoundary']!=case['boundary'] or
                     result.get('embeddedParent','Direct')!=case['parent']):raise ValueError('A business-error case changed its source, native parent or actual boundary code.')
-            process=json.loads((file.parent/case['name']/'process.json').read_text())
+            capture=json.loads(file.read_text())['case']
+            process=json.loads((file.parent/capture/'process.json').read_text())
             if products is None:products=process['products']
             elif process['products']!=products:raise ValueError('The business-error journeys differ in captured first-party host products.')
             for phase in ('before','finished'):
-                model=json.loads((file.parent/case['name']/(phase+'-checked-model.json')).read_text())['model']
+                model=json.loads((file.parent/capture/(phase+'-checked-model.json')).read_text())['model']
                 state=deepcopy(model['payload']['state'])
                 for token in state['tokens']:
                     if token.get('producingWorkHandle')==model['executionId']:token['producingWorkHandle']='<model-execution>'
@@ -787,6 +800,7 @@ def verify(path):
         def read(name):return json.loads(q.evidence_file(root,case+"/"+name).read_text())
         process=read("process.json");products=process["products"]
         if process.get('businessErrorBoundary')!=boundary:raise ValueError('The actual business-error boundary differs from its declared case.')
+        if business and process.get('resumptionSweepIntervalSeconds')!=.2:raise ValueError('The actual business-error recovery lost its declared production resumption configuration.')
         if (process["sourceRevision"]!=source or process["parent"]!=parent or process["businessError"] is not business_error or process["predecessorExitCode"]!=-9 or
                 [item["role"] for item in process["processes"]]!=(["http-fixture","workbench","workbench","consumption-sdk","workbench","workbench"] if post_ack or parent_pending or success_parent is not None else ["http-fixture"]+["workbench"]*(4 if pending_crash else 3)) or len({item["processId"] for item in process["processes"]})!=(6 if post_ack or parent_pending or success_parent is not None else 5 if pending_crash else 4)):raise ValueError("The actual ETL reference lacks its distinct process-loss/restart provenance.")
         if products["sourceCommit"]!=source or products["metadataOnly"] is not True or len(products["actualProductVersions"])!=(12 if direct else 6) or any(not item["productVersion"].endswith("+"+source) for item in products["actualProductVersions"]):raise ValueError("The actual Workbench and ETL products differ from their declared source.")

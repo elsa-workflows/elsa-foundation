@@ -188,6 +188,7 @@ def main():
             features.update({"ActivitiesBpmnHosting":{"AdmitNewExecutions":True},"ActivitiesBpmnHostingApi":{}})
             if args.model_cancel_before_admission:features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":300}
             elif args.pending_cancellation_crash or args.pending_parent_result_crash or args.successful_parent_result_crash:features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":.2}
+            elif args.business_error_boundary:features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":.2}
             # This first model profile qualifies the built-in single-node actor, as the hosting tests do.
             for name in ("WorkflowsRuntimeDistributed", "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence", "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence"):
                 features.pop(name, None)
@@ -568,7 +569,9 @@ def main():
         outcome="cancelled" if cancelling else "businessError" if args.business_error else "succeeded"
         native_terminal="Cancelled" if cancelling else "Completed"
         model_terminal="Cancelled" if cancelling else "Faulted" if args.business_error and not caught_business_error else "Completed"
-        parent_terminal=model_terminal
+        faulted=model_terminal=='Faulted'
+        absorbed=faulted and args.embedded_parent=='CompensationScope'
+        parent_terminal='Completed' if absorbed else model_terminal
         try:
             finished=wait_for(view,lambda value:value["run"]["status"]==outcome and value["native"]["instance"]["status"]==native_terminal and
                 (not direct_bpmn or value["model"]["status"]=="TerminalSettled" and value["model"]["result"]["status"]==model_terminal) and
@@ -598,12 +601,14 @@ def main():
             q.write_json(output/'finished-checked-embedding.json',checked_outer)
             outer=finished['embedding'];run_bpmn,=[a for a in outer['activities'] if a['activityType']=='Elsa.Activities.Bpmn.Activities.RunBpmn']
             after=[a for a in outer['activities'] if (a.get('authoredActivityId') or a['executableNodeId'])=='after']
-            faulted=parent_terminal=='Faulted'
             incidents=outer['incidents']
-            if (run_bpmn['status']!=parent_terminal or
-                    (faulted and (len(incidents)!=1 or incidents[0]['activityExecutionId']!=run_bpmn['activityExecutionId'] or
-                        incidents[0]['failureType']!='ActivityReturnedFault' or incidents[0]['status']!='Blocking' or
-                        incidents[0]['resolutionOutcome']['actionKind']!='FaultWorkflow')) or
+            faulted_ids={a['activityExecutionId'] for a in outer['activities'] if a['status']=='Faulted'}
+            scopes=[a for a in outer['activities'] if a['activityType']=='Elsa.Activities.Compensation.Activities.CompensationScope']
+            if (run_bpmn['status']!=model_terminal or
+                    (faulted and (len(incidents)!=len(faulted_ids) or {i['activityExecutionId'] for i in incidents}!=faulted_ids or
+                        any(i['failureType']!='ActivityReturnedFault' or i['status']!=('Resolved' if absorbed else 'Blocking') or
+                            i['resolutionOutcome']['actionKind']!=('AbsorbFault' if absorbed else 'FaultWorkflow') for i in incidents))) or
+                    (absorbed and (len(scopes)!=1 or scopes[0]['status']!='Completed' or scopes[0]['outcomeNames']!=['Compensated'])) or
                     (not faulted and incidents) or ((cancelling or faulted) and after) or
                     (not cancelling and not faulted and args.embedded_parent!='Root' and (len(after)!=1 or after[0]['status']!='Completed'))):
                 raise ValueError('The real native RunBpmn parent did not preserve its completion/fault/cancellation behavior.')
@@ -653,6 +658,7 @@ def main():
             "definition":definition,"selection":selection,"workflowExecutionId":execution,"runId":run,"publication":publication,"etlPublication":published,"bindings":bindings,
             "fixtureSha256":q.digest(fixture_script),"controllerSha256":q.digest(Path(__file__)),"cutAtUtc":cut_at,"businessError":args.business_error,"pipelineCancel":args.pipeline_cancel,"nativeCancel":args.native_cancel,"modelCancel":args.model_cancel,"retryAfterSeconds":retry_after,"beforeStores":before_stores,"finishedStores":finished_stores,
             **({'businessErrorBoundary':args.business_error_boundary} if args.business_error_boundary else {}),
+            **({'resumptionSweepIntervalSeconds':.2} if args.business_error_boundary else {}),
             **({"observedCancelledAfterRetryDeadlineAtUtc":observed_cancelled_after_deadline} if cancelling else {}),
             **({"modelPublication":model_publication,"modelExecutionId":model_execution} if direct_bpmn else {}),
             **({'embeddedParent':args.embedded_parent,'nativeParentExecutionId':native_parent_execution,'nativeParentPublication':native_parent_publication,'nativeParentCancel':args.native_parent_cancel} if native_parent_execution else {}),
