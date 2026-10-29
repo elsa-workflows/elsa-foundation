@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-direct-bpmn-native-etl-model-cancellation",
+  "sourceRevision": "6f6bf1786cb6fbf290caac500c4737f4721b2a96",
+  "assets": [
+    {
+      "path": "model-cancel/before-checked-model.json",
+      "sha256": "148098c9e6c02b3d870877447f725c98433bba20ddc8b0bef7796776341e6629"
+    },
+    {
+      "path": "model-cancel/before-elsa.sqlite.gz",
+      "sha256": "4213c21d8388383c3589b7774c0ef495185f95feddbade8cc86aabe7af00fb1f"
+    },
+    {
+      "path": "model-cancel/before-etl-design.sqlite.gz",
+      "sha256": "5c9eefea59b47c277d6d62e8a15ab70d3312efb890510ce549969875e8224bf6"
+    },
+    {
+      "path": "model-cancel/before-etl-runtime.sqlite.gz",
+      "sha256": "13b779af154a6bc92f36ac48279db826a9ace47a117606ed92a6e7aef7c5e128"
+    },
+    {
+      "path": "model-cancel/before-wire.json",
+      "sha256": "bf75058405b5e62d10a6da1721f6118a6968f6531148c70bda83fec13e2e7b5a"
+    },
+    {
+      "path": "model-cancel/before.json",
+      "sha256": "b053af6589d29203313445f58a386b9703f890409dc9a363858e34ce2e2ffd17"
+    },
+    {
+      "path": "model-cancel/finished-checked-model.json",
+      "sha256": "0c6d061e7fd64e9e44e6e4594f1016c7b92ae7c664e921c0605f30aa49461b15"
+    },
+    {
+      "path": "model-cancel/finished-elsa.sqlite.gz",
+      "sha256": "2a02e4c71318d85f78a94f09da1c64a7e4b8813830beb9d01f9552fe59b2422f"
+    },
+    {
+      "path": "model-cancel/finished-etl-design.sqlite.gz",
+      "sha256": "5892dd0b3a98805647e4056b1245a18c005f818e8929fb38efa6631cbd6981c3"
+    },
+    {
+      "path": "model-cancel/finished-etl-runtime.sqlite.gz",
+      "sha256": "c079e66583fe1eeff37ee2f02da22f8a91c8890e00f3ae1a9a74ce71a4bdc19f"
+    },
+    {
+      "path": "model-cancel/finished-wire.json",
+      "sha256": "bf75058405b5e62d10a6da1721f6118a6968f6531148c70bda83fec13e2e7b5a"
+    },
+    {
+      "path": "model-cancel/finished.json",
+      "sha256": "e4e7f80912db95103a3737b48fa047846def1e0943af60c2880c3f55a45f6acd"
+    },
+    {
+      "path": "model-cancel/model-cancel-command.json",
+      "sha256": "cf1b59f014d33a3d9a577b57efcea1fa759b3854850c9a888bb75cf72102733f"
+    },
+    {
+      "path": "model-cancel/model-cancel-response.json",
+      "sha256": "e140e846f1890586f978e8de3f0708b7cd1d5456ad19197f2a2e322e8f546f98"
+    },
+    {
+      "path": "model-cancel/process.json",
+      "sha256": "2ced5e3cacc022b19cf1602139e87db49a3875a556f488fcbd7f7a64f5698812"
+    },
+    {
+      "path": "model-cancel/recovered.json",
+      "sha256": "b053af6589d29203313445f58a386b9703f890409dc9a363858e34ce2e2ffd17"
+    },
+    {
+      "path": "model-cancel/retained-checked-model.json",
+      "sha256": "0c6d061e7fd64e9e44e6e4594f1016c7b92ae7c664e921c0605f30aa49461b15"
+    },
+    {
+      "path": "model-cancel/retained-wire.json",
+      "sha256": "bf75058405b5e62d10a6da1721f6118a6968f6531148c70bda83fec13e2e7b5a"
+    },
+    {
+      "path": "model-cancel/retained.json",
+      "sha256": "e4e7f80912db95103a3737b48fa047846def1e0943af60c2880c3f55a45f6acd"
+    },
+    {
+      "path": "model-cancel/safe-errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  ],
+  "scopeLimits": [
+    "BPMN-originated cancellation of an admitted native RunEtl worker after process recovery; cancellation before admission, pending cancel/result crashes, embedding, held retry and final upgrade/Studio remain unproved.",
+    "The crash cut uses SIGSTOP only to copy committed stores, then SIGKILL; no persisted state or clock is edited.",
+    "External HTTP effects remain at least once."
+  ],
+  "modelCancellationBeforeAdmissionProved": false,
+  "runBpmnEtlIntegrationProved": false,
+  "modelHeldFaultRetryProved": false
+}

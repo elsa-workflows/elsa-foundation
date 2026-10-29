@@ -208,3 +208,55 @@ class ActualNativeWorkerCancellationControls(_ActualRecoveryControls):
 
 
 if __name__=="__main__":unittest.main()
+
+
+class ActualModelCancellationControls(_ActualRecoveryControls):
+    evidence=EVIDENCE.parent/"model-cancellation"
+
+    def test_actual_model_cancellation_is_bounded_to_an_admitted_worker(self):
+        result=self.verify()
+        self.assertTrue(result["modelToWorkerCancellationProved"])
+        self.assertFalse(result["modelCancellationBeforeAdmissionProved"])
+        self.assertFalse(result["runBpmnEtlIntegrationProved"])
+        self.assertFalse(result["modelHeldFaultRetryProved"])
+        self.assertEqual(6,result["wholeStoresVerified"])
+
+    def test_model_cancel_source_cannot_be_deleted_after_its_claimed_settlement(self):
+        def remove(c):
+            rows=[identity for identity,content in c.execute("SELECT OutboxItemId,ContentJson FROM elsa_runtime_post_commit_outbox")
+                if json.loads(content)["intent"]["kind"]==etl.key("Elsa.Bpmn.CancelNativeWork.v1")]
+            self.assertEqual(1,len(rows))
+            c.execute("DELETE FROM elsa_runtime_post_commit_outbox WHERE OutboxItemId=?",(rows[0],))
+        self.change_store("model-cancel",remove)
+        with self.assertRaisesRegex(ValueError,"model cancellation source was acknowledged"):self.verify()
+
+    def test_model_cannot_settle_before_actual_etl_cancel_delivery(self):
+        def pending(c):
+            for identity,content in c.execute("SELECT OutboxItemId,ContentJson FROM elsa_runtime_post_commit_outbox").fetchall():
+                value=json.loads(content)
+                if value["intent"]["kind"]==etl.key("Elsa.Etl.Cancel.v1"):
+                    value["status"]="Pending"
+                    c.execute("UPDATE elsa_runtime_post_commit_outbox SET Status=0,ContentJson=? WHERE OutboxItemId=?",(json.dumps(value),identity))
+        self.change_store("model-cancel",pending)
+        with self.assertRaisesRegex(ValueError,"model settled before actual downstream cancellation delivery"):self.verify()
+
+    def test_retained_cancel_command_must_distinguish_acceptance_from_settlement(self):
+        self.change("model-cancel/model-cancel-command.json",lambda v:v["result"].update(lifecycle="TerminalSettled"))
+        with self.assertRaisesRegex(ValueError,"retained pending-settlement decision"):self.verify()
+
+    def test_empty_downstream_inventory_is_rejected_after_rehashing_all_affected_assets(self):
+        def remove_inventory(value):
+            value["model"]["payload"]["nativeResults"][0]["cancellationSources"]=[]
+            value["resultSource"]["intent"]["payload"]["cancellationSources"]=[]
+        for phase in ("finished","retained"):self.change("model-cancel/"+phase+"-checked-model.json",remove_inventory)
+        def physical(c):
+            identity,content=c.execute("SELECT ExecutionId,ContentJson FROM elsa_runtime_model_execution").fetchone()
+            value=json.loads(content);value["payload"]["nativeResults"][0]["cancellationSources"]=[]
+            c.execute("UPDATE elsa_runtime_model_execution SET ContentJson=? WHERE ExecutionId=?",(json.dumps(value),identity))
+            for identity,content in c.execute("SELECT OutboxItemId,ContentJson FROM elsa_runtime_post_commit_outbox").fetchall():
+                value=json.loads(content)
+                if value["intent"]["kind"]==etl.key("Elsa.Bpmn.NativeWorkResult.v1"):
+                    value["intent"]["payload"]["cancellationSources"]=[]
+                    c.execute("UPDATE elsa_runtime_post_commit_outbox SET ContentJson=? WHERE OutboxItemId=?",(json.dumps(value),identity))
+        self.change_store("model-cancel",physical)
+        with self.assertRaisesRegex(ValueError,"complete downstream cancellation inventory"):self.verify()

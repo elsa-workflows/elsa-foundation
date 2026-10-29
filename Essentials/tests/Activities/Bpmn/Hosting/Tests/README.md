@@ -81,3 +81,5 @@ dotnet test Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.
 ```
 
 The suite runs hosts sequentially. It never discovers or stops an existing listener and never uses a developer's host or data directory.
+
+The actual ETL HTTP controller also qualifies [model-originated cancellation of an admitted worker](../../../../../../specs/1017-direct-bpmn-hosting/evidence/pipeline/model-cancellation/README.md): BPMN retains pending settlement, its native worker cancels ETL, exact downstream delivery precedes model settlement and another host stays stable beyond the saved retry deadline. Cancellation before worker admission and pending cancel/result crash cuts remain separate gates.

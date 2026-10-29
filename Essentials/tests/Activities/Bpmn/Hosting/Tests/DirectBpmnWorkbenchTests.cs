@@ -72,8 +72,10 @@ public sealed class DirectBpmnWorkbenchTests
     {
         await using var host = await OwnedWorkbench.StartAsync(directBpmn: true);
         await host.GetAsync("/bpmn/executions/unknown", HttpStatusCode.Unauthorized);
+        await host.PostAsync("/bpmn/executions/unknown/cancel", new { requestId = "cancel-unknown" }, HttpStatusCode.Unauthorized);
         await host.LoginAsync();
         await host.GetAsync("/bpmn/executions/unknown", HttpStatusCode.NotFound);
+        await host.PostAsync("/bpmn/executions/unknown/cancel", new { requestId = "cancel-unknown" }, HttpStatusCode.NotFound);
         var process = new BpmnProcessDefinition("direct-process", Elements:
             [new("start", BpmnElementTypes.StartEvent), new("human", BpmnElementTypes.UserTask, bindingRef: "human-work"), new("end", BpmnElementTypes.EndEvent)],
             SequenceFlows: [new("to-human", "start", "human"), new("to-end", "human", "end")]);
