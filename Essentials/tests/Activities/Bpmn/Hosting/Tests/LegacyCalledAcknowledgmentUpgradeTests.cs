@@ -59,8 +59,8 @@ public sealed class LegacyCalledAcknowledgmentUpgradeTests
                 var recoveredBackup = Path.Combine(temporary.FullName, "recovered.sqlite"); await BackupAsync(host.RuntimeDatabase, recoveredBackup);
                 var recoveredApi = Receipt(original, recoveredParent, recoveredChild, cut == "notice" ? "NoticeAccepted" : "TerminalAccepted", "Observe");
                 var recoveredApiPath = Path.Combine(temporary.FullName, "recovered-api.json"); await File.WriteAllTextAsync(recoveredApiPath, recoveredApi.ToJsonString());
-                var recoveredProof = await InspectAsync(host.ReaderAssemblyPath, recoveredBackup, recoveredApiPath, markerPath, "recovered");
-                var recoveredSnapshot = await ExportAsync(recoveredBackup, cut + "-recovered.sqlite.gz");
+                var recoveredProof = await CheckedSnapshotAsync(host.ReaderAssemblyPath, recoveredBackup, "--inspect-called-ack", recoveredApiPath, markerPath, "recovered");
+                var recoveredSnapshot = await ExportSnapshotAsync(recoveredBackup, cut + "-recovered.sqlite.gz", "legacy-called-ack");
                 await host.RestartAsync(); var secondProcess = host.ProcessId; Assert.NotEqual(firstProcess, secondProcess);
                 await host.LoginAsync();
                 Assert.True(JsonNode.DeepEquals(recoveredParent, await host.GetAsync("/runtime/workflows/instances/" + parentId)));
@@ -95,8 +95,8 @@ public sealed class LegacyCalledAcknowledgmentUpgradeTests
                 var finishedBackup = Path.Combine(temporary.FullName, "finished.sqlite"); await BackupAsync(host.RuntimeDatabase, finishedBackup);
                 var finishedApi = Receipt(original, finishedParent, finishedChild, "Finished", "FinishWarning");
                 var finishedApiPath = Path.Combine(temporary.FullName, "finished-api.json"); await File.WriteAllTextAsync(finishedApiPath, finishedApi.ToJsonString());
-                var finishedProof = await InspectAsync(host.ReaderAssemblyPath, finishedBackup, finishedApiPath, markerPath, "finished");
-                var finishedSnapshot = await ExportAsync(finishedBackup, cut + "-finished.sqlite.gz");
+                var finishedProof = await CheckedSnapshotAsync(host.ReaderAssemblyPath, finishedBackup, "--inspect-called-ack", finishedApiPath, markerPath, "finished");
+                var finishedSnapshot = await ExportSnapshotAsync(finishedBackup, cut + "-finished.sqlite.gz", "legacy-called-ack");
                 var migrations = await MigrationsAsync(host.RuntimeDatabase); Assert.All(originalMigrations, migration => Assert.Contains(migration, migrations));
                 Assert.Equal(artifacts, await ArtifactsAsync(host.RuntimeDatabase));
                 await host.RestartAsync(); var thirdProcess = host.ProcessId; Assert.NotEqual(secondProcess, thirdProcess); await host.LoginAsync();
@@ -166,32 +166,5 @@ public sealed class LegacyCalledAcknowledgmentUpgradeTests
         var result = await host.PostAsync("/runtime/workflows/stimuli", new { stimulusType = "Event", stimulusHash = "sha256:" + Hash(Encoding.UTF8.GetBytes(name)),
             mode = "ResumeOnly", correlationId = execution, input = new { eventName = name } });
         Assert.Equal(0, result["startedCount"]!.GetValue<int>()); Assert.Equal(1, result["resumedCount"]!.GetValue<int>()); return result;
-    }
-    private static async Task<long> SourceStatusAsync(string database, string id)
-    {
-        await using var connection = Read(database); await connection.OpenAsync(); await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT Status FROM elsa_runtime_post_commit_outbox WHERE OutboxItemId = $id";
-        command.Parameters.AddWithValue("$id", Convert.ToBase64String(Encoding.Unicode.GetBytes(id))); return (long)(await command.ExecuteScalarAsync())!;
-    }
-    private static async Task<JsonNode> InspectAsync(string reader, string database, string api, string marker, string phase)
-    {
-        var hash = Hash(await File.ReadAllBytesAsync(database));
-        var info = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-        foreach (var argument in new[] { reader, "--inspect-called-ack", database, hash, "default", api, marker, phase }) info.ArgumentList.Add(argument);
-        using var process = Process.Start(info) ?? throw new InvalidOperationException("The checked snapshot reader did not start.");
-        var output = process.StandardOutput.ReadToEndAsync(); var error = process.StandardError.ReadToEndAsync();
-        try { using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30)); await process.WaitForExitAsync(limit.Token); }
-        finally { if (!process.HasExited) { process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); } }
-        var text = await output; Assert.True(process.ExitCode == 0, "Actual checked provider refused: " + text + await error);
-        var result = JsonNode.Parse(text)!; Assert.True(result["providerChecked"]!.GetValue<bool>()); Assert.True(result["readOnly"]!.GetValue<bool>());
-        Assert.Equal(hash, result["snapshotSha256"]!.GetValue<string>()); Assert.Equal(hash, Hash(await File.ReadAllBytesAsync(database))); return result;
-    }
-    private static async Task<object?> ExportAsync(string database, string name)
-    {
-        if (Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_EVIDENCE_DIRECTORY") is not { } root) return null;
-        var output = Path.Combine(root, "legacy-called-ack"); Directory.CreateDirectory(output); var path = Path.Combine(output, name);
-        var data = await File.ReadAllBytesAsync(database);
-        await using (var file = File.Create(path)) await using (var gzip = new GZipStream(file, CompressionLevel.SmallestSize)) await gzip.WriteAsync(data);
-        return new { file = name, databaseSha256 = Hash(data), gzipSha256 = Hash(await File.ReadAllBytesAsync(path)) };
     }
 }

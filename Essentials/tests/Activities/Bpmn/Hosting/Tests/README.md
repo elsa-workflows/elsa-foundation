@@ -42,7 +42,17 @@ python3 tools/bpmn/qualify-hosting.py verify-upgrade \
   --manifest /tmp/elsa-bpmn-called-ack-upgrade/manifest.json
 ```
 
-Broadcast cohorts, active multi-instance/compensation/control recovery and actual Studio behavior remain separate qualification families. These legacy tests do not establish new direct-model settlement or the real native/ETL bridge.
+The broadcast family restores four actual cuts: before first selection, after cohort installation, after one callback/re-arm and an installed empty cohort. Its checked provider observations verify exact recipients, physical generations, original pins, completed callbacks, excluded listeners and deterministic keyed starts. A second process preserves the acknowledged source and recipient boundary. Selected finite work completes through normal Events. Original infinite loops and excluded listeners that explicitly return the existing generic HTTP `Ambiguous` result retire through native `CancelWorkflow`; the generic endpoint's ambiguity rule remains unchanged. A third process preserves the final views.
+
+```sh
+python3 tools/bpmn/qualify-hosting.py resume-upgrade --family broadcast \
+  --manifest specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json \
+  --output /tmp/elsa-bpmn-broadcast-upgrade
+python3 tools/bpmn/qualify-hosting.py verify-upgrade \
+  --manifest /tmp/elsa-bpmn-broadcast-upgrade/manifest.json
+```
+
+Active multi-instance/compensation/control recovery and actual Studio behavior remain separate qualification families. These legacy tests do not establish new direct-model settlement/broadcast dispatch or the real native/ETL bridge.
 
 ```sh
 dotnet test Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj -c Release

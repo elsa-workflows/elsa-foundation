@@ -1,4 +1,6 @@
 using System.Security.Cryptography;
+using System.Diagnostics;
+using System.IO.Compression;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Reflection.Metadata;
@@ -57,5 +59,37 @@ internal static class LegacyUpgradeInspection
         await input.OpenAsync(); await output.OpenAsync(); input.BackupDatabase(output);
         await using var command = output.CreateCommand(); command.CommandText = "PRAGMA integrity_check";
         Assert.Equal("ok", (string)(await command.ExecuteScalarAsync())!);
+    }
+
+    internal static async Task<long> SourceStatusAsync(string database, string id)
+    {
+        await using var connection = Read(database); await connection.OpenAsync(); await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT Status FROM elsa_runtime_post_commit_outbox WHERE OutboxItemId = $id";
+        command.Parameters.AddWithValue("$id", Convert.ToBase64String(Encoding.Unicode.GetBytes(id))); return (long)(await command.ExecuteScalarAsync())!;
+    }
+
+    internal static async Task<JsonNode> CheckedSnapshotAsync(string reader, string database, string? command, params string[] arguments)
+    {
+        var hash = Hash(await File.ReadAllBytesAsync(database));
+        var info = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        info.ArgumentList.Add(reader);
+        if (command is not null) info.ArgumentList.Add(command);
+        foreach (var argument in new[] { database, hash, "default" }.Concat(arguments)) info.ArgumentList.Add(argument);
+        using var process = Process.Start(info) ?? throw new InvalidOperationException("The checked snapshot reader did not start.");
+        var output = process.StandardOutput.ReadToEndAsync(); var error = process.StandardError.ReadToEndAsync();
+        try { using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30)); await process.WaitForExitAsync(limit.Token); }
+        finally { if (!process.HasExited) { process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); } }
+        var text = await output; Assert.True(process.ExitCode == 0, "Actual checked provider refused: " + text + await error);
+        var result = JsonNode.Parse(text)!; Assert.True(result["providerChecked"]!.GetValue<bool>()); Assert.True(result["readOnly"]!.GetValue<bool>());
+        Assert.Equal(hash, result["snapshotSha256"]!.GetValue<string>()); Assert.Equal(hash, Hash(await File.ReadAllBytesAsync(database))); return result;
+    }
+
+    internal static async Task<object?> ExportSnapshotAsync(string database, string name, string directory)
+    {
+        if (Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_EVIDENCE_DIRECTORY") is not { } root) return null;
+        var output = Path.Combine(root, directory); Directory.CreateDirectory(output); var path = Path.Combine(output, name);
+        var data = await File.ReadAllBytesAsync(database);
+        await using (var file = File.Create(path)) await using (var gzip = new GZipStream(file, CompressionLevel.SmallestSize)) await gzip.WriteAsync(data);
+        return new { file = name, databaseSha256 = Hash(data), gzipSha256 = Hash(await File.ReadAllBytesAsync(path)) };
     }
 }

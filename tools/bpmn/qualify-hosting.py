@@ -410,6 +410,8 @@ def verify_upgrade(path: Path) -> dict:
         return verify_native_parent_upgrade(path)
     if manifest.get("kind") == "actual-legacy-called-ack-upgrade":
         return verify_called_ack_upgrade(path)
+    if manifest.get("kind") == "actual-legacy-broadcast-upgrade":
+        return verify_broadcast_upgrade(path)
     if manifest.get("schemaVersion") != 1 or manifest.get("kind") != "actual-legacy-partial-fork-upgrade":
         raise ValueError("Unknown upgrade manifest.")
     root = path.parent
@@ -508,6 +510,8 @@ def resume_upgrade(args) -> dict:
         return resume_native_parent_upgrade(args)
     if args.family == "called-ack":
         return resume_called_ack_upgrade(args)
+    if args.family == "broadcast":
+        return resume_broadcast_upgrade(args)
     baseline = args.manifest.resolve(strict=True)
     verify_capture(baseline)
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True, timeout=5).strip()
@@ -867,6 +871,145 @@ def resume_called_ack_upgrade(args) -> dict:
     write_json(output / "manifest.json", manifest); return verify_called_ack_upgrade(output / "manifest.json")
 
 
+def verify_broadcast_inputs(path: Path) -> dict:
+    matrix = json.loads(path.read_text())
+    if (matrix.get("kind") != "actual-pre-writer-baseline-matrix" or matrix.get("gateAComplete") is not True or matrix.get("frozenAuthoringFingerprint") != FROZEN):
+        raise ValueError("Broadcast recovery requires the actual frozen pre-writer matrix.")
+    names = {"broadcast/" + cut + suffix for cut in ("before-selection", "after-cohort", "after-resume", "empty-cohort") for suffix in (".json", ".sqlite.gz")}
+    selected = {asset["path"]: asset["sha256"] for asset in matrix["assets"] if asset["path"] in names}
+    if set(selected) != names or len([asset for asset in matrix["assets"] if asset["path"] in names]) != len(names):
+        raise ValueError("The actual broadcast inputs are incomplete or duplicated.")
+    for name, sha in selected.items():
+        if digest(evidence_file(path.parent, name)) != sha: raise ValueError("An original broadcast input differs: " + name)
+    return selected
+
+
+def verify_broadcast_upgrade(path: Path) -> dict:
+    manifest = json.loads(path.read_text()); root = path.parent
+    if manifest.get("schemaVersion") != 1 or manifest.get("kind") != "actual-legacy-broadcast-upgrade": raise ValueError("Unknown broadcast upgrade evidence.")
+    cuts = {"before-selection", "after-cohort", "after-resume", "empty-cohort"}
+    names = {"legacy-broadcast/process.json", "frozen-contract.json"} | {"legacy-broadcast/" + cut + "-" + phase + ".sqlite.gz" for cut in cuts for phase in ("recovered", "finished")}
+    assets = {asset["path"]: asset for asset in manifest["assets"]}
+    if set(assets) != names or len(assets) != len(manifest["assets"]): raise ValueError("The broadcast evidence is incomplete or duplicated.")
+    for name, asset in assets.items():
+        if digest(evidence_file(root, name)) != asset["sha256"]: raise ValueError("A broadcast evidence asset differs.")
+    process = json.loads(evidence_file(root, "legacy-broadcast/process.json").read_text()); source_revision = manifest.get("sourceRevision", "")
+    if (not re.fullmatch(r"[0-9a-f]{40}", source_revision) or process.get("sourceRevision") != source_revision or process.get("kind") != manifest["kind"] or
+            process.get("formatVersion") != 1 or process.get("testOnlyRecoveryProbePresent") is not False or process.get("baselineManifestSha256") != manifest.get("baselineManifestSha256") or
+            not process.get("reader", {}).get("productVersion", "").endswith("+" + source_revision)):
+        raise ValueError("The broadcast upgrade lacks its source-bound standard host and checked reader.")
+    cases = process["observations"]
+    if len(cases) != 4 or {case["cut"] for case in cases} != cuts: raise ValueError("All four actual broadcast cuts are required.")
+    key = lambda value: base64.b64encode(value.encode("utf-16-le", errors="surrogatepass")).decode()
+    for case in cases:
+        cut = case["cut"]; original = case["originalStopped"]; reference = case["referenceSource"]
+        if (not re.fullmatch(r"[0-9a-f]{40}", case.get("baselineSourceRevision", "")) or case["baselineSourceRevision"] == source_revision or
+                case["baselineApiSha256"] != manifest["baselineAssets"].get("broadcast/" + cut + ".json") or
+                case["inputGzipSha256"] != manifest["baselineAssets"].get("broadcast/" + cut + ".sqlite.gz") or
+                not any(binary["file"] == "Elsa.Workbench.dll" and binary["productVersion"].endswith("+" + source_revision) for binary in case["binaries"]) or
+                len({case["firstProcessId"], case["secondProcessId"], case["thirdProcessId"]}) != 3):
+            raise ValueError("The broadcast cut lacks its actual baseline or three-process host identity.")
+        recovered = case["recoveredProof"]; current = recovered["source"]; before = original["source"]
+        if (current["status"] != "Delivered" or current["deliveryFencingToken"] <= before["deliveryFencingToken"] or current["deliveringOwnerId"] is not None or
+                any(current[field] != before[field] for field in ("outboxItemId", "workflowExecutionId", "intentPayload", "intentFingerprint")) or
+                current["selectedStarts"] != reference["selectedStarts"] or current["selectedResumes"] != reference["selectedResumes"]):
+            raise ValueError("The original broadcast source/selected recipient identities changed.")
+        if current["snapshot"] is None: raise ValueError("A durable broadcast recipient decision is required, including empty decisions.")
+        if cut == "before-selection":
+            if (before["snapshot"] is not None or len(current["selectedStarts"]) != 2 or len(current["selectedResumes"]) != 4 or
+                    current["snapshot"]["starts"] != reference["snapshot"]["starts"] or current["snapshot"]["resumes"] != reference["snapshot"]["resumes"]):
+                raise ValueError("Delayed first delivery must select the actual listeners armed after publisher commit.")
+        elif current["snapshot"] != before["snapshot"]: raise ValueError("Recovery changed the original immutable broadcast cohort.")
+        workflows = {item["workflowExecutionId"]: item for item in recovered["workflows"]}
+        for old in original["workflows"]:
+            if not old["exists"]: continue
+            now = workflows[old["workflowExecutionId"]]
+            if old["pinnedExecutable"] != now["pinnedExecutable"]: raise ValueError("An original broadcast workflow changed its complete pin.")
+            if not any(item["workflowExecutionId"] == old["workflowExecutionId"] for item in current["selectedResumes"]) and old["bookmarks"] != now["bookmarks"]:
+                raise ValueError("A saved empty or fixed cohort changed an excluded listener.")
+        for recipient in current["selectedResumes"]:
+            now = workflows[recipient["workflowExecutionId"]]
+            completed = [item for item in now["selectedActivities"] if item["activityExecutionId"] == recipient["activityExecutionId"]]
+            if len(completed) != 1 or completed[0]["status"] != "Completed" or any(wait["bookmarkId"] == recipient["bookmarkId"] for wait in now["bookmarks"]):
+                raise ValueError("A selected saved callback lacks durable completion/registration retirement.")
+        if cut == "after-resume":
+            for old in original["workflows"]:
+                if not old["exists"]: continue
+                now = workflows[old["workflowExecutionId"]]
+                for wait in old["bookmarks"]:
+                    if not any(item["bookmarkId"] == wait["bookmarkId"] for item in current["selectedResumes"]) and wait not in now["bookmarks"]:
+                        raise ValueError("Source retry consumed or changed an already re-armed listener.")
+                for old_activity in old["selectedActivities"]:
+                    new_activity = next(item for item in now["selectedActivities"] if item["activityExecutionId"] == old_activity["activityExecutionId"])
+                    if old_activity["status"] == "Completed" and old_activity != new_activity:
+                        raise ValueError("Source retry repeated an already accepted callback.")
+        if case["secondProof"]["source"] != current or case["secondProof"]["workflows"] != recovered["workflows"]:
+            raise ValueError("A second process changed the recovered broadcast boundary.")
+        for phase in ("recovered", "finished"):
+            proof = case[phase + "Proof"]; snapshot = case[phase + "Snapshot"]
+            if proof.get("providerChecked") is not True or proof.get("readOnly") is not True or proof["snapshotSha256"] != snapshot["databaseSha256"] or proof["source"] != current:
+                raise ValueError("The upgraded broadcast cut has no exact checked snapshot/source proof.")
+            with checked_upgrade_snapshot(root, "legacy-broadcast", snapshot) as connection:
+                verify_retained_native_material(connection, case)
+                rows = connection.execute("SELECT Status, ContentJson, Revision FROM elsa_runtime_post_commit_outbox WHERE OutboxItemId = ?", (key(current["outboxItemId"]),)).fetchall()
+                if (len(rows) != 1 or rows[0][0] != 2 or hashlib.sha256(rows[0][1].encode()).hexdigest() != current["contentSha256"] or rows[0][2] != current["rowRevision"]):
+                    raise ValueError("The physical original broadcast delivery differs from its checked source.")
+                document = json.loads(rows[0][1]); stored = document["recipientSnapshot"]
+                if stored is None or document["status"] != "Delivered": raise ValueError("The physical saved recipient decision is missing.")
+                physical_resumes = [(entry["workflowExecutionId"], entry["bookmarkId"], entry["activityExecutionId"], entry["registrationCapture"]["generation"]) for entry in stored["resumes"]]
+                expected_resumes = [(key(entry["workflowExecutionId"]), key(entry["bookmarkId"]), key(entry["activityExecutionId"]), entry["generation"]) for entry in current["selectedResumes"]]
+                if physical_resumes != expected_resumes or len(stored["starts"]) != len(current["selectedStarts"]):
+                    raise ValueError("The physical broadcast recipient identities/generations differ.")
+                for recipient in current["selectedResumes"]:
+                    rows = connection.execute("SELECT Status FROM elsa_runtime_activity_execution_state WHERE WorkflowExecutionId = ? AND ActivityExecutionId = ?", (key(recipient["workflowExecutionId"]), key(recipient["activityExecutionId"]))).fetchall()
+                    if rows != [(4,)]: raise ValueError("The physical saved callback did not complete.")
+                for workflow in proof["workflows"]:
+                    rows = connection.execute("SELECT ContentJson FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId = ?", (key(workflow["workflowExecutionId"]),)).fetchall()
+                    if len(rows) != 1 or json.loads(rows[0][0])["pinnedExecutable"] != {field: key(value) for field, value in workflow["pinnedExecutable"].items()}:
+                        raise ValueError("A physical broadcast workflow lost its complete pin.")
+                    physical_waits = {row[0] for row in connection.execute("SELECT BookmarkId FROM elsa_runtime_bookmark_state WHERE WorkflowExecutionId = ?", (key(workflow["workflowExecutionId"]),))}
+                    if physical_waits != {key(wait["bookmarkId"]) for wait in workflow["bookmarks"]}: raise ValueError("Physical broadcast waits differ from the checked boundary.")
+            if phase == "finished" and (any(workflow["bookmarks"] for workflow in proof["workflows"]) or
+                    any(workflow["status"] not in ("Completed", "Cancelled") for workflow in proof["allWorkflows"])):
+                raise ValueError("A recovered broadcast execution did not retire through its normal command.")
+        if cut == "after-resume":
+            if len(case["loopingIds"]) != 2 or case["cancellation"]["status"] != "Completed": raise ValueError("The authored infinite loops lack completed normal native cancellation.")
+        elif case["loopingIds"]: raise ValueError("A finite broadcast fixture was relabeled as an infinite loop.")
+        expected_cancellation = set(case["loopingIds"])
+        for command in case["finishCommands"]:
+            if command["startedCount"] != 0: raise ValueError("A normal finish Event started new work.")
+            if command["resumedCount"] == 0:
+                if not command["resumes"] or any(item["status"] != "Ambiguous" for item in command["resumes"]): raise ValueError("An excluded native listener lacks its explicit generic-HTTP ambiguity refusal.")
+                expected_cancellation.update(item["workflowExecutionId"] for item in command["resumes"])
+        if set(case["cancelledIds"]) != expected_cancellation or expected_cancellation and case["cancellation"]["status"] != "Completed":
+            raise ValueError("The exact native retirement targets differ from infinite or explicitly ambiguous listeners.")
+    frozen = json.loads(evidence_file(root, "frozen-contract.json").read_text()); first = next(case for case in cases if case["cut"] == "before-selection")
+    if (frozen.get("sourceRevision") != source_revision or frozen.get("oracleSha256") != FROZEN or frozen.get("matchesFrozenFingerprint") is not True or
+            frozen.get("immutableSnapshot") is not True or frozen.get("closedSnapshotSha256") != first["finishedSnapshot"]["databaseSha256"]):
+        raise ValueError("The upgraded broadcast Design store has no frozen authoring proof.")
+    return {"actualBroadcastCutsRecovered": 4, "wholeStoresVerified": 8, "deliveryTimeMatchingPreserved": True, "emptyAndRearmedDecisionsPreserved": True,
+        "frozenAuthoringPreserved": True, "sourceRevision": source_revision, "allLegacyFamiliesRecovered": False, "studioAcceptanceProved": False, "directModelBroadcastProved": False}
+
+
+def resume_broadcast_upgrade(args) -> dict:
+    baseline = args.manifest.resolve(strict=True); inputs = verify_broadcast_inputs(baseline)
+    source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True, timeout=5).strip()
+    if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True, timeout=5).strip(): raise ValueError("Commit the qualification source before recording exact-source upgrade evidence.")
+    output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False); env = os.environ.copy()
+    env.update(ELSA_BPMN_LEGACY_MATRIX_DIRECTORY=str(baseline.parent), ELSA_BPMN_HOST_EVIDENCE_DIRECTORY=str(output), ELSA_BPMN_HOST_SOURCE_REVISION=source)
+    command = ["dotnet", "test", str(REPO / "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"), "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyBroadcastUpgradeTests", "--logger", "trx;LogFileName=legacy-broadcast-upgrade.trx"]
+    if args.artifacts_path is not None: command += ["--artifacts-path", str(args.artifacts_path.resolve())]
+    with (output / "run.log").open("w") as log: subprocess.run(command, cwd=REPO, env=env, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=3600)
+    if inputs != verify_broadcast_inputs(baseline): raise ValueError("Broadcast upgrade changed an original input.")
+    with tempfile.TemporaryDirectory(prefix="elsa-broadcast-upgraded-design-") as temporary:
+        database = Path(temporary) / "design.sqlite"; database.write_bytes(gzip.decompress((output / "legacy-broadcast/before-selection-finished.sqlite.gz").read_bytes()))
+        subprocess.run([sys.executable, str(REPO / "e2e-tests/bpmn/verify_published_contracts.py"), "--database", str(database), "--source-revision", source, "--closed-snapshot", "--output", str(output / "frozen-contract.json")], check=True, timeout=60)
+    names = ["legacy-broadcast/process.json", "frozen-contract.json"] + ["legacy-broadcast/" + cut + "-" + phase + ".sqlite.gz" for cut in ("before-selection", "after-cohort", "after-resume", "empty-cohort") for phase in ("recovered", "finished")]
+    write_json(output / "manifest.json", {"schemaVersion": 1, "kind": "actual-legacy-broadcast-upgrade", "sourceRevision": source,
+        "baselineManifestSha256": digest(baseline), "baselineAssets": inputs, "assets": [{"path": name, "sha256": digest(output / name)} for name in names]})
+    return verify_broadcast_upgrade(output / "manifest.json")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     phases = parser.add_subparsers(dest="phase", required=True)
@@ -880,7 +1023,7 @@ def main() -> int:
     upgrade.add_argument("--manifest", type=Path, required=True)
     upgrade.add_argument("--output", type=Path, required=True)
     upgrade.add_argument("--artifacts-path", type=Path)
-    upgrade.add_argument("--family", choices=("partial-forks", "native-parents", "called-ack"), default="partial-forks")
+    upgrade.add_argument("--family", choices=("partial-forks", "native-parents", "called-ack", "broadcast"), default="partial-forks")
     verified_upgrade = phases.add_parser("verify-upgrade")
     verified_upgrade.add_argument("--manifest", type=Path, required=True)
     args = parser.parse_args()

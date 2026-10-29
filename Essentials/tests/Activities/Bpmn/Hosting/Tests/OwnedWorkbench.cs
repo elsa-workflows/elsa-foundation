@@ -100,9 +100,11 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         return await ReadAsync(response, path, expected);
     }
 
-    public async Task<JsonNode> PostAsync(string path, object value, HttpStatusCode? expected = null)
+    public async Task<JsonNode> PostAsync(string path, object value, HttpStatusCode? expected = null, string? idempotencyKey = null)
     {
-        using var response = await client.PostAsJsonAsync(path, value);
+        using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(value) };
+        if (idempotencyKey is not null) request.Headers.Add("Idempotency-Key", idempotencyKey);
+        using var response = await client.SendAsync(request);
         return await ReadAsync(response, path, expected);
     }
 
