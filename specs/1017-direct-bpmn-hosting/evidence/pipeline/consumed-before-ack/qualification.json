@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "executingSource": "d1bd08c33f436764eaca5a5c69017f14a3ea85d5",
+  "actualJourneysPassed": 2,
+  "actualCancellationOrigins": [
+    "model-command",
+    "native-terminal"
+  ],
+  "rawAssets": 65,
+  "wholeStoresVerified": 24,
+  "ownedWorkbenchProcesses": 8,
+  "ownedSdkProcesses": 2,
+  "ownedHttpProcesses": 2,
+  "actualSigkillExits": 4,
+  "allQualifiedJourneyChildrenStopped": true,
+  "allRejectedAndSupersededJourneyChildrenStopped": true,
+  "physicalOutputRecordsPerCase": 2,
+  "lateRetryRequestsPerCase": 0,
+  "standardHostBuild": {
+    "errors": 0,
+    "warnings": 261,
+    "logSha256": "fea67ec13599a5a251e1057b4b71b9720e14d77ac4ba49e1e30f33c9313d9780"
+  },
+  "portableChecks": {
+    "passed": 71,
+    "failed": 0,
+    "skipped": 0,
+    "newPositiveMatrix": 1,
+    "newRehashedNegativeControls": 9,
+    "verifierSha256": "6bd13485026f8797ef006f115a012cc6c7d7b60671d9e0fdca20f8ec139845cd",
+    "controlsSha256": "1abcc527e3140f39c3d66362db1e39582f8d83ebbbbca1ee366c3dd69c4ef889",
+    "logSha256": "68cfe97ce45195780510a31a4ad79c74f29f8a1fcd201e88e58ba1d25bdc75a3"
+  },
+  "mapsCheckPassed": true,
+  "testTiersPassed": 123,
+  "frozenBaselineAssetsUnchanged": 104,
+  "postConsumptionPreAckCrashProved": true,
+  "runBpmnEtlIntegrationProved": false,
+  "modelHeldFaultRetryProved": false,
+  "finalUpgradeAndStudioProved": false,
+  "fullPrReviewRounds": 0,
+  "unchangedProductionEarlierDotNetChecks": {
+    "executingSource": "54d8532b0a00c39626185a7d617790004b9f9448",
+    "receipt": "../native-admission-race/qualification.json",
+    "bpmnPassed": 384,
+    "efModelCheckpointPassed": 43,
+    "rerunAtThisSource": false
+  },
+  "scopeLimits": [
+    "Production SDK uses original bindings, actual outbox processors and protocol-aware recovery mailboxes without source ACK; no fabricated state/result/receipt or delivery hook.",
+    "Both actual pipelines are Cancelled before model settlement; exact model result consumption is durable while native result/model-cancel source ACK remains owed.",
+    "Fresh third/fourth standard Workbench hosts acknowledge the original sources without another model revision/receipt and remain stable past the original HTTP429 retry deadline plus two seconds.",
+    "RunBpmn service embedding/native-parent mappings, held retry, other providers/rollback and final upgrade/Studio remain open."
+  ]
+}

@@ -101,7 +101,7 @@ def physical_model_bridge(connection,phase,checked,origin,result,model_cancel=Fa
         if source is None:continue
         row=connection.execute("SELECT Status,ContentJson FROM elsa_runtime_post_commit_outbox WHERE OutboxItemId=?",(key(source["outboxItemId"]),)).fetchone()
         stored=json.loads(row[1]) if row else None
-        if row is None or row[0]!=2 or stored["intent"]["payload"]!=source["intent"]["payload"] or stored["deliveredAt"]!=source["deliveredAt"]:
+        if row is None or row[0]!=source["status"] or stored["intent"]["payload"]!=source["intent"]["payload"] or stored["deliveredAt"]!=source["deliveredAt"]:
             raise ValueError("The physical native/model delivery source differs from its consumption proof.")
     rows=connection.execute("SELECT InputId,ContentJson FROM elsa_runtime_model_input WHERE ExecutionId=?",(key(model["executionId"]),)).fetchall()
     if len(rows)!=(1 if phase=="before" else 3 if model_cancel else 2):raise ValueError("The physical model accepted an unexpected input.")
@@ -240,9 +240,66 @@ def pending_cancellation(read,root,process,bridge,model_cancel):
 
 
 
+def consumed_before_ack(read,root,process,bridge,model_cancel):
+    checked,origin,result=bridge;observed=read('consumed-checked.json');view=read('consumed.json');sdk=read('sdk-consume.json')
+    model=observed['model'];worker=observed['worker'];receipt,=[x for x in observed['inputs'] if x['inputKind']=='native-result']
+    native,=[s for s in observed['sources'] if s['intent']['kind']=='Elsa.Bpmn.NativeWorkResult.v1']
+    etl,=[s for s in observed['sources'] if s['intent']['kind']=='Elsa.Etl.Cancel.v1'];start,=[s for s in observed['sources'] if s['intent']['kind']=='Elsa.Bpmn.StartNativeWork.v1']
+    if (process.get('postConsumptionPreAck') is not True or observed['readOnly'] is not True or observed['origin']!=origin or
+            model!=checked['finished']['model'] or worker!=checked['finished']['worker'] or observed['queuedModelInputs'] or model['lifecycle']!=3 or
+            receipt!=checked['finished']['resultInput'] or receipt!=sdk['receipt'] or receipt['acceptedRevision']!=(3 if model_cancel else 2) or
+            native['outboxItemId']!=checked['finished']['resultSource']['outboxItemId'] or native['intent']['payload']!=result or native['status']!=3 or native['deliveredAt'] is not None or native['deliveryFencingToken']<1 or
+            start!=checked['before']['startSource'] or etl['status']!=2 or etl['deliveredAt'] is None or result['cancellationSources']!=[etl['outboxItemId']] or
+            view['run']['status']!='cancelled' or view['run']['runId']!=process['runId'] or view['run']['acceptedRecords']!=2 or view['run']['outstandingRecords'] or view['run']['outstandingBytes'] or
+            view['native']['instance']['status']!='Cancelled' or view['model']['status']!='TerminalSettled' or view['model']['revision']!=model['revision'] or
+            read('consumed-wire.json')!=read('before-wire.json')):
+        raise ValueError('The actual pre-ACK crash lacks durable exact consumption with its original result source still owed.')
+    if model_cancel:
+        cancellation,=model['payload']['cancellations'];cancel,=[s for s in observed['sources'] if s['intent']['kind']=='Elsa.Bpmn.CancelNativeWork.v1']
+        if (not cancellation['settled'] or cancellation.get('notAdmitted',False) or cancel['outboxItemId']!=cancellation['sourceOutboxItemId'] or
+                cancel['status']!=3 or cancel['deliveredAt'] is not None):raise ValueError('The consumed model cancellation lost its still-owed original acknowledgment.')
+    operations=['deliver-model-cancel','drain-native-cancel'] if model_cancel else []
+    operations+=['deliver-etl-cancel','queue-native-result','consume-native-result']
+    if (sdk['operation']!='--consume-native-result' or sdk['origin']!=origin or sdk['model']!=model or sdk['worker']!=worker or sdk['resultSource']!=native or
+            [s['operation'] for s in sdk['steps']]!=operations or len(sdk['products'])!=8 or sdk['products'][0]['sha256']!=process['dispatcherSha256'] or
+            any(process['sourceRevision'] not in p['informationalVersion'] for p in sdk['products']) or
+            not (instant(process['pendingCutAtUtc'])<instant(sdk['startedAtUtc'])<=instant(sdk['completedAtUtc'])<instant(process['consumedCutAtUtc']))):
+        raise ValueError('The actual SDK consumption lost its production operations, exact source or pre-ACK ordering.')
+    for step in sdk['steps']:
+        if 'delivery' in step:
+            delivery=step['delivery']
+            if delivery['attemptedCount']!=1 or delivery['deliveredCount']!=int(step['operation']=='deliver-etl-cancel'):
+                raise ValueError('The actual SDK fabricated acknowledgment instead of retaining native/model responsibility.')
+        elif step['drain']['status']!=0:raise ValueError('The protocol-aware recovery mailbox did not accept actual consumption.')
+    observed_bridge={**checked,'consumed':{'model':model,'worker':worker,'startSource':start,'resultSource':native,'resultInput':receipt}}
+    for store,snapshot in process['consumedStores'].items():
+        file=q.evidence_file(root,snapshot['file']);raw=gzip.decompress(file.read_bytes())
+        if q.digest(file)!=snapshot['gzipSha256'] or hashlib.sha256(raw).hexdigest()!=snapshot['databaseSha256'] or snapshot['observer']['snapshotSha256']!=snapshot['databaseSha256'] or snapshot['observer']['readOnly'] is not True:
+            raise ValueError('An actual provider-observed consumed-before-ACK store differs.')
+        with tempfile.TemporaryDirectory(prefix='elsa-consumed-read-') as temporary:
+            database=Path(temporary)/'snapshot.sqlite';database.write_bytes(raw)
+            with closing(sqlite3.connect(database.as_uri()+'?mode=ro&immutable=1',uri=True)) as connection:
+                if connection.execute('PRAGMA integrity_check').fetchall()!=[('ok',)]:raise ValueError('A consumed-before-ACK store failed integrity.')
+                if store=='elsa':
+                    physical_model_bridge(connection,'consumed',observed_bridge,origin,result,model_cancel=model_cancel)
+                    if connection.execute('SELECT COUNT(*) FROM elsa_runtime_bookmark_state').fetchone()[0]:raise ValueError('The consumed cancellation recreated a native wait.')
+                    rows=[json.loads(x[0]) for x in connection.execute('SELECT ContentJson FROM elsa_runtime_post_commit_outbox')]
+                    if len(rows)!=len(observed['sources']):raise ValueError('The physical pre-ACK store lost a retained delivery source.')
+                    for source in observed['sources']:
+                        row,=[x for x in rows if x['outboxItemId']==key(source['outboxItemId'])]
+                        if row['intent']['payload']!=source['intent']['payload'] or row['deliveredAt']!=source['deliveredAt'] or row['status']!=['Pending','Delivering','Delivered','FailedRetryable','FailedFinal'][source['status']]:raise ValueError('The physical pre-ACK source disagrees with actual consumption/acknowledgment state.')
+                elif store=='etl-runtime':
+                    row,=connection.execute('SELECT InvocationJson,Status,AcceptedRecords,RejectedRecords,OutstandingRecords,OutstandingBytes FROM elsa_etl_runtime_runs').fetchall()
+                    invocation=json.loads(row[0]);terminal=connection.execute('SELECT Outcome FROM elsa_etl_runtime_terminals').fetchall()
+                    if row[1:]!=(5,2,0,0,0) or terminal!=[(3,)] or etl['intent']['payload']!=invocation or decoded(invocation['runId'])!=process['runId']:
+                        raise ValueError('The actual pre-ACK consumption left its original ETL invocation running or rebound cancellation.')
+
+
+
 def verify(path):
     manifest=json.loads(path.read_text());root=path.parent
-    if manifest.get('kind')=='actual-bpmn-pending-cancellation-matrix':
+    if manifest.get('kind') in ('actual-bpmn-pending-cancellation-matrix','actual-bpmn-consumed-before-ack-matrix'):
+        consumed_matrix=manifest['kind']=='actual-bpmn-consumed-before-ack-matrix'
         if manifest.get('schemaVersion')!=1 or len(manifest['cases'])!=2 or {c['stage'] for c in manifest['cases']}!={'model-command','native-terminal'}:
             raise ValueError('The pending cancellation matrix lacks both actual process cuts.')
         for case in manifest['cases']:
@@ -250,10 +307,10 @@ def verify(path):
             file=q.evidence_file(root,case['manifest'])
             if q.digest(file)!=case['sha256']:raise ValueError('A pending cancellation case manifest differs.')
             result=verify(file)
-            if result['sourceRevision']!=manifest['sourceRevision'] or result['pendingCancellationStage']!=case['stage'] or not result['pendingCancellationCrashProved']:
+            if result['sourceRevision']!=manifest['sourceRevision'] or result['pendingCancellationStage']!=case['stage'] or not result['postConsumptionPreAckCrashProved' if consumed_matrix else 'pendingCancellationCrashProved']:
                 raise ValueError('A pending cancellation case changed its source or actual stage.')
-        return {'sourceRevision':manifest['sourceRevision'],'actualPendingCancellationStages':['model-command','native-terminal'],'pendingCancellationCrashProved':True,
-            'wholeStoresVerified':18,'actualWorkbenchProcesses':8,'actualHttpProcesses':2,'postConsumptionPreAckCrashProved':False,
+        return {'sourceRevision':manifest['sourceRevision'],'actualPendingCancellationStages':['model-command','native-terminal'],'pendingCancellationCrashProved':not consumed_matrix,
+            'wholeStoresVerified':24 if consumed_matrix else 18,'actualWorkbenchProcesses':8,'actualHttpProcesses':2,'actualSdkProcesses':2 if consumed_matrix else 0,'postConsumptionPreAckCrashProved':consumed_matrix,
             'runBpmnEtlIntegrationProved':False,'modelHeldFaultRetryProved':False}
     model_cancel=manifest.get("kind")=="actual-direct-bpmn-native-etl-model-cancellation"
     pipeline_cancel=manifest.get("kind")=="actual-direct-bpmn-native-etl-pipeline-cancellation"
@@ -262,7 +319,8 @@ def verify(path):
     direct=cancelling or manifest.get("kind")=="actual-direct-bpmn-native-etl-recovery"
     if manifest.get("schemaVersion")!=1 or manifest.get("kind") not in ("actual-native-etl-recovery-reference","actual-direct-bpmn-native-etl-recovery","actual-direct-bpmn-native-etl-pipeline-cancellation","actual-direct-bpmn-native-etl-worker-cancellation","actual-direct-bpmn-native-etl-model-cancellation"):raise ValueError("Unknown ETL recovery reference evidence.")
     source=manifest["sourceRevision"];assets=manifest["assets"]
-    stage=manifest.get('pendingCancellationStage');pending_crash=stage is not None
+    stage=manifest.get('pendingCancellationStage');pending_crash=stage is not None;post_ack=manifest.get('postConsumptionPreAck') is True
+    if post_ack and not pending_crash:raise ValueError('A consumed-before-ACK case requires its actual pending cancellation source.')
     if pending_crash and stage!=('model-command' if model_cancel else 'native-terminal' if worker_cancel else None):raise ValueError('Unknown pending cancellation stage.')
     if len(source)!=40 or any(c not in "0123456789abcdef" for c in source):raise ValueError("The ETL reference lacks an exact source.")
     expected_cases={"model-cancel":("BpmnModel",False)} if model_cancel else {"native-cancel":("BpmnModel",False)} if worker_cancel else {"direct-cancel":("BpmnModel",False)} if pipeline_cancel else {"direct-success":("BpmnModel",False),"direct-business":("BpmnModel",True)} if direct else {"sequence":("Sequence",False),"flowchart":("Flowchart",False),"worker-business":("RunEtl",True)}
@@ -273,6 +331,7 @@ def verify(path):
     if worker_cancel:names.add("native-cancel-response.json")
     if model_cancel:names|={"model-cancel-response.json","model-cancel-command.json"}
     if pending_crash:names|={'pending.json','pending-checked.json','pending-wire.json'}|{'pending-'+s+'.sqlite.gz' for s in ('elsa','etl-runtime','etl-design')}
+    if post_ack:names|={'sdk-consume.json','consumed.json','consumed-checked.json','consumed-wire.json'}|{'consumed-'+s+'.sqlite.gz' for s in ('elsa','etl-runtime','etl-design')}
     declared={asset["path"] for asset in assets}
     if len(declared)!=len(assets) or declared!={case+"/"+name for case in expected_cases for name in names}:raise ValueError("The ETL recovery bundle lacks its exact actual assets.")
     for asset in assets:
@@ -282,12 +341,13 @@ def verify(path):
         def read(name):return json.loads(q.evidence_file(root,case+"/"+name).read_text())
         process=read("process.json");products=process["products"]
         if (process["sourceRevision"]!=source or process["parent"]!=parent or process["businessError"] is not business_error or process["predecessorExitCode"]!=-9 or
-                [item["role"] for item in process["processes"]]!=(["http-fixture"]+["workbench"]*(4 if pending_crash else 3)) or len({item["processId"] for item in process["processes"]})!=(5 if pending_crash else 4)):raise ValueError("The actual ETL reference lacks its distinct process-loss/restart provenance.")
+                [item["role"] for item in process["processes"]]!=(["http-fixture","workbench","workbench","consumption-sdk","workbench","workbench"] if post_ack else ["http-fixture"]+["workbench"]*(4 if pending_crash else 3)) or len({item["processId"] for item in process["processes"]})!=(6 if post_ack else 5 if pending_crash else 4)):raise ValueError("The actual ETL reference lacks its distinct process-loss/restart provenance.")
         if products["sourceCommit"]!=source or products["metadataOnly"] is not True or len(products["actualProductVersions"])!=(12 if direct else 6) or any(not item["productVersion"].endswith("+"+source) for item in products["actualProductVersions"]):raise ValueError("The actual Workbench and ETL products differ from their declared source.")
         before=read("before.json");finished=read("finished.json");recovered=read("recovered.json")
         before_wire=read("before-wire.json");wire=read("finished-wire.json")
         bridge=model_bridge(read,process,before,finished,business_error,cancelling,model_cancel) if direct else None
         if pending_crash:pending_cancellation(read,q.evidence_file(root,case+'/process.json').parent,process,bridge,model_cancel)
+        if post_ack:consumed_before_ack(read,q.evidence_file(root,case+'/process.json').parent,process,bridge,model_cancel)
         if finished!=read("retained.json") or wire!=read("retained-wire.json"):raise ValueError("The terminal native/ETL views or physical effects changed after another process.")
         identity=process["workflowExecutionId"];run_id=process["runId"];selection=process["selection"]
         old={node(item):item for item in before["native"]["activities"]};current={node(item):item for item in finished["native"]["activities"]}
@@ -336,6 +396,8 @@ def verify(path):
                     with closing(sqlite3.connect(database.as_uri()+"?mode=ro&immutable=1",uri=True)) as connection:
                         if connection.execute("PRAGMA integrity_check").fetchall()!=[("ok",)]:raise ValueError("An actual ETL snapshot failed integrity verification.")
                         if store=="elsa":
+                            if post_ack and phase=='finished' and connection.execute('SELECT COUNT(*) FROM elsa_runtime_scheduler_work_item').fetchone()[0]:
+                                raise ValueError('The recovered pre-ACK journey retained native/model scheduler work.')
                             if bridge is not None:physical_model_bridge(connection,phase,*bridge,model_cancel=model_cancel)
                             if model_cancel and phase=="finished":physical_model_cancellation(connection,read,*bridge)
                             row=connection.execute("SELECT Status,ContentJson FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId=?",(key(identity),)).fetchone()
@@ -381,9 +443,9 @@ def verify(path):
                     cancel_id[:-len(cancel_suffix)]!=result_source["outboxItemId"][:-len(result_suffix)]):
                 raise ValueError("The native cancellation lost its exact ETL address or same-checkpoint result responsibility.")
         results.append({"case":case,"acceptedRecords":accepted,"rejectedRecords":rejected,"physicalOutputRecords":len(records),"businessErrorPreserved":business_error})
-    result={"actualReferenceJourneys":results,"wholeStoresVerified":len(expected_cases)*(9 if pending_crash else 6),"sourceRevision":source,"directBpmnClosedWorkerIntegrationProved":direct,
+    result={"actualReferenceJourneys":results,"wholeStoresVerified":len(expected_cases)*(12 if post_ack else 9 if pending_crash else 6),"sourceRevision":source,"directBpmnClosedWorkerIntegrationProved":direct,
         "runBpmnEtlIntegrationProved":False,"modelHeldFaultRetryProved":False}
-    result.update(pendingCancellationCrashProved=pending_crash,pendingCancellationStage=stage,postConsumptionPreAckCrashProved=False)
+    result.update(pendingCancellationCrashProved=pending_crash and not post_ack,pendingCancellationStage=stage,postConsumptionPreAckCrashProved=post_ack)
     if not direct:result["directOrRunBpmnEtlIntegrationProved"]=False
     if cancelling:result.update(pipelineOriginatedCancellationProved=pipeline_cancel,nativeWorkerOriginatedCancellationProved=worker_cancel,modelToWorkerCancellationProved=model_cancel,modelCancellationBeforeAdmissionProved=False)
     return result
