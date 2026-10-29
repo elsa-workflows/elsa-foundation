@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-legacy-broadcast-header-schema-refusal",
+  "sourceRevision": "fe3b77bcc02c7042d9a8f5e7d584a57e63e3cd98",
+  "sourceFrom": "captured standard Workbench product version; diagnostic observer sourceRevision was unset",
+  "qualifyingRecovery": false,
+  "assets": [
+    {
+      "path": "failed-recipient-14iZz9Wu7V8.json",
+      "sha256": "91af95172865d9d71ba364eb7e7925f61afbd72e803aae05ccebe00ddd7e1b16"
+    },
+    {
+      "path": "failed-recipient-14iZz9Wu7V8.sqlite.gz",
+      "sha256": "30b9769f8df7472a0f370390a336517c485de8ee61e64025871631f436f3fd1a"
+    }
+  ],
+  "assertions": [
+    "Actual saved recipient remained Running with both original waits Suspended.",
+    "Actual source had selected recipients and was Delivered; its acknowledgment did not prove resumed recipient progression.",
+    "Actual recipient incident retained schema write refusal: existing native header v1, admitted host writer v2.",
+    "Consistent failed whole runtime store captured before the production metadata writer fix."
+  ]
+}

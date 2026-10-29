@@ -1,0 +1,270 @@
+{
+  "processId": 19595,
+  "sourceRevision": null,
+  "productVersion": "1.0.0\u002Bfe3b77bcc02c7042d9a8f5e7d584a57e63e3cd98",
+  "expected": {
+    "workflowExecutionId": "14iZz9Wu7V8",
+    "exists": true,
+    "status": "Completed",
+    "pinnedExecutable": {
+      "artifactId": "artifact-05141c7f1f4b",
+      "definitionId": "14iZz7qy9yf",
+      "definitionVersionId": "14iZz7s0YRo",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:05141c7f1f4bc7540277be45fb68eda142bb041a07aeb4cb8348d1ce8cad3f4d"
+    },
+    "pinnedSource": {
+      "sourceReferenceId": "activation-ref:publication-14iZz8NpfOp",
+      "sourceKind": "WorkflowDefinitionVersion",
+      "sourceId": "14iZz7s0YRo",
+      "sourceVersion": "1.0.0",
+      "definitionId": "14iZz7qy9yf",
+      "definitionVersionId": "14iZz7s0YRo",
+      "artifactVersion": "1.0.0",
+      "publicationId": "publication-14iZz8NpfOp",
+      "slotId": "activation-slot:11:14iZz7qy9yf:7:default"
+    },
+    "runKind": 2,
+    "tenantId": "default",
+    "partition": {
+      "value": "default"
+    },
+    "testScope": null,
+    "testScopeState": null,
+    "testActivities": null,
+    "testRunDeliveryReceipts": {},
+    "bookmarks": [],
+    "selectedActivities": [
+      {
+        "activityExecutionId": "14iZzBIbu0E",
+        "status": "Completed",
+        "bookmarkIds": [],
+        "attemptCount": 2
+      },
+      {
+        "activityExecutionId": "14iZzBIiRa9",
+        "status": "Completed",
+        "bookmarkIds": [],
+        "attemptCount": 2
+      }
+    ]
+  },
+  "observed": {
+    "instance": {
+      "workflowExecutionId": "14iZz9Wu7V8",
+      "artifactId": "artifact-05141c7f1f4b",
+      "definitionId": "14iZz7qy9yf",
+      "definitionVersionId": "14iZz7s0YRo",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:05141c7f1f4bc7540277be45fb68eda142bb041a07aeb4cb8348d1ce8cad3f4d",
+      "status": "Running",
+      "runKind": "PublishedRun",
+      "subStatus": null,
+      "createdAt": "2026-10-28T07:20:27.764179\u002B00:00",
+      "startedAt": "2026-10-28T07:20:27.764179\u002B00:00",
+      "updatedAt": "2026-10-28T07:20:27.77942\u002B00:00",
+      "completedAt": null,
+      "correlationId": null,
+      "parentWorkflowExecutionId": null,
+      "tenantId": "default",
+      "activityCount": 3,
+      "incidentCount": 2,
+      "sourceReferenceId": "activation-ref:publication-14iZz8NpfOp",
+      "publicationId": "publication-14iZz8NpfOp",
+      "slotId": "activation-slot:11:14iZz7qy9yf:7:default",
+      "sourceKind": "WorkflowDefinitionVersion",
+      "sourceId": "14iZz7s0YRo",
+      "sourceVersion": "1.0.0",
+      "activeIncidentCount": 2,
+      "blockingIncidentCount": 2
+    },
+    "activities": [
+      {
+        "activityExecutionId": "14iZz9xu0DB",
+        "workflowExecutionId": "14iZz9Wu7V8",
+        "executableNodeId": "node-waiter",
+        "authoredActivityId": "node-waiter",
+        "activityType": "Elsa.Activities.Bpmn.Activities.BpmnProcess",
+        "activityTypeVersion": "1.0.0\u002Bbf83b23b4b3987d6ac3b7c31df98ee9133156763",
+        "status": "Running",
+        "subStatus": null,
+        "executionSequence": 5095995183495271497,
+        "scheduledAt": "2026-10-28T07:20:27.813173\u002B00:00",
+        "startedAt": "2026-10-28T07:20:27.827622\u002B00:00",
+        "completedAt": null,
+        "firstCheckpointId": "checkpoint:dbbeda7de94a3558:schedule:node-waiter:activity-scheduled:14iZz9xu0DB",
+        "lastCheckpointId": "checkpoint:659dada82faa9c50:invoke:14iZz9xu0DB:activity-inspection-captured:14iZz9xu0DB",
+        "lastCommittedAt": "2026-10-28T07:20:28.055299\u002B00:00",
+        "provenance": {
+          "parentActivityExecutionId": null,
+          "schedulingActivityExecutionId": null,
+          "schedulingWorkflowExecutionId": "14iZz9Wu7V8",
+          "branchId": null,
+          "iterationId": null,
+          "executionPathId": null,
+          "executionScopeId": null,
+          "schedulingCause": "WorkflowStart",
+          "metadata": {}
+        },
+        "outcomeNames": [],
+        "bookmarkCount": 0,
+        "incidentCount": 0,
+        "valueSnapshotCount": 1,
+        "metadata": {}
+      },
+      {
+        "activityExecutionId": "14iZzBIiRa9",
+        "workflowExecutionId": "14iZz9Wu7V8",
+        "executableNodeId": "node-wait-b",
+        "authoredActivityId": "node-wait-b",
+        "activityType": "Elsa.Event",
+        "activityTypeVersion": "1.0.0\u002Bbf83b23b4b3987d6ac3b7c31df98ee9133156763",
+        "status": "Suspended",
+        "subStatus": "BookmarkWaiting",
+        "executionSequence": 7097718024039307471,
+        "scheduledAt": "2026-10-28T07:20:28.059322\u002B00:00",
+        "startedAt": "2026-10-28T07:20:28.070814\u002B00:00",
+        "completedAt": null,
+        "firstCheckpointId": "checkpoint:a938d0921a81cc65:schedule-child:node-wait-b:14iZzBIiRa9:activity-scheduled:14iZzBIiRa9",
+        "lastCheckpointId": "checkpoint:14iZz9Wu7V8:scheduler-poison:e8f09898ee790443",
+        "lastCommittedAt": "2026-10-29T18:30:31.718875\u002B00:00",
+        "provenance": {
+          "parentActivityExecutionId": "14iZz9xu0DB",
+          "schedulingActivityExecutionId": "14iZz9xu0DB",
+          "schedulingWorkflowExecutionId": "14iZz9Wu7V8",
+          "branchId": null,
+          "iterationId": null,
+          "executionPathId": "token:9",
+          "executionScopeId": null,
+          "schedulingCause": "element:intermediateCatchEvent",
+          "metadata": {}
+        },
+        "outcomeNames": [],
+        "bookmarkCount": 1,
+        "incidentCount": 1,
+        "valueSnapshotCount": 3,
+        "metadata": {}
+      },
+      {
+        "activityExecutionId": "14iZzBIbu0E",
+        "workflowExecutionId": "14iZz9Wu7V8",
+        "executableNodeId": "node-wait-a",
+        "authoredActivityId": "node-wait-a",
+        "activityType": "Elsa.Event",
+        "activityTypeVersion": "1.0.0\u002Bbf83b23b4b3987d6ac3b7c31df98ee9133156763",
+        "status": "Suspended",
+        "subStatus": "BookmarkWaiting",
+        "executionSequence": 7909761418495933300,
+        "scheduledAt": "2026-10-28T07:20:28.058862\u002B00:00",
+        "startedAt": "2026-10-28T07:20:28.06014\u002B00:00",
+        "completedAt": null,
+        "firstCheckpointId": "checkpoint:a938d0921a81cc65:schedule-child:node-wait-a:14iZzBIbu0E:activity-scheduled:14iZzBIbu0E",
+        "lastCheckpointId": "checkpoint:14iZz9Wu7V8:scheduler-poison:6f5bbb4d01cf7c27",
+        "lastCommittedAt": "2026-10-29T18:30:31.674301\u002B00:00",
+        "provenance": {
+          "parentActivityExecutionId": "14iZz9xu0DB",
+          "schedulingActivityExecutionId": "14iZz9xu0DB",
+          "schedulingWorkflowExecutionId": "14iZz9Wu7V8",
+          "branchId": null,
+          "iterationId": null,
+          "executionPathId": "token:7",
+          "executionScopeId": null,
+          "schedulingCause": "element:intermediateCatchEvent",
+          "metadata": {}
+        },
+        "outcomeNames": [],
+        "bookmarkCount": 1,
+        "incidentCount": 1,
+        "valueSnapshotCount": 3,
+        "metadata": {}
+      }
+    ],
+    "incidents": [
+      {
+        "incidentId": "incident:6f5bbb4d01cf7c27:scheduler-poison",
+        "workflowExecutionId": "14iZz9Wu7V8",
+        "activityExecutionId": "14iZzBIbu0E",
+        "executableNodeId": "node-wait-a",
+        "severity": "Critical",
+        "status": "Blocking",
+        "resolutionOutcome": {
+          "actionKind": "WaitForIntervention",
+          "appliedAt": "2026-10-29T18:30:31.674301\u002B00:00",
+          "strategy": null,
+          "systemSource": "PoisonedSchedulerWork",
+          "metadata": {}
+        },
+        "failureType": "SchedulerWorkPoisoned",
+        "message": "Scheduler work item \u002714l0lyYSBV3\u0027 (ResumeBookmark) was poisoned during dispatch by handler \u0027WorkflowResumeBookmarkSchedulerWorkHandler\u0027 after 1 failure(s): Elsa.Persistence.EntityFramework.EfSchemaWriteRefusedException: Schema family \u0027RuntimeWorkflowExecution\u0027 refused a write: the value needs schema version \u00271.0.0\u0027, but this host may write only \u00272.0.0\u0027 until \u00271.0.0\u0027 is finalized for the family. Nothing was saved.",
+        "createdAt": "2026-10-29T18:30:31.674301\u002B00:00",
+        "resolvedAt": null,
+        "isBlocking": true,
+        "metadata": {
+          "runtime.activityExecutionId": "14iZzBIbu0E",
+          "runtime.executableNodeId": "node-wait-a",
+          "runtime.poison.retryMode": "DoNotRetry",
+          "runtime.poison.retryReason": "Default runtime domain retry policy does not retry.",
+          "runtime.incidentId": "incident:6f5bbb4d01cf7c27:scheduler-poison",
+          "runtime.checkpointReason": "SchedulerWorkPoisoned",
+          "runtime.checkpointRequirement": "Mandatory",
+          "runtime.schedulerWorkItemId": "14l0lyYSBV3",
+          "runtime.commandKind": "ResumeBookmark",
+          "runtime.poison.handlerName": "WorkflowResumeBookmarkSchedulerWorkHandler",
+          "runtime.poison.failureCount": "1",
+          "runtime.faultType": "Elsa.Persistence.EntityFramework.EfSchemaWriteRefusedException",
+          "runtime.faultMessage": "Schema family \u0027RuntimeWorkflowExecution\u0027 refused a write: the value needs schema version \u00271.0.0\u0027, but this host may write only \u00272.0.0\u0027 until \u00271.0.0\u0027 is finalized for the family. Nothing was saved.",
+          "runtime.faultStackTrace": "   at Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaWriteGateInterceptor.CheckAsync(DbContext context, Boolean synchronous, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/SchemaFinalization/EfSchemaWriteGateInterceptor.cs:line 123\n   at Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaWriteGateInterceptor.SavingChangesAsync(DbContextEventData eventData, InterceptionResult\u00601 result, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/SchemaFinalization/EfSchemaWriteGateInterceptor.cs:line 61\n   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)\n   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointCommitStore.\u003C\u003Ec__DisplayClass21_0.\u003C\u003CCommitCoreAsync\u003Eg__CommitNewAsync|0\u003Ed.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs:line 390\n--- End of stack trace from previous location ---\n   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointCommitStore.\u003C\u003Ec__DisplayClass21_0.\u003C\u003CCommitCoreAsync\u003Eg__CommitNewAsync|0\u003Ed.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs:line 424\n--- End of stack trace from previous location ---\n   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointCommitStore.\u003C\u003Ec__DisplayClass21_0.\u003C\u003CCommitCoreAsync\u003Eg__CommitNewAsync|0\u003Ed.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs:line 424\n--- End of stack trace from previous location ---\n   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointCommitStore.CommitCoreAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs:line 263\n   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointCommitStore.CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs:line 147\n   at Elsa.Workflows.Runtime.Services.Coalescing.CoalescingRuntimeCheckpointCommitStore.CommitInnerAsync(RuntimeCoalescingSession session, RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs:line 283\n   at Elsa.Workflows.Runtime.Services.Coalescing.CoalescingRuntimeCheckpointCommitStore.CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs:line 236\n   at Elsa.Workflows.Runtime.Services.Checkpoints.RuntimeCheckpointCommitter.CommitAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs:line 190\n   at Elsa.Workflows.Runtime.Services.Bookmarks.BookmarkConsumptionCheckpointService.CommitAsync(BookmarkConsumptionCheckpointRequest request, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Bookmarks/BookmarkConsumptionCheckpointService.cs:line 180\n   at Elsa.Activities.Runtime.Services.WorkflowResumeBookmarkSchedulerWorkHandler.ReadResumeStateAsync[T](Func\u00601 read, RuntimeResumeBookmarkCommandPayload payload, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs:line 209\n   at Elsa.Activities.Runtime.Services.WorkflowResumeBookmarkSchedulerWorkHandler.ResumeActivityAsync(IServiceProvider serviceProvider, RuntimeCheckpointCommitter checkpointCommitter, ActivityFaultIncidentRecorder activityFaultIncidentRecorder, IBookmarkConsumptionCheckpointService bookmarkConsumptionCheckpointService, IWorkflowSchedulerWorkQueue schedulerWorkQueue, IDurableValueStateStore durableValueStateStore, IRuntimePayloadCapturePolicy payloadCapturePolicy, RuntimeSchedulerWorkItem workItem, RuntimeResumeBookmarkCommandPayload resumePayload, BookmarkState bookmark, IReadOnlyCollection\u00601 siblingBookmarks, WorkflowExecutable executable, ExecutableNode executableNode, ActivityExecutionState state, ActivityTriggerDelivery triggerDelivery, ActivityAttempt claimedAttempt, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs:line 262\n   at Elsa.Activities.Runtime.Services.WorkflowResumeBookmarkSchedulerWorkHandler.HandleAsync(RuntimeSchedulerWorkItem workItem, PersistenceScope persistenceScope, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs:line 204\n   at Elsa.Activities.Runtime.Services.WorkflowResumeBookmarkSchedulerWorkHandler.HandleAsync(RuntimeSchedulerWorkItem workItem, PersistenceScope persistenceScope, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs:line 204\n   at Elsa.Workflows.Runtime.Middleware.RuntimeActivityInvokeMiddleware.InvokeAsync(ActivityRuntimePipelineContext context, ActivityRuntimeMiddlewareDelegate next) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Middleware/RuntimeActivityInvokeMiddleware.cs:line 32\n   at Elsa.Workflows.Runtime.Services.Scheduler.WorkflowSchedulerDrainer.DispatchWithClaimRenewalAsync(ClaimRenewalState renewal, Func\u00602 dispatch, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs:line 651\n   at Elsa.Workflows.Runtime.Services.Scheduler.WorkflowSchedulerDrainer.DispatchWithClaimRenewalAsync(ClaimRenewalState renewal, Func\u00602 dispatch, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs:line 685\n   at Elsa.Workflows.Runtime.Services.Scheduler.WorkflowSchedulerDrainer.DispatchAsync(RuntimeSchedulerWorkItem workItem, RuntimeSchedulerWorkClaim claim, IServiceProvider ambientServices, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs:line 275"
+        }
+      },
+      {
+        "incidentId": "incident:e8f09898ee790443:scheduler-poison",
+        "workflowExecutionId": "14iZz9Wu7V8",
+        "activityExecutionId": "14iZzBIiRa9",
+        "executableNodeId": "node-wait-b",
+        "severity": "Critical",
+        "status": "Blocking",
+        "resolutionOutcome": {
+          "actionKind": "WaitForIntervention",
+          "appliedAt": "2026-10-29T18:30:31.718875\u002B00:00",
+          "strategy": null,
+          "systemSource": "PoisonedSchedulerWork",
+          "metadata": {}
+        },
+        "failureType": "SchedulerWorkPoisoned",
+        "message": "Scheduler work item \u002714l0lz3EWCZ\u0027 (ResumeBookmark) was poisoned during dispatch by handler \u0027WorkflowResumeBookmarkSchedulerWorkHandler\u0027 after 1 failure(s): Elsa.Persistence.EntityFramework.EfSchemaWriteRefusedException: Schema family \u0027RuntimeWorkflowExecution\u0027 refused a write: the value needs schema version \u00271.0.0\u0027, but this host may write only \u00272.0.0\u0027 until \u00271.0.0\u0027 is finalized for the family. Nothing was saved.",
+        "createdAt": "2026-10-29T18:30:31.718875\u002B00:00",
+        "resolvedAt": null,
+        "isBlocking": true,
+        "metadata": {
+          "runtime.activityExecutionId": "14iZzBIiRa9",
+          "runtime.executableNodeId": "node-wait-b",
+          "runtime.poison.retryMode": "DoNotRetry",
+          "runtime.poison.retryReason": "Default runtime domain retry policy does not retry.",
+          "runtime.incidentId": "incident:e8f09898ee790443:scheduler-poison",
+          "runtime.checkpointReason": "SchedulerWorkPoisoned",
+          "runtime.checkpointRequirement": "Mandatory",
+          "runtime.schedulerWorkItemId": "14l0lz3EWCZ",
+          "runtime.commandKind": "ResumeBookmark",
+          "runtime.poison.handlerName": "WorkflowResumeBookmarkSchedulerWorkHandler",
+          "runtime.poison.failureCount": "1",
+          "runtime.faultType": "Elsa.Persistence.EntityFramework.EfSchemaWriteRefusedException",
+          "runtime.faultMessage": "Schema family \u0027RuntimeWorkflowExecution\u0027 refused a write: the value needs schema version \u00271.0.0\u0027, but this host may write only \u00272.0.0\u0027 until \u00271.0.0\u0027 is finalized for the family. Nothing was saved.",
+          "runtime.faultStackTrace": "   at Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaWriteGateInterceptor.CheckAsync(DbContext context, Boolean synchronous, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/SchemaFinalization/EfSchemaWriteGateInterceptor.cs:line 123\n   at Elsa.Persistence.EntityFramework.SchemaFinalization.EfSchemaWriteGateInterceptor.SavingChangesAsync(DbContextEventData eventData, InterceptionResult\u00601 result, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/SchemaFinalization/EfSchemaWriteGateInterceptor.cs:line 61\n   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)\n   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointCommitStore.\u003C\u003Ec__DisplayClass21_0.\u003C\u003CCommitCoreAsync\u003Eg__CommitNewAsync|0\u003Ed.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs:line 390\n--- End of stack trace from previous location ---\n   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointCommitStore.\u003C\u003Ec__DisplayClass21_0.\u003C\u003CCommitCoreAsync\u003Eg__CommitNewAsync|0\u003Ed.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs:line 424\n--- End of stack trace from previous location ---\n   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointCommitStore.\u003C\u003Ec__DisplayClass21_0.\u003C\u003CCommitCoreAsync\u003Eg__CommitNewAsync|0\u003Ed.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs:line 424\n--- End of stack trace from previous location ---\n   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointCommitStore.CommitCoreAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs:line 263\n   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointCommitStore.CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs:line 147\n   at Elsa.Workflows.Runtime.Services.Coalescing.CoalescingRuntimeCheckpointCommitStore.CommitInnerAsync(RuntimeCoalescingSession session, RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs:line 283\n   at Elsa.Workflows.Runtime.Services.Coalescing.CoalescingRuntimeCheckpointCommitStore.CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs:line 236\n   at Elsa.Workflows.Runtime.Services.Checkpoints.RuntimeCheckpointCommitter.CommitAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs:line 190\n   at Elsa.Workflows.Runtime.Services.Bookmarks.BookmarkConsumptionCheckpointService.CommitAsync(BookmarkConsumptionCheckpointRequest request, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Bookmarks/BookmarkConsumptionCheckpointService.cs:line 180\n   at Elsa.Activities.Runtime.Services.WorkflowResumeBookmarkSchedulerWorkHandler.ReadResumeStateAsync[T](Func\u00601 read, RuntimeResumeBookmarkCommandPayload payload, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs:line 209\n   at Elsa.Activities.Runtime.Services.WorkflowResumeBookmarkSchedulerWorkHandler.ResumeActivityAsync(IServiceProvider serviceProvider, RuntimeCheckpointCommitter checkpointCommitter, ActivityFaultIncidentRecorder activityFaultIncidentRecorder, IBookmarkConsumptionCheckpointService bookmarkConsumptionCheckpointService, IWorkflowSchedulerWorkQueue schedulerWorkQueue, IDurableValueStateStore durableValueStateStore, IRuntimePayloadCapturePolicy payloadCapturePolicy, RuntimeSchedulerWorkItem workItem, RuntimeResumeBookmarkCommandPayload resumePayload, BookmarkState bookmark, IReadOnlyCollection\u00601 siblingBookmarks, WorkflowExecutable executable, ExecutableNode executableNode, ActivityExecutionState state, ActivityTriggerDelivery triggerDelivery, ActivityAttempt claimedAttempt, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs:line 262\n   at Elsa.Activities.Runtime.Services.WorkflowResumeBookmarkSchedulerWorkHandler.HandleAsync(RuntimeSchedulerWorkItem workItem, PersistenceScope persistenceScope, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs:line 204\n   at Elsa.Activities.Runtime.Services.WorkflowResumeBookmarkSchedulerWorkHandler.HandleAsync(RuntimeSchedulerWorkItem workItem, PersistenceScope persistenceScope, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowResumeBookmarkSchedulerWorkHandler.cs:line 204\n   at Elsa.Workflows.Runtime.Middleware.RuntimeActivityInvokeMiddleware.InvokeAsync(ActivityRuntimePipelineContext context, ActivityRuntimeMiddlewareDelegate next) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Middleware/RuntimeActivityInvokeMiddleware.cs:line 32\n   at Elsa.Workflows.Runtime.Services.Scheduler.WorkflowSchedulerDrainer.DispatchWithClaimRenewalAsync(ClaimRenewalState renewal, Func\u00602 dispatch, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs:line 651\n   at Elsa.Workflows.Runtime.Services.Scheduler.WorkflowSchedulerDrainer.DispatchWithClaimRenewalAsync(ClaimRenewalState renewal, Func\u00602 dispatch, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs:line 685\n   at Elsa.Workflows.Runtime.Services.Scheduler.WorkflowSchedulerDrainer.DispatchAsync(RuntimeSchedulerWorkItem workItem, RuntimeSchedulerWorkClaim claim, IServiceProvider ambientServices, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs:line 275"
+        }
+      }
+    ],
+    "outputs": {},
+    "persistenceMode": "Balanced",
+    "inspectionGranularity": "boundary-level",
+    "activityNextContinuationToken": null,
+    "permissions": {
+      "canManage": true,
+      "canInspectValues": true
+    }
+  },
+  "snapshot": {
+    "file": "failed-recipient-14iZz9Wu7V8.sqlite.gz",
+    "databaseSha256": "5a01e10565c8abd20bea364e9d97e88ea75e8a429bd06f764aead09981d8360a",
+    "gzipSha256": "30b9769f8df7472a0f370390a336517c485de8ee61e64025871631f436f3fd1a"
+  }
+}

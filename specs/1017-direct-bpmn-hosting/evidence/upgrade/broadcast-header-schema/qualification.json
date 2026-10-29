@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "executingSource": "4716b51ec75284efa2b85fdf3b36a5125571335b",
+  "regressionSource": "fe3b77bcc02c7042d9a8f5e7d584a57e63e3cd98",
+  "priorCiHead": "aef0d539b80f1147761f18b773be5678f2dd1d82",
+  "priorCiRun": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40925038408/job/123628697925",
+  "priorCiFailedAttempts": 2,
+  "localOriginalFailureReproduced": true,
+  "failureEvidenceManifest": "failure/manifest.json",
+  "failureEvidenceManifestSha256": "c270ba28c9bf930b87c68d9f5a3fab6d5fe7620cbe1e79f94040c4a7a7d12b3b",
+  "actualLegacyBroadcastCutsRecovered": 4,
+  "wholeUpgradedStoresVerified": 8,
+  "actualStandardWorkbenchProcesses": 12,
+  "allQualifiedProcessesStopped": true,
+  "frozenPublishedDescriptorsVerified": 2,
+  "frozenBaselineAssetsUnchanged": 104,
+  "focusedProviderTests": {
+    "passed": 106,
+    "failed": 0,
+    "skipped": 0,
+    "coverage": "StimulusDeliverySchemaGateTests, ExactBookmarkResumeCheckpointTests, EfRuntimeModelCheckpointTests",
+    "logSha256": "857261775cd982777adf94b2ecd42054c6f7696a1f3ae05b7f9b4c282baa9bed",
+    "productionCodeIdenticalToExecutingSource": true,
+    "newVersionSelectionCases": 2
+  },
+  "newVersionSelectionCases": {
+    "heldV1": "Passes; storage1 and native JSON unchanged.",
+    "activeV2WithoutFix": "Fails actual schema gate; no partial commit.",
+    "activeV2WithFix": "Passes; storage2, original native JSON unchanged, original revision increment retained."
+  },
+  "actualLegacyHostTest": {
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "fourCuts": true,
+    "logSha256": "72c83a72c72ab4f00fe3f4e5320af0d4761de42879b2ab7bced40d41abab7361"
+  },
+  "writeGuardBypassed": false,
+  "familyHoldsOrFinalizationEditedInHost": false,
+  "fullPrReviewRounds": 0,
+  "allLegacyFamiliesRecovered": false,
+  "studioAcceptanceProved": false,
+  "directModelBroadcastProved": false,
+  "scopeLimits": [
+    "Existing native listeners were selected/queued but failed during exact bookmark resume because revision-only owner-header touches retained storage stamp1 under admitted writer2. Actual failed API/store retained before production edit.",
+    "Exact bookmark resume and model-parent wait metadata touches now use the existing family write-version selector, retaining the gate, version floor, CAS checks and native ContentJson.",
+    "All four original broadcaster cuts recover on a standard upgraded host, preserve exact first-delivery recipients/source, empty and rearmed decisions, pins/migrations/artifacts and frozen authoring, then retire normally and survive fresh processes.",
+    "Only this legacy-broadcast compatibility arm is requalified; other upgrade families, final affected-source Studio, model broadcast, faults/retry and provider/rollback remain open."
+  ],
+  "actualRunBpmnHumanHostRegression": {
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0,
+    "executingSource": "4716b51ec75284efa2b85fdf3b36a5125571335b",
+    "logSha256": "131df6925aa8fa7bfd23f334ddf01565ea8342c9732d4aa6ee4e4b781e26ac69",
+    "scope": "Actual native parent admission/resume regression only; not final Studio or the whole direct-model program."
+  }
+}
