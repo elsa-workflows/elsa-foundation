@@ -23,8 +23,10 @@ public sealed record RuntimeCheckpointCommit(
     public void EnsureModelStateShape()
     {
         if (ModelState is not { } model) return;
+        var retainsState = model.ExpectedRevision == model.State.Revision;
         if (model.State.ExecutionId != WorkflowExecutionId || ExpectedFence is null ||
-            model.State.UpdatedAt != Checkpoint.OccurredAt || model.Input.AcceptedAt != Checkpoint.OccurredAt ||
+            (!retainsState && model.State.UpdatedAt != Checkpoint.OccurredAt) ||
+            model.State.UpdatedAt > Checkpoint.OccurredAt || model.Input.AcceptedAt != Checkpoint.OccurredAt ||
             ExpectedBookmarkResume is not null || StateChanges.WorkflowExecution is not null ||
             StateChanges.ActivityExecutions.Count != 0 || StateChanges.ActivityExecutionInspections.Count != 0 ||
             StateChanges.Bookmarks.Count != 0 || StateChanges.DurableValues.Count != 0 ||

@@ -8,9 +8,10 @@ namespace Elsa.Workflows.Runtime.Services.Executions;
 
 /// <summary>Protocol authority comes from checked physical material and committed state, never an input hint.</summary>
 internal sealed class RuntimeExecutionProtocolSelector(RuntimeExecutionProtocolRegistry registry,
-    IWorkflowExecutableStore materialStore, IRuntimeModelExecutionReader stateReader,
+    IWorkflowExecutableStore materialStore,
     IWorkflowExecutionStateStore nativeStateReader, IRuntimeCheckpointCommitStore checkpointStore,
-    IPersistenceAccessContextAccessor access, IServiceProvider scopedServices, IWorkflowSchedulerWorkQueue queue)
+    IPersistenceAccessContextAccessor access, IServiceProvider scopedServices, IWorkflowSchedulerWorkQueue queue,
+    IRuntimeModelExecutionReader? stateReader = null)
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
     private readonly HashSet<string> selected = new(StringComparer.Ordinal);
@@ -19,7 +20,9 @@ internal sealed class RuntimeExecutionProtocolSelector(RuntimeExecutionProtocolR
     public async ValueTask<bool> IsModelAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken)
     {
         if (envelope.Command.Kind == WorkflowExecutionCommandKind.ExecuteModel) return true;
-        var state = await stateReader.FindAsync(envelope.WorkflowExecutionId, cancellationToken);
+        if (stateReader is null && checkpointStore.SupportsModelCheckpoint)
+            throw Unavailable("The selected model persistence has no state reader.");
+        var state = stateReader is null ? null : await stateReader.FindAsync(envelope.WorkflowExecutionId, cancellationToken);
         if (state is null)
         {
             var head = await queue.ListAsync(new(envelope.WorkflowExecutionId, limit: 1), cancellationToken);
@@ -33,7 +36,7 @@ internal sealed class RuntimeExecutionProtocolSelector(RuntimeExecutionProtocolR
     {
         if (work.CommandKind != WorkflowExecutionCommandKind.ExecuteModel || work.Payload is null)
             throw Unavailable("The scheduler item is not a supported model input.");
-        if (!materialStore.SupportsModelMaterial || !checkpointStore.SupportsModelCheckpoint ||
+        if (stateReader is null || !materialStore.SupportsModelMaterial || !checkpointStore.SupportsModelCheckpoint ||
             !checkpointStore.CanCommitModelState(stateReader))
             throw Unavailable("The selected physical stores do not support atomic model execution.");
         var command = work.Payload.Value.Deserialize<RuntimeModelExecutionCommand>(Web)

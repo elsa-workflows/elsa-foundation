@@ -75,6 +75,10 @@ Selection reads actual physical material, full pin/incarnation, committed model 
 
 The cross-domain production consumer is `ActivitiesBpmnHostingFeature` and its internal BPMN driver. This initial single-node human profile does not qualify clustered model placement, generic settlement, runtime-only deployment or a stable arbitrary-model plugin promise. See [spec1017](../../../../../specs/1017-direct-bpmn-hosting/spec.md).
 
+An unchanged model revision in `RuntimeModelStateChange` records an input receipt against the exact current state. The physical writer rejects any state/payload/timestamp/result difference, preserves stored state bytes and still compares the row revision at commit. The actual BPMN consumer uses it to retain obsolete/terminal-input rejection without advancing or reviving execution. This does not qualify the remaining cancellation/parent settlement bridges.
+
+Model readers come only from the selected physical provider. With no model provider installed, native default composition still resolves and runs; model inspection/dispatch reports unavailability rather than manufacturing a reader or treating unavailable model state as an empty store. If model checkpoint capability is selected without its reader, protocol selection refuses before claim.
+
 ### `IWorkflowDispatchStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one provider owns first-class workflow-dispatch lifecycle records).
 - **Signature:** save/find plus list by parent workflow execution ID.

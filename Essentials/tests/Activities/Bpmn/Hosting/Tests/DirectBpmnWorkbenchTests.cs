@@ -51,6 +51,7 @@ public sealed class DirectBpmnWorkbenchTests
         var completionPath = executionPath + "/work/" + work["invocationId"]!.GetValue<string>() + "/complete";
         var obsolete = await host.PostAsync(completionPath, new { requestId = "obsolete", attemptId = "obsolete-attempt" }, HttpStatusCode.Conflict);
         Assert.Equal("obsolete-human-work", obsolete["result"]!["code"]!.GetValue<string>());
+        Assert.True(JsonNode.DeepEquals(recovered, await host.GetAsync(executionPath)));
         Assert.True(JsonNode.DeepEquals(work, Assert.Single((await host.GetAsync(executionPath + "/work"))["items"]!.AsArray())));
         var rejectedRevision = (await host.GetAsync(executionPath))["revision"]!.GetValue<long>();
         await host.PostAsync(completionPath, new { requestId = "obsolete", attemptId = work["attemptId"]!.GetValue<string>() }, HttpStatusCode.Conflict);
@@ -66,6 +67,11 @@ public sealed class DirectBpmnWorkbenchTests
         Assert.True((await host.PostAsync(completionPath, completion))["replay"]!.GetValue<bool>());
         Assert.Equal(completed["revision"]!.GetValue<long>(), (await host.GetAsync(executionPath))["revision"]!.GetValue<long>());
         Assert.Equal("Accepted", (await host.GetAsync(executionPath + "/commands/complete"))["result"]!["status"]!.GetValue<string>());
+        var late = await host.PostAsync(completionPath, new { requestId = "late", attemptId = work["attemptId"]!.GetValue<string>() }, HttpStatusCode.Conflict);
+        Assert.False(late["pending"]!.GetValue<bool>());
+        Assert.Equal("execution-terminal", late["result"]!["code"]!.GetValue<string>());
+        Assert.True(JsonNode.DeepEquals(completed, await host.GetAsync(executionPath)));
+        Assert.Equal("execution-terminal", (await host.GetAsync(executionPath + "/commands/late"))["result"]!["code"]!.GetValue<string>());
         await host.StopAsync();
         await using var database = new SqliteConnection($"Data Source={host.RuntimeDatabase};Mode=ReadOnly;Pooling=False");
         await database.OpenAsync();
@@ -89,7 +95,7 @@ public sealed class DirectBpmnWorkbenchTests
                 Assert.Contains(sourceRevision, binaries.Single(binary => binary.file == "Elsa.Workbench.dll").productVersion!);
             var evidence = new { formatVersion = 1, sourceRevision, capturedAt = DateTimeOffset.UtcNow,
                 profile = "foundation-direct-v1 / built-in single-node mailbox / EF SQLite / production Workbench authenticated HTTP",
-                originalProcessId = previousProcess, restartedProcessId = restartedProcess, published, started, waiting, recovered, work, obsolete, accepted, completed,
+                originalProcessId = previousProcess, restartedProcessId = restartedProcess, published, started, waiting, recovered, work, obsolete, accepted, completed, late,
                 nativeWorkflowRows = 0, nativeActivityRows = 0, nativeBookmarkRows = 0, exactCompletionReplayPreservedRevision = true,
                 binaries, snapshots = new[] { waitingSnapshot, completedSnapshot },
                 limits = new[] { "Same-source process restart; no changed-binary or legacy-upgrade acceptance.", "Combined host has Design storage configured; runtime-only proof remains open.",

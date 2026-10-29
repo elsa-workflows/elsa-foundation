@@ -88,16 +88,17 @@ public sealed class RuntimeModelInputReceipt
     public JsonElement Result { get; }
 }
 
-/// <summary>A fenced decision's model state and exact accepted-input proof; only a checkpoint may write it.</summary>
+/// <summary>A fenced input's resulting model state and receipt. An unchanged revision retains the exact committed state.</summary>
 public sealed class RuntimeModelStateChange
 {
     public RuntimeModelStateChange(long? expectedRevision, RuntimeModelExecutionState state, RuntimeModelInputReceipt input)
     {
         ArgumentNullException.ThrowIfNull(state); ArgumentNullException.ThrowIfNull(input);
         if (expectedRevision is <= 0 || expectedRevision == long.MaxValue) throw new ArgumentOutOfRangeException(nameof(expectedRevision));
-        if (state.Revision != (expectedRevision ?? 0) + 1 || input.AcceptedRevision != state.Revision ||
-            input.Scope != state.Scope || input.ExecutionId != state.ExecutionId)
-            throw new ArgumentException("A model decision requires the next revision and matching scoped input receipt.");
+        var retainsState = expectedRevision is not null && state.Revision == expectedRevision;
+        if ((!retainsState && state.Revision != (expectedRevision ?? 0) + 1) || input.AcceptedRevision != state.Revision ||
+            input.Scope != state.Scope || input.ExecutionId != state.ExecutionId || input.AcceptedAt < state.UpdatedAt)
+            throw new ArgumentException("A model input requires the next revision or exact retained state, with its matching scoped receipt.");
         ExpectedRevision = expectedRevision; State = state; Input = input;
     }
 

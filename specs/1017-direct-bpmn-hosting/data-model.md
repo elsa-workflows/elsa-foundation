@@ -18,6 +18,8 @@ Validation occurs at both application and provider boundaries: physical key equa
 
 Semantic revision advances only on accepted model decisions. Execution fence identifies coordinator ownership; worker attempt/fence identifies a work attempt. They are independent. A model state update cannot authorize a foreign/obsolete work result. Existing native participants and absent-model fingerprints remain unchanged; do not append an empty serialized model field to old identities.
 
+An input may retain the exact current state/revision while recording a rejected or settlement receipt. `RuntimeModelStateChange` uses `ExpectedRevision == State.Revision` for this case. The provider compares the complete proposed state with the current checked state, retains its original bytes/timestamps, and still forces a physical revision compare in the fenced checkpoint. Receipt, consumed claim and marker remain atomic; an unchanged revision is not permission to mutate payload, lifecycle or result. A terminal execution can retain such a receipt without semantic revival.
+
 ## Accepted input and conflict identity
 
 An input records scope, execution, command/delivery ID, canonical content fingerprint, exact invocation/attempt where applicable, accepted revision and retained result. Its logical key includes scope/execution/input ID. Equivalent retries return the recorded outcome after authorization; conflicting content under the same key is refused without mutation. Unknown model protocol/command is refused before durable acceptance and cannot reach Noop fallback.

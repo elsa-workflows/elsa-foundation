@@ -13,11 +13,13 @@ using Elsa.Workflows.Runtime.Services.Checkpoints;
 namespace Elsa.Activities.Bpmn.Internal;
 
 /// <summary>The first direct profile uses library semantics and model-owned human work, without native activities.</summary>
-internal sealed class BpmnDirectExecutionDriver(IRuntimeModelExecutionReader reader, RuntimeCheckpointCommitter committer,
-    TimeProvider clock, BpmnModelHostingOptions options) : IRuntimeExecutionProtocolDriver
+internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter committer,
+    TimeProvider clock, BpmnModelHostingOptions options, IRuntimeModelExecutionReader? reader = null) : IRuntimeExecutionProtocolDriver
 {
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
     private static readonly JsonSerializerOptions Strict = new(JsonSerializerDefaults.Web) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
+    private IRuntimeModelExecutionReader Reader => reader ?? throw new RuntimeSchedulerWorkUnavailableException(
+        "bpmn.state-unavailable", "The selected host has no model state reader.");
 
     public ValueTask ValidateMaterialAsync(RuntimeModelMaterial material, CancellationToken cancellationToken = default)
     {
@@ -50,7 +52,7 @@ internal sealed class BpmnDirectExecutionDriver(IRuntimeModelExecutionReader rea
                 break;
             default: throw new BpmnModelValidationException("The BPMN input kind is unsupported.");
         }
-        var prior = await reader.FindInputAsync(context.WorkItem.WorkflowExecutionId, context.Command.InputId, cancellationToken);
+        var prior = await Reader.FindInputAsync(context.WorkItem.WorkflowExecutionId, context.Command.InputId, cancellationToken);
         if (prior is not null && prior.ContentFingerprint != RuntimeCheckpointCommitFingerprint.ComputeModelInput(context.Command))
             throw new RuntimeCheckpointReplayConflictException(context.Command.InputId);
     }
@@ -60,7 +62,7 @@ internal sealed class BpmnDirectExecutionDriver(IRuntimeModelExecutionReader rea
         var command = context.Command;
         var executionId = context.WorkItem.WorkflowExecutionId;
         var fingerprint = RuntimeCheckpointCommitFingerprint.ComputeModelInput(command);
-        if (await reader.FindInputAsync(executionId, command.InputId, cancellationToken) is { } prior)
+        if (await Reader.FindInputAsync(executionId, command.InputId, cancellationToken) is { } prior)
         {
             if (prior.ContentFingerprint != fingerprint) throw new RuntimeCheckpointReplayConflictException(command.InputId);
             return;
@@ -115,8 +117,8 @@ internal sealed class BpmnDirectExecutionDriver(IRuntimeModelExecutionReader rea
         }
         var now = clock.GetUtcNow();
         if (current is not null && now < current.UpdatedAt) now = current.UpdatedAt;
-        var revision = checked((current?.Revision ?? 0) + 1);
-        var state = new RuntimeModelExecutionState(1, context.Scope, executionId, command.TenantId,
+        var revision = rejection is null ? checked((current?.Revision ?? 0) + 1) : current!.Revision;
+        var state = rejection is not null ? current! : new RuntimeModelExecutionState(1, context.Scope, executionId, command.TenantId,
             context.Material.Model!.Protocol, context.Material.Identity, context.Material.IncarnationId, revision, lifecycle,
             command.Authority, current?.CreatedAt ?? now, now, JsonSerializer.SerializeToElement(document, Web), terminal);
         var receipt = new RuntimeModelInputReceipt(context.Scope, executionId, command.InputId, command.InputKind,

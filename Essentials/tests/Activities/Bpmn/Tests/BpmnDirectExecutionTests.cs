@@ -25,6 +25,26 @@ public sealed class BpmnDirectExecutionTests : IDisposable
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
     private readonly string database = Path.Combine(Path.GetTempPath(), "elsa-direct-bpmn-" + Guid.NewGuid().ToString("N") + ".sqlite");
 
+    [Fact]
+    public async Task Native_default_composition_runs_while_model_reads_refuse_without_a_selected_provider()
+    {
+        await using var host = WorkflowExecutionHarness.Create().ConfigureServices(services =>
+        {
+            services.AddLogging();
+            new EventsFeature().ConfigureServices(services);
+            new ActivitiesBpmnHostingFeature().ConfigureServices(services);
+        }).Build("native-invocation");
+        foreach (var initializer in host.Services.GetServices<IShellInitializer>()) await initializer.InitializeAsync();
+        foreach (var task in host.Services.GetServices<IStartupTask>()) await task.ExecuteAsync(CancellationToken.None);
+        var run = await host.RunAsync(WorkflowExecutionHarness.NewExecutable(WorkflowExecutionHarness.NewProbeNode("native")));
+        Assert.Equal(WorkflowExecutionStatus.Completed, run.WorkflowState!.Status);
+        await using var scope = await ScopeAsync(host);
+        Assert.Null(scope.ServiceProvider.GetService<IRuntimeModelExecutionReader>());
+        var runtime = scope.ServiceProvider.GetRequiredService<IBpmnModelRuntime>();
+        await Assert.ThrowsAsync<Elsa.Workflows.Runtime.Core.Exceptions.RuntimeSchedulerWorkUnavailableException>(() =>
+            runtime.FindExecutionAsync("unavailable", new("operator", null)).AsTask());
+    }
+
     [Theory]
     [InlineData("duplicate-protocol")]
     [InlineData("duplicate-driver")]
@@ -107,16 +127,24 @@ public sealed class BpmnDirectExecutionTests : IDisposable
         Assert.False(started.Replay);
         Assert.True((await runtime.StartAsync(published.SourceReferenceId, "request-start", new Dictionary<string, JsonElement>(), caller)).Replay);
         var work = Assert.Single((await runtime.ListWorkAsync(started.ExecutionId, new(), caller)).Items);
+        var beforeObsolete = (await runtime.FindExecutionAsync(started.ExecutionId, caller))!;
         var obsolete = await runtime.CompleteHumanAsync(started.ExecutionId, "obsolete", work.InvocationId, "wrong-attempt", null, caller);
         Assert.Equal("Rejected", obsolete.Result!.Value.GetProperty("status").GetString());
         Assert.Equal("obsolete-human-work", obsolete.Result.Value.GetProperty("code").GetString());
+        Assert.Equal(JsonSerializer.Serialize(beforeObsolete, Web), JsonSerializer.Serialize(await runtime.FindExecutionAsync(started.ExecutionId, caller), Web));
         await Assert.ThrowsAsync<Elsa.Workflows.Runtime.Core.Exceptions.RuntimeCheckpointReplayConflictException>(() =>
             runtime.CompleteHumanAsync(started.ExecutionId, "obsolete", work.InvocationId, work.AttemptId, null, caller).AsTask());
         var completed = await runtime.CompleteHumanAsync(started.ExecutionId, "complete", work.InvocationId, work.AttemptId, null, caller);
         Assert.Equal("Accepted", completed.Result!.Value.GetProperty("status").GetString());
         Assert.True((await runtime.CompleteHumanAsync(started.ExecutionId, "complete", work.InvocationId, work.AttemptId, ["Done"], caller)).Replay);
         Assert.True((await runtime.CompleteHumanAsync(started.ExecutionId, "complete", work.InvocationId, work.AttemptId, [], caller)).Replay);
-        Assert.Equal(RuntimeModelLifecycle.TerminalSettled, (await runtime.FindExecutionAsync(started.ExecutionId, caller))!.Lifecycle);
+        var terminal = (await runtime.FindExecutionAsync(started.ExecutionId, caller))!;
+        Assert.Equal(RuntimeModelLifecycle.TerminalSettled, terminal.Lifecycle);
+        var late = await runtime.CompleteHumanAsync(started.ExecutionId, "late", work.InvocationId, work.AttemptId, null, caller);
+        Assert.False(late.Pending);
+        Assert.Equal("execution-terminal", late.Result!.Value.GetProperty("code").GetString());
+        Assert.Equal(JsonSerializer.Serialize(terminal, Web), JsonSerializer.Serialize(await runtime.FindExecutionAsync(started.ExecutionId, caller), Web));
+        Assert.False(await scope.ServiceProvider.GetRequiredService<RuntimeDbContext>().SchedulerWorkItems.AnyAsync());
         var foreign = new BpmnModelCaller("other-operator", "other-tenant");
         await Assert.ThrowsAsync<InvalidOperationException>(() => runtime.FindExecutionAsync(started.ExecutionId, foreign).AsTask());
         await using (var foreignScope = await host.Services.GetRequiredService<IPersistenceOperationScopeFactory>().CreateAsync(new("other-tenant")))

@@ -28,6 +28,113 @@ public sealed class EfRuntimeModelCheckpointTests
     private static readonly RuntimeExecutionLease Lease = new("lease", "execution", "owner", Now, Now.AddMinutes(10), 1);
     private static readonly RuntimeCheckpointPersistenceDecision Immediate = new(RuntimeCheckpointPersistenceMode.Immediate);
 
+    [Theory]
+    [InlineData(RuntimeModelLifecycle.Running)]
+    [InlineData(RuntimeModelLifecycle.TerminalSettled)]
+    public async Task Retained_input_records_its_receipt_without_rewriting_execution_state(RuntimeModelLifecycle lifecycle)
+    {
+        await using var database = await CreateDatabaseAsync();
+        await using (var context = database.Open()) await Store(context).CommitAsync(Commit(1, lifecycle), Immediate);
+        await using (var context = database.Open())
+        {
+            var before = await context.Set<RuntimeModelExecutionEntity>().AsNoTracking().SingleAsync();
+            await Store(context).CommitAsync(Retained(1, lifecycle), Immediate);
+            var after = await context.Set<RuntimeModelExecutionEntity>().AsNoTracking().SingleAsync();
+            Assert.Equal(before.ContentJson, after.ContentJson);
+            Assert.Equal(before.Revision, after.Revision);
+            Assert.Equal(before.SchemaVersion, after.SchemaVersion);
+            Assert.Equal(1, (await Reader(context).FindInputAsync("execution", "obsolete"))!.AcceptedRevision);
+            Assert.Equal(2, await context.RuntimeCheckpointCommits.CountAsync());
+        }
+        await using var restarted = database.Open();
+        Assert.Equal(lifecycle, (await Reader(restarted).FindAsync("execution"))!.Lifecycle);
+        Assert.NotNull(await Reader(restarted).FindInputAsync("execution", "obsolete"));
+    }
+
+    [Theory]
+    [InlineData("payload")]
+    [InlineData("timestamp")]
+    [InlineData("terminal-result")]
+    public async Task An_unchanged_revision_cannot_smuggle_a_state_mutation(string field)
+    {
+        await using var database = await CreateDatabaseAsync();
+        await using var context = database.Open();
+        await Store(context).CommitAsync(Commit(1, RuntimeModelLifecycle.TerminalSettled), Immediate);
+        var commit = Retained(1, RuntimeModelLifecycle.TerminalSettled);
+        var state = commit.ModelState!.State;
+        var changed = new RuntimeModelExecutionState(state.FormatVersion, state.Scope, state.ExecutionId, state.TenantId, state.Protocol,
+            state.Executable, state.MaterialIncarnationId, state.Revision, state.Lifecycle, state.Authority, state.CreatedAt,
+            field == "timestamp" ? state.UpdatedAt.AddTicks(1) : state.UpdatedAt,
+            field == "payload" ? JsonSerializer.SerializeToElement(new { tokens = new[] { "injected" } }) : state.Payload,
+            field == "terminal-result" ? JsonSerializer.SerializeToElement(new { outcome = "replaced" }) : state.TerminalResult);
+        commit = commit with { ModelState = new(state.Revision, changed, commit.ModelState.Input) };
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Store(context).CommitAsync(commit, Immediate).AsTask());
+        Assert.Null(await Reader(context).FindInputAsync("execution", "obsolete"));
+        Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Retained_input_still_compares_the_physical_revision_at_commit()
+    {
+        await using var database = await CreateDatabaseAsync();
+        await using (var context = database.Open()) await Store(context).CommitAsync(Commit(1), Immediate);
+        var advance = new AdvanceBeforeModelCompare();
+        await using (var context = database.Open(advance))
+            await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => Store(context).CommitAsync(Retained(1), Immediate).AsTask());
+        Assert.True(advance.Changed);
+        await using var restarted = database.Open();
+        Assert.Equal(1, (await Reader(restarted).FindAsync("execution"))!.Revision);
+        Assert.Null(await Reader(restarted).FindInputAsync("execution", "obsolete"));
+        Assert.Single(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task Retained_input_marker_failure_rolls_back_receipt_and_the_fence_touch()
+    {
+        await using var database = await CreateDatabaseAsync();
+        long revision;
+        await using (var context = database.Open())
+        {
+            await Store(context).CommitAsync(Commit(1), Immediate);
+            revision = (await context.ExecutionLivenessStates.SingleAsync()).Revision;
+        }
+        await using (var context = database.Open(new FailMarker()))
+            await Assert.ThrowsAsync<DbUpdateException>(() => Store(context).CommitAsync(Retained(1), Immediate).AsTask());
+        await using var restarted = database.Open();
+        Assert.Null(await Reader(restarted).FindInputAsync("execution", "obsolete"));
+        Assert.Equal(revision, (await restarted.ExecutionLivenessStates.SingleAsync()).Revision);
+        Assert.Single(await restarted.RuntimeCheckpointCommits.ToArrayAsync());
+    }
+
+    private RuntimeCheckpointCommit Retained(long revision, RuntimeModelLifecycle lifecycle = RuntimeModelLifecycle.Running)
+    {
+        var state = Change(revision, lifecycle: lifecycle).State;
+        var at = Now.AddSeconds(5);
+        var input = new RuntimeModelInputReceipt(state.Scope, state.ExecutionId, "obsolete", "test.input", "obsolete-content", revision, at,
+            "invocation", "obsolete-attempt", JsonSerializer.SerializeToElement(new { status = "Rejected" }));
+        return new("obsolete", new("obsolete", "ModelDecision", "execution", at, [], new Dictionary<string, string>()),
+            new(null, null, [], [], [], [], []), [], new Dictionary<string, string>())
+            { ExpectedFence = Lease.ToFence(), ModelState = new(revision, state, input) };
+    }
+
+    private sealed class AdvanceBeforeModelCompare : DbCommandInterceptor
+    {
+        public bool Changed { get; private set; }
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (!Changed && command.CommandText.StartsWith("UPDATE", StringComparison.Ordinal) && command.CommandText.Contains("\"elsa_runtime_model_execution\"", StringComparison.Ordinal))
+            {
+                Changed = true;
+                await using var advance = command.Connection!.CreateCommand();
+                advance.Transaction = command.Transaction;
+                advance.CommandText = "UPDATE elsa_runtime_model_execution SET Revision = Revision + 1";
+                await advance.ExecuteNonQueryAsync(cancellationToken);
+            }
+            return result;
+        }
+    }
+
     [Fact]
     public async Task Decisions_survive_context_restart_with_exact_receipts_and_no_native_header()
     {

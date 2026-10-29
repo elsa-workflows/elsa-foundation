@@ -11,13 +11,16 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Activities.Bpmn.Internal;
 
 internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWorkflowExecutableSourceReferenceStore sources,
-    IWorkflowExecutableRootWriteLeaseManager leases, IRuntimeModelExecutionReader states, BpmnDirectExecutionDriver driver,
+    IWorkflowExecutableRootWriteLeaseManager leases, BpmnDirectExecutionDriver driver,
     IWorkflowExecutionActorProvider actors, IPersistenceAccessContextAccessor access, IRuntimeRecoveryContinuationCodec continuations,
-    TimeProvider clock, IWorkflowSchedulerWorkQueue queue, ILogger<BpmnModelRuntime>? logger = null) : IBpmnModelRuntime
+    TimeProvider clock, IWorkflowSchedulerWorkQueue queue, ILogger<BpmnModelRuntime>? logger = null,
+    IRuntimeModelExecutionReader? states = null) : IBpmnModelRuntime
 {
     private const string SourceKind = "BpmnModel";
     private const string WorkPagePurpose = "bpmn-human-work-v1";
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private IRuntimeModelExecutionReader States => states ?? throw new RuntimeSchedulerWorkUnavailableException(
+        "bpmn.state-unavailable", "The selected host has no model state reader.");
 
     public async ValueTask<BpmnPublishedModel> PublishAsync(BpmnModelDefinition definition, string requestId, BpmnModelCaller caller,
         CancellationToken cancellationToken = default)
@@ -67,7 +70,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         CancellationToken cancellationToken = default)
     {
         Scope(caller);
-        var state = await states.FindAsync(executionId, cancellationToken);
+        var state = await States.FindAsync(executionId, cancellationToken);
         return state is not null && state.TenantId == caller.TenantId && state.Protocol == new RuntimeExecutionProtocol(BpmnModelProtocol.Key, BpmnModelProtocol.Version)
             ? state : null;
     }
@@ -116,7 +119,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
             return await PendingAsync(executionId, requestId, caller, cancellationToken) is not null
                 ? new(executionId, requestId, true, true, null) : throw new BpmnModelResourceMissingException();
         }
-        var receipt = await states.FindInputAsync(executionId, requestId, cancellationToken);
+        var receipt = await States.FindInputAsync(executionId, requestId, cancellationToken);
         if (receipt is not null) return new(executionId, requestId, true, false, receipt.Result);
         return await PendingAsync(executionId, requestId, caller, cancellationToken) is not null ? new(executionId, requestId, true, true, null) : null;
     }
@@ -127,7 +130,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         var scope = Scope(caller);
         if (actors is not InProcessWorkflowExecutionActorProvider)
             throw new NotSupportedException("This BPMN hosting profile requires the qualified built-in actor provider.");
-        var prior = await states.FindInputAsync(executionId, command.InputId, cancellationToken);
+        var prior = await States.FindInputAsync(executionId, command.InputId, cancellationToken);
         if (prior is not null)
         {
             if (prior.ContentFingerprint != RuntimeCheckpointCommitFingerprint.ComputeModelInput(command))
@@ -154,7 +157,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         catch (OperationCanceledException) { throw; }
         catch (Exception exception) when (exception is not RuntimeCheckpointReplayConflictException)
         {
-            var consumed = await states.FindInputAsync(executionId, command.InputId, cancellationToken);
+            var consumed = await States.FindInputAsync(executionId, command.InputId, cancellationToken);
             if (consumed is not null && consumed.ContentFingerprint == RuntimeCheckpointCommitFingerprint.ComputeModelInput(command))
                 return new(executionId, command.InputId, false, false, consumed.Result);
             var retained = await PendingAsync(executionId, command.InputId, caller, cancellationToken);
@@ -164,7 +167,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         }
         if (result.Status is WorkflowExecutionCommandDispatchStatus.Rejected or WorkflowExecutionCommandDispatchStatus.Deferred or WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted)
             throw new RuntimeSchedulerWorkUnavailableException("bpmn.admission-unavailable", "The BPMN command could not be admitted for execution.");
-        var receipt = await states.FindInputAsync(executionId, command.InputId, cancellationToken);
+        var receipt = await States.FindInputAsync(executionId, command.InputId, cancellationToken);
         return new(executionId, command.InputId, false, receipt is null, receipt?.Result);
     }
 

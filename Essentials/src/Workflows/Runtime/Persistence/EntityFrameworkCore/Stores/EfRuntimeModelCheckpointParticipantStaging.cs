@@ -12,6 +12,7 @@ internal static class EfRuntimeModelCheckpointParticipantStaging
         string scope, CancellationToken cancellationToken)
     {
         var state = change.State;
+        var retainsState = change.ExpectedRevision == state.Revision;
         var id = CompositeId(scope, state.ExecutionId);
         var row = await context.Set<RuntimeModelExecutionEntity>().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (row is null)
@@ -34,10 +35,12 @@ internal static class EfRuntimeModelCheckpointParticipantStaging
                 current.TenantId != state.TenantId || current.CreatedAt != state.CreatedAt || state.UpdatedAt < current.UpdatedAt ||
                 !WorkflowExecutionAuthoritySnapshot.Matches(current.Authority, state.Authority.SystemIdentity, state.Authority.RootInitiator, state.Authority.Metadata))
                 throw new InvalidOperationException("A model decision cannot change its execution authority or pinned material.");
-            if (current.Lifecycle == RuntimeModelLifecycle.TerminalSettled ||
+            if (retainsState && RuntimeArtifactJson.Serialize(current) != RuntimeArtifactJson.Serialize(state))
+                throw new InvalidOperationException("A retained-state input cannot change the committed model state.");
+            if (!retainsState && (current.Lifecycle == RuntimeModelLifecycle.TerminalSettled ||
                 current.Lifecycle == RuntimeModelLifecycle.TerminalPendingSettlement &&
                 (state.Lifecycle is not (RuntimeModelLifecycle.TerminalPendingSettlement or RuntimeModelLifecycle.TerminalSettled) ||
-                 !JsonElement.DeepEquals(current.TerminalResult!.Value, state.TerminalResult!.Value)))
+                 !JsonElement.DeepEquals(current.TerminalResult!.Value, state.TerminalResult!.Value))))
                 throw new InvalidOperationException("A terminal model execution cannot resume semantic progression or replace its result.");
         }
 
@@ -50,10 +53,19 @@ internal static class EfRuntimeModelCheckpointParticipantStaging
             _ = EfRuntimeModelExecutionReader.Read(previous, scope, input.ExecutionId, input.InputId);
             throw new InvalidOperationException("This model input already has an accepted decision; use its retained receipt.");
         }
-        row.Id = id; row.ScopeKey = Encode(scope); row.ScopeKeyHash = Hash(scope);
-        row.ExecutionId = Encode(state.ExecutionId); row.ExecutionIdHash = Hash(state.ExecutionId); row.ExecutionIdOrderKey = Order(state.ExecutionId);
-        row.ArtifactIdHash = Hash(state.Executable.ArtifactId); row.Lifecycle = (int)state.Lifecycle;
-        row.ContentJson = RuntimeArtifactJson.Serialize(state); row.SchemaVersion = RuntimeModelStateEfModule.SchemaVersion; row.Revision = state.Revision;
+        if (retainsState)
+        {
+            // Retain the exact stored bytes/timestamps, but still compare the physical row's revision at commit.
+            // Without a forced update EF could omit this participant and accept a receipt for superseded state.
+            context.Entry(row).Property(item => item.Revision).IsModified = true;
+        }
+        else
+        {
+            row.Id = id; row.ScopeKey = Encode(scope); row.ScopeKeyHash = Hash(scope);
+            row.ExecutionId = Encode(state.ExecutionId); row.ExecutionIdHash = Hash(state.ExecutionId); row.ExecutionIdOrderKey = Order(state.ExecutionId);
+            row.ArtifactIdHash = Hash(state.Executable.ArtifactId); row.Lifecycle = (int)state.Lifecycle;
+            row.ContentJson = RuntimeArtifactJson.Serialize(state); row.SchemaVersion = RuntimeModelStateEfModule.SchemaVersion; row.Revision = state.Revision;
+        }
         context.Set<RuntimeModelInputEntity>().Add(new()
         {
             Id = inputId, ScopeKey = Encode(scope), ScopeKeyHash = Hash(scope),
