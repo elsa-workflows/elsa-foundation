@@ -70,6 +70,7 @@ def main():
     parser.add_argument("--admission-race-order", choices=("cancel-first", "admit-first"), help="Gate an unchanged actual proposal before its provider transaction, commit the competitor, then cold-recover both writers' obligations.")
     parser.add_argument("--pending-cancellation-crash", action="store_true", help="With model/native cancellation, kill a second real host while its cancellation/result deliveries remain owed.")
     parser.add_argument("--consumed-before-ack-crash", action="store_true", help="With pending cancellation, use the production SDK to consume the result before killing the host with source ACK still owed.")
+    parser.add_argument("--pending-parent-result-crash", action="store_true", help="With whole-native-parent cancellation, consume the actual worker result through the production SDK, then kill a second host while parent settlement is still owed.")
     outcome_group = parser.add_mutually_exclusive_group()
     outcome_group.add_argument("--business-error", action="store_true", help="Reject one actual HTTP record through its declared Int64 schema.")
     outcome_group.add_argument("--pipeline-cancel", action="store_true", help="Cancel the actual ETL run after host recovery and observe native/BPMN cancellation.")
@@ -83,6 +84,8 @@ def main():
     if args.embedded_parent and (args.parent!='BpmnModel' or args.model_cancel_before_admission or args.pending_cancellation_crash):
         parser.error("Embedding requires --parent BpmnModel and the normal admitted-worker recovery journey.")
     if args.native_parent_cancel and not args.embedded_parent:parser.error("Native parent cancellation requires --embedded-parent.")
+    if args.pending_parent_result_crash and (not args.native_parent_cancel or args.dispatcher_assembly is None):
+        parser.error("The pending native-parent result cut requires --native-parent-cancel and --dispatcher-assembly.")
     if args.queued_native_stage and (not args.model_cancel_before_admission or args.dispatcher_assembly is None):
         parser.error("A queued native stage requires --model-cancel-before-admission and --dispatcher-assembly.")
     if args.admission_race_order and args.queued_native_stage != "checkpoint":
@@ -425,7 +428,7 @@ def main():
         if exit_code!=-signal.SIGKILL:raise ValueError("The predecessor did not exit through actual process loss.")
         print("Observed durable 429 and completed sibling; owned predecessor terminated.",flush=True)
         pending_cancellation_evidence=None
-        if args.pending_cancellation_crash:
+        if args.pending_cancellation_crash or args.pending_parent_result_crash:
             features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":300};q.write_json(root/"shells.json",shells)
         api=launch();recovered=view();q.write_json(output/"recovered.json",recovered)
         if args.pipeline_cancel:
@@ -451,6 +454,34 @@ def main():
                 headers={'Content-Type':'application/json','Idempotency-Key':'cancel-actual-runbpmn-parent'})
             with api.opener.open(request,timeout=30) as response:cancelled=json.load(response)
             q.write_json(output/'native-parent-cancel-response.json',cancelled)
+        if args.pending_parent_result_crash:
+            pending=wait_for(view,lambda value:value['embedding']['instance']['status']=='Cancelled' and value['model']['status']=='Running' and value['run']['status']=='running',
+                'The actual cancelled native parent did not retain its owed model cancellation.',30)
+            os.kill(host.pid,signal.SIGSTOP)
+            wait_for(lambda:q.process_field(host.pid,'stat'),lambda value:'T' in value,'The pending-parent host did not quiesce.',5)
+            dispatcher=args.dispatcher_assembly.resolve(strict=True);nonce=uuid.uuid4().hex
+            q.write_json(root/'owned-bpmn-recovery.json',{'schemaVersion':1,'controllerProcessId':os.getpid(),'modelExecutionId':model_execution,'nativeParentExecutionId':native_parent_execution,'nonce':nonce})
+            sdk=start(['dotnet',str(dispatcher),'--consume-native-result',str(root),model_execution,nonce],'consumption-sdk')
+            sdk_log=root/f'consumption-sdk-{len(processes)-1}.log';sdk.wait(timeout=90)
+            consumed=json.loads(sdk_log.read_text());q.write_json(output/'sdk-consume.json',consumed)
+            if sdk.returncode!=0 or any(source not in p['informationalVersion'] for p in consumed['products']):
+                raise ValueError('The source-matched production SDK did not consume the actual embedded result: '+sdk_log.read_text())
+            os.kill(host.pid,signal.SIGCONT);pending=view();pending_wire=wire();os.kill(host.pid,signal.SIGSTOP)
+            wait_for(lambda:q.process_field(host.pid,'stat'),lambda value:'T' in value,'The consumed pending-parent host did not quiesce.',5)
+            pending_cut_at=datetime.now(timezone.utc).isoformat();pending_stores=snapshots('parent-pending');pending_checked=checked_native_model();pending_embedding=checked_embedding()
+            q.write_json(output/'parent-pending.json',pending);q.write_json(output/'parent-pending-wire.json',pending_wire)
+            q.write_json(output/'parent-pending-checked-model.json',pending_checked);q.write_json(output/'parent-pending-checked-embedding.json',pending_embedding)
+            parent_result,=[s for s in pending_embedding['sources'] if s['intent']['kind']=='Elsa.Bpmn.ResumeNativeParent.v1']
+            if (pending_checked['model']['lifecycle']!=2 or pending_checked['model']['revision']!=3 or pending_checked['worker']['status']!=5 or pending_checked['resultInput']!=consumed['receipt'] or
+                    pending_checked['resultSource']['status']!=3 or pending_checked['resultSource']['deliveredAt'] is not None or parent_result['status']!=0 or parent_result['deliveredAt'] is not None or
+                    any(r['inputKind']=='native-parent-settled' for r in pending_embedding['inputs']) or pending_wire!=before_wire or pending['run']['status']!='cancelled' or
+                    pending_embedding['queuedModelInputs'] or any(not c['settled'] for c in pending_checked['model']['payload']['cancellations'])):
+                raise ValueError('The actual terminal model did not retain its original parent result and source acknowledgment as owed.')
+            stop(host,crash=True)
+            if host.returncode!=-signal.SIGKILL:raise ValueError('The pending-parent host did not lose its actual process.')
+            pending_cancellation_evidence={'pendingParentResultCrash':True,'parentPendingStores':pending_stores,'parentPendingCutAtUtc':pending_cut_at,'parentPendingPredecessorExitCode':host.returncode,
+                'sweepIntervalsSeconds':[.2,300,.2,.2],'dispatcherSha256':q.digest(dispatcher)}
+            features['WorkflowsRuntimeResumption']={'SweepIntervalSeconds':.2};q.write_json(root/'shells.json',shells);api=launch()
         if args.pending_cancellation_crash:
             try:
                 stage="model-command" if args.model_cancel else "native-terminal"

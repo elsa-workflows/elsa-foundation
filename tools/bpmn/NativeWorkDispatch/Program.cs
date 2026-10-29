@@ -139,6 +139,28 @@ try
                 partition: new(origin.Scope.Value)));
             return await actor.EnqueueAsync(envelope);
         }
+        string? embeddedParentId = null;
+        if (model.Payload.TryGetProperty("nativeParent", out var embeddedParent) && embeddedParent.ValueKind != JsonValueKind.Null)
+        {
+            embeddedParentId = owner.GetProperty("nativeParentExecutionId").GetString()!;
+            var actualParent = await workflows.FindAsync(embeddedParentId);
+            var text = embeddedParent.GetProperty("invocation").GetProperty("nativeExecutionId").GetString()!;
+            var bytes = new byte[embeddedParentId.Length * 2];
+            for (var index = 0; index < embeddedParentId.Length; index++)
+                System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(index * 2, 2), embeddedParentId[index]);
+            if (text != "u16:" + Convert.ToBase64String(bytes) || actualParent?.Status != WorkflowExecutionStatus.Cancelled ||
+                model.Lifecycle != RuntimeModelLifecycle.Running)
+                throw new InvalidOperationException("This embedded cut requires the original actual cancelled native parent and its still-running model.");
+            var delivery = await processor.ProcessAsync(new(1, embeddedParentId, "Elsa.Bpmn.CancelEmbedded.v1"));
+            steps.Add(new { operation = "deliver-embedded-cancel", delivery });
+            if (delivery.AttemptedCount != 1 || delivery.DeliveredCount != 0)
+                throw new InvalidOperationException("The original native parent's cancellation was not queued without acknowledgment.");
+            var drain = await Drain(model.ExecutionId); steps.Add(new { operation = "consume-embedded-cancel", drain });
+            model = await models.FindAsync(model.ExecutionId) ?? throw new InvalidOperationException("The embedded model disappeared.");
+            if (model.Lifecycle != RuntimeModelLifecycle.TerminalPendingSettlement || model.Revision != 2 ||
+                model.TerminalResult?.GetProperty("status").GetString() != "Cancelled")
+                throw new InvalidOperationException("Actual embedded cancellation did not retain its pending worker responsibility.");
+        }
         var worker = await workflows.FindAsync(origin.WorkerExecutionId) ?? throw new InvalidOperationException("The real native worker is absent.");
         if (!origin.IsEquivalentTo(worker.ModelWorkOrigin) || (await queue.ListAsync(new(origin.WorkerExecutionId))).Items.Count != 0 ||
             (await queue.ListAsync(new(model.ExecutionId))).Items.Count != 0 || await models.FindInputAsync(model.ExecutionId, origin.ResultInputId) is not null)
@@ -169,12 +191,12 @@ try
         var receipt = await models.FindInputAsync(model.ExecutionId, origin.ResultInputId);
         var resultAddress = consumedModel.Payload.GetProperty("nativeResults").EnumerateArray().Single().GetProperty("sourceOutboxItemId").GetString()!;
         var resultSource = await lookup.FindDurableAsync(resultAddress);
-        if (consumedModel.Lifecycle != RuntimeModelLifecycle.TerminalSettled || consumedModel.Revision != model.Revision + 1 || receipt is null ||
+        if (consumedModel.Lifecycle != (embeddedParentId is null ? RuntimeModelLifecycle.TerminalSettled : RuntimeModelLifecycle.TerminalPendingSettlement) || consumedModel.Revision != model.Revision + 1 || receipt is null ||
             receipt.Result.GetProperty("status").GetString() != "Accepted" || resultSource is null || resultSource.Status != RuntimePostCommitOutboxStatus.FailedRetryable ||
             (await queue.ListAsync(new(model.ExecutionId))).Items.Count != 0)
             throw new InvalidOperationException("The actual native result lacks durable model consumption with source acknowledgment still owed.");
         Console.WriteLine(JsonSerializer.Serialize(new { operation = args[0], startedAtUtc = started, completedAtUtc = DateTimeOffset.UtcNow,
-            origin, steps, model = consumedModel, worker = await workflows.FindAsync(origin.WorkerExecutionId), receipt, resultSource,
+            origin, steps, embeddedParentExecutionId = embeddedParentId, model = consumedModel, worker = await workflows.FindAsync(origin.WorkerExecutionId), receipt, resultSource,
             products = new[] { Product(Assembly.GetExecutingAssembly()), Product(typeof(IWorkflowStartDispatcher).Assembly),
                 Product(typeof(Elsa.Workflows.Runtime.Services.Executions.WorkflowStartDispatcher).Assembly), Product(typeof(RuntimeEntityFrameworkCoreOptions).Assembly),
                 Product(typeof(ActivitiesBpmnHostingFeature).Assembly), Product(typeof(EtlRuntimeFeature).Assembly), Product(typeof(EtlRuntimeEntityFrameworkCoreFeature).Assembly),
