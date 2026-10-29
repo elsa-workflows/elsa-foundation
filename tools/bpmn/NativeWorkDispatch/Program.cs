@@ -29,12 +29,16 @@ using Elsa.Etl.Workflows.Runtime;
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 try
 {
-    if (args.Length is not (4 or 6) || args[0] is not ("--enqueue-start" or "--enqueue-checkpoint" or "--drain-checkpoint" or "--cancel-model" or "--consume-native-result") ||
-        args.Length == 6 && args[4] != "--gate")
+    if (args.Length is not (4 or 6) || args[0] is not ("--enqueue-start" or "--enqueue-checkpoint" or "--drain-checkpoint" or "--cancel-model" or "--consume-native-result" or "--consume-native-success") ||
+        args.Length == 6 && args[4] != (args[0] == "--consume-native-success" ? "--parent-return-stage" : "--gate"))
         throw new ArgumentException("Select an owned enqueue/drain/cancel operation, content root, model id, nonce and optional --gate directory.");
     var race = args[0] is "--drain-checkpoint" or "--cancel-model";
-    var consume = args[0] == "--consume-native-result";
-    if (consume && args.Length != 4) throw new ArgumentException("Consumption uses the original production delivery path without a validation gate.");
+    var success = args[0] == "--consume-native-success";
+    var consume = success || args[0] == "--consume-native-result";
+    if (consume && !success && args.Length != 4) throw new ArgumentException("Consumption uses the original production delivery path without a validation gate.");
+    var parentReturnStage = success && args.Length == 6 ? args[5] : null;
+    if (success && parentReturnStage is not ("pending" or "consumed" or "settled"))
+        throw new ArgumentException("Successful native-parent capture requires --parent-return-stage pending|consumed|settled.");
     var checkpointCut = args[0] == "--enqueue-checkpoint";
     var root = Path.GetFullPath(args[1]);
     using var marker = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(root, "owned-bpmn-recovery.json")));
@@ -148,19 +152,23 @@ try
             var bytes = new byte[embeddedParentId.Length * 2];
             for (var index = 0; index < embeddedParentId.Length; index++)
                 System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(index * 2, 2), embeddedParentId[index]);
-            if (text != "u16:" + Convert.ToBase64String(bytes) || actualParent?.Status != WorkflowExecutionStatus.Cancelled ||
+            if (text != "u16:" + Convert.ToBase64String(bytes) || actualParent?.Status != (success ? WorkflowExecutionStatus.Running : WorkflowExecutionStatus.Cancelled) ||
                 model.Lifecycle != RuntimeModelLifecycle.Running)
-                throw new InvalidOperationException("This embedded cut requires the original actual cancelled native parent and its still-running model.");
-            var delivery = await processor.ProcessAsync(new(1, embeddedParentId, "Elsa.Bpmn.CancelEmbedded.v1"));
-            steps.Add(new { operation = "deliver-embedded-cancel", delivery });
-            if (delivery.AttemptedCount != 1 || delivery.DeliveredCount != 0)
-                throw new InvalidOperationException("The original native parent's cancellation was not queued without acknowledgment.");
-            var drain = await Drain(model.ExecutionId); steps.Add(new { operation = "consume-embedded-cancel", drain });
-            model = await models.FindAsync(model.ExecutionId) ?? throw new InvalidOperationException("The embedded model disappeared.");
-            if (model.Lifecycle != RuntimeModelLifecycle.TerminalPendingSettlement || model.Revision != 2 ||
-                model.TerminalResult?.GetProperty("status").GetString() != "Cancelled")
-                throw new InvalidOperationException("Actual embedded cancellation did not retain its pending worker responsibility.");
+                throw new InvalidOperationException("This embedded cut requires the original native parent in the selected actual state and its still-running model.");
+            if (!success)
+            {
+                var delivery = await processor.ProcessAsync(new(1, embeddedParentId, "Elsa.Bpmn.CancelEmbedded.v1"));
+                steps.Add(new { operation = "deliver-embedded-cancel", delivery });
+                if (delivery.AttemptedCount != 1 || delivery.DeliveredCount != 0)
+                    throw new InvalidOperationException("The original native parent's cancellation was not queued without acknowledgment.");
+                var drain = await Drain(model.ExecutionId); steps.Add(new { operation = "consume-embedded-cancel", drain });
+                model = await models.FindAsync(model.ExecutionId) ?? throw new InvalidOperationException("The embedded model disappeared.");
+                if (model.Lifecycle != RuntimeModelLifecycle.TerminalPendingSettlement || model.Revision != 2 ||
+                    model.TerminalResult?.GetProperty("status").GetString() != "Cancelled")
+                    throw new InvalidOperationException("Actual embedded cancellation did not retain its pending worker responsibility.");
+            }
         }
+        if (success && embeddedParentId is null) throw new InvalidOperationException("Successful parent-return capture requires its actual RunBpmn parent.");
         var worker = await workflows.FindAsync(origin.WorkerExecutionId) ?? throw new InvalidOperationException("The real native worker is absent.");
         if (!origin.IsEquivalentTo(worker.ModelWorkOrigin) || (await queue.ListAsync(new(origin.WorkerExecutionId))).Items.Count != 0 ||
             (await queue.ListAsync(new(model.ExecutionId))).Items.Count != 0 || await models.FindInputAsync(model.ExecutionId, origin.ResultInputId) is not null)
@@ -175,12 +183,15 @@ try
             var drain = await Drain(origin.WorkerExecutionId); steps.Add(new { operation = "drain-native-cancel", drain });
             worker = await workflows.FindAsync(origin.WorkerExecutionId) ?? throw new InvalidOperationException("The native worker disappeared.");
         }
-        if (worker.Status != WorkflowExecutionStatus.Cancelled)
-            throw new InvalidOperationException("Consumption must retain the actual native cancellation.");
-        var etl = await processor.ProcessAsync(new(1, origin.WorkerExecutionId, "Elsa.Etl.Cancel.v1"));
-        steps.Add(new { operation = "deliver-etl-cancel", delivery = etl });
-        if (etl.AttemptedCount != 1 || etl.DeliveredCount != 1)
-            throw new InvalidOperationException("The original ETL cancellation remains owed.");
+        if (worker.Status != (success ? WorkflowExecutionStatus.Completed : WorkflowExecutionStatus.Cancelled))
+            throw new InvalidOperationException("Consumption must retain the selected actual native terminal result.");
+        if (!success)
+        {
+            var etl = await processor.ProcessAsync(new(1, origin.WorkerExecutionId, "Elsa.Etl.Cancel.v1"));
+            steps.Add(new { operation = "deliver-etl-cancel", delivery = etl });
+            if (etl.AttemptedCount != 1 || etl.DeliveredCount != 1)
+                throw new InvalidOperationException("The original ETL cancellation remains owed.");
+        }
         var result = await processor.ProcessAsync(new(1, origin.WorkerExecutionId, "Elsa.Bpmn.NativeWorkResult.v1"));
         steps.Add(new { operation = "queue-native-result", delivery = result });
         var queuedModel = (await queue.ListAsync(new(model.ExecutionId))).Items;
@@ -195,8 +206,58 @@ try
             receipt.Result.GetProperty("status").GetString() != "Accepted" || resultSource is null || resultSource.Status != RuntimePostCommitOutboxStatus.FailedRetryable ||
             (await queue.ListAsync(new(model.ExecutionId))).Items.Count != 0)
             throw new InvalidOperationException("The actual native result lacks durable model consumption with source acknowledgment still owed.");
+        var nativeResultConsumedModel = consumedModel;
+        RuntimePostCommitOutboxItem? parentResultSource = null;
+        RuntimeModelInputReceipt? parentSettlementReceipt = null;
+        if (success)
+        {
+            if (consumedModel.Revision != 2 || consumedModel.TerminalResult?.GetProperty("status").GetString() != "Completed")
+                throw new InvalidOperationException("The actual successful native result did not leave its parent return pending.");
+            parentResultSource = (await sdk.GetRequiredService<IRuntimePostCommitOutboxStore>()
+                .GetDeliverableAsync(new(DateTimeOffset.UtcNow, 2, model.ExecutionId, "Elsa.Bpmn.ResumeNativeParent.v1"))).Single();
+            if (parentResultSource.Status != RuntimePostCommitOutboxStatus.Pending)
+                throw new InvalidOperationException("The original native-parent result was not still pending.");
+            if (parentReturnStage is "consumed" or "settled")
+            {
+                var delivery = await processor.ProcessAsync(new(1, model.ExecutionId, "Elsa.Bpmn.ResumeNativeParent.v1"));
+                steps.Add(new { operation = "deliver-parent-result", delivery });
+                if (delivery.AttemptedCount != 1 || delivery.DeliveredCount != 0)
+                    throw new InvalidOperationException("The actual native parent result was acknowledged before its model settlement.");
+                if ((await workflows.FindAsync(embeddedParentId!))?.Status != WorkflowExecutionStatus.Completed)
+                {
+                    var drain = await Drain(embeddedParentId!); steps.Add(new { operation = "consume-parent-result", drain });
+                }
+                if ((await workflows.FindAsync(embeddedParentId!))?.Status != WorkflowExecutionStatus.Completed)
+                    throw new InvalidOperationException("The actual native parent did not consume and complete its original RunBpmn invocation.");
+                if (parentReturnStage == "settled")
+                {
+                    if ((await queue.ListAsync(new(model.ExecutionId))).Items.Count == 0)
+                    {
+                        parentResultSource = await lookup.FindDurableAsync(parentResultSource.OutboxItemId) ?? throw new InvalidOperationException("The parent result disappeared.");
+                        var delay = parentResultSource.AvailableAt - DateTimeOffset.UtcNow;
+                        if (delay > TimeSpan.FromSeconds(30)) throw new InvalidOperationException("The original parent source is not due within this owned capture's bound.");
+                        if (delay > TimeSpan.Zero) await Task.Delay(delay);
+                        var settle = await processor.ProcessAsync(new(1, model.ExecutionId, "Elsa.Bpmn.ResumeNativeParent.v1"));
+                        steps.Add(new { operation = "queue-parent-settlement", delivery = settle });
+                        if (settle.AttemptedCount != 1 || settle.DeliveredCount != 0)
+                            throw new InvalidOperationException("The parent source did not queue its exact model settlement without acknowledgment.");
+                    }
+                    var drain = await Drain(model.ExecutionId); steps.Add(new { operation = "consume-parent-settlement", drain });
+                }
+            }
+            consumedModel = await models.FindAsync(model.ExecutionId) ?? throw new InvalidOperationException("The final model disappeared.");
+            parentResultSource = await lookup.FindDurableAsync(parentResultSource.OutboxItemId) ?? throw new InvalidOperationException("The original parent result disappeared.");
+            var settlementId = "native-parent-settled:" + BpmnModelIdentity.Create(parentResultSource.OutboxItemId);
+            parentSettlementReceipt = await models.FindInputAsync(model.ExecutionId, settlementId);
+            if (consumedModel.Revision != (parentReturnStage == "settled" ? 3 : 2) ||
+                consumedModel.Lifecycle != (parentReturnStage == "settled" ? RuntimeModelLifecycle.TerminalSettled : RuntimeModelLifecycle.TerminalPendingSettlement) ||
+                (parentSettlementReceipt is not null) != (parentReturnStage == "settled") || parentResultSource.DeliveredAt is not null ||
+                parentResultSource.Status != (parentReturnStage == "pending" ? RuntimePostCommitOutboxStatus.Pending : RuntimePostCommitOutboxStatus.FailedRetryable))
+                throw new InvalidOperationException("The actual native-parent consumption/settlement/ACK boundary differs from the selected stage.");
+        }
         Console.WriteLine(JsonSerializer.Serialize(new { operation = args[0], startedAtUtc = started, completedAtUtc = DateTimeOffset.UtcNow,
             origin, steps, embeddedParentExecutionId = embeddedParentId, model = consumedModel, worker = await workflows.FindAsync(origin.WorkerExecutionId), receipt, resultSource,
+            nativeResultConsumedModel, parentReturnStage, parentResultSource, parentSettlementReceipt,
             products = new[] { Product(Assembly.GetExecutingAssembly()), Product(typeof(IWorkflowStartDispatcher).Assembly),
                 Product(typeof(Elsa.Workflows.Runtime.Services.Executions.WorkflowStartDispatcher).Assembly), Product(typeof(RuntimeEntityFrameworkCoreOptions).Assembly),
                 Product(typeof(ActivitiesBpmnHostingFeature).Assembly), Product(typeof(EtlRuntimeFeature).Assembly), Product(typeof(EtlRuntimeEntityFrameworkCoreFeature).Assembly),
