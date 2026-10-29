@@ -663,6 +663,52 @@ public sealed class EfActivityDesignStores(
         }, tenantId: version.TenantId, cancellationToken: cancellationToken)).Value;
     }
 
+    public async Task RefreshPaletteHintsAsync(
+        DesignOperationKey operationKey,
+        ActivityDefinitionVersion version,
+        string? expectedOldFacetsSource,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operationKey);
+        ArgumentNullException.ThrowIfNull(version);
+        EnsureTenant(version.TenantId);
+        PrepareVersion(version);
+        var incomingFacetsSource = version.DesignFacetsSource;
+        var stored = await ById(Access(db.ActivityDefinitionVersions.AsNoTracking()), version.Id).SingleAsync(cancellationToken);
+        // Restrict this exception to the palette facet. Even a direct caller cannot replace structure,
+        // outcome, icon or other descriptor content through this presentation refresh.
+        static string OtherFacets(string? source) => JsonSerializer.Serialize(
+            (JsonSerializer.Deserialize<ActivityDesignFacet[]>(source ?? "[]", Json) ?? [])
+            .Where(facet => facet.Kind != "elsa.activity-palette"));
+        if (stored.Hash != version.Hash || OtherFacets(stored.DesignFacetsSource) != OtherFacets(incomingFacetsSource))
+            throw new InvalidOperationException("A palette refresh cannot change executable identity or other design facets.");
+        if (stored.DesignFacetsSource == incomingFacetsSource)
+        {
+            version.LastModifiedAt = stored.LastModifiedAt;
+            return;
+        }
+        var now = DateTimeOffset.UtcNow;
+        var token = Guid.NewGuid().ToByteArray();
+        var updated = await ById(Access(db.ActivityDefinitionVersions), version.Id)
+            .Where(row => row.Hash == version.Hash && row.DesignFacetsSource == expectedOldFacetsSource)
+            .ExecuteUpdateAsync(updates => updates
+                .SetProperty(row => row.DesignFacetsSource, incomingFacetsSource)
+                .SetProperty(row => row.LastModifiedAt, now)
+                .SetProperty(row => EF.Property<byte[]>(row, "ConcurrencyToken"), token), cancellationToken);
+        if (updated == 1)
+        {
+            version.LastModifiedAt = now;
+            return;
+        }
+        stored = await ById(Access(db.ActivityDefinitionVersions.AsNoTracking()), version.Id).SingleAsync(cancellationToken);
+        if (stored.Hash == version.Hash && stored.DesignFacetsSource == incomingFacetsSource)
+        {
+            version.LastModifiedAt = stored.LastModifiedAt;
+            return;
+        }
+        throw new DbUpdateConcurrencyException("The catalog entry changed during a palette hints refresh.");
+    }
+
     public async Task RefreshAsync(
         DesignOperationKey operationKey,
         ActivityDefinitionVersion version,
@@ -678,7 +724,7 @@ public sealed class EfActivityDesignStores(
         var now = DateTimeOffset.UtcNow;
         var token = Guid.NewGuid().ToByteArray();
         // ExecuteUpdateAsync bypasses PropertySaveBehavior.Throw on Hash/InputsSource. That is the
-        // sanctioned tier-only refresh: compare-and-swap on the old hash, and stamp concurrency
+        // sanctioned input-presentation refresh: compare-and-swap on the old hash, and stamp concurrency
         // bookkeeping the same way SaveChanges would. operationKey is unused; the hash CAS is the
         // retry token.
         var updated = await ById(Access(db.ActivityDefinitionVersions), version.Id)

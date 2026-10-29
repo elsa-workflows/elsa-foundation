@@ -1,3 +1,4 @@
+import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Boxes, Code2, Download, ListTree, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
 import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, type StudioActivityPropertyEditorContribution, type StudioAiContributionApi, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
@@ -25,6 +26,8 @@ import {
 } from "../activityPresentation";
 import { buildDraftFromJson } from "../workflowSerialization";
 import { WorkflowCodeView } from "../WorkflowCodeView";
+import { withWorkflowStartEnabled } from "../workflowStartEditing";
+import { getWorkflowStartEnabled } from "../workflowStart";
 import { WorkflowPropertiesView } from "../WorkflowPropertiesView";
 import { loadActivityIconRegistry } from "../activityIconView";
 import { weaverUnavailableTitle } from "./constants";
@@ -104,7 +107,8 @@ import {
   type ActivityInspectorTabId
 } from "./InspectorPanel";
 import { BpmnElementInspector } from "../bpmn/BpmnElementInspector";
-import { BpmnShapePalette } from "../bpmn/BpmnShapePalette";
+import { bpmnPaletteElements } from "../bpmn/bpmnPaletteElements";
+import { emptyGraphElements } from "../graph-authoring/graphPaletteElements";
 import { collectOwnedNodeIds, findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
 import { bpmnElementTypeLabel, bpmnStructureKind, type BpmnElement, type BpmnSequenceFlow } from "../bpmn/bpmnTypes";
 import { exportBpmnDocument, importBpmnDocument, layoutFromBpmnDiagram, summarizeBpmnImportIssues, withDiagramFromLayout } from "../api/bpmnInterchange";
@@ -218,7 +222,7 @@ export function WorkflowEditor({
     details,
     setDetails,
     catalog,
-    paletteCatalog,
+    paletteCatalog: availablePaletteCatalog,
     recommendedDefinitions,
     activityDescriptors,
     availabilityDiagnostics,
@@ -262,6 +266,7 @@ export function WorkflowEditor({
     canAddActivitiesToCanvas: scopeAllowsAuthoring
   } = useWorkflowScope({ context, draft, frames, selectedNodeId, catalog, activityDescriptors, availabilityDiagnostics });
   const canAddActivitiesToCanvas = scopeAllowsAuthoring && !editorDoc.pinned;
+  const elements = isBpmnDesigner ? bpmnPaletteElements : emptyGraphElements;
   const inlineSteps = authorsInline(themeLayout, isBpmnDesigner);
   const availableDesignerPanels = filterGraphAuthoringContributions(workflowDesignerPanels, "workflow-definition");
   const sidePanelLayout = useSidePanelLayout(undefined, {
@@ -287,6 +292,13 @@ export function WorkflowEditor({
     ? recommendedDefinitions.find(item => item.definitionId === inspectedRecommendationDefinitionId) ?? null
     : null;
 
+  const paletteContext = useMemo(() => getActivityPaletteContext(
+    "workflow-definition", draft?.state.rootActivity, scope?.owner.nodeId, scope?.slot, catalogByVersion
+  ), [draft?.state.rootActivity, scope, catalogByVersion]);
+  const isOfferedActivity = useCallback((activity: ActivityCatalogItem) => isActivityOfferedInContext(activity, paletteContext), [paletteContext]);
+  const paletteCatalog = useMemo(() => availablePaletteCatalog.filter(isOfferedActivity), [availablePaletteCatalog, isOfferedActivity]);
+  const choicesForSlot = (owner: ActivityNode, slot: ChildSlot) => availablePaletteCatalog.filter(activity => isActivityOfferedInContext(activity,
+    getActivityPaletteContext("workflow-definition", draft?.state.rootActivity, owner.nodeId, slot, catalogByVersion)));
   const paletteGroups = useMemo(() => groupActivityPalette(paletteCatalog), [paletteCatalog]);
   const filteredPaletteGroups = useMemo(() => {
     const term = paletteSearch.trim().toLowerCase();
@@ -345,6 +357,8 @@ export function WorkflowEditor({
     catalogByVersion,
     isUnsupportedDesigner,
     isBpmnDesigner,
+    isOfferedActivity,
+    elements,
     // A compensation scope's steps change only through its step list, never by a palette drop on the canvas.
     canAddActivitiesToCanvas: canAddActivitiesToCanvas && scope?.slot.id !== compensationStepsSlotId,
     readOnly: editorDoc.pinned,
@@ -389,7 +403,10 @@ export function WorkflowEditor({
     moveSequenceActivity,
     onConnectMenuPick,
     addActivity,
-    addBpmnShape,
+    onElementClick,
+    onElementDragStart,
+    onElementDragEnd,
+    onElementPointerDown,
     onPaletteClick,
     onPaletteDragStart,
     onPaletteDragEnd,
@@ -418,7 +435,15 @@ export function WorkflowEditor({
       }
       setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false);
     } });
-  const nodes = runCanvas.nodes;
+  const nodes = useMemo(() => {
+    const activities = new Map((scope?.slot.activities ?? (scopeOwner ? [scopeOwner] : [])).map(activity => [activity.nodeId, activity]));
+    return runCanvas.nodes.map(node => {
+      const activity = activities.get(node.id);
+      return activity ? { ...node, data: { ...node.data,
+        workflowStartEnabled: getWorkflowStartEnabled(activity, catalogByVersion.get(activity.activityVersionId))
+      } } : node;
+    });
+  }, [catalogByVersion, runCanvas.nodes, scope?.slot.activities, scopeOwner]);
   const edges = runCanvas.edges;
   const selectEditorNode = (nodeId: string | null) => {
     select(nodeId);
@@ -459,6 +484,15 @@ export function WorkflowEditor({
     if (nodes.length === 1) canvasRef.current?.focus({ preventScroll: true });
   }, [nodes, onNodesDelete, canvasRef]);
 
+  const setWorkflowStart = useCallback((nodeId: string, enabled: boolean) => {
+    if (!canAddActivitiesToCanvas) return;
+    editDraft(({ draft: current }) => current?.state.rootActivity ? {
+      ...current,
+      state: { ...current.state, rootActivity: updateActivity(current.state.rootActivity, nodeId,
+        activity => withWorkflowStartEnabled(activity, catalogByVersion.get(activity.activityVersionId), enabled), catalogByVersion) }
+    } : null);
+  }, [canAddActivitiesToCanvas, catalogByVersion, editDraft]);
+
   const nodeActions = useMemo<WorkflowNodeActions | null>(() => {
     if (isUnsupportedDesigner || isBpmnDesigner || !canAddActivitiesToCanvas) return null;
     return {
@@ -469,7 +503,8 @@ export function WorkflowEditor({
         openAddStepMenu(anchor, { nodeId, handleId: portName });
       },
       duplicate: nodeId => { duplicateSelectedActivities([nodeId]); },
-      delete: deleteCanvasNode
+      delete: deleteCanvasNode,
+      setWorkflowStart
     };
   }, [
     canAddActivitiesToCanvas,
@@ -479,7 +514,8 @@ export function WorkflowEditor({
     isBpmnDesigner,
     isUnsupportedDesigner,
     openAddStepMenu,
-    selectedCanvasNodeIds
+    selectedCanvasNodeIds,
+    setWorkflowStart
   ]);
 
   // Inside a slot (breadcrumb non-empty) whose resolved slot is empty, show a guided picker instead of a
@@ -1073,16 +1109,21 @@ export function WorkflowEditor({
   const leftPanelTabs: WorkflowEditorPanelTab[] = [
     ...(inlineSteps ? [] : [{
       id: "activities",
-      title: "Activities",
+      title: elements.length ? "Elements" : "Activities",
       order: 0,
       icon: <Boxes size={15} />,
       render: () => (
         <>
-          {isBpmnDesigner ? <BpmnShapePalette onAddShape={addBpmnShape} /> : null}
           <ActivityPalettePanel
             paletteSearch={paletteSearch}
             onSearchChange={setPaletteSearch}
             groups={filteredPaletteGroups}
+            elements={elements}
+            disabled={!canAddActivitiesToCanvas}
+            onElementClick={onElementClick}
+            onElementDragStart={onElementDragStart}
+            onElementDragEnd={onElementDragEnd}
+            onElementPointerDown={onElementPointerDown}
             expandedCategories={expandedPaletteCategories}
             onToggleCategory={togglePaletteCategory}
             onActivityClick={isCompensationScopeCanvas ? addCompensationStepFromPalette : onPaletteClick}
@@ -1150,7 +1191,9 @@ export function WorkflowEditor({
           selectedRecommendedVersion={inspectedRecommendation}
           selectedSlots={inspectedSlots}
           inspectingScopeOwner={inspectedIsScopeOwner}
-          catalog={paletteCatalog}
+          catalog={availablePaletteCatalog}
+          choicesForSlot={choicesForSlot}
+          placementNotice={selectedNode ? activityPaletteNotice(inspectedCatalogItem, paletteContext) : undefined}
           catalogByVersion={catalogByVersion}
           selectedSupportsScopedVariables={inspectedSupportsScopedVariables}
           propertyEditors={propertyEditors}
@@ -1409,8 +1452,8 @@ export function WorkflowEditor({
         resourceKind="workflow-definition"
         layout={sidePanelLayout}
         palette={activeLeftPanel ? {
-          ariaLabel: "Activities panel",
-          tabLabel: "Activities panel tabs",
+          ariaLabel: elements.length ? "Elements panel" : "Activities panel",
+          tabLabel: elements.length ? "Elements panel tabs" : "Activities panel tabs",
           tabs: leftPanelTabs,
           activeTabId: activeLeftPanel.id,
           onSelect: setActiveLeftPanelId
@@ -1473,6 +1516,7 @@ export function WorkflowEditor({
               onMove={moveSequenceActivity}
               onDelete={deleteCanvasNode}
               onDuplicate={nodeId => duplicateSelectedActivities([nodeId])}
+              onSetWorkflowStart={setWorkflowStart}
               onOpenSlot={(ownerId, label, slot) => enterSlotScope(ownerId, slot, slotCrumbLabel(label, slot))}
             >
               {connectMenu ? <ConnectMenu clientX={connectMenu.clientX} clientY={connectMenu.clientY} activities={paletteCatalog} onPick={onConnectMenuPick} onClose={() => setConnectMenu(null)} /> : null}

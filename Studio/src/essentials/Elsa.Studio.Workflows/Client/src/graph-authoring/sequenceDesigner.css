@@ -314,6 +314,12 @@ html[data-workspace-style][data-theme-appearance="high-contrast"] .wf-sequence-i
   cursor: default;
 }
 
+.wf-sequence-actions button[aria-pressed="true"] {
+  background: var(--studio-accent-soft);
+  color: var(--studio-accent);
+  border-color: var(--studio-accent);
+}
+
 .wf-sequence-insert {
   display: inline-flex;
   width: 1.5rem;

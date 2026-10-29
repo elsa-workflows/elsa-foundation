@@ -1,3 +1,4 @@
+import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "./graph-authoring/activityPaletteContext";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Boxes, ListTree, Network, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
@@ -51,7 +52,6 @@ import {
   collectRemovedGraphNodeIds,
   createBpmnBoundNode,
   createBpmnFlowEdge,
-  createBpmnShapeNode,
   findBpmnElement,
   nextBpmnPlacementPosition,
   readBpmnElements,
@@ -63,8 +63,9 @@ import {
   type BpmnNodeData
 } from "./bpmn/bpmnAdapter";
 import { BpmnElementInspector } from "./bpmn/BpmnElementInspector";
-import { BpmnShapePalette } from "./bpmn/BpmnShapePalette";
-import { bpmnElementTypeLabel, type BpmnElement, type BpmnSequenceFlow, type BpmnShapeDescriptor } from "./bpmn/bpmnTypes";
+import { bpmnPaletteElements } from "./bpmn/bpmnPaletteElements";
+import { emptyGraphElements } from "./graph-authoring/graphPaletteElements";
+import { bpmnElementTypeLabel, type BpmnElement, type BpmnSequenceFlow } from "./bpmn/bpmnTypes";
 import { filterGraphAuthoringContributions } from "./graph-authoring/graphAuthoringContributions";
 import { ScopedVariablesEditor } from "./WorkflowPropertiesView";
 import { toActivityDescriptor } from "./workflow-editor/useWorkflowEditorData";
@@ -251,6 +252,23 @@ export function ActivityGraphPublicInterfaceEditor({
   );
 }
 
+export function ActivityGraphVariablesEditor({ context, value, readOnly, onChange }: Pick<StudioActivityDefinitionImplementationEditorProps, "context" | "value" | "readOnly" | "onChange">) {
+  const payload = normalizePayload(value.payload);
+  return <fieldset disabled={readOnly} className="wf-container-variables wf-tokens">
+    <ScopedVariablesEditor
+      context={context}
+      variables={toVariableEditorRecords(payload.variables)}
+      title="Variables"
+      addLabel="Add variable"
+      emptyLabel="No variables defined for this activity."
+      onChange={next => onChange({ ...value, payload: {
+        ...(isRecord(value.payload) ? value.payload : {}),
+        variables: fromVariableEditorRecords(next)
+      } })}
+    />
+  </fieldset>;
+}
+
 export function ActivityGraphImplementationEditor({
   context,
   definitionId,
@@ -360,6 +378,7 @@ export function ActivityGraphImplementationEditor({
   const ownerSupported = supportsActivityNode(owner, ownerCatalogItem);
   const slot = ownerSupported ? scope?.slot : undefined;
   const isBpmnSlot = slot?.mode === "bpmn";
+  const elements = isBpmnSlot ? bpmnPaletteElements : emptyGraphElements;
   // Authoring inline drops the activity list, not the Activities tab: it also holds the scope owner and
   // the root-composition chooser.
   const inlineSteps = authorsInline(themeLayout, isBpmnSlot);
@@ -375,7 +394,12 @@ export function ActivityGraphImplementationEditor({
   const selectedCatalogItem = selected ? catalogByVersion.get(selected.activityVersionId) : undefined;
   const selectedIndex = selected ? activities.findIndex(activity => activity.nodeId === selected.nodeId) : -1;
   const selectedSupported = selected ? supportsActivityNode(selected, selectedCatalogItem) : true;
-  const availableActivities = catalog.filter(item => item.available !== false && supportsActivityGraphAuthoring(item));
+  const supportedActivities = catalog.filter(item => item.available !== false && supportsActivityGraphAuthoring(item));
+  const paletteContext = getActivityPaletteContext("activity-definition-graph", root, owner.nodeId, slot, catalogByVersion);
+  const isOfferedActivity = (activity: ActivityCatalogItem) => isActivityOfferedInContext(activity, paletteContext);
+  const availableActivities = supportedActivities.filter(isOfferedActivity);
+  const choicesForSlot = (owner: ActivityNode, slot: ChildSlot) => supportedActivities.filter(activity => isActivityOfferedInContext(activity,
+    getActivityPaletteContext("activity-definition-graph", root, owner.nodeId, slot, catalogByVersion)));
   const filteredPaletteGroups = useMemo(() => {
     const search = paletteSearch.trim().toLocaleLowerCase();
     return groupActivityPalette(availableActivities.filter(activity => !search ||
@@ -503,6 +527,8 @@ export function ActivityGraphImplementationEditor({
     catalogByVersion,
     select: setSelectedNodeId,
     commitCanvas,
+    isOfferedActivity,
+    elements,
     placeActivity,
     createPlacement: isBpmnSlot ? createPlacement : undefined,
     createEdge: isBpmnSlot
@@ -512,15 +538,6 @@ export function ActivityGraphImplementationEditor({
   });
   const { stampCanvasNode } = interactions;
   stampCanvasNodeRef.current = stampCanvasNode;
-
-  // A pure BPMN shape (event, gateway, unbound task) binds no activity, so it is stamped straight onto
-  // the canvas: syncBpmnCanvasToScope picks its element out of the node it just placed.
-  const addBpmnShape = useCallback((shape: BpmnShapeDescriptor) => {
-    if (readOnly || !isBpmnSlot) return;
-    stampCanvasNode(
-      createBpmnShapeNode(shape, nextBpmnPlacementPosition(nodes.length)) as unknown as Node<WorkflowNodeData>
-    );
-  }, [isBpmnSlot, nodes.length, readOnly, stampCanvasNode]);
 
   // Structure edits (element name, sequence-flow condition, default flow) rewrite the scope owner's BPMN
   // payload directly rather than going through the canvas mirror, the same way an inspector edit to an
@@ -704,16 +721,6 @@ export function ActivityGraphImplementationEditor({
     const nextRoot = updateActivity(root, nextSelected.nodeId, () => nextSelected, catalogByVersion);
     commitRoot(nextRoot);
   };
-  const updateVariables = (next: unknown[]) => {
-    commitDocument({
-      ...value,
-      payload: {
-        ...(isRecord(value.payload) ? value.payload : {}),
-        ...payload,
-        variables: fromVariableEditorRecords(next)
-      }
-    });
-  };
   const inspectedNode = selected ?? owner;
   const inspectedCatalogItem = selected ? selectedCatalogItem : ownerCatalogItem;
   const inspectedDescriptor = inspectedCatalogItem ? toActivityDescriptor(inspectedCatalogItem) : null;
@@ -752,7 +759,7 @@ export function ActivityGraphImplementationEditor({
   const leftPanelTabs: WorkflowEditorPanelTab[] = [
     {
       id: "activities",
-      title: "Activities",
+      title: elements.length ? "Elements" : "Activities",
       order: 0,
       icon: <Boxes size={15} />,
       render: () => (
@@ -761,13 +768,15 @@ export function ActivityGraphImplementationEditor({
           {catalogQuery.isPending ? <span role="status">Loading the authorized activity catalog…</span> : null}
           {catalogQuery.isError ? <span role="alert">The activity catalog is unavailable. Existing graph state remains unchanged.</span> : null}
           {!root.activityVersionId ? <div className="ad-graph-root-options" role="group" aria-label="Graph composition">{availableActivities.filter(activity => getChildSlots(createActivityNode(activity, "root"), activity).length > 0).map(activity => <button key={activity.activityVersionId} type="button" onClick={() => chooseRoot(activity.activityVersionId)} disabled={readOnly}>{getActivityDisplay(activity)}</button>)}</div> : null}
-          {/* Events and gateways are what make the scope a BPMN process rather than a list of bound
-              tasks; the activity palette below contributes the activity-bearing elements. */}
-          {isBpmnSlot ? <BpmnShapePalette onAddShape={addBpmnShape} disabled={readOnly} /> : null}
           {inlineSteps ? null : <ActivityPalettePanel
             paletteSearch={paletteSearch}
             onSearchChange={setPaletteSearch}
             groups={filteredPaletteGroups}
+            elements={elements}
+            onElementClick={interactions.onElementClick}
+            onElementDragStart={interactions.onElementDragStart}
+            onElementDragEnd={interactions.onElementDragEnd}
+            onElementPointerDown={interactions.onElementPointerDown}
             expandedCategories={expandedCategories}
             disabled={readOnly}
             onToggleCategory={category => setExpandedCategories(current => {
@@ -822,21 +831,14 @@ export function ActivityGraphImplementationEditor({
             selectedNodeAvailability={null}
             selectedSlots={inspectedSlots}
             inspectingScopeOwner={!selected}
-            catalog={availableActivities}
+            catalog={supportedActivities}
+            choicesForSlot={choicesForSlot}
+            placementNotice={selected ? activityPaletteNotice(selectedCatalogItem, paletteContext) : undefined}
             catalogByVersion={catalogByVersion}
             selectedSupportsScopedVariables={inspectedSupportsVariables}
             readOnly={readOnly}
             variablesPanel={!selected && scopePath.length === 0 ? (
-              <fieldset disabled={readOnly} className="wf-container-variables">
-                <ScopedVariablesEditor
-                  context={context}
-                  variables={toVariableEditorRecords(payload.variables)}
-                  title="Graph variables"
-                  addLabel="Add graph variable"
-                  emptyLabel="No graph variables are defined."
-                  onChange={updateVariables}
-                />
-              </fieldset>
+              <ActivityGraphVariablesEditor context={context} value={value} readOnly={readOnly} onChange={commitDocument} />
             ) : undefined}
             propertyEditors={propertyEditors}
             expressionEditors={expressionEditors}
@@ -875,8 +877,8 @@ export function ActivityGraphImplementationEditor({
       className="ad-graph-workspace"
       layout={sidePanelLayout}
       palette={{
-        ariaLabel: "Activities panel",
-        tabLabel: "Activities panel tabs",
+        ariaLabel: elements.length ? "Elements panel" : "Activities panel",
+        tabLabel: elements.length ? "Elements panel tabs" : "Activities panel tabs",
         tabs: leftPanelTabs,
         activeTabId: activeLeftPanel.id,
         onSelect: setActiveLeftPanelId

@@ -6,12 +6,18 @@ import { resolveActivityIcon, resolveActivityIconFallback, resolveActivityIconTo
 import { renderActivityIcon } from "../activityIconView";
 import { getActivityDisplay } from "../workflowAdapter";
 import { formatActivityVersion } from "../workflowFormatting";
+import { emptyGraphElements, mergeGraphPaletteGroups, type GraphPaletteElement } from "../graph-authoring/graphPaletteElements";
 import type { ActivityPaletteGroup } from "./editorTypes";
 
 interface ActivityPalettePanelProps {
   paletteSearch: string;
   onSearchChange(value: string): void;
   groups: ActivityPaletteGroup[];
+  elements?: readonly GraphPaletteElement[];
+  onElementClick?(element: GraphPaletteElement): void;
+  onElementDragStart?(event: React.DragEvent<HTMLButtonElement>, element: GraphPaletteElement): void;
+  onElementDragEnd?(event: React.DragEvent<HTMLButtonElement>, element: GraphPaletteElement): void;
+  onElementPointerDown?(event: React.PointerEvent<HTMLButtonElement>, element: GraphPaletteElement): void;
   expandedCategories: Set<string>;
   disabled?: boolean;
   onToggleCategory(category: string): void;
@@ -26,7 +32,12 @@ interface ActivityPalettePanelProps {
 export function ActivityPalettePanel({
   paletteSearch,
   onSearchChange,
-  groups,
+  groups: activityGroups,
+  elements = emptyGraphElements,
+  onElementClick,
+  onElementDragStart,
+  onElementDragEnd,
+  onElementPointerDown,
   expandedCategories,
   disabled = false,
   onToggleCategory,
@@ -35,6 +46,8 @@ export function ActivityPalettePanel({
   onActivityDragEnd,
   onActivityPointerDown
 }: ActivityPalettePanelProps) {
+  const groups = mergeGraphPaletteGroups(activityGroups, elements, paletteSearch);
+  const elementPalette = elements.length > 0;
   const searching = paletteSearch.trim().length > 0;
   const treeId = useId();
   const treeRef = useRef<HTMLDivElement | null>(null);
@@ -53,7 +66,7 @@ export function ActivityPalettePanel({
     const categoryKey = `category:${group.category}`;
     const expanded = searching || expandedCategories.has(group.category);
     return expanded
-      ? [categoryKey, ...group.activities.map(activity => `activity:${activity.activityVersionId}`)]
+      ? [categoryKey, ...group.elements.map(element => `element:${element.id}`), ...group.activities.map(activity => `activity:${activity.activityVersionId}`)]
       : [categoryKey];
   });
   const activeItemKey = focusedItemKey && visibleItemKeys.includes(focusedItemKey)
@@ -102,8 +115,8 @@ export function ActivityPalettePanel({
         <input
           type="search"
           value={paletteSearch}
-          placeholder="Search activities"
-          aria-label="Search activity palette"
+          placeholder={elementPalette ? "Search elements" : "Search activities"}
+          aria-label={elementPalette ? "Search element palette" : "Search activity palette"}
           aria-controls={treeId}
           onChange={event => onSearchChange(event.target.value)}
           onKeyDown={event => {
@@ -113,9 +126,9 @@ export function ActivityPalettePanel({
           }}
         />
       </label>
-      <div ref={treeRef} id={treeId} className="wf-palette-list" role="tree" aria-label="Available activities" onKeyDown={onTreeKeyDown}>
+      <div ref={treeRef} id={treeId} className="wf-palette-list" role="tree" aria-label={elementPalette ? "Available elements" : "Available activities"} onKeyDown={onTreeKeyDown}>
         {groups.length === 0 ? (
-          <p className="wf-muted wf-palette-empty">No matching activities.</p>
+          <p className="wf-muted wf-palette-empty">{elementPalette ? "No matching elements." : "No matching activities."}</p>
         ) : groups.map(group => {
         const expanded = searching || expandedCategories.has(group.category);
         const categoryKey = `category:${group.category}`;
@@ -133,10 +146,44 @@ export function ActivityPalettePanel({
               onClick={() => onToggleCategory(group.category)}>
               {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               <span>{group.category}</span>
-              <small>{group.activities.length}</small>
+              <small>{group.activities.length + group.elements.length}</small>
             </button>
             {expanded ? (
               <div className="wf-palette-activities" role="group">
+                {group.elements.map(element => {
+                  const elementKey = `element:${element.id}`;
+                  return <button
+                    key={elementKey}
+                    type="button"
+                    className="wf-palette-activity"
+                    role="treeitem"
+                    aria-level={2}
+                    aria-label={element.label}
+                    data-category={group.category}
+                    data-element-id={element.id}
+                    tabIndex={activeItemKey === elementKey ? 0 : -1}
+                    disabled={disabled}
+                    draggable={!disabled}
+                    title={element.description ?? `Add ${element.label.toLocaleLowerCase()}`}
+                    onFocus={() => setFocusedItemKey(elementKey)}
+                    onClick={() => onElementClick?.(element)}
+                    onDragStart={event => onElementDragStart?.(event, element)}
+                    onDragEnd={event => onElementDragEnd?.(event, element)}
+                    onPointerDown={event => onElementPointerDown?.(event, element)}
+                    onKeyDown={event => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      onElementClick?.(element);
+                    }}
+                  >
+                    <span className="wf-activity-icon" data-tone="accent" aria-hidden="true">{element.icon}</span>
+                    <span className="wf-palette-activity-text">
+                      <strong>{element.label}</strong>
+                      {element.description ? <small>{element.description}</small> : null}
+                    </span>
+                    <GripVertical className="wf-palette-activity-grip" size={14} aria-hidden="true" />
+                  </button>;
+                })}
                 {group.activities.map(activity => {
                   const description = activity.description?.trim();
                   const descriptionId = description ? `wf-palette-description-${activity.activityVersionId}` : undefined;

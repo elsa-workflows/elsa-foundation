@@ -2,7 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { VariablesEditor, WorkflowPropertiesView } from "../WorkflowPropertiesView";
+import { ScopedVariablesEditor, VariablesEditor, WorkflowPropertiesView } from "../WorkflowPropertiesView";
 import type { WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
 import { clearApiCapabilityCache } from "../api/capabilities";
 
@@ -76,6 +76,51 @@ function variable(alias: string, collectionKind = "Single") {
 }
 
 describe("argument row editor", () => {
+  it("offers activated storage compatible with each variable type and preserves an unavailable selection", async () => {
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return { capabilities: [{
+        id: "elsa.api.activity-design", contractVersion: "1",
+        links: [{ rel: "activity-authoring-capabilities", href: "activity-options" }]
+      }] };
+      if (url === "/activity-options") return {
+        storageDriverKeys: ["elsa.json", "elsa.number"],
+        types: [
+          { alias: "String", supportsDurability: true, compatibleStorageDriverKeys: ["elsa.json", "elsa.inactive"] },
+          { alias: "Boolean", supportsDurability: true, compatibleStorageDriverKeys: ["elsa.number"] }
+        ]
+      };
+      throw new Error(`Unexpected request ${url}`);
+    });
+    const onChange = vi.fn();
+    const container = render(<ScopedVariablesEditor context={{ baseUrl: "test://storage-options", http: { getJson } } as never}
+      variables={[
+        { ...variable("String"), storageDriverType: "elsa.archived" },
+        { ...variable("Boolean"), referenceKey: "v2", name: "Flag" }
+      ]} onChange={onChange} />);
+    await vi.waitFor(() => expect(container.querySelectorAll("select[aria-label='Variable storage driver']")).toHaveLength(2));
+    const [textStorage, boolStorage] = [...container.querySelectorAll<HTMLSelectElement>("select[aria-label='Variable storage driver']")];
+    await vi.waitFor(() => expect(textStorage.disabled).toBe(false));
+    expect([...textStorage.options].map(option => option.value)).toEqual(["", "elsa.archived", "elsa.json"]);
+    expect(textStorage.value).toBe("elsa.archived");
+    expect(textStorage.selectedOptions[0].disabled).toBe(true);
+    expect([...boolStorage.options].map(option => option.value)).toEqual(["", "elsa.number"]);
+    expect(onChange).not.toHaveBeenCalled();
+    setSelectValue(textStorage, "elsa.json");
+    expect(onChange.mock.calls[0][0][0]).toMatchObject({ referenceKey: "v1", storageDriverType: "elsa.json" });
+    click(container.querySelector<HTMLButtonElement>(".wf-properties-add")!);
+    expect(onChange.mock.calls.at(-1)![0].at(-1)).toMatchObject({ type: { alias: "String" }, storageDriverType: "elsa.json" });
+  });
+
+  it("keeps storage read-only and preserves its value when the capability list is unavailable", async () => {
+    const container = render(<ScopedVariablesEditor context={{ baseUrl: "test://storage-unavailable", http: { getJson: vi.fn(async () => { throw new Error("offline"); }) } } as never}
+      variables={[{ ...variable("String"), storageDriverType: "elsa.archived" }]} onChange={vi.fn()} />);
+    await vi.waitFor(() => expect(container.querySelector("select[aria-label='Variable storage driver']")).toBeTruthy());
+    const select = container.querySelector<HTMLSelectElement>("select[aria-label='Variable storage driver']")!;
+    await vi.waitFor(() => expect(select.options[0].textContent).toBe("Storage unavailable"));
+    expect(select.disabled).toBe(true);
+    expect(select.value).toBe("elsa.archived");
+    expect(container.querySelector("input[aria-label='Variable storage driver']")).toBeNull();
+  });
   it("renders the type dropdown grouped by category and a collection-kind dropdown", () => {
     const container = render(
       <VariablesEditor items={[variable("Boolean")]} typeOptions={typeOptions} storageOptions={null} editorForAlias={editorForAlias} onChange={vi.fn()} />

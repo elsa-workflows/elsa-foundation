@@ -134,7 +134,7 @@ describe("workflow Test Run setup", () => {
     const container = renderPanel({ stimulusEditors: [httpWorkflowTestStimulusEditor], onStart });
     await settle();
 
-    changeSelect(container.querySelector<HTMLSelectElement>("select")!, "trigger:http-option");
+    await vi.waitFor(() => expect(container.querySelector<HTMLFormElement>("form")?.style.display).toBe("none"));
     const loadingAnnouncement = container.querySelector<HTMLElement>(".wf-test-drive-loading")?.textContent;
     expect(container.querySelector<HTMLFormElement>("form")?.style.display).toBe("none");
     expect(onStart).not.toHaveBeenCalled();
@@ -184,7 +184,7 @@ describe("workflow Test Run setup", () => {
       expect(startSelector.querySelector("option[value='trigger:http-option']")).toBeTruthy();
     });
 
-    changeSelect(startSelector, "trigger:http-option");
+    expect(startSelector.value).toBe("trigger:http-option");
     const textarea = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Send HTTP request data']");
     expect(textarea).toBeTruthy();
     expect(JSON.parse(textarea!.value)).toEqual(defaultHttpTestRequest);
@@ -215,10 +215,9 @@ describe("workflow Test Run setup", () => {
     const container = renderPanel({ stimulusEditors: customRegistry.list(), onStart });
     await settle();
     const startSelector = container.querySelector<HTMLSelectElement>("select")!;
-    expect(startSelector.value).toBe("direct");
+    expect(startSelector.value).toBe("trigger:custom-option");
     expect(startSelector.labels).toHaveLength(1);
     expect(startSelector.labels?.[0].querySelector("span")?.textContent?.trim()).toBe("Start");
-    changeSelect(startSelector, "trigger:custom-option");
 
     const customControl = container.querySelector<HTMLInputElement>("input[aria-label='Custom stimulus']");
     expect(customControl).toBeTruthy();
@@ -260,6 +259,84 @@ describe("workflow Test Run setup", () => {
     await settle();
     expect(publishingMocks.getOptions.mock.calls.length).toBeGreaterThan(1);
     expect(container.textContent).not.toContain("Draft changed");
+  });
+
+  it("defaults to the first trigger and its declared default mode", async () => {
+    const firstOption = {
+      ...customOption,
+      optionId: "first-option",
+      modes: [
+        { ...customOption.modes[0], modeId: "other-mode", isDefault: false },
+        customOption.modes[0]
+      ]
+    };
+    publishingMocks.getOptions.mockResolvedValue({ options: [firstOption, customOption] });
+    const container = renderPanel();
+    await settle();
+
+    const selectors = container.querySelectorAll<HTMLSelectElement>("select");
+    expect(selectors[0].value).toBe("trigger:first-option");
+    expect(selectors[1].value).toBe("custom-mode");
+    expect(container.querySelector("input[aria-label='Custom stimulus']")).toBeTruthy();
+  });
+
+  it("still defaults to the first trigger when reopened before options finish loading", async () => {
+    let resolveOptions!: (result: { options: typeof customOption[] }) => void;
+    publishingMocks.getOptions.mockReturnValue(new Promise(resolve => { resolveOptions = resolve; }));
+    let savedState: WorkflowTestDriveSetupState | null = null;
+    const onSetupStateChange = (state: WorkflowTestDriveSetupState) => { savedState = state; };
+    renderPanel({ onSetupStateChange });
+    await settle();
+
+    unmountCurrent();
+    const container = renderPanel({ setupState: savedState, onSetupStateChange });
+    resolveOptions({ options: [customOption] });
+    await settle();
+    expect(container.querySelector<HTMLSelectElement>("select")?.value).toBe("trigger:custom-option");
+  });
+
+  it("falls back to Direct start when the workflow has no triggers", async () => {
+    publishingMocks.getOptions.mockResolvedValue({ options: [] });
+    const onStart = vi.fn(async () => testRunView);
+    const container = renderPanel({ onStart });
+    await settle();
+
+    expect(container.querySelector<HTMLSelectElement>("select")?.value).toBe("direct");
+    changeValue(container.querySelector<HTMLInputElement>(".wf-run-input-list input")!, "workflow-order");
+    flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await settle();
+    expect(onStart).toHaveBeenCalledWith(expect.anything(), { orderId: "workflow-order" }, { kind: "direct" }, "Direct start", ["orderId"], expect.any(Function));
+  });
+
+  it.each(["direct", "trigger:second-option"])("retains an explicit %s selection after refreshing and remounting", async selection => {
+    publishingMocks.getOptions.mockResolvedValue({ options: [customOption, { ...customOption, optionId: "second-option" }] });
+    let savedState: WorkflowTestDriveSetupState | null = null;
+    const onSetupStateChange = (state: WorkflowTestDriveSetupState) => { savedState = state; };
+    let container = renderPanel({ onSetupStateChange });
+    await settle();
+    changeSelect(container.querySelector<HTMLSelectElement>("select")!, selection);
+
+    const refresh = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Refresh setup")!;
+    flushSync(() => refresh.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await settle();
+    expect(container.querySelector<HTMLSelectElement>("select")?.value).toBe(selection);
+
+    unmountCurrent();
+    container = renderPanel({ setupState: savedState, onSetupStateChange });
+    await settle();
+    expect(container.querySelector<HTMLSelectElement>("select")?.value).toBe(selection);
+  });
+
+  it("selects the first remaining trigger when the selected trigger is removed", async () => {
+    const container = renderPanel();
+    await settle();
+    changeSelect(container.querySelector<HTMLSelectElement>("select")!, "trigger:custom-option");
+    publishingMocks.getOptions.mockResolvedValue({ options: [{ ...customOption, optionId: "remaining-option" }] });
+
+    const refresh = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Refresh setup")!;
+    flushSync(() => refresh.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await settle();
+    expect(container.querySelector<HTMLSelectElement>("select")?.value).toBe("trigger:remaining-option");
   });
 
   it("retains the selected start and setup values when the Test Run panel remounts", async () => {
@@ -331,7 +408,7 @@ describe("workflow Test Run setup", () => {
     expect(container.textContent).toContain("The trigger action could not be sent.");
   });
 
-  it("does not select a trigger silently and disables an unknown driver without a declared schema", async () => {
+  it("disables the default trigger when its driver has no editor or declared schema", async () => {
     publishingMocks.getOptions.mockResolvedValue({
       options: [{ ...customOption, modes: [{ modeId: "opaque-mode", label: "Opaque", description: "No schema or editor." }] }],
       diagnostics: [{ code: "driver.unavailable", message: "No trigger module is installed.", nodeId: "authored-node" }]
@@ -340,12 +417,13 @@ describe("workflow Test Run setup", () => {
     await settle();
 
     const startSelector = container.querySelector<HTMLSelectElement>("select")!;
-    expect(startSelector.value).toBe("direct");
+    expect(startSelector.value).toBe("trigger:custom-option");
     expect(container.textContent).toContain("driver.unavailable");
     expect(container.textContent).toContain("authored-node");
-    changeSelect(startSelector, "trigger:custom-option");
     expect(container.textContent).toContain("does not declare a JSON Schema");
     expect(container.querySelector<HTMLButtonElement>("button[type='submit']")?.disabled).toBe(true);
+    changeSelect(startSelector, "direct");
+    expect(container.querySelector<HTMLButtonElement>("button[type='submit']")?.disabled).toBe(false);
   });
 
   it("normalizes camelCase collection kinds in the captured input contract before editing and parsing", async () => {
