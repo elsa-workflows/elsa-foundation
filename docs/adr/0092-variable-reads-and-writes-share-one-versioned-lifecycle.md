@@ -88,7 +88,9 @@ record.
 ## Terms
 
 - **Version**: a per-variable counter. Each applied write that changes the variable's value increments it. The
-  variable's value digest is computed once per applied write and stored beside the version.
+  variable's value digest is computed once per applied write and stored beside the version. The digest is taken over
+  ADR 0091's canonical form (decision 7 there), so it compares meaning, not the stored text: two writers that write
+  the same value with different escaping or notation produce the same digest.
 - **Read set**: the variables an invocation actually read, each with the version and stored digest it saw. It has two
   parts:
   - the **input read set**: reads made while the inputs were materialized, committed with the input snapshot;
@@ -172,6 +174,12 @@ session write.
 only to log it, and then write an unrelated value. ADR 0090 §7 already treats "read, then changed" as a read-modify-write;
 this applies the same rule to both surfaces. The conservative choice is correct here: a missed lost update is silent,
 while a false one is visible and can be overridden (decision 6).
+
+**A read alone never produces a write.** Only an explicit write enters this rule: a capture, a `Set`, or a session write
+(an assignment, or in a script a change the JSON-backed view recorded). The ADR 0090 amendment ([#3425](https://github.com/elsa-workflows/elsa-foundation/pull/3425), C1 and
+C2) makes session reads untracked, so a step that only read X has no write to X, and so no lost update on X. Under
+ADR 0090 as first written, every session read was tracked and compared at commit, and a lossy adapter could turn a
+read into a write (see the evidence on [#3425](https://github.com/elsa-workflows/elsa-foundation/pull/3425)).
 
 **An invocation never conflicts with its own writes.** When an invocation's own write to X is applied, its base for X
 advances to the version that write produced, and that advanced base is persisted with the invocation. This covers an
