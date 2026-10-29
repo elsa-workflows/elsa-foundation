@@ -234,7 +234,11 @@ completion.** A successful completion carries an *outcome selection* instead of 
 - **Selecting.** A C# activity returns the selection in its `Complete` transition.
   - A script selects through `setOutcome(name)` and `setOutcomes([names])`. Each call replaces the pending selection,
     so the last call wins.
-  - The selection is independent of the returned data.
+  - The selection is independent of the returned data. A script selects outcomes **only** through the setters; its
+    return value is data only. This replaces RunJavaScript's routing by return value (#1114, recorded in
+    `docs/reports/elsa-4-activity-behavioural-drive-2026-08.md`) and its `Unmatched` outcome: two mechanisms side by
+    side would give one activity two contradictory rules for "nothing selected" (`Done` here, `Unmatched` there), for
+    an unknown name (a fault here, a silent `Unmatched` there) and for several outcomes.
   - A pending selection takes effect only on successful completion. A fault or cancellation dispatches nothing, and a
     selection never dispatches a branch while the script is still running.
   - The script setters are therefore part of the step's transaction (D-3). They are a sanctioned exception to the
@@ -247,8 +251,12 @@ completion.** A successful completion carries an *outcome selection* instead of 
   - When provider-relevant configuration changes, the ports refresh and affected connections are exposed for repair.
   - Publication pins the resolved per-node set in the executable.
   - Outcome names are never invented at run time.
-- **Validation at run time.** A selection is checked against the node's pinned set. An unknown name faults the step
-  with `VF-ACT-006` by default, unless the node or activity explicitly configures a fallback outcome.
+- **Validation in two layers,** depending on how a name is written:
+  - a literal name (`setOutcome('Approved')`) that is not in the node's set is a publish diagnostic, so a typo is
+    caught before run time;
+  - a computed name (`setOutcome(variables.status)`) is checked at run time against the node's pinned set. An unknown
+    name faults the step with `VF-ACT-006` by default, unless the node or activity explicitly configures a fallback
+    outcome. Dynamic outcomes stay possible, within the set the designer declared.
 - **Unconnected outcomes.** A declared outcome with no connected edge is valid; selecting it ends that path.
 - **Several outcomes.** An activity contract declares whether its completions may select more than one outcome.
   - The connections of every selected outcome are scheduled.
@@ -262,10 +270,16 @@ completion.** A successful completion carries an *outcome selection* instead of 
 - Switch in "match any" mode;
 - `Complete` with several outcomes.
 
-A RunJavaScript with no selection completes with `Done` (#3295).
+Elsa 3 had no checked outcome set, so for a computed `setOutcome(…)` the converter derives the possible outcomes (from
+the node's `PossibleOutcomes` and the literal names in the script). If it cannot, it refuses with guidance
+(faithful-or-refuse).
+
+A RunJavaScript with no selection completes with `Done`, in Elsa 3 and here. The converter's rule that maps Elsa 3's
+`Done` to `Unmatched` (spec 239 R8, spec 236 member map) existed only because of routing by return value; it becomes
+`Done` to `Done`, which fixes #3295 at its cause.
 
 *Left to the implementing spec (S-3):*
-- whether RunJavaScript keeps selecting by its return value next to the setters;
+- removing RunJavaScript's routing by return value and its `Unmatched` outcome, and the converter's R8 rule;
 - the shape of the selection in the transition and in persisted completion records;
 - how a multi-outcome declaration appears in the activity contract and in Studio;
 - the fallback configuration;
