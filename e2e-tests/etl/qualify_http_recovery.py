@@ -108,12 +108,16 @@ def main():
         return api
 
     def snapshots(label):
+        if host.poll() is None and "T" not in q.process_field(host.pid,"stat"):
+            raise ValueError("Quiesce or stop the owned Workbench before copying coupled stores.")
         result={}
         for name in ("elsa", "etl-runtime", "etl-design"):
-            backup=root/f"{label}-{name}.sqlite"; q.backup_sqlite(root/(name+".db"),backup)
+            backup=root/f"{label}-{name}.sqlite"
+            observed=json.loads(subprocess.check_output(["dotnet",str(reader),"--backup-sqlite",str(root/(name+".db")),str(backup)],text=True,timeout=30))
+            if observed["readOnly"] is not True or observed["snapshotSha256"]!=q.digest(backup):raise ValueError("The provider backup receipt differs from its actual closed database.")
             target=output/(label+"-"+name+".sqlite.gz")
             with backup.open("rb") as raw,gzip.open(target,"wb") as zipped:shutil.copyfileobj(raw,zipped)
-            result[name]={"file":target.name,"databaseSha256":q.digest(backup),"gzipSha256":q.digest(target)}
+            result[name]={"file":target.name,"databaseSha256":q.digest(backup),"gzipSha256":q.digest(target),"observer":observed}
         return result
 
     try:

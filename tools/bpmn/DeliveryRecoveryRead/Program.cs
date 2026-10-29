@@ -16,6 +16,26 @@ using Elsa.Persistence.EntityFramework;
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 try
 {
+    if (args.Length == 3 && args[0] == "--backup-sqlite")
+    {
+        var backupSourceFile = Path.GetFullPath(args[1]);
+        var backupTargetFile = Path.GetFullPath(args[2]);
+        if (!File.Exists(backupSourceFile) || File.Exists(backupTargetFile))
+            throw new InvalidDataException("The snapshot requires an existing source and a fresh target.");
+        var backupSourceHash = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(backupSourceFile)));
+        await using (var input = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = backupSourceFile, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString()))
+        await using (var output = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = backupTargetFile, Pooling = false }.ToString()))
+        {
+            await input.OpenAsync(); await output.OpenAsync(); input.BackupDatabase(output);
+            await using var check = output.CreateCommand(); check.CommandText = "PRAGMA integrity_check";
+            if ((string?)await check.ExecuteScalarAsync() != "ok") throw new InvalidDataException("The actual SQLite backup failed integrity verification.");
+        }
+        if (backupSourceHash != Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(backupSourceFile))))
+            throw new InvalidDataException("The source main file changed during the quiesced snapshot.");
+        Console.WriteLine(JsonSerializer.Serialize(new { ReadOnly = true, SourceMainSha256 = backupSourceHash,
+            SnapshotSha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(backupTargetFile))) }, json));
+        return 0;
+    }
     if (args.Length == 2 && args[0] is "--inspect-studio-products" or "--inspect-etl-products")
     {
         var directory = Path.GetDirectoryName(Path.GetFullPath(args[1]))!;
