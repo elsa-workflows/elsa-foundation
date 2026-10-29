@@ -23,6 +23,7 @@ internal sealed class BpmnEmbeddingDelivery(BpmnEmbeddingBoundary boundary, Bpmn
             var completion = source.Intent.Payload?.Deserialize<RunBpmnCompletion>() ?? throw BpmnEmbeddingJson.Invalid();
             invocation = BpmnEmbeddingBoundary.Read(new RunBpmnState(1, completion.Invocation));
             var model = await boundary.RequireModelAsync(invocation, cancellationToken);
+            BpmnEmbeddingBoundary.RequireWorkerCancellationSettled(model);
             if (completion.FormatVersion != 1 || source.Intent.WorkflowExecutionId != invocation.ExecutionId ||
                 model.TerminalResult is not { } terminal || !JsonElement.DeepEquals(terminal, completion.Result)) throw BpmnEmbeddingJson.Invalid();
             var proof = await boundary.ParentProofAsync(invocation, cancellationToken);

@@ -101,7 +101,8 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         var document = current is null ? new Document(context.Material.Model!.Profile == BpmnModelProtocol.NativeWorkProfile ? 2 : 1,
             new BpmnExecutionState(), []) : Read(current);
         if (current is null && embedded is { } parent)
-            document = document with { FormatVersion = 3, NativeParent = new(BpmnEmbeddingJson.Write(parent.Invocation)) };
+            document = document with { FormatVersion = context.Material.Model!.Profile == BpmnModelProtocol.NativeWorkProfile ? 5 : 3,
+                NativeParent = new(BpmnEmbeddingJson.Write(parent.Invocation)) };
         if (current is null && command.InputKind == "start")
             document = document with { SourceReferenceId = command.Payload.Deserialize<Start>(Strict)!.SourceReferenceId };
         BpmnEvaluation? evaluation = null;
@@ -127,7 +128,7 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                     return new BpmnNativeWorkCancellation(origin, RuntimePostCommitOutboxItems.OutboxItemId(decision,
                         BpmnNativeWorkBoundary.CancellationIntentId(origin)));
                 }).ToArray();
-                document = document with { Work = [], FormatVersion = cancellations.Length > 0 ? 4 : document.FormatVersion,
+                document = document with { Work = [], FormatVersion = cancellations.Length > 0 ? document.NativeParent is null ? 4 : 6 : document.FormatVersion,
                     Cancellations = cancellations.Length > 0 ? cancellations : document.Cancellations };
             }
         }
@@ -299,11 +300,14 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                 !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(invocation.Model.Executable, state.Executable)) throw BpmnEmbeddingJson.Invalid();
         }
         var cancelled = state.TerminalResult is { } terminal && terminal.TryGetProperty("status", out var status) && status.GetString() == "Cancelled";
-        if (result.FormatVersion is not (1 or 2 or 3 or 4) ||
-            (result.FormatVersion == 3) != (result.NativeParent is not null) ||
-            (result.FormatVersion == 4) != (result.Cancellations is not null) ||
-            result.FormatVersion == 4 && (!cancelled || result.Cancellations!.Count == 0 ||
-                result.Cancellations.Any(item => !item.Settled) != (state.Lifecycle == RuntimeModelLifecycle.TerminalPendingSettlement) ||
+        // Formats 1-4 keep their original shapes. Embedded native service work and its cancellation
+        // use 5/6 so an older driver refuses them instead of dropping parent or worker responsibility.
+        if (result.FormatVersion is not (1 or 2 or 3 or 4 or 5 or 6) ||
+            (result.FormatVersion is 3 or 5 or 6) != (result.NativeParent is not null) ||
+            (result.FormatVersion is 4 or 6) != (result.Cancellations is not null) ||
+            result.FormatVersion is 4 or 6 && (!cancelled || result.Cancellations!.Count == 0 ||
+                (result.Cancellations.Any(item => !item.Settled) ? state.Lifecycle != RuntimeModelLifecycle.TerminalPendingSettlement :
+                    result.NativeParent is null && state.Lifecycle != RuntimeModelLifecycle.TerminalSettled) ||
                 result.Cancellations.Select(item => item.Origin.InvocationId).Distinct(StringComparer.Ordinal).Count() != result.Cancellations.Count ||
                 result.Cancellations.Any(item => !item.Origin.MatchesModel(state) ||
                     item.Origin.ResultIntentKind != BpmnNativeWorkBoundary.ResultKind ||
@@ -320,7 +324,7 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                 item.NativeWork is { } origin && (!origin.MatchesModel(state) || origin.InvocationId != item.InvocationId || origin.AttemptId != item.AttemptId ||
                     origin.BindingId != item.BindingId || origin.ResultIntentKind != BpmnNativeWorkBoundary.ResultKind ||
                     origin.WorkerExecutionId != BpmnNativeWorkBoundary.WorkerIdentity(origin.Scope, state.ExecutionId, item.InvocationId,
-                        item.AttemptId, origin.WorkerExecutable).WorkflowExecutionId) || (result.FormatVersion == 2) != (item.NativeWork is not null)))
+                        item.AttemptId, origin.WorkerExecutable).WorkflowExecutionId) || (result.FormatVersion is 2 or 5) != (item.NativeWork is not null)))
             throw new BpmnModelValidationException("The BPMN state and exact work inventory differ.");
         return result;
     }

@@ -58,7 +58,7 @@ internal sealed class BpmnEmbeddingBoundary(BpmnNativeWorkBoundary native, IWork
     internal async ValueTask RequireMaterialAsync(BpmnEmbeddingPin pin, CancellationToken token)
     {
         var material = await materials.FindMaterialAsync(pin.Executable.ArtifactId, token);
-        if (material?.Model is not { Profile: BpmnModelProtocol.Profile } model || model.Protocol != new RuntimeExecutionProtocol(BpmnModelProtocol.Key, BpmnModelProtocol.Version) || material.IncarnationId != pin.MaterialIncarnationId ||
+        if (material?.Model is not { Profile: BpmnModelProtocol.Profile or BpmnModelProtocol.NativeWorkProfile } model || model.Protocol != new RuntimeExecutionProtocol(BpmnModelProtocol.Key, BpmnModelProtocol.Version) || material.IncarnationId != pin.MaterialIncarnationId ||
             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(material.Identity, pin.Executable)) throw BpmnEmbeddingJson.Invalid();
     }
 
@@ -165,6 +165,7 @@ internal sealed class BpmnEmbeddingBoundary(BpmnNativeWorkBoundary native, IWork
             await RequireModelAsync(invocation, token);
         if (context.Command.InputKind == "native-parent-settled")
         {
+            RequireWorkerCancellationSettled(context.State ?? throw BpmnEmbeddingJson.Invalid());
             var completion = payload.Deserialize<RunBpmnCompletion>() ?? throw BpmnEmbeddingJson.Invalid();
             if (source.Intent.Kind != ResultKind || source.Intent.WorkflowExecutionId != invocation.ExecutionId || context.State?.TerminalResult is not { } terminal ||
                 !JsonElement.DeepEquals(completion.Invocation, input.Invocation) || !JsonElement.DeepEquals(completion.Result, terminal) ||
@@ -180,6 +181,12 @@ internal sealed class BpmnEmbeddingBoundary(BpmnNativeWorkBoundary native, IWork
             return (invocation, null);
         }
         return (invocation, context.State is null ? await ObserveParentAsync(invocation, token) : null);
+    }
+
+    internal static void RequireWorkerCancellationSettled(RuntimeModelExecutionState model)
+    {
+        if (BpmnDirectExecutionDriver.Read(model).Cancellations?.Any(item => !item.Settled) == true)
+            throw BpmnNativeWorkBoundary.Unavailable("The embedded native worker cancellation remains owed before parent settlement.");
     }
 
     internal async ValueTask<bool> ParentProofAsync(BpmnEmbeddedInvocation invocation, CancellationToken token)
