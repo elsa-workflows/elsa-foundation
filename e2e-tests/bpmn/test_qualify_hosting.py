@@ -1,7 +1,9 @@
-"""Mechanical capture safeguards; these tests do not qualify workflow recovery."""
+"""Mechanical capture/upgrade evidence safeguards; host journeys supply recovery proof."""
 import importlib.util
+from contextlib import closing
 from datetime import datetime, timezone
 import json
+import gzip
 import os
 from pathlib import Path
 import signal
@@ -165,6 +167,75 @@ class ActualCaptureControls(unittest.TestCase):
         capture.write_json(self.path, self.manifest)
         with self.assertRaisesRegex(ValueError, "frozen authoring verification"):
             capture.verify_capture(self.path)
+
+
+class ActualUpgradeControls(unittest.TestCase):
+    def setUp(self):
+        default = SCRIPT.parents[2] / "specs/1017-direct-bpmn-hosting/evidence/upgrade/partial-forks/manifest.json"
+        self.original = Path(os.environ.get("ELSA_BPMN_UPGRADE_MANIFEST", default)).resolve(strict=True)
+        capture.verify_upgrade(self.original)
+        self.before = capture.digest(self.original)
+        self.directory = tempfile.TemporaryDirectory()
+        self.bundle = Path(self.directory.name) / "upgrade"
+        shutil.copytree(self.original.parent, self.bundle)
+        self.path = self.bundle / self.original.name
+        self.manifest = json.loads(self.path.read_text())
+        self.process_path = self.bundle / "legacy-partial-forks/process.json"
+        self.process = json.loads(self.process_path.read_text())
+
+    def tearDown(self):
+        self.assertEqual(self.before, capture.digest(self.original))
+        capture.verify_upgrade(self.original)
+        self.directory.cleanup()
+
+    def rehash(self, path):
+        name = path.relative_to(self.bundle).as_posix()
+        next(asset for asset in self.manifest["assets"] if asset["path"] == name)["sha256"] = capture.digest(path)
+        capture.write_json(self.path, self.manifest)
+
+    def change_runtime(self, sql):
+        snapshot = self.bundle / "legacy-partial-forks/upgraded-runtime.sqlite.gz"
+        database = Path(self.directory.name) / "changed.sqlite"
+        database.write_bytes(gzip.decompress(snapshot.read_bytes()))
+        with closing(sqlite3.connect(database)) as connection:
+            with connection:
+                connection.execute(sql)
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        snapshot.write_bytes(gzip.compress(database.read_bytes(), mtime=0))
+        self.process["snapshot"]["databaseSha256"] = capture.digest(database)
+        self.process["snapshot"]["gzipSha256"] = capture.digest(snapshot)
+        capture.write_json(self.process_path, self.process)
+        self.rehash(snapshot); self.rehash(self.process_path)
+
+    def test_physical_nonterminal_state_refuses_completed_api_evidence_after_rehashing(self):
+        self.change_runtime("UPDATE elsa_runtime_workflow_execution_state SET Status = 1")
+        with self.assertRaisesRegex(ValueError, "physical workflow row"):
+            capture.verify_upgrade(self.path)
+
+    def test_changed_original_executable_refuses_success_evidence_after_rehashing(self):
+        self.change_runtime("UPDATE elsa_runtime_workflow_executable SET ContentJson = ContentJson || ' '")
+        with self.assertRaisesRegex(ValueError, "original executable"):
+            capture.verify_upgrade(self.path)
+
+    def test_replaced_wait_identity_is_refused_after_rehashing(self):
+        activities = self.process["observations"][0]["completed"]["activities"]
+        next(activity for activity in activities if activity["executableNodeId"] == "wait-b")["activityExecutionId"] = "repeated-wait"
+        capture.write_json(self.process_path, self.process); self.rehash(self.process_path)
+        with self.assertRaisesRegex(ValueError, "exact continuation"):
+            capture.verify_upgrade(self.path)
+
+    def test_unrelated_baseline_is_refused_after_rehashing(self):
+        self.process["baselineSourceRevision"] = "b" * 40
+        capture.write_json(self.process_path, self.process); self.rehash(self.process_path)
+        with self.assertRaisesRegex(ValueError, "declared baseline"):
+            capture.verify_upgrade(self.path)
+
+    def test_frozen_receipt_from_another_upgraded_store_is_refused_after_rehashing(self):
+        path = self.bundle / "frozen-contract.json"
+        frozen = json.loads(path.read_text()); frozen["closedSnapshotSha256"] = "0" * 64
+        capture.write_json(path, frozen); self.rehash(path)
+        with self.assertRaisesRegex(ValueError, "frozen authoring verification"):
+            capture.verify_upgrade(self.path)
 
 
 if __name__ == "__main__":

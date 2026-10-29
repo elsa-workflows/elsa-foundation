@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-legacy-partial-fork-upgrade",
+  "sourceRevision": "f3b56e516d4e6bd05bfa82995f512f27f4520fe8",
+  "baselineManifestSha256": "f2e699c1c3751ef52524e6e0e7ebb087b66bf1e18ad6a52d724e5691a05c5950",
+  "baselineSourceRevision": "438001406d980051584234e5d656eb8e6a67f47f",
+  "baselineAssets": {
+    "cases.json": "613d2620435f1d62546ec5df2b63128d8549323a2f36543f99db1ea4a3eede62",
+    "runtime.sqlite": "494db0de530ad83335c7ba5c9bb65b2fd2bff9f2ae3cd2cdef6dac8baa6fa5cb",
+    "design.sqlite": "73984412998c1f418f52b422e279402e2e9b01cd240c50d67dcb8efd5c306d6e"
+  },
+  "assets": [
+    {
+      "path": "legacy-partial-forks/process.json",
+      "sha256": "34abede4b3b695bddd4c720b50aeaaa513e7fd81df327fc07ca1f3ea6b48b1fe"
+    },
+    {
+      "path": "legacy-partial-forks/upgraded-runtime.sqlite.gz",
+      "sha256": "6059fa46c438474e19c1b2c2d455404cb9d39ae8d310ce8187d78d31a8f36b9d"
+    },
+    {
+      "path": "legacy-partial-forks/upgraded-design.sqlite.gz",
+      "sha256": "b4c0cf9cbb059881b02991560c06520ba79f1304d6ee04ba7948df91fda66a97"
+    },
+    {
+      "path": "frozen-contract.json",
+      "sha256": "b681cdda1e00b8ef86b486d5bf9f9813c512b11605742b52d2659f4dc9ce9ed0"
+    }
+  ]
+}
