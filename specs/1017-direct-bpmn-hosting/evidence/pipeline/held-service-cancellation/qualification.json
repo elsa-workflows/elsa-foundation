@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "executingSource": "a4098bd1a23a1e975c82ebefb7334ba7c9a2bfd4",
+  "productionRuntimeChanged": false,
+  "productionPolicyDriverApiSource": "6f532c6edfe4931ce0d574e0c98c5d93cb012d81",
+  "actualHeldCancellationJourneys": 5,
+  "rawAssets": 166,
+  "wholeStoresVerified": 45,
+  "actualWorkbenchProcesses": 20,
+  "actualHttpProcesses": 5,
+  "actualSigkillExits": 10,
+  "all25ListedChildrenStopped": true,
+  "heldCancellationProved": true,
+  "retiredRetryRefusalProved": true,
+  "originalFaultedNativeAndEtlTruthUnchanged": true,
+  "priorHttpOutputRecordsPerCase": 2,
+  "newPhysicalWorkers": 0,
+  "newEtlRuns": 0,
+  "newPhysicalHttpEffects": 0,
+  "cancellationToAlreadyFaultedWorkerEmitted": false,
+  "originalTypedRunBpmnCancellationAndExactSettlementProved": true,
+  "cancelEmbeddedAcknowledgedFromExistingTerminalResponsibilityWithoutNewInput": true,
+  "sameSourceInterpreterHistoriesCompared": true,
+  "normalization": [
+    "producingWorkHandle only when it equals that model execution identity"
+  ],
+  "externalLibraryBinaryHashClaimed": false,
+  "portableControls": 161,
+  "newPortablePositiveAndNegativeControls": 12,
+  "skippedTests": 0,
+  "standardHostBuildErrors": 0,
+  "testTierRegistrations": 123,
+  "frozenBaselineAssetsVerifiedUnchanged": 104,
+  "frozenBaselineManifestUnchanged": true,
+  "earlierBpmn411AndHumanHost9ValidationSource": "d2e62a1abea349db6a401661ff0904c20d565843",
+  "earlierDotnetValidationRelabeledAsThisSource": false,
+  "budgetExhaustionProved": false,
+  "timerInterruptionProved": false,
+  "competingRetryCancelCommitOrdersProved": false,
+  "obsoleteResultControlsProved": false,
+  "authorizationBeforeReplayProved": false,
+  "finalAffectedSourceUpgradeAndStudioProved": false,
+  "fullPrReviewRounds": 0,
+  "completeTaskOrProgramAcceptance": false,
+  "validationLogs": [
+    {
+      "path": "validation/maps.txt",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+    },
+    {
+      "path": "validation/portable-tests.txt",
+      "sha256": "f83faa97eaf2886ed033b4f2a6f11a6e73d9e9ba4612f07bffb0237683ed4165"
+    },
+    {
+      "path": "validation/standard-host-build.txt",
+      "sha256": "9ca8723c59c792e02f0094f9478bc090a375c425d5d3393c3add3a549861e78b"
+    },
+    {
+      "path": "validation/test-tiers.txt",
+      "sha256": "91cc02f2f85c466bbc3d5d675d3bf055059b2c0e5e185229a4c4d99b174f25c4"
+    },
+    {
+      "path": "validation/whole-stores.json",
+      "sha256": "f0dd4e38c324c551521fd310f2c502ecfae00464ebe4492a43ee5edd0e0d4424"
+    }
+  ]
+}

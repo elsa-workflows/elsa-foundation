@@ -4,6 +4,8 @@ For the execution-model program's source-bound **actual process-loss recovery** 
 
 The later [held-service retry journeys](../../specs/1017-direct-bpmn-hosting/evidence/pipeline/held-service-retry/README.md) qualify one authorized new physical worker/run after a terminal native/ETL fault and two process losses, directly and through all four native RunBpmn parents. `verify_held_service_retry.py` checks their original failed state, active semantic snapshot, pinned budget, exact result/parent consumption and whole stores. [Explicit FinalFault](../../specs/1017-direct-bpmn-hosting/evidence/pipeline/final-service-fault/README.md) separately proves terminal retry refusal. Remaining retry/cancellation/authorization and final upgrade/Studio acceptance is open.
 
+[Cancellation while held](../../specs/1017-direct-bpmn-hosting/evidence/pipeline/held-service-cancellation/README.md) is a separate real journey under the same five shapes. `verify_held_service_cancellation.py` checks retirement, unchanged failed native/ETL truth, terminal retry refusal, original native parent cancellation and no additional worker/run/HTTP effects after two process losses. Budget exhaustion, timer/competing-input/authorization and final upgrade/Studio gates remain open.
+
 `Test-FiniteFileEtl.ps1` exercises the finite CSV-to-JSONL path through an isolated, owned
 Workbench process. It uses the normal HTTP APIs to inspect host bindings, create/validate/publish
 an ETL definition, publish native workflow definitions, and execute the resulting artifacts. The

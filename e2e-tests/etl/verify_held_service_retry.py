@@ -200,9 +200,9 @@ def physical_runtime(c,phase,p,observed,replacement,old,success,command,embedded
         'The original native fault incident was erased or reassigned during model retry.')
 
 
-def physical_etl(c,phase,p,before,final,content,unavailable):
+def physical_etl(c,phase,p,before,final,content,unavailable,include_replacement=True):
     c.row_factory=sqlite3.Row;rows=c.execute('SELECT * FROM elsa_etl_runtime_runs').fetchall()
-    require(len(rows)==(2 if phase=='finished' else 1),'The retry created an extra physical ETL run or lost the failed run.')
+    require(len(rows)==(2 if phase=='finished' and include_replacement else 1),'The retry created an extra physical ETL run or lost the failed run.')
     first=None
     for row in rows:
         inv=json.loads(row['InvocationJson']);run=v.decoded(inv['runId']);original=run==p['runId']

@@ -1,0 +1,697 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-bpmn-held-service-cancellation-matrix",
+  "sourceRevision": "a4098bd1a23a1e975c82ebefb7334ba7c9a2bfd4",
+  "cases": [
+    {
+      "name": "direct",
+      "assets": [
+        {
+          "path": "direct/before-checked-model.json",
+          "sha256": "00350fe81912fc1d8b917e926641d7794cf70630645c155ffd3ba075a3e17a74"
+        },
+        {
+          "path": "direct/before-elsa.sqlite.gz",
+          "sha256": "efb6b62f925925daf5710ebda1d435c7980e3b30ebb046e2e745627926fb5127"
+        },
+        {
+          "path": "direct/before-etl-design.sqlite.gz",
+          "sha256": "403b23cca3bf0d503839a98409ce3a48acb3dffa24155baa62bfd19a25b43385"
+        },
+        {
+          "path": "direct/before-etl-runtime.sqlite.gz",
+          "sha256": "956091b3bb650b0112beec3bd7bc0f250c269a8d98e4d86abbb726b939578e95"
+        },
+        {
+          "path": "direct/before-wire.json",
+          "sha256": "34ccaa390f02496dd1254d5bce23ab82459cbf12e865e5df1dec8d72a151d047"
+        },
+        {
+          "path": "direct/before.json",
+          "sha256": "c713173fb134a3eea5fa1360acd420c703c163613f63048febeecf59858a0884"
+        },
+        {
+          "path": "direct/finished-checked-model.json",
+          "sha256": "8b17e36f422094465cf3b35604657583e010ea438d9f3b9ce9133b81ee266388"
+        },
+        {
+          "path": "direct/finished-elsa.sqlite.gz",
+          "sha256": "c68377ff566d11a6947cce78b420c0fe0362f70f424885f7c8fc8e3a0127bc59"
+        },
+        {
+          "path": "direct/finished-etl-design.sqlite.gz",
+          "sha256": "9f659fa5066f45f9ca1630f08f292814c6555558407ee9862da0b74422e87710"
+        },
+        {
+          "path": "direct/finished-etl-runtime.sqlite.gz",
+          "sha256": "2c48b1848106eb393bccc62e6993a7d55b958a3c574411a444e764414c8fbae9"
+        },
+        {
+          "path": "direct/finished-wire.json",
+          "sha256": "34ccaa390f02496dd1254d5bce23ab82459cbf12e865e5df1dec8d72a151d047"
+        },
+        {
+          "path": "direct/finished.json",
+          "sha256": "f84af144db24eb3f8b6361ce4d7f5e7ae8e3b4f83c66510ae8ddb4cae82eaef4"
+        },
+        {
+          "path": "direct/held-after-restart.json",
+          "sha256": "838771393a71168e7427e3f2ae51e84058664db03dbf778f81818f8544388188"
+        },
+        {
+          "path": "direct/held-cancel-command.json",
+          "sha256": "a6fcb64c5ba83f49bf4f75edb5233a92d0d7b48467a335b2a56265422cda9186"
+        },
+        {
+          "path": "direct/held-checked-model.json",
+          "sha256": "d2d0e189534ed19ad5c99080cae7f1556b4f61625f8a614f06b7d46207a96be3"
+        },
+        {
+          "path": "direct/held-elsa.sqlite.gz",
+          "sha256": "348aecf04559fc1f3b9db6d974a16a61855aeb0af46cba08057a5429c1ffd873"
+        },
+        {
+          "path": "direct/held-etl-design.sqlite.gz",
+          "sha256": "fcc5530c82acebec9ca24c6030352f05df4422525a294ad3a81fd1a6b9621ff6"
+        },
+        {
+          "path": "direct/held-etl-runtime.sqlite.gz",
+          "sha256": "530f3970af32dff2f01b1e9e20f1d7f1280efc94c969e0418bc21141d32a57f8"
+        },
+        {
+          "path": "direct/held-wire.json",
+          "sha256": "34ccaa390f02496dd1254d5bce23ab82459cbf12e865e5df1dec8d72a151d047"
+        },
+        {
+          "path": "direct/held.json",
+          "sha256": "838771393a71168e7427e3f2ae51e84058664db03dbf778f81818f8544388188"
+        },
+        {
+          "path": "direct/lookup-snapshot.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "direct/lookup-source.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "direct/process.json",
+          "sha256": "6eaec3e113095c4e14cd1013c1913421dec48a7ae787842df5f4fe1fe47d929d"
+        },
+        {
+          "path": "direct/recovered.json",
+          "sha256": "c713173fb134a3eea5fa1360acd420c703c163613f63048febeecf59858a0884"
+        },
+        {
+          "path": "direct/retained-checked-model.json",
+          "sha256": "8b17e36f422094465cf3b35604657583e010ea438d9f3b9ce9133b81ee266388"
+        },
+        {
+          "path": "direct/retained-incidents.json",
+          "sha256": "0991fdbc5e5fd2e89ff1d6dcfe4f65d4129a6c713571a24b5a178402ef4a61fc"
+        },
+        {
+          "path": "direct/retained-wire.json",
+          "sha256": "34ccaa390f02496dd1254d5bce23ab82459cbf12e865e5df1dec8d72a151d047"
+        },
+        {
+          "path": "direct/retained.json",
+          "sha256": "f84af144db24eb3f8b6361ce4d7f5e7ae8e3b4f83c66510ae8ddb4cae82eaef4"
+        },
+        {
+          "path": "direct/retired-retry-refusal.json",
+          "sha256": "83a3e618f34934e8e222d5c4f976b7261a34cf72f50b5eb0d26e45e7517440ff"
+        },
+        {
+          "path": "direct/snapshot-unavailability.json",
+          "sha256": "52250f8aa2fa27be1db27291bca009fa7a9bbd2bddfedeb3d5435ba38d1ac8f3"
+        }
+      ]
+    },
+    {
+      "name": "root",
+      "assets": [
+        {
+          "path": "root/before-checked-embedding.json",
+          "sha256": "d5026a6dbc9548e7f452d3c4262394cbe7c9012111100f6217fdac6fd53b8653"
+        },
+        {
+          "path": "root/before-checked-model.json",
+          "sha256": "0db1922cfee13138aff1910af9e8768409bed35db963114935fd8fafcf1fbb2f"
+        },
+        {
+          "path": "root/before-elsa.sqlite.gz",
+          "sha256": "4cc46aaf60c5e4d458a19f459a70e133fdbf6549932c4f5b92ef73345b1caaa7"
+        },
+        {
+          "path": "root/before-etl-design.sqlite.gz",
+          "sha256": "8254b090c44a20af4a256ff0bfc365feaccffd03d89289ace96e600ee6d1aa43"
+        },
+        {
+          "path": "root/before-etl-runtime.sqlite.gz",
+          "sha256": "ff771e9892939ee69c82bd77380055de8de6a5f6e1222b82334ef325a438d3a1"
+        },
+        {
+          "path": "root/before-wire.json",
+          "sha256": "dc5ddd6f0758536fa93ff64b4d9dfb659aab5ee4726f1500b171fbf520b3a4bb"
+        },
+        {
+          "path": "root/before.json",
+          "sha256": "c94ebc906f6b50ae82fcb82906cbcff90fd5decbbaf141eb3faef758589a7c75"
+        },
+        {
+          "path": "root/finished-checked-embedding.json",
+          "sha256": "7765900c81d68fb4dd6ce38aba2640bec2a7815bed932400eb8a32ffd3708c14"
+        },
+        {
+          "path": "root/finished-checked-model.json",
+          "sha256": "897afde374f3b09cdde361c468fc3323eba361b3a1831791ac0dba89b53fe239"
+        },
+        {
+          "path": "root/finished-elsa.sqlite.gz",
+          "sha256": "6911dc67e55112f4ccb9cd9daab99058f0f20558adc664119f2d742862e7effb"
+        },
+        {
+          "path": "root/finished-etl-design.sqlite.gz",
+          "sha256": "60bdcf3522caa69d497b4828716061b778c79698f56744e556238a7ec0301bfc"
+        },
+        {
+          "path": "root/finished-etl-runtime.sqlite.gz",
+          "sha256": "b49e55793ebbb7d0fd77c65844d93b7df191cc325957630e9300e4ce0b9d9206"
+        },
+        {
+          "path": "root/finished-wire.json",
+          "sha256": "dc5ddd6f0758536fa93ff64b4d9dfb659aab5ee4726f1500b171fbf520b3a4bb"
+        },
+        {
+          "path": "root/finished.json",
+          "sha256": "1fc4a4f39b20a7bd6f5c00d5089342bad95792a8b65fed16a5fc39d7a87900b7"
+        },
+        {
+          "path": "root/held-after-restart.json",
+          "sha256": "6fa193e577460f5456067f8b56f3a4ca2d2ce915e60638c682205c2bffe28912"
+        },
+        {
+          "path": "root/held-cancel-command.json",
+          "sha256": "4121bc6af35f84ba78b504e698e089017b0de231294f526c4fab02efa9c6290b"
+        },
+        {
+          "path": "root/held-checked-embedding.json",
+          "sha256": "06598a663d8df222fda93a3c0ee8ebbb4c13651e2ad3122495fc1b01edb5f424"
+        },
+        {
+          "path": "root/held-checked-model.json",
+          "sha256": "181536babc0bc9755a8012a8b4fe8062f040a5c5a7f230f4b992aac938a5b338"
+        },
+        {
+          "path": "root/held-elsa.sqlite.gz",
+          "sha256": "43b4b60a5616e481f2d8d1b8376be0f317880d487c2d83a29ace59d390dd788d"
+        },
+        {
+          "path": "root/held-etl-design.sqlite.gz",
+          "sha256": "28610daab50972bc8c75dc490bdb609f763a82a80816541f89b16b2fa08317e6"
+        },
+        {
+          "path": "root/held-etl-runtime.sqlite.gz",
+          "sha256": "cbd03ea76f0bc4d606261bf6e4f084dba21b0c294f2f3db734dd86d5019482fa"
+        },
+        {
+          "path": "root/held-wire.json",
+          "sha256": "dc5ddd6f0758536fa93ff64b4d9dfb659aab5ee4726f1500b171fbf520b3a4bb"
+        },
+        {
+          "path": "root/held.json",
+          "sha256": "6fa193e577460f5456067f8b56f3a4ca2d2ce915e60638c682205c2bffe28912"
+        },
+        {
+          "path": "root/lookup-snapshot.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "root/lookup-source.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "root/process.json",
+          "sha256": "0a4755f14bcaf272edf6e4ef7ccb7220ebb98566d8027b82cb85da2725ed9030"
+        },
+        {
+          "path": "root/recovered.json",
+          "sha256": "c94ebc906f6b50ae82fcb82906cbcff90fd5decbbaf141eb3faef758589a7c75"
+        },
+        {
+          "path": "root/retained-checked-embedding.json",
+          "sha256": "7765900c81d68fb4dd6ce38aba2640bec2a7815bed932400eb8a32ffd3708c14"
+        },
+        {
+          "path": "root/retained-checked-model.json",
+          "sha256": "897afde374f3b09cdde361c468fc3323eba361b3a1831791ac0dba89b53fe239"
+        },
+        {
+          "path": "root/retained-incidents.json",
+          "sha256": "f9c3b27f6ec5f34c821a13d8e115ed257fbfea042daa28656befafa84e7040db"
+        },
+        {
+          "path": "root/retained-wire.json",
+          "sha256": "dc5ddd6f0758536fa93ff64b4d9dfb659aab5ee4726f1500b171fbf520b3a4bb"
+        },
+        {
+          "path": "root/retained.json",
+          "sha256": "1fc4a4f39b20a7bd6f5c00d5089342bad95792a8b65fed16a5fc39d7a87900b7"
+        },
+        {
+          "path": "root/retired-retry-refusal.json",
+          "sha256": "9ceef129f7f046669d884fadf36ada2a5004929d25ef599b88262dd3be89d0bb"
+        },
+        {
+          "path": "root/snapshot-unavailability.json",
+          "sha256": "af33fbeaa9cca47af28254fe3609073412109522dcd4d985aa28076cc1b2920f"
+        }
+      ]
+    },
+    {
+      "name": "sequence",
+      "assets": [
+        {
+          "path": "sequence/before-checked-embedding.json",
+          "sha256": "358f13003a7cc3e556554973e518bfd056d0d55d375f5cdcfeb40719f4ef3477"
+        },
+        {
+          "path": "sequence/before-checked-model.json",
+          "sha256": "aed829668577349e2f217851a26b1011af348a89755cd359e0a517745ac9822d"
+        },
+        {
+          "path": "sequence/before-elsa.sqlite.gz",
+          "sha256": "102b00dae16b46528ac3a83b77131df2e3709c55ee9b58aa9f9010a2c83304e0"
+        },
+        {
+          "path": "sequence/before-etl-design.sqlite.gz",
+          "sha256": "df18cac71967f8c1802365835275705a74a967b10469064a6f6bcbc3d0a10145"
+        },
+        {
+          "path": "sequence/before-etl-runtime.sqlite.gz",
+          "sha256": "f4f984d22efb491825944920e4b562271cbcde4fa0e9234b3d103c961ddf936f"
+        },
+        {
+          "path": "sequence/before-wire.json",
+          "sha256": "7da841bbb87800cefc907f76ec623aaa1ca2746459341965a1275f808b90314e"
+        },
+        {
+          "path": "sequence/before.json",
+          "sha256": "715c909de2f059771f686a4843e7d1e1208e3d596c135c1189aa31e980bad797"
+        },
+        {
+          "path": "sequence/finished-checked-embedding.json",
+          "sha256": "b1183eb0a7eb335a53531940e11a4e11f1fb6a26f3743a3b55531bc25c9b8ec3"
+        },
+        {
+          "path": "sequence/finished-checked-model.json",
+          "sha256": "028be39ac21c9795695d6268e47d6ebe5b29b284beeecf730e50802dbcfc85f7"
+        },
+        {
+          "path": "sequence/finished-elsa.sqlite.gz",
+          "sha256": "e2fdf7180f67d29d243542635a9c7352e403961f2ceb64b91460b5bd15ab0c05"
+        },
+        {
+          "path": "sequence/finished-etl-design.sqlite.gz",
+          "sha256": "4ce0b22d9432bdd1409f3b2df7b0f2edcea2ff7243a910616617889ca033dae0"
+        },
+        {
+          "path": "sequence/finished-etl-runtime.sqlite.gz",
+          "sha256": "5e5f427737fd3b68965f6efcd0760ef2b89169c01f00449e4d856f670df1224d"
+        },
+        {
+          "path": "sequence/finished-wire.json",
+          "sha256": "7da841bbb87800cefc907f76ec623aaa1ca2746459341965a1275f808b90314e"
+        },
+        {
+          "path": "sequence/finished.json",
+          "sha256": "6d5bcab91efba9cf05df70b1f5776e12e4ae25561bdfff3cd0975c7c78c93b68"
+        },
+        {
+          "path": "sequence/held-after-restart.json",
+          "sha256": "4a5e008a1008c6b102ec1ef82e3fff0fc869165aaa7e815204fd63e61149c08c"
+        },
+        {
+          "path": "sequence/held-cancel-command.json",
+          "sha256": "e8903f3f621f294bd1f09bfbd856f8a3d4d8b122ab7782552196220cba6cbe7c"
+        },
+        {
+          "path": "sequence/held-checked-embedding.json",
+          "sha256": "9ca0005a1ad441cdf8576a8b73b2457954313de84abbd3d8040a1695dd69d226"
+        },
+        {
+          "path": "sequence/held-checked-model.json",
+          "sha256": "b02d0f624452afdce2dc74205297d8b2e4c7833f1476202d66f297e0894f5e19"
+        },
+        {
+          "path": "sequence/held-elsa.sqlite.gz",
+          "sha256": "e0285494b6080dad4ad851c159407b3684e36cfee4487aa459a6d9a89b572416"
+        },
+        {
+          "path": "sequence/held-etl-design.sqlite.gz",
+          "sha256": "239cdd950fc375485930bdbcfa4c35ba0163d29a7c7fc1f36c2e04c538aa11ee"
+        },
+        {
+          "path": "sequence/held-etl-runtime.sqlite.gz",
+          "sha256": "45d36c1695197dcf91a3ea525fc408fbb132e9bcc4176b71839db85a88ecc608"
+        },
+        {
+          "path": "sequence/held-wire.json",
+          "sha256": "7da841bbb87800cefc907f76ec623aaa1ca2746459341965a1275f808b90314e"
+        },
+        {
+          "path": "sequence/held.json",
+          "sha256": "4a5e008a1008c6b102ec1ef82e3fff0fc869165aaa7e815204fd63e61149c08c"
+        },
+        {
+          "path": "sequence/lookup-snapshot.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "sequence/lookup-source.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "sequence/process.json",
+          "sha256": "f6d8d7084a396f4b7d37cbc3e35b664d3ba0db2ea2d963ebde13d0c2e18a916e"
+        },
+        {
+          "path": "sequence/recovered.json",
+          "sha256": "715c909de2f059771f686a4843e7d1e1208e3d596c135c1189aa31e980bad797"
+        },
+        {
+          "path": "sequence/retained-checked-embedding.json",
+          "sha256": "b1183eb0a7eb335a53531940e11a4e11f1fb6a26f3743a3b55531bc25c9b8ec3"
+        },
+        {
+          "path": "sequence/retained-checked-model.json",
+          "sha256": "028be39ac21c9795695d6268e47d6ebe5b29b284beeecf730e50802dbcfc85f7"
+        },
+        {
+          "path": "sequence/retained-incidents.json",
+          "sha256": "7b4ee75501c12f5c37dba7ab3ee186028218f2f350412ba181b1a28ca892c0f2"
+        },
+        {
+          "path": "sequence/retained-wire.json",
+          "sha256": "7da841bbb87800cefc907f76ec623aaa1ca2746459341965a1275f808b90314e"
+        },
+        {
+          "path": "sequence/retained.json",
+          "sha256": "6d5bcab91efba9cf05df70b1f5776e12e4ae25561bdfff3cd0975c7c78c93b68"
+        },
+        {
+          "path": "sequence/retired-retry-refusal.json",
+          "sha256": "3eeaae506e37754d4a544183dca23696a5f0f85ef1b574e7d8517ab41fc618bb"
+        },
+        {
+          "path": "sequence/snapshot-unavailability.json",
+          "sha256": "cf173ed68ede161b5bdf03e124fa4c7162a82d923e8d1f015cd575ebd83772d5"
+        }
+      ]
+    },
+    {
+      "name": "flowchart",
+      "assets": [
+        {
+          "path": "flowchart/before-checked-embedding.json",
+          "sha256": "6b134efad25502d0a134cfdbcf3396c0111c3645e063db11a1555509e420b8f1"
+        },
+        {
+          "path": "flowchart/before-checked-model.json",
+          "sha256": "6105418cb7d361ddb84eea44bafe738a69e14a0ba9d8b1257e8beb74cf9866a6"
+        },
+        {
+          "path": "flowchart/before-elsa.sqlite.gz",
+          "sha256": "7ed5348ad860c0852b93d0161a546cf2cd5c520d8fc6c7f60326564bd46ccbd9"
+        },
+        {
+          "path": "flowchart/before-etl-design.sqlite.gz",
+          "sha256": "6decd1b2cb93e70340e15df55d3626b818d15153257253cb8e11bae0d9308fbd"
+        },
+        {
+          "path": "flowchart/before-etl-runtime.sqlite.gz",
+          "sha256": "c3e3be2bd3dec0a96f513b534b3a7f8aabb3cb21356bcd7a2f27cd52f35eb48f"
+        },
+        {
+          "path": "flowchart/before-wire.json",
+          "sha256": "db784efb8c76a0ad4b604f0fa8a6082dbd2b9031077fdd20e56d655c2a0c539b"
+        },
+        {
+          "path": "flowchart/before.json",
+          "sha256": "f07920b59f9fc2535f5f8478210fb25d39158202bcf2203954117c1b96fa3aee"
+        },
+        {
+          "path": "flowchart/finished-checked-embedding.json",
+          "sha256": "408c425e35bc766eb754a693fbb0794d3624582d0478f9c77342fbebea3ab76f"
+        },
+        {
+          "path": "flowchart/finished-checked-model.json",
+          "sha256": "637e75a88d1009f400645c2852ac24c43c031aad5e35ba96f056ea873e758d8d"
+        },
+        {
+          "path": "flowchart/finished-elsa.sqlite.gz",
+          "sha256": "4e99ca64a9b9e331fd0dc367592ed24200c6b0bf9de552512e6c84511b6ecf58"
+        },
+        {
+          "path": "flowchart/finished-etl-design.sqlite.gz",
+          "sha256": "186ee5edff9e30285e01d5150aca3395b36d22715855700c82413b7f541dc9d8"
+        },
+        {
+          "path": "flowchart/finished-etl-runtime.sqlite.gz",
+          "sha256": "4023f0fe31e9802380c69ba2144cf0ba99e8fa7f74a13d065aa54a65ab477f11"
+        },
+        {
+          "path": "flowchart/finished-wire.json",
+          "sha256": "db784efb8c76a0ad4b604f0fa8a6082dbd2b9031077fdd20e56d655c2a0c539b"
+        },
+        {
+          "path": "flowchart/finished.json",
+          "sha256": "777788303646451a8b6b8f0e1ee774476bb4f613d4a1236067d0c3cdc00a02a0"
+        },
+        {
+          "path": "flowchart/held-after-restart.json",
+          "sha256": "47a7d6024448828a38f49b329ead0c1843ae99551d6306ada601828e0bf15101"
+        },
+        {
+          "path": "flowchart/held-cancel-command.json",
+          "sha256": "e41c417f3029152d42b80df510a8f6aa7eb499f7623dc9fbafa38412f4ab4a41"
+        },
+        {
+          "path": "flowchart/held-checked-embedding.json",
+          "sha256": "f45132f4781ae3db4f6a203a27905466f828ed768ee933346822573fafd67185"
+        },
+        {
+          "path": "flowchart/held-checked-model.json",
+          "sha256": "ec9316727bef51e3920a7dd0bdbe70eccda8f15f8066b00a8b05e5babfff661c"
+        },
+        {
+          "path": "flowchart/held-elsa.sqlite.gz",
+          "sha256": "c23a99f1e993fd8d1db79e0096cba9bec906f927b1a08c5ee3ce95f99315fbac"
+        },
+        {
+          "path": "flowchart/held-etl-design.sqlite.gz",
+          "sha256": "5b638aeb8653b385d1db4537c4f9cf212f8edd0f862153bf88691b81ed7d9270"
+        },
+        {
+          "path": "flowchart/held-etl-runtime.sqlite.gz",
+          "sha256": "c0f03c1c9697b374037f316f45fe4b170e1f1b8efa39942ab334124f746cd192"
+        },
+        {
+          "path": "flowchart/held-wire.json",
+          "sha256": "db784efb8c76a0ad4b604f0fa8a6082dbd2b9031077fdd20e56d655c2a0c539b"
+        },
+        {
+          "path": "flowchart/held.json",
+          "sha256": "47a7d6024448828a38f49b329ead0c1843ae99551d6306ada601828e0bf15101"
+        },
+        {
+          "path": "flowchart/lookup-snapshot.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "flowchart/lookup-source.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "flowchart/process.json",
+          "sha256": "f4e1aab0b23d17922f4343153f7b015307823e9e707d41ca7679e91ec279125e"
+        },
+        {
+          "path": "flowchart/recovered.json",
+          "sha256": "f07920b59f9fc2535f5f8478210fb25d39158202bcf2203954117c1b96fa3aee"
+        },
+        {
+          "path": "flowchart/retained-checked-embedding.json",
+          "sha256": "408c425e35bc766eb754a693fbb0794d3624582d0478f9c77342fbebea3ab76f"
+        },
+        {
+          "path": "flowchart/retained-checked-model.json",
+          "sha256": "637e75a88d1009f400645c2852ac24c43c031aad5e35ba96f056ea873e758d8d"
+        },
+        {
+          "path": "flowchart/retained-incidents.json",
+          "sha256": "642cec93b002c20b5c7f37a6de9c9427e8e70a564c528580bdab70cd910ebdb0"
+        },
+        {
+          "path": "flowchart/retained-wire.json",
+          "sha256": "db784efb8c76a0ad4b604f0fa8a6082dbd2b9031077fdd20e56d655c2a0c539b"
+        },
+        {
+          "path": "flowchart/retained.json",
+          "sha256": "777788303646451a8b6b8f0e1ee774476bb4f613d4a1236067d0c3cdc00a02a0"
+        },
+        {
+          "path": "flowchart/retired-retry-refusal.json",
+          "sha256": "d51b05af4baa3dc2e70efe0bb27a08c55ad3929c6394426015784d208fc1323b"
+        },
+        {
+          "path": "flowchart/snapshot-unavailability.json",
+          "sha256": "4794c138b647115767d38f52f738ab6ac125e5c394e0d12262136789b69a3ab4"
+        }
+      ]
+    },
+    {
+      "name": "compensationscope",
+      "assets": [
+        {
+          "path": "compensationscope/before-checked-embedding.json",
+          "sha256": "375d1e44421daf76bad6968c0debbc0651c1d43e875ef0b6ad192c8754f735e6"
+        },
+        {
+          "path": "compensationscope/before-checked-model.json",
+          "sha256": "8cf045eb836ab2d0e612e944a911b0afaf3aedb93b6de8c2e1a27c16fe4defa8"
+        },
+        {
+          "path": "compensationscope/before-elsa.sqlite.gz",
+          "sha256": "fd19cbff753a174bfb07fd4958978f769f7bca2854cb07b6bb40d9de23f3881e"
+        },
+        {
+          "path": "compensationscope/before-etl-design.sqlite.gz",
+          "sha256": "5b226d32f35683fe0a68ab068c454fe250bb03fd80f97094cbe46522b410c0a7"
+        },
+        {
+          "path": "compensationscope/before-etl-runtime.sqlite.gz",
+          "sha256": "bcae72aeda36b18c7d140927c7929f3f31003268b4597ff048817ad9bd1ba6b7"
+        },
+        {
+          "path": "compensationscope/before-wire.json",
+          "sha256": "b9670df27a8df6f1e45a77ee23d5a15f33f17e930e74fa91c8ce92124ba708dd"
+        },
+        {
+          "path": "compensationscope/before.json",
+          "sha256": "244bb8e6120f47e65ea3bc9292c2b45251a354fc2d549e5cdef4866f6451456c"
+        },
+        {
+          "path": "compensationscope/finished-checked-embedding.json",
+          "sha256": "947c077e1bb57d53fa09c13d7bcbcab60b7d2b833a6121c04f8a4f57e3e069ab"
+        },
+        {
+          "path": "compensationscope/finished-checked-model.json",
+          "sha256": "d59764a79a2be1fe4db9f2c213ede86ca3a382f6d94596aec0efbf15e7dd08d5"
+        },
+        {
+          "path": "compensationscope/finished-elsa.sqlite.gz",
+          "sha256": "e63e09eb79f511ed175d0d64143479a3b4c7cdaa3e998550e2953c05a64a0e52"
+        },
+        {
+          "path": "compensationscope/finished-etl-design.sqlite.gz",
+          "sha256": "de84d5f9c93cb699aa24bd5a2cd3b7b50abe7610ce519a400de2650f8d02c0bc"
+        },
+        {
+          "path": "compensationscope/finished-etl-runtime.sqlite.gz",
+          "sha256": "0c1e962ef0ee78b05a14f1c8fc76e37a07d1050ad8401efd9fad52357339fbfe"
+        },
+        {
+          "path": "compensationscope/finished-wire.json",
+          "sha256": "b9670df27a8df6f1e45a77ee23d5a15f33f17e930e74fa91c8ce92124ba708dd"
+        },
+        {
+          "path": "compensationscope/finished.json",
+          "sha256": "1778c1c788e036b6b595d2580e2af78cc85beba4c052d79bf837986880b62981"
+        },
+        {
+          "path": "compensationscope/held-after-restart.json",
+          "sha256": "599ba9719e9b23c282758984768c389bb1c2ccbba24598261c6611cdc750971d"
+        },
+        {
+          "path": "compensationscope/held-cancel-command.json",
+          "sha256": "304383b3f2121f0ec2a84b430d97677e7483d7976c518c866f803dbfb214a7a1"
+        },
+        {
+          "path": "compensationscope/held-checked-embedding.json",
+          "sha256": "cb4f51b99a9cd4c650e88292f8b4591a60e9538237f3d154758752933ae66a5c"
+        },
+        {
+          "path": "compensationscope/held-checked-model.json",
+          "sha256": "505f1390a930f81a6db83d50a407eb2877be8afd5e8d561468322a009c6d8f87"
+        },
+        {
+          "path": "compensationscope/held-elsa.sqlite.gz",
+          "sha256": "01a444eb7b34aeb488019a7e5204acf8e1bc18bf37588b324e77e2d606652bc0"
+        },
+        {
+          "path": "compensationscope/held-etl-design.sqlite.gz",
+          "sha256": "b0f6a4a8ccbe8c09374fb34470e9b9e52ce4fdc1b2fb2f4205cd962883b288dc"
+        },
+        {
+          "path": "compensationscope/held-etl-runtime.sqlite.gz",
+          "sha256": "0f06c89e5388d81e7e10d83eaf68a3cad9c6357415d2879946ee194b3086f30e"
+        },
+        {
+          "path": "compensationscope/held-wire.json",
+          "sha256": "b9670df27a8df6f1e45a77ee23d5a15f33f17e930e74fa91c8ce92124ba708dd"
+        },
+        {
+          "path": "compensationscope/held.json",
+          "sha256": "599ba9719e9b23c282758984768c389bb1c2ccbba24598261c6611cdc750971d"
+        },
+        {
+          "path": "compensationscope/lookup-snapshot.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "compensationscope/lookup-source.csv",
+          "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+        },
+        {
+          "path": "compensationscope/process.json",
+          "sha256": "d52ffebbffa1767eb7737cee14be9604b63df163a55a7345967f0f5b2db56626"
+        },
+        {
+          "path": "compensationscope/recovered.json",
+          "sha256": "244bb8e6120f47e65ea3bc9292c2b45251a354fc2d549e5cdef4866f6451456c"
+        },
+        {
+          "path": "compensationscope/retained-checked-embedding.json",
+          "sha256": "947c077e1bb57d53fa09c13d7bcbcab60b7d2b833a6121c04f8a4f57e3e069ab"
+        },
+        {
+          "path": "compensationscope/retained-checked-model.json",
+          "sha256": "d59764a79a2be1fe4db9f2c213ede86ca3a382f6d94596aec0efbf15e7dd08d5"
+        },
+        {
+          "path": "compensationscope/retained-incidents.json",
+          "sha256": "458a9b65c0d70aa81cd2abbcaf40be6433472b3563da0edb4ff4bd1e00f24b25"
+        },
+        {
+          "path": "compensationscope/retained-wire.json",
+          "sha256": "b9670df27a8df6f1e45a77ee23d5a15f33f17e930e74fa91c8ce92124ba708dd"
+        },
+        {
+          "path": "compensationscope/retained.json",
+          "sha256": "1778c1c788e036b6b595d2580e2af78cc85beba4c052d79bf837986880b62981"
+        },
+        {
+          "path": "compensationscope/retired-retry-refusal.json",
+          "sha256": "bada008ae1bb1774e118df86db42aa7e37678da897e234c1eb9f21a004d6acf5"
+        },
+        {
+          "path": "compensationscope/snapshot-unavailability.json",
+          "sha256": "ebf54a9456c3d567aff94b962cebc8566c5d0d1c287dd2ff939b3c5c3cae1346"
+        }
+      ]
+    }
+  ],
+  "listedChildrenStopped": 25
+}
