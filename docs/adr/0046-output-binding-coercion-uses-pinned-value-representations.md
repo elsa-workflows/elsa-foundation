@@ -267,8 +267,12 @@ today. Its date-heavy scripts are already refused.
   part is fixed by the JSON-backed view (*JavaScript*). Nothing recorded decides that numbers become doubles: ADR 0036
   chose `JsonNode` because it is lossless on numbers.
 - **Spec 095:** the frozen-value contract changes (V9).
-- **ADR 0090:** detects a change by comparing serialized values. Exact write-back of untouched values is what keeps a
-  variable that a script only read from looking changed.
+- **ADR 0090** (proposed) detects a change by serializing each tracked variable at commit and comparing it with its
+  base (§2, §6). Today a script cannot change a variable it only reads: there is no tracking or write-back, and a test
+  with a large number left the stored text and revision unchanged. Once tracking exists, a tracked read that holds the
+  script's converted double would serialize differently and produce a spurious write, and under §7 a false conflict.
+  ADR 0090 therefore needs either exact write-back of untouched values (the JSON-backed view) or a comparison against
+  the original JSON.
 - **ADR 0036:** assumes Jint reads `JsonNode` through a `JsonElementConverter`; that converter is gone from main, and
   the closed engine converts values itself. The JSON-backed view brings the engine back in line with its intent.
 - **Specs and issues:** S-8 is defined against this amendment. It unblocks #3196, #3202 (model part), #3194,
