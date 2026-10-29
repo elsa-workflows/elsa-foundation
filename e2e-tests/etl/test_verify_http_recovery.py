@@ -15,10 +15,12 @@ etl=importlib.util.module_from_spec(_spec);_spec.loader.exec_module(etl)
 EVIDENCE=etl.q.REPO/"specs/1017-direct-bpmn-hosting/evidence/pipeline/native-http-reference"
 
 
-class ActualNativeEtlRecoveryControls(unittest.TestCase):
+class _ActualRecoveryControls(unittest.TestCase):
+    evidence=EVIDENCE
+
     def setUp(self):
         self.temporary=tempfile.TemporaryDirectory(prefix="elsa-etl-reference-negative-");self.addCleanup(self.temporary.cleanup)
-        self.root=Path(self.temporary.name)/"evidence";shutil.copytree(EVIDENCE,self.root)
+        self.root=Path(self.temporary.name)/"evidence";shutil.copytree(self.evidence,self.root)
 
     def rehash(self,relative):
         path=self.root/"manifest.json";manifest=json.loads(path.read_text())
@@ -30,6 +32,18 @@ class ActualNativeEtlRecoveryControls(unittest.TestCase):
 
     def verify(self):return etl.verify(self.root/"manifest.json")
 
+    def change_store(self,case,action):
+        path=self.root/case/"finished-elsa.sqlite.gz";raw=Path(self.temporary.name)/"changed.sqlite"
+        raw.write_bytes(gzip.decompress(path.read_bytes()))
+        with closing(sqlite3.connect(raw)) as connection:action(connection);connection.commit()
+        path.write_bytes(gzip.compress(raw.read_bytes()));self.rehash(case+"/finished-elsa.sqlite.gz")
+        def observed(process):
+            snapshot=process["finishedStores"]["elsa"];snapshot["databaseSha256"]=hashlib.sha256(raw.read_bytes()).hexdigest()
+            snapshot["gzipSha256"]=etl.q.digest(path);snapshot["observer"]["snapshotSha256"]=snapshot["databaseSha256"]
+        self.change(case+"/process.json",observed)
+
+
+class ActualNativeEtlRecoveryControls(_ActualRecoveryControls):
     def test_all_three_actual_journeys_verify_without_claiming_bpmn_integration(self):
         result=self.verify()
         self.assertEqual(18,result["wholeStoresVerified"])
@@ -66,6 +80,47 @@ class ActualNativeEtlRecoveryControls(unittest.TestCase):
             snapshot["gzipSha256"]=etl.q.digest(path);snapshot["observer"]["snapshotSha256"]=snapshot["databaseSha256"]
         self.change("worker-business/process.json",observed)
         with self.assertRaisesRegex(ValueError,"result address does not name its real native invocation"):self.verify()
+
+
+class ActualDirectBpmnEtlRecoveryControls(_ActualRecoveryControls):
+    evidence=EVIDENCE.parent/"direct-http-recovery"
+
+    def test_both_actual_model_worker_journeys_verify_with_bounded_claims(self):
+        result=self.verify()
+        self.assertEqual(12,result["wholeStoresVerified"])
+        self.assertTrue(result["directBpmnClosedWorkerIntegrationProved"])
+        self.assertFalse(result["runBpmnEtlIntegrationProved"])
+        self.assertFalse(result["modelHeldFaultRetryProved"])
+        self.assertEqual([4,3],[case["acceptedRecords"] for case in result["actualReferenceJourneys"]])
+
+    def test_completed_worker_cannot_relabel_its_typed_business_error(self):
+        def hide(value):
+            for result in (value["model"]["payload"]["nativeResults"][0],value["resultSource"]["intent"]["payload"]):
+                result["completion"]["outcomeKey"]="Done";result["completion"]["result"]["outcome"]=0
+        for phase in ("finished","retained"):self.change("direct-business/"+phase+"-checked-model.json",hide)
+        with self.assertRaisesRegex(ValueError,"typed RunEtl result"):self.verify()
+
+    def test_acknowledgement_requires_the_exact_model_receipt(self):
+        for phase in ("finished","retained"):self.change("direct-success/"+phase+"-checked-model.json",lambda value:value.update(resultInput=None))
+        with self.assertRaisesRegex(ValueError,"acknowledged without its exact model consumption"):self.verify()
+
+    def test_rehashed_physical_model_receipt_cannot_borrow_a_fingerprint(self):
+        def corrupt(connection):
+            for identity,raw in connection.execute("SELECT Id,ContentJson FROM elsa_runtime_model_input"):
+                value=json.loads(raw)
+                if value["inputKind"]==etl.key("native-result"):
+                    value["contentFingerprint"]=etl.key("foreign-fingerprint")
+                    connection.execute("UPDATE elsa_runtime_model_input SET ContentJson=? WHERE Id=?",(json.dumps(value),identity))
+        self.change_store("direct-success",corrupt)
+        with self.assertRaisesRegex(ValueError,"physical model receipt lost its exact"):self.verify()
+
+    def test_rehashed_physical_worker_cannot_redirect_its_frozen_return(self):
+        def corrupt(connection):
+            value=json.loads(connection.execute("SELECT ContentJson FROM elsa_runtime_workflow_execution_state").fetchone()[0])
+            value["modelWorkOrigin"]["resultInputId"]=etl.key("foreign-model-return")
+            connection.execute("UPDATE elsa_runtime_workflow_execution_state SET ContentJson=?",(json.dumps(value),))
+        self.change_store("direct-success",corrupt)
+        with self.assertRaisesRegex(ValueError,"physical worker lost its protected exact model origin"):self.verify()
 
 
 if __name__=="__main__":unittest.main()
