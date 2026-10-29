@@ -6,6 +6,9 @@ on 2026-10-24, started from the review of spec 266
 (@j03y-nxxbz) and Frans van Ek (@FransVanEk), because it would overturn parts of an accepted ADR (0045 §4, §5 and
 §6) and changes what spec 266 analyses.
 
+Review: this text reached `main` through #3312 without a review by Joey Barten or Frans van Ek, so it is not agreed.
+It is under review in the initiative of epic #3052, with an amendment proposed below (*Amendment proposed*).
+
 Part of epic #3052. Implementing it needs an active program whose scope covers runtime value flow
 ([program-goal registry](../program-goals/README.md#registry)). If accepted, it amends
 [ADR 0045](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md) §4, §5 and §6 and
@@ -223,6 +226,105 @@ the author's own objects).
 
 Output captures, the Set, Merge and Reduce intrinsics, operator alterations, pure input bindings, and outputs as
 typed results.
+
+## Amendment proposed (epic #3052, 2026-10-29): explicit writes instead of comparing serialized forms
+
+@j03y-nxxbz drafted this amendment while reviewing this ADR for the
+[initiative](https://github.com/elsa-workflows/elsa-foundation/issues/3052). It keeps the ADR's goal and changes how a
+step's changes are found. The questions for @sfmskywalker are at the end.
+
+**Why.** Decision 2 rests on one premise (its *Why*): a durable variable is serializable, so "did it change?" is a
+comparison of serialized forms. That premise mixes up two things. The stored form is JSON, but the form an activity
+works with does not turn back into that same JSON. Probes on `main` (2026-10-29, System.Text.Json with the options
+`main` uses, and Jint 4.9.1 with `IsolatedJintEngine.CreateValue` copied line for line) give:
+
+| Form a step holds | Read, then serialized again |
+|---|---|
+| Stored `JsonElement`, never rewritten | Identical: the only form that keeps its text |
+| `JsonNode` | Same meaning; different text (escaping, whitespace) |
+| C# class (typed `Get<T>`) | Loses data: unknown members dropped, defaults added, camelCase members not read, a `DateTime` with an offset turned into server time |
+| Script value (Jint) | Loses data: every number becomes a double (`9007199254740993` becomes `9007199254740992`, `1.0` becomes `1`), integer-like keys move first, duplicate keys collapse |
+| Value stored through EF | Re-escaped (`é` becomes `é`), so the stored text depends on which backend wrote it |
+
+The rounded number is one case of a general rule: deserializing and serializing again does not give back the original
+JSON. [ADR 0046](0046-output-binding-coercion-uses-pinned-value-representations.md) V6 lets an adapter lose detail on
+purpose, and [ADR 0091](https://github.com/elsa-workflows/elsa-foundation/pull/3408) decision 3 keeps stored data in
+the notation it arrived in. Under decisions 2 and 6, two failures follow:
+- **Nothing changed, but it is written.** Every read is tracked (decision 2), and the commit serializes the tracked
+  instance (decision 6). A step that only read a value therefore writes it, and in a background step decision 7 can
+  turn that into a false conflict. This cannot happen today, because nothing tracks reads: a test on `main` with
+  `9007199254740993`, `12345678901234567890` and `1234567890.123456789012345` left the stored text and the frame
+  revision unchanged.
+- **One field changed, the others are corrupted.** The write is rebuilt from the adapter's object and replaces the
+  whole value. In the probe, `o.name = 'b'` in a script also rounded `id` and turned `amount: 1.0` into `1`; in C#,
+  `Name = "b"` dropped the unknown member `extra`.
+
+A better comparison cures only the first failure. EF Core can rely on snapshots because it owns typed columns, compares
+property by property with value comparers, and writes only what changed. Here the stored form is raw JSON that Elsa does
+not own, and the write replaces the whole value.
+
+**What `main` already does.** Writes are explicit: Set, Merge and Reduce, and output captures, each a whole-value write
+with a frame revision. Reads are never tracked, so a spurious write cannot happen. Decisions 2 and 6 add implicit
+change detection on top. It is needed for one feature only: changing a read object without assigning it
+(`order.total = 1`, decision 2). Three other proposals already rule that out or make it unnecessary:
+- the [ADR 0089 amendment](https://github.com/elsa-workflows/elsa-foundation/pull/3420) reads through a read-only
+  accessor;
+- ADR 0046 V9 keeps a script's changes on its own copy;
+- decision 3 of this ADR already works out the may-write set at publish.
+
+**The amendment.** The goal stays: a step is a unit of work, its changes commit with the step, and a fault or cancel
+saves nothing (decisions 1, 6 and 9, and D-3). Conflict policy per node stays (decision 7). What changes:
+
+- **C1. Reads are not tracked.** A read returns a value: in a script, ADR 0046's JSON-backed view; in C#, a copy.
+  Reading a variable again in the same step returns the step's current value, so read-your-writes stays. This replaces
+  "A read returns a tracked instance", and every read becomes what decision 2 calls a read-only read.
+- **C2. A write is explicit.** A step changes a variable by assigning it: `variables.x = v`, `setVariable('x', v)`,
+  `context.Variables.Set(target, value)`. In a script, changing a read value (`variables.order.total = 1`,
+  `getVariable('o').x = 1`) is also an explicit write: the JSON-backed view records the change, so the variable gets
+  an intent without any comparison. Elsa 3's nested mutation therefore still converts inside RunJavaScript. In C#,
+  changing a copy without `Set` is not a write (question 1).
+- **C3. The write keeps what the step did not touch.** An intent is assembled as the base JSON plus the step's
+  changes, so untouched members keep their stored text. It is applied as one whole-value intent, as decision 6 says.
+  This is a change within one step, not the cross-branch field patch rejected under *Alternatives considered*.
+- **C4. A no-op assignment writes nothing.** Equality is equality of meaning in ADR 0091's canonical form, not of
+  text, so notation, escaping and key order do not make a value different.
+- **C5. Read-then-write conflicts use versions.** Decision 7 checks the variable versions the step read, which
+  [ADR 0092](https://github.com/elsa-workflows/elsa-foundation/pull/3411) records in the read set, instead of comparing
+  serialized values. Its digest, for the 0 → 1 → 0 case, compares meaning, not text.
+
+**What it changes in this ADR.**
+- Decision 2: C1 and C2 replace "A read returns a tracked instance" and the mutation rule. The comparison of serialized
+  forms in its *Why* goes.
+- Decision 4: `Get<T>` returns a copy and `Set` is the write; `GetReadOnly<T>` is no longer a separate read.
+- Decision 6: intents come from explicit writes (C2), assembled by C3; C4 replaces "compared with its base".
+- Decision 7: C5.
+- *Alternatives considered*: "Values: variables are immutable values, changed only by assigning" was rejected because
+  C# authors expect to mutate what they read. This amendment adopts it for C# unless question 1 says otherwise, and
+  keeps mutation in scripts through the view.
+- *Consequences*, cost: no serialization of read variables at commit; only written variables are serialized.
+- Open question 1 (a script read-only read) is gone: every read is read-only.
+
+**What it touches elsewhere.**
+- **ADR 0046 amendment (#3422), V9:** the script's copy is the JSON-backed view with a change layer, and changes leave
+  the script only as explicit writes (C2).
+- **ADR 0089 amendment (#3420), A3:** the recorded reads are what C5 checks against.
+- **ADR 0091 (#3408):** decision 3 rules out comparing stored text; its canonical form gives the equality of C4 and
+  the digest of C5.
+- **ADR 0092 (#3411):** replaces decision 7's comparison (C5); a step that only read a variable produces no write.
+- **Decision D-3 on the board** says "an output capture wins over a tracked write". Under this amendment that becomes
+  a "step write"; the transaction model does not need tracking.
+
+**Questions for @sfmskywalker.**
+1. **Changing without assigning.** Is changing a read object without assigning it a must-have for C#, for scripts, or
+   only for converting Elsa 3's `getVariable('o').x = 1`? C2 covers scripts. If C# needs it, would you limit tracking
+   to the may-write set and compare with a snapshot of the value as read, never with the stored text?
+2. **What decision 6 compares.** Did "the serialized form of its base" mean the stored text, or a snapshot of the
+   value as read (what EF Core does)?
+3. **`Get<T>`.** What is `T` for a dynamic value, and which serializer options read it? Is dropping unknown members
+   acceptable as a declared loss (ADR 0046 V6), or should a dynamic value be `JsonNode` or a JSON view?
+4. **The change layer.** Do you accept the JSON-backed view's change layer in scripts instead of a comparison?
+5. **Assembling the write.** Is "base JSON plus the step's changes, applied as one whole-value intent" (C3) acceptable?
+6. **Conflicts.** Do you agree that decision 7's base becomes ADR 0092's version, with a digest that compares meaning?
 
 ## Consequences
 
