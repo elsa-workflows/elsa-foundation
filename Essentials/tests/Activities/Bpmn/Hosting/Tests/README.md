@@ -62,7 +62,17 @@ python3 tools/bpmn/qualify-hosting.py verify-upgrade \
   --manifest /tmp/elsa-bpmn-controls-upgrade/manifest.json
 ```
 
-Active multi-instance recovery and actual Studio behavior remain separate qualification families. These legacy tests do not establish new direct-model settlement/broadcast dispatch or the real native/ETL bridge.
+The multi-instance family restores the coupled captures with one completed child per parent. It covers sequential/parallel cardinality3 in Balanced/Durable mode. An exact checked reader verifies loop counters, native iteration/semantic-token identities, original child pins, dispatch sources, committed terminal inboxes and physical waits. Normal Events complete one additional exact child per parent, a restart preserves the last held iteration, and another Event finishes all three children. The original completed child remains unchanged; another process preserves all sixteen final workflow views.
+
+```sh
+python3 tools/bpmn/qualify-hosting.py resume-upgrade --family multi-instance \
+  --manifest specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json \
+  --output /tmp/elsa-bpmn-multi-instance-upgrade
+python3 tools/bpmn/qualify-hosting.py verify-upgrade \
+  --manifest /tmp/elsa-bpmn-multi-instance-upgrade/manifest.json
+```
+
+Actual Studio behavior remains a separate qualification. These legacy tests do not establish new direct-model MI/settlement/broadcast dispatch or the real native/ETL bridge.
 
 ```sh
 dotnet test Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj -c Release

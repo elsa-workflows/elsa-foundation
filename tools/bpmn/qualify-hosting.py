@@ -414,6 +414,8 @@ def verify_upgrade(path: Path) -> dict:
         return verify_broadcast_upgrade(path)
     if manifest.get("kind") == "actual-legacy-controls-upgrade":
         return verify_controls_upgrade(path)
+    if manifest.get("kind") == "actual-legacy-multi-instance-upgrade":
+        return verify_multi_instance_upgrade(path)
     if manifest.get("schemaVersion") != 1 or manifest.get("kind") != "actual-legacy-partial-fork-upgrade":
         raise ValueError("Unknown upgrade manifest.")
     root = path.parent
@@ -516,6 +518,8 @@ def resume_upgrade(args) -> dict:
         return resume_broadcast_upgrade(args)
     if args.family == "controls":
         return resume_controls_upgrade(args)
+    if args.family == "multi-instance":
+        return resume_multi_instance_upgrade(args)
     baseline = args.manifest.resolve(strict=True)
     verify_capture(baseline)
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True, timeout=5).strip()
@@ -1185,6 +1189,138 @@ def resume_controls_upgrade(args) -> dict:
     return verify_controls_upgrade(output / "manifest.json")
 
 
+def verify_multi_instance_inputs(path: Path) -> dict:
+    matrix = json.loads(path.read_text())
+    if matrix.get("kind") != "actual-pre-writer-baseline-matrix" or matrix.get("gateAComplete") is not True or matrix.get("frozenAuthoringFingerprint") != FROZEN: raise ValueError("MI recovery requires the actual frozen pre-writer matrix.")
+    names = {"multi-instance-and-studio/" + name for name in ("runtime.sqlite.gz", "design.sqlite.gz", "api.json", "physical-checked.json")}
+    selected = {asset["path"]: asset["sha256"] for asset in matrix["assets"] if asset["path"] in names}
+    if set(selected) != names or len([asset for asset in matrix["assets"] if asset["path"] in names]) != len(names): raise ValueError("The coupled actual MI inputs are incomplete or duplicated.")
+    for name, sha in selected.items():
+        if digest(evidence_file(path.parent, name)) != sha: raise ValueError("An original MI input differs: " + name)
+    return selected
+
+
+def verify_multi_instance_upgrade(path: Path) -> dict:
+    manifest = json.loads(path.read_text()); root = path.parent
+    if manifest.get("schemaVersion") != 1 or manifest.get("kind") != "actual-legacy-multi-instance-upgrade": raise ValueError("Unknown MI upgrade evidence.")
+    stages = ("recovered", "progressed", "resumed", "finished")
+    names = {"legacy-multi-instance/process.json.gz", "legacy-multi-instance/finished-design.sqlite.gz", "frozen-contract.json"} | {"legacy-multi-instance/" + stage + ".sqlite.gz" for stage in stages}
+    assets = {asset["path"]: asset for asset in manifest["assets"]}
+    if set(assets) != names or len(assets) != len(manifest["assets"]): raise ValueError("The actual MI evidence is incomplete or duplicated.")
+    for name, asset in assets.items():
+        if digest(evidence_file(root, name)) != asset["sha256"]: raise ValueError("An actual MI upgrade asset differs.")
+    raw = gzip.decompress(evidence_file(root, "legacy-multi-instance/process.json.gz").read_bytes()); declared = assets["legacy-multi-instance/process.json.gz"]
+    if declared.get("encoding") != "gzip" or declared.get("uncompressedSha256") != hashlib.sha256(raw).hexdigest(): raise ValueError("The compressed MI receipt lost its decoded bytes.")
+    process = json.loads(raw); source = manifest.get("sourceRevision", "")
+    if (not re.fullmatch(r"[0-9a-f]{40}", source) or process.get("sourceRevision") != source or process.get("kind") != manifest["kind"] or process.get("formatVersion") != 1 or
+            not re.fullmatch(r"[0-9a-f]{40}", process.get("baselineSourceRevision", "")) or source == process["baselineSourceRevision"] or process.get("baselineAssets") != manifest.get("baselineAssets") or
+            process.get("baselineManifestSha256") != manifest.get("baselineManifestSha256") or process.get("testOnlyRecoveryProbePresent") is not False or
+            len(process.get("processIds", [])) != 4 or len(set(process["processIds"])) != 4 or not process.get("reader", {}).get("productVersion", "").endswith("+" + source) or
+            not any(binary["file"] == "Elsa.Workbench.dll" and binary["productVersion"].endswith("+" + source) for binary in process.get("binaries", []))):
+        raise ValueError("The actual MI upgrade lacks its standard host, checked reader or original source identity.")
+    if tuple(stage["name"] for stage in process["stages"]) != stages or [stage["completedCount"] for stage in process["stages"]] != [1, 2, 2, 3]:
+        raise ValueError("The actual MI progress/restart stages are incomplete or reordered.")
+    key = lambda value: base64.b64encode(value.encode("utf-16-le", errors="surrogatepass")).decode()
+    original = {item["parentWorkflowExecutionId"]: item for item in process["originalPhysical"]}; initial_calls = {}; completed_original = {}
+    for index, stage in enumerate(process["stages"]):
+        completed = stage["completedCount"]; proof = stage["proof"]; api = stage["api"]
+        if proof.get("providerChecked") is not True or proof.get("readOnly") is not True or proof["snapshotSha256"] != stage["snapshot"]["databaseSha256"] or api.get("passed") is not True or api.get("sourceRevision") != source or api["completedCount"] != completed:
+            raise ValueError("The MI stage lacks its actual checked provider/API snapshot binding.")
+        cases = proof["multiInstance"]
+        if len(cases) != 4 or {(case["persistenceMode"], case["isSequential"]) for case in cases} != {(mode, seq) for mode in ("Balanced", "Durable") for seq in (False, True)}: raise ValueError("The actual MI mode/policy matrix is incomplete.")
+        workflows, activities, bookmarks, sources = {}, {}, {}, {}
+        for case in cases:
+            parent_id = case["parentWorkflowExecutionId"]; captured = original[parent_id]; observed_api = next(item for item in api["cases"] if item["parentWorkflowExecutionId"] == parent_id)
+            if case.get("exactLoopIterationAndConsumptionVerified") is not True or case["completedCount"] != completed or (case["persistenceMode"], case["isSequential"]) != (captured["persistenceMode"], captured["isSequential"]): raise ValueError("The actual MI loop/iteration consumption is unproved.")
+            calls = case["calls"]; expected_count = min(3, completed + 1) if case["isSequential"] else 3
+            if len(calls) != expected_count or len({item["call"]["iterationId"] for item in calls}) != expected_count or sum(item["call"]["status"] == 4 for item in calls) != completed or sum(item["call"]["status"] == 3 for item in calls) != expected_count - completed:
+                raise ValueError("The MI cardinality, unique iteration identities or exact completed count differs.")
+            parent = case["parent"]; workflows[parent_id] = parent
+            for activity in case["parentActivities"]: activities[(parent_id, activity["invocationId"])] = activity
+            root_activity = next(item for item in case["parentActivities"] if item["execution"]["executableNodeId"] == "mi-bpmn")
+            if completed == 3:
+                if parent["status"] != 3 or root_activity["privateState"] is not None or case["activeCallTokens"]: raise ValueError("A final MI loop retained live semantic work.")
+            else:
+                state = root_activity["privateState"]["value"]["inlineValue"]; loops = state["loops"]
+                if (parent["status"] != 1 or len(loops) != 1 or loops[0]["loopId"] != captured["loopId"] or loops[0]["isSequential"] != case["isSequential"] or loops[0]["totalCount"] != 3 or
+                        loops[0]["completedCount"] != completed or loops[0]["nextIndex"] != (completed + 1 if case["isSequential"] else 3)):
+                    raise ValueError("The captured MI loop counters or sequential policy changed.")
+                if sorted(case["activeCallTokens"]) != sorted(item["call"]["provenance"]["executionPathId"] for item in calls if item["call"]["status"] == 3): raise ValueError("The actual MI live tokens differ from the held native iterations.")
+            if index == 0:
+                initial_calls[parent_id] = {item["call"]["invocationId"]: item for item in calls}
+                if set(initial_calls[parent_id]) != {item["callActivityExecutionId"] for item in captured["calls"]}: raise ValueError("The captured MI invocation identities changed on upgrade.")
+                completed_original[parent_id] = next(item for item in calls if item["child"]["workflowExecutionId"] == observed_api["completedChildWorkflowExecutionId"])
+            for old_id, old in initial_calls[parent_id].items():
+                now = next((item for item in calls if item["call"]["invocationId"] == old_id), None)
+                if now is None or any(now["call"][field] != old["call"][field] for field in ("iterationId", "execution")) or now["child"]["workflowExecutionId"] != old["child"]["workflowExecutionId"]:
+                    raise ValueError("An original MI call/child/iteration identity changed during continuation.")
+            unchanged = next(item for item in calls if item["child"]["workflowExecutionId"] == observed_api["completedChildWorkflowExecutionId"])
+            if unchanged != completed_original[parent_id]: raise ValueError("An already completed original MI iteration repeated or changed.")
+            for item in calls:
+                call, child, link = item["call"], item["child"], item["dispatch"]; done = call["status"] == 4
+                if call["iterationId"] != "bpmn-mi:" + call["provenance"]["executionPathId"] or call["provenance"]["iterationId"] != call["iterationId"] or call["parentActivityExecutionId"] != root_activity["invocationId"]:
+                    raise ValueError("An actual MI call lost its exact iteration/token ancestry.")
+                if child["pinnedExecutable"] != observed_api["originalChildPin"] or link["childExecutable"] != child["pinnedExecutable"] or child["status"] != (3 if done else 1) or link["status"] != (2 if done else 1): raise ValueError("An actual MI child pin or truthful dispatch outcome changed.")
+                if done and (call["childControlInbox"] is None or call["childControlInbox"]["nextOrdinal"] != 1 or call["childControlInbox"]["isTerminalConsumed"] is not True or call["childControlInbox"]["pending"] or call["completion"]["outcomeKey"] != "Completed" or call["fault"] is not None): raise ValueError("A delivered MI result lacks exact committed caller consumption.")
+                workflows[child["workflowExecutionId"]] = child
+                for activity in item["childActivities"]: activities[(child["workflowExecutionId"], activity["invocationId"])] = activity
+                for wait in item["physicalBookmarks"]: bookmarks[(wait["state"]["workflowExecutionId"], wait["state"]["bookmarkId"])] = wait
+                for item_source in item["sources"]: sources[item_source["outboxItemId"]] = item_source
+        if set(workflows) != set(stage["views"]): raise ValueError("The actual MI workflow API set differs from checked execution data.")
+        with checked_upgrade_snapshot(root, "legacy-multi-instance", stage["snapshot"]) as connection:
+            verify_retained_native_material(connection, process)
+            for identity, workflow in workflows.items():
+                rows = connection.execute("SELECT Status, ContentJson FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId = ?", (key(identity),)).fetchall()
+                if len(rows) != 1 or rows[0][0] != workflow["status"] or json.loads(rows[0][1])["pinnedExecutable"] != {field: key(value) for field, value in workflow["pinnedExecutable"].items()}: raise ValueError("A physical MI workflow outcome or full pin differs.")
+                physical_waits = dict(connection.execute("SELECT BookmarkId, Revision FROM elsa_runtime_bookmark_state WHERE WorkflowExecutionId = ?", (identity,)))
+                if physical_waits != {bookmark: item["generation"] for (owner, bookmark), item in bookmarks.items() if owner == identity}: raise ValueError("A physical held MI wait lost its exact identity/generation.")
+            for (owner, invocation), activity in activities.items():
+                rows = connection.execute("SELECT Status, ContentJson FROM elsa_runtime_activity_execution_state WHERE WorkflowExecutionId = ? AND ActivityExecutionId = ?", (key(owner), key(invocation))).fetchall()
+                expected_status = ("Scheduled", "Running", "Waiting", "Suspended", "Completed", "Faulted", "Cancelled", "Recovered", "Superseded")[activity["status"]]
+                if len(rows) != 1 or rows[0][0] != expected_status: raise ValueError("A physical MI invocation differs from its checked status.")
+                stored = json.loads(rows[0][1]); private, expected = stored.get("privateState"), activity["privateState"]
+                if ((private is None) != (expected is None) or private is not None and (private["stateVersion"] != expected["stateVersion"] or private["value"]["inlineValue"] != expected["value"]["inlineValue"])): raise ValueError("The physical MI loop state differs from checked counters/live work.")
+                inbox = activity.get("childControlInbox")
+                if inbox is not None and (stored.get("childControlInbox") is None or any(stored["childControlInbox"][field] != inbox[field] for field in ("version", "nextOrdinal", "isTerminalConsumed")) or stored["childControlInbox"]["target"]["parentExecutable"] != {field: key(value) for field, value in inbox["target"]["parentExecutable"].items()}): raise ValueError("A physical MI inbox lost its exact committed acceptance.")
+            for identity, item in sources.items():
+                rows = connection.execute("SELECT Status, ContentJson FROM elsa_runtime_post_commit_outbox WHERE OutboxItemId = ?", (key(identity),)).fetchall()
+                if len(rows) != 1 or rows[0][0] != 2 or item["status"] != 2 or json.loads(rows[0][1])["intent"]["payload"] != item["intent"]["payload"]: raise ValueError("An actual MI start/terminal source differs from its immutable delivered intent.")
+    for field, before_index in (("firstDeliveries", 0), ("lastDeliveries", 2)):
+        deliveries = process[field]; before = process["stages"][before_index]["proof"]["multiInstance"]
+        if len(deliveries) != 4 or {item["parentWorkflowExecutionId"] for item in deliveries} != set(original): raise ValueError("The MI normal continuation commands are incomplete.")
+        for delivery in deliveries:
+            case = next(item for item in before if item["parentWorkflowExecutionId"] == delivery["parentWorkflowExecutionId"])
+            target = next(item for item in case["calls"] if item["call"]["invocationId"] == delivery["callActivityExecutionId"])
+            if target["call"]["status"] != 3 or target["call"]["iterationId"] != delivery["iterationId"] or target["child"]["workflowExecutionId"] != delivery["childWorkflowExecutionId"] or delivery["delivery"]["startedCount"] != 0 or delivery["delivery"]["resumedCount"] != 1: raise ValueError("A normal MI Event targeted another/completed iteration.")
+    progressed, resumed = process["stages"][1:3]
+    if progressed["views"] != resumed["views"] or progressed["proof"]["multiInstance"] != resumed["proof"]["multiInstance"]: raise ValueError("A restart repeated completed MI work or changed the surviving iteration.")
+    with checked_upgrade_snapshot(root, "legacy-multi-instance", process["designSnapshot"]): pass
+    frozen = json.loads(evidence_file(root, "frozen-contract.json").read_text())
+    if frozen.get("sourceRevision") != source or frozen.get("oracleSha256") != FROZEN or frozen.get("matchesFrozenFingerprint") is not True or frozen.get("immutableSnapshot") is not True or frozen.get("closedSnapshotSha256") != process["designSnapshot"]["databaseSha256"]: raise ValueError("The upgraded MI Design store lacks its frozen authoring proof.")
+    return {"actualMultiInstanceCasesRecovered": 4, "nativeIterationsCompleted": 12, "finalWorkflowExecutions": 16, "wholeStoresVerified": 5, "frozenAuthoringPreserved": True,
+        "sourceRevision": source, "allLegacyFamiliesRecovered": False, "studioAcceptanceProved": False, "directModelMultiInstanceProved": False}
+
+
+def resume_multi_instance_upgrade(args) -> dict:
+    baseline = args.manifest.resolve(strict=True); inputs = verify_multi_instance_inputs(baseline)
+    source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True, timeout=5).strip()
+    if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True, timeout=5).strip(): raise ValueError("Commit the qualification source before recording exact-source upgrade evidence.")
+    output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False); env = os.environ.copy()
+    env.update(ELSA_BPMN_LEGACY_MATRIX_DIRECTORY=str(baseline.parent), ELSA_BPMN_HOST_EVIDENCE_DIRECTORY=str(output), ELSA_BPMN_HOST_SOURCE_REVISION=source)
+    command = ["dotnet", "test", str(REPO / "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"), "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyMultiInstanceUpgradeTests", "--logger", "trx;LogFileName=legacy-multi-instance-upgrade.trx"]
+    if args.artifacts_path is not None: command += ["--artifacts-path", str(args.artifacts_path.resolve())]
+    with (output / "run.log").open("w") as log: subprocess.run(command, cwd=REPO, env=env, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=3600)
+    if inputs != verify_multi_instance_inputs(baseline): raise ValueError("MI recovery changed an original input.")
+    with tempfile.TemporaryDirectory(prefix="elsa-mi-upgraded-design-") as temporary:
+        database = Path(temporary) / "design.sqlite"; database.write_bytes(gzip.decompress((output / "legacy-multi-instance/finished-design.sqlite.gz").read_bytes()))
+        subprocess.run([sys.executable, str(REPO / "e2e-tests/bpmn/verify_published_contracts.py"), "--database", str(database), "--source-revision", source, "--closed-snapshot", "--output", str(output / "frozen-contract.json")], check=True, timeout=60)
+    process = output / "legacy-multi-instance/process.json"; (output / "legacy-multi-instance/process.json.gz").write_bytes(gzip.compress(process.read_bytes(), mtime=0))
+    names = ["legacy-multi-instance/process.json.gz", "legacy-multi-instance/finished-design.sqlite.gz", "frozen-contract.json"] + ["legacy-multi-instance/" + stage + ".sqlite.gz" for stage in ("recovered", "progressed", "resumed", "finished")]
+    assets = [{"path": name, "sha256": digest(output / name)} for name in names]; assets[0].update(encoding="gzip", uncompressedSha256=digest(process))
+    write_json(output / "manifest.json", {"schemaVersion": 1, "kind": "actual-legacy-multi-instance-upgrade", "sourceRevision": source, "baselineManifestSha256": digest(baseline), "baselineAssets": inputs, "assets": assets})
+    return verify_multi_instance_upgrade(output / "manifest.json")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     phases = parser.add_subparsers(dest="phase", required=True)
@@ -1198,7 +1334,7 @@ def main() -> int:
     upgrade.add_argument("--manifest", type=Path, required=True)
     upgrade.add_argument("--output", type=Path, required=True)
     upgrade.add_argument("--artifacts-path", type=Path)
-    upgrade.add_argument("--family", choices=("partial-forks", "native-parents", "called-ack", "broadcast", "controls"), default="partial-forks")
+    upgrade.add_argument("--family", choices=("partial-forks", "native-parents", "called-ack", "broadcast", "controls", "multi-instance"), default="partial-forks")
     verified_upgrade = phases.add_parser("verify-upgrade")
     verified_upgrade.add_argument("--manifest", type=Path, required=True)
     args = parser.parse_args()
