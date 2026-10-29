@@ -572,5 +572,89 @@ class ActualControlsUpgradeControls(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "control bookmark identity/generation"): capture.verify_upgrade(self.path)
 
 
+class ActualMultiInstanceUpgradeControls(unittest.TestCase):
+    def setUp(self):
+        self.original = SCRIPT.parents[2] / "specs/1017-direct-bpmn-hosting/evidence/upgrade/multi-instance/manifest.json"
+        capture.verify_upgrade(self.original); self.before = capture.digest(self.original)
+        self.directory = tempfile.TemporaryDirectory(); self.bundle = Path(self.directory.name) / "upgrade"
+        shutil.copytree(self.original.parent, self.bundle); self.path = self.bundle / "manifest.json"; self.manifest = json.loads(self.path.read_text())
+        self.process_path = self.bundle / "legacy-multi-instance/process.json.gz"; self.process = json.loads(gzip.decompress(self.process_path.read_bytes()))
+
+    def tearDown(self):
+        self.assertEqual(self.before, capture.digest(self.original)); capture.verify_upgrade(self.original); self.directory.cleanup()
+    def stage(self, name): return next(stage for stage in self.process["stages"] if stage["name"] == name)
+    def rehash(self, path):
+        name = path.relative_to(self.bundle).as_posix(); next(asset for asset in self.manifest["assets"] if asset["path"] == name)["sha256"] = capture.digest(path)
+        capture.write_json(self.path, self.manifest)
+    def save_process(self):
+        raw = json.dumps(self.process).encode(); self.process_path.write_bytes(gzip.compress(raw, mtime=0))
+        next(asset for asset in self.manifest["assets"] if asset["path"] == "legacy-multi-instance/process.json.gz")["uncompressedSha256"] = hashlib.sha256(raw).hexdigest(); self.rehash(self.process_path)
+    def mutate_snapshot(self, stage, mutate):
+        snapshot = stage["snapshot"]; path = self.bundle / "legacy-multi-instance" / snapshot["file"]
+        database = Path(self.directory.name) / "changed.sqlite"; database.write_bytes(gzip.decompress(path.read_bytes()))
+        with closing(sqlite3.connect(database)) as connection:
+            with connection: mutate(connection)
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        path.write_bytes(gzip.compress(database.read_bytes(), mtime=0)); snapshot["databaseSha256"] = capture.digest(database); snapshot["gzipSha256"] = capture.digest(path)
+        stage["proof"]["snapshotSha256"] = capture.digest(database); self.rehash(path); self.save_process()
+
+    def test_loop_counter_cannot_advance_without_its_exact_completed_children(self):
+        case = self.stage("recovered")["proof"]["multiInstance"][0]
+        root = next(activity for activity in case["parentActivities"] if activity["execution"]["executableNodeId"] == "mi-bpmn")
+        root["privateState"]["value"]["inlineValue"]["loops"][0]["completedCount"] = 2; self.save_process()
+        with self.assertRaisesRegex(ValueError, "loop counters"): capture.verify_upgrade(self.path)
+
+    def test_live_native_iteration_cannot_borrow_another_token(self):
+        case = self.stage("recovered")["proof"]["multiInstance"][0]; held = next(item for item in case["calls"] if item["call"]["status"] == 3)
+        held["call"]["provenance"]["executionPathId"] = "foreign-token"; self.save_process()
+        with self.assertRaisesRegex(ValueError, "live tokens"): capture.verify_upgrade(self.path)
+
+    def test_new_iteration_must_keep_the_original_child_pin(self):
+        case = next(case for case in self.stage("progressed")["proof"]["multiInstance"] if case["isSequential"])
+        held = next(item for item in case["calls"] if item["call"]["status"] == 3); held["child"]["pinnedExecutable"]["definitionVersionId"] = "foreign-version"
+        self.save_process()
+        with self.assertRaisesRegex(ValueError, "child pin"): capture.verify_upgrade(self.path)
+
+    def test_original_completed_iteration_cannot_acquire_another_attempt(self):
+        stage = self.stage("progressed"); case = stage["proof"]["multiInstance"][0]
+        original_id = next(item["completedChildWorkflowExecutionId"] for item in stage["api"]["cases"] if item["parentWorkflowExecutionId"] == case["parentWorkflowExecutionId"])
+        done = next(item for item in case["calls"] if item["child"]["workflowExecutionId"] == original_id); attempts = done["childActivities"][0]["attempts"]
+        attempts.append(json.loads(json.dumps(attempts[0]))); self.save_process()
+        with self.assertRaisesRegex(ValueError, "already completed original MI iteration"): capture.verify_upgrade(self.path)
+
+    def test_physical_loop_cannot_differ_from_the_checked_counters(self):
+        stage = self.stage("recovered"); case = stage["proof"]["multiInstance"][0]
+        root = next(activity for activity in case["parentActivities"] if activity["execution"]["executableNodeId"] == "mi-bpmn"); identity = base64.b64encode(root["invocationId"].encode("utf-16-le")).decode()
+        def change(connection):
+            document = json.loads(connection.execute("SELECT ContentJson FROM elsa_runtime_activity_execution_state WHERE ActivityExecutionId = ?", (identity,)).fetchone()[0])
+            document["privateState"]["value"]["inlineValue"]["loops"][0]["completedCount"] = 2
+            connection.execute("UPDATE elsa_runtime_activity_execution_state SET ContentJson = ? WHERE ActivityExecutionId = ?", (json.dumps(document), identity))
+        self.mutate_snapshot(stage, change)
+        with self.assertRaisesRegex(ValueError, "physical MI loop state"): capture.verify_upgrade(self.path)
+
+    def test_delivered_mi_result_needs_physical_committed_inbox_acceptance(self):
+        stage = self.stage("recovered"); done = next(item for item in stage["proof"]["multiInstance"][0]["calls"] if item["call"]["status"] == 4)
+        identity = base64.b64encode(done["call"]["invocationId"].encode("utf-16-le")).decode()
+        def change(connection):
+            document = json.loads(connection.execute("SELECT ContentJson FROM elsa_runtime_activity_execution_state WHERE ActivityExecutionId = ?", (identity,)).fetchone()[0])
+            document["childControlInbox"]["isTerminalConsumed"] = False
+            connection.execute("UPDATE elsa_runtime_activity_execution_state SET ContentJson = ? WHERE ActivityExecutionId = ?", (json.dumps(document), identity))
+        self.mutate_snapshot(stage, change)
+        with self.assertRaisesRegex(ValueError, "physical MI inbox"): capture.verify_upgrade(self.path)
+
+    def test_remaining_iteration_keeps_its_exact_physical_wait(self):
+        stage = self.stage("progressed"); held = next(item for item in stage["proof"]["multiInstance"][0]["calls"] if item["call"]["status"] == 3)
+        wait = next(wait for wait in held["physicalBookmarks"] if wait["state"]["workflowExecutionId"] == held["child"]["workflowExecutionId"])
+        self.mutate_snapshot(stage, lambda connection: connection.execute("UPDATE elsa_runtime_bookmark_state SET Revision = Revision + 1 WHERE WorkflowExecutionId = ? AND BookmarkId = ?", (wait["state"]["workflowExecutionId"], wait["state"]["bookmarkId"])))
+        with self.assertRaisesRegex(ValueError, "held MI wait"): capture.verify_upgrade(self.path)
+
+    def test_continuation_event_cannot_target_the_already_completed_child(self):
+        stage = self.stage("recovered"); delivery = self.process["firstDeliveries"][0]
+        case = next(case for case in stage["proof"]["multiInstance"] if case["parentWorkflowExecutionId"] == delivery["parentWorkflowExecutionId"])
+        done = next(item for item in case["calls"] if item["call"]["status"] == 4)
+        delivery.update(callActivityExecutionId=done["call"]["invocationId"], childWorkflowExecutionId=done["child"]["workflowExecutionId"], iterationId=done["call"]["iterationId"]); self.save_process()
+        with self.assertRaisesRegex(ValueError, "another/completed iteration"): capture.verify_upgrade(self.path)
+
+
 if __name__ == "__main__":
     unittest.main()

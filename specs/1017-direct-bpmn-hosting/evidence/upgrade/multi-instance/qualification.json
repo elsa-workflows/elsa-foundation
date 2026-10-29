@@ -1,0 +1,39 @@
+{
+  "executingHostReaderSource": "645d59aa6990df001d218af055154092c841cc41",
+  "actualMultiInstanceCases": 4,
+  "nativeChildIterationsCompleted": 12,
+  "finalWorkflowExecutions": 16,
+  "wholeHostingSuite": {
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0,
+    "command": "dotnet test Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj -c Release --artifacts-path /private/tmp/elsa-2898-stale-input-host --no-build --no-restore --logger trx;LogFileName=multi-instance-exact-source-whole-host.trx",
+    "trxSha256": "72732181e38012e70c16047719417b382e889c37283263764ec4b91897fa3776"
+  },
+  "verifierControls": {
+    "passed": 54,
+    "failed": 0,
+    "skipped": 0,
+    "newMultiInstanceRefusalControls": 8,
+    "command": "ELSA_BPMN_CAPTURE_MANIFEST=specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/manifest.json python3 -m unittest discover -s e2e-tests/bpmn -p test_qualify_hosting.py -v",
+    "verifierSha256": "96b0c5ff25cf2ee37d7931a5e7300dce6eb7c9a8c5e51159d71204e020533849",
+    "controlsSha256": "e82e36baf1f0d7ea3b1380216c2e2067445cfb37d71904d57fc173d35d6da6aa"
+  },
+  "projectGraphAndTierChecks": {
+    "solutionFilters": "pass",
+    "testTiers": "123 projects, each in one tier and one shard"
+  },
+  "originalCapturesUnchanged": true,
+  "retainedExecutablePayloadsAndIncarnations": 92,
+  "frozenPublishedDescriptorsVerified": 2,
+  "hostProcesses": 4,
+  "checkedProviderObservations": 4,
+  "runtimeSnapshots": 4,
+  "designSnapshots": 1,
+  "fullPrReviewRounds": 0,
+  "limits": [
+    "Actual legacy native/BpmnProcess MI in Balanced/Durable modes only; no direct-model MI or native/ETL bridge is proved.",
+    "Actual Studio, direct/RunBpmn settlement and remaining operational/clustered qualification stay open.",
+    "T030, #2898, #2907 and Program #2892 remain partial."
+  ]
+}
