@@ -15,8 +15,7 @@ namespace Elsa.Activities.Bpmn.Internal;
 internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
     IPostCommitOutboxLookupStore outbox, IWorkflowExecutionStateStore workflows, IActivityExecutionStateStore activities,
     IRuntimeCheckpointCommitStore checkpoints, IRuntimePostCommitOutboxStore outboxStore,
-    IPersistenceAccessContextAccessor access, TimeProvider clock,
-    IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions, IRuntimeModelExecutionReader? models = null,
+    IPersistenceAccessContextAccessor access, TimeProvider clock, IRuntimeModelExecutionReader? models = null,
     CoalescingInner<IWorkflowExecutionStateStore>? physicalWorkflows = null,
     CoalescingInner<IActivityExecutionStateStore>? physicalActivities = null,
     CoalescingInner<IRuntimePostCommitOutboxStore>? physicalOutbox = null,
@@ -25,8 +24,6 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
     internal const string StartKind = "Elsa.Bpmn.StartNativeWork.v1";
     internal const string ResultKind = "Elsa.Bpmn.NativeWorkResult.v1";
     internal const string CancelKind = "Elsa.Bpmn.CancelNativeWork.v1";
-    private readonly HashSet<string> requiredSources = contributions.Where(item => item.RequiresDurableSource)
-        .Select(item => item.IntentKind).ToHashSet(StringComparer.Ordinal);
     internal static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
     internal IWorkflowExecutionStateStore PhysicalWorkflows => workflows.GetType() == typeof(CoalescingWorkflowExecutionStateStore)
         ? physicalWorkflows?.Value ?? throw new NotSupportedException("The physical native workflow reader is unavailable.") : workflows;
@@ -134,8 +131,10 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
         {
             var source = await PhysicalLookup.FindDurableAsync(id, cancellationToken)
                 ?? throw Unavailable("A native downstream cancellation source is unavailable.");
-            if (source.StimulusDeliverySourceScope != result.Origin.Scope || source.Intent.WorkflowExecutionId != result.Origin.WorkerExecutionId ||
-                source.Intent.Kind == ResultKind || !requiredSources.Contains(source.Intent.Kind) ||
+            // Older integrations such as ETL own durable intents without opting into claimed source delivery.
+            // The qualified physical lookup proves their scope; an explicit source scope must still match.
+            if (source.StimulusDeliverySourceScope is { } scope && scope != result.Origin.Scope ||
+                source.Intent.WorkflowExecutionId != result.Origin.WorkerExecutionId || source.Intent.Kind == ResultKind ||
                 RuntimePostCommitOutboxItems.OutboxItemId(checkpoint, source.Intent.IntentId) != id)
                 throw new BpmnModelValidationException("A native downstream cancellation source differs from its terminal checkpoint.");
             if (source.Status != RuntimePostCommitOutboxStatus.Delivered)
@@ -197,7 +196,7 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
         }
         var intentId = "bpmn-native-result:" + BpmnModelIdentity.Create(origin.WorkerExecutionId, origin.InvocationId, origin.AttemptId);
         var cancellationSources = worker.Status == WorkflowExecutionStatus.Cancelled
-            ? commit.PostCommitIntents.Where(item => item.Kind != ResultKind && requiredSources.Contains(item.Kind))
+            ? commit.PostCommitIntents.Where(item => item.Kind != ResultKind)
                 .Select(item => RuntimePostCommitOutboxItems.OutboxItemId(commit.CommitId, item.IntentId)).Order(StringComparer.Ordinal).ToArray()
             : null;
         return new(origin, RuntimePostCommitOutboxItems.OutboxItemId(commit.CommitId, intentId), worker.Status, completion, root?.Fault?.Code, cancellationSources);

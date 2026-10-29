@@ -36,7 +36,7 @@ def encoded_tree(value):
     return value
 
 
-def model_bridge(read,process,before,finished,business_error,cancelled=False):
+def model_bridge(read,process,before,finished,business_error,cancelled=False,model_cancel=False):
     checked={phase:read(phase+"-checked-model.json") for phase in ("before","finished","retained")}
     if checked["finished"]!=checked["retained"]:raise ValueError("The actual native/model return proof changed after another process.")
     first,last=checked["before"],checked["finished"];origin=first["worker"]["modelWorkOrigin"]
@@ -61,12 +61,12 @@ def model_bridge(read,process,before,finished,business_error,cancelled=False):
     result,=last["model"]["payload"]["nativeResults"];receipt=last["resultInput"];source=last["resultSource"]
     expected="Cancelled" if cancelled else "Faulted" if business_error else "Completed"
     native_status=5 if cancelled else 3
-    if (last["model"]["lifecycle"]!=3 or last["model"]["revision"]!=2 or last["model"]["payload"]["work"] or last["worker"]["status"]!=native_status or
+    if (last["model"]["lifecycle"]!=3 or last["model"]["revision"]!=(3 if model_cancel else 2) or last["model"]["payload"]["work"] or last["worker"]["status"]!=native_status or
             result["origin"]!=origin or result["status"]!=native_status or last["model"]["terminalResult"]["status"]!=expected or
             before["model"]["status"]!="Running" or finished["model"]["status"]!="TerminalSettled" or finished["model"]["result"]["status"]!=expected):
         raise ValueError("The actual model did not retain the native worker's typed terminal outcome.")
     if (receipt is None or receipt["inputId"]!=origin["resultInputId"] or receipt["inputKind"]!="native-result" or receipt["executionId"]!=model_id or
-            receipt["invocationId"]!=origin["invocationId"] or receipt["attemptId"]!=origin["attemptId"] or receipt["acceptedRevision"]!=2 or receipt["result"]["status"]!="Accepted" or
+            receipt["invocationId"]!=origin["invocationId"] or receipt["attemptId"]!=origin["attemptId"] or receipt["acceptedRevision"]!=(3 if model_cancel else 2) or receipt["result"]["status"]!="Accepted" or
             source is None or source["status"]!=2 or source["stimulusDeliverySourceScope"]!=origin["scope"] or source["outboxItemId"]!=result["sourceOutboxItemId"] or source["intent"]["payload"]!=result or
             source["intent"]["kind"]!=origin["resultIntentKind"] or instant(source["deliveredAt"])<instant(receipt["acceptedAt"])):
         raise ValueError("The actual result was acknowledged without its exact model consumption proof.")
@@ -82,7 +82,7 @@ def model_bridge(read,process,before,finished,business_error,cancelled=False):
     return checked,origin,result
 
 
-def physical_model_bridge(connection,phase,checked,origin,result):
+def physical_model_bridge(connection,phase,checked,origin,result,model_cancel=False):
     observed=checked[phase];model=observed["model"]
     row=connection.execute("SELECT Lifecycle,Revision,ContentJson FROM elsa_runtime_model_execution WHERE ExecutionId=?",(key(model["executionId"]),)).fetchone()
     stored=json.loads(row[2]) if row else None
@@ -104,7 +104,7 @@ def physical_model_bridge(connection,phase,checked,origin,result):
         if row is None or row[0]!=2 or stored["intent"]["payload"]!=source["intent"]["payload"] or stored["deliveredAt"]!=source["deliveredAt"]:
             raise ValueError("The physical native/model delivery source differs from its consumption proof.")
     rows=connection.execute("SELECT InputId,ContentJson FROM elsa_runtime_model_input WHERE ExecutionId=?",(key(model["executionId"]),)).fetchall()
-    if len(rows)!=(1 if phase=="before" else 2):raise ValueError("The physical model accepted an unexpected input.")
+    if len(rows)!=(1 if phase=="before" else 3 if model_cancel else 2):raise ValueError("The physical model accepted an unexpected input.")
     receipt=observed["resultInput"]
     if receipt is not None:
         stored,=[json.loads(row[1]) for row in rows if row[0]==key(receipt["inputId"])]
@@ -122,21 +122,55 @@ def physical_model_bridge(connection,phase,checked,origin,result):
             raise ValueError("The model return differs from the authoritative physical native root completion.")
 
 
+def physical_model_cancellation(connection,read,checked,origin,result):
+    model=checked["finished"]["model"];receipt=checked["finished"]["resultInput"]
+    cancellations=model["payload"].get("cancellations")
+    if (model["payload"]["formatVersion"]!=4 or not isinstance(cancellations,list) or len(cancellations)!=1 or
+            model["terminalResult"]!={"status":"Cancelled","reason":"Cancel the recovered BPMN service invocation."}):
+        raise ValueError("The model cancellation lost its retained semantic decision or exact native responsibility.")
+    cancellation,=cancellations
+    if cancellation["origin"]!=origin or cancellation["settled"] is not True:
+        raise ValueError("The model cancellation did not settle its original native invocation and attempt.")
+    row=connection.execute("SELECT Status,ContentJson FROM elsa_runtime_post_commit_outbox WHERE OutboxItemId=?",(key(cancellation["sourceOutboxItemId"]),)).fetchone()
+    source=json.loads(row[1]) if row else None
+    if (row is None or row[0]!=2 or source["intent"]["kind"]!=key("Elsa.Bpmn.CancelNativeWork.v1") or
+            source["intent"]["workflowExecutionId"]!=key(model["executionId"]) or source["intent"]["payload"]!={**cancellation,"settled":False} or
+            source["status"]!="Delivered" or instant(source["deliveredAt"])<instant(receipt["acceptedAt"])):
+        raise ValueError("The model cancellation source was acknowledged without its exact native result consumption.")
+    row=connection.execute("SELECT ContentJson FROM elsa_runtime_model_input WHERE ExecutionId=? AND InputId=?",(key(model["executionId"]),key("cancel-actual-bpmn-etl"))).fetchone()
+    accepted=json.loads(row[0]) if row else None;command=read("model-cancel-command.json");response=read("model-cancel-response.json")
+    if (accepted is None or accepted["inputKind"]!=key("cancel") or accepted["acceptedRevision"]!=2 or
+            accepted["result"]!={"status":"Accepted","code":None,"revision":2,"lifecycle":"TerminalPendingSettlement"} or
+            command["pending"] or command["executionId"]!=model["executionId"] or command["inputId"]!="cancel-actual-bpmn-etl" or
+            accepted["result"]!=command["result"] or response["result"]!=command["result"] or
+            instant(accepted["acceptedAt"])>instant(receipt["acceptedAt"])):
+        raise ValueError("The actual BPMN cancel command lost its retained pending-settlement decision.")
+    cancel_sources=[json.loads(row[0]) for row in connection.execute("SELECT ContentJson FROM elsa_runtime_post_commit_outbox")
+        if json.loads(row[0])["intent"]["kind"]==key("Elsa.Etl.Cancel.v1")]
+    if len(cancel_sources)!=1 or result.get("cancellationSources")!=[base64.b64decode(cancel_sources[0]["outboxItemId"]).decode("utf-16le")]:
+        raise ValueError("The actual native result lost its complete downstream cancellation inventory.")
+    downstream=cancel_sources[0]
+    if (downstream["status"]!="Delivered" or instant(downstream["deliveredAt"])>instant(receipt["acceptedAt"])):
+        raise ValueError("The model settled before actual downstream cancellation delivery.")
+
+
 def verify(path):
     manifest=json.loads(path.read_text());root=path.parent
+    model_cancel=manifest.get("kind")=="actual-direct-bpmn-native-etl-model-cancellation"
     pipeline_cancel=manifest.get("kind")=="actual-direct-bpmn-native-etl-pipeline-cancellation"
     worker_cancel=manifest.get("kind")=="actual-direct-bpmn-native-etl-worker-cancellation"
-    cancelling=pipeline_cancel or worker_cancel
+    cancelling=pipeline_cancel or worker_cancel or model_cancel
     direct=cancelling or manifest.get("kind")=="actual-direct-bpmn-native-etl-recovery"
-    if manifest.get("schemaVersion")!=1 or manifest.get("kind") not in ("actual-native-etl-recovery-reference","actual-direct-bpmn-native-etl-recovery","actual-direct-bpmn-native-etl-pipeline-cancellation","actual-direct-bpmn-native-etl-worker-cancellation"):raise ValueError("Unknown ETL recovery reference evidence.")
+    if manifest.get("schemaVersion")!=1 or manifest.get("kind") not in ("actual-native-etl-recovery-reference","actual-direct-bpmn-native-etl-recovery","actual-direct-bpmn-native-etl-pipeline-cancellation","actual-direct-bpmn-native-etl-worker-cancellation","actual-direct-bpmn-native-etl-model-cancellation"):raise ValueError("Unknown ETL recovery reference evidence.")
     source=manifest["sourceRevision"];assets=manifest["assets"]
     if len(source)!=40 or any(c not in "0123456789abcdef" for c in source):raise ValueError("The ETL reference lacks an exact source.")
-    expected_cases={"native-cancel":("BpmnModel",False)} if worker_cancel else {"direct-cancel":("BpmnModel",False)} if pipeline_cancel else {"direct-success":("BpmnModel",False),"direct-business":("BpmnModel",True)} if direct else {"sequence":("Sequence",False),"flowchart":("Flowchart",False),"worker-business":("RunEtl",True)}
+    expected_cases={"model-cancel":("BpmnModel",False)} if model_cancel else {"native-cancel":("BpmnModel",False)} if worker_cancel else {"direct-cancel":("BpmnModel",False)} if pipeline_cancel else {"direct-success":("BpmnModel",False),"direct-business":("BpmnModel",True)} if direct else {"sequence":("Sequence",False),"flowchart":("Flowchart",False),"worker-business":("RunEtl",True)}
     names={"before.json","recovered.json","finished.json","retained.json","before-wire.json","finished-wire.json","retained-wire.json","safe-errors.json","process.json"}
     names|={phase+"-"+store+".sqlite.gz" for phase in ("before","finished") for store in ("elsa","etl-runtime","etl-design")}
     if direct:names|={phase+"-checked-model.json" for phase in ("before","finished","retained")}
     if pipeline_cancel:names.add("cancel-response.json")
     if worker_cancel:names.add("native-cancel-response.json")
+    if model_cancel:names|={"model-cancel-response.json","model-cancel-command.json"}
     declared={asset["path"] for asset in assets}
     if len(declared)!=len(assets) or declared!={case+"/"+name for case in expected_cases for name in names}:raise ValueError("The ETL recovery bundle lacks its exact actual assets.")
     for asset in assets:
@@ -150,7 +184,7 @@ def verify(path):
         if products["sourceCommit"]!=source or products["metadataOnly"] is not True or len(products["actualProductVersions"])!=(12 if direct else 6) or any(not item["productVersion"].endswith("+"+source) for item in products["actualProductVersions"]):raise ValueError("The actual Workbench and ETL products differ from their declared source.")
         before=read("before.json");finished=read("finished.json");recovered=read("recovered.json")
         before_wire=read("before-wire.json");wire=read("finished-wire.json")
-        bridge=model_bridge(read,process,before,finished,business_error,cancelling) if direct else None
+        bridge=model_bridge(read,process,before,finished,business_error,cancelling,model_cancel) if direct else None
         if finished!=read("retained.json") or wire!=read("retained-wire.json"):raise ValueError("The terminal native/ETL views or physical effects changed after another process.")
         identity=process["workflowExecutionId"];run_id=process["runId"];selection=process["selection"]
         old={node(item):item for item in before["native"]["activities"]};current={node(item):item for item in finished["native"]["activities"]}
@@ -165,9 +199,9 @@ def verify(path):
         retry=next((item["http"]["fetch"] for item in before["partitions"]["items"] if item["http"]["fetch"] and item["http"]["fetch"]["lastStatusCode"]==429),None)
         if retry is None or retry["phase"]!="waiting" or retry["attemptCount"]!=1 or instant(retry["notBefore"])<=instant(process["cutAtUtc"]):raise ValueError("The actual crash cut lacks its original future 429 retry.")
         if cancelling:
-            response=read("native-cancel-response.json" if worker_cancel else "cancel-response.json")
-            accepted_request=response["submissionDisposition"]=="Accepted" if worker_cancel else response["cancellationAccepted"] and response["terminalResult"]["outcome"]=="cancelled"
-            if (process.get("nativeCancel" if worker_cancel else "pipelineCancel") is not True or process.get("retryAfterSeconds")!=60 or recovered["run"]["status"]!="running" or
+            response=read("model-cancel-response.json" if model_cancel else "native-cancel-response.json" if worker_cancel else "cancel-response.json")
+            accepted_request=(response["inputId"]=="cancel-actual-bpmn-etl" and response["result"]["status"]=="Accepted" and response["result"]["lifecycle"]=="TerminalPendingSettlement") if model_cancel else response["submissionDisposition"]=="Accepted" if worker_cancel else response["cancellationAccepted"] and response["terminalResult"]["outcome"]=="cancelled"
+            if (process.get("modelCancel" if model_cancel else "nativeCancel" if worker_cancel else "pipelineCancel") is not True or process.get("retryAfterSeconds")!=60 or recovered["run"]["status"]!="running" or
                     not accepted_request or
                     instant(process["observedCancelledAfterRetryDeadlineAtUtc"])<=instant(retry["notBefore"])):
                 raise ValueError("The actual pipeline cancellation lacks its accepted request and post-deadline observation.")
@@ -199,7 +233,8 @@ def verify(path):
                     with closing(sqlite3.connect(database.as_uri()+"?mode=ro&immutable=1",uri=True)) as connection:
                         if connection.execute("PRAGMA integrity_check").fetchall()!=[("ok",)]:raise ValueError("An actual ETL snapshot failed integrity verification.")
                         if store=="elsa":
-                            if bridge is not None:physical_model_bridge(connection,phase,*bridge)
+                            if bridge is not None:physical_model_bridge(connection,phase,*bridge,model_cancel=model_cancel)
+                            if model_cancel and phase=="finished":physical_model_cancellation(connection,read,*bridge)
                             row=connection.execute("SELECT Status,ContentJson FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId=?",(key(identity),)).fetchone()
                             if row is None or row[0]!=(1 if phase=="before" else 5 if cancelling else 3) or json.loads(row[1])["pinnedExecutable"]!={name:key(value) for name,value in pin.items()}:raise ValueError("The physical native ETL workflow lost its exact pin or state.")
                             bookmarks=connection.execute("SELECT BookmarkId FROM elsa_runtime_bookmark_state WHERE WorkflowExecutionId=?",(identity,)).fetchall()
@@ -208,7 +243,7 @@ def verify(path):
                             elif pipeline_cancel:
                                 activity,=connection.execute("SELECT ContentJson FROM elsa_runtime_activity_execution_state").fetchall()
                                 native_consumption=json.loads(activity[0]).get("triggerDeliveries") or []
-                            if phase=="finished" and worker_cancel:
+                            if phase=="finished" and (worker_cancel or model_cancel):
                                 native_cancel_sources=[json.loads(row[0]) for row in connection.execute("SELECT ContentJson FROM elsa_runtime_post_commit_outbox")
                                     if json.loads(row[0])["intent"]["kind"]==key("Elsa.Etl.Cancel.v1")]
                         if store=="etl-runtime":
@@ -225,14 +260,14 @@ def verify(path):
                             terminal=connection.execute("SELECT Outcome FROM elsa_etl_runtime_terminals").fetchall();outbox=connection.execute("SELECT Attempts,Disposition,AcknowledgedAtUtcTicks FROM elsa_etl_runtime_outbox").fetchall()
                             if phase=="before" and (terminal or outbox or row[1]!=1):raise ValueError("The actual retry cut already carried a terminal result.")
                             if phase=="finished" and (row[1]!=(5 if cancelling else 3 if business_error else 2) or row[2:]!=(accepted,rejected,0,0) or terminal!=[(3 if cancelling else 1 if business_error else 0,)] or len(outbox)!=1 or outbox[0][0]<1 or outbox[0][1] is None or outbox[0][2] is None):raise ValueError("The physical ETL terminal or owed native result did not settle.")
-                            if phase=="finished" and worker_cancel and outbox[0][1]!=2:
+                            if phase=="finished" and (worker_cancel or model_cancel) and outbox[0][1]!=2:
                                 raise ValueError("The native-origin ETL result lacks its actual proven-parent-terminal disposition.")
         if (native_bookmark!=decoded(invocation["resultAddress"]["bookmarkId"]) or native_bookmark!=decoded(invocation["resultAddress"]["registrationId"]) or
                 decoded(invocation["resultAddress"]["nodeId"])!=old["etl"]["executableNodeId"]):raise ValueError("The ETL result address did not retain its actual native bookmark.")
         if pipeline_cancel and not any(receipt["status"]=="Consumed" and receipt["registrationId"]==key(decoded(invocation["resultAddress"]["registrationId"])) and
                 receipt["providerId"]==key(decoded(invocation["resultAddress"]["providerId"])) and receipt["payloadType"]["alias"]==key("Elsa.Etl.Workflows.Runtime.Models.RunEtlCompletion")
                 for receipt in native_consumption):raise ValueError("The cancelled native root lacks its exact typed ETL consumption receipt.")
-        if worker_cancel:
+        if worker_cancel or model_cancel:
             if len(native_cancel_sources)!=1:raise ValueError("The native cancellation checkpoint lacks its actual owed ETL cancel source.")
             cancel=native_cancel_sources[0];result_source=bridge[0]["finished"]["resultSource"]
             cancel_id=base64.b64decode(cancel["outboxItemId"]).decode("utf-16le");intent_id=base64.b64decode(cancel["intent"]["intentId"]).decode("utf-16le")
@@ -246,7 +281,7 @@ def verify(path):
     result={"actualReferenceJourneys":results,"wholeStoresVerified":len(expected_cases)*6,"sourceRevision":source,"directBpmnClosedWorkerIntegrationProved":direct,
         "runBpmnEtlIntegrationProved":False,"modelHeldFaultRetryProved":False}
     if not direct:result["directOrRunBpmnEtlIntegrationProved"]=False
-    if cancelling:result.update(pipelineOriginatedCancellationProved=pipeline_cancel,nativeWorkerOriginatedCancellationProved=worker_cancel,modelToWorkerCancellationProved=False)
+    if cancelling:result.update(pipelineOriginatedCancellationProved=pipeline_cancel,nativeWorkerOriginatedCancellationProved=worker_cancel,modelToWorkerCancellationProved=model_cancel,modelCancellationBeforeAdmissionProved=False)
     return result
 
 

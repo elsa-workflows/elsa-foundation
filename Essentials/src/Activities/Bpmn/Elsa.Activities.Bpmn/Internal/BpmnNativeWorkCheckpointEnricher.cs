@@ -10,7 +10,7 @@ namespace Elsa.Activities.Bpmn.Internal;
 /// <summary>Native admission and terminal delivery participate in the existing native checkpoint.</summary>
 internal sealed class BpmnNativeWorkCheckpointEnricher(BpmnNativeWorkBoundary boundary) : IRuntimeCheckpointCommitEnricher
 {
-    // Capture the final set of required child-cancellation sources contributed by native activity integrations.
+    // Capture every child-cancellation delivery contributed by native activity integrations, including older handlers.
     // ValidateFinalAsync refuses any later contributor that changes that inventory.
     public int Order => int.MaxValue;
     public async ValueTask<RuntimeCheckpointCommit> EnrichAsync(RuntimeCheckpointCommit commit, CancellationToken cancellationToken = default)
