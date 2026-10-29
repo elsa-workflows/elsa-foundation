@@ -45,7 +45,7 @@ public sealed class BpmnProcess(IBpmnProcessRuntime executionEngine) : Structura
     /// trigger provider skips it. Root position is not recoverable from the published node alone, so this is the
     /// opt-out; a none-start process is unaffected either way (it starts on direct invocation).
     /// </summary>
-    [ActivityInput(Key = nameof(CanStartWorkflow), DefaultValue = "true")]
+    [ActivityInput(Key = nameof(CanStartWorkflow), DisplayName = "Start new workflows", Description = "Allow event-defined start events to start new workflow instances. When off, this process can still run inside an existing workflow.", DefaultValue = "true")]
     public bool CanStartWorkflow { get; set; } = true;
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context) => executionEngine.StartAsync(context);

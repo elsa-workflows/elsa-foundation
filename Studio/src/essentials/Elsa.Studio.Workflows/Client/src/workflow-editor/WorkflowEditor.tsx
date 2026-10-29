@@ -25,6 +25,7 @@ import {
 } from "../activityPresentation";
 import { buildDraftFromJson } from "../workflowSerialization";
 import { WorkflowCodeView } from "../WorkflowCodeView";
+import { withWorkflowStartEnabled } from "../workflowStart";
 import { WorkflowPropertiesView } from "../WorkflowPropertiesView";
 import { loadActivityIconRegistry } from "../activityIconView";
 import { weaverUnavailableTitle } from "./constants";
@@ -459,6 +460,15 @@ export function WorkflowEditor({
     if (nodes.length === 1) canvasRef.current?.focus({ preventScroll: true });
   }, [nodes, onNodesDelete, canvasRef]);
 
+  const setWorkflowStart = useCallback((nodeId: string, enabled: boolean) => {
+    if (!canAddActivitiesToCanvas) return;
+    editDraft(({ draft: current }) => current?.state.rootActivity ? {
+      ...current,
+      state: { ...current.state, rootActivity: updateActivity(current.state.rootActivity, nodeId,
+        activity => withWorkflowStartEnabled(activity, catalogByVersion.get(activity.activityVersionId), enabled), catalogByVersion) }
+    } : null);
+  }, [canAddActivitiesToCanvas, catalogByVersion, editDraft]);
+
   const nodeActions = useMemo<WorkflowNodeActions | null>(() => {
     if (isUnsupportedDesigner || isBpmnDesigner || !canAddActivitiesToCanvas) return null;
     return {
@@ -469,7 +479,8 @@ export function WorkflowEditor({
         openAddStepMenu(anchor, { nodeId, handleId: portName });
       },
       duplicate: nodeId => { duplicateSelectedActivities([nodeId]); },
-      delete: deleteCanvasNode
+      delete: deleteCanvasNode,
+      setWorkflowStart
     };
   }, [
     canAddActivitiesToCanvas,
@@ -479,7 +490,8 @@ export function WorkflowEditor({
     isBpmnDesigner,
     isUnsupportedDesigner,
     openAddStepMenu,
-    selectedCanvasNodeIds
+    selectedCanvasNodeIds,
+    setWorkflowStart
   ]);
 
   // Inside a slot (breadcrumb non-empty) whose resolved slot is empty, show a guided picker instead of a
@@ -1473,6 +1485,7 @@ export function WorkflowEditor({
               onMove={moveSequenceActivity}
               onDelete={deleteCanvasNode}
               onDuplicate={nodeId => duplicateSelectedActivities([nodeId])}
+              onSetWorkflowStart={setWorkflowStart}
               onOpenSlot={(ownerId, label, slot) => enterSlotScope(ownerId, slot, slotCrumbLabel(label, slot))}
             >
               {connectMenu ? <ConnectMenu clientX={connectMenu.clientX} clientY={connectMenu.clientY} activities={paletteCatalog} onPick={onConnectMenuPick} onClose={() => setConnectMenu(null)} /> : null}
