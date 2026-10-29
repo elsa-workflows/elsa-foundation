@@ -1,9 +1,10 @@
 import { isThemeMode, themeModeLabels, type ThemeMode } from "./presets";
 import { isNavModePreference, navModeStorageKey, type NavModePreference } from "./navMode";
+import { isWorkspaceStyle, type WorkspaceStyle } from "./workspaceStyles";
 
 /**
- * The user's appearance choices as one model: which theme, which colour mode and where the
- * navigation sits. ThemeProvider owns the live state; this module owns the shape, the defaults,
+ * The user's appearance choices as one model: base preset, workspace style, color scheme,
+ * mode and navigation. ThemeProvider owns the live state; this module owns the shape, the defaults,
  * persistence and resolution, so the topbar menu and a Settings › Appearance page share one source.
  *
  * `system` is a mode preference, not a theme mode: it follows the OS contrast and colour-scheme
@@ -14,12 +15,16 @@ export type ThemeModePreference = ThemeMode | "system";
 export interface AppearancePreferences {
   /** Theme id, or null for the configured default theme. */
   themeId: string | null;
+  workspaceStyle: WorkspaceStyle | null;
+  colorSchemeId: string | null;
   mode: ThemeModePreference;
   navigation: NavModePreference;
 }
 
 export const appearanceStorageKeys = {
   themeId: "elsa-studio-theme",
+  workspaceStyle: "elsa-studio-workspace-style",
+  colorSchemeId: "elsa-studio-color-scheme",
   mode: "elsa-studio-theme-mode",
   navigation: navModeStorageKey
 } as const;
@@ -33,9 +38,11 @@ export const appearanceChromeStorageKeys = {
   activeBottomPanel: "elsa-studio-active-bottom-panel"
 } as const;
 
-/** Every key `resetAppearancePreferences` removes. Spec and code must stay in lockstep (8 keys). */
+/** Every appearance and chrome override cleared by Reset. */
 export const appearanceResetStorageKeys = [
   appearanceStorageKeys.themeId,
+  appearanceStorageKeys.workspaceStyle,
+  appearanceStorageKeys.colorSchemeId,
   appearanceStorageKeys.mode,
   appearanceStorageKeys.navigation,
   appearanceChromeStorageKeys.sidebarCollapsed,
@@ -62,6 +69,8 @@ export const appearanceModePreferences: readonly ThemeModePreference[] = [
 
 export const defaultAppearancePreferences: AppearancePreferences = {
   themeId: null,
+  workspaceStyle: null,
+  colorSchemeId: null,
   mode: "system",
   navigation: "theme"
 };
@@ -98,8 +107,11 @@ export function readAppearancePreferences(storage: PreferenceStorage | undefined
   const read = (key: string) => (storage ? safely(() => storage.getItem(key), null) : null);
   const mode = read(appearanceStorageKeys.mode);
   const navigation = read(appearanceStorageKeys.navigation);
+  const workspaceStyle = read(appearanceStorageKeys.workspaceStyle);
   return {
     themeId: read(appearanceStorageKeys.themeId) || null,
+    workspaceStyle: isWorkspaceStyle(workspaceStyle) ? workspaceStyle : null,
+    colorSchemeId: read(appearanceStorageKeys.colorSchemeId) || null,
     mode: isThemeModePreference(mode) ? mode : defaultAppearancePreferences.mode,
     navigation: isNavModePreference(navigation) ? navigation : defaultAppearancePreferences.navigation
   };
@@ -115,6 +127,11 @@ export function writeAppearancePreferences(
     if (preferences.themeId !== undefined) {
       if (preferences.themeId === null) storage.removeItem(appearanceStorageKeys.themeId);
       else storage.setItem(appearanceStorageKeys.themeId, preferences.themeId);
+    }
+    for (const key of ["workspaceStyle", "colorSchemeId"] as const) {
+      const value = preferences[key];
+      if (value === null) storage.removeItem(appearanceStorageKeys[key]);
+      else if (value !== undefined) storage.setItem(appearanceStorageKeys[key], value);
     }
     if (preferences.mode !== undefined) storage.setItem(appearanceStorageKeys.mode, preferences.mode);
     if (preferences.navigation !== undefined) storage.setItem(appearanceStorageKeys.navigation, preferences.navigation);

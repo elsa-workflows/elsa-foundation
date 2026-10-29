@@ -30,6 +30,10 @@
   --studio-text: var(--foreground);
   --studio-text-muted: var(--muted-foreground);
   --studio-border: var(--border);
+  --studio-edge-subtle: var(--studio-border);
+  --studio-edge-control: var(--studio-border);
+  --studio-canvas: var(--studio-bg);
+  --studio-panel: var(--studio-surface);
   --studio-accent: var(--primary);
   --studio-accent-text: var(--primary-foreground);
   --studio-accent-soft: color-mix(in srgb, var(--primary) 10%, transparent);

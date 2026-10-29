@@ -13,7 +13,6 @@ import {
 import {
   getThemeNavMode,
   navModeAttribute,
-  resolveNavMode,
   type NavMode,
   type NavModePreference
 } from "../themes/navMode";
@@ -26,9 +25,14 @@ import {
   type ThemeModePreference
 } from "../themes/appearance";
 import { findSelectableTheme, getSelectableThemes, getThemeStore, normalizeThemeStore, type ThemeStoreResponse } from "../themes/themeStoreApi";
+import { applyWorkspaceStyle, getWorkspaceStyle, type WorkspaceStyle } from "../themes/workspaceStyles";
 
 interface ThemeContextType {
   currentTheme: Theme;
+  currentColorScheme: Theme;
+  workspaceStyle: WorkspaceStyle | null;
+  setWorkspaceStyle: (style: WorkspaceStyle | null) => void;
+  setColorScheme: (themeId: string | null) => void;
   /** The mode the current theme is rendered in. */
   mode: ThemeMode;
   /** The mode the user asked for; differs from `mode` when the current theme lacks it. */
@@ -70,7 +74,14 @@ export function ThemeProvider({
   const [loadedStore, setLoadedStore] = useState<ThemeStoreResponse>();
   const store = loadedStore ?? builtInStore;
   const storeLoaded = loadedStore !== undefined;
-  const [currentTheme, setCurrentTheme] = useState<Theme>(builtInThemeDefinitions[0]);
+  const [baseTheme, setCurrentTheme] = useState<Theme>(builtInThemeDefinitions[0]);
+  const [preview, setPreview] = useState<Theme>();
+  const [workspaceStyle, setWorkspaceStyleState] = useState<WorkspaceStyle | null>(null);
+  const [colorSchemeId, setColorSchemeId] = useState<string | null>(null);
+  const currentTheme = preview ?? baseTheme;
+  const activeStyle = preview ? null : workspaceStyle;
+  const currentColorScheme = preview ?? (colorSchemeId === null ? baseTheme : findSelectableTheme(store, colorSchemeId));
+  const styledTheme = React.useMemo(() => applyWorkspaceStyle(currentTheme, activeStyle), [currentTheme, activeStyle]);
   // The preferred mode survives theme switches: picking High contrast, visiting a light/dark-only
   // theme, and coming back restores High contrast rather than whatever that theme fell back to.
   const [modePreference, setModePreferenceState] = useState<ThemeModePreference>("system");
@@ -79,9 +90,10 @@ export function ThemeProvider({
   const preferredMode = React.useMemo(() => resolveModePreference(modePreference), [modePreference, systemModeVersion]);
   const [navModePreference, setNavModePreferenceState] = useState<NavModePreference>("theme");
   const [mounted, setMounted] = useState(false);
-  const supportedModes = getSupportedThemeModes(currentTheme);
-  const activeMode = resolveThemeMode(currentTheme, preferredMode);
-  const navMode = resolveNavMode(currentTheme.layout, navModePreference);
+  const supportedModes = getSupportedThemeModes(currentColorScheme);
+  const activeMode = resolveThemeMode(currentColorScheme, preferredMode);
+  const themeNavMode = activeStyle ? getWorkspaceStyle(activeStyle).navigation : getThemeNavMode(styledTheme.layout);
+  const navMode = navModePreference === "theme" ? themeNavMode : navModePreference;
 
   // Initialize from localStorage on mount and again whenever the store changes, falling back to the
   // OS contrast and colour-scheme preferences while the user has never chosen a mode. Once chosen,
@@ -93,8 +105,13 @@ export function ThemeProvider({
     setModePreferenceState(saved.mode);
     setNavModePreferenceState(saved.navigation);
     setCurrentTheme(nextTheme);
+    setWorkspaceStyleState(saved.workspaceStyle);
+    setColorSchemeId(saved.colorSchemeId);
     if (storeLoaded && saved.themeId !== null) {
       writeAppearancePreferences({ themeId: nextTheme.id });
+    }
+    if (storeLoaded && saved.colorSchemeId !== null) {
+      writeAppearancePreferences({ colorSchemeId: findSelectableTheme(store, saved.colorSchemeId).id });
     }
     setMounted(true);
   }, [store, storeLoaded]);
@@ -126,19 +143,23 @@ export function ThemeProvider({
   useEffect(() => {
     if (!mounted) return;
 
-    const colors = getThemeModeDefinition(currentTheme, activeMode) ?? currentTheme.dark;
+    const colors = getThemeModeDefinition(currentColorScheme, activeMode) ?? currentColorScheme.dark;
     const root = document.documentElement;
 
     clearMaterialVariables(root);
-    applyMaterialVariables(root, currentTheme.material);
-    applyThemeStyleVariables(root, currentTheme);
+    if (activeStyle === null) {
+      applyMaterialVariables(root, currentTheme.material);
+      applyMaterialVariables(root, getThemeModeDefinition(currentTheme, activeMode)?.material);
+    }
+    applyThemeStyleVariables(root, styledTheme);
     Object.entries(colors).forEach(([key, value]) => {
       if (key === "chartColors") {
         (value as string[]).forEach((color, index) => {
           root.style.setProperty(`--chart-${index + 1}`, color);
         });
       } else if (key === "material") {
-        applyMaterialVariables(root, value as ThemeMaterialMode);
+        // Material is presentation owned by the base preset/style, never by a color override.
+        return;
       } else {
         // Convert camelCase to kebab-case
         const cssVarName = `--${key.replace(/([A-Z])/g, "-$1").toLowerCase()}`;
@@ -149,22 +170,41 @@ export function ThemeProvider({
     // `data-theme-mode` stays the light/dark colour scheme — the contract module CSS keys on — and
     // `data-theme-appearance` carries the exact mode (light, dark, dim, high-contrast).
     root.setAttribute("data-theme", currentTheme.id);
+    root.setAttribute("data-color-scheme", currentColorScheme.id);
+    if (activeStyle) root.setAttribute("data-workspace-style", activeStyle);
+    else root.removeAttribute("data-workspace-style");
     root.setAttribute("data-theme-mode", getThemeColorScheme(activeMode));
     root.setAttribute("data-theme-appearance", activeMode);
-    root.setAttribute(studioThemeLayoutAttribute, currentTheme.layout ?? "classic");
+    root.setAttribute(studioThemeLayoutAttribute, styledTheme.layout ?? "classic");
     root.setAttribute(navModeAttribute, navMode);
-    if (isMaterialTheme(currentTheme.id)) {
+    if (activeStyle === null && isMaterialTheme(currentTheme.id)) {
       root.setAttribute("data-theme-material", currentTheme.id);
     } else {
       root.removeAttribute("data-theme-material");
     }
 
-  }, [currentTheme, activeMode, navMode, mounted]);
+  }, [currentTheme, currentColorScheme, styledTheme, activeStyle, activeMode, navMode, mounted]);
 
   const handleSetTheme = (themeId: string) => {
     const nextTheme = findSelectableTheme(store, themeId);
-    writeAppearancePreferences({ themeId: nextTheme.id });
+    writeAppearancePreferences({ themeId: nextTheme.id, workspaceStyle: null, colorSchemeId: null });
+    setPreview(undefined);
+    setWorkspaceStyleState(null);
+    setColorSchemeId(null);
     setCurrentTheme(nextTheme);
+  };
+
+  const handleSetWorkspaceStyle = (style: WorkspaceStyle | null) => {
+    setPreview(undefined);
+    setWorkspaceStyleState(style);
+    writeAppearancePreferences({ workspaceStyle: style });
+  };
+
+  const handleSetColorScheme = (themeId: string | null) => {
+    const id = themeId === null ? null : findSelectableTheme(store, themeId).id;
+    setPreview(undefined);
+    setColorSchemeId(id);
+    writeAppearancePreferences({ colorSchemeId: id });
   };
 
   const handleSetModePreference = (preference: ThemeModePreference) => {
@@ -181,12 +221,15 @@ export function ThemeProvider({
     const defaults = resetAppearancePreferences();
     setModePreferenceState(defaults.mode);
     setNavModePreferenceState(defaults.navigation);
+    setPreview(undefined);
+    setWorkspaceStyleState(null);
+    setColorSchemeId(null);
     // Not persisted: the configured default theme applies until the user picks one again.
     setCurrentTheme(findSelectableTheme(store, defaults.themeId));
   };
 
   const handlePreviewTheme = (theme: StudioThemeDefinition) => {
-    setCurrentTheme(toTheme(theme));
+    setPreview(toTheme(theme));
   };
 
   const refreshThemes = async () => {
@@ -198,6 +241,10 @@ export function ThemeProvider({
     <ThemeContext.Provider
       value={{
         currentTheme,
+        currentColorScheme,
+        workspaceStyle: activeStyle,
+        setWorkspaceStyle: handleSetWorkspaceStyle,
+        setColorScheme: handleSetColorScheme,
         mode: activeMode,
         preferredMode,
         setTheme: handleSetTheme,
@@ -208,7 +255,7 @@ export function ThemeProvider({
         supportedModes,
         navMode,
         navModePreference,
-        themeNavMode: getThemeNavMode(currentTheme.layout),
+        themeNavMode,
         setNavModePreference: handleSetNavModePreference,
         previewTheme: handlePreviewTheme,
         availableThemes: getSelectableThemes(store),
@@ -301,6 +348,11 @@ function clearMaterialVariables(root: HTMLElement) {
 /** The resolved navigation mode; `left` outside a ThemeProvider, where nothing publishes a preference. */
 export function useNavMode(): NavMode {
   return useContext(ThemeContext)?.navMode ?? "left";
+}
+
+/** Optional shell integration; standalone hosts retain their existing arrangement. */
+export function useWorkspaceStyle(): WorkspaceStyle | null {
+  return useContext(ThemeContext)?.workspaceStyle ?? null;
 }
 
 export function useTheme(): ThemeContextType {

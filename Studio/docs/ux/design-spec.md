@@ -185,17 +185,21 @@ owns the live state; this module owns the shape, defaults, persistence and resol
 | Preference | Status | Values | Default | Stored as |
 |---|---|---|---|---|
 | Theme | `exists` | any selectable theme id | configured `Themes:DefaultThemeId`, else the first theme | `elsa-studio-theme` |
+| Workspace style | `exists` | `quiet`, `focus`, `open`, or unset to inherit the preset | unset | `elsa-studio-workspace-style` |
+| Color scheme | `exists` | any selectable theme id, or unset to inherit preset colors | unset | `elsa-studio-color-scheme` |
 | Mode | `exists` | `system`, `light`, `dark`, `dim`, `high-contrast` | `system` (follows OS colour scheme and contrast, live) | `elsa-studio-theme-mode` |
 | Navigation | `exists` | `theme`, `left`, `top` | `theme` | `elsa-studio-nav-mode` |
 
-- The topbar `ThemeSwitcher` edits theme, the four concrete modes and nav today (`exists`).
-  Settings › Appearance (`exists`) edits the same model: theme (Classic default, plus the other
-  built-in and custom themes), mode (System, Light, Dark, and the theme's optional modes),
-  navigation, and a link to the Theme Builder. Density is not in the model. Neither surface
-  keeps its own state.
+- The topbar `ThemeSwitcher` edits workspace style, color scheme, mode and navigation.
+  Settings › Appearance edits the same model and offers original complete presets under
+  Theme presets. Applying a preset intentionally clears both overrides. Normal style/color
+  changes preserve the other choices and mounted authoring state. Theme Builder preview is
+  transient. See [ADR 0023](../adr/0023-separate-workspace-style-and-color-scheme.md).
 - `resetAppearancePreferences()` / `resetAppearance` exist (`exists`) and **Reset appearance**
-  on Settings › Appearance exposes them. Reset clears these eight keys (`exists`):
+  on Settings › Appearance exposes them. Reset clears these ten keys (`exists`):
   - `elsa-studio-theme`
+  - `elsa-studio-workspace-style`
+  - `elsa-studio-color-scheme`
   - `elsa-studio-theme-mode`
   - `elsa-studio-nav-mode`
   - `elsa-studio-sidebar-collapsed`

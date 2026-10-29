@@ -4,6 +4,7 @@ import { Check, Contrast, Moon, Palette, PanelLeft, PanelTop, Sun, SunDim, Swatc
 import { useTheme } from "./ThemeProvider";
 import { allThemeModes, getSupportedThemeModes, getThemeModeDefinition, isThemeMode, themeModeLabels, type ThemeMode } from "../themes/presets";
 import { isNavModePreference, navModePreferenceLabels, navModePreferences, type NavModePreference } from "../themes/navMode";
+import { isWorkspaceStyle, workspaceStyles } from "../themes/workspaceStyles";
 import "./ThemeSwitcher.css";
 
 const modeIcons: Record<ThemeMode, LucideIcon> = {
@@ -81,7 +82,7 @@ const navModeIcons: Record<NavModePreference, LucideIcon> = {
 
 export function ThemeSwitcher() {
   const {
-    currentTheme, mode, setTheme, setMode, availableThemes, supportedModes,
+    currentTheme, currentColorScheme, workspaceStyle, setWorkspaceStyle, setColorScheme, mode, setMode, availableThemes, supportedModes,
     navModePreference, themeNavMode, setNavModePreference
   } = useTheme();
 
@@ -96,7 +97,7 @@ export function ThemeSwitcher() {
             type="button"
             className="theme-selector-button"
             aria-label="Select theme"
-            title={`Theme: ${currentTheme.name} · ${themeModeLabels[mode]}`}
+            title={`${workspaceStyles.find(style => style.id === workspaceStyle)?.name ?? currentTheme.name} · ${currentColorScheme.name} · ${themeModeLabels[mode]}`}
           >
             <Palette size={18} />
             <span className="theme-selector-swatch" aria-hidden="true">
@@ -104,7 +105,7 @@ export function ThemeSwitcher() {
                 <span
                   key={themeMode}
                   className="theme-selector-swatch-dot"
-                  style={{ backgroundColor: getThemeModeDefinition(currentTheme, themeMode)?.primary }}
+                  style={{ backgroundColor: getThemeModeDefinition(currentColorScheme, themeMode)?.primary }}
                 />
               ))}
             </span>
@@ -113,6 +114,20 @@ export function ThemeSwitcher() {
 
         <DropdownMenu.Portal>
           <DropdownMenu.Content className="theme-dropdown" align="end" sideOffset={8}>
+            <DropdownMenu.Label className="theme-dropdown-header">
+              <span className="theme-dropdown-title">Workspace style</span>
+            </DropdownMenu.Label>
+            <DropdownMenu.RadioGroup
+              className="theme-style-group"
+              value={workspaceStyle ?? "theme"}
+              onValueChange={value => setWorkspaceStyle(isWorkspaceStyle(value) ? value : null)}
+            >
+              {[...workspaceStyles.map(style => ({ id: style.id, name: style.name })), { id: "theme", name: "Theme default" }].map(style => (
+                <DropdownMenu.RadioItem key={style.id} value={style.id} className="theme-mode-item" onSelect={event => event.preventDefault()}>
+                  <span>{style.name}</span>
+                </DropdownMenu.RadioItem>
+              ))}
+            </DropdownMenu.RadioGroup>
             <DropdownMenu.Label className="theme-dropdown-header">
               <span className="theme-dropdown-title">Appearance</span>
             </DropdownMenu.Label>
@@ -130,7 +145,7 @@ export function ThemeSwitcher() {
                     value={themeMode}
                     className="theme-mode-item"
                     disabled={!available}
-                    title={available ? themeModeLabels[themeMode] : `${currentTheme.name} has no ${themeModeLabels[themeMode].toLowerCase()} mode`}
+                    title={available ? themeModeLabels[themeMode] : `${currentColorScheme.name} has no ${themeModeLabels[themeMode].toLowerCase()} mode`}
                     // Keep the menu open so modes can be compared in place.
                     onSelect={event => event.preventDefault()}
                   >
@@ -140,6 +155,9 @@ export function ThemeSwitcher() {
                 );
               })}
             </DropdownMenu.RadioGroup>
+            <DropdownMenu.Item className="theme-follow-system" onSelect={event => { event.preventDefault(); setMode("system"); }}>
+              Follow system appearance
+            </DropdownMenu.Item>
 
             <DropdownMenu.Label className="theme-dropdown-header">
               <span className="theme-dropdown-title">Navigation</span>
@@ -157,7 +175,7 @@ export function ThemeSwitcher() {
                     value={preference}
                     className="theme-mode-item"
                     title={preference === "theme"
-                      ? `Follow ${currentTheme.name}: ${navModePreferenceLabels[themeNavMode].toLowerCase()} navigation`
+                      ? `Follow ${workspaceStyles.find(style => style.id === workspaceStyle)?.name ?? currentTheme.name}: ${navModePreferenceLabels[themeNavMode].toLowerCase()} navigation`
                       : `${navModePreferenceLabels[preference]} navigation`}
                     onSelect={event => event.preventDefault()}
                   >
@@ -169,16 +187,17 @@ export function ThemeSwitcher() {
             </DropdownMenu.RadioGroup>
 
             <DropdownMenu.Label className="theme-dropdown-header">
-              <span className="theme-dropdown-title">Theme</span>
+              <span className="theme-dropdown-title">Color scheme</span>
             </DropdownMenu.Label>
-            <div className="theme-list">
+            <DropdownMenu.RadioGroup className="theme-list" value={currentColorScheme.id} onValueChange={setColorScheme} aria-label="Color scheme">
               {availableThemes.map(theme => (
-                <DropdownMenu.Item
+                <DropdownMenu.RadioItem
                   key={theme.id}
-                  className={`theme-item ${currentTheme.id === theme.id ? "active" : ""}`}
+                  value={theme.id}
+                  className={`theme-item ${currentColorScheme.id === theme.id ? "active" : ""}`}
                   aria-label={theme.name}
-                  onSelect={() => setTheme(theme.id)}
-                  title={theme.description}
+                  onSelect={event => event.preventDefault()}
+                  title={`${theme.name} colors; keeps the current workspace`}
                 >
                   <span className="theme-item-preview" aria-hidden="true">
                     {getSupportedThemeModes(theme).map(themeMode => (
@@ -190,12 +209,12 @@ export function ThemeSwitcher() {
                     ))}
                   </span>
                   <span className="theme-item-name">{theme.name}</span>
-                  {currentTheme.id === theme.id && (
+                  {currentColorScheme.id === theme.id && (
                     <Check size={16} className="theme-item-checkmark" aria-hidden="true" />
                   )}
-                </DropdownMenu.Item>
+                </DropdownMenu.RadioItem>
               ))}
-            </div>
+            </DropdownMenu.RadioGroup>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
