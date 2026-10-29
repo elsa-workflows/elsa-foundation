@@ -6,6 +6,11 @@ const readyPath = readyPathIndex >= 0 ? process.argv[readyPathIndex + 1] : null;
 if (!readyPath) {
     throw new Error('Missing --ready-file path.');
 }
+const retryDelayIndex = process.argv.indexOf('--source-retry-after-seconds');
+const sourceRetryAfterSeconds = retryDelayIndex >= 0 ? Number(process.argv[retryDelayIndex + 1]) : 3;
+if (!Number.isSafeInteger(sourceRetryAfterSeconds) || sourceRetryAfterSeconds < 1 || sourceRetryAfterSeconds > 60) {
+    throw new Error('Source Retry-After must be an integer from 1 to 60 seconds.');
+}
 
 const requests = [];
 const outputPosts = [];
@@ -74,7 +79,7 @@ const server = http.createServer(async (request, response) => {
         const continuation = url.searchParams.get('pageToken');
         if (shard === 'shard-b' && !hasContinuation && shardBAttempts++ === 0) {
             trackRequest(request, 429, { shard, page: 0 });
-            sendJson(response, 429, { error: 'retry' }, { 'retry-after': '3' });
+            sendJson(response, 429, { error: 'retry' }, { 'retry-after': String(sourceRetryAfterSeconds) });
             return;
         }
 

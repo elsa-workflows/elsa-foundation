@@ -16,10 +16,13 @@ using Elsa.Persistence.EntityFramework;
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 try
 {
-    if (args.Length == 2 && args[0] == "--inspect-studio-products")
+    if (args.Length == 2 && args[0] is "--inspect-studio-products" or "--inspect-etl-products")
     {
         var directory = Path.GetDirectoryName(Path.GetFullPath(args[1]))!;
-        var products = new[] { "Elsa.Studio.Web.dll", "Elsa.Studio.Hosting.dll", "Elsa.Studio.Core.dll", "Elsa.Studio.Workflows.dll" }.Select(name =>
+        var names = args[0] == "--inspect-studio-products"
+            ? new[] { "Elsa.Studio.Web.dll", "Elsa.Studio.Hosting.dll", "Elsa.Studio.Core.dll", "Elsa.Studio.Workflows.dll" }
+            : new[] { "Elsa.Workbench.dll", "Elsa.Etl.Core.dll", "Elsa.Etl.Runtime.dll", "Elsa.Etl.Workflows.Runtime.dll", "Elsa.Etl.Persistence.EntityFrameworkCore.dll", "Elsa.Etl.Runtime.Api.dll" };
+        var products = names.Select(name =>
         {
             var path = Path.Combine(directory, name);
             return new { Name = name, ProductVersion = System.Diagnostics.FileVersionInfo.GetVersionInfo(path).ProductVersion,
@@ -28,7 +31,7 @@ try
         var studioSourceCommit = products[0].ProductVersion?.Split('+').Last();
         if (studioSourceCommit?.Length != 40 || studioSourceCommit.Any(character => !char.IsAsciiHexDigitLower(character)) ||
             products.Any(product => product.ProductVersion?.EndsWith("+" + studioSourceCommit, StringComparison.Ordinal) != true))
-            throw new InvalidDataException("The actual Studio products do not share one full source commit.");
+            throw new InvalidDataException("The actual selected host products do not share one full source commit.");
         Console.WriteLine(JsonSerializer.Serialize(new { SourceCommit = studioSourceCommit, MetadataOnly = true, ActualProductVersions = products }, json));
         return 0;
     }
