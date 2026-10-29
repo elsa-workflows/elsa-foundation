@@ -19,6 +19,40 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
         var reader = models ?? throw new NotSupportedException("Native BPMN work requires qualified model state persistence.");
         if (actors is not InProcessWorkflowExecutionActorProvider)
             throw new NotSupportedException("This native BPMN binding requires the qualified built-in actor provider.");
+        if (source.Intent.Kind == BpmnNativeWorkBoundary.CancelKind)
+        {
+            var cancellation = source.Intent.Payload?.Deserialize<BpmnNativeWorkCancellation>(BpmnNativeWorkBoundary.Web)
+                ?? throw new BpmnModelValidationException("The native work cancellation address is missing.");
+            var model = await boundary.RequireCancellationAsync(source, cancellation, cancellationToken);
+            var origin = cancellation.Origin;
+            var worker = await boundary.FindWorkerAsync(origin, cancellationToken);
+            if (worker is null)
+                // Absence alone is not cancellation-before-admission proof. Keep the exact source owed.
+                throw Pending("bpmn.native-cancel.admission-pending", "The native start still requires durable retirement before cancellation can settle.");
+            if (worker.TenantId != model.TenantId || worker.Authority is null ||
+                !WorkflowExecutionAuthoritySnapshot.Matches(model.Authority, worker.Authority.SystemIdentity,
+                    worker.Authority.RootInitiator, worker.Authority.Metadata))
+                throw new BpmnModelValidationException("The native cancellation worker has different execution authority.");
+            if (!worker.Status.IsTerminal())
+            {
+                if (!queue.SupportsClaimTransitions || !queue.SupportsClaimValidation)
+                    throw new NotSupportedException("Native BPMN cancellation requires the qualified physical input queue.");
+                var id = "bpmn-native-cancel:" + BpmnModelIdentity.Create(source.SourceOutboxItemId, origin.WorkerExecutionId);
+                await queue.EnqueueAsync(new(id, origin.WorkerExecutionId, id, WorkflowExecutionCommandKind.Cancel,
+                    id, id, source.Intent.RecordedAt, clock.GetUtcNow()), cancellationToken);
+                throw Pending("bpmn.native-cancel.pending", "Cancellation of the original native worker remains owed.");
+            }
+            var document = BpmnDirectExecutionDriver.Read(model);
+            var terminalResult = document.NativeResults?.SingleOrDefault(item => origin.IsEquivalentTo(item.Origin));
+            var receipt = await reader.FindInputAsync(model.ExecutionId, origin.ResultInputId, cancellationToken);
+            if (document.Cancellations?.Single(item => origin.IsEquivalentTo(item.Origin)).Settled != true ||
+                terminalResult is null || terminalResult.Status != worker.Status || receipt is null || receipt.Result.GetProperty("status").GetString() != "Accepted" ||
+                receipt.ContentFingerprint != RuntimeCheckpointCommitFingerprint.ComputeModelInput(new(model.Executable,
+                    model.MaterialIncarnationId, origin.ResultInputId, "native-result",
+                    JsonSerializer.SerializeToElement(terminalResult, BpmnNativeWorkBoundary.Web), model.Authority, model.TenantId)))
+                throw Pending("bpmn.native-cancel.result-pending", "The actual native terminal result has not settled the model cancellation.");
+            return;
+        }
         if (source.Intent.Kind == BpmnNativeWorkBoundary.StartKind)
         {
             var origin = source.Intent.Payload?.Deserialize<RuntimeModelNativeWorkOrigin>(BpmnNativeWorkBoundary.Web)

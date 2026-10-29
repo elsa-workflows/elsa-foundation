@@ -22,6 +22,7 @@ internal static class BpmnHostingApi
     public const string Publish = "bpmn:publish";
     public const string Execute = "bpmn:execute";
     public const string CompleteHuman = "bpmn:complete-human";
+    public const string Cancel = "bpmn:cancel";
     public static void Map(IEndpointRouteBuilder endpoints) =>
         NativeEndpoints.Generated.ElsaActivitiesBpmnApiEndpoints.Map(
             endpoints.MapEndpointGroup(Owner, BpmnHostingJsonContext.Default, jsonContentType: "application/json; charset=utf-8", tag: "BPMN"));
@@ -40,7 +41,8 @@ internal sealed class BpmnHostingPermissionContributor : IPermissionContributor
         new(BpmnHostingApi.Read, "Read BPMN executions", "BPMN", "Inspect model executions, human work and command outcomes."),
         new(BpmnHostingApi.Publish, "Publish BPMN models", "BPMN", "Publish supported immutable BPMN model material."),
         new(BpmnHostingApi.Execute, "Start BPMN executions", "BPMN", "Start an execution from an authorized live model source."),
-        new(BpmnHostingApi.CompleteHuman, "Complete BPMN human work", "BPMN", "Complete an exact active human invocation and attempt.")
+        new(BpmnHostingApi.CompleteHuman, "Complete BPMN human work", "BPMN", "Complete an exact active human invocation and attempt."),
+        new(BpmnHostingApi.Cancel, "Cancel BPMN executions", "BPMN", "Cancel an execution and retain its downstream settlement responsibility.")
     ];
 }
 
@@ -107,6 +109,7 @@ internal sealed record GetBpmnExecutionRequest(string Id);
 internal sealed record ListBpmnWorkRequest(string Id, int Limit = RuntimeStorePageRequest.DefaultLimit, string? ContinuationToken = null);
 internal sealed record CompleteBpmnHumanRequest(string Id, string Invocation, string RequestId, string AttemptId, string[]? Outcomes = null);
 internal sealed record GetBpmnCommandRequest(string Id, string Request);
+internal sealed record CancelBpmnExecutionRequest(string Id, string RequestId, string? Reason = null);
 internal sealed record BpmnExecutionView(string ExecutionId, long Revision, string Status, RuntimeExecutionProtocol Protocol,
     WorkflowExecutableIdentity Executable, string MaterialIncarnationId, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, JsonElement? Result);
 
@@ -176,6 +179,21 @@ internal sealed class CompleteHumanEndpoint(IBpmnModelRuntime runtime, BpmnApiCa
     }
 }
 
+[Post("bpmn/executions/{id}/cancel")]
+[RequirePermission(BpmnHostingApi.Cancel)]
+internal sealed class CancelEndpoint(IBpmnModelRuntime runtime, BpmnApiCaller caller) : ApiEndpointWithResult<CancelBpmnExecutionRequest, BpmnModelCommandOutcome>
+{
+    public override void Configure(ApiEndpointOptions options)
+    { options.Operation = "CancelBpmnExecution"; options.Accepts = ["application/json"]; options.BodyMode = EndpointBodyMode.RequiredWithContentTypeAndPayload; }
+    public override async Task<EndpointResult<BpmnModelCommandOutcome>> HandleAsync(CancelBpmnExecutionRequest request, CancellationToken cancellationToken)
+    {
+        var id = BpmnHostingApi.Route(HttpContext, "id");
+        var identity = await caller.ForExecutionAsync(id, BpmnHostingApi.Cancel, cancellationToken);
+        var result = await runtime.CancelAsync(id, request.RequestId, request.Reason, identity, cancellationToken);
+        return EndpointResult.Status(BpmnHostingApi.CommandStatus(result), result);
+    }
+}
+
 [Get("bpmn/executions/{id}/commands/{request}")]
 [RequirePermission(BpmnHostingApi.Read)]
 internal sealed class GetCommandEndpoint(BpmnApiCaller caller) : ApiEndpoint<GetBpmnCommandRequest, BpmnModelCommandOutcome>
@@ -195,6 +213,7 @@ internal sealed class GetCommandEndpoint(BpmnApiCaller caller) : ApiEndpoint<Get
 [JsonSerializable(typeof(ListBpmnWorkRequest))]
 [JsonSerializable(typeof(CompleteBpmnHumanRequest))]
 [JsonSerializable(typeof(GetBpmnCommandRequest))]
+[JsonSerializable(typeof(CancelBpmnExecutionRequest))]
 [JsonSerializable(typeof(BpmnPublishedModel))]
 [JsonSerializable(typeof(BpmnModelCommandOutcome))]
 [JsonSerializable(typeof(BpmnExecutionView))]

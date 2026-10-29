@@ -14,6 +14,10 @@ public interface IBpmnModelRuntime
         BpmnModelCaller caller, CancellationToken cancellationToken = default);
     ValueTask<BpmnModelCommandOutcome> CompleteHumanAsync(string executionId, string requestId, string invocationId,
         string attemptId, string[]? outcomes, BpmnModelCaller caller, CancellationToken cancellationToken = default);
+    /// <summary>Closes semantic progression and retains any native cancellation responsibility until its actual settlement.</summary>
+    ValueTask<BpmnModelCommandOutcome> CancelAsync(string executionId, string requestId, string? reason,
+        BpmnModelCaller caller, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<BpmnModelCommandOutcome>(new NotSupportedException("This BPMN host does not support cancellation."));
     ValueTask<BpmnModelCommandOutcome?> FindCommandAsync(string executionId, string requestId, BpmnModelCaller caller, CancellationToken cancellationToken = default);
 }
 

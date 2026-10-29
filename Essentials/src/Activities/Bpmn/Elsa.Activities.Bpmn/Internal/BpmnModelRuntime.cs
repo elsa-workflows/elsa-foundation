@@ -114,6 +114,17 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         return await DispatchAsync(executionId, command, caller, cancellationToken);
     }
 
+    public async ValueTask<BpmnModelCommandOutcome> CancelAsync(string executionId, string requestId, string? reason,
+        BpmnModelCaller caller, CancellationToken cancellationToken = default)
+    {
+        Scope(caller); InputId(requestId);
+        if (reason?.Length > 2048) throw new ArgumentException("A BPMN cancellation reason cannot exceed 2048 UTF-16 code units.", nameof(reason));
+        var state = await FindExecutionAsync(executionId, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
+        var command = new RuntimeModelExecutionCommand(state.Executable, state.MaterialIncarnationId, requestId, "cancel",
+            JsonSerializer.SerializeToElement(new { reason }, Web), state.Authority, state.TenantId);
+        return await DispatchAsync(executionId, command, caller, cancellationToken);
+    }
+
     public async ValueTask<BpmnModelCommandOutcome?> FindCommandAsync(string executionId, string requestId, BpmnModelCaller caller,
         CancellationToken cancellationToken = default)
     {

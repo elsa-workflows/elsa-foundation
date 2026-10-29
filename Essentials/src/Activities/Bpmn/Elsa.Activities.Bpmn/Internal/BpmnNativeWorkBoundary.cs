@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -14,7 +15,8 @@ namespace Elsa.Activities.Bpmn.Internal;
 internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
     IPostCommitOutboxLookupStore outbox, IWorkflowExecutionStateStore workflows, IActivityExecutionStateStore activities,
     IRuntimeCheckpointCommitStore checkpoints, IRuntimePostCommitOutboxStore outboxStore,
-    IPersistenceAccessContextAccessor access, TimeProvider clock, IRuntimeModelExecutionReader? models = null,
+    IPersistenceAccessContextAccessor access, TimeProvider clock,
+    IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions, IRuntimeModelExecutionReader? models = null,
     CoalescingInner<IWorkflowExecutionStateStore>? physicalWorkflows = null,
     CoalescingInner<IActivityExecutionStateStore>? physicalActivities = null,
     CoalescingInner<IRuntimePostCommitOutboxStore>? physicalOutbox = null,
@@ -22,6 +24,9 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
 {
     internal const string StartKind = "Elsa.Bpmn.StartNativeWork.v1";
     internal const string ResultKind = "Elsa.Bpmn.NativeWorkResult.v1";
+    internal const string CancelKind = "Elsa.Bpmn.CancelNativeWork.v1";
+    private readonly HashSet<string> requiredSources = contributions.Where(item => item.RequiresDurableSource)
+        .Select(item => item.IntentKind).ToHashSet(StringComparer.Ordinal);
     internal static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
     internal IWorkflowExecutionStateStore PhysicalWorkflows => workflows.GetType() == typeof(CoalescingWorkflowExecutionStateStore)
         ? physicalWorkflows?.Value ?? throw new NotSupportedException("The physical native workflow reader is unavailable.") : workflows;
@@ -109,7 +114,57 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
             source.Intent.WorkflowExecutionId != origin.WorkerExecutionId || source.Intent.Payload is not { } payload ||
             !JsonElement.DeepEquals(payload, JsonSerializer.SerializeToElement(result, Web)))
             throw new BpmnModelValidationException("The native result differs from its committed terminal owner and outbox source.");
+        if (BpmnDirectExecutionDriver.Read(state).Cancellations?.Any(item => !item.Settled && origin.IsEquivalentTo(item.Origin)) == true)
+            await RequireCancellationSettlementAsync(result, cancellationToken);
     }
+
+    private async ValueTask RequireCancellationSettlementAsync(BpmnNativeWorkResult result, CancellationToken cancellationToken)
+    {
+        if (result.Status != WorkflowExecutionStatus.Cancelled) return; // Preserve an already completed/faulted worker's actual result.
+        if (result.CancellationSources is not { } sources)
+            throw Unavailable("The native cancellation has no retained downstream settlement inventory.");
+        // Intent ids can contain colons. Remove the exact deterministic result intent, rather than splitting an address.
+        var resultIntent = "bpmn-native-result:" + BpmnModelIdentity.Create(result.Origin.WorkerExecutionId, result.Origin.InvocationId, result.Origin.AttemptId);
+        if (!result.SourceOutboxItemId.EndsWith(":" + resultIntent, StringComparison.Ordinal))
+            throw new BpmnModelValidationException("The native cancellation result source identity is invalid.");
+        var checkpoint = result.SourceOutboxItemId[..^(resultIntent.Length + 1)];
+        if (sources.Distinct(StringComparer.Ordinal).Count() != sources.Count)
+            throw new BpmnModelValidationException("The native cancellation settlement inventory contains duplicates.");
+        foreach (var id in sources)
+        {
+            var source = await PhysicalLookup.FindDurableAsync(id, cancellationToken)
+                ?? throw Unavailable("A native downstream cancellation source is unavailable.");
+            if (source.StimulusDeliverySourceScope != result.Origin.Scope || source.Intent.WorkflowExecutionId != result.Origin.WorkerExecutionId ||
+                source.Intent.Kind == ResultKind || !requiredSources.Contains(source.Intent.Kind) ||
+                RuntimePostCommitOutboxItems.OutboxItemId(checkpoint, source.Intent.IntentId) != id)
+                throw new BpmnModelValidationException("A native downstream cancellation source differs from its terminal checkpoint.");
+            if (source.Status != RuntimePostCommitOutboxStatus.Delivered)
+                throw Unavailable("Native downstream cancellation remains owed.");
+        }
+    }
+
+    internal async ValueTask<RuntimeModelExecutionState> RequireCancellationAsync(PostCommitDeliveryContext source,
+        BpmnNativeWorkCancellation cancellation, CancellationToken cancellationToken)
+    {
+        EnsureQualified();
+        access.Current.EnsureScope(source.Scope);
+        var origin = cancellation.Origin;
+        var model = await models!.FindAsync(origin.ExecutionId, cancellationToken)
+            ?? throw Unavailable("The cancelling model execution is unavailable.");
+        access.Current.EnsureTenantScope(model.TenantId);
+        var retained = BpmnDirectExecutionDriver.Read(model).Cancellations?.SingleOrDefault(item => origin.IsEquivalentTo(item.Origin));
+        if (!origin.MatchesModel(model) || model.TerminalResult?.GetProperty("status").GetString() != "Cancelled" ||
+            source.Scope != origin.Scope || source.Intent.WorkflowExecutionId != origin.ExecutionId ||
+            cancellation.SourceOutboxItemId != source.SourceOutboxItemId || cancellation.Settled ||
+            retained is null || retained.SourceOutboxItemId != cancellation.SourceOutboxItemId ||
+            source.Intent.IntentId != CancellationIntentId(origin) || source.Intent.Payload is not { } payload ||
+            !JsonElement.DeepEquals(payload, JsonSerializer.SerializeToElement(cancellation, Web)))
+            throw new BpmnModelValidationException("The native cancellation differs from its model's retained responsibility.");
+        return model;
+    }
+
+    internal static string CancellationIntentId(RuntimeModelNativeWorkOrigin origin) =>
+        "bpmn-cancel-native:" + BpmnModelIdentity.Create(origin.InvocationId, origin.AttemptId);
 
     internal async ValueTask<BpmnNativeWorkResult> CaptureAsync(RuntimeCheckpointCommit commit, WorkflowExecutionState worker,
         CancellationToken cancellationToken)
@@ -141,7 +196,11 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
                 redacted ? null : value.Result.InlineValue?.Clone(), redacted);
         }
         var intentId = "bpmn-native-result:" + BpmnModelIdentity.Create(origin.WorkerExecutionId, origin.InvocationId, origin.AttemptId);
-        return new(origin, RuntimePostCommitOutboxItems.OutboxItemId(commit.CommitId, intentId), worker.Status, completion, root?.Fault?.Code);
+        var cancellationSources = worker.Status == WorkflowExecutionStatus.Cancelled
+            ? commit.PostCommitIntents.Where(item => item.Kind != ResultKind && requiredSources.Contains(item.Kind))
+                .Select(item => RuntimePostCommitOutboxItems.OutboxItemId(commit.CommitId, item.IntentId)).Order(StringComparer.Ordinal).ToArray()
+            : null;
+        return new(origin, RuntimePostCommitOutboxItems.OutboxItemId(commit.CommitId, intentId), worker.Status, completion, root?.Fault?.Code, cancellationSources);
     }
 
     internal static RuntimeSchedulerWorkUnavailableException Unavailable(string message) => new("bpmn.native-work-unavailable", message);
@@ -151,4 +210,7 @@ internal sealed record BpmnNativeCompletion(string InvocationId, string AttemptI
     string OutcomeKey, ValueTypeDescriptor ResultType, JsonElement? Result, bool IsRedacted);
 
 internal sealed record BpmnNativeWorkResult(RuntimeModelNativeWorkOrigin Origin, string SourceOutboxItemId,
-    WorkflowExecutionStatus Status, BpmnNativeCompletion? Completion, string? FaultCode);
+    WorkflowExecutionStatus Status, BpmnNativeCompletion? Completion, string? FaultCode,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? CancellationSources = null);
+
+internal sealed record BpmnNativeWorkCancellation(RuntimeModelNativeWorkOrigin Origin, string SourceOutboxItemId, bool Settled = false);

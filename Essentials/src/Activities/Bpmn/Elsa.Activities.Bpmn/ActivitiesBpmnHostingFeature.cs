@@ -39,7 +39,7 @@ public class ActivitiesBpmnHostingFeature : IShellFeature
             services.AddSingleton(new RuntimePostCommitIntentHandlerContribution(kind, typeof(BpmnEmbeddingDelivery),
                 RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)), requiresDurableSource: true));
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, BpmnNativeWorkCheckpointEnricher>());
-        foreach (var kind in new[] { BpmnNativeWorkBoundary.StartKind, BpmnNativeWorkBoundary.ResultKind })
+        foreach (var kind in new[] { BpmnNativeWorkBoundary.StartKind, BpmnNativeWorkBoundary.ResultKind, BpmnNativeWorkBoundary.CancelKind })
             services.AddSingleton(new RuntimePostCommitIntentHandlerContribution(kind, typeof(BpmnNativeWorkDelivery),
                 RuntimePostCommitRetryPolicy.UntilAcknowledged(TimeSpan.FromSeconds(1)), requiresDurableSource: true));
         services.TryAddSingleton(new BpmnModelHostingOptions(AdmitNewExecutions));
@@ -53,7 +53,7 @@ public class ActivitiesBpmnHostingFeature : IShellFeature
         public BpmnProtocolContributor() { }
         public IEnumerable<RuntimeExecutionProtocolRegistration> GetProtocols() =>
             [new(new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), typeof(BpmnDirectExecutionDriver))
-                { InputKinds = ["start", "complete-human", "native-result", "start-embedded", "cancel-embedded", "native-parent-settled"] }];
+                { InputKinds = ["start", "complete-human", "cancel", "native-result", "start-embedded", "cancel-embedded", "native-parent-settled"] }];
     }
 }
 

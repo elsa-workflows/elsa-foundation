@@ -1,4 +1,5 @@
 #nullable enable
+Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.CancelAsync(string! executionId, string! requestId, string? reason, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome!>
 Elsa.Activities.Bpmn.Core.BpmnModelDefinition
 Elsa.Activities.Bpmn.Core.BpmnModelDefinition.BpmnModelDefinition(int formatVersion, System.Text.Json.JsonElement process, System.Collections.Generic.IReadOnlyList<string!>! humanBindings) -> void
 Elsa.Activities.Bpmn.Core.BpmnModelDefinition.FormatVersion.get -> int

@@ -26,6 +26,46 @@ public sealed class BpmnDirectExecutionTests : IDisposable
     private readonly string database = Path.Combine(Path.GetTempPath(), "elsa-direct-bpmn-" + Guid.NewGuid().ToString("N") + ".sqlite");
 
     [Fact]
+    public async Task Cancellation_keeps_its_exact_receipt_reason_and_final_state_across_provider_restart()
+    {
+        string execution;
+        BpmnHumanWork work;
+        string retained;
+        var caller = new BpmnModelCaller("operator", null);
+        await using (var host = await OpenAsync())
+        {
+            await using var scope = await ScopeAsync(host);
+            var runtime = scope.ServiceProvider.GetRequiredService<IBpmnModelRuntime>();
+            var published = await runtime.PublishAsync(Material().Definition.Deserialize<BpmnModelDefinition>(Web)!, "cancel-publish", caller);
+            execution = (await runtime.StartAsync(published.SourceReferenceId, "cancel-start", null, caller)).ExecutionId;
+            work = Assert.Single((await runtime.ListWorkAsync(execution, new(), caller)).Items);
+            var result = await runtime.CancelAsync(execution, "cancel", "Owner cancelled the pending approval.", caller);
+            Assert.False(result.Pending);
+            Assert.Equal("Accepted", result.Result!.Value.GetProperty("status").GetString());
+            var state = (await runtime.FindExecutionAsync(execution, caller))!;
+            Assert.Equal(RuntimeModelLifecycle.TerminalSettled, state.Lifecycle);
+            Assert.Equal("Cancelled", state.TerminalResult!.Value.GetProperty("status").GetString());
+            Assert.Equal("Owner cancelled the pending approval.", state.TerminalResult.Value.GetProperty("reason").GetString());
+            Assert.Empty((await runtime.ListWorkAsync(execution, new(), caller)).Items);
+            retained = JsonSerializer.Serialize(state, Web);
+            await AssertNativeEmptyAsync(scope.ServiceProvider);
+        }
+        await using (var host = await OpenAsync(admitNewExecutions: false))
+        {
+            await using var scope = await ScopeAsync(host);
+            var runtime = scope.ServiceProvider.GetRequiredService<IBpmnModelRuntime>();
+            Assert.True((await runtime.CancelAsync(execution, "cancel", "Owner cancelled the pending approval.", caller)).Replay);
+            await Assert.ThrowsAsync<Elsa.Workflows.Runtime.Core.Exceptions.RuntimeCheckpointReplayConflictException>(() =>
+                runtime.CancelAsync(execution, "cancel", "Different reason", caller).AsTask());
+            var late = await runtime.CompleteHumanAsync(execution, "late-human", work.InvocationId, work.AttemptId, null, caller);
+            Assert.Equal("execution-terminal", late.Result!.Value.GetProperty("code").GetString());
+            Assert.Equal("execution-terminal", (await runtime.CancelAsync(execution, "another-cancel", null, caller)).Result!.Value.GetProperty("code").GetString());
+            Assert.Equal(retained, JsonSerializer.Serialize(await runtime.FindExecutionAsync(execution, caller), Web));
+            await AssertNativeEmptyAsync(scope.ServiceProvider);
+        }
+    }
+
+    [Fact]
     public async Task Native_default_composition_runs_while_model_reads_refuse_without_a_selected_provider()
     {
         await using var host = WorkflowExecutionHarness.Create().ConfigureServices(services =>

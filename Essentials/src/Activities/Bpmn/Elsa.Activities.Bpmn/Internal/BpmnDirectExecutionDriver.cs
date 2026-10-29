@@ -63,6 +63,12 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                 if (complete.Outcomes is { } outcomes && (outcomes.Length != 1 || outcomes[0] != "Done"))
                     throw new BpmnModelValidationException("This direct human binding supports the Done outcome.");
                 break;
+            case "cancel":
+                var cancel = context.Command.Payload.Deserialize<CancelInput>(Strict)
+                    ?? throw new BpmnModelValidationException("BPMN cancellation input is missing.");
+                if (context.State is null || cancel.Reason?.Length > 2048)
+                    throw new BpmnModelValidationException("Cancellation requires an existing execution and a bounded reason.");
+                break;
             case "native-result":
                 await NativeWork.ValidateResultAsync(context, NativeResult(context.Command.Payload), cancellationToken);
                 break;
@@ -99,14 +105,27 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         CompletionInput? completion = null;
         BpmnNativeWorkResult? nativeResult = null;
         var cancelled = false;
+        var settledCancellation = false;
         if (command.InputKind == "native-parent-settled")
         {
             if (current?.Lifecycle != RuntimeModelLifecycle.TerminalPendingSettlement) rejection = "parent-already-settled";
         }
-        else if (command.InputKind == "cancel-embedded")
+        else if (command.InputKind is "cancel-embedded" or "cancel")
         {
             if (current?.TerminalResult is not null) rejection = "execution-terminal";
-            else { cancelled = true; document = document with { Work = [] }; }
+            else
+            {
+                cancelled = true;
+                var cancellations = document.Work.Where(item => item.NativeWork is not null).Select(item =>
+                {
+                    var origin = item.NativeWork!;
+                    var decision = "model-input:" + BpmnModelIdentity.Create(context.Scope.Value, executionId, command.InputId);
+                    return new BpmnNativeWorkCancellation(origin, RuntimePostCommitOutboxItems.OutboxItemId(decision,
+                        BpmnNativeWorkBoundary.CancellationIntentId(origin)));
+                }).ToArray();
+                document = document with { Work = [], FormatVersion = cancellations.Length > 0 ? 4 : document.FormatVersion,
+                    Cancellations = cancellations.Length > 0 ? cancellations : document.Cancellations };
+            }
         }
         else if (command.InputKind is "start" or "start-embedded")
         {
@@ -121,7 +140,14 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             completion = nativeResult is null ? Completion(command.Payload) :
                 new(nativeResult.Origin.InvocationId, nativeResult.Origin.AttemptId);
             var work = document.Work.SingleOrDefault(item => item.InvocationId == completion.InvocationId && item.AttemptId == completion.AttemptId);
-            if (current!.Lifecycle is RuntimeModelLifecycle.TerminalSettled or RuntimeModelLifecycle.TerminalPendingSettlement)
+            if (nativeResult is not null && document.Cancellations?.SingleOrDefault(item => !item.Settled && nativeResult.Origin.IsEquivalentTo(item.Origin)) is { } cancellation)
+            {
+                // The semantic cancellation is final. Record the worker's actual terminal truth only for settlement.
+                document = document with { Cancellations = document.Cancellations.Select(item => item == cancellation ? item with { Settled = true } : item).ToArray(),
+                    NativeResults = [.. document.NativeResults ?? [], nativeResult] };
+                settledCancellation = true;
+            }
+            else if (current!.Lifecycle is RuntimeModelLifecycle.TerminalSettled or RuntimeModelLifecycle.TerminalPendingSettlement)
                 rejection = "execution-terminal";
             else if (work is null) rejection = "obsolete-human-work";
             else if (nativeResult is null && work.NativeWork is not null) rejection = "not-human-work";
@@ -164,7 +190,9 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         if (cancelled)
         {
             lifecycle = RuntimeModelLifecycle.TerminalSettled;
-            terminal = JsonSerializer.SerializeToElement(new { status = "Cancelled" }, Web);
+            terminal = command.InputKind == "cancel"
+                ? JsonSerializer.SerializeToElement(new { status = "Cancelled", command.Payload.Deserialize<CancelInput>(Strict)!.Reason }, Web)
+                : JsonSerializer.SerializeToElement(new { status = "Cancelled" }, Web);
         }
         if (evaluation is not null)
         {
@@ -182,6 +210,10 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         }
         if (terminal is not null && document.NativeParent is not null && rejection is null)
             lifecycle = command.InputKind == "native-parent-settled" ? RuntimeModelLifecycle.TerminalSettled : RuntimeModelLifecycle.TerminalPendingSettlement;
+        if (document.Cancellations?.Any(item => !item.Settled) == true)
+            lifecycle = RuntimeModelLifecycle.TerminalPendingSettlement;
+        else if (settledCancellation && document.NativeParent is null)
+            lifecycle = RuntimeModelLifecycle.TerminalSettled;
         var now = clock.GetUtcNow();
         if (current is not null && now < current.UpdatedAt) now = current.UpdatedAt;
         var revision = rejection is null ? checked((current?.Revision ?? 0) + 1) : current!.Revision;
@@ -198,6 +230,10 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             .Select(work => new RuntimePostCommitIntent(work.NativeWork!.SourceIntentId, executionId, BpmnNativeWorkBoundary.StartKind,
                 now, null, work.NativeWork.SourceIntentId, JsonSerializer.SerializeToElement(work.NativeWork, Web))).ToArray() : [];
         var intents = starts.ToList();
+        if (cancelled && rejection is null)
+            intents.AddRange((document.Cancellations ?? []).Select(item => new RuntimePostCommitIntent(
+                BpmnNativeWorkBoundary.CancellationIntentId(item.Origin), executionId, BpmnNativeWorkBoundary.CancelKind,
+                now, null, BpmnNativeWorkBoundary.CancellationIntentId(item.Origin), JsonSerializer.SerializeToElement(item, Web))));
         if (rejection is null && current?.TerminalResult is null && terminal is not null && document.NativeParent is { } nativeParent)
         {
             var intent = "bpmn-native-parent:" + BpmnModelIdentity.Create(executionId);
@@ -250,7 +286,18 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                 !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(invocation.Model.Executable, state.Executable)) throw BpmnEmbeddingJson.Invalid();
         }
         var cancelled = state.TerminalResult is { } terminal && terminal.TryGetProperty("status", out var status) && status.GetString() == "Cancelled";
-        if (result.FormatVersion is not (1 or 2 or 3) || (result.FormatVersion == 3) != (result.NativeParent is not null) ||
+        if (result.FormatVersion is not (1 or 2 or 3 or 4) ||
+            (result.FormatVersion == 3) != (result.NativeParent is not null) ||
+            (result.FormatVersion == 4) != (result.Cancellations is not null) ||
+            result.FormatVersion == 4 && (!cancelled || result.Cancellations!.Count == 0 ||
+                result.Cancellations.Any(item => !item.Settled) != (state.Lifecycle == RuntimeModelLifecycle.TerminalPendingSettlement) ||
+                result.Cancellations.Select(item => item.Origin.InvocationId).Distinct(StringComparer.Ordinal).Count() != result.Cancellations.Count ||
+                result.Cancellations.Any(item => !item.Origin.MatchesModel(state) ||
+                    item.Origin.ResultIntentKind != BpmnNativeWorkBoundary.ResultKind ||
+                    item.Origin.WorkerExecutionId != BpmnNativeWorkBoundary.WorkerIdentity(state.Scope, state.ExecutionId,
+                        item.Origin.InvocationId, item.Origin.AttemptId, item.Origin.WorkerExecutable).WorkflowExecutionId ||
+                    !item.SourceOutboxItemId.EndsWith(":" + BpmnNativeWorkBoundary.CancellationIntentId(item.Origin), StringComparison.Ordinal) ||
+                    item.Settled && result.NativeResults?.Any(value => item.Origin.IsEquivalentTo(value.Origin)) != true)) ||
             (cancelled ? result.Work.Count != 0 : result.Work.Count != result.State.ActiveWork.Count) ||
             result.Work.Select(item => item.InvocationId).Distinct(StringComparer.Ordinal).Count() != result.Work.Count ||
             result.Work.Select(item => item.TokenId).Distinct(StringComparer.Ordinal).Count() != result.Work.Count ||
@@ -314,9 +361,11 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
 
     internal sealed record Document(int FormatVersion, BpmnExecutionState State, IReadOnlyList<Work> Work, string? SourceReferenceId = null,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<BpmnNativeWorkResult>? NativeResults = null,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BpmnEmbeddedParent? NativeParent = null);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BpmnEmbeddedParent? NativeParent = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<BpmnNativeWorkCancellation>? Cancellations = null);
     internal sealed record Work(string ElementId, string BindingId, string TokenId, string? IterationId, string InvocationId, string AttemptId,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RuntimeModelNativeWorkOrigin? NativeWork = null);
     private sealed record Start(IReadOnlyDictionary<string, JsonElement>? Inputs = null, string? SourceReferenceId = null);
     private sealed record CompletionInput(string InvocationId, string AttemptId, string[]? Outcomes = null);
+    private sealed record CancelInput(string? Reason = null);
 }
