@@ -36,19 +36,26 @@ try
         await using var boundProvider = boundServices.BuildServiceProvider();
         await using var boundScope = boundProvider.CreateAsyncScope();
         var boundModels = boundScope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>();
-        var boundModel = await boundModels.FindAsync(args[2]) ?? throw new InvalidDataException("The actual model execution is absent.");
+        var boundModel = await boundModels.FindAsync(args[2]);
         var boundWorker = await boundScope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(args[3])
             ?? throw new InvalidDataException("The actual native worker is absent.");
         if (args[0] == "--read-bpmn-embedding")
         {
             var embeddingActivities = new List<ActivityExecutionState>();
             var embeddingBookmarks = new List<BookmarkState>();
+            var queuedModelInputs = new List<RuntimeSchedulerWorkItem>();
             string? cursor = null;
             do
             {
                 var page = await boundScope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>()
                     .ListPageAsync(new(boundWorker.WorkflowExecutionId, continuationToken: cursor));
                 embeddingActivities.AddRange(page.Items); cursor = page.NextContinuationToken;
+            } while (cursor is not null);
+            do
+            {
+                var page = await boundScope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+                    .ListAsync(new(args[2], continuationToken: cursor));
+                queuedModelInputs.AddRange(page.Items); cursor = page.NextContinuationToken;
             } while (cursor is not null);
             do
             {
@@ -60,8 +67,8 @@ try
             await using (var indexConnection = new SqliteConnection(boundConnectionString))
             {
                 await indexConnection.OpenAsync();
-                foreach (var selection in new[] { (Table: "elsa_runtime_model_input", Column: "InputId", Targets: new[] { boundModel.ExecutionId }),
-                             (Table: "elsa_runtime_post_commit_outbox", Column: "OutboxItemId", Targets: new[] { boundModel.ExecutionId, boundWorker.WorkflowExecutionId }) })
+                foreach (var selection in new[] { (Table: "elsa_runtime_model_input", Column: "InputId", Targets: new[] { args[2] }),
+                             (Table: "elsa_runtime_post_commit_outbox", Column: "OutboxItemId", Targets: new[] { args[2], boundWorker.WorkflowExecutionId }) })
                 {
                     await using var command = indexConnection.CreateCommand();
                     var column = selection.Column == "InputId" ? "ExecutionId" : "WorkflowExecutionId";
@@ -83,7 +90,7 @@ try
             }
             var embeddingInputs = new List<RuntimeModelInputReceipt>();
             foreach (var identity in inputIds.Order(StringComparer.Ordinal))
-                embeddingInputs.Add(await boundModels.FindInputAsync(boundModel.ExecutionId, identity) ?? throw new InvalidDataException("A physical model receipt disappeared."));
+                embeddingInputs.Add(await boundModels.FindInputAsync(args[2], identity) ?? throw new InvalidDataException("A physical model receipt disappeared."));
             var embeddingSources = new List<RuntimePostCommitOutboxItem>();
             var lookup = boundScope.ServiceProvider.GetRequiredService<IPostCommitOutboxLookupStore>();
             foreach (var identity in sourceIds.Order(StringComparer.Ordinal))
@@ -93,9 +100,11 @@ try
             }
             var directCounterpart = args.Length == 5 ? await boundModels.FindAsync(args[4]) ?? throw new InvalidDataException("The actual direct counterpart is absent.") : null;
             Console.WriteLine(JsonSerializer.Serialize(new { ReadOnly = true, Model = boundModel, DirectCounterpart = directCounterpart, NativeParent = boundWorker,
-                Activities = embeddingActivities, Bookmarks = embeddingBookmarks, Inputs = embeddingInputs, Sources = embeddingSources }, json));
+                Activities = embeddingActivities, Bookmarks = embeddingBookmarks, Inputs = embeddingInputs, Sources = embeddingSources,
+                QueuedModelInputs = queuedModelInputs }, json));
             return 0;
         }
+        if (boundModel is null) throw new InvalidDataException("The actual model execution is absent.");
         var boundOrigin = boundWorker.ModelWorkOrigin ?? throw new InvalidDataException("The native worker has no actual model origin.");
         if (!boundOrigin.MatchesModel(boundModel)) throw new InvalidDataException("The actual model and worker pins differ.");
         var boundOutbox = boundScope.ServiceProvider.GetRequiredService<IPostCommitOutboxLookupStore>();

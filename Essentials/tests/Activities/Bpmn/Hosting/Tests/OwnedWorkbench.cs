@@ -115,9 +115,16 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         return await ReadAsync(response, path, expected);
     }
 
-    public async Task RestartAsync()
+    public async Task RestartAsync(double? recoverySweepSeconds = null)
     {
         await StopAsync();
+        if (recoverySweepSeconds is { } interval)
+        {
+            var path = Path.Combine(ContentRoot, "shells.json");
+            var shells = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
+            shells["CShells"]!["Shells"]!["default"]!["Features"]!["WorkflowsRuntimeResumption"] = new JsonObject { ["SweepIntervalSeconds"] = interval };
+            await File.WriteAllTextAsync(path, shells.ToJsonString());
+        }
         await LaunchAsync();
     }
 
