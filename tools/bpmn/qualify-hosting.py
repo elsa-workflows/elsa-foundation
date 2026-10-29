@@ -962,11 +962,13 @@ def verify_broadcast_upgrade(path: Path) -> dict:
                     raise ValueError("The physical broadcast recipient identities/generations differ.")
                 for recipient in current["selectedResumes"]:
                     rows = connection.execute("SELECT Status FROM elsa_runtime_activity_execution_state WHERE WorkflowExecutionId = ? AND ActivityExecutionId = ?", (key(recipient["workflowExecutionId"]), key(recipient["activityExecutionId"]))).fetchall()
-                    if rows != [(4,)]: raise ValueError("The physical saved callback did not complete.")
+                    if rows != [("Completed",)]: raise ValueError("The physical saved callback did not complete.")
                 for workflow in proof["workflows"]:
-                    rows = connection.execute("SELECT ContentJson FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId = ?", (key(workflow["workflowExecutionId"]),)).fetchall()
-                    if len(rows) != 1 or json.loads(rows[0][0])["pinnedExecutable"] != {field: key(value) for field, value in workflow["pinnedExecutable"].items()}:
-                        raise ValueError("A physical broadcast workflow lost its complete pin.")
+                    if workflow.get("exists") is not True or not isinstance(workflow.get("pinnedExecutable"), dict): raise ValueError("An actual broadcast recipient disappeared.")
+                    rows = connection.execute("SELECT Status, ContentJson FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId = ?", (key(workflow["workflowExecutionId"]),)).fetchall()
+                    expected_status = {"Pending": 0, "Running": 1, "Suspended": 2, "Completed": 3, "Faulted": 4, "Cancelled": 5}.get(workflow["status"])
+                    if len(rows) != 1 or rows[0][0] != expected_status or json.loads(rows[0][1])["status"] != workflow["status"] or json.loads(rows[0][1])["pinnedExecutable"] != {field: key(value) for field, value in workflow["pinnedExecutable"].items()}:
+                        raise ValueError("A physical broadcast workflow changed its outcome or complete pin.")
                     physical_waits = {row[0] for row in connection.execute("SELECT BookmarkId FROM elsa_runtime_bookmark_state WHERE WorkflowExecutionId = ?", (key(workflow["workflowExecutionId"]),))}
                     if physical_waits != {key(wait["bookmarkId"]) for wait in workflow["bookmarks"]}: raise ValueError("Physical broadcast waits differ from the checked boundary.")
             if phase == "finished" and (any(workflow["bookmarks"] for workflow in proof["workflows"]) or
