@@ -166,6 +166,17 @@ with one implementation leaf at a time. Establishment does not constitute produc
 issues retain normal triage, contract decisions and review gates. Releases, deployments, provider
 purchases and publisher activation are not included. The remaining decisions apply.
 
+**Owner continuation, 29 October 2026:** the owner authorizes autonomous end-to-end delivery of
+Weaver across Studio's full M0–M5 roadmap, including implementation, tests, documentation, scoped PRs,
+review, merges through the authorized repository process and verification on resulting main. The
+[delivery authorization on #3428](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6509190533)
+supersedes the establishment-only session boundary. Within this Program, the agent may triage,
+refine and promote sufficiently clear issues, respecting dependencies, existing claims and the
+repository readiness cap. Keep one implementation leaf active with one integration/review lane;
+independent subagents may support investigation and review. Routine decisions and milestone
+transitions proceed without renewed permission. The module ownership, independent-package witness
+before contract freeze, sequencing and existing scope/credential/release boundaries remain.
+
 ### D1 — Risk-based testing
 
 - Test observable behaviour at the cheapest level that proves it; unit-test logic that carries real risk.
