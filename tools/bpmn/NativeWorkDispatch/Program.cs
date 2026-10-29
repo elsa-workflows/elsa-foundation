@@ -18,6 +18,7 @@ using CShells.Lifecycle;
 using Elsa.Activities.Bpmn;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Events;
+using Elsa.Tasks.Core;
 
 // An owned SDK client, not a state seeder: ordinary Start dispatch writes the real protected queue item.
 // The existing drain-policy seam leaves its processing to the standard Workbench recovery host.
@@ -68,6 +69,8 @@ try
         foreach (var initializer in provider.GetServices<IShellInitializer>()) await initializer.InitializeAsync();
     await using var scope = provider.CreateAsyncScope();
     var sdk = scope.ServiceProvider;
+    if (race)
+        foreach (var task in sdk.GetServices<IStartupTask>()) await task.ExecuteAsync(CancellationToken.None);
     var models = sdk.GetRequiredService<IRuntimeModelExecutionReader>();
     var model = await models.FindAsync(args[2]) ?? throw new InvalidOperationException("The actual model execution is absent.");
     if (model.Lifecycle != RuntimeModelLifecycle.Running || model.TerminalResult is not null || model.Protocol != new RuntimeExecutionProtocol("elsa.bpmn", 1))
