@@ -137,10 +137,20 @@ def main():
         assets = {}
         for name in ("runtime", "design"):
             backup = root / f"{label}-{name}.sqlite"
-            with closing(sqlite3.connect((backend_root / f"{name}.db").as_uri() + "?mode=ro", uri=True)) as original, closing(sqlite3.connect(backup)) as target:
+            working = root / f"{label}-{name}-backup-working.sqlite"
+            with closing(sqlite3.connect((backend_root / f"{name}.db").as_uri() + "?mode=ro", uri=True)) as original, closing(sqlite3.connect(working)) as target:
                 original.backup(target)
+                # The backup inherits WAL mode. Make this new owned copy standalone;
+                # Python/SQLite can otherwise leave empty WAL/SHM sidecars after close.
+                if target.execute("PRAGMA journal_mode=DELETE").fetchone() != ("delete",):
+                    raise ValueError("The owned backup did not become a standalone database.")
                 if target.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                     raise ValueError("The actual Studio store backup is corrupt.")
+            if Path(str(working) + "-wal").exists():
+                raise ValueError("The closed owned backup unexpectedly retains a WAL.")
+            # SQLite may leave an unused SHM after leaving WAL mode.
+            # Copy the closed DELETE-mode main file to a fresh immutable evidence path.
+            shutil.copyfile(working, backup)
             compressed = output / f"{label}-{name}.sqlite.gz"
             with backup.open("rb") as raw, gzip.open(compressed, "wb") as target: shutil.copyfileobj(raw, target)
             assets[name] = {"file": compressed.name, "databaseSha256": digest(backup), "gzipSha256": digest(compressed)}
