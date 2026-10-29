@@ -9,6 +9,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import re
 import sqlite3
 import tempfile
 
@@ -22,6 +23,10 @@ def decoded(value):
     if not value.startswith("u16:"):raise ValueError("The ETL invocation lost its checked lossless-text encoding.")
     return base64.b64decode(value[4:],validate=True).decode("utf-16le")
 def node(value): return value.get("authoredActivityId") or value["executableNodeId"]
+def instant(value):
+    match=re.fullmatch(r"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,7}))?(?:\+00:00|Z)",value)
+    if match is None:raise ValueError("The actual receipt timestamp is not UTC.")
+    return datetime.strptime(match[1],"%Y-%m-%dT%H:%M:%S"),(match[2] or "").ljust(7,"0")
 
 
 def encoded_tree(value):
@@ -31,7 +36,7 @@ def encoded_tree(value):
     return value
 
 
-def model_bridge(read,process,before,finished,business_error):
+def model_bridge(read,process,before,finished,business_error,pipeline_cancel=False):
     checked={phase:read(phase+"-checked-model.json") for phase in ("before","finished","retained")}
     if checked["finished"]!=checked["retained"]:raise ValueError("The actual native/model return proof changed after another process.")
     first,last=checked["before"],checked["finished"];origin=first["worker"]["modelWorkOrigin"]
@@ -54,17 +59,22 @@ def model_bridge(read,process,before,finished,business_error):
             [item["nativeWork"] for item in first["model"]["payload"]["work"]]!=[origin] or first["resultInput"] is not None or first["resultSource"] is not None):
         raise ValueError("The actual crash cut lost its live model invocation.")
     result,=last["model"]["payload"]["nativeResults"];receipt=last["resultInput"];source=last["resultSource"]
-    expected="Faulted" if business_error else "Completed"
-    if (last["model"]["lifecycle"]!=3 or last["model"]["revision"]!=2 or last["model"]["payload"]["work"] or last["worker"]["status"]!=3 or
-            result["origin"]!=origin or result["status"]!=3 or last["model"]["terminalResult"]["status"]!=expected or
+    expected="Cancelled" if pipeline_cancel else "Faulted" if business_error else "Completed"
+    native_status=5 if pipeline_cancel else 3
+    if (last["model"]["lifecycle"]!=3 or last["model"]["revision"]!=2 or last["model"]["payload"]["work"] or last["worker"]["status"]!=native_status or
+            result["origin"]!=origin or result["status"]!=native_status or last["model"]["terminalResult"]["status"]!=expected or
             before["model"]["status"]!="Running" or finished["model"]["status"]!="TerminalSettled" or finished["model"]["result"]["status"]!=expected):
         raise ValueError("The actual model did not retain the native worker's typed terminal outcome.")
     if (receipt is None or receipt["inputId"]!=origin["resultInputId"] or receipt["inputKind"]!="native-result" or receipt["executionId"]!=model_id or
             receipt["invocationId"]!=origin["invocationId"] or receipt["attemptId"]!=origin["attemptId"] or receipt["acceptedRevision"]!=2 or receipt["result"]["status"]!="Accepted" or
             source is None or source["status"]!=2 or source["stimulusDeliverySourceScope"]!=origin["scope"] or source["outboxItemId"]!=result["sourceOutboxItemId"] or source["intent"]["payload"]!=result or
-            source["intent"]["kind"]!=origin["resultIntentKind"] or datetime.fromisoformat(source["deliveredAt"])<datetime.fromisoformat(receipt["acceptedAt"])):
+            source["intent"]["kind"]!=origin["resultIntentKind"] or instant(source["deliveredAt"])<instant(receipt["acceptedAt"])):
         raise ValueError("The actual result was acknowledged without its exact model consumption proof.")
-    completion=result["completion"];typed=completion["result"]
+    completion=result["completion"]
+    if pipeline_cancel:
+        if completion is not None or result["faultCode"] is not None:raise ValueError("The actual cancelled worker was relabeled as completed or faulted.")
+        return checked,origin,result
+    typed=completion["result"]
     if (completion["isRedacted"] or completion["resultType"]["alias"]!="Elsa.Etl.Workflows.Runtime.Models.RunEtlResult" or
             completion["outcomeKey"]!=("BusinessError" if business_error else "Done") or typed!={"runId":process["runId"],"outcome":1 if business_error else 0,
                 "acceptedRecords":3 if business_error else 4,"rejectedRecords":1 if business_error else 0,"filteredRecords":0,"diagnosticCode":"etl.rows-rejected" if business_error else None}):
@@ -101,8 +111,11 @@ def physical_model_bridge(connection,phase,checked,origin,result):
         if (stored["contentFingerprint"]!=key(receipt["contentFingerprint"]) or stored["inputKind"]!=key("native-result") or
                 stored["invocationId"]!=key(origin["invocationId"]) or stored["attemptId"]!=key(origin["attemptId"]) or stored["result"]!=receipt["result"]):
             raise ValueError("The physical model receipt lost its exact accepted input identity.")
-        activity,=connection.execute("SELECT ContentJson FROM elsa_runtime_activity_execution_state").fetchall()
-        completion=json.loads(activity[0])["completion"];expected=result["completion"]
+        activity,=connection.execute("SELECT Status,ContentJson FROM elsa_runtime_activity_execution_state").fetchall()
+        completion=json.loads(activity[1])["completion"];expected=result["completion"]
+        if result["status"]==5:
+            if activity[0]!="Cancelled" or completion is not None:raise ValueError("The physical native root lost its actual cancellation.")
+            return
         if (completion["invocationId"]!=key(expected["invocationId"]) or completion["attemptId"]!=key(expected["attemptId"]) or
                 completion["contractFingerprint"]!=key(expected["contractFingerprint"]) or completion["outcomeKey"]!=key(expected["outcomeKey"]) or
                 completion["result"]["inlineValue"]!=expected["result"] or completion["result"]["type"]["alias"]!=key(expected["resultType"]["alias"])):
@@ -111,14 +124,16 @@ def physical_model_bridge(connection,phase,checked,origin,result):
 
 def verify(path):
     manifest=json.loads(path.read_text());root=path.parent
-    direct=manifest.get("kind")=="actual-direct-bpmn-native-etl-recovery"
-    if manifest.get("schemaVersion")!=1 or manifest.get("kind") not in ("actual-native-etl-recovery-reference","actual-direct-bpmn-native-etl-recovery"):raise ValueError("Unknown ETL recovery reference evidence.")
+    pipeline_cancel=manifest.get("kind")=="actual-direct-bpmn-native-etl-pipeline-cancellation"
+    direct=pipeline_cancel or manifest.get("kind")=="actual-direct-bpmn-native-etl-recovery"
+    if manifest.get("schemaVersion")!=1 or manifest.get("kind") not in ("actual-native-etl-recovery-reference","actual-direct-bpmn-native-etl-recovery","actual-direct-bpmn-native-etl-pipeline-cancellation"):raise ValueError("Unknown ETL recovery reference evidence.")
     source=manifest["sourceRevision"];assets=manifest["assets"]
     if len(source)!=40 or any(c not in "0123456789abcdef" for c in source):raise ValueError("The ETL reference lacks an exact source.")
-    expected_cases={"direct-success":("BpmnModel",False),"direct-business":("BpmnModel",True)} if direct else {"sequence":("Sequence",False),"flowchart":("Flowchart",False),"worker-business":("RunEtl",True)}
+    expected_cases={"direct-cancel":("BpmnModel",False)} if pipeline_cancel else {"direct-success":("BpmnModel",False),"direct-business":("BpmnModel",True)} if direct else {"sequence":("Sequence",False),"flowchart":("Flowchart",False),"worker-business":("RunEtl",True)}
     names={"before.json","recovered.json","finished.json","retained.json","before-wire.json","finished-wire.json","retained-wire.json","safe-errors.json","process.json"}
     names|={phase+"-"+store+".sqlite.gz" for phase in ("before","finished") for store in ("elsa","etl-runtime","etl-design")}
     if direct:names|={phase+"-checked-model.json" for phase in ("before","finished","retained")}
+    if pipeline_cancel:names.add("cancel-response.json")
     declared={asset["path"] for asset in assets}
     if len(declared)!=len(assets) or declared!={case+"/"+name for case in expected_cases for name in names}:raise ValueError("The ETL recovery bundle lacks its exact actual assets.")
     for asset in assets:
@@ -132,30 +147,41 @@ def verify(path):
         if products["sourceCommit"]!=source or products["metadataOnly"] is not True or len(products["actualProductVersions"])!=(12 if direct else 6) or any(not item["productVersion"].endswith("+"+source) for item in products["actualProductVersions"]):raise ValueError("The actual Workbench and ETL products differ from their declared source.")
         before=read("before.json");finished=read("finished.json");recovered=read("recovered.json")
         before_wire=read("before-wire.json");wire=read("finished-wire.json")
-        bridge=model_bridge(read,process,before,finished,business_error) if direct else None
+        bridge=model_bridge(read,process,before,finished,business_error,pipeline_cancel) if direct else None
         if finished!=read("retained.json") or wire!=read("retained-wire.json"):raise ValueError("The terminal native/ETL views or physical effects changed after another process.")
         identity=process["workflowExecutionId"];run_id=process["runId"];selection=process["selection"]
         old={node(item):item for item in before["native"]["activities"]};current={node(item):item for item in finished["native"]["activities"]}
         if before["native"]["instance"]["status"]!="Running" or before["run"]["status"]!="running" or "after" in old or old["etl"]["status"]!="Suspended":raise ValueError("The actual predecessor was not held at the real RunEtl wait.")
-        if current["etl"]["activityExecutionId"]!=old["etl"]["activityExecutionId"] or len(current)!=(1 if parent in ("RunEtl","BpmnModel") else 3) or any(item["status"]!="Completed" for item in current.values()) or current["etl"]["outcomeNames"]!=["BusinessError" if business_error else "Done"]:raise ValueError("The actual native continuation changed its invocation or typed outcome.")
-        if finished["native"]["instance"]["status"]!="Completed" or finished["native"]["incidents"]:raise ValueError("The actual native parent did not complete without incidents.")
+        terminal_status="Cancelled" if pipeline_cancel else "Completed"
+        if current["etl"]["activityExecutionId"]!=old["etl"]["activityExecutionId"] or len(current)!=(1 if parent in ("RunEtl","BpmnModel") else 3) or any(item["status"]!=terminal_status for item in current.values()) or current["etl"]["outcomeNames"]!=([] if pipeline_cancel else ["BusinessError" if business_error else "Done"]):raise ValueError("The actual native continuation changed its invocation or typed outcome.")
+        if finished["native"]["instance"]["status"]!=terminal_status or finished["native"]["incidents"]:raise ValueError("The actual native parent did not settle without incidents.")
         pin={name:before["native"]["instance"][name] for name in ("artifactId","artifactHash","artifactVersion","definitionId","definitionVersionId")}
         for view in (before,recovered,finished):
             if (view["native"]["instance"]["workflowExecutionId"]!=identity or view["run"]["runId"]!=run_id or view["run"]["selection"]!=selection or
                     any(view["native"]["instance"][name]!=value for name,value in pin.items())):raise ValueError("An actual ETL/native identity or full pin changed on recovery.")
         retry=next((item["http"]["fetch"] for item in before["partitions"]["items"] if item["http"]["fetch"] and item["http"]["fetch"]["lastStatusCode"]==429),None)
-        if retry is None or retry["phase"]!="waiting" or retry["attemptCount"]!=1 or datetime.fromisoformat(retry["notBefore"])<=datetime.fromisoformat(process["cutAtUtc"]):raise ValueError("The actual crash cut lacks its original future 429 retry.")
+        if retry is None or retry["phase"]!="waiting" or retry["attemptCount"]!=1 or instant(retry["notBefore"])<=instant(process["cutAtUtc"]):raise ValueError("The actual crash cut lacks its original future 429 retry.")
+        if pipeline_cancel:
+            response=read("cancel-response.json")
+            if (process.get("pipelineCancel") is not True or process.get("retryAfterSeconds")!=60 or recovered["run"]["status"]!="running" or
+                    not response["cancellationAccepted"] or response["terminalResult"]["outcome"]!="cancelled" or
+                    instant(process["observedCancelledAfterRetryDeadlineAtUtc"])<=instant(retry["notBefore"])):
+                raise ValueError("The actual pipeline cancellation lacks its accepted request and post-deadline observation.")
         if not any(item["http"]["exhausted"] and item["owedBatch"] is None for item in before["partitions"]["items"]):raise ValueError("The sibling had not completed before the actual crash cut.")
-        accepted,rejected=(3,1) if business_error else (4,0);outcome="businessError" if business_error else "succeeded"
+        accepted,rejected=(2,0) if pipeline_cancel else (3,1) if business_error else (4,0);outcome="cancelled" if pipeline_cancel else "businessError" if business_error else "succeeded"
         result=finished["run"];rows=finished["partitions"]["items"]
         if (result["formatVersion"]!=2 or result["status"]!=outcome or result["terminalResult"]["outcome"]!=outcome or result["acceptedRecords"]!=accepted or result["rejectedRecords"]!=rejected or result["filteredRecords"]!=0 or
-                result["outstandingRecords"]!=0 or result["outstandingBytes"]!=0 or len(rows)!=2 or any(not item["http"]["exhausted"] or item["owedBatch"] is not None or item["http"]["pageSequence"]!=1 for item in rows)):raise ValueError("The actual ETL terminal or partition accounting differs.")
+                result["outstandingRecords"]!=0 or result["outstandingBytes"]!=0 or len(rows)!=2 or any(item["owedBatch"] is not None for item in rows) or
+                not pipeline_cancel and any(not item["http"]["exhausted"] or item["http"]["pageSequence"]!=1 for item in rows)):raise ValueError("The actual ETL terminal or partition accounting differs.")
         if business_error and result["terminalResult"]["diagnostic"]["code"]!="etl.rows-rejected":raise ValueError("The actual ETL business-error key differs.")
         if wire["overflow"] or before_wire["overflow"]:raise ValueError("The physical HTTP observations exceeded their bounds.")
         earlier=[item for item in before_wire["requests"] if item.get("shard")=="shard-b"];later=[item for item in wire["requests"] if item.get("shard")=="shard-b"]
-        if len(earlier)!=1 or len(later)!=3 or [item["status"] for item in later]!=[429,200,200] or later[0]!=earlier[0] or later[1]["receivedAtMs"]-later[0]["receivedAtMs"]<20000:raise ValueError("The physical source retried early or changed its saved page sequence.")
+        if pipeline_cancel:
+            if len(earlier)!=1 or later!=earlier or later[0]["status"]!=429:raise ValueError("The physically cancelled HTTP shard resumed its saved retry.")
+        elif len(earlier)!=1 or len(later)!=3 or [item["status"] for item in later]!=[429,200,200] or later[0]!=earlier[0] or later[1]["receivedAtMs"]-later[0]["receivedAtMs"]<20000:raise ValueError("The physical source retried early or changed its saved page sequence.")
         records=[record for post in wire["outputPosts"] for record in post["records"]];expected_records={1:"Ada",2:"Grace",3:"Linus"}
-        if not business_error:expected_records[4]="Margaret"
+        if pipeline_cancel:expected_records.pop(3)
+        elif not business_error:expected_records[4]="Margaret"
         if {item["id"]:item["name"] for item in records}!=expected_records or any(not post["hasIdempotencyKey"] for post in wire["outputPosts"]):raise ValueError("The physical HTTP receiver lacks the actual mapped effects.")
         errors=read("safe-errors.json")
         if errors!=([{"recordOrdinal":1,"code":"etl.invalid-value","field":"id"}] if business_error else []):raise ValueError("The actual safe-error file output differs.")
@@ -171,7 +197,7 @@ def verify(path):
                         if store=="elsa":
                             if bridge is not None:physical_model_bridge(connection,phase,*bridge)
                             row=connection.execute("SELECT Status,ContentJson FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId=?",(key(identity),)).fetchone()
-                            if row is None or row[0]!=(1 if phase=="before" else 3) or json.loads(row[1])["pinnedExecutable"]!={name:key(value) for name,value in pin.items()}:raise ValueError("The physical native ETL workflow lost its exact pin or state.")
+                            if row is None or row[0]!=(1 if phase=="before" else 5 if pipeline_cancel else 3) or json.loads(row[1])["pinnedExecutable"]!={name:key(value) for name,value in pin.items()}:raise ValueError("The physical native ETL workflow lost its exact pin or state.")
                             bookmarks=connection.execute("SELECT BookmarkId FROM elsa_runtime_bookmark_state WHERE WorkflowExecutionId=?",(identity,)).fetchall()
                             if len(bookmarks)!=(1 if phase=="before" else 0):raise ValueError("The physical RunEtl wait was recreated or not consumed.")
                             if phase=="before":native_bookmark=bookmarks[0][0]
@@ -188,13 +214,14 @@ def verify(path):
                             if artifact["formatVersion"]!=2 or artifact["definitionVersion"]!=version["definitionVersion"] or decoded(artifact["definitionId"])!=version["definitionId"] or decoded(artifact["contentHash"])!=version["contentHash"]:raise ValueError("The physical ETL artifact lost its exact published pin.")
                             terminal=connection.execute("SELECT Outcome FROM elsa_etl_runtime_terminals").fetchall();outbox=connection.execute("SELECT Attempts,Disposition,AcknowledgedAtUtcTicks FROM elsa_etl_runtime_outbox").fetchall()
                             if phase=="before" and (terminal or outbox or row[1]!=1):raise ValueError("The actual retry cut already carried a terminal result.")
-                            if phase=="finished" and (row[1]!=(3 if business_error else 2) or row[2:]!=(accepted,rejected,0,0) or terminal!=[(1 if business_error else 0,)] or len(outbox)!=1 or outbox[0][0]<1 or outbox[0][1] is None or outbox[0][2] is None):raise ValueError("The physical ETL terminal or owed native result did not settle.")
+                            if phase=="finished" and (row[1]!=(5 if pipeline_cancel else 3 if business_error else 2) or row[2:]!=(accepted,rejected,0,0) or terminal!=[(3 if pipeline_cancel else 1 if business_error else 0,)] or len(outbox)!=1 or outbox[0][0]<1 or outbox[0][1] is None or outbox[0][2] is None):raise ValueError("The physical ETL terminal or owed native result did not settle.")
         if (native_bookmark!=decoded(invocation["resultAddress"]["bookmarkId"]) or native_bookmark!=decoded(invocation["resultAddress"]["registrationId"]) or
                 decoded(invocation["resultAddress"]["nodeId"])!=old["etl"]["executableNodeId"]):raise ValueError("The ETL result address did not retain its actual native bookmark.")
         results.append({"case":case,"acceptedRecords":accepted,"rejectedRecords":rejected,"physicalOutputRecords":len(records),"businessErrorPreserved":business_error})
     result={"actualReferenceJourneys":results,"wholeStoresVerified":len(expected_cases)*6,"sourceRevision":source,"directBpmnClosedWorkerIntegrationProved":direct,
         "runBpmnEtlIntegrationProved":False,"modelHeldFaultRetryProved":False}
     if not direct:result["directOrRunBpmnEtlIntegrationProved"]=False
+    if pipeline_cancel:result.update(pipelineOriginatedCancellationProved=True,modelToWorkerCancellationProved=False)
     return result
 
 
