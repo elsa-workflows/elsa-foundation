@@ -16,6 +16,22 @@ using Elsa.Persistence.EntityFramework;
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 try
 {
+    if (args.Length == 2 && args[0] == "--inspect-studio-products")
+    {
+        var directory = Path.GetDirectoryName(Path.GetFullPath(args[1]))!;
+        var products = new[] { "Elsa.Studio.Web.dll", "Elsa.Studio.Hosting.dll", "Elsa.Studio.Core.dll", "Elsa.Studio.Workflows.dll" }.Select(name =>
+        {
+            var path = Path.Combine(directory, name);
+            return new { Name = name, ProductVersion = System.Diagnostics.FileVersionInfo.GetVersionInfo(path).ProductVersion,
+                Sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))) };
+        }).ToArray();
+        var source = products[0].ProductVersion?.Split('+').Last();
+        if (source?.Length != 40 || source.Any(character => !char.IsAsciiHexDigitLower(character)) ||
+            products.Any(product => product.ProductVersion?.EndsWith("+" + source, StringComparison.Ordinal) != true))
+            throw new InvalidDataException("The actual Studio products do not share one full source commit.");
+        Console.WriteLine(JsonSerializer.Serialize(new { SourceCommit = source, MetadataOnly = true, ActualProductVersions = products }, json));
+        return 0;
+    }
     if (args.Length == 3 && args[0] == "--check-predecessor-queue-reader")
     {
         Console.WriteLine(JsonSerializer.Serialize(await PredecessorQueueReader.RunAsync(args[1], args[2]), json));
