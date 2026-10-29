@@ -66,6 +66,7 @@ def main():
     parser.add_argument("--parent", choices=("Sequence", "Flowchart", "RunEtl", "BpmnModel"), default="Sequence")
     parser.add_argument("--queued-native-stage", choices=("start", "checkpoint"), help="With cancellation before admission, use the actual SDK to retain the selected native queue stage first.")
     parser.add_argument("--dispatcher-assembly", type=Path, help="Built owned SDK client required for the queued-native cut.")
+    parser.add_argument("--admission-race-order", choices=("cancel-first", "admit-first"), help="Gate an unchanged actual proposal before its provider transaction, commit the competitor, then cold-recover both writers' obligations.")
     outcome_group = parser.add_mutually_exclusive_group()
     outcome_group.add_argument("--business-error", action="store_true", help="Reject one actual HTTP record through its declared Int64 schema.")
     outcome_group.add_argument("--pipeline-cancel", action="store_true", help="Cancel the actual ETL run after host recovery and observe native/BPMN cancellation.")
@@ -77,6 +78,8 @@ def main():
     if cancelling and args.parent != "BpmnModel":parser.error("Cancellation currently qualifies the direct BPMN/native RunEtl root only.")
     if args.queued_native_stage and (not args.model_cancel_before_admission or args.dispatcher_assembly is None):
         parser.error("A queued native stage requires --model-cancel-before-admission and --dispatcher-assembly.")
+    if args.admission_race_order and args.queued_native_stage != "checkpoint":
+        parser.error("An admission race requires the actual queued WorkflowStarted checkpoint cut.")
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
     if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True).strip():
         raise ValueError("Commit the journey source before recording exact-source evidence.")
@@ -229,6 +232,65 @@ def main():
                         if len(queued)!=1 or queued!=dispatch["queuedWork"] or queued[0]["commandKind"]!=(0 if args.queued_native_stage=="start" else 11):
                             raise ValueError("The actual native start/checkpoint was not queued before cancellation.")
                     os.kill(host.pid,signal.SIGCONT)
+                    if args.admission_race_order:
+                        gate=root/"admission-gate"
+                        first_op="--drain-checkpoint" if args.admission_race_order=="cancel-first" else "--cancel-model"
+                        second_op="--cancel-model" if args.admission_race_order=="cancel-first" else "--drain-checkpoint"
+                        first=start(["dotnet",str(dispatcher),first_op,str(root),model_execution,nonce,"--gate",str(gate)],"gated-sdk")
+                        first_log=root/f"gated-sdk-{len(processes)-1}.log"
+                        def gate_ready():
+                            if first.poll() is not None:raise ValueError("The actual first writer exited before its unchanged proposal gate: "+first_log.read_text())
+                            return (gate/"ready.json").exists()
+                        wait_for(gate_ready,bool,"The actual first writer did not reach its pre-transaction observation hook.",90)
+                        observed=json.loads((gate/"ready.json").read_text());q.write_json(output/"race-proposal.json",observed)
+                        second=start(["dotnet",str(dispatcher),second_op,str(root),model_execution,nonce],"competing-sdk")
+                        second_log=root/f"competing-sdk-{len(processes)-1}.log";second.wait(timeout=90)
+                        competing=json.loads(second_log.read_text());q.write_json(output/"race-competitor.json",competing)
+                        if second.returncode!=0:raise ValueError("The actual competing SDK writer failed: "+second_log.read_text())
+                        competitor_checked=admission_checked();q.write_json(output/"race-competing-checked.json",competitor_checked)
+                        release_at=datetime.now(timezone.utc).isoformat();(gate/"release").write_text(release_at)
+                        first.wait(timeout=90);gated=json.loads(first_log.read_text());q.write_json(output/"race-gated.json",gated)
+                        q.write_json(output/"race-release.json",json.loads((gate/"released.json").read_text()))
+                        if first.returncode!=0:raise ValueError("The actual gated SDK writer failed: "+first_log.read_text())
+                        if any(source not in p["informationalVersion"] for client in (competing,gated) for p in client["products"]):
+                            raise ValueError("A race writer does not match the exact committed source.")
+                        cancellation=competing["outcome"] if args.admission_race_order=="cancel-first" else gated["outcome"]
+                        pending=admission_view();quiesce();pending_stores=snapshots("pending");pending_checked=admission_checked()
+                        q.write_json(output/"cancel-response.json",cancellation);q.write_json(output/"pending.json",pending);q.write_json(output/"pending-checked.json",pending_checked)
+                        if (cancellation["pending"] or cancellation["result"]["status"]!="Accepted" or pending["model"]["status"]!="TerminalPendingSettlement" or
+                                pending_checked["model"]["revision"]!=2 or pending["runs"]["items"] or len(pending_checked["sources"])!=2):
+                            raise ValueError("The actual ordered admission/cancellation did not retain its decision and obligations.")
+                        admitted=args.admission_race_order=="admit-first"
+                        if (pending_checked["worker"] is not None)!=admitted or len(pending["native"])!=int(admitted):
+                            raise ValueError("The competing writer order did not determine actual native admission.")
+                        stop(host,crash=True);exit_code=host.returncode
+                        if exit_code!=-signal.SIGKILL:raise ValueError("The owned race predecessor did not lose its actual process.")
+                        print("Actual "+args.admission_race_order+" interleaving retained; owned predecessor killed.",flush=True)
+                        features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":.2};q.write_json(root/"shells.json",shells)
+                        api=launch()
+                        finished_checked=wait_for(admission_checked,lambda value:value["model"]["lifecycle"]==3 and
+                            len(value["inputs"])==3 and len(value["sources"])==2 and all(item["status"]==2 for item in value["sources"]) and
+                            not value["queuedNativeWork"] and not value["queuedModelInputs"],"The actual admission/cancellation race did not settle after restart.",90)
+                        finished=admission_view();finished_wire=wire();stop(host);finished_checked=admission_checked();finished_stores=snapshots("finished")
+                        q.write_json(output/"finished.json",finished);q.write_json(output/"finished-checked.json",finished_checked);q.write_json(output/"finished-wire.json",finished_wire)
+                        api=launch();until=time.monotonic()+2
+                        while time.monotonic()<until:
+                            if admission_view()!=finished or wire()!=finished_wire:raise ValueError("The admission/cancellation race revived work across another host.")
+                            time.sleep(.2)
+                        retained=admission_view();retained_wire=wire();stop(host);retained_checked=admission_checked()
+                        q.write_json(output/"retained.json",retained);q.write_json(output/"retained-checked.json",retained_checked);q.write_json(output/"retained-wire.json",retained_wire)
+                        if retained_checked!=finished_checked:raise ValueError("The actual race settlement changed after another host.")
+                        q.write_json(output/"process.json",{"schemaVersion":1,"kind":"actual-bpmn-native-admission-cancellation-race","sourceRevision":source,
+                            "raceOrder":args.admission_race_order,"products":products,"processes":processes,"predecessorExitCode":exit_code,
+                            "modelPublication":model_publication,"publication":publication,"etlPublication":published,"modelExecutionId":model_execution,
+                            "origin":before_checked["origin"],"beforeStores":before_stores,"pendingStores":pending_stores,"finishedStores":finished_stores,
+                            "sweepIntervalsSeconds":[300,.2,.2],"controllerSha256":q.digest(Path(__file__)),"fixtureSha256":q.digest(fixture_script),
+                            "dispatcherSha256":q.digest(dispatcher),"queuedNativeStage":"checkpoint","releaseRequestedAtUtc":release_at,
+                            "scopeLimits":["Actual unchanged native/model checkpoint proposals interleave before the real EF writer transaction; no persisted state or clock is edited.",
+                                "Owned SDK uses existing checkpoint-validation and drain-budget seams; three standard Workbench hosts perform publication, process loss and cold recovery.",
+                                "Pending-result crash cuts, embedding, held retry, other providers and final upgrade/Studio remain separate gates."]})
+                        print("Actual "+args.admission_race_order+" race settled and survived another standard Workbench host.",flush=True)
+                        return
                     cancellation=api.request("/bpmn/executions/"+model_execution+"/cancel",
                         {"requestId":"cancel-before-native-admission","reason":"Retire the original native start before admission."})
                     pending=admission_view();quiesce();pending_stores=snapshots("pending");pending_checked=admission_checked()
@@ -270,6 +332,8 @@ def main():
                             "Simultaneous native admission/cancellation, pending result crashes, embedding, held retry and final upgrade/Studio remain separate gates." if args.queued_native_stage else "Queued native-start checkpoint/admission races, pending result crashes, embedding, held retry and final upgrade/Studio remain separate gates."]})
                     print("Original native start retired after process loss; no worker or ETL run across a third host.",flush=True)
                 except Exception as failure:
+                    for child in children:
+                        if child is not host and child is not fixture:stop(child)
                     stop(host);failed_stores=snapshots("failed")
                     q.write_json(output/"failure.json",{"sourceRevision":source,"failureType":type(failure).__name__,"failedStores":failed_stores,"processes":processes,"products":products})
                     raise
