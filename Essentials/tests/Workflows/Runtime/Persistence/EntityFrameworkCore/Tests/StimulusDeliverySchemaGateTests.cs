@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -146,6 +147,51 @@ public sealed class StimulusDeliverySchemaGateTests
     {
         public string Encode(string purpose, ReadOnlySpan<byte> payload) => throw new NotSupportedException();
         public byte[] Decode(string purpose, string token) => throw new NotSupportedException();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Exact_resume_header_touch_uses_the_admitted_version_without_rewriting_native_content(bool finalize)
+    {
+        await using var fixture = await Fixture.Create(RuntimeWorkflowExecutionEfModule.SchemaFamily);
+        var pin = new WorkflowExecutableIdentity("artifact", "definition", "version", "1.0.0", "hash");
+        var workflow = new WorkflowExecutionState("target", pin, WorkflowExecutionStatus.Running, null,
+            Now, Now, Now, null, null, null, Scope.Value, new Dictionary<string, string>())
+            { RunKind = WorkflowRunKind.PublishedRun, Partition = new(Scope.Value) };
+        var wait = new BookmarkState("wait", "target", "activity", "node", "resume", "Event", "named", null,
+            new Dictionary<string, string>(), Now, null);
+        var suspended = new ActivityExecutionState(new("activity", "target", "node", "node", "Test.Activity", "1"),
+            ActivityExecutionStatus.Suspended, null, 1, Now, Now, null, null, null, null, null,
+            ActivitySchedulingProvenance.From("target", null, null, null, null, null, null, "fixture"), null,
+            ["wait"], [], 0, 0, new Dictionary<string, string>());
+        string content; long originalRevision;
+        await using (var seed = fixture.Open())
+        {
+            await new EfWorkflowExecutionStateStore(seed, new Accessor(), new NoTokens()).SaveAsync(workflow);
+            await new EfActivityExecutionStateStore(seed, new Accessor(), new NoTokens()).SaveAsync(suspended);
+            await new EfBookmarkStateStore(seed, new Accessor()).SaveAsync(wait);
+            var row = await seed.WorkflowExecutionStates.AsNoTracking().SingleAsync();
+            Assert.Equal("1.0.0", row.SchemaVersion); content = row.ContentJson; originalRevision = row.Revision;
+        }
+        if (finalize) await fixture.Finalize();
+        await using var context = fixture.Open();
+        var bookmark = new EfBookmarkStateStore(context, new Accessor());
+        var expected = StimulusResumeRecipient.From((await bookmark.ObserveAsync("target", "wait"))!, workflow, Scope);
+        context.ChangeTracker.Clear();
+        var claim = suspended with { Status = ActivityExecutionStatus.Running,
+            Attempts = [new("claim", "activity", 1, ActivityAttemptReason.Resume, Now)],
+            Metadata = new Dictionary<string, string> { [RuntimeMetadataKeys.ActivityAttemptActivationClaim] = "claim" } };
+        var commit = new RuntimeCheckpointCommit("resume", new("resume", "ExactBookmarkClaim", "target", Now, ["activity"], new Dictionary<string, string>()),
+            new(null, null, [new("activity", RuntimeStateChangeOperation.Upsert, claim, new Dictionary<string, string>())],
+                [new("wait", RuntimeStateChangeOperation.Delete, wait, new Dictionary<string, string>())], [], [], []),
+            [], new Dictionary<string, string>()) { ExpectedBookmarkResume = expected, RetainSchedulerWork = true };
+        await new EfRuntimeCheckpointCommitStore(context, new Accessor()).CommitAsync(commit, new(RuntimeCheckpointPersistenceMode.Immediate));
+        var written = await context.WorkflowExecutionStates.AsNoTracking().SingleAsync();
+        Assert.Equal(finalize ? "2.0.0" : "1.0.0", written.SchemaVersion);
+        Assert.Equal(content, written.ContentJson); Assert.Equal(checked(originalRevision + 1), written.Revision);
+        Assert.Null(await bookmark.FindAsync("target", "wait"));
+        Assert.Equal(ActivityExecutionStatus.Running, (await new EfActivityExecutionStateStore(context, new Accessor(), new NoTokens()).FindAsync("target", "activity"))!.Status);
     }
 
     [Fact]

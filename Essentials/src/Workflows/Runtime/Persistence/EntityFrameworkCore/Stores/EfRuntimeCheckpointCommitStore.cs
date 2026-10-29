@@ -94,6 +94,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
         }
         // Protect the exact generation and both live owner headers even when this checkpoint changes only
         // activity state. Normal participant staging reuses these tracked rows and their original CAS revisions.
+        workflowRow.SchemaVersion = RuntimeNativeModelWorkWriteVersion.For(context, workflow, workflowRow.SchemaVersion);
         row.Revision = checked(row.Revision + 1);
         workflowRow.Revision = checked(workflowRow.Revision + 1);
         activityRow.Revision = checked(activityRow.Revision + 1);
@@ -133,6 +134,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
             await EfRuntimeCheckpointTestScopeParticipantStaging.AssertOpenAndStageAsync(context, testScope,
                 _timeProvider.GetUtcNow(), scope, touchedTestScopes, cancellationToken);
         // Order cancellation and child admission without consuming or changing the real parent wait's generation.
+        workflowRow.SchemaVersion = RuntimeNativeModelWorkWriteVersion.For(context, workflow, workflowRow.SchemaVersion);
         context.Entry(bookmarkRow).Property(row => row.Revision).IsModified = true;
         context.Entry(workflowRow).Property(row => row.Revision).IsModified = true;
         context.Entry(activityRow).Property(row => row.Revision).IsModified = true;
