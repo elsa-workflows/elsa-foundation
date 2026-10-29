@@ -459,7 +459,7 @@ def main():
             q.write_json(output/'native-parent-cancel-response.json',cancelled)
         if args.pending_parent_result_crash or args.successful_parent_result_crash:
             if args.successful_parent_result_crash:
-                pending=wait_for(view,lambda value:value['embedding']['instance']['status']=='Running' and value['model']['status']=='Running' and value['run']['status']=='completed' and value['native']['instance']['status']=='Completed',
+                pending=wait_for(view,lambda value:value['embedding']['instance']['status']=='Running' and value['model']['status']=='Running' and value['run']['status']=='succeeded' and value['native']['instance']['status']=='Completed',
                     'Actual ETL/native success did not retain its owed model result and original native parent wait.',60)
             else:
                 pending=wait_for(view,lambda value:value['embedding']['instance']['status']=='Cancelled' and value['model']['status']=='Running' and value['run']['status']=='running',
@@ -485,7 +485,7 @@ def main():
                 if (pending_checked['model']['lifecycle']!=(3 if settled else 2) or pending_checked['model']['revision']!=(3 if settled else 2) or pending_checked['worker']['status']!=3 or pending_checked['resultInput']!=consumed['receipt'] or
                         pending_checked['resultSource']['status']!=3 or pending_checked['resultSource']['deliveredAt'] is not None or parent_result['status']!=(3 if parent_consumed else 0) or parent_result['deliveredAt'] is not None or
                         len([r for r in pending_embedding['inputs'] if r['inputKind']=='native-parent-settled'])!=int(settled) or
-                        pending['run']['status']!='completed' or pending['embedding']['instance']['status']!=('Completed' if parent_consumed else 'Running') or
+                        pending['run']['status']!='succeeded' or pending['embedding']['instance']['status']!=('Completed' if parent_consumed else 'Running') or
                         (pending_embedding['queuedModelInputs'] and (not parent_consumed or settled))):
                     raise ValueError('The actual successful parent result did not retain the selected consumption/settlement/ACK boundary.')
             elif (pending_checked['model']['lifecycle']!=2 or pending_checked['model']['revision']!=3 or pending_checked['worker']['status']!=5 or pending_checked['resultInput']!=consumed['receipt'] or
