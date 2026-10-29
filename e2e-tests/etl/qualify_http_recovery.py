@@ -684,8 +684,9 @@ def main():
                     'partitions':api.request('/etl/runs/'+escaped_second+'/connector-partitions?limit=50')},'incidents':api.request(route+'/incidents?limit=10')}
             if args.obsolete_result_controls:
                 waiting=wait_for(pair,lambda value:value['replacement']['run']['status']=='running' and
-                    any(x['http']['fetch']['phase']=='waiting' and x['http']['fetch']['lastStatusCode']==429 for x in value['replacement']['partitions']['items']) and
-                    sum(x['acceptedMainEffects'] for x in value['replacement']['partitions']['items'])==2,
+                    any(x['http'] and x['http']['fetch'] and x['http']['fetch']['phase']=='waiting' and x['http']['fetch']['lastStatusCode']==429 for x in value['replacement']['partitions']['items']) and
+                    sum(x['acceptedMainEffects'] for x in value['replacement']['partitions']['items'])==2 and
+                    all(not x['isClaimed'] and x['owedBatch'] is None for x in value['replacement']['partitions']['items']),
                     'The actual replacement did not retain its own HTTP429 wait before obsolete-result controls.',90)
                 os.kill(host.pid,signal.SIGSTOP)
                 wait_for(lambda:q.process_field(host.pid,'stat'),lambda value:'T' in value,'The replacement host did not quiesce.',5)
