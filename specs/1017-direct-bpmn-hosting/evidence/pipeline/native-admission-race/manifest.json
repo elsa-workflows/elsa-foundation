@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-bpmn-native-admission-cancellation-race-matrix",
+  "sourceRevision": "54d8532b0a00c39626185a7d617790004b9f9448",
+  "cases": [
+    {
+      "order": "cancel-first",
+      "manifest": "cancel-first/manifest.json",
+      "sha256": "2a59c8c7e30f360889b96b9b6a92c1d7b51d7341729586fd60e400bc03c095f7"
+    },
+    {
+      "order": "admit-first",
+      "manifest": "admit-first/manifest.json",
+      "sha256": "61166ed3718ca12c9e95490878be81d2cac7a6a68ebf82c298f628ace061e421"
+    }
+  ]
+}

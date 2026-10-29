@@ -66,7 +66,7 @@ try
     }
     services.Replace(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainPolicy>(new CaptureDrainPolicy(checkpointCut || race)));
     // The orchestration loop follows delivered continuations even when each scheduler pass has a one-item budget.
-    // Two existing cycle-budget slots cover the durable-claim handoff and actual admission checkpoint only.
+    // The existing two-cycle budget retains admission and the next queued root step, before activity invocation.
     if (args[0] == "--drain-checkpoint")
         services.Replace(ServiceDescriptor.Singleton(new WorkflowDrainOrchestratorOptions(maxTotalDrainCycles: 2)));
     await using var provider = services.BuildServiceProvider();
