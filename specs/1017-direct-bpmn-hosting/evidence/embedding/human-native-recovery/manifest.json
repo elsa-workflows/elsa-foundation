@@ -1,0 +1,263 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-native-runbpmn-human-recovery",
+  "sourceRevision": "0c419ca5f5fe494c802d062eff2512a2b7ab9f38",
+  "assets": [
+    {
+      "path": "compensationscope-cancel/case.json",
+      "sha256": "5101d6ddaa297d6b48f2c5843b58ba1990f0852af427d157ffed08a1bb13abae"
+    },
+    {
+      "path": "compensationscope-cancel/completed-checked.json",
+      "sha256": "0e060008ebfb401fce5bd418a833574688e5f2cf8f88dd88a1b71b9f90bd10cf"
+    },
+    {
+      "path": "compensationscope-cancel/completed-design.sqlite.gz",
+      "sha256": "51708ce7fda7e62eb8d7bd6f09ad9be5c03bc88443d5dd3d85a0aa0a0da7bbcd"
+    },
+    {
+      "path": "compensationscope-cancel/completed-runtime.sqlite.gz",
+      "sha256": "99a00923cde74c6f95150a1d468ce7e9b6a1fcff337d0954cdda53e531d5cef6"
+    },
+    {
+      "path": "compensationscope-cancel/retained-checked.json",
+      "sha256": "0e060008ebfb401fce5bd418a833574688e5f2cf8f88dd88a1b71b9f90bd10cf"
+    },
+    {
+      "path": "compensationscope-cancel/waiting-checked.json",
+      "sha256": "79992085e75e954feb4d2e70ce4a424c54944f704d9bf75a178901b70b7e678f"
+    },
+    {
+      "path": "compensationscope-cancel/waiting-design.sqlite.gz",
+      "sha256": "51708ce7fda7e62eb8d7bd6f09ad9be5c03bc88443d5dd3d85a0aa0a0da7bbcd"
+    },
+    {
+      "path": "compensationscope-cancel/waiting-runtime.sqlite.gz",
+      "sha256": "f7fbef257521abc7455ca124f5bd060b5fc8ed3eff57b8187db75db60f817a25"
+    },
+    {
+      "path": "compensationscope-complete/case.json",
+      "sha256": "e1794a2c8de2006bd6cc2828e85a8b0786ed96540c00c6e4fea1eb6579a4791e"
+    },
+    {
+      "path": "compensationscope-complete/completed-checked.json",
+      "sha256": "c6b98287b9a54c99753825332f0736b249daa2fef10fce66d8cb3904a6582eb7"
+    },
+    {
+      "path": "compensationscope-complete/completed-design.sqlite.gz",
+      "sha256": "46dcc8715c9fe33a127158cc154dc24fea1728f5d87e0e824634a61c0e22fe56"
+    },
+    {
+      "path": "compensationscope-complete/completed-runtime.sqlite.gz",
+      "sha256": "3e7135d2620e0f3fcfeaf9dc1e82a41864c9e57ef64719a18ffa6a0dc60510b3"
+    },
+    {
+      "path": "compensationscope-complete/retained-checked.json",
+      "sha256": "c6b98287b9a54c99753825332f0736b249daa2fef10fce66d8cb3904a6582eb7"
+    },
+    {
+      "path": "compensationscope-complete/waiting-checked.json",
+      "sha256": "bb6dd9cb1867b724e00b5503f055dd25a3b21671af8dd8ad80fe7647c34c475b"
+    },
+    {
+      "path": "compensationscope-complete/waiting-design.sqlite.gz",
+      "sha256": "46dcc8715c9fe33a127158cc154dc24fea1728f5d87e0e824634a61c0e22fe56"
+    },
+    {
+      "path": "compensationscope-complete/waiting-runtime.sqlite.gz",
+      "sha256": "06c279189d11a7bd5324d440a8aa6da3c3c03fa65769b42814d445418b1174de"
+    },
+    {
+      "path": "flowchart-cancel/case.json",
+      "sha256": "2e1c74bb6995073dd0a6b42a39daeee1affb7ad57cca4422a5655053ddc7c90f"
+    },
+    {
+      "path": "flowchart-cancel/completed-checked.json",
+      "sha256": "43149bf5412c459783d6c0514613b7e6a1f43d036804cfa3b9a2ab255f2bfc68"
+    },
+    {
+      "path": "flowchart-cancel/completed-design.sqlite.gz",
+      "sha256": "eb2c272caee18de229a6af04a23e7d21c8e0e13e11a94cc2cdba3c8b6bf3b9a6"
+    },
+    {
+      "path": "flowchart-cancel/completed-runtime.sqlite.gz",
+      "sha256": "79f7a088f2a5101d6a7039af92ccffdd1d98e23b1f162e62905d150f57c21b90"
+    },
+    {
+      "path": "flowchart-cancel/retained-checked.json",
+      "sha256": "43149bf5412c459783d6c0514613b7e6a1f43d036804cfa3b9a2ab255f2bfc68"
+    },
+    {
+      "path": "flowchart-cancel/waiting-checked.json",
+      "sha256": "30c21e538fb466f738199f634b5bdc4fc78aafc2f177cb9ad4072b718c19be07"
+    },
+    {
+      "path": "flowchart-cancel/waiting-design.sqlite.gz",
+      "sha256": "eb2c272caee18de229a6af04a23e7d21c8e0e13e11a94cc2cdba3c8b6bf3b9a6"
+    },
+    {
+      "path": "flowchart-cancel/waiting-runtime.sqlite.gz",
+      "sha256": "bd7438f81667236034d4f012fffa0d71817a00f9409f3eb47831512b02bfb48e"
+    },
+    {
+      "path": "flowchart-complete/case.json",
+      "sha256": "a26e9ef2d55bf80ff797de69fdecf1237e33396d9f5335c5fa8312598b56ea88"
+    },
+    {
+      "path": "flowchart-complete/completed-checked.json",
+      "sha256": "b1b88e28700b9efc968293eb8802f0de7260c7a35315b63620056e7584a57ebd"
+    },
+    {
+      "path": "flowchart-complete/completed-design.sqlite.gz",
+      "sha256": "f9c4463d6b48b1cbad3eff8bd827d2d789a4fafc3e8ba5199a14dfade4996031"
+    },
+    {
+      "path": "flowchart-complete/completed-runtime.sqlite.gz",
+      "sha256": "affb51c0befbc7d8594ea8efe8958a0baee35d2c29312f57362166d24c4a3d97"
+    },
+    {
+      "path": "flowchart-complete/retained-checked.json",
+      "sha256": "b1b88e28700b9efc968293eb8802f0de7260c7a35315b63620056e7584a57ebd"
+    },
+    {
+      "path": "flowchart-complete/waiting-checked.json",
+      "sha256": "62c472f32b4fd13a7c9535e4296b65e3e8360f282c739ccc6449696a7ad79139"
+    },
+    {
+      "path": "flowchart-complete/waiting-design.sqlite.gz",
+      "sha256": "f9c4463d6b48b1cbad3eff8bd827d2d789a4fafc3e8ba5199a14dfade4996031"
+    },
+    {
+      "path": "flowchart-complete/waiting-runtime.sqlite.gz",
+      "sha256": "6b12291292cac5d36e09c5e5fe4c677105fff33768a5057c2c23702e21a6f06a"
+    },
+    {
+      "path": "root-cancel/case.json",
+      "sha256": "7a75164f93cc3e2d428705f49539b81d862d57d71e2a5f75633f85d3db402680"
+    },
+    {
+      "path": "root-cancel/completed-checked.json",
+      "sha256": "f5d67618cb9fbc22391be7b617b8e05a2ef761dd814c14095de1ce2b1ee33e97"
+    },
+    {
+      "path": "root-cancel/completed-design.sqlite.gz",
+      "sha256": "b489b5f4a02c1735807c240fb0d6a825df9a8c0ba26fc5c6702965c9c2a7e873"
+    },
+    {
+      "path": "root-cancel/completed-runtime.sqlite.gz",
+      "sha256": "3b9f753b7778f427bc3eb3daeccb371576321d8fcde24c021721f8042d038322"
+    },
+    {
+      "path": "root-cancel/retained-checked.json",
+      "sha256": "f5d67618cb9fbc22391be7b617b8e05a2ef761dd814c14095de1ce2b1ee33e97"
+    },
+    {
+      "path": "root-cancel/waiting-checked.json",
+      "sha256": "78409b0f570e4f2ee09c329f3ab146aa4e18aa04241c797daf688e2a555e2a23"
+    },
+    {
+      "path": "root-cancel/waiting-design.sqlite.gz",
+      "sha256": "b489b5f4a02c1735807c240fb0d6a825df9a8c0ba26fc5c6702965c9c2a7e873"
+    },
+    {
+      "path": "root-cancel/waiting-runtime.sqlite.gz",
+      "sha256": "d1d42457c1f87c39246b0a0d8e9f5fdc5c210afb2d8be09c8246aabcd69d34e5"
+    },
+    {
+      "path": "root-complete/case.json",
+      "sha256": "8ff4d17e585c92832f3ff99bcd66f6d457e6c33118532c4f4286b491acaf8a35"
+    },
+    {
+      "path": "root-complete/completed-checked.json",
+      "sha256": "8344839129711dccb1f0e5b7530ff79462da6d502e5225c96f1e5c6f24b540ee"
+    },
+    {
+      "path": "root-complete/completed-design.sqlite.gz",
+      "sha256": "8c4580c3832de62005e6c89606331f52e405cdbd8c5b79379c6e002f1bbe4f70"
+    },
+    {
+      "path": "root-complete/completed-runtime.sqlite.gz",
+      "sha256": "c5f973ba38f1081aa7c749dedef762cb37d10160a9762943527953cd69280c35"
+    },
+    {
+      "path": "root-complete/retained-checked.json",
+      "sha256": "8344839129711dccb1f0e5b7530ff79462da6d502e5225c96f1e5c6f24b540ee"
+    },
+    {
+      "path": "root-complete/waiting-checked.json",
+      "sha256": "290d68614ce74576b293778335dd75dac7447af1bdc28d0e606553f0f9dbc72c"
+    },
+    {
+      "path": "root-complete/waiting-design.sqlite.gz",
+      "sha256": "8c4580c3832de62005e6c89606331f52e405cdbd8c5b79379c6e002f1bbe4f70"
+    },
+    {
+      "path": "root-complete/waiting-runtime.sqlite.gz",
+      "sha256": "84562ff3a5a77568aa40c36e8a0a1a87e4694cce3d9c780dfe46e9991c4d68b3"
+    },
+    {
+      "path": "sequence-cancel/case.json",
+      "sha256": "ea9c518a1645222b27fb1ddda8842760fcd0fe50e65eae3e36b77af6e6441f9c"
+    },
+    {
+      "path": "sequence-cancel/completed-checked.json",
+      "sha256": "54c07d4ed6a66c9f7d5c69bb9286754476af5fec189bcec155650f72fe20d800"
+    },
+    {
+      "path": "sequence-cancel/completed-design.sqlite.gz",
+      "sha256": "e6aaa4d5413f7aebbf638c095930cea6f74d053a780211fab661117c4485d195"
+    },
+    {
+      "path": "sequence-cancel/completed-runtime.sqlite.gz",
+      "sha256": "c59240b400f256c4f98ee4e9328b87888fed0426b48bba00b3a01e8d9e9aeb28"
+    },
+    {
+      "path": "sequence-cancel/retained-checked.json",
+      "sha256": "54c07d4ed6a66c9f7d5c69bb9286754476af5fec189bcec155650f72fe20d800"
+    },
+    {
+      "path": "sequence-cancel/waiting-checked.json",
+      "sha256": "61471f3397278436142ed60de4bc979f2dc0c052720577ae54fa03493378c16c"
+    },
+    {
+      "path": "sequence-cancel/waiting-design.sqlite.gz",
+      "sha256": "e6aaa4d5413f7aebbf638c095930cea6f74d053a780211fab661117c4485d195"
+    },
+    {
+      "path": "sequence-cancel/waiting-runtime.sqlite.gz",
+      "sha256": "d650a12647ca474d3019ecbc45e01cf893dbb5675f2bb9a986ecd85cb4c0e3c4"
+    },
+    {
+      "path": "sequence-complete/case.json",
+      "sha256": "8ca06bd09a4b06b018ab930c9b4c1af72fa453fac92ccbe946fa82436a0bf32c"
+    },
+    {
+      "path": "sequence-complete/completed-checked.json",
+      "sha256": "bd68b63943a4619dae0ccf478f17220769ac26938f57825b58872a3d587a29ea"
+    },
+    {
+      "path": "sequence-complete/completed-design.sqlite.gz",
+      "sha256": "7c437d3a01b036dee3b79b0d0d180eeea1f120e1f99ba056e25c0159ec7eda5e"
+    },
+    {
+      "path": "sequence-complete/completed-runtime.sqlite.gz",
+      "sha256": "c06683e4898aeeb513de7a382cd856bc4dddfcad1ddd961932fc9984b52899c2"
+    },
+    {
+      "path": "sequence-complete/retained-checked.json",
+      "sha256": "bd68b63943a4619dae0ccf478f17220769ac26938f57825b58872a3d587a29ea"
+    },
+    {
+      "path": "sequence-complete/waiting-checked.json",
+      "sha256": "fe33b7b11627cb15e28066620fec5b8fdc3aef9562a598d005e0bc1414eb6d6a"
+    },
+    {
+      "path": "sequence-complete/waiting-design.sqlite.gz",
+      "sha256": "7c437d3a01b036dee3b79b0d0d180eeea1f120e1f99ba056e25c0159ec7eda5e"
+    },
+    {
+      "path": "sequence-complete/waiting-runtime.sqlite.gz",
+      "sha256": "8399b40cc65b3125df5f2604aadf5d5c8b86eb94937b45dd26983c7e2523a918"
+    }
+  ]
+}

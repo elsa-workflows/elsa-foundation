@@ -34,3 +34,7 @@ that an unchanged native v1 control reads and the actual current model v2 row is
 The fixture path must be new. Output includes the predecessor provider/Core product commits and hashes.
 The native control's v1 stamp is deliberately constructed; this witness proves predecessor reader refusal, with
 separate tests for the actual held-v1 write gate. It does not prove host admission, worker placement or recovery.
+
+## Native RunBpmn recovery
+
+`verify_runbpmn_recovery.py` checks the [actual human-work embedding captures](../../specs/1017-direct-bpmn-hosting/evidence/embedding/human-native-recovery/README.md) without starting hosts or changing stores. Eight real native/model journeys cover root, Sequence, Flowchart and CompensationScope completion/whole-parent cancellation after a real process loss. Four same-process direct counterparts compare released-interpreter states. The verifier checks all32 closed stores and exact native/model settlement receipts; `test_verify_runbpmn_recovery.py` supplies seven rehashed corrupt-copy controls. The receipt explicitly leaves ETL embedding, additional crash/race cuts and final upgrade/Studio acceptance open.
