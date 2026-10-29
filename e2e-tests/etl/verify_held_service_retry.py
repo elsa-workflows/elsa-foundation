@@ -40,7 +40,7 @@ def source_and_receipt(checked,result,revision):
         'A worker result was acknowledged without its exact physical-attempt consumption receipt.')
 
 
-def verify_case(root,expected_parent,source,authorization=False):
+def verify_case(root,expected_parent,source,authorization=False,obsolete=False):
     read=lambda name:json.loads((root/name).read_text())
     p=read('process.json');embedded=expected_parent!='direct';products=p['products']
     require(p['schemaVersion']==1 and p['kind']=='actual-model-held-service-retry' and p['sourceRevision']==source and p['parent']=='BpmnModel' and
@@ -48,8 +48,10 @@ def verify_case(root,expected_parent,source,authorization=False):
         p['technicalFault'] and not p['businessError'] and p['technicalFaultPolicy']=='HoldForRetry' and p['maxServiceAttempts']==2 and
         p['retryAfterSeconds']==20 and p['resumptionSweepIntervalSeconds']==.2 and p['predecessorExitCode']==p['heldPredecessorExitCode']==-9 and
         p.get('authorizationControls',False) is authorization and
-        [x['role'] for x in p['processes']]==(['http-fixture','workbench','workbench','auth-sdk','workbench','workbench'] if authorization else ['http-fixture']+['workbench']*4) and
-        len({x['processId'] for x in p['processes']})==(6 if authorization else 5) and
+        p.get('obsoleteResultControls',False) is obsolete and
+        [x['role'] for x in p['processes']]==(['http-fixture','workbench','workbench','auth-sdk','workbench','workbench'] if authorization else
+            ['http-fixture','workbench','workbench','workbench','obsolete-sdk','workbench'] if obsolete else ['http-fixture']+['workbench']*4) and
+        len({x['processId'] for x in p['processes']})==(6 if authorization or obsolete else 5) and
         len({x['controllerProcessId'] for x in p['processes']})==1 and all(x['started'] for x in p['processes']),
         'The held retry lacks its exact policy, source or two real process-loss cuts.')
     require(products['sourceCommit']==source and products['metadataOnly'] and len(products['actualProductVersions'])==12 and
@@ -141,7 +143,91 @@ def verify_case(root,expected_parent,source,authorization=False):
             stores+=1
     if embedded:verify_parent(root,p,observations,final)
     if authorization:verify_authorization(root,p,h['resultInput'],read('retry-command.json')['accepted'])
+    if obsolete:stores+=verify_obsolete_results(root,p,h)
     return {'parent':expected_parent,'wholeStoresVerified':stores,'physicalOutputRecords':6,'failedAttemptPreserved':True}
+
+
+def verify_obsolete_results(root,p,held):
+    read=lambda name:json.loads((root/name).read_text())
+    sdk=read('obsolete-sdk.json');before=read('replacement-wait-before.json');checked=read('replacement-wait-checked-model.json')
+    model=sdk['modelBefore'];old=sdk['oldResult'];origin=old['origin'];current=sdk['currentOrigin'];receipt=sdk['originalReceipt'];source=sdk['originalSource']
+    require(sdk['operation']=='probe-obsolete-native-result' and sdk['executionStateSeeded'] is False and len(sdk['products'])==5 and
+        all(x['informationalVersion'].endswith('+'+p['sourceRevision']) and re.fullmatch('[a-f0-9]{64}',x['sha256']) for x in sdk['products']) and
+        sdk['queuedBefore']==[],'The obsolete-result probe lacks its normal source-matched transport.')
+    require(before==read('replacement-wait-after.json') and before['replacement']['run']['runId']==p['replacementRunId'] and
+        before['replacement']['run']['status']=='running' and before['replacement']['run']['acceptedRecords']==2 and
+        before['replacement']['native']['instance']['status']=='Running' and model==checked['model'] and model['revision']==3 and model['lifecycle']==1 and
+        model['terminalResult'] is None and model['payload']['nativeResults']==[old] and old==held['model']['payload']['nativeResults'][0] and
+        model['payload']['state']==held['model']['payload']['state'] and
+        model['payload']['work'][0]['nativeWork']==current and origin['invocationId']==current['invocationId'] and origin['attemptId']!=current['attemptId'] and
+        origin['workerExecutionId']==p['workflowExecutionId'] and current['workerExecutionId']==p['replacementWorkerExecutionId'] and
+        sdk['oldWorker']==held['worker']==checked['worker'] and sdk['currentWorker']['status']==1 and sdk['currentWorker']['modelWorkOrigin']==current and
+        receipt==held['resultInput']==checked['resultInput'] and source==held['resultSource']==checked['resultSource'],
+        'The obsolete-result controls lack an unchanged real old failure and one live physical replacement.')
+    retry,=[x['http']['fetch'] for x in before['replacement']['partitions']['items'] if x['partitionOrdinal']==1]
+    require(retry['phase']=='waiting' and retry['lastStatusCode']==429 and retry['attemptCount']==1 and
+        v.instant(retry['notBefore'])>v.instant(sdk['completedAtUtc']) and v.instant(sdk['completedAtUtc'])>=v.instant(sdk['startedAtUtc']),
+        'The obsolete-result probe did not finish before the real replacement retry deadline.')
+    controls=sdk['controls'];require([x['name'] for x in controls]==['exact-old-result-replay','conflicting-old-result','newly-addressed-old-result'],
+        'The actual obsolete-result transport lacks its exact replay and negative controls.')
+    for index,control in enumerate(controls):
+        command=control['command'];expected_input=origin['resultInputId']+(':obsolete-probe' if index==2 else '')
+        expected_payload={**old,'faultCode':'owned-probe-conflicting-code'} if index==1 else old
+        require(command=={'executable':model['executable'],'materialIncarnationId':model['materialIncarnationId'],'inputId':expected_input,
+            'inputKind':'native-result','payload':expected_payload,'authority':model['authority'],'tenantId':model['tenantId']} and
+            control['model']==model and control['originalReceipt']==receipt and control['originalSource']==source and control['queuedModelInputs']==[] and
+            control['addressedReceipt']==(None if index==2 else receipt),
+            'An obsolete result changed the retained input, original source or current model state.')
+        require((control['outcome'] is not None and control['outcome']['status']==0 and control['refusalType'] is None and control['refusalMessage'] is None) if index==0 else
+            control['outcome'] is None and control['refusalType']=='BpmnModelValidationException' and control['refusalMessage']==(
+                'The native result differs from its committed terminal owner and outbox source.' if index==1 else 'The native result does not address this exact model invocation.'),
+            'The actual obsolete-result replay/refusal does not match the committed physical source.')
+    wire=read('replacement-wait-wire.json');rearm=read('retry-rearm.json');finished=read('finished-wire.json')
+    require(wire['retryRearms']==finished['retryRearms']==[rearm] and rearm['rearmNumber']==1 and rearm['previousShardBAttempts']==1 and
+        not wire['overflow'] and finished['requests'][:len(wire['requests'])]==wire['requests'] and
+        Counter(r['id'] for post in wire['outputPosts'] for r in post['records'])==Counter({1:2,2:2}),
+        'The owned HTTP rearm or physical replacement wait effects differ from the actual probe.')
+    retries=[r for r in wire['requests'] if r.get('shard')=='shard-b' and r.get('page')==0 and r['status']==429]
+    require(len(retries)==2 and retries[1]['receivedAtMs']>=rearm['rearmedAtMs'] and
+        any(r.get('shard')=='shard-b' and r.get('page')==0 and r['status']==200 and
+            r['receivedAtMs']>=retries[1]['receivedAtMs']+p['retryAfterSeconds']*1000 for r in finished['requests']),
+        'The replacement did not respect its own actual HTTP429 retry deadline.')
+    require(set(p['replacementWaitStores'])=={'elsa','etl-runtime','etl-design'},'The obsolete-result wait lacks its whole coupled stores.')
+    for store,snapshot in p['replacementWaitStores'].items():
+        file=q.evidence_file(root,snapshot['file']);raw=gzip.decompress(file.read_bytes())
+        require(q.digest(file)==snapshot['gzipSha256'] and hashlib.sha256(raw).hexdigest()==snapshot['databaseSha256'] and
+            snapshot['observer']['readOnly'] and snapshot['observer']['snapshotSha256']==snapshot['databaseSha256'],
+            'The obsolete-result wait snapshot differs from its provider-observed bytes.')
+        with tempfile.TemporaryDirectory(prefix='elsa-obsolete-result-read-') as temporary:
+            db=Path(temporary)/'snapshot.sqlite';db.write_bytes(raw)
+            with closing(sqlite3.connect(db.as_uri()+'?mode=ro&immutable=1',uri=True)) as c:
+                require(c.execute('PRAGMA integrity_check').fetchall()==[('ok',)],'An obsolete-result wait whole store failed integrity verification.')
+                if store=='elsa':
+                    row,=c.execute('SELECT Revision,Lifecycle,ContentJson FROM elsa_runtime_model_execution').fetchall();physical=json.loads(row[2])
+                    require(row[:2]==(3,1) and physical['payload']==model['payload'] and physical['terminalResult'] is None and
+                        physical['executable']==v.encoded_tree(model['executable']), 'The physical live replacement model differs from the probe.')
+                    inputs=[json.loads(r[0]) for r in c.execute('SELECT ContentJson FROM elsa_runtime_model_input')]
+                    require(len(inputs)==3 and {v.decoded(r['inputKind']) for r in inputs}=={'start-embedded' if p['embeddedParent'] else 'start','native-result','retry-service'} and
+                        next(r for r in inputs if r['inputKind']==v.key('native-result'))['result']==receipt['result'] and
+                        next(r for r in inputs if r['inputKind']==v.key('native-result'))['contentFingerprint']==v.key(receipt['contentFingerprint']) and
+                        not c.execute('SELECT 1 FROM elsa_runtime_scheduler_work_item WHERE WorkflowExecutionId=?',(v.key(model['executionId']),)).fetchall(),
+                        'The physical obsolete-result probe added an input or replaced its accepted receipt.')
+                    for worker in (sdk['oldWorker'],sdk['currentWorker']):
+                        status,content=c.execute('SELECT Status,ContentJson FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId=?',(v.key(worker['workflowExecutionId']),)).fetchone();physical=json.loads(content)
+                        require(status==worker['status'] and physical['modelWorkOrigin']==v.encoded_tree(worker['modelWorkOrigin']) and
+                            physical['pinnedExecutable']==v.encoded_tree(worker['pinnedExecutable']), 'The physical old/current worker differs during the obsolete-result probe.')
+                    status,content=c.execute('SELECT Status,ContentJson FROM elsa_runtime_post_commit_outbox WHERE OutboxItemId=?',(v.key(source['outboxItemId']),)).fetchone();physical=json.loads(content)
+                    require(status==2 and physical['intent']['payload']==old and physical['deliveredAt']==source['deliveredAt'],
+                        'The physical original result source changed during replay.')
+                elif store=='etl-runtime':
+                    rows=c.execute('SELECT RunId,Status,AcceptedRecords,RejectedRecords,InvocationJson FROM elsa_etl_runtime_runs').fetchall()
+                    require(len(rows)==2 and {(v.decoded(r[0]),r[1],r[2],r[3]) for r in rows}=={(p['runId'],4,2,0),(p['replacementRunId'],1,2,0)},
+                        'The physical ETL replacement was not live beside the original fault during the probe.')
+                    for run,status,accepted,rejected,invocation in rows:
+                        inv=json.loads(invocation);expected=origin if v.decoded(run)==p['runId'] else current
+                        require(v.decoded(inv['resultAddress']['workflowExecutionId'])==expected['workerExecutionId'],
+                            'The physical ETL attempt lost its native result address during the probe.')
+    return 3
 
 
 def verify_authorization(root,p,original_receipt,retry_command):
@@ -372,16 +458,20 @@ def verify(path):
         len(cases)==5 and {c['name'] for c in cases}=={'direct','root','sequence','flowchart','compensationscope'}, 'The held retry matrix lacks every unique direct/native parent.')
     authorization=manifest.get('authorizationControls',False)
     require(isinstance(authorization,bool),'The authorization qualification flag is invalid.')
+    obsolete=manifest.get('obsoleteResultControls',False)
+    require(isinstance(obsolete,bool) and not (authorization and obsolete),'The obsolete-result qualification flag is invalid.')
     names={'process.json','before.json','recovered.json','held.json','held-after-restart.json','finished.json','retained.json','retry-command.json','snapshot-unavailability.json',
         'lookup-source.csv','lookup-snapshot.csv'}|{p+'-wire.json' for p in ('before','held','finished','retained')}|{p+'-checked-model.json' for p in ('before','held','finished','retained')}|{
         p+'-checked-replacement.json' for p in ('finished','retained')}|{p+'-'+s+'.sqlite.gz' for p in ('before','held','finished') for s in ('elsa','etl-runtime','etl-design')}
     if authorization:names|={'auth-probe-users.json','auth-before.json','auth-after.json','auth-retained.json'}
+    if obsolete:names|={'retry-rearm.json','obsolete-sdk.json','replacement-wait-before.json','replacement-wait-after.json','replacement-wait-checked-model.json','replacement-wait-wire.json'}|{
+        'replacement-wait-'+s+'.sqlite.gz' for s in ('elsa','etl-runtime','etl-design')}
     products=None;traces={};results=[]
     for case in cases:
         directory=case['name'];assets=case['assets'];expected=names|({p+'-checked-embedding.json' for p in ('before','held','finished','retained')} if directory!='direct' else set())
         require(len(assets)==len(expected) and {a['path'] for a in assets}=={directory+'/'+n for n in expected}, 'The held retry case lacks its exact raw assets.')
         for asset in assets:require(q.digest(q.evidence_file(root,asset['path']))==asset['sha256'],'An actual held retry asset differs.')
-        results.append(verify_case(root/directory,directory,source,authorization))
+        results.append(verify_case(root/directory,directory,source,authorization,obsolete))
         process=json.loads((root/directory/'process.json').read_text())
         if products is None:products=process['products']
         require(products==process['products'],'The held retry cases used different first-party host products.')
@@ -395,7 +485,8 @@ def verify(path):
             traces[phase]=state
     return {'actualHeldRetryJourneys':results,'wholeStoresVerified':sum(r['wholeStoresVerified'] for r in results),'sourceRevision':source,
         'oneAuthorizedPhysicalRetryProved':True,'oldFailurePreserved':True,'sameSourceInterpreterTracesCompared':True,
-        'budgetExhaustionProved':False,'heldCancellationProved':False,'obsoleteResultControlsProved':False,'authorizationBeforeReplayProved':authorization,
+        'budgetExhaustionProved':False,'heldCancellationProved':False,'obsoleteResultControlsProved':obsolete,'authorizationBeforeReplayProved':authorization,
+        'actualObsoleteResultTransportControls':15 if obsolete else 0,
         'tenantIsolationBeforeReplayProved':authorization,'actualAuthorizationHttpProbes':355 if authorization else 0,
         'finalUpgradeAndStudioProved':False}
 

@@ -9,6 +9,7 @@ if (!readyPath) {
 const retryDelayIndex = process.argv.indexOf('--source-retry-after-seconds');
 const sourceRetryAfterSeconds = retryDelayIndex >= 0 ? Number(process.argv[retryDelayIndex + 1]) : 3;
 const invalidLastId = process.argv.includes('--invalid-last-id');
+const allowRetryRearm = process.argv.includes('--allow-retry-rearm');
 if (!Number.isSafeInteger(sourceRetryAfterSeconds) || sourceRetryAfterSeconds < 1 || sourceRetryAfterSeconds > 60) {
     throw new Error('Source Retry-After must be an integer from 1 to 60 seconds.');
 }
@@ -16,6 +17,7 @@ if (!Number.isSafeInteger(sourceRetryAfterSeconds) || sourceRetryAfterSeconds < 
 const requests = [];
 const outputPosts = [];
 let shardBAttempts = 0;
+const retryRearms = [];
 let capturedOutputBytes = 0;
 let observationsOverflow = false;
 const maximumBodyBytes = 1024 * 1024;
@@ -69,7 +71,18 @@ const server = http.createServer(async (request, response) => {
         return;
     }
     if (request.method === 'GET' && url.pathname === '/__fixture/state') {
-        sendJson(response, 200, { requests, outputPosts, overflow: observationsOverflow });
+        sendJson(response, 200, { requests, outputPosts, overflow: observationsOverflow, ...(allowRetryRearm ? { retryRearms } : {}) });
+        return;
+    }
+    if (allowRetryRearm && request.method === 'POST' && url.pathname === '/__fixture/rearm-source-retry') {
+        if (retryRearms.length !== 0 || shardBAttempts !== 1) {
+            sendJson(response, 409, { error: 'retry-rearm-not-current' });
+            return;
+        }
+        const receipt = { rearmNumber: 1, previousShardBAttempts: shardBAttempts, rearmedAtMs: elapsedMilliseconds() };
+        retryRearms.push(receipt);
+        shardBAttempts = 0;
+        sendJson(response, 200, receipt);
         return;
     }
 

@@ -73,6 +73,7 @@ def main():
     service_policy.add_argument('--final-service-fault',action='store_true',help='Pin explicit FinalFault/1 and prove a real current incident cannot retry after semantic finality.')
     parser.add_argument('--held-action',choices=('retry','cancel','exhaust'),default='retry',help='After the held failure survives its second process loss, retry successfully, cancel, or exhaust its budget through a real unavailable bound input.')
     parser.add_argument('--retry-auth-controls',action='store_true',help='Use real owned Identity accounts to verify retry/inspection permissions and foreign-tenant refusal before and after replay.')
+    parser.add_argument('--obsolete-result-controls',action='store_true',help='Replay the actual old native result and reject modified/misaddressed inputs while the replacement is in a real HTTP429 wait.')
     parser.add_argument("--queued-native-stage", choices=("start", "checkpoint"), help="With cancellation before admission, use the actual SDK to retain the selected native queue stage first.")
     parser.add_argument("--dispatcher-assembly", type=Path, help="Built owned SDK client required for the queued-native cut.")
     parser.add_argument("--admission-race-order", choices=("cancel-first", "admit-first"), help="Gate an unchanged actual proposal before its provider transaction, commit the competitor, then cold-recover both writers' obligations.")
@@ -96,6 +97,8 @@ def main():
     if args.held_action!='retry' and not args.hold_service_retry:parser.error('--held-action requires --hold-service-retry.')
     if args.retry_auth_controls and (not args.hold_service_retry or args.held_action!='retry' or args.dispatcher_assembly is None):
         parser.error('Retry authorization controls require --hold-service-retry --held-action retry and --dispatcher-assembly.')
+    if args.obsolete_result_controls and (not args.hold_service_retry or args.held_action!='retry' or args.dispatcher_assembly is None or args.retry_auth_controls):
+        parser.error('Obsolete-result controls require --hold-service-retry --held-action retry and --dispatcher-assembly, separately from authorization controls.')
     if args.business_error_boundary and (not (args.business_error or args.technical_fault) or args.parent!='BpmnModel'):
         parser.error("A business-error boundary requires --parent BpmnModel and a business-error or technical-fault journey.")
     caught_business_error=args.business_error and args.business_error_boundary=='matching'
@@ -226,7 +229,7 @@ def main():
     try:
         fixture_script=REPO/"e2e-tests/etl/EtlHttpFixture.mjs";ready=root/"http-ready.json"
         retry_after=60 if cancelling else 20
-        fixture=start(["node",str(fixture_script),"--ready-file",str(ready),"--source-retry-after-seconds",str(retry_after)]+(["--invalid-last-id"] if args.business_error else []),"http-fixture")
+        fixture=start(["node",str(fixture_script),"--ready-file",str(ready),"--source-retry-after-seconds",str(retry_after)]+(["--invalid-last-id"] if args.business_error else [])+(['--allow-retry-rearm'] if args.obsolete_result_controls else []),"http-fixture")
         wait_for(lambda:ready.exists(),bool,"The owned HTTP fixture did not start.",15)
         fixture_url="http://127.0.0.1:"+str(json.loads(ready.read_text())["port"])
         def wire():
@@ -648,6 +651,9 @@ def main():
                 auth_controls('before',route,request,expected)
                 if checked_native_model()!=checked_held or wire()!=before_wire:
                     raise ValueError('A denied principal changed the held execution before the authorized retry.')
+            if args.obsolete_result_controls:
+                fixture_api=q.Api('http://127.0.0.1:'+str(json.loads(ready.read_text())['port']))
+                q.write_json(output/'retry-rearm.json',fixture_api.request('/__fixture/rearm-source-retry',{}))
             submitted=api.request(route+'/retry-service',request)
             accepted=wait_for(lambda:api.request(route+'/commands/'+request['requestId']),lambda value:not value['pending'],
                 'The authorized retry did not retain its exact command result.',90)
@@ -676,6 +682,29 @@ def main():
                 second_run=replacement['runId'];worker=replacement['origin']['workerExecutionId'];escaped_second=urllib.parse.quote(second_run,safe='')
                 return {'original':view(),'replacement':{'native':api.view(worker),'run':api.request('/etl/runs/'+escaped_second),
                     'partitions':api.request('/etl/runs/'+escaped_second+'/connector-partitions?limit=50')},'incidents':api.request(route+'/incidents?limit=10')}
+            if args.obsolete_result_controls:
+                waiting=wait_for(pair,lambda value:value['replacement']['run']['status']=='running' and
+                    any(x['http']['fetch']['phase']=='waiting' and x['http']['fetch']['lastStatusCode']==429 for x in value['replacement']['partitions']['items']) and
+                    sum(x['acceptedMainEffects'] for x in value['replacement']['partitions']['items'])==2,
+                    'The actual replacement did not retain its own HTTP429 wait before obsolete-result controls.',90)
+                os.kill(host.pid,signal.SIGSTOP)
+                wait_for(lambda:q.process_field(host.pid,'stat'),lambda value:'T' in value,'The replacement host did not quiesce.',5)
+                try:
+                    before_probe=checked_native_model();q.write_json(output/'replacement-wait-before.json',waiting)
+                    dispatcher=args.dispatcher_assembly.resolve(strict=True);nonce=uuid.uuid4().hex
+                    q.write_json(root/'owned-bpmn-recovery.json',{'schemaVersion':1,'controllerProcessId':os.getpid(),'modelExecutionId':model_execution,'nonce':nonce})
+                    sdk=start(['dotnet',str(dispatcher),'--probe-obsolete-result',str(root),model_execution,nonce],'obsolete-sdk')
+                    sdk_log=root/f'obsolete-sdk-{len(processes)-1}.log';sdk.wait(timeout=90)
+                    probe=json.loads(sdk_log.read_text());q.write_json(output/'obsolete-sdk.json',probe)
+                    if sdk.returncode!=0 or any(source not in p['informationalVersion'] for p in probe['products']):
+                        raise ValueError('The source-matched actual obsolete-result SDK controls failed.')
+                    after_probe=checked_native_model();q.write_json(output/'replacement-wait-checked-model.json',after_probe)
+                    replacement_wait_stores=snapshots('replacement-wait')
+                    if before_probe!=after_probe:raise ValueError('An obsolete result changed the model or original source/receipt while the replacement was live.')
+                finally:os.kill(host.pid,signal.SIGCONT)
+                after_probe_view=pair();q.write_json(output/'replacement-wait-after.json',after_probe_view)
+                q.write_json(output/'replacement-wait-wire.json',wire())
+                if after_probe_view!=waiting:raise ValueError('An obsolete result changed the replacement wait or the original physical fault.')
             if args.held_action=='exhaust':
                 absorbed=native_parent_execution and args.embedded_parent=='CompensationScope'
                 final=wait_for(pair,lambda value:value['replacement']['run']['status']=='faulted' and value['replacement']['native']['instance']['status']=='Faulted' and
@@ -784,6 +813,7 @@ def main():
                 'nativeParentExecutionId':native_parent_execution,'nativeParentPublication':native_parent_publication,'selection':selection,'bindings':bindings,
                 'fixtureSha256':q.digest(fixture_script),'controllerSha256':q.digest(Path(__file__)),'businessError':False,'technicalFault':True,
                 **({'authorizationControls':True,'dispatcherSha256':q.digest(dispatcher)} if args.retry_auth_controls else {}),
+                **({'obsoleteResultControls':True,'dispatcherSha256':q.digest(dispatcher),'replacementWaitStores':replacement_wait_stores} if args.obsolete_result_controls else {}),
                 'technicalFaultPolicy':'HoldForRetry','maxServiceAttempts':2,'retryAfterSeconds':retry_after,'resumptionSweepIntervalSeconds':.2,
                 'scopeLimits':['Actual one authorized held-service retry after process loss; old failed state stays terminal, with one new physical worker/run for the same semantic work. Prior effects may repeat.',
                     'Snapshot availability is repaired externally without changing bytes or SQL state. Budget exhaustion, cancellation while held, old-result controls, provider/retention/rollback and final upgrade/Studio remain separate gates.']})

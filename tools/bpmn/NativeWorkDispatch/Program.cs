@@ -36,10 +36,12 @@ using Elsa.Etl.Workflows.Runtime;
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 try
 {
-    if (args.Length is not (4 or 6) || args[0] is not ("--enqueue-start" or "--enqueue-checkpoint" or "--drain-checkpoint" or "--cancel-model" or "--consume-native-result" or "--consume-native-success" or "--create-auth-probe-users") ||
+    if (args.Length is not (4 or 6) || args[0] is not ("--enqueue-start" or "--enqueue-checkpoint" or "--drain-checkpoint" or "--cancel-model" or "--consume-native-result" or "--consume-native-success" or "--create-auth-probe-users" or "--probe-obsolete-result") ||
         args.Length == 6 && args[4] != (args[0] == "--consume-native-success" ? "--parent-return-stage" : "--gate"))
         throw new ArgumentException("Select an owned enqueue/drain/cancel operation, content root, model id, nonce and optional --gate directory.");
     var race = args[0] is "--drain-checkpoint" or "--cancel-model";
+    var obsolete = args[0] == "--probe-obsolete-result";
+    if (obsolete && args.Length != 4) throw new ArgumentException("Obsolete-result controls use the normal model mailbox without a proposal gate.");
     var success = args[0] == "--consume-native-success";
     var consume = success || args[0] == "--consume-native-result";
     if (consume && !success && args.Length != 4) throw new ArgumentException("Consumption uses the original production delivery path without a validation gate.");
@@ -64,7 +66,7 @@ try
     var services = new ServiceCollection();
     services.AddLogging(); services.AddWorkflowRuntime();
     services.AddSingleton<IPersistenceAccessContextAccessor>(new ScopedAccess());
-    if (race || consume)
+    if (race || consume || obsolete)
     {
         new EventsFeature().ConfigureServices(services);
         new ActivitiesBpmnHostingFeature().ConfigureServices(services);
@@ -111,20 +113,25 @@ try
             services.AddScoped<IRuntimeCheckpointCommitEnricher, AdmissionGate>();
         }
     }
-    services.Replace(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainPolicy>(new CaptureDrainPolicy(checkpointCut || race || consume)));
+    services.Replace(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainPolicy>(new CaptureDrainPolicy(checkpointCut || race || consume || obsolete)));
     // The orchestration loop follows delivered continuations even when each scheduler pass has a one-item budget.
     // The existing two-cycle budget retains admission and the next queued root step, before activity invocation.
     if (args[0] == "--drain-checkpoint")
         services.Replace(ServiceDescriptor.Singleton(new WorkflowDrainOrchestratorOptions(maxTotalDrainCycles: 2)));
     await using var provider = services.BuildServiceProvider();
-    if (race || consume)
+    if (race || consume || obsolete)
         foreach (var initializer in provider.GetServices<IShellInitializer>()) await initializer.InitializeAsync();
     await using var scope = provider.CreateAsyncScope();
     var sdk = scope.ServiceProvider;
-    if (race || consume)
+    if (race || consume || obsolete)
         foreach (var task in sdk.GetServices<IStartupTask>()) await task.ExecuteAsync(CancellationToken.None);
     var models = sdk.GetRequiredService<IRuntimeModelExecutionReader>();
     var model = await models.FindAsync(args[2]) ?? throw new InvalidOperationException("The actual model execution is absent.");
+    if (obsolete)
+    {
+        await ObsoleteResultProbe.RunAsync(sdk, model, json);
+        return 0;
+    }
     if ((consume ? model.Lifecycle is not (RuntimeModelLifecycle.Running or RuntimeModelLifecycle.TerminalPendingSettlement) :
             model.Lifecycle != RuntimeModelLifecycle.Running || model.TerminalResult is not null) || model.Protocol != new RuntimeExecutionProtocol("elsa.bpmn", 1))
         throw new InvalidOperationException("Only the original live BPMN invocation may enqueue its worker.");
