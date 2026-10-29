@@ -1,0 +1,361 @@
+{
+  "kind": "Dependency-lock repair after initial direct-process evidence",
+  "failedHead": "9c6eaa314f4b986b382d934eabcf197b8d7f79c6",
+  "failedCi": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40790816735",
+  "cause": "Stale transitive Project dependency snapshots for Elsa.Workflows.Runtime after adding its direct Events.Core reference. Trimming generated lock refreshes left inconsistent consumers; cached local solution restore did not force revalidation.",
+  "repair": "Regenerated the complete solution dependency graph with --force-evaluate. Kept resulting transitive package pruning rather than restoring stale dependency snapshots.",
+  "positiveChecks": [
+    "dotnet restore Elsa.Server.slnx --locked-mode --force",
+    "dotnet restore Elsa.Server.Core.slnf --locked-mode --force",
+    "dotnet restore Elsa.Server.Workbench.slnf --locked-mode --force -p:BaseIntermediateOutputPath=obj/model-lock-validation/"
+  ],
+  "productionAndHostTestSourceChanged": false,
+  "existingEvidenceSource": "48bf343b51f9db4c682bacb737758d0c6dbdcfbc",
+  "newHeadCi": "Pending push/checks; previous failed checks remain recorded, not superseded by a green claim.",
+  "lockFiles": [
+    {
+      "path": "Essentials/tests/Activities/Behavioral/Tests/packages.lock.json",
+      "sha256": "05bb63427f7a4128c2f5fe00f207002f14bdad98ac686341e7ff51d2c03fb5d1"
+    },
+    {
+      "path": "Essentials/tests/Activities/Bpmn/Interchange/Tests/packages.lock.json",
+      "sha256": "b11a7f5c4ae9f5efac35052c09de04d2171e9a00768658dc5630eae452f7be90"
+    },
+    {
+      "path": "Essentials/tests/Activities/Compensation/Persistence/EntityFrameworkCore/ProviderTests/packages.lock.json",
+      "sha256": "d24528da2010284b0606d7d3454da663fff6f6fb26e638ca17cdfbfeed266a8d"
+    },
+    {
+      "path": "Essentials/tests/Activities/Compensation/Tests/packages.lock.json",
+      "sha256": "b416b5f577910d0fdb510a442053b50a9bce65d75bb65166dfc94c08bff195b9"
+    },
+    {
+      "path": "Essentials/tests/Activities/ControlFlow/Tests/packages.lock.json",
+      "sha256": "df9fce5eace920838e41637fbf273804b3c31b3901394d1f22d6290df5cb4e88"
+    },
+    {
+      "path": "Essentials/tests/Activities/Design/Api/Tests/packages.lock.json",
+      "sha256": "b86b58472896afa8c8219a99c4dd35846fa1801d0bdec9d32846e65b0a3542fc"
+    },
+    {
+      "path": "Essentials/tests/Activities/Design/Tests/packages.lock.json",
+      "sha256": "c294748f8b3226583edc3590b11587b80b2acf6943126d5a15db641d8b566718"
+    },
+    {
+      "path": "Essentials/tests/Activities/DispatchWorkflow/Tests/packages.lock.json",
+      "sha256": "67fd1e15ed6eebdb3c467a65713b616a5908047470d377108fd4336159dce347"
+    },
+    {
+      "path": "Essentials/tests/Activities/Flowchart/Tests/packages.lock.json",
+      "sha256": "e76870ee5fcd89ef292041295191f449cacec3162bae254b1f7eb8a4a150e3bb"
+    },
+    {
+      "path": "Essentials/tests/Activities/Graph/Tests/packages.lock.json",
+      "sha256": "8c511c4e9a6e7f010e69280694ee252ddaae9bdfb7be1bffffbdc964ccfaa310"
+    },
+    {
+      "path": "Essentials/tests/Activities/Http/CommandCost/Tests/packages.lock.json",
+      "sha256": "8be3d952a32ebedbf1b17921309f997e4d77f9d496f2f36527a11311da984f94"
+    },
+    {
+      "path": "Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/packages.lock.json",
+      "sha256": "f112456480df6c28cb9dd1207c7f7a96a3730d5805b24850e69cf4be4f51abe2"
+    },
+    {
+      "path": "Essentials/tests/Activities/Http/IntegrationTests/packages.lock.json",
+      "sha256": "2d947ec8e4011081c7c03f2d7293556226f57b7e54162d90cec79af5e487263d"
+    },
+    {
+      "path": "Essentials/tests/Activities/Http/Tests/packages.lock.json",
+      "sha256": "b3cbb3909b3510fb09526e5c69fa7b31f0877620afc4ab32f361d25af66227ff"
+    },
+    {
+      "path": "Essentials/tests/Activities/Runtime/Tests/packages.lock.json",
+      "sha256": "95d5fcb051b4ef688b1f3111c9cd06f9665def4d1d7374a676e7f095b6115c25"
+    },
+    {
+      "path": "Essentials/tests/Activities/Scheduling/Tests/packages.lock.json",
+      "sha256": "9c168228c63d7c506adc37462e4eb66b72825e613eef70794add83973682b307"
+    },
+    {
+      "path": "Essentials/tests/Activities/Scripting/Tests/packages.lock.json",
+      "sha256": "fcc22bd95db9782fd9df76a20e737a18c4ef83c57c0608edad7f8428a50a71ce"
+    },
+    {
+      "path": "Essentials/tests/Activities/Sequence/Tests/packages.lock.json",
+      "sha256": "535dd70a282310b4b9ae1f07180413f8d41d60f05bb0368dd7a63afe5a0cbdb4"
+    },
+    {
+      "path": "Essentials/tests/Activities/Testing/packages.lock.json",
+      "sha256": "de9e02c81e783f57c57ef1303ec6eb90b2f79d3b05a1bf616860a82df020ff9c"
+    },
+    {
+      "path": "Essentials/tests/Api/Capabilities/Tests/packages.lock.json",
+      "sha256": "dfb60a0d96bfedf07ab40e03b2d2170e02b63c8575cb90ad2f9025aa4aa17906"
+    },
+    {
+      "path": "Essentials/tests/Cli/Fixtures/Host/packages.lock.json",
+      "sha256": "a145059fb5a38812edf42c98c8767b721d19db6331f5f018875ce9a71f3a16b1"
+    },
+    {
+      "path": "Essentials/tests/Cli/Fixtures/ShellsHost/packages.lock.json",
+      "sha256": "a7b353422c8e4cf6ecaafbe2d7b5eaaeb9312dfeb7d7bbc4a300a12aea3873b0"
+    },
+    {
+      "path": "Essentials/tests/Cluster/EntityFrameworkCore/ProviderTests/packages.lock.json",
+      "sha256": "4722407c1133565ff0fc6d0371210b089040973ad333f2646f00f4aaef5c5346"
+    },
+    {
+      "path": "Essentials/tests/Cluster/EntityFrameworkCore/Testing/packages.lock.json",
+      "sha256": "1bf594908472efd9826ae86c4b947ffcb5e04f020f77d276ae28e7cb53a43403"
+    },
+    {
+      "path": "Essentials/tests/Cluster/EntityFrameworkCore/Tests/packages.lock.json",
+      "sha256": "f505c0a813d30c1484ea7b9897c576d32324410d535284ac98d31c6f59656a8f"
+    },
+    {
+      "path": "Essentials/tests/Cluster/Fixtures/FeedModule/packages.lock.json",
+      "sha256": "39bacc868c4a0d5772803d7b91715f4f0a79f9dd542f8e3ef2f79096bc0336a0"
+    },
+    {
+      "path": "Essentials/tests/Cluster/Fixtures/MigratingModule/packages.lock.json",
+      "sha256": "72528be7d87f0789d281f7bbf36e919e1a729cd8bb9b06a012e5d5cb1ae48e1e"
+    },
+    {
+      "path": "Essentials/tests/Cluster/Readability/Tests/packages.lock.json",
+      "sha256": "53929491a915f8eb7fc0737b6a47eaafb9d743370ff6922084b22179ac8198b7"
+    },
+    {
+      "path": "Essentials/tests/Cluster/Testing/packages.lock.json",
+      "sha256": "cd2d3f1fed0c68e9b3de945d335ead638e6b8cf93da784bc5db29bacd6944a01"
+    },
+    {
+      "path": "Essentials/tests/Cluster/Tests/packages.lock.json",
+      "sha256": "de3d13ceddd22d056d3810d653872e8771c08d13139e9ba28ecd9a9bd9280b26"
+    },
+    {
+      "path": "Essentials/tests/Connections/Tests/packages.lock.json",
+      "sha256": "d3535466d6d50841cd44097b6cd4463ccf798ddce3163a6cf3911797b54c1fed"
+    },
+    {
+      "path": "Essentials/tests/Diagnostics/OpenTelemetry/Tests/packages.lock.json",
+      "sha256": "17acc597d100a34c231e830e8d365ec089e4ea3d5aaddd528cb20eef65b9e2de"
+    },
+    {
+      "path": "Essentials/tests/Diagnostics/StructuredLogs/Tests/packages.lock.json",
+      "sha256": "d6c0606d851e20dc5894ffbae1ceb3adda19891377c19e6d1b6176d86ea26ce0"
+    },
+    {
+      "path": "Essentials/tests/Expressions/Api/Tests/packages.lock.json",
+      "sha256": "10b6709dba5671f2c15b08b43764cd86a774227e243304281b3b368849038892"
+    },
+    {
+      "path": "Essentials/tests/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/Tests/packages.lock.json",
+      "sha256": "2d9c30dc5d64bc5d38c53356873e65a9ad5c5ef03115663b768b827f92d8b36b"
+    },
+    {
+      "path": "Essentials/tests/Foundation/Identity/Persistence/EntityFrameworkCore/ProviderTests/packages.lock.json",
+      "sha256": "abd37a1d80bc74d802464b7e13a16bd959434a606d744c0c43453a1120c8a7d7"
+    },
+    {
+      "path": "Essentials/tests/Foundation/Identity/Tests/packages.lock.json",
+      "sha256": "862384e094b4991b6b49e9d2c2dcc1795c2899286b74d89eb3a63d0a06f8d53e"
+    },
+    {
+      "path": "Essentials/tests/Http/Tests/packages.lock.json",
+      "sha256": "677d3d20e08605b0e0ff76e98e8fb314cce1cbb5b94e5f06260b1141f31017fd"
+    },
+    {
+      "path": "Essentials/tests/Locking/Tests/packages.lock.json",
+      "sha256": "fad1760693d71bb5bb3cda89267f1f2eacb7bb73929b011f6cccb7aa19dd3553"
+    },
+    {
+      "path": "Essentials/tests/Modularity/EntityFramework/Tests/packages.lock.json",
+      "sha256": "1b0965fa2fa2262ea885ee0fb8cb5264977b715dafb8b9594260705dcdff7064"
+    },
+    {
+      "path": "Essentials/tests/Modularity/ProviderTests/packages.lock.json",
+      "sha256": "6ade4cc622119d710d65af1bcc509dbbbe56740fd1d9006c4452dc7dbaea3762"
+    },
+    {
+      "path": "Essentials/tests/Modularity/Tests/packages.lock.json",
+      "sha256": "c91d8a508db4666af496e026cdb96ed45806579ae1463520a597429149c1c894"
+    },
+    {
+      "path": "Essentials/tests/Persistence/EntityFramework/Tests/packages.lock.json",
+      "sha256": "40c93155159c20edc8be50bec26a50c61a1f597f72a283d64e609532e8b8bf8d"
+    },
+    {
+      "path": "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/ProviderTests/packages.lock.json",
+      "sha256": "309764059d5b8af275ade778f4193b8e6af123aaccd801015650f2ef72090469"
+    },
+    {
+      "path": "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/packages.lock.json",
+      "sha256": "49d86a148abb1d5e0fb24462956e9ce4b90d671955755e0bdd8c241cca22c78c"
+    },
+    {
+      "path": "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/PostgreSql/PackageFeedProbe/packages.lock.json",
+      "sha256": "a40c4830f40ff32a9082b73610389dfae66a431aad5650b6cfe9bab68ec21e46"
+    },
+    {
+      "path": "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/packages.lock.json",
+      "sha256": "c78f615f087baa129ea2761143760ebbc974a71cf56529497174e7a5a07168e1"
+    },
+    {
+      "path": "Essentials/tests/Secrets/Tests/packages.lock.json",
+      "sha256": "0dd5062d03b88d37dc9f5161eb9358d32aae4e87c78fada7d4db479f37e5ea09"
+    },
+    {
+      "path": "Essentials/tests/Secrets/Workflows/Tests/packages.lock.json",
+      "sha256": "48803e995f85b120e1f1adb1c460cf1d96880f03ca3ebd3df711af4952388edd"
+    },
+    {
+      "path": "Essentials/tests/Studio/Preferences/Tests/packages.lock.json",
+      "sha256": "aca7cf5ac981a1449b1d308b276cc8bb9732b9446f4384882442e054bf60237a"
+    },
+    {
+      "path": "Essentials/tests/Workbench/BackgroundActivities/Tests/packages.lock.json",
+      "sha256": "765e9fcc64d05a3832293e1cff02cedef6d6c1e54f797e81a1ce0315f5ff78bc"
+    },
+    {
+      "path": "Essentials/tests/Workbench/Fixtures/BackgroundActivities/packages.lock.json",
+      "sha256": "aa8c34f2e6b8f4c11b34499ecb2d417e257a541444beaca942abf00d4a4f5c0a"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/packages.lock.json",
+      "sha256": "0bbcd8c8b194a2263c2a90a5a8bc37d54ac0ae5ca96b47c34ed0b346188ad420"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/Tests/packages.lock.json",
+      "sha256": "371749b164576d4defb12c4f678fc803cdee03ea0e6536afd06aef200ae53c9c"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Dashboard/Tests/packages.lock.json",
+      "sha256": "6dce0f2f3355167cdbc70518ac8834613a40b47f517266a7bfed1380dbaebc11"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Design/Api/Tests/packages.lock.json",
+      "sha256": "79dd5e7b583e5f40f4d249615b6f37d6d88b47122b0656c83ac88b15ce140ed7"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Design/Persistence/EntityFrameworkCore/Tests/packages.lock.json",
+      "sha256": "70c1bb26b91ac94c74d176c4d531e99996e301f71a504c2e45c9efadec217061"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Design/Tests/packages.lock.json",
+      "sha256": "6fe342e78c5695b8dbf51b1d52a931351c7e1edeb8e9aaf12f2d8c1c0cdad995"
+    },
+    {
+      "path": "Essentials/tests/Workflows/ExecutionEvidence/Tests/packages.lock.json",
+      "sha256": "56d186ca7eb5748f1c023bb96cfe339dfdf0c78eda6325d12fdcb5a415de6e0a"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Publishing/Api/Tests/packages.lock.json",
+      "sha256": "8de995f23ff2059a4579eff6e31d85db25bb407247bc576368292a92adeba97e"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Publishing/Persistence/EntityFrameworkCore/Tests/packages.lock.json",
+      "sha256": "0f991ccaa9067fa072beb753fc552742f92ea92f150338bba59d49208e931c61"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Publishing/Tests/packages.lock.json",
+      "sha256": "0ea6ce8a334f7a9d10197e756c7904b21a3486a56dcdf8e4d59867a2e6084c2e"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Api/Tests/packages.lock.json",
+      "sha256": "be65d7c45397a65ef0a78320b36698968baec3f5c73262ec30a91fea72afd4e0"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/ProviderTests/packages.lock.json",
+      "sha256": "6e1449f7f7b8a5d583a97e26315263e491ce62b3cb79fc94be3362e3747c3dbc"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Tests/packages.lock.json",
+      "sha256": "5e573880df110f8698cb1d151e809fdf10b3bbae0306861a3f666914f7bce0c5"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Distributed/Tests/packages.lock.json",
+      "sha256": "3b31a9dc21238cb4cb02f8f4714a290378412639972f524f8e06560b5036d9a1"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Http/Tests/packages.lock.json",
+      "sha256": "a96451232d60d0c0c05c4a19e97dfebbd9cb344d117a97a242c162ffb2c6d8a6"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Fixtures/WorkerOidcHost/packages.lock.json",
+      "sha256": "a92f3c2237f2e57f5a134d0c0c9182c151753b946438dbada05ea89178826afe"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/packages.lock.json",
+      "sha256": "92c79f806056708059ba67beb8eaa5167f16db5eeac55627f1c221abe6f3c3c7"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/packages.lock.json",
+      "sha256": "32865980503ae05fc72ab940b3110546016c4ca2999e493ee0e82cd308d67a8e"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Reconciliation/ExecutionProbe/packages.lock.json",
+      "sha256": "8562fa3c9d017b1324d91d8269fb28df6349ab6c2f8d69a6cbb2091a66f2144d"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Reconciliation/Tests/packages.lock.json",
+      "sha256": "c46bcad2b4aabcdcd96d30692716de4cd2afbb9f277c6e6fb3b739f66be06ef6"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Resumption/Tests/packages.lock.json",
+      "sha256": "c466727fa69741cb844cce57c86bb955ba88b838af5af985732be5ccea422d3a"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Scheduling/Tests/packages.lock.json",
+      "sha256": "dabb7f85cb84dd6cc3abbd48d115df61bc82c5073fc83a2b05f11034e0f2cf75"
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime/Tests/packages.lock.json",
+      "sha256": "77eb03781b1479f9a5b9083a445f8ec0ee801678445cc1f723b426690daca1b7"
+    },
+    {
+      "path": "Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/packages.lock.json",
+      "sha256": "5605152145ccda62be9d507d66c2cd3ecc96a45460d4fbc78b0c2172586a835a"
+    },
+    {
+      "path": "Extensions/Elsa3/tests/Mapping/Tests/packages.lock.json",
+      "sha256": "949d0fe16c1905725d45c3adfc98369daf3d5e3204775fd6f04b7bf45db0f0c2"
+    },
+    {
+      "path": "Extensions/Etl/tests/Tests/packages.lock.json",
+      "sha256": "b092dfb395e4f9c47d5de1893b647e538cc96657bb05e3318bf8a7db8cdc33fd"
+    },
+    {
+      "path": "Extensions/Etl/tests/WorkerHost/packages.lock.json",
+      "sha256": "8110552ca9ed26e4bc3486d2bebadc66bda101a3815829001a17f2ce19b434e5"
+    },
+    {
+      "path": "Extensions/ExtensionBuilder/tests/Api/Tests/packages.lock.json",
+      "sha256": "0d547c070738a78f91da2e233b3be29a0630f9d9c436fe5fbb826e5fd3c89b96"
+    },
+    {
+      "path": "Extensions/Integrations/tests/Connectors/OAuth2/Tests/packages.lock.json",
+      "sha256": "aca237636607ce5878372f5054fea60c265b65aad061da8019cd136d8b95a105"
+    },
+    {
+      "path": "Extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/packages.lock.json",
+      "sha256": "2aae2aa24acf1c50fc7158633106390328d9f8c42ea581f196b35114c9a8d728"
+    },
+    {
+      "path": "Extensions/Rules/tests/Tests/packages.lock.json",
+      "sha256": "d44b1fe9ee098750432f2aa1d2c4889e530a3052e1bb502a01bc503eab4347f5"
+    },
+    {
+      "path": "tools/bpmn/DeliveryPreflight/packages.lock.json",
+      "sha256": "f1921587bd72b743b0526c6daefa6c7969f8aa08fa60d26227c7f6bc1f237a90"
+    },
+    {
+      "path": "tools/bpmn/DeliveryRecoveryRead/packages.lock.json",
+      "sha256": "22af850f4215b27dd80c9d2ab7f564232862639b7e015b5af32d6a36713c7350"
+    },
+    {
+      "path": "tools/ef/Elsa.EntityFrameworkCore.Tooling/packages.lock.json",
+      "sha256": "b0ea8c26ef0f4ab578d4a29f19974fd90c7d0814d2b9de1ac5d83f46d60bbd84"
+    }
+  ]
+}
