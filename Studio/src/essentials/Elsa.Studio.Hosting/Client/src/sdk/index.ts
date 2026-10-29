@@ -427,55 +427,11 @@ export interface StudioWorkflowDesignerPanelContribution<TContext = unknown> {
   component: ComponentType<StudioWorkflowDesignerPanelProps<TContext>>;
 }
 
-export interface StudioWorkflowContextActivity {
-  id: string;
-  type: string;
-  displayName?: string;
-  description?: string;
-}
-
 export interface StudioWorkflowContextConnection {
   source: string;
   target: string;
   sourcePort?: string;
   targetPort?: string;
-}
-
-export interface StudioWorkflowContextDiagnostic {
-  severity: string;
-  message: string;
-}
-
-// Snapshot of the open workflow that the designer publishes onto `window.__ELSA_STUDIO_WORKFLOW_CONTEXT__`
-// for out-of-band consumers (the host's agent context provider, Weaver tooling). Defined once here so the
-// writer (the Workflows module's context bridge) and every reader share a single contract.
-export interface StudioWorkflowContextSnapshot {
-  workflowId: string;
-  workflowDefinitionId?: string;
-  workflowVersionId?: string | null;
-  draftId?: string | null;
-  revision?: string | null;
-  selectedNodeId?: string | null;
-  selectedActivityType?: string | null;
-  /** Node the inspector shows: the selection, or the scope owner when nothing is selected. */
-  inspectedNodeId?: string | null;
-  inspectedActivityType?: string | null;
-  /**
-   * True only on the owner FALLBACK — nothing is selected and the scope owner is shown. False when the
-   * owner itself is explicitly selected (possible for unsupported designers); compare inspectedNodeId
-   * against the scope to detect that case.
-   */
-  inspectedIsScopeOwner?: boolean;
-  summary?: string;
-  activities?: StudioWorkflowContextActivity[];
-  connections?: StudioWorkflowContextConnection[];
-  diagnostics?: StudioWorkflowContextDiagnostic[];
-}
-
-declare global {
-  interface Window {
-    __ELSA_STUDIO_WORKFLOW_CONTEXT__?: StudioWorkflowContextSnapshot;
-  }
 }
 
 export interface StudioFeatureAreaNavLeaf {
@@ -1194,6 +1150,27 @@ export interface StudioAgentContextRequest {
   surface: StudioAgentSurface;
   mode?: StudioAgentMode;
   sessionId?: string;
+  signal?: AbortSignal;
+}
+
+/** Backend payload enums retain camelCase wire spelling; presentation may normalize labels. */
+export type StudioAgentContextOrigin = "clientSnapshot" | "resourceData" | "authoritativeRead" | "installedGuidance";
+export type StudioAgentExecutionLocation = "server" | "clientWorkingState";
+export type StudioAgentEffectScope = "clientWorkingState" | "serverPersisted";
+export type StudioAgentPreparedRisk = "readOnly" | "reviewRequired" | "destructive" | "admin";
+export type StudioAgentClientOutcome = "applied" | "refused" | "uncertain";
+
+/** Module-defined data is opaque to the shell and provider transports. */
+export interface StudioAgentPayload<TData = unknown> {
+  typeId: string;
+  schemaVersion: string;
+  data: TData;
+}
+
+/** Identifies an originating registry and module/editor lifetime; it grants no authority. */
+export interface StudioAgentClientBinding {
+  clientId: string;
+  generationId: string;
 }
 
 export interface StudioAgentContextAttachment {
@@ -1205,6 +1182,27 @@ export interface StudioAgentContextAttachment {
   sensitivity: StudioAgentSensitivity;
   scope: string;
   content?: unknown;
+  summary?: string;
+  references?: Record<string, string>;
+  moduleId?: string;
+  schemaVersion?: string;
+  target?: StudioAgentResourceTarget | null;
+  /** Caller values are input to installed backend admission, never self-asserted trust. */
+  origin?: StudioAgentContextOrigin;
+  client?: StudioAgentClientBinding | null;
+  agentScopes?: string[];
+}
+
+export interface StudioAgentContributionDiagnostic {
+  contributorId: string;
+  code: string;
+  message: string;
+  required: boolean;
+}
+
+export interface StudioAgentContextCollection {
+  attachments: StudioAgentContextAttachment[];
+  diagnostics: StudioAgentContributionDiagnostic[];
 }
 
 export interface StudioAgentContextProviderContribution {
@@ -1214,7 +1212,8 @@ export interface StudioAgentContextProviderContribution {
   order?: number;
   surfaces: string[];
   sensitivity: StudioAgentSensitivity;
-  collect(context: StudioAgentContextRequest): Promise<StudioAgentContextAttachment[]>;
+  required?: boolean;
+  collect(context: StudioAgentContextRequest): Promise<StudioAgentContextCollection | StudioAgentContextAttachment[]>;
 }
 
 export interface StudioAgentPromptStarterContribution {
@@ -1279,15 +1278,72 @@ export interface StudioAgentToolContractContribution {
   availability?: StudioAgentToolAvailability;
   invocationModes: StudioAgentToolInvocationMode[];
   resultRendererIds?: string[];
+  contractVersion?: string;
+  executionLocation?: StudioAgentExecutionLocation;
+  /** Invoked only for a matching backend-prepared, explicitly reviewed client request. */
+  executeClient?(invocation: StudioAgentPreparedInvocation, signal?: AbortSignal): Promise<StudioAgentClientExecutionResult>;
 }
 
 export interface StudioAgentResourceTarget {
+  moduleId: string;
   resourceType: string;
-  resourceId?: string;
+  resourceId: string | null;
+  revision: string | null;
   displayName?: string;
-  moduleId?: string;
   route?: string;
   summary?: string;
+}
+
+/** Frozen server preparation; callback code must not replace target, arguments or approval digest. */
+export interface StudioAgentPreparedInvocation {
+  invocationId: string;
+  sessionId: string;
+  turnId: string;
+  toolCallId: string;
+  toolName: string;
+  toolContractVersion: string;
+  moduleId: string;
+  actorId: string;
+  tenantId: string;
+  target: StudioAgentResourceTarget | null;
+  arguments: unknown;
+  approvalDigest: string;
+  risk: StudioAgentPreparedRisk;
+  preview: StudioAgentPayload;
+  executionLocation: StudioAgentExecutionLocation;
+  requiresApproval: boolean;
+  client: StudioAgentClientBinding | null;
+  expiresAt: string;
+}
+
+/** Observed module outcome. Returning from a dispatch call alone does not prove application. */
+export interface StudioAgentClientExecutionResult {
+  outcome: StudioAgentClientOutcome;
+  summary: string;
+  after?: StudioAgentResourceTarget | null;
+  result?: StudioAgentPayload | null;
+}
+
+export interface StudioAgentClientAcknowledgement extends StudioAgentClientExecutionResult {
+  client: StudioAgentClientBinding;
+  approvalDigest: string;
+}
+
+export interface StudioAgentEffectReceipt {
+  invocationId: string;
+  before: StudioAgentResourceTarget;
+  after: StudioAgentResourceTarget;
+  scope: StudioAgentEffectScope;
+  evidence: StudioAgentPayload;
+}
+
+export interface StudioAgentToolResult {
+  toolCallId: string;
+  toolName: string;
+  succeeded: boolean;
+  content: string;
+  payload?: StudioAgentPayload | null;
+  receipt?: StudioAgentEffectReceipt | null;
 }
 
 export interface StudioAgentResultRendererProps {
@@ -1295,6 +1351,8 @@ export interface StudioAgentResultRendererProps {
   resourceTarget?: StudioAgentResourceTarget;
   result: unknown;
   resultType?: string;
+  preparedInvocation?: StudioAgentPreparedInvocation;
+  toolResult?: StudioAgentToolResult;
 }
 
 export interface StudioAgentResultRendererContribution {
@@ -1304,11 +1362,16 @@ export interface StudioAgentResultRendererContribution {
   order?: number;
   resourceTypes?: string[];
   resultTypes?: string[];
+  schemaVersions?: string[];
   component: ComponentType<StudioAgentResultRendererProps>;
   supports?(props: StudioAgentResultRendererProps): boolean;
 }
 
-export interface StudioAgentRegistry {
+export interface StudioAgentRegistry extends StudioAgentPromptDispatcher {
+  /** Stable per registry instance; modules pair it with a private editor generation. */
+  readonly clientId: string;
+  readonly promptActions: StudioContributionRegistry<StudioAgentPromptActionContribution>;
+  readonly providerAvailability: StudioAiProviderAvailability;
   readonly contextProviders: StudioContributionRegistry<StudioAgentContextProviderContribution>;
   readonly promptStarters: StudioContributionRegistry<StudioAgentPromptStarterContribution>;
   readonly capabilities: StudioContributionRegistry<StudioAgentCapabilityContribution>;
@@ -1325,20 +1388,11 @@ export type StudioAiToolDangerLevel = "low" | "medium" | "high" | "critical";
 export type StudioAiTenantBehavior = "tenant-scoped" | "host-scoped" | "cross-tenant-denied";
 export type StudioAiProposalStatus = "draft" | "validated" | "blocked" | "approved" | "rejected" | "applied" | "expired";
 
-export interface StudioAiContextAttachment {
-  id?: string;
-  kind: string;
-  referenceId?: string | null;
-  scope?: string | null;
-  activityId?: string | null;
-  metadata?: Record<string, unknown>;
-}
-
-export interface StudioAiPromptRequest {
+export interface StudioAgentPromptRequest {
   message: string;
   agent?: string | null;
   mode?: StudioAiPromptMode;
-  attachments?: StudioAiContextAttachment[];
+  attachments?: StudioAgentContextAttachment[];
   source?: {
     moduleId?: string;
     actionId?: string;
@@ -1352,7 +1406,7 @@ export interface StudioAiPromptRequest {
 }
 
 /** The completed outcome of a prompt dispatched with a {@link StudioAiPromptRequest.requestId}. */
-export interface StudioAiPromptResult {
+export interface StudioAgentPromptResult {
   requestId: string;
   status: "completed" | "cancelled" | "failed";
   /** The assistant's final message text (empty for cancelled/failed turns). */
@@ -1361,17 +1415,7 @@ export interface StudioAiPromptResult {
   autoApply?: boolean;
 }
 
-export interface StudioAiContextProviderContribution {
-  id: string;
-  kind: string;
-  label: string;
-  description?: string;
-  moduleId?: string;
-  order?: number;
-  createAttachment(reference: unknown): StudioAiContextAttachment | null;
-}
-
-export interface StudioAiPromptActionContribution<TContext = unknown> {
+export interface StudioAgentPromptActionContribution<TContext = unknown> {
   id: string;
   label: string;
   description?: string;
@@ -1379,64 +1423,13 @@ export interface StudioAiPromptActionContribution<TContext = unknown> {
   order?: number;
   placement: StudioAiPromptPlacement;
   contextKind: string;
-  createPrompt(context: TContext): StudioAiPromptRequest | null;
+  createPrompt(context: TContext): StudioAgentPromptRequest | null;
 }
 
-export interface StudioAiToolContribution {
-  name: string;
-  displayName: string;
-  description?: string;
-  mutability: StudioAiToolMutability;
-  dangerLevel: StudioAiToolDangerLevel;
-  tenantBehavior?: StudioAiTenantBehavior;
-  permissions?: string[];
-  agentScopes?: string[];
-  moduleId?: string;
-  /** JSON Schema describing the tool's input arguments, surfaced to the agent harness. */
-  inputSchema?: unknown;
-  /**
-   * Client-side executor backing the tool. Modules capture their own authenticated endpoint context
-   * (`api.backend`) in this closure, so every invocation carries the signed-in user's credentials and
-   * the backend's permission gating applies — the tool can never read further than the user could
-   * through the same bridge endpoints (no bridge-key bypass).
-   */
-  execute?(input: Record<string, unknown>): Promise<unknown>;
-}
-
-export interface StudioAiProposalRendererProps {
-  proposal: StudioAiProposalSummary;
-}
-
-export interface StudioAiProposalSummary {
-  id: string;
-  kind: string;
-  status: StudioAiProposalStatus | string;
-  conversationId?: string | null;
-  rationale?: string | null;
-  warnings?: string[];
-  diagnostics?: Array<{ code?: string; message: string; severity?: string; path?: string | null }>;
-  graphDiff?: {
-    addedActivityIds?: string[];
-    removedActivityIds?: string[];
-    changedActivityIds?: string[];
-    data?: Record<string, unknown>;
-  } | null;
-}
-
-export interface StudioAiProposalRendererContribution {
-  id: string;
-  kind: string;
-  moduleId?: string;
-  component: ComponentType<StudioAiProposalRendererProps>;
-}
-
-export interface StudioAiSurfaceContribution {
-  id: string;
-  title: string;
-  placement: "route" | "panel" | "drawer" | "inline";
-  moduleId?: string;
-  order?: number;
-}
+/** Compatibility names for callers migrating to the canonical agent dispatcher. */
+export type StudioAiPromptRequest = StudioAgentPromptRequest;
+export type StudioAiPromptResult = StudioAgentPromptResult;
+export type StudioAiPromptActionContribution<TContext = unknown> = StudioAgentPromptActionContribution<TContext>;
 
 export type StudioDialogTone = "default" | "danger";
 export type StudioDialogKind = "confirm" | "prompt" | "alert";
@@ -1504,6 +1497,7 @@ export const studioSlotIds = {
   settingEditors: "studio.setting-editors",
   agentContextProviders: "studio.weaver.context-providers",
   agentPromptStarters: "studio.weaver.prompt-starters",
+  agentPromptActions: "studio.weaver.prompt-actions",
   agentCapabilities: "studio.weaver.capabilities",
   agentActions: "studio.weaver.actions",
   agentToolSlots: "studio.weaver.tool-slots",
@@ -1512,11 +1506,6 @@ export const studioSlotIds = {
   workflowDesignerNodeRenderers: "workflow.designer.node-renderers",
   workflowDesignerToolboxItems: "workflow.designer.toolbox-items",
   workflowDesignerPanels: "workflow.designer.panels",
-  aiContextProviders: "studio.ai.context-providers",
-  aiPromptActions: "studio.ai.prompt-actions",
-  aiTools: "studio.ai.tools",
-  aiProposalRenderers: "studio.ai.proposal-renderers",
-  aiSurfaces: "studio.ai.surfaces",
   diagnostics: "studio.diagnostics",
   diagnosticsWidgets: "studio.diagnostics.widgets"
 } as const;
@@ -1597,6 +1586,7 @@ export const studioSlots = {
   settingEditors: defineStudioSlot({ id: studioSlotIds.settingEditors, kind: "setting-editor", title: "Setting editors", owner: hostSlotOwner() }),
   agentContextProviders: defineStudioSlot({ id: studioSlotIds.agentContextProviders, kind: "weaver-context-provider", title: "Weaver context providers", owner: hostSlotOwner() }),
   agentPromptStarters: defineStudioSlot({ id: studioSlotIds.agentPromptStarters, kind: "weaver-prompt-starter", title: "Weaver prompt starters", owner: hostSlotOwner() }),
+  agentPromptActions: defineStudioSlot({ id: studioSlotIds.agentPromptActions, kind: "weaver-prompt-action", title: "Weaver prompt actions", owner: hostSlotOwner() }),
   agentCapabilities: defineStudioSlot({ id: studioSlotIds.agentCapabilities, kind: "weaver-capability", title: "Weaver capabilities", owner: hostSlotOwner() }),
   agentActions: defineStudioSlot({ id: studioSlotIds.agentActions, kind: "weaver-action", title: "Weaver actions", owner: hostSlotOwner() }),
   agentToolSlots: defineStudioSlot({ id: studioSlotIds.agentToolSlots, kind: "weaver-tool-slot", title: "Weaver tool slots", owner: hostSlotOwner() }),
@@ -1605,11 +1595,6 @@ export const studioSlots = {
   workflowDesignerNodeRenderers: defineStudioSlot({ id: studioSlotIds.workflowDesignerNodeRenderers, kind: "workflow-designer-node-renderer", title: "Workflow designer node renderers", owner: hostSlotOwner() }),
   workflowDesignerToolboxItems: defineStudioSlot({ id: studioSlotIds.workflowDesignerToolboxItems, kind: "workflow-designer-toolbox-item", title: "Workflow designer toolbox items", owner: hostSlotOwner() }),
   workflowDesignerPanels: defineStudioSlot({ id: studioSlotIds.workflowDesignerPanels, kind: "workflow-designer-panel", title: "Workflow designer panels", owner: hostSlotOwner() }),
-  aiContextProviders: defineStudioSlot({ id: studioSlotIds.aiContextProviders, kind: "ai-context-provider", title: "AI context providers", owner: hostSlotOwner() }),
-  aiPromptActions: defineStudioSlot({ id: studioSlotIds.aiPromptActions, kind: "ai-prompt-action", title: "AI prompt actions", owner: hostSlotOwner() }),
-  aiTools: defineStudioSlot({ id: studioSlotIds.aiTools, kind: "ai-tool", title: "AI tools", owner: hostSlotOwner() }),
-  aiProposalRenderers: defineStudioSlot({ id: studioSlotIds.aiProposalRenderers, kind: "ai-proposal-renderer", title: "AI proposal renderers", owner: hostSlotOwner() }),
-  aiSurfaces: defineStudioSlot({ id: studioSlotIds.aiSurfaces, kind: "ai-surface", title: "AI surfaces", owner: hostSlotOwner() }),
   diagnostics: defineStudioSlot({ id: studioSlotIds.diagnostics, kind: "diagnostic", title: "Diagnostics", owner: hostSlotOwner() }),
   diagnosticsWidgets: defineStudioSlot({ id: studioSlotIds.diagnosticsWidgets, kind: "diagnostics-widget", title: "Diagnostics widgets", owner: hostSlotOwner() })
 };
@@ -1625,14 +1610,16 @@ export interface StudioDashboardWidgetRegistry extends Omit<StudioContributionRe
   add<TSnapshot = unknown, TSettings = unknown>(contribution: StudioDashboardWidgetContribution<TSnapshot, TSettings>): void;
 }
 
-export interface StudioAiPromptDispatcher {
-  dispatchPrompt(request: StudioAiPromptRequest): void;
-  onPrompt(listener: (request: StudioAiPromptRequest) => void): () => void;
+export interface StudioAgentPromptDispatcher {
+  dispatchPrompt(request: StudioAgentPromptRequest): void;
+  onPrompt(listener: (request: StudioAgentPromptRequest) => void): () => void;
   /** Publishes the completed outcome of a correlated prompt back to interested callers. */
-  publishPromptResult(result: StudioAiPromptResult): void;
+  publishPromptResult(result: StudioAgentPromptResult): void;
   /** Subscribes to correlated prompt results. Returns an unsubscribe function. */
-  onPromptResult(listener: (result: StudioAiPromptResult) => void): () => void;
+  onPromptResult(listener: (result: StudioAgentPromptResult) => void): () => void;
 }
+
+export type StudioAiPromptDispatcher = StudioAgentPromptDispatcher;
 
 /**
  * Observable availability of the AI provider backing Weaver surfaces. The host reports the latest state
@@ -1648,14 +1635,8 @@ export interface StudioAiProviderAvailability {
   subscribe(listener: (available: boolean) => void): () => void;
 }
 
-export interface StudioAiContributionApi extends StudioAiPromptDispatcher {
-  readonly contextProviders: StudioContributionRegistry<StudioAiContextProviderContribution>;
-  readonly promptActions: StudioContributionRegistry<StudioAiPromptActionContribution>;
-  readonly tools: StudioContributionRegistry<StudioAiToolContribution>;
-  readonly proposalRenderers: StudioContributionRegistry<StudioAiProposalRendererContribution>;
-  readonly surfaces: StudioContributionRegistry<StudioAiSurfaceContribution>;
-  readonly providerAvailability: StudioAiProviderAvailability;
-}
+/** Compatibility facade: contribution registration is exclusively on api.agent. */
+export type StudioAiContributionApi = StudioAgentPromptDispatcher;
 
 export interface ElsaStudioHostContext extends StudioEndpointContext {
   hostVersion: string;
@@ -1912,51 +1893,38 @@ export function createDashboardWidgetRegistry(): StudioDashboardWidgetRegistry {
   return createContributionRegistry<StudioDashboardWidgetContribution>({ slot: studioSlots.dashboardWidgets }) as unknown as StudioDashboardWidgetRegistry;
 }
 
+/** Shared prompt transport while contribution producers migrate from the legacy AI facade. */
 export function createAiContributionApi(): StudioAiContributionApi {
-  const listeners = new Set<(request: StudioAiPromptRequest) => void>();
-  const resultListeners = new Set<(result: StudioAiPromptResult) => void>();
-  const availabilityListeners = new Set<(available: boolean) => void>();
-  let providerAvailable = true;
-
+  const listeners = new Set<(request: StudioAgentPromptRequest) => void>();
+  const results = new Set<(result: StudioAgentPromptResult) => void>();
   return {
-    contextProviders: createContributionRegistry({ slot: studioSlots.aiContextProviders }),
-    promptActions: createContributionRegistry({ slot: studioSlots.aiPromptActions }),
-    tools: createContributionRegistry({ slot: studioSlots.aiTools }),
-    proposalRenderers: createContributionRegistry({ slot: studioSlots.aiProposalRenderers }),
-    surfaces: createContributionRegistry({ slot: studioSlots.aiSurfaces }),
+    dispatchPrompt(request) { for (const listener of listeners) listener(request); },
+    onPrompt(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+    publishPromptResult(result) { for (const listener of results) listener(result); },
+    onPromptResult(listener) { results.add(listener); return () => results.delete(listener); }
+  };
+}
+
+export function createAgentRegistry(): StudioAgentRegistry {
+  const prompts = createAiContributionApi();
+  const listeners = new Set<(available: boolean) => void>();
+  let available = true;
+  return {
+    ...prompts,
+    clientId: globalThis.crypto?.randomUUID?.() ?? `studio-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     providerAvailability: {
-      get: () => providerAvailable,
-      set(available) {
-        if (available === providerAvailable) return;
-        providerAvailable = available;
-        for (const listener of availabilityListeners) {
-          listener(available);
-        }
-      },
-      subscribe(listener) {
-        availabilityListeners.add(listener);
-        listener(providerAvailable);
-        return () => availabilityListeners.delete(listener);
-      }
+      get: () => available,
+      set(value) { if (value !== available) { available = value; for (const listener of listeners) listener(value); } },
+      subscribe(listener) { listeners.add(listener); listener(available); return () => listeners.delete(listener); }
     },
-    dispatchPrompt(request) {
-      for (const listener of listeners) {
-        listener(request);
-      }
-    },
-    onPrompt(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    publishPromptResult(result) {
-      for (const listener of resultListeners) {
-        listener(result);
-      }
-    },
-    onPromptResult(listener) {
-      resultListeners.add(listener);
-      return () => resultListeners.delete(listener);
-    }
+    contextProviders: createContributionRegistry({ slot: studioSlots.agentContextProviders }),
+    promptActions: createContributionRegistry({ slot: studioSlots.agentPromptActions }),
+    promptStarters: createContributionRegistry({ slot: studioSlots.agentPromptStarters }),
+    capabilities: createContributionRegistry({ slot: studioSlots.agentCapabilities }),
+    actions: createContributionRegistry({ slot: studioSlots.agentActions }),
+    toolSlots: createContributionRegistry({ slot: studioSlots.agentToolSlots }),
+    toolContracts: createContributionRegistry({ slot: studioSlots.agentToolContracts }),
+    resultRenderers: createContributionRegistry({ slot: studioSlots.agentResultRenderers })
   };
 }
 

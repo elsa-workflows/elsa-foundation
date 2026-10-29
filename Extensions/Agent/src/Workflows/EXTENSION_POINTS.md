@@ -3,38 +3,19 @@
 Owner project: `Elsa.Agent.Workflows`
 Domain: `Elsa.Agent.Workflows`
 
-## Contributions to other domains
+## Cross-domain contributions
 
-### `IAgentCapabilityProvider` *(Agent core contract — `Elsa.Agent.Core`)*
+The module contributes to [Agent foundation](../Agent/EXTENSION_POINTS.md) through contracts in `Elsa.Agent.Core`.
 
-Kind: Source (returns workflow capability descriptors).
+- `IAgentContextProvider`: `DefaultWorkflowAgentContextProvider` admits `workflow.definition` schema `1` for exact `workflow-definition` targets. It whitelists bounded activity identities, connections and positions, stamps caller material as `ClientSnapshot`, and emits installed guidance separately. Property values, caller permission claims and arbitrary diagnostics are excluded. A separate `workflow.request` schema `1` admits only bounded intent/name/description/reference metadata with no target, client binding or tool scopes; it never supplies graph authority. Other workflow kinds and versions produce explicit diagnostics.
+- `IAgentCapabilityProvider`: `WorkflowAgentCapabilityProvider` declares explanation of the admitted graph and a reviewed position-change journey. It does not advertise runtime investigation, activity creation, save or publish.
+- `IAgentTool`: `WorkflowReadGraphTool` returns a typed `workflows.graph` result. `WorkflowSetDesignerPositionTool` prepares exact `activityId`, finite `x`/`y`, target revision and originating client generation; it requires current `workflows/design:manage` permission and explicit review even under FullAuto.
+- `IAgentClientTool`: the same layout tool admits the owning editor's observed result as `workflows.layout-change` schema `1`, renderer `workflows.agent.layout-result`. The receipt proves unsaved local state only. Native editor application and whole-batch undo remain module-owned; save and publish remain explicit.
 
-Known implementation:
+The named context/capability/tool fan-in and generic review lifecycle are owned by Agent foundation. This module registers contributions, not additional aggregating handlers or provider loops.
 
-- `WorkflowAgentCapabilityProvider` *(cross-domain)* — contributes `workflow.explain`, `workflow.troubleshoot`, and `workflow.propose-change`.
+## Legacy domain seams
 
-### `IAgentContextProvider` *(Agent core contract — `Elsa.Agent.Core`)*
+`IWorkflowAgentContextProvider` retains the minimized workflow-specific context view. `IWorkflowActivityCatalogProvider` currently returns no invented catalog entries. `IWorkflowRevisionProvider` has no authoritative unsaved-editor revision source; exact layout preparation uses the admitted client snapshot and the owning editor rechecks its live revision before application.
 
-Kind: Source (returns minimized workflow context attachments).
-
-Known implementation:
-
-- `DefaultWorkflowAgentContextProvider` *(cross-domain)* — returns workflow definition context with explicit redaction notes and no secrets/provider tokens/full execution payloads.
-
-## Overridable contracts
-
-### `IWorkflowAgentContextProvider`
-
-Workflow-specific context shape provider for explanations, troubleshooting, and proposal grounding.
-
-### `IWorkflowRevisionProvider`
-
-Base revision lookup seam used to reject stale workflow-change proposals before approval or execution.
-
-### `IWorkflowChangePermissionEvaluator`
-
-Permission seam for checking whether an actor can propose a workflow change. The default denies all until wired to the owning authorization model.
-
-### `IWorkflowChangeProposalService`
-
-Creates reviewable `workflow.change` proposals after revision and permission validation.
+`IWorkflowChangePermissionEvaluator` defaults to denial. The legacy broad `IWorkflowChangeProposalService` returns `agent.workflow.operation_unsupported`; broader graph authoring is not a second proposal engine. The retained domain graph vocabulary and classifier do not advertise unsupported activity-creation journeys. Future workflow work must connect the real catalog and owning resource before enabling them.

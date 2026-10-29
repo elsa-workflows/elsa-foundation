@@ -1,5 +1,6 @@
-import type { StudioEndpointContext } from "../../sdk";
+import type { StudioAgentPreparedInvocation, StudioAgentToolResult, StudioEndpointContext } from "../../sdk";
 import type {
+  AgentClientAcknowledgement,
   AgentActionProposal,
   AgentAutonomyMode,
   AgentBootstrapResponse,
@@ -21,11 +22,13 @@ export interface AgentClient {
   approveProposal(proposalId: string, request: AgentProposalDecisionRequest): Promise<AgentProposalDecisionResponse>;
   denyProposal(proposalId: string, request: AgentProposalDecisionRequest): Promise<AgentProposalDecisionResponse>;
   executeProposal(proposalId: string, request: AgentProposalDecisionRequest): Promise<AgentProposalDecisionResponse>;
+  acknowledgeClient(sessionId: string, invocationId: string, request: AgentClientAcknowledgement): Promise<AgentProposalDecisionResponse>;
   submitFeedback(sessionId: string, messageId: string, request: AgentFeedbackRequest): Promise<void>;
   cancelTurn(sessionId: string, turnId: string): Promise<void>;
 }
 
 export function createAgentClient(context: StudioEndpointContext): AgentClient {
+  const deliveryIds = new WeakMap<AgentMessageRequest, string>();
   return {
     async bootstrap() {
       // A single agent harness is active server-side; the client never chooses among providers.
@@ -50,19 +53,25 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
       })));
     },
     async sendMessage(sessionId, request) {
+      let requestId = request.requestId ?? deliveryIds.get(request);
+      if (!requestId) { requestId = globalThis.crypto?.randomUUID?.() ?? `message-${Date.now()}-${Math.random()}`; deliveryIds.set(request, requestId); }
       const accepted = unwrap(await context.http.postJson<AgentApiResponse<BackendAgentMessageAcceptedResponse>>(`/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/messages`, {
         role: "user",
         content: request.message,
         message: request.message,
         mode: request.mode,
         capabilityId: request.capabilityId,
+        requestId,
+        source: request.source,
+        promptMode: request.promptMode,
         requestedCapabilities: request.capabilityId ? [request.capabilityId] : [],
         contextAttachments: request.contextAttachments.map(mapContextAttachment)
       }));
 
       return {
         messageId: getAcceptedMessageId(accepted),
-        status: "pending",
+        status: mapMessageStatus(readField(readRecord(accepted, "message"), "status")),
+        warnings: readRecordArray(accepted, "warnings").map(item => ({ code: readString(item, "code") ?? "agent.context", message: readString(item, "message") ?? "Context admission limitation.", target: readString(item, "target") })),
         streamUrl: `/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/stream`
       };
     },
@@ -87,15 +96,12 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
         revision: request.revision,
         comment: request.comment
       }));
-      return {
-        proposalId: readString(result, "proposalId") ?? proposalId,
-        approvalStatus: getExecutionStatus(result),
-        result: {
-          resourceType: "agent-proposal",
-          resourceId: readString(result, "proposalId") ?? proposalId,
-          summary: readString(result, "message") ?? readString(result, "summary") ?? "Proposal execution completed."
-        }
-      };
+      return mapExecution(result, proposalId);
+    },
+    async acknowledgeClient(sessionId, invocationId, request) {
+      const result = unwrap(await context.http.postJson<AgentApiResponse<BackendAgentProposalExecutionResult>>(
+        `/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/client-invocations/${encodeURIComponent(invocationId)}/acknowledgements`, request));
+      return mapExecution(result, invocationId);
     },
     async submitFeedback(sessionId, messageId, request) {
       unwrap(await context.http.postJson<AgentApiResponse<BackendAgentFeedback>>("/_elsa/agent/feedback", {
@@ -174,6 +180,10 @@ interface BackendAgentActionProposal {
 }
 
 interface BackendAgentProposalExecutionResult {
+  clientInvocation?: StudioAgentPreparedInvocation;
+  toolResult?: StudioAgentToolResult;
+  resourceType?: string;
+  resourceId?: string;
   proposalId?: string;
   executed?: boolean;
   message?: string;
@@ -281,40 +291,32 @@ function mapSession(session: BackendAgentSession): AgentCreateSessionResponse {
 }
 
 function mapContextAttachment(attachment: AgentMessageRequest["contextAttachments"][number]) {
-  const secretRedacted = attachment.sensitivity === "secret-redacted";
-  const content = isRecord(attachment.content) ? attachment.content : undefined;
-  const references = buildContextReferences(attachment, content);
+  const redacted = attachment.sensitivity === "secret-redacted";
   return {
-    id: attachment.id,
-    kind: attachment.contentType,
-    displayName: attachment.label,
+    ...attachment,
     sensitivity: mapSensitivity(attachment.sensitivity),
-    summary: secretRedacted ? "[secret redacted]" : typeof attachment.content === "string" ? attachment.content : attachment.label,
-    // Forward the structured body (e.g. the live workflow graph) so the agent can reason over real
-    // activity ids and connections. Never forward content for secret-redacted attachments.
-    content: secretRedacted ? undefined : content,
-    references
+    summary: redacted ? "[secret redacted]" : attachment.summary ?? (typeof attachment.content === "string" ? attachment.content : attachment.label),
+    content: redacted ? undefined : attachment.content,
+    references: attachment.references ?? {}
   };
 }
 
-function buildContextReferences(attachment: AgentMessageRequest["contextAttachments"][number], content: Record<string, unknown> | undefined) {
-  const references: Record<string, string> = {
-    source: attachment.source,
-    sourceId: attachment.sourceId ?? "",
-    scope: attachment.scope
-  };
-
-  for (const key of ["workflowDefinitionId", "workflowVersionId", "draftId", "revision", "selectedNodeId", "selectedActivityType"]) {
-    const value = content?.[key];
-    if (typeof value === "string" && value.trim()) {
-      references[key] = value;
+function mapExecution(result: BackendAgentProposalExecutionResult, fallbackId: string): AgentProposalDecisionResponse {
+  return {
+    proposalId: readString(result, "proposalId") ?? fallbackId,
+    approvalStatus: getExecutionStatus(result),
+    executed: readBoolean(result, "executed"),
+    clientInvocation: readField(result, "clientInvocation") as StudioAgentPreparedInvocation | undefined,
+    toolResult: readField(result, "toolResult") as StudioAgentToolResult | undefined,
+    result: {
+      resourceType: readString(result, "resourceType") ?? "agent-proposal",
+      resourceId: readString(result, "resourceId") ?? readString(result, "proposalId") ?? fallbackId,
+      summary: readString(result, "summary") ?? readString(result, "message") ?? "Execution outcome unavailable."
     }
-  }
-
-  return references;
+  };
 }
 
-function mapProviderDiagnostics(provider: BackendAgentProviderDiagnostics): AgentProviderDiagnostics {
+function mapProviderDiagnostics(provider: unknown): AgentProviderDiagnostics {
   return {
     providerId: readString(provider, "providerId") ?? "",
     isAvailable: readBoolean(provider, "isAvailable") ?? false,
@@ -326,7 +328,7 @@ function mapProviderDiagnostics(provider: BackendAgentProviderDiagnostics): Agen
   };
 }
 
-function mapCapabilityKind(kind: string | number | undefined, requiresApproval?: boolean): AgentBootstrapResponse["capabilities"][number]["kind"] {
+function mapCapabilityKind(kind: unknown, requiresApproval?: boolean): AgentBootstrapResponse["capabilities"][number]["kind"] {
   const value = normalizeEnum(kind);
   if (value === "context" || kind === 1) return "context";
   if (value === "prompt-starter" || kind === 2) return "prompt-starter";
@@ -335,7 +337,7 @@ function mapCapabilityKind(kind: string | number | undefined, requiresApproval?:
   return requiresApproval ? "proposal" : "answer";
 }
 
-function mapCapabilityRisk(risk: string | number | undefined, requiresApproval?: boolean): AgentBootstrapResponse["capabilities"][number]["risk"] {
+function mapCapabilityRisk(risk: unknown, requiresApproval?: boolean): AgentBootstrapResponse["capabilities"][number]["risk"] {
   const value = normalizeEnum(risk);
   if (value === "review-required" || risk === 1) return "review-required";
   if (value === "destructive" || risk === 2) return "destructive";
@@ -343,7 +345,7 @@ function mapCapabilityRisk(risk: string | number | undefined, requiresApproval?:
   return requiresApproval ? "review-required" : "read-only";
 }
 
-function mapProviderKind(kind: string | number | undefined) {
+function mapProviderKind(kind: unknown) {
   const value = normalizeEnum(kind);
   if (value === "provider-sdk-binding" || kind === 0) return "provider-sdk-binding";
   if (value === "agent-harness-provider" || kind === 1) return "agent-harness-provider";
@@ -356,7 +358,7 @@ function mapProviderOperation(operation: string | number) {
   return numeric ?? value;
 }
 
-function mapProviderRiskProfile(riskProfile: string | number | undefined) {
+function mapProviderRiskProfile(riskProfile: unknown) {
   const value = normalizeEnum(riskProfile);
   if (value === "read-only" || riskProfile === 0) return "read-only";
   if (value === "review-required" || riskProfile === 1) return "review-required";
@@ -374,9 +376,17 @@ function mapProposalDecision(proposal: BackendAgentActionProposal): AgentProposa
 }
 
 function getExecutionStatus(result: BackendAgentProposalExecutionResult): AgentActionProposal["status"] {
+  const status = normalizeEnum(readField(result, "status") ?? readField(result, "approvalStatus"));
+  if (status === "awaiting-client" || status === "uncertain" || status === "cancelled" || status === "expired") return status;
   const executed = readBoolean(result, "executed");
   if (executed !== undefined) return executed ? "executed" : "failed";
-  return mapProposalStatus(readField(result, "approvalStatus") ?? readField(result, "status"));
+  return mapProposalStatus(status);
+}
+
+function mapMessageStatus(status: unknown): AgentMessageResponse["status"] {
+  if (typeof status === "number") return (["pending", "streaming", "completed", "failed", "cancelled"] as const)[status] ?? "failed";
+  const value = normalizeEnum(status);
+  return ["pending", "streaming", "completed", "failed", "cancelled"].includes(value) ? value as AgentMessageResponse["status"] : "pending";
 }
 
 function getAcceptedMessageId(accepted: BackendAgentMessageAcceptedResponse) {
@@ -398,6 +408,7 @@ function mapSessionStatus(status: unknown): AgentCreateSessionResponse["status"]
 
 function mapProposalStatus(status: unknown): AgentActionProposal["status"] {
   const value = normalizeEnum(status);
+  if (["draft", "edited", "expired", "cancelled", "executing", "awaiting-client", "uncertain"].includes(value)) return value as AgentActionProposal["status"];
   if (value === "approved" || status === 1) return "approved";
   if (value === "denied" || status === 2) return "denied";
   if (value === "executed" || status === 3) return "executed";

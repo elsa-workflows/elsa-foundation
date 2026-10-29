@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { AlertCircle, Check, Package, Plus, Search } from "lucide-react";
-import { StudioHttpError, type StudioAiContributionApi, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { StudioHttpError, type StudioAgentRegistry, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { CopyableIdentifier, OverflowMenu, StudioButton, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
 import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition, workflowDefinitionFolderMovePath } from "../api/workflowDesign";
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails, WorkflowDefinitionSummary } from "../workflowTypes";
@@ -68,7 +68,7 @@ function canRetainBrowseSnapshot(previous: BrowseIdentity, next: BrowseIdentity)
 
 export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRequestId = null, onHomeCreateRequestHandled }: {
   context: StudioEndpointContext;
-  ai: StudioAiContributionApi;
+  ai: StudioAgentRegistry;
   onOpen(id: string): void;
   session: WorkflowDefinitionBrowseSession;
   homeCreateRequestId?: string | null;

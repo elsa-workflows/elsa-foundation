@@ -1,6 +1,7 @@
 # Agent Foundation extension points
 
-Owner project: `Elsa.Agent.Core`
+Owner project: `Elsa.Agent`
+Contract project: `Elsa.Agent.Core`
 Domain: `Elsa.Agent`
 
 ## Overridable contracts
@@ -95,7 +96,7 @@ Known implementations:
 
 - `GitHubCopilotAgentProvider` (`Elsa.Agent.GitHubCopilot`) *(intra-domain — provider adapter)* — binds Elsa's provider-neutral agent facade to the GitHub Copilot SDK when explicitly enabled and authenticated, while keeping SDK tool mutation behind Elsa-owned proposal policy. Also implements `IAgentHarness` (below).
 - `AnthropicAgentProvider` (`Elsa.Agent.Anthropic`) *(intra-domain — provider adapter)* — drives Claude over the shared agent tool currency using an `IChatClient`. Enabling it excludes other agent harnesses (single active harness). Implements `IAgentProvider` only; the host step loop drives the turn.
-- `DeterministicAgentProvider` (`Elsa.Agent.Core`) *(intra-domain — test/default seam)* — deterministic provider implementation for backend contract validation without an external SDK.
+- `DeterministicAgentProvider` (`Elsa.Agent.Tests`) *(intra-domain — test-only seam)* — deterministic provider implementation for backend contract validation without an external SDK.
 
 ### `IAgentHarness`
 

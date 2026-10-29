@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Elsa.Agent.Anthropic;
 using Elsa.Agent.Anthropic.Options;
 using Elsa.Agent.Anthropic.Services;
@@ -86,6 +87,23 @@ public sealed class AnthropicAgentProviderTests
         var result = Assert.Single(toolMessage.Contents.OfType<FunctionResultContent>());
         // The tool_result must reference the same call id as the synthesized tool_use (Anthropic pairing rule).
         Assert.Equal("call_1", result.CallId);
+    }
+
+    [Fact]
+    public async Task Tool_result_protocol_preserves_independent_module_type_version_and_evidence()
+    {
+        var client = new ScriptedChatClient(Update(new TextContent("Done.")));
+        var provider = BuildProvider(client);
+        var result = new AgentToolResult("call_1", "independent_tool", true, "Observed result.",
+            new("independent.result", "7", JsonSerializer.SerializeToElement(new { actualValue = 42 })));
+        var context = new AgentTurnContext("s1", "s1", [new(AgentRole.Tool, result.Content, result.ToolCallId, result.ToolName)], [result], [], [], 1, 4);
+        await Collect(provider.ContinueTurnAsync(context));
+        var toolMessage = Assert.Single(client.CapturedMessages!, message => message.Role == ChatRole.Tool);
+        var protocolResult = Assert.Single(toolMessage.Contents.OfType<FunctionResultContent>());
+        var json = Assert.IsType<string>(protocolResult.Result);
+        Assert.Contains("independent.result", json);
+        Assert.Contains("\"schemaVersion\":\"7\"", json);
+        Assert.Contains("42", json);
     }
 
     [Fact]

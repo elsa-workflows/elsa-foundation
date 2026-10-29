@@ -1,43 +1,22 @@
 import React from "react";
 import type {
   ElsaStudioModuleApi,
-  StudioAiContextAttachment,
-  StudioAiProposalRendererProps,
+  StudioAgentContextAttachment,
+  StudioAgentResultRendererProps,
   StudioEndpointContext
 } from "@elsa-workflows/studio-sdk";
 import { capabilityIds, resolveCapabilityLink } from "@elsa-workflows/studio-workflows";
 
+interface WorkflowProposalSummary {
+  kind?: string; rationale?: string; warnings?: string[];
+  diagnostics?: Array<{ code?: string; message: string; severity?: string }>;
+  graphDiff?: { addedActivityIds?: string[]; removedActivityIds?: string[]; changedActivityIds?: string[] };
+}
+
 const moduleId = "Elsa.Studio.Weaver.Workflows";
 
 export function register(api: ElsaStudioModuleApi) {
-  api.ai.contextProviders.add({
-    id: "weaver.workflows.definition-context",
-    kind: "workflow-definition",
-    label: "Workflow definition",
-    description: "Attaches workflow definition metadata, draft state, versions, and validation diagnostics.",
-    moduleId,
-    createAttachment: reference => createWorkflowAttachment("workflow-definition", reference)
-  });
-
-  api.ai.contextProviders.add({
-    id: "weaver.workflows.executable-context",
-    kind: "workflow-executable",
-    label: "Workflow executable",
-    description: "Attaches runtime executable identity, source, root activity, and resume target metadata.",
-    moduleId,
-    createAttachment: reference => createWorkflowAttachment("workflow-executable", reference)
-  });
-
-  api.ai.contextProviders.add({
-    id: "weaver.workflows.instance-context",
-    kind: "workflow-instance",
-    label: "Workflow instance",
-    description: "Attaches workflow instance state, incidents, bookmarks, and recent execution history when available.",
-    moduleId,
-    createAttachment: reference => createWorkflowAttachment("workflow-instance", reference)
-  });
-
-  api.ai.promptActions.add({
+  api.agent.promptActions.add({
     id: "weaver.workflows.suggest-create-metadata",
     label: "Suggest name and description",
     description: "Ask Weaver to propose a workflow display name and description for the draft being created.",
@@ -68,7 +47,7 @@ export function register(api: ElsaStudioModuleApi) {
     }
   });
 
-  api.ai.promptActions.add({
+  api.agent.promptActions.add({
     id: "weaver.workflows.explain-definition",
     label: "Explain workflow",
     description: "Ask Weaver to explain the selected workflow definition.",
@@ -83,7 +62,7 @@ export function register(api: ElsaStudioModuleApi) {
     })
   });
 
-  api.ai.promptActions.add({
+  api.agent.promptActions.add({
     id: "weaver.workflows.explain-executable",
     label: "Explain executable",
     description: "Ask Weaver to explain a published workflow executable and its runtime start conditions.",
@@ -104,7 +83,7 @@ export function register(api: ElsaStudioModuleApi) {
     })
   });
 
-  api.ai.promptActions.add({
+  api.agent.promptActions.add({
     id: "weaver.workflows.find-draft-risks",
     label: "Find draft risks",
     description: "Ask Weaver to inspect draft validation errors and graph structure for likely runtime issues.",
@@ -119,7 +98,7 @@ export function register(api: ElsaStudioModuleApi) {
     })
   });
 
-  api.ai.promptActions.add({
+  api.agent.promptActions.add({
     id: "weaver.workflows.propose-update",
     label: "Propose update",
     description: "Ask Weaver for a reviewed workflow update proposal instead of applying mutations directly.",
@@ -134,7 +113,7 @@ export function register(api: ElsaStudioModuleApi) {
     })
   });
 
-  api.ai.promptActions.add({
+  api.agent.promptActions.add({
     id: "weaver.workflows.explain-instance",
     label: "Explain instance",
     description: "Ask Weaver to explain workflow instance state and history when instance data is available.",
@@ -149,71 +128,15 @@ export function register(api: ElsaStudioModuleApi) {
     })
   });
 
-  api.ai.tools.add({
-    name: "workflow.definition.read",
-    displayName: "Read workflow definition",
-    description: "Reads workflow definition metadata, draft state, versions, and validation diagnostics.",
-    mutability: "read-only",
-    dangerLevel: "low",
-    tenantBehavior: "tenant-scoped",
-    moduleId,
-    permissions: ["workflows:read"],
-    agentScopes: ["workflow-author"]
-  });
-
-  api.ai.tools.add({
-    name: "get-executable-detail",
-    displayName: "Get executable detail",
-    description: "Reads a workflow executable by artifact id: identity, compiled node tree with input-binding summaries, the chosen reference's layout, and all source references. Descriptor payloads are omitted and secret values are never inlined.",
-    mutability: "read-only",
-    dangerLevel: "low",
-    tenantBehavior: "tenant-scoped",
-    moduleId,
-    permissions: ["workflows:read"],
-    agentScopes: ["workflow-author"],
-    inputSchema: {
-      type: "object",
-      properties: {
-        artifactId: { type: "string", description: "The content-addressed artifact id of the executable to inspect." },
-        sourceReferenceId: { type: "string", description: "Optional source reference id selecting which reference's layout is returned; defaults to the newest live reference." }
-      },
-      required: ["artifactId"],
-      additionalProperties: false
-    },
-    // Executes through the module's authenticated endpoint context — the same context every other
-    // workflow-management call uses — so the endpoint's workflow read permission gates the tool and
-    // there is no bridge-key bypass (plan §6, ADR 0037).
-    execute: input => getExecutableDetail(api.backend, input)
-  });
-
-  api.ai.tools.add({
-    name: "workflow.proposal.create",
-    displayName: "Create workflow proposal",
-    description: "Creates a reviewed workflow create/update proposal that requires explicit user approval before apply.",
-    mutability: "proposal",
-    dangerLevel: "medium",
-    tenantBehavior: "tenant-scoped",
-    moduleId,
-    permissions: ["workflows:write"],
-    agentScopes: ["workflow-author"]
-  });
-
-  api.ai.proposalRenderers.add({
-    id: "weaver.workflows.workflow-proposal-renderer",
-    kind: "WorkflowCreate",
-    moduleId,
-    component: WorkflowProposalRenderer
-  });
-
-  api.ai.proposalRenderers.add({
-    id: "weaver.workflows.workflow-update-proposal-renderer",
-    kind: "WorkflowUpdate",
-    moduleId,
-    component: WorkflowProposalRenderer
+  api.agent.resultRenderers.add({
+    id: "weaver.workflows.workflow-proposal-renderer", moduleId: "Elsa.Studio.Workflows",
+    displayName: "Workflow proposal", resultTypes: ["workflows.proposal"], schemaVersions: ["1"],
+    component: ({ result }: StudioAgentResultRendererProps) => <WorkflowProposalRenderer proposal={result as WorkflowProposalSummary} />
   });
 }
 
-export function WorkflowProposalRenderer({ proposal }: StudioAiProposalRendererProps) {
+export function WorkflowProposalRenderer({ proposal }: { proposal: WorkflowProposalSummary }) {
+  if (!proposal || typeof proposal !== "object") return <p>Workflow proposal data is unavailable.</p>;
   const graphDiff = proposal.graphDiff;
 
   return (
@@ -260,21 +183,26 @@ function readTrimmedString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function createWorkflowAttachment(kind: string, reference: unknown) {
-  return createAttachment(kind, readReferenceId(reference), reference);
-}
-
-function createAttachment(kind: string, referenceId: string | null, reference: unknown): StudioAiContextAttachment {
+function createAttachment(kind: string, referenceId: string | null, reference: unknown): StudioAgentContextAttachment {
+  const record = isRecord(reference) ? reference : {};
+  const definition = isRecord(record.definition) ? record.definition : record;
+  const draft = isRecord(record.draft) ? record.draft : record;
+  const content: Record<string, string | null> = { requestKind: kind, referenceId };
+  for (const key of ["intent", "name", "description", "rootActivityVersionId"] as const) {
+    const value = record[key] ?? definition[key] ?? draft[key];
+    if (typeof value === "string") content[key] = value.slice(0, 1024);
+  }
   return {
-    kind,
-    referenceId,
-    metadata: isRecord(reference) ? reference : { value: reference }
+    id: `workflow-request:${kind}:${referenceId ?? "new"}`, moduleId: "Elsa.Studio.Workflows", schemaVersion: "1",
+    source: moduleId, sourceId: referenceId ?? undefined, label: "Workflow request", contentType: "workflow.request", sensitivity: "internal", scope: "selection",
+    summary: "Workflow request context", origin: "clientSnapshot", target: null, content
   };
 }
 
 function readReferenceId(reference: unknown) {
   if (!isRecord(reference)) return null;
-  const id = reference.id ?? reference.definitionId ?? reference.artifactId ?? reference.instanceId;
+  const nestedDefinition = isRecord(reference.definition) ? reference.definition : {};
+  const id = reference.id ?? reference.definitionId ?? reference.artifactId ?? reference.instanceId ?? nestedDefinition.id;
   return typeof id === "string" ? id : null;
 }
 

@@ -12,6 +12,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+    <ProjectReference Include="..\Agent\Elsa.Agent.csproj" />
     <ProjectReference Include="..\Core\Elsa.Agent.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Essentials\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\..\Essentials\src\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />

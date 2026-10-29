@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="CShells" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
@@ -13,6 +14,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Agent\Elsa.Agent.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Events\Elsa.Events\Elsa.Events.csproj" />
     <ProjectReference Include="..\..\src\Core\Elsa.Agent.Core.csproj" />
     <ProjectReference Include="..\..\src\Anthropic\Elsa.Agent.Anthropic.csproj" />
     <ProjectReference Include="..\..\src\Api\Elsa.Agent.Api.csproj" />

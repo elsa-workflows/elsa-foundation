@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
 import { createStudioRegistry } from "../../registry";
-import { createEndpointContext } from "../../../sdk";
+import { createEndpointContext, type StudioAgentPreparedInvocation } from "../../../sdk";
 import type { AgentClient } from "../../agent/agentClient";
 import type { AgentStreamEvent } from "../../agent/agentTypes";
 import { WeaverSurface } from "../WeaverSurface";
@@ -135,10 +135,11 @@ describe("WeaverSurface", () => {
     api.ai.onPromptResult(result => results.push(result));
 
     const { unmount } = render(
-      <WeaverSurface api={api} surface={{ route: "/" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "p1", message: "name it", requestId: "req-1" }} />
+      <WeaverSurface api={api} surface={{ route: "/" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "p1", message: "name it", requestId: "req-1", mode: "enqueue", source: { moduleId: "Sample", actionId: "name" }, attachments: [{ id: "explicit", source: "Sample", label: "Exact selection", contentType: "sample", sensitivity: "internal", scope: "selection", content: { value: 42 } }] }} />
     );
     await flushPromises();
 
+    expect(client.sendMessage).toHaveBeenCalledWith("agt_1", expect.objectContaining({ requestId: "req-1", promptMode: "enqueue", source: { moduleId: "Sample", actionId: "name" }, contextAttachments: [expect.objectContaining({ id: "explicit", content: { value: 42 } })] }));
     expect(results).toHaveLength(1);
     expect(results[0]).toMatchObject({ requestId: "req-1", status: "completed", autoApply: false });
     expect(results[0].text).toContain("Order Approval");
@@ -166,6 +167,57 @@ describe("WeaverSurface", () => {
 
     unmount();
   });
+  it("requires local review even in FullAuto and waits for observed acknowledgement before resuming", async () => {
+    const api = readyApi(); const client = readyClient();
+    client.bootstrap = vi.fn(async () => ({ ...await readyClient().bootstrap(), policy: { ... (await readyClient().bootstrap()).policy, defaultAutonomyMode: "full-auto" } }));
+    const invocation = preparedInvocation(api);
+    let observe!: (value: { outcome: "applied"; summary: string; after: typeof invocation.target; result: { typeId: string; schemaVersion: string; data: { value: number } } }) => void;
+    const execute = vi.fn(() => new Promise(resolve => { observe = resolve; })) as never;
+    api.agent.toolContracts.add({ id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Change", description: "Change sample", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], executionLocation: "clientWorkingState", contractVersion: "1", executeClient: execute });
+    client.executeProposal = vi.fn(async () => ({ proposalId: "proposal", approvalStatus: "awaiting-client", executed: false, clientInvocation: invocation }));
+    client.acknowledgeClient = vi.fn(async () => ({ proposalId: "proposal", approvalStatus: "executed", executed: true, toolResult: { toolCallId: "call", toolName: "sample_change", succeeded: true, content: "Observed sample value 2.", payload: { typeId: "sample.result", schemaVersion: "1", data: { value: 2 } } } }));
+    let streams = 0;
+    const subscribeStream = vi.fn((_ctx, _url, emit) => {
+      if (++streams === 1) emit({ type: "proposal-created", proposalId: "proposal", messageId: "msg", proposal: { title: "Change sample", summary: "Set sample value to 2.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } });
+      emit({ type: "message-completed", messageId: "msg" });
+      return { close() {} };
+    }) as unknown as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} />);
+    await flushPromises(); typeAndSend(container, "Change sample"); await flushPromises();
+    expect(client.approveProposal).not.toHaveBeenCalled(); expect(execute).not.toHaveBeenCalled();
+    flushSync(() => buttonByText(container, "Approve")!.click()); await flushPromises();
+    flushSync(() => buttonByText(container, "Apply")!.click()); await flushPromises();
+    expect(container.querySelector('[data-status="awaiting-client"]')).toBeTruthy(); expect(client.acknowledgeClient).not.toHaveBeenCalled();
+    observe({ outcome: "applied", summary: "Observed sample value 2.", after: { ...invocation.target!, revision: "r2" }, result: { typeId: "sample.result", schemaVersion: "1", data: { value: 2 } } });
+    await flushPromises();
+    expect(client.acknowledgeClient).toHaveBeenCalledWith("agt_1", "i", expect.objectContaining({ approvalDigest: "digest", outcome: "applied", after: expect.objectContaining({ revision: "r2" }) }));
+    expect(container.querySelector('[data-status="executed"]')).toBeTruthy(); expect(streams).toBe(2); expect(client.sendMessage).toHaveBeenCalledTimes(1);
+    unmount();
+  });
+
+  it("does not open another stream for a completed duplicate delivery", async () => {
+    const api = readyApi(); const client = readyClient();
+    client.sendMessage = vi.fn(async () => ({ messageId: "existing", status: "completed", streamUrl: "/stream", warnings: [{ code: "agent.message.duplicate", message: "Already accepted." }] }));
+    const subscribeStream = vi.fn(() => ({ close() {} })) as unknown as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/" }} variant="dock" client={client} subscribeStream={subscribeStream} />);
+    await flushPromises(); typeAndSend(container, "Inspect"); await flushPromises();
+    expect(subscribeStream).not.toHaveBeenCalled(); expect(container.textContent).toContain("already accepted"); unmount();
+  });
+
+  it("honors a server module's explicit review requirement in FullAuto", async () => {
+    const api = readyApi(); const client = readyClient();
+    client.bootstrap = vi.fn(async () => ({ ...await readyClient().bootstrap(), policy: { ... (await readyClient().bootstrap()).policy, defaultAutonomyMode: "full-auto" } }));
+    const invocation = preparedInvocation(api); invocation.executionLocation = "server"; invocation.client = null;
+    const subscribeStream = ((_context, _url, emit) => {
+      emit({ type: "proposal-created", proposalId: "review", messageId: "msg", proposal: { title: "Server change", summary: "The module requires explicit review.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } });
+      emit({ type: "message-completed", messageId: "msg" }); return { close() {} };
+    }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} />);
+    await flushPromises(); typeAndSend(container, "Propose server change"); await flushPromises();
+    expect(client.approveProposal).not.toHaveBeenCalled(); expect(client.executeProposal).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-status="awaiting-approval"]')).toBeTruthy(); unmount();
+  });
+
 });
 
 function typeAndSend(container: HTMLElement, value: string) {
@@ -220,6 +272,7 @@ function readyClient(): AgentClient {
     approveProposal: vi.fn(async proposalId => ({ proposalId, approvalStatus: "approved" })),
     denyProposal: vi.fn(async proposalId => ({ proposalId, approvalStatus: "denied" })),
     executeProposal: vi.fn(async proposalId => ({ proposalId, approvalStatus: "executed" })),
+    acknowledgeClient: vi.fn(),
     submitFeedback: vi.fn(),
     cancelTurn: vi.fn(async () => {})
   };
@@ -241,4 +294,8 @@ function render(element: React.ReactElement) {
 
 async function flushPromises() {
   for (let i = 0; i < 5; i++) await new Promise(resolve => setTimeout(resolve, 0));
+}
+
+function preparedInvocation(api: ReturnType<typeof readyApi>): StudioAgentPreparedInvocation {
+  return { invocationId: "i", sessionId: "agt_1", turnId: "turn", toolCallId: "call", toolName: "sample_change", toolContractVersion: "1", moduleId: "Sample", actorId: "actor", tenantId: "tenant", target: { moduleId: "Sample", resourceType: "sample", resourceId: "one", revision: "r1" }, arguments: { value: 2 }, approvalDigest: "digest", risk: "reviewRequired", preview: { typeId: "sample.preview", schemaVersion: "1", data: { value: 2 } }, executionLocation: "clientWorkingState", requiresApproval: true, client: { clientId: api.agent.clientId, generationId: "generation" }, expiresAt: new Date(Date.now() + 60000).toISOString() };
 }

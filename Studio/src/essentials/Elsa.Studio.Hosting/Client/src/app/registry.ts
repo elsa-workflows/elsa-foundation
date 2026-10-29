@@ -1,6 +1,6 @@
 import {
   createEndpointContext,
-  createAiContributionApi,
+  createAgentRegistry,
   createContributionRegistry,
   createDashboardWidgetRegistry,
   registerActivityIcons,
@@ -40,6 +40,9 @@ export function createStudioRegistry(
   const routes = createContributionRegistry<StudioRouteContribution>({ slot: studioSlots.routes });
   const featureAreas = createFeatureAreaRegistry(navigation, routes);
   const dashboardWidgets = createDashboardWidgetRegistry();
+  // One dispatcher/availability instance serves both names during producer migration.
+  const agent = createAgentRegistry();
+  const ai = { dispatchPrompt: agent.dispatchPrompt, onPrompt: agent.onPrompt, publishPromptResult: agent.publishPromptResult, onPromptResult: agent.onPromptResult };
 
   return {
     host: hostContext,
@@ -59,22 +62,14 @@ export function createStudioRegistry(
     workflowRunInputEditors: createContributionRegistry({ slot: studioSlots.workflowRunInputEditors }),
     workflowTestStimulusEditors: createContributionRegistry({ slot: studioSlots.workflowTestStimulusEditors }),
     settingEditors: createContributionRegistry({ slot: studioSlots.settingEditors }),
-    agent: {
-      contextProviders: createContributionRegistry({ slot: studioSlots.agentContextProviders }),
-      promptStarters: createContributionRegistry({ slot: studioSlots.agentPromptStarters }),
-      capabilities: createContributionRegistry({ slot: studioSlots.agentCapabilities }),
-      actions: createContributionRegistry({ slot: studioSlots.agentActions }),
-      toolSlots: createContributionRegistry({ slot: studioSlots.agentToolSlots }),
-      toolContracts: createContributionRegistry({ slot: studioSlots.agentToolContracts }),
-      resultRenderers: createContributionRegistry({ slot: studioSlots.agentResultRenderers })
-    },
+    agent,
     workflowDesigner: {
       nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers }),
       toolboxItems: createContributionRegistry({ slot: studioSlots.workflowDesignerToolboxItems }),
       panels: createContributionRegistry({ slot: studioSlots.workflowDesignerPanels }),
       registerActivityIcons
     },
-    ai: createAiContributionApi(),
+    ai,
     dialogs: dialogController.api,
     diagnostics: createContributionRegistry<StudioModuleDiagnostic>({ slot: studioSlots.diagnostics })
   };

@@ -1,0 +1,12 @@
+using CShells.Features;
+using Elsa.Studio.Core.Attributes;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Weaver.Journey.Studio;
+
+[ShellFeature("WeaverJourneyStudio", DisplayName = "Weaver journey note")]
+[StudioModule("weaver-journey", "Weaver journey note", "navigation", "routes")]
+public class WeaverJourneyStudioFeature : IShellFeature
+{
+    public virtual void ConfigureServices(IServiceCollection services) { }
+}

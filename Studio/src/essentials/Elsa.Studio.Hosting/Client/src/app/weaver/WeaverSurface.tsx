@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Check, CheckCircle2, ChevronDown, Shield, X } from "lucide-react";
-import type { ElsaStudioModuleApi, StudioAgentSurface } from "../../sdk";
+import type { ElsaStudioModuleApi, StudioAgentPromptRequest, StudioAgentSurface } from "../../sdk";
 import type { AgentClient } from "../agent/agentClient";
 import { AgentContextChips } from "../agent/AgentContextChips";
 import { AgentPromptStarters } from "../agent/AgentPromptStarters";
+import { AgentToolResults } from "../agent/AgentToolResults";
 import { AgentProposalReview } from "../agent/AgentProposalReview";
-import { AgentWorkflowBatchReview } from "../agent/AgentWorkflowBatchReview";
 import type { subscribeAgentSessionStream } from "../agent/agentStream";
 import type { AgentSessionIndicatorSession } from "../agent/AgentSessionIndicator";
 import { WeaverComposer } from "./WeaverComposer";
@@ -43,7 +43,7 @@ export function WeaverSurface({
   client?: AgentClient;
   subscribeStream?: typeof subscribeAgentSessionStream;
   onSessionIndicatorChange?(sessions: AgentSessionIndicatorSession[]): void;
-  incomingPrompt?: { id: string; message: string; requestId?: string } | null;
+  incomingPrompt?: (StudioAgentPromptRequest & { id: string }) | null;
 }) {
   const session = useWeaverSession({ api, surface, client, subscribeStream });
   const resultRenderers = useMemo(() => api.agent.resultRenderers.list(), [api]);
@@ -56,7 +56,7 @@ export function WeaverSurface({
   const indicatorSessions = useMemo(
     () => toIndicatorSessions(session),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [session.sessionId, session.proposals, session.workflowBatches, session.error, session.busy]
+    [session.sessionId, session.proposals, session.error, session.busy]
   );
 
   useEffect(() => {
@@ -68,7 +68,7 @@ export function WeaverSurface({
   useEffect(() => {
     if (incomingPrompt && incomingPrompt.id !== lastPromptIdRef.current && session.ready) {
       lastPromptIdRef.current = incomingPrompt.id;
-      sendRef.current(incomingPrompt.message, { requestId: incomingPrompt.requestId });
+      sendRef.current(incomingPrompt);
     }
   }, [incomingPrompt, session.ready]);
 
@@ -79,7 +79,7 @@ export function WeaverSurface({
       <header className="weaver-surface-header">
         <div className="weaver-surface-title">
           <span>Weaver</span>
-          <strong>Workflow assistant</strong>
+          <strong>Studio assistant</strong>
         </div>
         <div className="weaver-surface-actions">
           <WeaverAutoApplyMenu
@@ -105,12 +105,13 @@ export function WeaverSurface({
       {session.error ? <div className="weaver-alert" role="alert">{session.error}</div> : null}
 
       <AgentContextChips attachments={session.attachments} />
+      {session.contextDiagnostics.length ? <div role="status" aria-label="Context limitations">{session.contextDiagnostics.map((item, index) => <p key={`${item.contributorId}-${index}`}>{item.contributorId}: {item.message}</p>)}</div> : null}
       <AgentPromptStarters prompts={session.promptStarters} disabled={composerDisabled || session.busy} onSelect={prompt => session.send(prompt)} />
 
       <div className="weaver-scroll">
         <WeaverMessageList messages={session.messages} streaming={session.busy} onFeedback={session.submitFeedback} />
         <WeaverTimeline entries={session.timeline} plan={session.plan} />
-        <AgentWorkflowBatchReview batches={session.workflowBatches} disabled={session.busy} onApply={session.applyWorkflowBatch} onUndo={session.undoWorkflowBatch} />
+        <AgentToolResults results={session.toolResults} renderers={resultRenderers} />
         <AgentProposalReview
           proposals={session.proposals}
           disabled={session.busy}
@@ -233,7 +234,7 @@ function describeProviderStatus(session: UseWeaverSession): { label: string; ton
 function toIndicatorSessions(session: UseWeaverSession): AgentSessionIndicatorSession[] {
   if (!session.sessionId) return [];
   const pendingProposals = session.proposals.filter(proposal => proposal.status === "awaiting-approval" || proposal.status === "approved").length;
-  const pendingArtifacts = session.workflowBatches.filter(batch => batch.status === "ready" || batch.status === "applying").length;
+  const pendingArtifacts = 0;
   const status: AgentSessionIndicatorSession["status"] = session.error
     ? "failed"
     : pendingProposals > 0

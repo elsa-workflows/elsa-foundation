@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Weaver.Journey</AssemblyName>
+    <PackageId>Weaver.Journey.Studio</PackageId>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Description>Owned Weaver candidate Studio contribution fixture; source composition is not the independent package witness.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+__REFERENCES__
+  </ItemGroup>
+</Project>

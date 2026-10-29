@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Core\Elsa.Agent.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Events\Core\Elsa.Events.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Agent.Tests" />
+  </ItemGroup>
+
+</Project>

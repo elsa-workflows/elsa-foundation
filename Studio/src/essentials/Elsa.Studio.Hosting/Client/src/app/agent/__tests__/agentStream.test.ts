@@ -140,60 +140,13 @@ describe("agent stream", () => {
     ]);
   });
 
-  it("normalizes typed workflow graph operation batch events with numeric enums", async () => {
+  it("preserves generic typed module results without domain decoding", async () => {
     const events: AgentStreamEvent[] = [];
-    const fetch = vi.fn(async () => new Response(streamFrom([
-      `data: ${JSON.stringify({
-        Id: "evt_batch",
-        Kind: 7,
-        ResultKind: 2,
-        Payload: {
-          SchemaVersion: "elsa.workflow-graph-operation-batch.v1",
-          WorkflowDefinitionId: "workflow-1",
-          BaseRevision: "rev-1",
-          Operations: [
-            {
-              Id: "op-add",
-              Kind: 0,
-              Parameters: { activityId: "temp:activity:email", activityType: "Elsa.Email.SendEmail" },
-              TemporaryReferences: ["temp:activity:email"],
-              Summary: "Add email."
-            }
-          ],
-          Metadata: { source: "deterministic-workflow-authoring" }
-        }
-      })}\n\n`
-    ]), { status: 200 }));
-
-    subscribeAgentSessionStream(
-      createEndpointContext("https://foundation.example/"),
-      "/_elsa/agent/sessions/agt_01/stream",
-      event => events.push(event),
-      error => { throw error; },
-      { fetch: fetch as typeof globalThis.fetch, defaultMessageId: "msg_01" });
+    const result = { toolCallId: "call", toolName: "sample_read", succeeded: true, content: "Observed sample.", payload: { typeId: "sample.result", schemaVersion: "2", data: { value: 42 } } };
+    const fetch = vi.fn(async () => new Response(streamFrom([`data: ${JSON.stringify({ Kind: 7, ResultKind: 2, Payload: result })}\n\n`]), { status: 200 }));
+    subscribeAgentSessionStream(createEndpointContext("https://foundation.example/"), "/stream", event => events.push(event), error => { throw error; }, { fetch, defaultMessageId: "message" });
     await flushPromises();
-
-    expect(events).toEqual([
-      {
-        type: "workflow-batch-created",
-        messageId: "msg_01",
-        batch: {
-          schemaVersion: "elsa.workflow-graph-operation-batch.v1",
-          workflowDefinitionId: "workflow-1",
-          baseRevision: "rev-1",
-          operations: [
-            {
-              id: "op-add",
-              kind: "add-activity",
-              parameters: { activityId: "temp:activity:email", activityType: "Elsa.Email.SendEmail" },
-              temporaryReferences: ["temp:activity:email"],
-              summary: "Add email."
-            }
-          ],
-          metadata: { source: "deterministic-workflow-authoring" }
-        }
-      }
-    ]);
+    expect(events).toEqual([{ type: "module-result", messageId: "message", result }]);
   });
 
   it("normalizes PascalCase typed error events", async () => {

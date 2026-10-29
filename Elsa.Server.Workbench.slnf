@@ -134,6 +134,7 @@
       "Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj",
       "Essentials/tests/Workbench/Fixtures/Reservations/Reservations.csproj",
       "Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj",
+      "Extensions/Agent/src/Agent/Elsa.Agent.csproj",
       "Extensions/Agent/src/Api/Elsa.Agent.Api.csproj",
       "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj",
       "Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj",

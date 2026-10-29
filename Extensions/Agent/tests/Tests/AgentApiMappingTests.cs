@@ -15,7 +15,7 @@ namespace Elsa.Agent.Tests;
 public sealed class AgentApiMappingTests
 {
     [Fact]
-    public void Maps_exactly_eleven_named_operations()
+    public void Maps_exactly_twelve_named_operations()
     {
         using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var app = new TestEndpointRouteBuilder(services);
@@ -29,7 +29,7 @@ public sealed class AgentApiMappingTests
             .OrderBy(x => x)
             .ToArray();
 
-        Assert.Equal(11, names.Length);
+        Assert.Equal(12, names.Length);
         Assert.All(names, name => Assert.StartsWith("ElsaAgentApiEndpoints", name, StringComparison.Ordinal));
     }
 
@@ -52,6 +52,7 @@ public sealed class AgentApiMappingTests
             ["ElsaAgentApiEndpointsApproveProposal"] = AgentPermissionKeys.Proposals,
             ["ElsaAgentApiEndpointsDenyProposal"] = AgentPermissionKeys.Proposals,
             ["ElsaAgentApiEndpointsExecuteProposal"] = AgentPermissionKeys.Proposals,
+            ["ElsaAgentApiEndpointsAcknowledgeClientInvocation"] = AgentPermissionKeys.Proposals,
             ["ElsaAgentApiEndpointsAudit"] = AgentPermissionKeys.Audit
         };
         var codec = new PermissionPolicyCodec();

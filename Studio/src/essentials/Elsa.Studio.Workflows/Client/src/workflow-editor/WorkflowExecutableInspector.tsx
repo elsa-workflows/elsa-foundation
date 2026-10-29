@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
 import { ChevronLeft, ChevronRight, Fingerprint, ListTree, Maximize2, Minimize2, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
-import type { StudioAiContributionApi, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
+import type { StudioAgentRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import { getDefinition } from "../api/workflowDesign";
 import { listActivities } from "../api/activityDesign";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
@@ -76,7 +76,7 @@ type SourceDefinitionState =
 
 export function WorkflowExecutableInspectorWorkbench({ context, ai, runInputEditors, artifactId, sourceReferenceId, onSelectReference }: {
   context: StudioEndpointContext;
-  ai: StudioAiContributionApi;
+  ai: StudioAgentRegistry;
   runInputEditors: StudioWorkflowRunInputEditorContribution[];
   artifactId: string;
   sourceReferenceId: string | null;

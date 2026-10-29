@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 using Elsa.Agent.Core.Contracts;
-using Elsa.Agent.Core.Extensions;
+using Elsa.Agent.Extensions;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -54,13 +54,15 @@ public sealed class AgentTurnOrchestratorTests
         Assert.Contains(first, x => x.Kind == AgentStreamEventKind.ToolApprovalRequested);
         Assert.DoesNotContain(first, x => x.Kind == AgentStreamEventKind.Completed);
 
-        await proposals.ApproveAsync(proposal.Id, "actor-1");
-        await proposals.ExecuteAsync(proposal.Id, "actor-1");
+        Assert.True((await proposals.ApproveAsync(proposal.Id, "actor-1", proposal.BaseRevision)).Succeeded);
+        var applied = await proposals.ExecuteAsync(proposal.Id, "actor-1", proposal.BaseRevision);
+        Assert.True(applied.Succeeded);
+        Assert.NotNull(applied.Value!.ToolResult!.Receipt);
 
         var second = await Collect(streaming.StreamAsync(session.Id));
 
         var delta = second.Last(x => x.Kind == AgentStreamEventKind.MessageDelta);
-        Assert.Contains("approved and applied", delta.Content);
+        Assert.Contains(applied.Value.ToolResult.Content, delta.Content);
         Assert.Equal(AgentStreamEventKind.Completed, second[^1].Kind);
     }
 
@@ -83,7 +85,7 @@ public sealed class AgentTurnOrchestratorTests
         var second = await Collect(streaming.StreamAsync(session.Id));
 
         var delta = second.Last(x => x.Kind == AgentStreamEventKind.MessageDelta);
-        Assert.Contains("did not complete", delta.Content);
+        Assert.Contains("denied", delta.Content, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(AgentStreamEventKind.Completed, second[^1].Kind);
     }
 
@@ -103,7 +105,7 @@ public sealed class AgentTurnOrchestratorTests
         {
             collected.Add(streamEvent);
             if (streamEvent.Kind == AgentStreamEventKind.Started)
-                turns.Cancel(((AgentTurnStarted)streamEvent.Payload!).TurnId);
+                turns.Cancel(session.Id, ((AgentTurnStarted)streamEvent.Payload!).TurnId);
         }
 
         Assert.Contains(collected, x => x.Kind == AgentStreamEventKind.TurnCancelled);
@@ -111,7 +113,7 @@ public sealed class AgentTurnOrchestratorTests
     }
 
     [Fact]
-    public async Task Follow_up_messages_are_steered_into_the_running_turn_between_steps()
+    public async Task A_busy_foreground_turn_refuses_another_prompt_without_losing_it_silently()
     {
         using var sp = Build(new SteeringProbeProvider(), [new EchoTool()]);
         using var scope = sp.CreateScope();
@@ -129,14 +131,14 @@ public sealed class AgentTurnOrchestratorTests
             if (!injected && streamEvent.Kind == AgentStreamEventKind.ToolCallCompleted)
             {
                 injected = true;
-                await PostAsync(sessions, session.Id, "second request");
+                await Assert.ThrowsAsync<AgentContributionException>(() => PostAsync(sessions, session.Id, "second request"));
             }
         }
 
-        Assert.Contains(collected, x => x.Kind == AgentStreamEventKind.Progress && x.Content!.Contains("second request"));
+        Assert.DoesNotContain(await sessions.ListMessagesAsync(session.Id), x => x.Content == "second request");
         var finalDelta = collected.Last(x => x.Kind == AgentStreamEventKind.MessageDelta);
         Assert.Contains("first request", finalDelta.Content);
-        Assert.Contains("second request", finalDelta.Content);
+        Assert.DoesNotContain("second request", finalDelta.Content);
     }
 
     [Fact]
@@ -167,14 +169,12 @@ public sealed class AgentTurnOrchestratorTests
 
     private static ServiceProvider Build(IAgentProvider provider, IEnumerable<IAgentTool> tools, int? maxSteps = null)
     {
-        var services = new ServiceCollection();
-        if (maxSteps is not null)
-            services.Configure<AgentTurnOptions>(o => o.MaxSteps = maxSteps.Value);
-        services.AddFoundationAgentAbstractions();
-        services.AddSingleton(provider);
-        foreach (var tool in tools)
-            services.AddSingleton(tool);
-        return services.BuildServiceProvider();
+        return AgentTestServices.Create(services =>
+        {
+            if (maxSteps is not null) services.Configure<AgentTurnOptions>(o => o.MaxSteps = maxSteps.Value);
+            services.AddSingleton(provider);
+            foreach (var tool in tools) services.AddSingleton(tool);
+        });
     }
 
     private static async Task<List<AgentStreamEvent>> RunAsync(ServiceProvider sp, string providerId, string prompt)

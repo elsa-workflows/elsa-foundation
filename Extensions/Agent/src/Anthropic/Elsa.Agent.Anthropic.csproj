@@ -12,6 +12,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\Agent\Elsa.Agent.csproj" />
 		<ProjectReference Include="..\Core\Elsa.Agent.Core.csproj" />
 	</ItemGroup>
 

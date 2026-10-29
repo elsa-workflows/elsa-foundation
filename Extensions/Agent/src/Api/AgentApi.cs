@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
+using System.Security.Cryptography;
 
 namespace Elsa.Agent.Api;
 
@@ -51,6 +52,8 @@ public static class AgentApi
             typeof(AgentProposalDecisionRequest), typeof(AgentApiResponse<AgentActionProposal>), HandleDenyProposalAsync);
         Map(api, "POST", $"{RoutePrefix}/proposals/{{proposalId}}/execute", "ExecuteProposal", AgentPermissionKeys.Proposals,
             typeof(AgentProposalDecisionRequest), typeof(AgentApiResponse<AgentProposalExecutionResult>), HandleExecuteProposalAsync);
+        Map(api, "POST", $"{RoutePrefix}/sessions/{{sessionId}}/client-invocations/{{invocationId}}/acknowledgements", "AcknowledgeClientInvocation", AgentPermissionKeys.Proposals,
+            typeof(AgentClientAcknowledgement), typeof(AgentApiResponse<AgentProposalExecutionResult>), HandleClientAcknowledgementAsync);
         Map(api, "GET", $"{RoutePrefix}/audit", "Audit", AgentPermissionKeys.Audit,
             typeof(AgentAuditQueryRequest), typeof(AgentApiResponse<IReadOnlyCollection<AgentAuditEvent>>), HandleAuditAsync);
     }
@@ -147,16 +150,14 @@ public static class AgentApi
         };
         var requestedAutonomy = AgentApiMapping.ParseAutonomyMode(request.AutonomyMode) ?? AgentPolicy.Default.AutonomyMode;
         var policy = AgentPolicy.Default with { AutonomyMode = AgentPolicy.Default.Clamp(requestedAutonomy) };
-        var title = activeSurface.ResourceType == "workflow-definition" && !string.IsNullOrWhiteSpace(activeSurface.ResourceId)
-            ? $"{activeSurface.ResourceId} workflow"
-            : "Studio assistant";
+        const string title = "Studio assistant";
         var mode = metadata.TryGetValue("mode", out var metadataMode) && !string.IsNullOrWhiteSpace(metadataMode)
             ? metadataMode
             : request.Mode;
         var session = await sessions.CreateAsync(new(tenantId, actorId, conversationId, providers.Active.ProviderId, mode, title, policy, sessionMetadata), context.RequestAborted);
         await providers.Active.CreateSessionAsync(session, context.RequestAborted);
-        var attachments = await CollectInitialContextAsync(context, session, request);
-        await sessions.AddContextAsync(session.Id, attachments, context.RequestAborted);
+        // Routes and presentation metadata never establish an authoritative resource target.
+        IReadOnlyCollection<AgentContextAttachment> attachments = [];
         await WriteAsync(context, AgentApiResponse<AgentCreateSessionResponse>.Success(new(session.Id, session.Status.ToContractString(), session.Title, attachments.Select(x => x.ToResponse()).ToList())), AgentJsonContext.Default.AgentApiResponseAgentCreateSessionResponse);
     }
 
@@ -193,6 +194,27 @@ public static class AgentApi
             return;
         }
         var evaluator = context.RequestServices.GetRequiredService<IAgentPolicyEvaluator>();
+        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(request, AgentJsonContext.Default.AgentMessageRequest)));
+        if (!string.IsNullOrWhiteSpace(request.RequestId))
+        {
+            var existing = (await sessions.ListMessagesAsync(sessionId, context.RequestAborted)).FirstOrDefault(x => x.Role == AgentRole.User && x.RequestId == request.RequestId);
+            if (existing is not null)
+            {
+                if (existing.DeliveryFingerprint != fingerprint)
+                {
+                    await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Failure(new("agent.message.delivery_conflict", "This prompt delivery identity was reused with different input.", 409)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse, 409);
+                    return;
+                }
+                await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Success(new(existing, [new("agent.message.duplicate", "This delivery was already accepted; it does not authorize another turn.", request.RequestId)])), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse);
+                return;
+            }
+        }
+        if (context.RequestServices.GetRequiredService<IAgentTurnRegistry>().IsActive(sessionId)
+            || context.RequestServices.GetRequiredService<IAgentTurnStateStore>().Find(sessionId) is not null)
+        {
+            await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Failure(new("agent.session.busy", "Finish or resolve the current turn before sending another prompt.", 409)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse, 409);
+            return;
+        }
         var availability = await evaluator.EvaluateAvailabilityAsync(session!.Policy, context.RequestAborted);
         if (!availability.Allowed)
         {
@@ -200,8 +222,14 @@ public static class AgentApi
             return;
         }
         var requestedCapabilities = requestedCapabilitiesInput.Count > 0 ? requestedCapabilitiesInput : string.IsNullOrWhiteSpace(request.CapabilityId) ? [] : [request.CapabilityId];
+        var installedCapabilities = await context.RequestServices.GetRequiredService<IAgentCapabilityCatalog>().ListAsync(context.RequestAborted);
         foreach (var capabilityId in requestedCapabilities)
         {
+            if (!installedCapabilities.Any(x => x.Id == capabilityId))
+            {
+                await WriteDeniedAsync(context, sessionId, new(false, [new("agent.capability.unavailable", "No installed module contributes the requested capability.", capabilityId)]));
+                return;
+            }
             var decision = await evaluator.EvaluateCapabilityAsync(session.Policy, capabilityId, context.RequestAborted);
             if (!decision.Allowed)
             {
@@ -211,16 +239,44 @@ public static class AgentApi
         }
         var stored = await sessions.ListContextAsync(sessionId, context.RequestAborted);
         var requestedStored = contextAttachmentIds.Count == 0 ? [] : stored.Where(x => contextAttachmentIds.Contains(x.Id, StringComparer.OrdinalIgnoreCase)).ToList();
-        var requestContext = contextAttachments.Select(x => x.ToDomain()).ToList();
-        var contextItems = await context.RequestServices.GetRequiredService<IAgentContextSanitizer>().SanitizeAsync(requestedStored.Concat(requestContext).ToList(), context.RequestAborted);
-        var contextDecision = await evaluator.EvaluateContextAsync(session.Policy, contextItems, context.RequestAborted);
-        if (!contextDecision.Allowed)
+        var requestContext = requestedStored.Concat(contextAttachments.Select(x => x.ToDomain())).ToList();
+        AgentResult<AgentContextContribution> collected;
+        try
         {
-            await WriteDeniedAsync(context, sessionId, contextDecision);
+            collected = await context.RequestServices.GetRequiredService<IAgentContextCollector>().CollectAsync(session.Policy,
+                new(sessionId, string.Empty, new Dictionary<string, string>()) { CallerAttachments = requestContext }, context.RequestAborted);
+        }
+        catch (AgentContributionException)
+        {
+            await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Failure(new("agent.context.composition_invalid", "Installed module context contributions conflict or cannot be transported.", 409)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse, 409);
             return;
         }
-        var message = await sessions.AddMessageAsync(sessionId, new(AgentRole.User, string.IsNullOrWhiteSpace(request.Content) ? request.Message : request.Content, AgentMessageStatus.Pending, requestedCapabilities.FirstOrDefault(), contextItems.Select(x => x.Id).ToList(), contextItems), context.RequestAborted);
-        await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Success(new(message, [])), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse);
+        if (!collected.Succeeded || collected.Value is null)
+        {
+            await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Failure(collected.Error!), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse, collected.Error!.StatusCode);
+            return;
+        }
+        var contextItems = collected.Value.Attachments;
+        var bindings = contextItems.Where(x => x.Client is not null).Select(x => x.Client!).Distinct().ToList();
+        var messageRequest = new AgentMessageCreateRequest(AgentRole.User, string.IsNullOrWhiteSpace(request.Content) ? request.Message : request.Content,
+            AgentMessageStatus.Pending, requestedCapabilities.FirstOrDefault(), contextItems.Select(x => x.Id).ToList(), contextItems)
+        {
+            RequestId = request.RequestId,
+            Source = request.Source,
+            Client = bindings.Count == 1 ? bindings[0] : null,
+            PromptMode = request.PromptMode,
+            DeliveryFingerprint = fingerprint
+        };
+        AgentMessage message;
+        try { message = await sessions.AddMessageAsync(sessionId, messageRequest, context.RequestAborted); }
+        catch (AgentContributionException)
+        {
+            await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Failure(new("agent.message.delivery_conflict", "Another prompt is pending, or this delivery identity conflicts with an accepted prompt.", 409)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse, 409);
+            return;
+        }
+        await sessions.AddContextAsync(sessionId, contextItems, context.RequestAborted);
+        var warnings = collected.Value.Diagnostics.Select(x => new AgentViolation(x.Code, x.Message, x.ContributorId)).ToList();
+        await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Success(new(message, warnings)), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse);
     }
 
     private static async Task HandleCancelTurnAsync(HttpContext context)
@@ -236,7 +292,7 @@ public static class AgentApi
             return;
         }
         var turnId = RouteValueOrFallback(context, "turnId", request.TurnId);
-        var cancelled = context.RequestServices.GetRequiredService<IAgentTurnRegistry>().Cancel(turnId);
+        var cancelled = context.RequestServices.GetRequiredService<IAgentTurnRegistry>().Cancel(sessionId, turnId);
         await WriteAsync(context, AgentApiResponse<AgentTurnCancelResponse>.Success(new(turnId, cancelled)), AgentJsonContext.Default.AgentApiResponseAgentTurnCancelResponse);
     }
 
@@ -350,7 +406,26 @@ public static class AgentApi
             return;
         }
         var result = await proposals.ExecuteAsync(proposalId, actorId, request.Revision, context.RequestAborted);
-        await WriteAsync(context, result.Succeeded ? AgentApiResponse<AgentProposalExecutionResult>.Success(result.Value!) : AgentApiResponse<AgentProposalExecutionResult>.Failure(result.Error!), AgentJsonContext.Default.AgentApiResponseAgentProposalExecutionResult, result.Succeeded ? 200 : result.Error!.StatusCode);
+        await WriteAsync(context, result.Succeeded ? AgentApiResponse<AgentProposalExecutionResult>.Success(result.Value!) : AgentApiResponse<AgentProposalExecutionResult>.Failure(result.Error!), AgentJsonContext.Default.AgentApiResponseAgentProposalExecutionResult,
+            result.Succeeded ? result.Value!.ClientInvocation is not null ? 202 : 200 : result.Error!.StatusCode);
+    }
+
+    private static async Task HandleClientAcknowledgementAsync(HttpContext context)
+    {
+        var request = await ReadAsync(context, AgentJsonContext.Default.AgentClientAcknowledgement);
+        if (request is null)
+            return;
+        var sessionId = RouteValue(context, "sessionId");
+        var (session, error) = await AgentSessionAuthorization.AuthorizeAsync(context.RequestServices.GetRequiredService<IAgentSessionService>(), context.User, sessionId, context.RequestAborted);
+        if (error is not null)
+        {
+            await WriteAsync(context, AgentApiResponse<AgentProposalExecutionResult>.Failure(error), AgentJsonContext.Default.AgentApiResponseAgentProposalExecutionResult, error.StatusCode);
+            return;
+        }
+        var result = await context.RequestServices.GetRequiredService<IAgentProposalService>().AcknowledgeAsync(sessionId,
+            RouteValue(context, "invocationId"), session!.ActorId, request, context.RequestAborted);
+        await WriteAsync(context, result.Succeeded ? AgentApiResponse<AgentProposalExecutionResult>.Success(result.Value!) : AgentApiResponse<AgentProposalExecutionResult>.Failure(result.Error!),
+            AgentJsonContext.Default.AgentApiResponseAgentProposalExecutionResult, result.Succeeded ? 200 : result.Error!.StatusCode);
     }
 
     private static async Task HandleAuditAsync(HttpContext context)
@@ -363,18 +438,28 @@ public static class AgentApi
             await WriteBindingErrorAsync(context, "take", bindingError);
             return;
         }
-        var events = await context.RequestServices.GetRequiredService<IAgentAuditReader>().ListAsync(sessionId, take, context.RequestAborted);
+        var sessions = context.RequestServices.GetRequiredService<IAgentSessionService>();
+        if (sessionId is not null)
+        {
+            var (_, error) = await AgentSessionAuthorization.AuthorizeAsync(sessions, context.User, sessionId, context.RequestAborted);
+            if (error is not null)
+            {
+                await WriteAsync(context, AgentApiResponse<IReadOnlyCollection<AgentAuditEvent>>.Failure(error), AgentJsonContext.Default.AgentApiResponseIReadOnlyCollectionAgentAuditEvent, error.StatusCode);
+                return;
+            }
+        }
+        var listed = await context.RequestServices.GetRequiredService<IAgentAuditReader>().ListAsync(sessionId, null, context.RequestAborted);
+        var owned = new List<AgentAuditEvent>();
+        foreach (var item in listed)
+        {
+            if (item.SessionId is null)
+                continue;
+            var session = await sessions.FindAsync(item.SessionId, context.RequestAborted);
+            if (session is not null && AgentEndpointActor.CanAccess(session.ActorId, session.TenantId, context.User))
+                owned.Add(item);
+        }
+        IReadOnlyCollection<AgentAuditEvent> events = owned.Take(Math.Clamp(take ?? 100, 1, 1000)).ToList();
         await WriteAsync(context, AgentApiResponse<IReadOnlyCollection<AgentAuditEvent>>.Success(events), AgentJsonContext.Default.AgentApiResponseIReadOnlyCollectionAgentAuditEvent);
-    }
-
-    private static async Task<IReadOnlyCollection<AgentContextAttachment>> CollectInitialContextAsync(HttpContext context, AgentSession session, AgentCreateSessionRequest request)
-    {
-        var activeSurface = request.ActiveSurface;
-        var workflowId = activeSurface?.ResourceId ?? TryGetWorkflowId(activeSurface?.Route);
-        if (workflowId is null)
-            return [];
-        var result = await context.RequestServices.GetRequiredService<IAgentContextCollector>().CollectAsync(session.Policy, new(session.Id, "workflow", new Dictionary<string, string> { ["workflowDefinitionId"] = workflowId, ["workflowVersionId"] = "draft" }), context.RequestAborted);
-        return result.Value ?? [];
     }
 
     private static async Task WriteDeniedAsync(HttpContext context, string sessionId, AgentPolicyDecision decision)
@@ -451,16 +536,6 @@ public static class AgentApi
         return null;
     }
 
-    private static string? TryGetWorkflowId(string? route)
-    {
-        if (string.IsNullOrWhiteSpace(route))
-            return null;
-
-        var segments = route.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        var workflowsIndex = Array.FindIndex(segments, x => string.Equals(x, "workflows", StringComparison.OrdinalIgnoreCase));
-        return workflowsIndex >= 0 && workflowsIndex + 1 < segments.Length ? segments[workflowsIndex + 1] : null;
-    }
-
     private static string RouteValue(HttpContext context, string name) => context.Request.RouteValues.TryGetValue(name, out var value) ? value?.ToString() ?? string.Empty : string.Empty;
 
     private static string RouteValueOrFallback(HttpContext context, string name, string fallback)
@@ -471,13 +546,7 @@ public static class AgentApi
 
     private static IReadOnlyCollection<string> BuildModes(IReadOnlyCollection<AgentCapability> capabilities)
     {
-        var modes = new List<string>();
-        if (capabilities.Any(x => string.Equals(x.Id, "workflow.explain", StringComparison.OrdinalIgnoreCase)))
-            modes.Add("explain");
-        if (capabilities.Any(x => string.Equals(x.Id, "workflow.troubleshoot", StringComparison.OrdinalIgnoreCase)))
-            modes.Add("troubleshoot");
-        if (capabilities.Any(x => string.Equals(x.Id, "workflow.propose-change", StringComparison.OrdinalIgnoreCase)))
-            modes.Add("build");
-        return modes;
+        var modes = capabilities.SelectMany(x => x.Modes).Distinct(StringComparer.Ordinal).ToList();
+        return modes.Count == 0 ? ["explain"] : modes;
     }
 }

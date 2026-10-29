@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
@@ -10,402 +10,113 @@ namespace Elsa.Agent.Workflows.Services;
 public sealed class WorkflowAgentCapabilityProvider : IAgentCapabilityProvider
 {
     public ValueTask<IReadOnlyCollection<AgentCapability>> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
-        => ValueTask.FromResult<IReadOnlyCollection<AgentCapability>>(
-        [
-            new(
-                "workflow.explain",
-                "Elsa.Studio.Workflows",
-                "Explain workflow",
-                "Explains the selected workflow definition using minimized workflow context.",
-                AgentCapabilityKind.Answer,
-                AgentRisk.ReadOnly,
-                ["/workflows"],
-                [],
-                ["workflow.definition"]
-            ),
-            new(
-                "workflow.troubleshoot",
-                "Elsa.Studio.Workflows",
-                "Troubleshoot active workflow",
-                "Troubleshoots an active workflow execution using selected workflow/runtime context.",
-                AgentCapabilityKind.Answer,
-                AgentRisk.ReadOnly,
-                ["/workflows"],
-                [],
-                ["workflow.definition", "workflow.instance", "workflow.execution"]
-            ),
-            new(
-                "workflow.propose-change",
-                "Elsa.Studio.Workflows",
-                "Propose workflow change",
-                "Creates a reviewable workflow-change proposal; execution remains gated by explicit approval.",
-                AgentCapabilityKind.Proposal,
-                AgentRisk.ReviewRequired,
-                ["/workflows"],
-                ["workflow.proposals"],
-                ["workflow.definition"])
+        => ValueTask.FromResult<IReadOnlyCollection<AgentCapability>>([
+            new("workflow.explain", WorkflowAgentSnapshot.ModuleId, "Explain open workflow", "Explains the admitted workflow working-state graph.",
+                AgentCapabilityKind.Answer, AgentRisk.ReadOnly, ["/workflows"], ["workflows/design:read"], ["workflow.definition", "workflow.request"]) { Modes = ["explain"] },
+            new("workflow.propose-change", WorkflowAgentSnapshot.ModuleId, "Propose workflow layout change", "Reviews the position of an existing activity in the open workflow. Saving and publishing remain explicit.",
+                AgentCapabilityKind.Proposal, AgentRisk.ReviewRequired, ["/workflows"], ["workflows/design:manage"], ["workflow.definition"]) { Modes = ["build"] }
         ]);
-}
-
-public sealed class DeterministicWorkflowAgentProvider : IAgentProvider
-{
-    public const string Id = "deterministic-workflow-authoring";
-
-    public string ProviderId => Id;
-
-    public Task<AgentProviderSession> CreateSessionAsync(AgentSession session, CancellationToken cancellationToken = default)
-        => Task.FromResult(new AgentProviderSession(session.Id, ProviderId, new Dictionary<string, string>
-        {
-            ["adapter"] = "deterministic",
-            ["surface"] = "workflow-authoring",
-            ["status"] = "available"
-        }));
-
-    public async IAsyncEnumerable<AgentStreamEvent> ContinueTurnAsync(AgentTurnContext context, [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        var message = new AgentProviderMessage(context.SessionId, context.LatestUserMessage?.Content ?? string.Empty, context.Context);
-        await Task.Yield();
-        var messageId = AgentProviderPrimitives.NewId();
-        yield return new AgentStreamEvent(messageId, AgentStreamEventKind.Started, null, null, null, DateTimeOffset.UtcNow);
-
-        if (ShouldReturnError(message.Content))
-        {
-            yield return new AgentStreamEvent(
-                messageId,
-                AgentStreamEventKind.Error,
-                null,
-                null,
-                new("agent.workflow.deterministic_error", "Deterministic workflow authoring provider returned a requested error.", 400),
-                DateTimeOffset.UtcNow,
-                AgentResultKind.Error);
-            yield break;
-        }
-
-        if (ShouldReturnClarification(message.Content))
-        {
-            var clarification = CreateClarification(message);
-            yield return new AgentStreamEvent(
-                messageId,
-                AgentStreamEventKind.ClarificationRequested,
-                clarification.Question,
-                null,
-                null,
-                DateTimeOffset.UtcNow,
-                AgentResultKind.Clarification,
-                clarification);
-            yield return new AgentStreamEvent(messageId, AgentStreamEventKind.Completed, null, null, null, DateTimeOffset.UtcNow);
-            yield break;
-        }
-
-        if (ShouldReturnWorkflowBatch(message.Content))
-        {
-            yield return new AgentStreamEvent(
-                messageId,
-                AgentStreamEventKind.WorkflowGraphOperationBatchCreated,
-                "Prepared one workflow graph operation batch.",
-                null,
-                null,
-                DateTimeOffset.UtcNow,
-                AgentResultKind.WorkflowGraphOperationBatch,
-                CreateBatch(message));
-            yield return new AgentStreamEvent(messageId, AgentStreamEventKind.Completed, null, null, null, DateTimeOffset.UtcNow);
-            yield break;
-        }
-
-        yield return new AgentStreamEvent(
-            messageId,
-            AgentStreamEventKind.MessageDelta,
-            "Deterministic workflow authoring provider response.",
-            null,
-            null,
-            DateTimeOffset.UtcNow,
-            AgentResultKind.Message);
-        yield return new AgentStreamEvent(messageId, AgentStreamEventKind.Completed, null, null, null, DateTimeOffset.UtcNow);
-    }
-
-    public Task<AgentToolApprovalResult> ApproveToolAsync(AgentProviderToolApprovalRequest request, CancellationToken cancellationToken = default)
-        => Task.FromResult(new AgentToolApprovalResult(request.Approved, request.Approved ? "Tool approval accepted by deterministic workflow provider." : "Tool approval denied by deterministic workflow provider."));
-
-    public Task<AgentProviderDiagnostics> GetDiagnosticsAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult(new AgentProviderDiagnostics(
-            ProviderId,
-            IsAvailable: true,
-            Status: "Deterministic workflow authoring provider is available for Weaver contract validation.",
-            AgentProviderKind.ProviderSdkBinding,
-            [AgentProviderOperation.Chat, AgentProviderOperation.Streaming, AgentProviderOperation.ToolApproval],
-            AgentProviderRiskProfile.ReviewRequired,
-            new Dictionary<string, string>
-            {
-                ["adapter"] = "deterministic",
-                ["surface"] = "workflow-authoring"
-            }));
-
-    private static WorkflowGraphOperationBatch CreateBatch(AgentProviderMessage message)
-    {
-        var workflowContext = message.Context.FirstOrDefault(x => string.Equals(x.ContentType, "workflow.definition", StringComparison.OrdinalIgnoreCase));
-        var workflowDefinitionId = GetReference(workflowContext, "workflowDefinitionId") ?? "workflow-draft";
-        var baseRevision = GetReference(workflowContext, "revision");
-        const string temporaryActivityId = "temp:activity:send-email-1";
-
-        return new(
-            WorkflowGraphOperationBatchSchema.CurrentVersion,
-            workflowDefinitionId,
-            baseRevision,
-            [
-                new(
-                    "op-add-send-email",
-                    WorkflowGraphOperationKind.AddActivity,
-                    new Dictionary<string, object?>
-                    {
-                        ["activityId"] = temporaryActivityId,
-                        ["activityType"] = "Elsa.Email.SendEmail",
-                        ["displayName"] = "Send email"
-                    },
-                    [temporaryActivityId],
-                    "Add a send email activity."),
-                new(
-                    "op-set-root",
-                    WorkflowGraphOperationKind.SetRoot,
-                    new Dictionary<string, object?>
-                    {
-                        ["activityId"] = temporaryActivityId
-                    },
-                    [temporaryActivityId],
-                    "Use the send email activity as the workflow root."),
-                new(
-                    "op-set-position",
-                    WorkflowGraphOperationKind.SetDesignerPosition,
-                    new Dictionary<string, object?>
-                    {
-                        ["activityId"] = temporaryActivityId,
-                        ["x"] = 320,
-                        ["y"] = 180
-                    },
-                    [temporaryActivityId],
-                    "Place the activity on the designer canvas."),
-                new(
-                    "op-set-subject",
-                    WorkflowGraphOperationKind.SetActivityProperty,
-                    new Dictionary<string, object?>
-                    {
-                        ["activityId"] = temporaryActivityId,
-                        ["propertyName"] = "Subject",
-                        ["value"] = "Hello from Weaver"
-                    },
-                    [temporaryActivityId],
-                    "Set the email subject.")
-            ],
-            new Dictionary<string, string>
-            {
-                ["surface"] = "designer",
-                ["source"] = "deterministic-workflow-authoring"
-            });
-    }
-
-    private static WorkflowClarificationResult CreateClarification(AgentProviderMessage message)
-    {
-        var workflowContext = message.Context.FirstOrDefault(x => string.Equals(x.ContentType, "workflow.definition", StringComparison.OrdinalIgnoreCase));
-        var workflowDefinitionId = GetReference(workflowContext, "workflowDefinitionId") ?? "workflow-draft";
-
-        return new(
-            "clarify-workflow-target",
-            "Which workflow branch should Weaver update?",
-            [
-                new("active-draft", "Active draft", "active-draft", "Apply the answer to the workflow currently open in the designer."),
-                new("selected-activity", "Selected activity", "selected-activity", "Scope the answer to the selected activity and nearby connections."),
-                new("new-workflow", "New workflow", "new-workflow", "Create a separate workflow graph instead of changing the current draft.")
-            ],
-            $"{message.SessionId}:clarification:workflow-target",
-            new Dictionary<string, string>
-            {
-                ["workflowDefinitionId"] = workflowDefinitionId,
-                ["surface"] = "designer"
-            });
-    }
-
-    private static string? GetReference(AgentContextAttachment? attachment, string key)
-        => attachment?.References.TryGetValue(key, out var value) == true && !string.IsNullOrWhiteSpace(value) ? value : null;
-
-    private static bool ShouldReturnClarification(string content)
-        => Contains(content, "clarify")
-            || Contains(content, "ambiguous")
-            || Contains(content, "which branch")
-            || Contains(content, "ask a question");
-
-    private static bool ShouldReturnWorkflowBatch(string content)
-        => Contains(content, "workflow graph operation")
-            || Contains(content, "direct apply")
-            || Contains(content, "add activity")
-            || Contains(content, "create workflow");
-
-    private static bool ShouldReturnError(string content)
-        => Contains(content, "force error") || Contains(content, "return error");
-
-    private static bool Contains(string content, string value)
-        => content.Contains(value, StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed class DefaultWorkflowActivityCatalogProvider : IWorkflowActivityCatalogProvider
 {
     public Task<IReadOnlyCollection<WorkflowAgentActivityCatalogItem>> ListAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult<IReadOnlyCollection<WorkflowAgentActivityCatalogItem>>(
-        [
-            new("Elsa.Workflows.WriteLine", "Write line", true, ["write", "line", "console", "log", "text"]),
-            new("Elsa.Workflows.Sequence", "Sequence", true, ["sequence", "flow", "container", "multiple"]),
-            new("Elsa.Email.SendEmail", "Send email", true, ["email", "mail", "send", "notification"]),
-            new("Elsa.Http.SendHttpRequest", "Send HTTP request", true, ["http", "webhook", "request", "api"]),
-            new("Elsa.Timers.Delay", "Delay", true, ["delay", "timer", "wait", "schedule"]),
-            new("Elsa.Secrets.LegacySecretActivity", "Legacy secret activity", false, ["secret", "credential", "unavailable"])
-        ]);
+        => Task.FromResult<IReadOnlyCollection<WorkflowAgentActivityCatalogItem>>([]);
 }
 
 public sealed class DefaultWorkflowAgentContextProvider(
     IWorkflowRevisionProvider revisionProvider,
     IWorkflowActivityCatalogProvider activityCatalogProvider) : IWorkflowAgentContextProvider, IAgentContextProvider
 {
-    private const int MaxActivityCatalogItems = 5;
+    public AgentContextProviderDescriptor Descriptor { get; } = new(
+        "workflows.context", WorkflowAgentSnapshot.ModuleId, "workflow",
+        ["workflow.definition", "workflow.request", "workflow.guidance"], ["1"], ["workflow-definition"], Required: false);
 
-    public string ScopeKind => "workflow";
-
-    public async ValueTask<IReadOnlyCollection<AgentContextAttachment>> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
+    public ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
     {
-        if (!request.Inputs.TryGetValue("workflowDefinitionId", out var workflowDefinitionId) || string.IsNullOrWhiteSpace(workflowDefinitionId))
-            throw new ArgumentException("Workflow context collection requires a 'workflowDefinitionId' input.", nameof(request));
+        var attachments = new List<AgentContextAttachment>();
+        var diagnostics = new List<AgentContributionDiagnostic>();
+        foreach (var caller in request.CallerAttachments.Where(item =>
+                     item.ModuleId == WorkflowAgentSnapshot.ModuleId || item.ContentType?.StartsWith("workflow.", StringComparison.Ordinal) == true))
+        {
+            if (caller.ContentType == "workflow.request" && caller.SchemaVersion == "1")
+            {
+                if (TryAdmitRequest(caller, out var admitted)) attachments.Add(admitted!);
+                else diagnostics.Add(new(Descriptor.Id, "agent.workflow.request_invalid", "The workflow request must contain bounded request-kind and reference metadata.", true));
+                continue;
+            }
+            if (caller.ContentType != "workflow.definition" || caller.SchemaVersion != "1")
+            {
+                diagnostics.Add(new(Descriptor.Id, "agent.workflow.context_unsupported", "This workflow context kind or schema is not supported by the current module contribution.", true));
+                continue;
+            }
+            if (!WorkflowAgentSnapshot.TryRead(caller, out var snapshot, out var error))
+            {
+                diagnostics.Add(new(Descriptor.Id, "agent.workflow.context_invalid", error, true));
+                continue;
+            }
+            if (request.Client is not null && request.Client != snapshot!.Client || request.Target is { } requested && !WorkflowAgentSnapshot.SameTarget(requested, snapshot!.Target))
+            {
+                diagnostics.Add(new(Descriptor.Id, "agent.workflow.context_target_mismatch", "The workflow snapshot does not match the requested target and revision.", true));
+                continue;
+            }
+            attachments.Add(new($"workflow:{snapshot!.Target.ResourceId}:{snapshot.Target.Revision}", "workflow.definition",
+                snapshot.Target.ResourceId, "Open workflow working state", "workflow.definition", AgentContextSensitivity.Internal,
+                "selection", $"Workflow '{snapshot.Target.ResourceId}' at revision '{snapshot.Target.Revision}' contains {snapshot.Graph.Activities.Count} activity summaries.",
+                snapshot.Content, new Dictionary<string, string> { ["workflowDefinitionId"] = snapshot.Target.ResourceId!, ["revision"] = snapshot.Target.Revision! })
+            {
+                ModuleId = WorkflowAgentSnapshot.ModuleId, SchemaVersion = "1", Target = snapshot.Target,
+                Origin = AgentContextOrigin.ClientSnapshot, Client = snapshot.Client, AgentScopes = ["/workflows"]
+            });
+        }
+        attachments.Add(new("workflows:installed-guidance", "workflows.module", null, "Workflow module guidance", "workflow.guidance",
+            AgentContextSensitivity.Public, "module", "The workflow module can read the admitted working-state graph and propose a reviewed layout change for an existing activity. Activity creation, property edits, broad graph batches, save and publish are unavailable in this contribution. Apply changes only through the declared tool and report local working-state receipts separately from saved resources.", null,
+            new Dictionary<string, string>())
+        {
+            ModuleId = WorkflowAgentSnapshot.ModuleId, SchemaVersion = "1", Origin = AgentContextOrigin.InstalledGuidance,
+            AgentScopes = []
+        });
+        return ValueTask.FromResult(new AgentContextContribution(attachments, diagnostics));
+    }
 
-        request.Inputs.TryGetValue("workflowVersionId", out var workflowVersionId);
-        request.Inputs.TryGetValue("prompt", out var prompt);
-        request.Inputs.TryGetValue("selectedNodeId", out var selectedNodeId);
-        request.Inputs.TryGetValue("selectedActivityType", out var selectedActivityType);
-        var context = await GetContextAsync(new(request.SessionId, workflowDefinitionId, workflowVersionId, prompt, selectedNodeId, selectedActivityType), cancellationToken);
-
-        return
-        [
-            new(
-                $"workflow:{context.WorkflowDefinitionId}",
-                "workflow.definition",
-                context.WorkflowDefinitionId,
-                context.Summary,
-                "workflow.definition",
-                AgentContextSensitivity.Internal,
-                "selection",
-                $"Workflow definition '{context.WorkflowDefinitionId}' at revision '{context.Revision}' with {context.Activities.Count} activity summaries, {context.ActivityCatalog.Count} catalog items, and selection hint '{context.Selection.NodeId ?? "none"}'. Redactions: {string.Join("; ", context.Redactions)}",
-                new
-                {
-                    workflowId = context.WorkflowDefinitionId,
-                    version = context.WorkflowVersionId ?? "draft",
-                    revision = context.Revision,
-                    summary = context.Summary,
-                    activities = context.Activities,
-                    connections = Array.Empty<object>(),
-                    selection = context.Selection,
-                    diagnostics = context.Diagnostics,
-                    designerConstraints = context.DesignerConstraints,
-                    permissions = context.Permissions,
-                    activityCatalog = context.ActivityCatalog
-                },
-                new Dictionary<string, string>
-                {
-                    ["workflowDefinitionId"] = context.WorkflowDefinitionId,
-                    ["workflowVersionId"] = context.WorkflowVersionId ?? string.Empty,
-                    ["revision"] = context.Revision
-                })
-        ];
+    private static bool TryAdmitRequest(AgentContextAttachment caller, out AgentContextAttachment? admitted)
+    {
+        admitted = null;
+        JsonElement content;
+        try { content = caller.Content is JsonElement json ? json : JsonSerializer.SerializeToElement(caller.Content); }
+        catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException) { return false; }
+        var kind = WorkflowAgentSnapshot.Text(content, "requestKind");
+        var reference = WorkflowAgentSnapshot.Text(content, "referenceId");
+        if (caller.ModuleId != WorkflowAgentSnapshot.ModuleId || string.IsNullOrWhiteSpace(caller.Id) || caller.Id.Length > 256 || content.ValueKind != JsonValueKind.Object ||
+            content.GetRawText().Length > 16384 || string.IsNullOrWhiteSpace(kind) || kind.Length > 80 || reference is null || reference.Length > 256)
+            return false;
+        static string? Field(JsonElement body, string name, int limit)
+        {
+            var value = WorkflowAgentSnapshot.Text(body, name);
+            return value?[..Math.Min(value.Length, limit)];
+        }
+        var data = JsonSerializer.SerializeToElement(new
+        {
+            requestKind = kind, referenceId = reference, intent = Field(content, "intent", 2000), name = Field(content, "name", 256),
+            description = Field(content, "description", 2000), rootActivityVersionId = Field(content, "rootActivityVersionId", 256)
+        });
+        admitted = new($"workflow:request:{caller.Id}", "workflow.request", reference, "Workflow request context", "workflow.request",
+            AgentContextSensitivity.Internal, "request", "Module-admitted workflow request and reference metadata; this does not identify live working state.", data,
+            new Dictionary<string, string>())
+        { ModuleId = WorkflowAgentSnapshot.ModuleId, SchemaVersion = "1", Origin = AgentContextOrigin.ClientSnapshot, Target = null, Client = null, AgentScopes = [] };
+        return true;
     }
 
     public async Task<WorkflowAgentContext> GetContextAsync(WorkflowAgentContextRequest request, CancellationToken cancellationToken = default)
     {
-        // When the client supplies the live graph (Studio serializes it into the workflow.definition
-        // attachment), hydrate activities and the base revision from it so the agent and the risk
-        // classifier reason over the real node ids. Otherwise fall back to the empty/seam defaults.
         var graph = request.Graph;
-        var activities = graph?.Activities ?? (IReadOnlyCollection<WorkflowAgentActivitySummary>)Array.Empty<WorkflowAgentActivitySummary>();
-        var revision = string.IsNullOrWhiteSpace(graph?.Revision)
-            ? await revisionProvider.GetCurrentRevisionAsync(request.WorkflowDefinitionId, cancellationToken)
-            : graph!.Revision!;
-        var activityCatalog = await SelectActivityCatalogAsync(request, activities, cancellationToken);
-        var diagnostics = CreateDiagnostics(request, activityCatalog);
-
-        return new(
-            request.WorkflowDefinitionId,
-            request.WorkflowVersionId,
-            revision,
-            $"Draft workflow {request.WorkflowDefinitionId}",
-            activities,
-            diagnostics,
-            [
-                "Secrets, credentials, and provider tokens are excluded from workflow authoring context.",
-                "Runtime payloads, incidents, unrelated workflow versions, and arbitrary workspace files are excluded.",
-                "Unavailable activities are excluded from Activity Catalog subsets."
-            ],
-            new WorkflowAgentSelectionHint(request.SelectedNodeId, request.SelectedActivityType, "studio-hint"),
-            new WorkflowAgentDesignerConstraints(MaxActivityCatalogItems, Enum.GetValues<WorkflowGraphOperationKind>()),
-            new WorkflowAgentPermissionSummary(
-                CanDirectApply: false,
-                CanProposeChange: true,
-                ["workflow.explain", "workflow.troubleshoot", "workflow.propose-change"]),
-            activityCatalog);
+        var revision = graph?.Revision ?? await revisionProvider.GetCurrentRevisionAsync(request.WorkflowDefinitionId, cancellationToken);
+        return new(request.WorkflowDefinitionId, request.WorkflowVersionId, revision, $"Draft workflow {request.WorkflowDefinitionId}",
+            graph?.Activities ?? [], [], ["Activity property values, credentials and runtime payloads are excluded."],
+            new(request.SelectedNodeId, request.SelectedActivityType, "client-snapshot"),
+            new(0, [WorkflowGraphOperationKind.SetDesignerPosition]), new(false, false, ["workflow.explain"]),
+            await activityCatalogProvider.ListAsync(cancellationToken));
     }
-
-    private async Task<IReadOnlyCollection<WorkflowAgentActivityCatalogItem>> SelectActivityCatalogAsync(
-        WorkflowAgentContextRequest request,
-        IReadOnlyCollection<WorkflowAgentActivitySummary> activities,
-        CancellationToken cancellationToken)
-    {
-        var availableItems = (await activityCatalogProvider.ListAsync(cancellationToken))
-            .Where(x => x.IsAvailable)
-            .ToList();
-        var selectedAvailableItem = availableItems.FirstOrDefault(x => string.Equals(x.Type, request.SelectedActivityType, StringComparison.OrdinalIgnoreCase));
-        if (selectedAvailableItem is not null)
-            return [selectedAvailableItem];
-
-        var tokens = Tokenize($"{request.Prompt} {request.SelectedActivityType} {string.Join(' ', activities.Select(x => x.Type))}");
-
-        if (tokens.Count == 0)
-            return availableItems.Take(MaxActivityCatalogItems).ToList();
-
-        var selected = availableItems
-            .Select(x => new { Item = x, Score = Score(x, tokens, request.SelectedActivityType) })
-            .Where(x => x.Score > 0)
-            .OrderByDescending(x => x.Score)
-            .ThenBy(x => x.Item.DisplayName, StringComparer.OrdinalIgnoreCase)
-            .Take(MaxActivityCatalogItems)
-            .Select(x => x.Item)
-            .ToList();
-
-        return selected;
-    }
-
-    private static IReadOnlyCollection<WorkflowAgentDiagnosticSummary> CreateDiagnostics(WorkflowAgentContextRequest request, IReadOnlyCollection<WorkflowAgentActivityCatalogItem> activityCatalog)
-    {
-        if (!string.IsNullOrWhiteSpace(request.Prompt) && activityCatalog.Count == 0)
-            return [new("Warning", "No available Activity Catalog items matched the prompt or selected draft context.")];
-
-        return [];
-    }
-
-    private static int Score(WorkflowAgentActivityCatalogItem item, IReadOnlyCollection<string> tokens, string? selectedActivityType)
-    {
-        var score = string.Equals(item.Type, selectedActivityType, StringComparison.OrdinalIgnoreCase) ? 100 : 0;
-        var haystack = Tokenize($"{item.Type} {item.DisplayName} {string.Join(' ', item.Keywords)}");
-
-        foreach (var token in tokens)
-        {
-            if (haystack.Contains(token))
-                score += 10;
-        }
-
-        return score;
-    }
-
-    private static HashSet<string> Tokenize(string value)
-        => value
-            .Split([' ', '.', '-', '_', ':', '/', '\\', ',', ';', '(', ')', '[', ']'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(x => x.ToLowerInvariant())
-            .Where(x => x.Length > 2 && !IsStopWord(x))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-    private static bool IsStopWord(string value)
-        => value is "elsa" or "workflow" or "workflows" or "activity" or "activities" or "draft" or "node" or "use" or "the";
 }
 
 public sealed class DefaultWorkflowRevisionProvider : IWorkflowRevisionProvider
@@ -476,7 +187,7 @@ public sealed class DefaultWorkflowGraphOperationBatchRiskClassifier : IWorkflow
             return new(
                 WorkflowGraphOperationBatchRiskDecision.DirectApply,
                 AgentRisk.ReadOnly,
-                AgentResultKind.WorkflowGraphOperationBatch,
+                AgentResultKind.ModuleResult,
                 [WorkflowGraphOperationBatchRiskReason.LowRisk],
                 "Batch is low risk and may be applied directly to the active designer working state.");
 
@@ -545,12 +256,7 @@ public sealed class DefaultWorkflowGraphOperationBatchRiskClassifier : IWorkflow
         => parameters.TryGetValue(key, out var value) ? Convert.ToString(value) : null;
 
     private static bool IsSupportedForDirectApply(WorkflowGraphOperationKind kind)
-        => kind is WorkflowGraphOperationKind.AddActivity
-            or WorkflowGraphOperationKind.UpdateActivity
-            or WorkflowGraphOperationKind.ConnectActivities
-            or WorkflowGraphOperationKind.SetRoot
-            or WorkflowGraphOperationKind.SetDesignerPosition
-            or WorkflowGraphOperationKind.SetActivityProperty;
+        => kind is WorkflowGraphOperationKind.SetDesignerPosition;
 
     private static bool IsDestructive(WorkflowGraphOperationKind kind)
         => kind is WorkflowGraphOperationKind.RemoveActivity or WorkflowGraphOperationKind.DisconnectActivities;
@@ -574,7 +280,7 @@ public sealed class DefaultWorkflowAuthoringAuditService(IAgentAuditSink auditSi
 
         return auditSink.EmitAsync(new(
             AgentProviderPrimitives.NewId(),
-            AgentAuditEventKind.WorkflowAuthoringInteraction,
+            AgentAuditEventKind.ModuleInteraction,
             request.SessionId,
             request.ActorId,
             $"Weaver workflow authoring interaction {request.Outcome}.",
@@ -583,45 +289,9 @@ public sealed class DefaultWorkflowAuthoringAuditService(IAgentAuditSink auditSi
     }
 }
 
-public sealed class DefaultWorkflowChangeProposalService(
-    IWorkflowRevisionProvider revisionProvider,
-    IWorkflowChangePermissionEvaluator permissions,
-    IAgentProposalService proposals) : IWorkflowChangeProposalService
+public sealed class DefaultWorkflowChangeProposalService : IWorkflowChangeProposalService
 {
-    public async Task<AgentResult<AgentActionProposal>> ProposeAsync(WorkflowChangeProposalRequest request, CancellationToken cancellationToken = default)
-    {
-        var currentRevision = await revisionProvider.GetCurrentRevisionAsync(request.WorkflowDefinitionId, cancellationToken);
-        if (!string.Equals(currentRevision, "unknown", StringComparison.OrdinalIgnoreCase) && !string.Equals(currentRevision, request.BaseRevision, StringComparison.Ordinal))
-            return AgentResult<AgentActionProposal>.Failure("agent.workflow.revision_conflict", $"Workflow '{request.WorkflowDefinitionId}' is at revision '{currentRevision}', not requested base revision '{request.BaseRevision}'.", 409);
-
-        if (!await permissions.CanProposeChangeAsync(request.ActorId, request.WorkflowDefinitionId, cancellationToken))
-            return AgentResult<AgentActionProposal>.Failure("agent.workflow.permission_denied", $"Actor '{request.ActorId}' is not allowed to propose workflow changes for '{request.WorkflowDefinitionId}'.", 403);
-
-        var now = DateTimeOffset.UtcNow;
-        var proposal = new AgentActionProposal(
-            AgentProviderPrimitives.NewId(),
-            request.SessionId,
-            null,
-            "workflow.propose-change",
-            "workflow-change",
-            request.Title,
-            request.Summary,
-            AgentRisk.ReviewRequired,
-            request.BaseRevision,
-            request.Operations.Select(x => new AgentActionChange("workflow", x.TryGetValue("op", out var op) ? Convert.ToString(op) ?? "operation" : "operation", request.Summary)).ToList(),
-            request.Operations,
-            request.Risks,
-            request.Rollback,
-            ["workflow.proposals"],
-            "workflow-definition",
-            request.WorkflowDefinitionId,
-            RequiresApproval: true,
-            AgentActionProposalStatus.AwaitingApproval,
-            null,
-            null,
-            now,
-            now);
-
-        return AgentResult<AgentActionProposal>.Success(await proposals.AddAsync(proposal, cancellationToken));
-    }
+    public Task<AgentResult<AgentActionProposal>> ProposeAsync(WorkflowChangeProposalRequest request, CancellationToken cancellationToken = default)
+        => Task.FromResult(AgentResult<AgentActionProposal>.Failure("agent.workflow.operation_unsupported",
+            "Broad workflow graph changes are unavailable. Use the reviewed layout-change tool for an existing activity.", 409));
 }

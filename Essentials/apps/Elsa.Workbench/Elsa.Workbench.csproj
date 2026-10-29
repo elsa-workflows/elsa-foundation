@@ -70,6 +70,7 @@
 		<ProjectReference Include="..\..\src\Cluster\EntityFrameworkCore\Elsa.Cluster.EntityFrameworkCore.csproj" />
 		<!-- Data Protection and its opt-in EF key store, composed from host configuration on the host container (#2191). -->
 		<ProjectReference Include="..\..\src\Foundation\DataProtection\EntityFrameworkCore\Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
+		<ProjectReference Include="..\..\..\Extensions\Agent\src\Agent\Elsa.Agent.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\Core\Elsa.Agent.Core.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\Api\Elsa.Agent.Api.csproj" />
 		<ProjectReference Include="..\..\..\Extensions\Agent\src\GitHubCopilot\Elsa.Agent.GitHubCopilot.csproj" />

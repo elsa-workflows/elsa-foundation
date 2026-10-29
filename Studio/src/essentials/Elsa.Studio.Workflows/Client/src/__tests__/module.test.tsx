@@ -243,7 +243,7 @@ describe("workflows module", () => {
     const dispatchPrompt = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const { api, container, unmount } = await renderRegisteredRoute("/workflows/definitions", testApi => {
-      testApi.ai.promptActions.add({
+      testApi.agent.promptActions.add({
         id: "weaver.workflows.explain-definition",
         label: "Explain workflow definition",
         placement: "selection",
@@ -251,10 +251,10 @@ describe("workflows module", () => {
         createPrompt: context => ({
           message: "Explain this workflow definition.",
           mode: "enqueue",
-          attachments: [{ kind: "workflow-definition", referenceId: (context as { id: string }).id }]
+          attachments: [{ id: "definition-context", source: "workflow", label: "Definition", contentType: "workflow.definition", sensitivity: "internal", scope: "selection", sourceId: (context as { id: string }).id }]
         })
       });
-      testApi.ai.dispatchPrompt = dispatchPrompt;
+      testApi.agent.dispatchPrompt = dispatchPrompt;
     });
 
     await waitForText(container, "Latest version");
@@ -278,7 +278,7 @@ describe("workflows module", () => {
     await click(buttonByText(menu, "Explain"));
     expect(dispatchPrompt).toHaveBeenCalledWith(expect.objectContaining({
       message: "Explain this workflow definition.",
-      attachments: [expect.objectContaining({ kind: "workflow-definition", referenceId: "definition-1" })]
+      attachments: [expect.objectContaining({ contentType: "workflow.definition", sourceId: "definition-1" })]
     }));
     expect(new URLSearchParams(window.location.search).has("definition")).toBe(false);
 
@@ -2783,7 +2783,7 @@ describe("workflows module", () => {
     const dispatchPrompt = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables", api => {
-      api.ai.promptActions.add({
+      api.agent.promptActions.add({
         id: "weaver.workflows.explain-executable",
         label: "Explain executable",
         placement: "selection",
@@ -2791,10 +2791,10 @@ describe("workflows module", () => {
         createPrompt: context => ({
           message: "Explain this workflow executable.",
           mode: "enqueue",
-          attachments: [{ kind: "workflow-executable", referenceId: (context as { artifactId: string }).artifactId }]
+          attachments: [{ id: "executable-context", source: "workflow", label: "Executable", contentType: "workflow.executable", sensitivity: "internal", scope: "selection", sourceId: (context as { artifactId: string }).artifactId }]
         })
       });
-      api.ai.dispatchPrompt = dispatchPrompt;
+      api.agent.dispatchPrompt = dispatchPrompt;
     });
 
     await waitForText(container, "artifact-1");
@@ -2802,7 +2802,7 @@ describe("workflows module", () => {
 
     expect(dispatchPrompt).toHaveBeenCalledWith(expect.objectContaining({
       message: "Explain this workflow executable.",
-      attachments: [expect.objectContaining({ kind: "workflow-executable", referenceId: "artifact-1" })]
+      attachments: [expect.objectContaining({ contentType: "workflow.executable", sourceId: "artifact-1" })]
     }));
     expect(container.textContent).toContain("Sent artifact-1 to Weaver");
 
@@ -5078,14 +5078,14 @@ async function openCreateDialogWithSuggest() {
 
   const captured: { requestId?: string } = {};
   const rendered = await renderRegisteredRoute("/workflows/definitions", api => {
-    api.ai.promptActions.add({
+    api.agent.promptActions.add({
       id: "weaver.workflows.suggest-create-metadata",
       label: "Suggest name and description",
       placement: "field-adornment",
       contextKind: "workflow-create-draft",
       createPrompt: () => ({ message: "suggest", mode: "enqueue", attachments: [] })
     });
-    api.ai.dispatchPrompt = request => { captured.requestId = request.requestId; };
+    api.agent.dispatchPrompt = request => { captured.requestId = request.requestId; };
   });
 
   await waitForText(rendered.container, "Hello World");
@@ -5096,7 +5096,7 @@ async function openCreateDialogWithSuggest() {
 
   const publishSuggestion = async (result: { text: string; status?: "completed" | "cancelled" | "failed"; autoApply?: boolean }) => {
     expect(captured.requestId).toBeTruthy();
-    flushSync(() => rendered.api.ai.publishPromptResult({ requestId: captured.requestId!, status: "completed", ...result }));
+    flushSync(() => rendered.api.agent.publishPromptResult({ requestId: captured.requestId!, status: "completed", ...result }));
     await flushPromises();
   };
 

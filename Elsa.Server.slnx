@@ -2,6 +2,7 @@
   <Folder Name="/Extensions/" />
   <Folder Name="/Extensions/Agent/" />
   <Folder Name="/Extensions/Agent/src/">
+    <Project Path="Extensions/Agent/src/Agent/Elsa.Agent.csproj" />
     <Project Path="Extensions/Agent/src/Anthropic/Elsa.Agent.Anthropic.csproj" />
     <Project Path="Extensions/Agent/src/Api/Elsa.Agent.Api.csproj" />
     <Project Path="Extensions/Agent/src/Core/Elsa.Agent.Core.csproj" />

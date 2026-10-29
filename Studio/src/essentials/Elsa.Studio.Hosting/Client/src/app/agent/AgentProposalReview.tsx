@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { AlertTriangle, Check, Loader2, Play, X } from "lucide-react";
 import type { StudioAgentResultRendererContribution } from "../../sdk";
 import type { AgentActionProposal } from "./agentTypes";
@@ -53,7 +53,7 @@ export function AgentProposalReview({
             {proposal.audit ? <AuditDetails proposal={proposal} /> : null}
             {ResultRenderer ? (
               <div className="agent-proposal-result" aria-label={resultRenderer.displayName}>
-                <ResultRenderer proposal={proposal} resourceTarget={proposal.resourceTarget} result={proposal.result} resultType={proposal.resultType} />
+                <Suspense fallback={<p>Loading module result…</p>}><ResultRenderer proposal={proposal} resourceTarget={proposal.resourceTarget} result={proposal.result} resultType={proposal.resultType} preparedInvocation={proposal.preparedInvocation} toolResult={proposal.toolResult} /></Suspense>
               </div>
             ) : <GenericResultFallback proposal={proposal} />}
             {proposal.risks && proposal.risks.length > 0 ? (
@@ -92,14 +92,19 @@ function findResultRenderer(
     proposal,
     resourceTarget: proposal.resourceTarget,
     result: proposal.result,
-    resultType: proposal.resultType
+    resultType: proposal.resultType,
+    preparedInvocation: proposal.preparedInvocation,
+    toolResult: proposal.toolResult
   };
   const explicitRenderer = renderers.find(renderer => renderer.id === proposal.resultRendererId);
-  if (explicitRenderer) {
+  if (explicitRenderer && (!explicitRenderer.moduleId || explicitRenderer.moduleId === proposal.resourceTarget?.moduleId)
+    && (!explicitRenderer.schemaVersions || explicitRenderer.schemaVersions.includes(proposal.toolResult?.payload?.schemaVersion ?? proposal.preparedInvocation?.preview.schemaVersion ?? ""))) {
     return explicitRenderer;
   }
 
   return [...renderers]
+    .filter(renderer => (!renderer.moduleId || renderer.moduleId === proposal.resourceTarget?.moduleId)
+      && (!renderer.schemaVersions || renderer.schemaVersions.includes(proposal.toolResult?.payload?.schemaVersion ?? proposal.preparedInvocation?.preview.schemaVersion ?? "")))
     .sort((left, right) => (left.order ?? 500) - (right.order ?? 500) || left.displayName.localeCompare(right.displayName))
     .find(renderer => (!!proposal.resourceTarget?.resourceType && renderer.resourceTypes?.includes(proposal.resourceTarget.resourceType))
       || (!!proposal.resultType && renderer.resultTypes?.includes(proposal.resultType))
@@ -107,14 +112,14 @@ function findResultRenderer(
 }
 
 function GenericResultFallback({ proposal }: { proposal: AgentActionProposal }) {
-  if (proposal.result === undefined) {
-    return null;
-  }
+  const result = proposal.result ?? proposal.toolResult?.payload ?? proposal.toolResult?.receipt?.evidence ?? proposal.preparedInvocation?.preview;
+  if (result === undefined) return null;
 
   return (
     <div className="agent-proposal-result" aria-label="Structured result">
       <span>Structured result</span>
-      <pre>{formatStructuredValue(proposal.result)}</pre>
+      {proposal.toolResult?.receipt ? <small>Observed revision: {proposal.toolResult.receipt.after.revision ?? "unversioned"}</small> : null}
+      <pre>{formatStructuredValue(result)}</pre>
     </div>
   );
 }
@@ -141,6 +146,7 @@ function ResourceTargetDetails({ proposal }: { proposal: AgentActionProposal }) 
           <dd>{target.resourceId}</dd>
         </div>
       ) : null}
+      {target.revision ? <div><dt>Revision</dt><dd>{target.revision}</dd></div> : null}
       {target.moduleId ? (
         <div>
           <dt>Module</dt>

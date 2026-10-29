@@ -105,7 +105,17 @@ public sealed record AgentContextAttachmentResponse(
     string ContentType,
     string Sensitivity,
     string Scope,
-    object? Content);
+    object? Content)
+{
+    public string ModuleId { get; init; } = string.Empty;
+    public string SchemaVersion { get; init; } = "1";
+    public AgentResourceTarget? Target { get; init; }
+    public AgentContextOrigin Origin { get; init; }
+    public AgentClientBinding? Client { get; init; }
+    public IReadOnlyCollection<string> AgentScopes { get; init; } = [];
+    public string Summary { get; init; } = string.Empty;
+    public IReadOnlyDictionary<string, string> References { get; init; } = new Dictionary<string, string>();
+}
 
 public sealed record AgentMessageViewModelResponse(
     string Id,
@@ -141,6 +151,9 @@ public sealed class AgentMessageRequest
     public IReadOnlyCollection<AgentContextAttachmentRequest> ContextAttachments { get; init; } = [];
     public string? CapabilityId { get; init; }
     public IReadOnlyCollection<string> RequestedCapabilities { get; init; } = [];
+    public string? RequestId { get; init; }
+    public AgentPromptSource? Source { get; init; }
+    public string? PromptMode { get; init; }
 }
 
 public sealed class AgentContextAttachmentRequest
@@ -152,13 +165,21 @@ public sealed class AgentContextAttachmentRequest
     public string Summary { get; init; } = string.Empty;
 
     /// <summary>
-    /// Optional structured body the client supplies inline (e.g. the live workflow graph that Studio
-    /// serializes for a <c>workflow.definition</c> attachment). When omitted the <see cref="Summary"/>
-    /// is used as the attachment content for backwards compatibility.
+    /// Module-owned structured caller input. Installed sources admit its schema, bound its content
+    /// and establish provenance before provider use; client metadata never grants authority.
     /// </summary>
     public object? Content { get; init; }
 
     public IReadOnlyDictionary<string, string> References { get; init; } = new Dictionary<string, string>();
+    public string Source { get; init; } = string.Empty;
+    public string? SourceId { get; init; }
+    public string Label { get; init; } = string.Empty;
+    public string ContentType { get; init; } = string.Empty;
+    public string Scope { get; init; } = "selection";
+    public string ModuleId { get; init; } = string.Empty;
+    public string SchemaVersion { get; init; } = "1";
+    public AgentResourceTarget? Target { get; init; }
+    public AgentClientBinding? Client { get; init; }
 }
 
 public sealed class AgentProposalDecisionRequest
@@ -239,20 +260,38 @@ public static class AgentApiMapping
             attachment.ContentType,
             attachment.Sensitivity.ToContractString(),
             attachment.Scope,
-            attachment.Content);
+            attachment.Content)
+        {
+            ModuleId = attachment.ModuleId,
+            SchemaVersion = attachment.SchemaVersion,
+            Target = attachment.Target,
+            Origin = attachment.Origin,
+            Client = attachment.Client,
+            AgentScopes = attachment.AgentScopes,
+            Summary = attachment.Summary,
+            References = attachment.References
+        };
 
     public static AgentContextAttachment ToDomain(this AgentContextAttachmentRequest attachment)
         => new(
             attachment.Id,
-            string.IsNullOrWhiteSpace(attachment.Kind) ? "context" : attachment.Kind,
-            attachment.References.TryGetValue("sourceId", out var sourceId) ? sourceId : null,
-            attachment.DisplayName,
-            string.IsNullOrWhiteSpace(attachment.Kind) ? "summary" : attachment.Kind,
+            string.IsNullOrWhiteSpace(attachment.Source) ? attachment.Kind : attachment.Source,
+            attachment.SourceId,
+            string.IsNullOrWhiteSpace(attachment.Label) ? attachment.DisplayName : attachment.Label,
+            string.IsNullOrWhiteSpace(attachment.ContentType) ? attachment.Kind : attachment.ContentType,
             ParseSensitivity(attachment.Sensitivity),
-            attachment.References.TryGetValue("scope", out var scope) ? scope : "selection",
+            attachment.Scope,
             attachment.Summary,
             attachment.Content ?? attachment.Summary,
-            attachment.References);
+            attachment.References)
+        {
+            ModuleId = attachment.ModuleId,
+            SchemaVersion = attachment.SchemaVersion,
+            Target = attachment.Target,
+            Client = attachment.Client,
+            Origin = AgentContextOrigin.ClientSnapshot,
+            AgentScopes = []
+        };
 
     public static AgentMessageViewModelResponse ToViewModel(this AgentMessage message)
         => new(message.Id, message.Role.ToContractString(), message.Content, message.Status.ToContractString());

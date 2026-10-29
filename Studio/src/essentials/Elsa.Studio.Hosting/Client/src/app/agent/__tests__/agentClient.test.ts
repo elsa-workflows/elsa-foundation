@@ -43,7 +43,7 @@ describe("agent client", () => {
       role: "user",
       content: "Explain this workflow.",
       capabilityId: "workflow.explain",
-      contextAttachments: [expect.objectContaining({ id: "ctx_01", kind: "workflow.definition", summary: "[secret redacted]" })]
+      contextAttachments: [expect.objectContaining({ id: "ctx_01", contentType: "workflow.definition", summary: "[secret redacted]" })]
     }));
     expect(context.http.postJson).not.toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
       contextAttachments: [expect.objectContaining({ summary: expect.stringContaining("super-secret") })]
@@ -77,6 +77,7 @@ describe("agent client", () => {
         label: "Hello World",
         contentType: "workflow.definition",
         content: graph,
+        references: { revision: "rev-7" },
         sensitivity: "internal",
         scope: "screen"
       }]
@@ -188,6 +189,17 @@ describe("agent client", () => {
     expect(approval).toMatchObject({ proposalId: "prop_01", approvalStatus: "approved" });
     expect(execution).toMatchObject({ proposalId: "prop_01", approvalStatus: "executed" });
   });
+  it("retains a generated delivery ID across retries and exposes duplicate/admission warnings", async () => {
+    const context = stubContext();
+    context.http.postJson = vi.fn(async () => ({ data: { message: { id: "message", status: "completed" }, warnings: [{ code: "agent.message.duplicate", message: "Already accepted.", target: "delivery" }] } })) as typeof context.http.postJson;
+    const client = createAgentClient(context);
+    const request = { message: "Inspect", mode: "explain" as const, contextAttachments: [] };
+    const first = await client.sendMessage("session", request); await client.sendMessage("session", request);
+    const calls = (context.http.postJson as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][1].requestId).toBeTruthy(); expect(calls[1][1].requestId).toBe(calls[0][1].requestId);
+    expect(first).toMatchObject({ status: "completed", warnings: [{ code: "agent.message.duplicate", target: "delivery" }] });
+  });
+
 });
 
 function stubContext(): StudioEndpointContext {

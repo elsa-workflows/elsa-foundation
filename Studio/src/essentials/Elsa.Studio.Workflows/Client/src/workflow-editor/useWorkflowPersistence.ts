@@ -23,6 +23,9 @@ interface WorkflowPersistenceParams {
 export function useWorkflowPersistence({ context, draft, autosaveEnabledByDefault = true, editDraft, setStatus, setError }: WorkflowPersistenceParams) {
   const [autosaveEnabled, setAutosaveEnabled] = useState(autosaveEnabledByDefault);
   const [autosavePaused, setAutosavePaused] = useState(false);
+  const reviewHoldRef = useRef(false);
+  const [reviewHeld, setReviewHeld] = useState(false);
+  const holdForReview = useCallback((hold: boolean) => { const previous = reviewHoldRef.current; reviewHoldRef.current = hold; setReviewHeld(hold); return previous; }, []);
   const [saving, setSaving] = useState(false);
   const lastSavedDraftSignatureRef = useRef("");
   const saveRequestIdRef = useRef(0);
@@ -33,11 +36,13 @@ export function useWorkflowPersistence({ context, draft, autosaveEnabledByDefaul
   latestDraftRef.current = draft;
 
   const markSaved = useCallback((savedDraft: WorkflowDraft | null) => {
+    reviewHoldRef.current = false; setReviewHeld(false);
     lastSavedDraftSignatureRef.current = savedDraft ? getDraftSignature(savedDraft) : "";
   }, []);
 
   const saveDraft = useCallback(async (draftSnapshot: WorkflowDraft, savedStatus: string) => {
     const queuedSave = async () => {
+      if (savedStatus === "Autosaved" && reviewHoldRef.current) return draftSnapshot;
       const requestId = ++saveRequestIdRef.current;
       const requestedSignature = getDraftSignature(draftSnapshot);
       setError("");
@@ -47,6 +52,7 @@ export function useWorkflowPersistence({ context, draft, autosaveEnabledByDefaul
         const saved = await updateDraft(context, draftSnapshot);
         const savedSignature = getDraftSignature(saved);
         lastSavedDraftSignatureRef.current = savedSignature;
+        if (savedStatus !== "Autosaved") { reviewHoldRef.current = false; setReviewHeld(false); }
         // Reconcile the just-persisted draft: if the live draft still matches what we sent, adopt the
         // server copy wholesale; otherwise the author kept editing, so only fold in the fresh validation.
         editDraft(({ draft: current }) => {
@@ -85,18 +91,19 @@ export function useWorkflowPersistence({ context, draft, autosaveEnabledByDefaul
   }, [saveDraft]);
 
   useEffect(() => {
-    if (!autosaveEnabled || autosavePaused || !draft) return;
+    if (!autosaveEnabled || autosavePaused || reviewHeld || !draft) return;
 
     const draftSignature = getDraftSignature(draft);
     if (draftSignature === lastSavedDraftSignatureRef.current) return;
 
     setStatus("Autosaving...");
     const timeoutId = window.setTimeout(() => {
+      if (reviewHoldRef.current) return;
       void saveDraft(draft, "Autosaved").catch(() => undefined);
     }, autosaveDelayMs);
 
     return () => window.clearTimeout(timeoutId);
-  }, [autosaveEnabled, autosavePaused, draft, saveDraft, setStatus]);
+  }, [autosaveEnabled, autosavePaused, reviewHeld, draft, saveDraft, setStatus]);
 
-  return { saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, autosavePaused, setAutosavePaused, markSaved };
+  return { holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, autosavePaused, setAutosavePaused, markSaved };
 }

@@ -1,5 +1,6 @@
 import React, { lazy, useCallback, useEffect, useRef, useState } from "react";
-import type { StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityPropertyEditorContribution, StudioAgentRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
+import type { WorkflowAgentController } from "../workflowAgent";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
 import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
 import type { ExpressionToolingCacheIdentity } from "../expression-tooling/expressionToolingClient";
@@ -16,6 +17,7 @@ const WorkflowInstanceDetailsWorkbench = lazy(() => import("./WorkflowInstances"
 export function WorkflowManagementPage({
   context,
   ai,
+  weaver,
   propertyEditors,
   expressionEditors,
   expressionTooling,
@@ -26,7 +28,8 @@ export function WorkflowManagementPage({
   autosaveEnabledByDefault
 }: {
   context: StudioEndpointContext;
-  ai: StudioAiContributionApi;
+  ai: StudioAgentRegistry;
+  weaver?: WorkflowAgentController;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   expressionTooling?: StudioExpressionToolingClient;
@@ -73,7 +76,7 @@ export function WorkflowManagementPage({
   return definitionId
     ? (
       <WorkflowLazyBoundary label="workflow designer">
-        <WorkflowEditor key={definitionId} context={context} definitionId={definitionId} ai={ai} propertyEditors={propertyEditors} expressionEditors={expressionEditors} expressionTooling={expressionTooling} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors} testStimulusEditors={testStimulusEditors ?? []} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
+        <WorkflowEditor key={definitionId} context={context} definitionId={definitionId} ai={ai} weaver={weaver} propertyEditors={propertyEditors} expressionEditors={expressionEditors} expressionTooling={expressionTooling} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors} testStimulusEditors={testStimulusEditors ?? []} workflowDesignerPanels={workflowDesignerPanels} autosaveEnabledByDefault={autosaveEnabledByDefault} onBack={() => openDefinition(null)} />
       </WorkflowLazyBoundary>
     )
     : (
@@ -85,7 +88,7 @@ export function WorkflowManagementPage({
     );
 }
 
-export function WorkflowExecutablesPage({ context, ai, runInputEditors }: { context: StudioEndpointContext; ai: StudioAiContributionApi; runInputEditors: StudioWorkflowRunInputEditorContribution[] }) {
+export function WorkflowExecutablesPage({ context, ai, runInputEditors }: { context: StudioEndpointContext; ai: StudioAgentRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[] }) {
   const [definitionFilter, setDefinitionFilter] = useState(readExecutableDefinitionFilterFromUrl);
 
   useEffect(() => {
@@ -117,7 +120,7 @@ export function WorkflowExecutablesPage({ context, ai, runInputEditors }: { cont
   );
 }
 
-export function WorkflowExecutableInspectorPage({ context, ai, runInputEditors }: { context: StudioEndpointContext; ai: StudioAiContributionApi; runInputEditors: StudioWorkflowRunInputEditorContribution[] }) {
+export function WorkflowExecutableInspectorPage({ context, ai, runInputEditors }: { context: StudioEndpointContext; ai: StudioAgentRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[] }) {
   const [location, setLocation] = useState(readExecutableInspectorLocation);
 
   useEffect(() => {
@@ -169,7 +172,7 @@ export function WorkflowInstancesPage({ context, navigate }: { context: StudioEn
 
 export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [], navigate }: {
   context: StudioEndpointContext;
-  ai: StudioAiContributionApi;
+  ai: StudioAgentRegistry;
   expressionEditors?: StudioExpressionEditorContribution[];
   navigate(path: string): void;
 }) {
