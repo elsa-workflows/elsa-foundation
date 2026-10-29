@@ -18,6 +18,11 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using CShells.Lifecycle;
 using Elsa.Activities.Bpmn;
 using Elsa.Activities.Bpmn.Core;
+using Elsa.Activities.Runtime;
+using Elsa.Activities.Primitives;
+using Elsa.Activities.Sequence;
+using Elsa.Activities.Flowchart;
+using Elsa.Activities.ControlFlow;
 using Elsa.Events;
 using Elsa.Tasks.Core;
 using Elsa.Etl.Runtime;
@@ -70,6 +75,15 @@ try
         new EtlRuntimeEntityFrameworkCoreFeature { ConnectionString = new SqliteConnectionStringBuilder
             { DataSource = etlDatabase, Mode = SqliteOpenMode.ReadWrite, Pooling = false }.ToString() }.ConfigureServices(services);
         new EtlWorkflowsRuntimeFeature().ConfigureServices(services);
+    }
+    if (success)
+    {
+        // These are the existing Workbench consumers for this capture's real CLR native parents.
+        new ActivitiesRuntimeFeature().ConfigureServices(services);
+        new ActivitiesPrimitivesFeature().ConfigureServices(services);
+        new ActivitiesSequenceFeature().ConfigureServices(services);
+        new ActivitiesFlowchartFeature().ConfigureServices(services);
+        new ActivitiesControlFlowFeature().ConfigureServices(services);
     }
     services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
     {
@@ -260,13 +274,16 @@ try
                 parentResultSource.Status != (parentReturnStage == "pending" ? RuntimePostCommitOutboxStatus.Pending : RuntimePostCommitOutboxStatus.FailedRetryable))
                 throw new InvalidOperationException("The actual native-parent consumption/settlement/ACK boundary differs from the selected stage.");
         }
+        var products = new List<object> { Product(Assembly.GetExecutingAssembly()), Product(typeof(IWorkflowStartDispatcher).Assembly),
+            Product(typeof(Elsa.Workflows.Runtime.Services.Executions.WorkflowStartDispatcher).Assembly), Product(typeof(RuntimeEntityFrameworkCoreOptions).Assembly),
+            Product(typeof(ActivitiesBpmnHostingFeature).Assembly), Product(typeof(EtlRuntimeFeature).Assembly), Product(typeof(EtlRuntimeEntityFrameworkCoreFeature).Assembly),
+            Product(typeof(EtlWorkflowsRuntimeFeature).Assembly) };
+        if (success) products.AddRange([Product(typeof(ActivitiesRuntimeFeature).Assembly), Product(typeof(ActivitiesPrimitivesFeature).Assembly),
+            Product(typeof(ActivitiesSequenceFeature).Assembly), Product(typeof(ActivitiesFlowchartFeature).Assembly), Product(typeof(ActivitiesControlFlowFeature).Assembly)]);
         Console.WriteLine(JsonSerializer.Serialize(new { operation = args[0], startedAtUtc = started, completedAtUtc = DateTimeOffset.UtcNow,
             origin, steps, embeddedParentExecutionId = embeddedParentId, model = consumedModel, worker = await workflows.FindAsync(origin.WorkerExecutionId), receipt, resultSource,
             nativeResultConsumedModel, parentReturnStage, parentResultSource, parentSettlementReceipt, parentSettlementCommand,
-            products = new[] { Product(Assembly.GetExecutingAssembly()), Product(typeof(IWorkflowStartDispatcher).Assembly),
-                Product(typeof(Elsa.Workflows.Runtime.Services.Executions.WorkflowStartDispatcher).Assembly), Product(typeof(RuntimeEntityFrameworkCoreOptions).Assembly),
-                Product(typeof(ActivitiesBpmnHostingFeature).Assembly), Product(typeof(EtlRuntimeFeature).Assembly), Product(typeof(EtlRuntimeEntityFrameworkCoreFeature).Assembly),
-                Product(typeof(EtlWorkflowsRuntimeFeature).Assembly) } }, json));
+            products }, json));
         return 0;
     }
     if (race)
