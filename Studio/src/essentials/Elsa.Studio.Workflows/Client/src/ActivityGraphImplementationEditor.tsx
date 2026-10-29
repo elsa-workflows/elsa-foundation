@@ -52,7 +52,6 @@ import {
   collectRemovedGraphNodeIds,
   createBpmnBoundNode,
   createBpmnFlowEdge,
-  createBpmnShapeNode,
   findBpmnElement,
   nextBpmnPlacementPosition,
   readBpmnElements,
@@ -64,8 +63,9 @@ import {
   type BpmnNodeData
 } from "./bpmn/bpmnAdapter";
 import { BpmnElementInspector } from "./bpmn/BpmnElementInspector";
-import { BpmnShapePalette } from "./bpmn/BpmnShapePalette";
-import { bpmnElementTypeLabel, type BpmnElement, type BpmnSequenceFlow, type BpmnShapeDescriptor } from "./bpmn/bpmnTypes";
+import { bpmnPaletteElements } from "./bpmn/bpmnPaletteElements";
+import { emptyGraphElements } from "./graph-authoring/graphPaletteElements";
+import { bpmnElementTypeLabel, type BpmnElement, type BpmnSequenceFlow } from "./bpmn/bpmnTypes";
 import { filterGraphAuthoringContributions } from "./graph-authoring/graphAuthoringContributions";
 import { ScopedVariablesEditor } from "./WorkflowPropertiesView";
 import { toActivityDescriptor } from "./workflow-editor/useWorkflowEditorData";
@@ -378,6 +378,7 @@ export function ActivityGraphImplementationEditor({
   const ownerSupported = supportsActivityNode(owner, ownerCatalogItem);
   const slot = ownerSupported ? scope?.slot : undefined;
   const isBpmnSlot = slot?.mode === "bpmn";
+  const elements = isBpmnSlot ? bpmnPaletteElements : emptyGraphElements;
   // Authoring inline drops the activity list, not the Activities tab: it also holds the scope owner and
   // the root-composition chooser.
   const inlineSteps = authorsInline(themeLayout, isBpmnSlot);
@@ -527,6 +528,7 @@ export function ActivityGraphImplementationEditor({
     select: setSelectedNodeId,
     commitCanvas,
     isOfferedActivity,
+    elements,
     placeActivity,
     createPlacement: isBpmnSlot ? createPlacement : undefined,
     createEdge: isBpmnSlot
@@ -536,15 +538,6 @@ export function ActivityGraphImplementationEditor({
   });
   const { stampCanvasNode } = interactions;
   stampCanvasNodeRef.current = stampCanvasNode;
-
-  // A pure BPMN shape (event, gateway, unbound task) binds no activity, so it is stamped straight onto
-  // the canvas: syncBpmnCanvasToScope picks its element out of the node it just placed.
-  const addBpmnShape = useCallback((shape: BpmnShapeDescriptor) => {
-    if (readOnly || !isBpmnSlot) return;
-    stampCanvasNode(
-      createBpmnShapeNode(shape, nextBpmnPlacementPosition(nodes.length)) as unknown as Node<WorkflowNodeData>
-    );
-  }, [isBpmnSlot, nodes.length, readOnly, stampCanvasNode]);
 
   // Structure edits (element name, sequence-flow condition, default flow) rewrite the scope owner's BPMN
   // payload directly rather than going through the canvas mirror, the same way an inspector edit to an
@@ -766,7 +759,7 @@ export function ActivityGraphImplementationEditor({
   const leftPanelTabs: WorkflowEditorPanelTab[] = [
     {
       id: "activities",
-      title: "Activities",
+      title: elements.length ? "Elements" : "Activities",
       order: 0,
       icon: <Boxes size={15} />,
       render: () => (
@@ -775,13 +768,15 @@ export function ActivityGraphImplementationEditor({
           {catalogQuery.isPending ? <span role="status">Loading the authorized activity catalog…</span> : null}
           {catalogQuery.isError ? <span role="alert">The activity catalog is unavailable. Existing graph state remains unchanged.</span> : null}
           {!root.activityVersionId ? <div className="ad-graph-root-options" role="group" aria-label="Graph composition">{availableActivities.filter(activity => getChildSlots(createActivityNode(activity, "root"), activity).length > 0).map(activity => <button key={activity.activityVersionId} type="button" onClick={() => chooseRoot(activity.activityVersionId)} disabled={readOnly}>{getActivityDisplay(activity)}</button>)}</div> : null}
-          {/* Events and gateways are what make the scope a BPMN process rather than a list of bound
-              tasks; the activity palette below contributes the activity-bearing elements. */}
-          {isBpmnSlot ? <BpmnShapePalette onAddShape={addBpmnShape} disabled={readOnly} /> : null}
           {inlineSteps ? null : <ActivityPalettePanel
             paletteSearch={paletteSearch}
             onSearchChange={setPaletteSearch}
             groups={filteredPaletteGroups}
+            elements={elements}
+            onElementClick={interactions.onElementClick}
+            onElementDragStart={interactions.onElementDragStart}
+            onElementDragEnd={interactions.onElementDragEnd}
+            onElementPointerDown={interactions.onElementPointerDown}
             expandedCategories={expandedCategories}
             disabled={readOnly}
             onToggleCategory={category => setExpandedCategories(current => {
@@ -882,8 +877,8 @@ export function ActivityGraphImplementationEditor({
       className="ad-graph-workspace"
       layout={sidePanelLayout}
       palette={{
-        ariaLabel: "Activities panel",
-        tabLabel: "Activities panel tabs",
+        ariaLabel: elements.length ? "Elements panel" : "Activities panel",
+        tabLabel: elements.length ? "Elements panel tabs" : "Activities panel tabs",
         tabs: leftPanelTabs,
         activeTabId: activeLeftPanel.id,
         onSelect: setActiveLeftPanelId

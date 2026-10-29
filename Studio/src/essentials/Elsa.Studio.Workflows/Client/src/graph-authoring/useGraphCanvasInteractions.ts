@@ -46,6 +46,11 @@ import type { ConnectMenuState, WorkflowConnectSource, WorkflowEdge } from "../w
 import type { WorkflowEdgeActions } from "../workflow-editor/contexts";
 import { decorateWorkflowCanvasElements } from "../workflow-editor/workflowAccessibility";
 
+import { emptyGraphElements, graphElementDragDataType, type GraphPaletteElement } from "./graphPaletteElements";
+
+type PaletteDragItem = { kind: "activity"; activity: ActivityCatalogItem } | { kind: "element"; element: GraphPaletteElement };
+const paletteDragKey = (item: PaletteDragItem) => item.kind === "activity" ? item.activity.activityVersionId : `element:${item.element.id}`;
+
 /**
  * Shape of the slot currently mirrored on the canvas. `unsupported` is a read-only projection of a
  * structure this host cannot edit; `none` means no slot resolved (leaf activity, or nothing chosen).
@@ -94,6 +99,7 @@ export interface GraphCanvasInteractionsParams {
   scopeKey: string;
   canAddActivities: boolean;
   isOfferedActivity?(activity: ActivityCatalogItem): boolean;
+  elements?: readonly GraphPaletteElement[];
   selectedNodeId: string | null;
   catalogByVersion: Map<string, ActivityCatalogItem>;
   select(nodeId: string | null): void;
@@ -163,6 +169,10 @@ export interface GraphCanvasInteractionsResult {
   insertSequenceActivity(activity: ActivityCatalogItem, index: number): void;
   moveSequenceActivity(nodeId: string, boundary: number): void;
   onConnectMenuPick(activity: ActivityCatalogItem): void;
+  onElementClick(element: GraphPaletteElement): void;
+  onElementDragStart(event: React.DragEvent<HTMLButtonElement>, element: GraphPaletteElement): void;
+  onElementDragEnd(event: React.DragEvent<HTMLButtonElement>, element: GraphPaletteElement): void;
+  onElementPointerDown(event: React.PointerEvent<HTMLButtonElement>, element: GraphPaletteElement): void;
   onPaletteClick(activity: ActivityCatalogItem): void;
   onPaletteDragStart(event: React.DragEvent<HTMLButtonElement>, activity: ActivityCatalogItem): void;
   onPaletteDragEnd(event: React.DragEvent<HTMLButtonElement>, activity: ActivityCatalogItem): void;
@@ -187,6 +197,7 @@ export function useGraphCanvasInteractions({
   scopeKey,
   canAddActivities,
   isOfferedActivity,
+  elements = emptyGraphElements,
   selectedNodeId,
   catalogByVersion,
   select,
@@ -205,12 +216,12 @@ export function useGraphCanvasInteractions({
   const connectSourceRef = useRef<WorkflowConnectSource | null>(null);
   const { onMoveEnd } = useGraphViewport({ nodes, scopeKey, instance: reactFlowInstance });
   const pointerDragRef = useRef<{
-    activity: ActivityCatalogItem;
+    item: PaletteDragItem;
     startX: number;
     startY: number;
     dragging: boolean;
   } | null>(null);
-  const nativePaletteDragRef = useRef<{ activityVersionId: string; handledDrop: boolean } | null>(null);
+  const nativePaletteDragRef = useRef<{ itemKey: string; handledDrop: boolean } | null>(null);
   const suppressPaletteClickRef = useRef(false);
   const pendingFocusNodeIdRef = useRef<string | null>(null);
   const focusObserverRef = useRef<MutationObserver | null>(null);
@@ -318,8 +329,8 @@ export function useGraphCanvasInteractions({
    * Places an already-positioned node on the canvas, clearing the previous selection, selecting and
    * focusing the newcomer, and committing it with whatever edge rewiring the caller decided on.
    * `order` reshuffles the node list (sequence insertion); `wire` derives the next edges from the
-   * resulting node order. `createdActivities` is what the host must thread into its sync call — a pure
-   * BPMN shape is the one placement that carries none, since it binds no activity.
+   * resulting node order. `createdActivities` is what the host must thread into its sync call — a structural
+   * element carries none, since it binds no activity.
    */
   const stampCanvasNode = useCallback<GraphCanvasStamp>((node, plan) => {
     const cleared = nodes.map(candidate => candidate.selected ? { ...candidate, selected: false } : candidate);
@@ -389,7 +400,7 @@ export function useGraphCanvasInteractions({
 
   const insertSequenceActivity = useCallback((activity: ActivityCatalogItem, index: number) => {
     if (mode !== "sequence" || !canAddActivities || activity.available === false || !Number.isInteger(index) || index < 0 || index > nodes.length) return;
-    if (nativePaletteDragRef.current?.activityVersionId === activity.activityVersionId) nativePaletteDragRef.current.handledDrop = true;
+    if (nativePaletteDragRef.current?.itemKey === activity.activityVersionId) nativePaletteDragRef.current.handledDrop = true;
     pointerDragRef.current = null;
     const placement = placementFactory(activity, { x: 0, y: 0 });
     if (!placement) return;
@@ -437,6 +448,25 @@ export function useGraphCanvasInteractions({
     return true;
   }, [canAddActivities, isOfferedActivity, edges, findEdgeUnderCursor, insertSequenceActivity, isGraphMode, mode, placeActivity, spliceActivityIntoEdge, toCanvasPosition]);
 
+  const placeElement = useCallback((element: GraphPaletteElement, position?: XYPosition) => {
+    if (!canAddActivities) return false;
+    // Re-resolve against the live scope: an old drag cannot stamp an element into a different designer.
+    const current = elements.find(candidate => candidate.id === element.id);
+    if (!current) return false;
+    const node = current.createNode(position ?? { x: 120 + nodes.length % 5 * 220, y: 120 + Math.floor(nodes.length / 5) * 140 });
+    // The owner adapter projects its own element payload. No ActivityNode/catalog reference is made.
+    stampCanvasNode({ ...node, selected: true } as Node<WorkflowNodeData>);
+    return true;
+  }, [canAddActivities, elements, nodes.length, stampCanvasNode]);
+
+  const tryAddPaletteItemAtClientPoint = useCallback((item: PaletteDragItem, clientX: number, clientY: number) => {
+    if (item.kind === "activity") return tryAddActivityAtClientPoint(item.activity, clientX, clientY);
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect || clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return false;
+    const position = toCanvasPosition(clientX, clientY);
+    return position ? placeElement(item.element, position) : false;
+  }, [placeElement, toCanvasPosition, tryAddActivityAtClientPoint]);
+
   // Pointer-based palette drag. Runs alongside the native HTML5 drag so a palette press that never
   // produces a dragstart (touch, or a browser that suppresses it) still lands an activity.
   useEffect(() => {
@@ -468,48 +498,57 @@ export function useGraphCanvasInteractions({
         suppressPaletteClickRef.current = false;
       }, 0);
 
-      tryAddActivityAtClientPoint(drag.activity, event.clientX, event.clientY);
+      tryAddPaletteItemAtClientPoint(drag.item, event.clientX, event.clientY);
     };
 
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
-    window.addEventListener("pointercancel", onPointerUp);
+    const onPointerCancel = () => { pointerDragRef.current = null; };
+    window.addEventListener("pointercancel", onPointerCancel);
 
     return () => {
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
-      window.removeEventListener("pointercancel", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerCancel);
     };
-  }, [tryAddActivityAtClientPoint]);
+  }, [tryAddPaletteItemAtClientPoint]);
 
-  const onPaletteDragStart = (event: React.DragEvent<HTMLButtonElement>, activity: ActivityCatalogItem) => {
-    nativePaletteDragRef.current = { activityVersionId: activity.activityVersionId, handledDrop: false };
-    event.dataTransfer.setData(activityDragDataType, activity.activityVersionId);
-    event.dataTransfer.setData("text/plain", activity.activityVersionId);
+  const startPaletteDrag = (event: React.DragEvent<HTMLButtonElement>, item: PaletteDragItem) => {
+    nativePaletteDragRef.current = { itemKey: paletteDragKey(item), handledDrop: false };
+    if (item.kind === "activity") {
+      event.dataTransfer.setData(activityDragDataType, item.activity.activityVersionId);
+      event.dataTransfer.setData("text/plain", item.activity.activityVersionId);
+    } else {
+      event.dataTransfer.setData(graphElementDragDataType, item.element.id);
+    }
     event.dataTransfer.effectAllowed = "copy";
   };
 
-  const onPaletteDragEnd = (event: React.DragEvent<HTMLButtonElement>, activity: ActivityCatalogItem) => {
+  const endPaletteDrag = (event: React.DragEvent<HTMLButtonElement>, item: PaletteDragItem) => {
     const nativeDrag = nativePaletteDragRef.current;
     nativePaletteDragRef.current = null;
+    pointerDragRef.current = null;
     if (nativeDrag?.handledDrop) return;
     if (event.clientX === 0 && event.clientY === 0) return;
-    if (!tryAddActivityAtClientPoint(activity, event.clientX, event.clientY)) return;
+    if (!tryAddPaletteItemAtClientPoint(item, event.clientX, event.clientY)) return;
 
     suppressPaletteClickRef.current = true;
-    window.setTimeout(() => {
-      suppressPaletteClickRef.current = false;
-    }, 0);
+    window.setTimeout(() => { suppressPaletteClickRef.current = false; }, 0);
   };
 
-  const onPalettePointerDown = (event: React.PointerEvent<HTMLButtonElement>, activity: ActivityCatalogItem) => {
+  const startPalettePointer = (event: React.PointerEvent<HTMLButtonElement>, item: PaletteDragItem) => {
     if (event.button !== 0) return;
-    pointerDragRef.current = {
-      activity,
-      startX: event.clientX,
-      startY: event.clientY,
-      dragging: false
-    };
+    pointerDragRef.current = { item, startX: event.clientX, startY: event.clientY, dragging: false };
+  };
+
+  const onPaletteDragStart = (event: React.DragEvent<HTMLButtonElement>, activity: ActivityCatalogItem) => startPaletteDrag(event, { kind: "activity", activity });
+  const onPaletteDragEnd = (event: React.DragEvent<HTMLButtonElement>, activity: ActivityCatalogItem) => endPaletteDrag(event, { kind: "activity", activity });
+  const onPalettePointerDown = (event: React.PointerEvent<HTMLButtonElement>, activity: ActivityCatalogItem) => startPalettePointer(event, { kind: "activity", activity });
+  const onElementDragStart = (event: React.DragEvent<HTMLButtonElement>, element: GraphPaletteElement) => startPaletteDrag(event, { kind: "element", element });
+  const onElementDragEnd = (event: React.DragEvent<HTMLButtonElement>, element: GraphPaletteElement) => endPaletteDrag(event, { kind: "element", element });
+  const onElementPointerDown = (event: React.PointerEvent<HTMLButtonElement>, element: GraphPaletteElement) => startPalettePointer(event, { kind: "element", element });
+  const onElementClick = (element: GraphPaletteElement) => {
+    if (!suppressPaletteClickRef.current) placeElement(element);
   };
 
   const onPaletteClick = (activity: ActivityCatalogItem) => {
@@ -544,10 +583,19 @@ export function useGraphCanvasInteractions({
     event.preventDefault();
     setHighlightedEdgeId(null);
 
+    const elementId = event.dataTransfer.getData(graphElementDragDataType);
+    if (elementId) {
+      event.stopPropagation();
+      if (nativePaletteDragRef.current?.itemKey === `element:${elementId}`) nativePaletteDragRef.current.handledDrop = true;
+      const element = elements.find(candidate => candidate.id === elementId);
+      if (element) tryAddPaletteItemAtClientPoint({ kind: "element", element }, event.clientX, event.clientY);
+      return;
+    }
+
     const activityVersionId = event.dataTransfer.getData(activityDragDataType) || event.dataTransfer.getData("text/plain");
     if (!activityVersionId) return;
     event.stopPropagation();
-    if (nativePaletteDragRef.current?.activityVersionId === activityVersionId) {
+    if (nativePaletteDragRef.current?.itemKey === activityVersionId) {
       nativePaletteDragRef.current.handledDrop = true;
     }
     if (!canAddActivities) return;
@@ -859,6 +907,10 @@ export function useGraphCanvasInteractions({
     insertSequenceActivity,
     moveSequenceActivity,
     onConnectMenuPick,
+    onElementClick,
+    onElementDragStart,
+    onElementDragEnd,
+    onElementPointerDown,
     onPaletteClick,
     onPaletteDragStart,
     onPaletteDragEnd,

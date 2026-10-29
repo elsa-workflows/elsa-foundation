@@ -1,3 +1,5 @@
+import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
+import { writeAppearancePreferences, type ThemeModePreference } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
 import React, { useMemo, useRef, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type {
@@ -124,7 +126,14 @@ const expressionEditors: StudioExpressionEditorContribution[] = [{
   surfaces: { inline: JavaScriptInlineEditor, expanded: JavaScriptExpandedEditor }
 }];
 
+const paletteTheme = new URLSearchParams(window.location.search).get("palette-theme");
+if (paletteTheme) writeAppearancePreferences({ themeId: paletteTheme, mode: (new URLSearchParams(window.location.search).get("appearance") ?? "light") as ThemeModePreference, navigation: "left" });
+
 export function ActivityDuplicateEditorFixture() {
+  return paletteTheme ? <ThemeProvider><ActivityDuplicateEditorFixtureContent /></ThemeProvider> : <ActivityDuplicateEditorFixtureContent />;
+}
+
+function ActivityDuplicateEditorFixtureContent() {
   const instanceHost = new URLSearchParams(window.location.search).get("host") === "instance";
   const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");
   const live = useRef({ status: "Running", disconnected: false });

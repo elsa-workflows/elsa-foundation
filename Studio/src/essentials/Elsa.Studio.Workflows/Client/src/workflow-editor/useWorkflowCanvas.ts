@@ -23,12 +23,11 @@ import {
   collectRemovedGraphNodeIds,
   createBpmnBoundNode,
   createBpmnFlowEdge,
-  createBpmnShapeNode,
   nextBpmnPlacementPosition,
   syncBpmnCanvasToScope,
   type BpmnNodeData
 } from "../bpmn/bpmnAdapter";
-import type { BpmnShapeDescriptor } from "../bpmn/bpmnTypes";
+import type { GraphPaletteElement } from "../graph-authoring/graphPaletteElements";
 import { createNodeId } from "./editorHelpers";
 import type { WorkflowEdge, WorkflowErrorInput } from "./editorTypes";
 import { forgetRemovedNodes, type WorkflowDraftRecipe } from "./workflowDocument";
@@ -68,6 +67,7 @@ interface WorkflowCanvasParams {
   canAddActivitiesToCanvas: boolean;
   readOnly?: boolean;
   isOfferedActivity?(activity: ActivityCatalogItem): boolean;
+  elements?: readonly GraphPaletteElement[];
   selectedNodeId: string | null;
   // Document mutations (from useWorkflowDocument). The canvas never touches the reducer directly.
   editDraft(recipe: WorkflowDraftRecipe): void;
@@ -88,7 +88,6 @@ export interface WorkflowCanvasResult extends Omit<GraphCanvasInteractionsResult
   nodes: Node<WorkflowNodeData>[];
   edges: WorkflowEdge[];
   addActivity(activity: ActivityCatalogItem, position?: XYPosition): ActivityNode | null;
-  addBpmnShape(shape: BpmnShapeDescriptor, position?: XYPosition): void;
 }
 
 // Owns the React Flow mirror (nodes/edges) of the current scope for a WorkflowDraft, plus everything
@@ -108,6 +107,7 @@ export function useWorkflowCanvas({
   isUnsupportedDesigner,
   isBpmnDesigner,
   isOfferedActivity,
+  elements,
   canAddActivitiesToCanvas,
   readOnly = false,
   selectedNodeId,
@@ -363,6 +363,7 @@ export function useWorkflowCanvas({
     select,
     commitCanvas,
     isOfferedActivity,
+    elements,
     placeActivity: addActivity,
     createPlacement: isBpmnDesigner ? createPlacement : undefined,
     createEdge: isBpmnDesigner
@@ -375,22 +376,12 @@ export function useWorkflowCanvas({
   const { stampCanvasNode } = interactions;
   stampCanvasNodeRef.current = stampCanvasNode;
 
-  // Stamps a pure BPMN shape (event/gateway/unbound task) from the shape palette onto the canvas.
-  // Shapes carry no ActivityNode, which is why this goes through the placement-free canvas stamp.
-  const addBpmnShape = useCallback((shape: BpmnShapeDescriptor, position?: XYPosition) => {
-    if (!isBpmnDesigner) return;
-    stampCanvasNode(
-      createBpmnShapeNode(shape, position ?? nextBpmnPlacementPosition(nodes.length)) as unknown as Node<WorkflowNodeData>
-    );
-  }, [isBpmnDesigner, nodes.length, stampCanvasNode]);
-
   const { accessibleNodes, accessibleEdges, ...rest } = interactions;
 
   return {
     ...rest,
     nodes: accessibleNodes,
     edges: accessibleEdges,
-    addActivity,
-    addBpmnShape
+    addActivity
   };
 }

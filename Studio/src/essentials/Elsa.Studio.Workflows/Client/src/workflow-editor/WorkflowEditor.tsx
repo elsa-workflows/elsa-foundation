@@ -107,7 +107,8 @@ import {
   type ActivityInspectorTabId
 } from "./InspectorPanel";
 import { BpmnElementInspector } from "../bpmn/BpmnElementInspector";
-import { BpmnShapePalette } from "../bpmn/BpmnShapePalette";
+import { bpmnPaletteElements } from "../bpmn/bpmnPaletteElements";
+import { emptyGraphElements } from "../graph-authoring/graphPaletteElements";
 import { collectOwnedNodeIds, findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
 import { bpmnElementTypeLabel, bpmnStructureKind, type BpmnElement, type BpmnSequenceFlow } from "../bpmn/bpmnTypes";
 import { exportBpmnDocument, importBpmnDocument, layoutFromBpmnDiagram, summarizeBpmnImportIssues, withDiagramFromLayout } from "../api/bpmnInterchange";
@@ -265,6 +266,7 @@ export function WorkflowEditor({
     canAddActivitiesToCanvas: scopeAllowsAuthoring
   } = useWorkflowScope({ context, draft, frames, selectedNodeId, catalog, activityDescriptors, availabilityDiagnostics });
   const canAddActivitiesToCanvas = scopeAllowsAuthoring && !editorDoc.pinned;
+  const elements = isBpmnDesigner ? bpmnPaletteElements : emptyGraphElements;
   const inlineSteps = authorsInline(themeLayout, isBpmnDesigner);
   const availableDesignerPanels = filterGraphAuthoringContributions(workflowDesignerPanels, "workflow-definition");
   const sidePanelLayout = useSidePanelLayout(undefined, {
@@ -356,6 +358,7 @@ export function WorkflowEditor({
     isUnsupportedDesigner,
     isBpmnDesigner,
     isOfferedActivity,
+    elements,
     // A compensation scope's steps change only through its step list, never by a palette drop on the canvas.
     canAddActivitiesToCanvas: canAddActivitiesToCanvas && scope?.slot.id !== compensationStepsSlotId,
     readOnly: editorDoc.pinned,
@@ -400,7 +403,10 @@ export function WorkflowEditor({
     moveSequenceActivity,
     onConnectMenuPick,
     addActivity,
-    addBpmnShape,
+    onElementClick,
+    onElementDragStart,
+    onElementDragEnd,
+    onElementPointerDown,
     onPaletteClick,
     onPaletteDragStart,
     onPaletteDragEnd,
@@ -1103,16 +1109,21 @@ export function WorkflowEditor({
   const leftPanelTabs: WorkflowEditorPanelTab[] = [
     ...(inlineSteps ? [] : [{
       id: "activities",
-      title: "Activities",
+      title: elements.length ? "Elements" : "Activities",
       order: 0,
       icon: <Boxes size={15} />,
       render: () => (
         <>
-          {isBpmnDesigner ? <BpmnShapePalette onAddShape={addBpmnShape} /> : null}
           <ActivityPalettePanel
             paletteSearch={paletteSearch}
             onSearchChange={setPaletteSearch}
             groups={filteredPaletteGroups}
+            elements={elements}
+            disabled={!canAddActivitiesToCanvas}
+            onElementClick={onElementClick}
+            onElementDragStart={onElementDragStart}
+            onElementDragEnd={onElementDragEnd}
+            onElementPointerDown={onElementPointerDown}
             expandedCategories={expandedPaletteCategories}
             onToggleCategory={togglePaletteCategory}
             onActivityClick={isCompensationScopeCanvas ? addCompensationStepFromPalette : onPaletteClick}
@@ -1441,8 +1452,8 @@ export function WorkflowEditor({
         resourceKind="workflow-definition"
         layout={sidePanelLayout}
         palette={activeLeftPanel ? {
-          ariaLabel: "Activities panel",
-          tabLabel: "Activities panel tabs",
+          ariaLabel: elements.length ? "Elements panel" : "Activities panel",
+          tabLabel: elements.length ? "Elements panel tabs" : "Activities panel tabs",
           tabs: leftPanelTabs,
           activeTabId: activeLeftPanel.id,
           onSelect: setActiveLeftPanelId
