@@ -7,6 +7,11 @@ html[data-workspace-style] {
   --studio-edge-control: color-mix(in srgb, var(--foreground) 18%, var(--card));
   --studio-focus: var(--ring);
   --studio-title-weight: 600;
+  --studio-page-title-size: 20px;
+  --studio-section-title-size: 16px;
+  --studio-body-size: 13px;
+  --studio-label-size: 12px;
+  --studio-surface-raised: var(--card);
   --studio-shadow-sm: 0 2px 5px color-mix(in srgb, var(--foreground) 5%, transparent);
   --shadow-sm: var(--studio-shadow-sm);
   --shadow-md: 0 4px 16px color-mix(in srgb, var(--foreground) 6%, transparent);
@@ -172,7 +177,7 @@ html[data-workspace-style] :is(.studio-tabs button, .bottom-panel-tab-list butto
   box-shadow: inset 0 -2px var(--studio-accent);
 }
 
-html[data-workspace-style] .studio-button:not([data-variant="primary"]):not(.studio-button-primary) {
+html[data-workspace-style] .studio-button:where(:not([data-variant="primary"]):not(.studio-button-primary):not(.studio-dialog-confirm):not(.danger)) {
   border-color: transparent;
   background: var(--studio-surface-muted);
   box-shadow: none;

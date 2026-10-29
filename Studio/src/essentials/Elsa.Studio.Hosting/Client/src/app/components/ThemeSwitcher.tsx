@@ -119,6 +119,7 @@ export function ThemeSwitcher() {
             </DropdownMenu.Label>
             <DropdownMenu.RadioGroup
               className="theme-style-group"
+              aria-label="Workspace style"
               value={workspaceStyle ?? "theme"}
               onValueChange={value => setWorkspaceStyle(isWorkspaceStyle(value) ? value : null)}
             >
@@ -133,6 +134,7 @@ export function ThemeSwitcher() {
             </DropdownMenu.Label>
             <DropdownMenu.RadioGroup
               className="theme-mode-group"
+              aria-label="Appearance"
               value={mode}
               onValueChange={value => isThemeMode(value) && setMode(value)}
             >
@@ -164,6 +166,7 @@ export function ThemeSwitcher() {
             </DropdownMenu.Label>
             <DropdownMenu.RadioGroup
               className="theme-nav-group"
+              aria-label="Navigation"
               value={navModePreference}
               onValueChange={value => isNavModePreference(value) && setNavModePreference(value)}
             >

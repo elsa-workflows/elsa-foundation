@@ -279,15 +279,9 @@
 .wf-publication-footer.wf-dialog-actions button[type="submit"] {
   border-color: color-mix(in srgb, var(--wf-accent) 44%, var(--wf-border));
   background: var(--wf-accent-soft);
-  /* --wf-accent on this wash is 4.46:1 in Classic light. Mix toward --wf-text so the label stays AA in light and dark. */
-  color: color-mix(in srgb, var(--wf-accent) 70%, var(--wf-text));
-  font-weight: 700;
-}
-
-/* Meridian Dim's 70% accent mix is 4.01:1 on the wash. 40% accent is 6.25:1. */
-html[data-theme="meridian"][data-theme-appearance="dim"] .wf-publication-footer.wf-dialog-actions .wf-primary-action,
-html[data-theme="meridian"][data-theme-appearance="dim"] .wf-publication-footer.wf-dialog-actions button[type="submit"] {
+  /* Favor the text tone so the tinted action stays readable across independently chosen palettes. */
   color: color-mix(in srgb, var(--wf-accent) 40%, var(--wf-text));
+  font-weight: 700;
 }
 
 .wf-publication-risks,

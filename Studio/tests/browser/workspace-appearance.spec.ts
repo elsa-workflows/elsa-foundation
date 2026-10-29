@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import axe from "axe-core";
 
 const styles = ["quiet", "focus", "open"] as const;
 const modes = ["light", "dark", "dim", "high-contrast"] as const;
@@ -39,6 +40,44 @@ for (const style of styles) for (const scheme of ["classic", "drift"]) for (cons
 }
 
 for (const style of styles) {
+  test(`${style} preserves the semantic fill of danger and primary confirmations`, async ({ page }) => {
+    await open(page, style, "classic", "light", "dialogs");
+    for (const [action, token] of [["Delete workflow", "--studio-danger"], ["Publish workflow", "--studio-accent"]]) {
+      await page.getByRole("button", { name: action, exact: true }).click();
+      const confirm = page.getByRole("dialog").getByRole("button", { name: "Confirm", exact: true });
+      const colors = await confirm.evaluate((element, token) => {
+        const probe = document.createElement("span");
+        probe.style.backgroundColor = `var(${token})`;
+        element.append(probe);
+        const expected = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return { actual: getComputedStyle(element).backgroundColor, expected };
+      }, token);
+      expect(colors.actual).toBe(colors.expected);
+      await page.getByRole("dialog").getByRole("button", { name: "Cancel", exact: true }).click();
+    }
+  });
+
+  test(`${style} keeps publication contrast when palette and base preset differ`, async ({ page }) => {
+    await open(page, style, "meridian", "dim", "publication");
+    await page.getByRole("button", { name: "Review & publish", exact: true }).click();
+    const publish = page.getByRole("dialog").getByRole("button", { name: "Publish", exact: true });
+    await expect(publish).toBeVisible();
+    await expect(publish).toBeEnabled();
+    await publish.evaluate(async element => {
+      await document.fonts.ready;
+      const surfaces = [element.closest(".wf-dialog"), element.closest(".wf-dialog-backdrop")];
+      await Promise.all(surfaces.flatMap(surface => surface?.getAnimations() ?? []).map(animation => animation.finished));
+    });
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
+    await page.addScriptTag({ content: axe.source });
+    const violations = await publish.evaluate(async element => {
+      const result = await (window as Window & { axe: { run: (root: Element, options: object) => Promise<{ violations: Array<{ id: string; nodes: Array<{ failureSummary?: string }> }> }> } }).axe.run(element, { runOnly: ["color-contrast"] });
+      return result.violations.map(violation => ({ id: violation.id, failures: violation.nodes.map(node => node.failureSummary) }));
+    });
+    expect(violations).toEqual([]);
+  });
+
   test(`${style} retains keyboard focus and high-contrast boundaries in the graph`, async ({ page }) => {
     await open(page, style, "classic", "high-contrast");
     await page.goto("/workspace-appearance.html?composition=flowchart");

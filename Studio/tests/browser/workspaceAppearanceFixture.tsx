@@ -7,6 +7,9 @@ import { ThemeSwitcher } from "../../src/essentials/Elsa.Studio.Hosting/Client/s
 import { AppearancePage } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/AppearancePage";
 import { ActivityDuplicateEditorFixture } from "./activityDuplicateEditorFixture";
 import { WorkflowDefinitionBrowseFixture } from "./workflowDefinitionBrowseFixture";
+import { WorkflowPublishChoiceFixture } from "./workflowPublishChoiceFixture";
+import { DialogHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/dialog/DialogHost";
+import { dialogs } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/dialogs";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/workspaceAppearance.css";
 import "./workspaceAppearanceFixture.css";
 
@@ -24,7 +27,11 @@ function Fixture() {
     <ShellFrame navigation={navigation} panels={[]} path={path} title={view === "appearance" ? "Appearance" : "Workflows"}
       backendBaseUrl="https://backend.example/" themeAction={<ThemeSwitcher />}
       onNavigate={next => setView(next.startsWith("/settings") ? "appearance" : "list")}>
-      {view === "appearance" ? <AppearancePage onNavigate={() => {}} /> : view === "list" ? <WorkflowDefinitionBrowseFixture /> : <ActivityDuplicateEditorFixture />}
+      {view === "appearance" ? <AppearancePage onNavigate={() => {}} /> : view === "list" ? <WorkflowDefinitionBrowseFixture /> : view === "publication" ? <WorkflowPublishChoiceFixture /> : view === "dialogs" ? <>
+        <button onClick={() => void dialogs.confirm({ title: "Delete workflow", message: "Delete this workflow?", tone: "danger" })}>Delete workflow</button>
+        <button onClick={() => void dialogs.confirm({ title: "Publish workflow", message: "Publish this workflow?" })}>Publish workflow</button>
+        <DialogHost />
+      </> : <ActivityDuplicateEditorFixture />}
     </ShellFrame>
   </ThemeProvider>;
 }

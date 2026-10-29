@@ -281,6 +281,7 @@ test.describe("shell user menu", () => {
       await themeTrigger.focus();
       await page.keyboard.press("Enter");
       const themeMenu = page.locator(".theme-dropdown");
+      const navigationGroup = themeMenu.getByRole("group", { name: "Navigation", exact: true });
       await expect(themeMenu).toBeVisible();
       for (const mode of ["Light", "Dark", "Dim", "High contrast"]) {
         await expect(themeMenu.getByRole("menuitemradio", { name: mode })).toBeVisible();
@@ -290,15 +291,15 @@ test.describe("shell user menu", () => {
       expect(themeBounds!.x).toBeGreaterThanOrEqual(0);
       expect(themeBounds!.x + themeBounds!.width).toBeLessThanOrEqual(width);
       for (const navigation of ["Theme default", "Left", "Top"]) {
-        await expect(themeMenu.getByRole("menuitemradio", { name: navigation })).toBeVisible();
+        await expect(navigationGroup.getByRole("menuitemradio", { name: navigation })).toBeVisible();
       }
       await expect(themeMenu.getByRole("menuitemradio", { name: "Light" })).toHaveAttribute("aria-checked", "true");
       await themeMenu.getByRole("menuitemradio", { name: "Dark" }).click();
       await expect(page.locator("html")).toHaveAttribute("data-theme-mode", "dark");
       await expect(themeMenu.getByRole("menuitemradio", { name: "Dark" })).toHaveAttribute("aria-checked", "true");
       for (const navigation of ["Top", "Theme default", "Left"]) {
-        await themeMenu.getByRole("menuitemradio", { name: navigation }).click();
-        await expect(themeMenu.getByRole("menuitemradio", { name: navigation })).toHaveAttribute("aria-checked", "true");
+        await navigationGroup.getByRole("menuitemradio", { name: navigation }).click();
+        await expect(navigationGroup.getByRole("menuitemradio", { name: navigation })).toHaveAttribute("aria-checked", "true");
         await expect(page.locator("html")).toHaveAttribute("data-nav-mode", navigation === "Top" ? "top" : "left");
         await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
         const afterNavigation = await readShellGeometry(page);
@@ -342,19 +343,31 @@ test.describe("shell user menu", () => {
     await themeTrigger.focus();
     await page.keyboard.press("Enter");
     const themeMenu = page.locator(".theme-dropdown");
-    await expect(themeMenu.getByRole("menuitemradio", { name: "Light", exact: true })).toBeFocused();
+    const workspaceGroup = themeMenu.getByRole("group", { name: "Workspace style", exact: true });
+    const navigationGroup = themeMenu.getByRole("group", { name: "Navigation", exact: true });
+    await expect(workspaceGroup.getByRole("menuitemradio", { name: "Quiet Studio", exact: true })).toBeFocused();
+    for (const name of ["Focus Canvas", "Open Studio", "Theme default", "Light"]) {
+      await page.keyboard.press("ArrowDown");
+      await expect((name === "Theme default" ? workspaceGroup : themeMenu).getByRole("menuitemradio", { name, exact: true })).toBeFocused();
+    }
     await page.keyboard.press("ArrowDown");
     await expect(themeMenu.getByRole("menuitemradio", { name: "Dark", exact: true })).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page.locator("html")).toHaveAttribute("data-theme-appearance", "dark");
 
     await page.keyboard.press("Home");
-    await expect(themeMenu.getByRole("menuitemradio", { name: "Light", exact: true })).toBeFocused();
-    for (const name of ["Dark", "Dim", "High contrast", "Theme default", "Left", "Top"]) {
+    await expect(workspaceGroup.getByRole("menuitemradio", { name: "Quiet Studio", exact: true })).toBeFocused();
+    for (const name of ["Focus Canvas", "Open Studio", "Theme default", "Light", "Dark", "Dim", "High contrast"]) {
       await page.keyboard.press("ArrowDown");
-      await expect(themeMenu.getByRole("menuitemradio", { name, exact: true })).toBeFocused();
+      await expect((name === "Theme default" ? workspaceGroup : themeMenu).getByRole("menuitemradio", { name, exact: true })).toBeFocused();
     }
-    const top = themeMenu.getByRole("menuitemradio", { name: "Top", exact: true });
+    await page.keyboard.press("ArrowDown");
+    await expect(themeMenu.getByRole("menuitem", { name: "Follow system appearance", exact: true })).toBeFocused();
+    for (const name of ["Theme default", "Left", "Top"]) {
+      await page.keyboard.press("ArrowDown");
+      await expect(navigationGroup.getByRole("menuitemradio", { name, exact: true })).toBeFocused();
+    }
+    const top = navigationGroup.getByRole("menuitemradio", { name: "Top", exact: true });
     await expect(top).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(top).toHaveAttribute("aria-checked", "true");
@@ -362,17 +375,20 @@ test.describe("shell user menu", () => {
     expectHeaderToFit(await readShellGeometry(page), 320);
 
     await page.keyboard.press("m");
-    await expect(themeMenu.getByRole("menuitem", { name: "Meridian", exact: true })).toBeFocused();
+    await expect(themeMenu.getByRole("menuitemradio", { name: "Meridian", exact: true })).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(page.locator("html")).toHaveAttribute("data-theme", "meridian");
+    await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "meridian");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
+    await page.keyboard.press("Escape");
     await expect(themeMenu).toBeHidden();
     await expect(themeTrigger).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(themeMenu.getByRole("menuitemradio", { name: "Light", exact: true })).toBeFocused();
+    await expect(workspaceGroup.getByRole("menuitemradio", { name: "Quiet Studio", exact: true })).toBeFocused();
     await page.keyboard.press("c");
-    await expect(themeMenu.getByRole("menuitem", { name: "Classic", exact: true })).toBeFocused();
+    await expect(themeMenu.getByRole("menuitemradio", { name: "Classic", exact: true })).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
+    await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "classic");
+    await page.keyboard.press("Escape");
     await expect(themeTrigger).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(account(page)).toBeFocused();
