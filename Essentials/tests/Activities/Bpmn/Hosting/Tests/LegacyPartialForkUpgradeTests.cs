@@ -15,6 +15,7 @@ public sealed class LegacyPartialForkUpgradeTests
     {
         var directory = Environment.GetEnvironmentVariable("ELSA_BPMN_LEGACY_CAPTURE_DIRECTORY") ??
             Path.Combine(AppContext.BaseDirectory, "Fixtures", "legacy-partial-forks");
+        AssertClosedCapture(directory);
         var manifest = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "manifest.json")))!;
         var originalHashes = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var name in new[] { "runtime.sqlite", "design.sqlite", "cases.json" })
@@ -25,8 +26,8 @@ public sealed class LegacyPartialForkUpgradeTests
         }
         var cases = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "cases.json")))!.AsArray();
         Assert.Equal(8, cases.Count);
-        var originalMigrations = await MigrationsAsync(Path.Combine(directory, "runtime.sqlite"));
-        var originalArtifacts = await ArtifactsAsync(Path.Combine(directory, "runtime.sqlite"));
+        var originalMigrations = await MigrationsAsync(Path.Combine(directory, "runtime.sqlite"), immutable: true);
+        var originalArtifacts = await ArtifactsAsync(Path.Combine(directory, "runtime.sqlite"), immutable: true);
         await using var host = await OwnedWorkbench.StartAsync(directBpmn: true, legacySnapshotDirectory: directory);
         var processId = host.ProcessId;
         await host.LoginAsync();
@@ -88,6 +89,7 @@ public sealed class LegacyPartialForkUpgradeTests
         Assert.Equal(originalArtifacts, await ArtifactsAsync(host.RuntimeDatabase));
         foreach (var (name, hash) in originalHashes)
             Assert.Equal(hash, Hash(await File.ReadAllBytesAsync(Path.Combine(directory, name))));
+        AssertClosedCapture(directory);
         var snapshot = await host.SnapshotAsync("upgraded-runtime.sqlite.gz", "legacy-partial-forks");
         var designSnapshot = await host.SnapshotAsync("upgraded-design.sqlite.gz", "legacy-partial-forks", design: true);
         if (Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_EVIDENCE_DIRECTORY") is { } evidenceRoot)
@@ -108,6 +110,12 @@ public sealed class LegacyPartialForkUpgradeTests
     }
 
     private static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+    private static void AssertClosedCapture(string directory)
+    {
+        foreach (var name in new[] { "runtime.sqlite", "design.sqlite" })
+            foreach (var suffix in new[] { "-wal", "-shm", "-journal" })
+                Assert.False(File.Exists(Path.Combine(directory, name + suffix)), "The original capture must remain closed and immutable.");
+    }
     private static JsonNode Activity(JsonNode view, string node) =>
         Assert.Single(view["activities"]!.AsArray(), activity => activity!["executableNodeId"]!.GetValue<string>() == node)!;
     private static void SamePin(JsonNode expected, JsonNode actual)
@@ -115,22 +123,29 @@ public sealed class LegacyPartialForkUpgradeTests
         foreach (var field in new[] { "workflowExecutionId", "artifactId", "artifactHash", "artifactVersion", "definitionId", "definitionVersionId" })
             Assert.Equal(expected[field]!.GetValue<string>(), actual[field]!.GetValue<string>());
     }
-    private static async Task<List<string>> MigrationsAsync(string database)
+    private static async Task<List<string>> MigrationsAsync(string database, bool immutable = false)
     {
-        await using var connection = new SqliteConnection($"Data Source={database};Mode=ReadOnly;Pooling=False");
+        await using var connection = Read(database, immutable);
         await connection.OpenAsync(); await using var command = connection.CreateCommand();
         command.CommandText = "SELECT MigrationId, ProductVersion FROM __EFMigrationsHistory_ElsaRuntime ORDER BY MigrationId";
         await using var reader = await command.ExecuteReaderAsync(); var rows = new List<string>();
         while (await reader.ReadAsync()) rows.Add(reader.GetString(0) + "|" + reader.GetString(1));
         return rows;
     }
-    private static async Task<SortedDictionary<string, string>> ArtifactsAsync(string database)
+    private static async Task<SortedDictionary<string, string>> ArtifactsAsync(string database, bool immutable = false)
     {
-        await using var connection = new SqliteConnection($"Data Source={database};Mode=ReadOnly;Pooling=False");
+        await using var connection = Read(database, immutable);
         await connection.OpenAsync(); await using var command = connection.CreateCommand();
         command.CommandText = "SELECT Id, IncarnationId, ContentJson FROM elsa_runtime_workflow_executable ORDER BY Id";
         await using var reader = await command.ExecuteReaderAsync(); var rows = new SortedDictionary<string, string>(StringComparer.Ordinal);
         while (await reader.ReadAsync()) rows.Add(reader.GetString(0), reader.GetString(1) + ":" + Hash(Encoding.UTF8.GetBytes(reader.GetString(2))));
         return rows;
     }
+
+    private static SqliteConnection Read(string database, bool immutable) => new(new SqliteConnectionStringBuilder
+    {
+        DataSource = immutable ? new Uri(Path.GetFullPath(database)).AbsoluteUri + "?immutable=1" : database,
+        Mode = SqliteOpenMode.ReadOnly,
+        Pooling = false
+    }.ToString());
 }
