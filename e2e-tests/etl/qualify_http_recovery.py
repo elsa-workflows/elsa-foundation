@@ -13,6 +13,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import subprocess
@@ -37,6 +38,12 @@ def wait_for(action, predicate, message, seconds=90):
     raise TimeoutError(message)
 
 
+def utc_instant(value):
+    # .NET emits variable fractional digits; Python3.9 accepts only three or six.
+    normalized=re.sub(r"\.(\d{1,7})(?=[+-])",lambda match:"."+match[1].ljust(6,"0")[:6],value.replace("Z","+00:00"))
+    return datetime.fromisoformat(normalized)
+
+
 def pipeline():
     return {"source": {"kind": "httpJson", "binding": "http-source", "recordsPointer": "/items",
         "fields": [{"name": "id", "pointer": "/id", "type": "int64", "required": True}, {"name": "name", "pointer": "/name", "type": "string", "required": True}],
@@ -57,8 +64,11 @@ def main():
     parser.add_argument("--reader-assembly", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--parent", choices=("Sequence", "Flowchart", "RunEtl", "BpmnModel"), default="Sequence")
-    parser.add_argument("--business-error", action="store_true", help="Reject one actual HTTP record through its declared Int64 schema.")
+    outcome_group = parser.add_mutually_exclusive_group()
+    outcome_group.add_argument("--business-error", action="store_true", help="Reject one actual HTTP record through its declared Int64 schema.")
+    outcome_group.add_argument("--pipeline-cancel", action="store_true", help="Cancel the actual ETL run after host recovery and observe native/BPMN cancellation.")
     args = parser.parse_args()
+    if args.pipeline_cancel and args.parent != "BpmnModel":parser.error("Pipeline cancellation currently qualifies the direct BPMN/native RunEtl root only.")
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
     if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True).strip():
         raise ValueError("Commit the journey source before recording exact-source evidence.")
@@ -124,7 +134,8 @@ def main():
 
     try:
         fixture_script=REPO/"e2e-tests/etl/EtlHttpFixture.mjs";ready=root/"http-ready.json"
-        fixture=start(["node",str(fixture_script),"--ready-file",str(ready),"--source-retry-after-seconds","20"]+(["--invalid-last-id"] if args.business_error else []),"http-fixture")
+        retry_after=60 if args.pipeline_cancel else 20
+        fixture=start(["node",str(fixture_script),"--ready-file",str(ready),"--source-retry-after-seconds",str(retry_after)]+(["--invalid-last-id"] if args.business_error else []),"http-fixture")
         wait_for(lambda:ready.exists(),bool,"The owned HTTP fixture did not start.",15)
         fixture_url="http://127.0.0.1:"+str(json.loads(ready.read_text())["port"])
         def wire():
@@ -196,7 +207,7 @@ def main():
         except TimeoutError:
             q.write_json(output/"failed-before.json",view());q.write_json(output/"failed-wire.json",wire());raise
         retry=next(item["http"]["fetch"] for item in before["partitions"]["items"] if item["http"]["fetch"] and item["http"]["fetch"]["lastStatusCode"]==429)
-        if retry["attemptCount"]!=1 or datetime.fromisoformat(retry["notBefore"].replace("Z","+00:00"))<=datetime.now(timezone.utc):
+        if retry["attemptCount"]!=1 or utc_instant(retry["notBefore"])<=datetime.now(timezone.utc):
             raise ValueError("The crash cut did not retain its original future retry deadline.")
         if host.poll() is not None or int(q.process_field(host.pid,"ppid"))!=os.getpid():raise ValueError("The cut no longer belongs to this live controller child.")
         os.kill(host.pid,signal.SIGSTOP)
@@ -211,23 +222,32 @@ def main():
         if exit_code!=-signal.SIGKILL:raise ValueError("The predecessor did not exit through actual process loss.")
         print("Observed durable 429 and completed sibling; owned predecessor terminated.",flush=True)
         api=launch();recovered=view();q.write_json(output/"recovered.json",recovered)
-        outcome="businessError" if args.business_error else "succeeded"
-        finished=wait_for(view,lambda value:value["run"]["status"]==outcome and value["native"]["instance"]["status"]=="Completed" and
-            (not direct_bpmn or value["model"]["status"]=="TerminalSettled" and value["model"]["result"]["status"]==("Faulted" if args.business_error else "Completed")),"The actual ETL/native/model chain did not finish after process loss.",120)
+        if args.pipeline_cancel:
+            if recovered["run"]["status"]!="running":raise ValueError("The actual pipeline completed before its cancellation cut.")
+            cancelled=api.request("/etl/runs/"+escaped+"/cancel",{})
+            if not cancelled["cancellationAccepted"] or cancelled["terminalResult"]["outcome"]!="cancelled":
+                raise ValueError("The real ETL cancel API did not accept the running pipeline's cancellation.")
+            q.write_json(output/"cancel-response.json",cancelled)
+        outcome="cancelled" if args.pipeline_cancel else "businessError" if args.business_error else "succeeded"
+        native_terminal="Cancelled" if args.pipeline_cancel else "Completed"
+        model_terminal="Cancelled" if args.pipeline_cancel else "Faulted" if args.business_error else "Completed"
+        finished=wait_for(view,lambda value:value["run"]["status"]==outcome and value["native"]["instance"]["status"]==native_terminal and
+            (not direct_bpmn or value["model"]["status"]=="TerminalSettled" and value["model"]["result"]["status"]==model_terminal),"The actual ETL/native/model chain did not finish after process loss.",120)
         if direct_bpmn:
             checked=wait_for(checked_native_model,lambda value:value["resultSource"] is not None and value["resultSource"]["status"]==2 and value["resultInput"] is not None,
                 "The native result remained unacknowledged after model consumption.",90)
             q.write_json(output/"finished-checked-model.json",checked)
         result=finished["run"];rows=finished["partitions"]["items"];native_view=finished["native"]
         if (result["formatVersion"]!=2 or result["selection"]!=selection or result["terminalResult"]["outcome"]!=outcome or
-                result["acceptedRecords"]!=(3 if args.business_error else 4) or result["rejectedRecords"]!=(1 if args.business_error else 0) or result["filteredRecords"]!=0 or result["outstandingRecords"]!=0 or result["outstandingBytes"]!=0 or
-                len(rows)!=2 or finished["partitions"]["nextCursor"] is not None or any(not item["http"]["exhausted"] or item["http"]["pageSequence"]!=1 or item["owedBatch"] is not None for item in rows)):
-            raise ValueError("The recovered ETL run did not settle four accepted records and both exact partitions.")
-        if native_view["incidents"] or len(native_view["activities"])!=(1 if args.parent in ("RunEtl","BpmnModel") else 3) or any(item["status"]!="Completed" for item in native_view["activities"]):
+                result["acceptedRecords"]!=(2 if args.pipeline_cancel else 3 if args.business_error else 4) or result["rejectedRecords"]!=(1 if args.business_error else 0) or result["filteredRecords"]!=0 or result["outstandingRecords"]!=0 or result["outstandingBytes"]!=0 or
+                len(rows)!=2 or finished["partitions"]["nextCursor"] is not None or any(item["owedBatch"] is not None for item in rows) or
+                not args.pipeline_cancel and any(not item["http"]["exhausted"] or item["http"]["pageSequence"]!=1 for item in rows)):
+            raise ValueError("The recovered ETL run did not retain the expected output accounting and exact partitions.")
+        if native_view["incidents"] or len(native_view["activities"])!=(1 if args.parent in ("RunEtl","BpmnModel") else 3) or any(item["status"]!=native_terminal for item in native_view["activities"]):
             raise ValueError("The recovered native parent did not execute RunEtl and its successor once.")
         old_activities={(item.get("authoredActivityId") or item["executableNodeId"]):item for item in before["native"]["activities"]}
         etl_activity=next(item for item in native_view["activities"] if (item.get("authoredActivityId") or item["executableNodeId"])=="etl")
-        if etl_activity["outcomeNames"]!=["BusinessError" if args.business_error else "Done"]:
+        if etl_activity["outcomeNames"]!=([] if args.pipeline_cancel else ["BusinessError" if args.business_error else "Done"]):
             raise ValueError("The real RunEtl activity did not preserve its typed terminal outcome.")
         if "after" in old_activities or old_activities["etl"]["activityExecutionId"]!=next(item["activityExecutionId"] for item in native_view["activities"] if (item.get("authoredActivityId") or item["executableNodeId"])=="etl"):
             raise ValueError("The native RunEtl invocation was recreated or its successor ran before the cut.")
@@ -235,10 +255,11 @@ def main():
             if before["native"]["instance"][field]!=native_view["instance"][field]:raise ValueError("The actual native executable full pin changed during ETL recovery.")
         q.write_json(output/"finished.json",finished);finished_wire=wire();q.write_json(output/"finished-wire.json",finished_wire)
         b_requests=[item for item in finished_wire["requests"] if item.get("shard")=="shard-b"]
-        if len(b_requests)!=3 or [item["status"] for item in b_requests]!=[429,200,200] or b_requests[1]["receivedAtMs"]-b_requests[0]["receivedAtMs"]<20000:
+        if (args.pipeline_cancel and (len(b_requests)!=1 or b_requests[0]["status"]!=429) or
+                not args.pipeline_cancel and (len(b_requests)!=3 or [item["status"] for item in b_requests]!=[429,200,200] or b_requests[1]["receivedAtMs"]-b_requests[0]["receivedAtMs"]<20000)):
             raise ValueError("The actual source retried early or failed to resume its original two-page shard.")
         records=[item for post in finished_wire["outputPosts"] for item in post["records"]]
-        expected_records={1:"Ada",2:"Grace",3:"Linus"} if args.business_error else {1:"Ada",2:"Grace",3:"Linus",4:"Margaret"}
+        expected_records={1:"Ada",2:"Grace"} if args.pipeline_cancel else {1:"Ada",2:"Grace",3:"Linus"} if args.business_error else {1:"Ada",2:"Grace",3:"Linus",4:"Margaret"}
         if {item["id"]:item["name"] for item in records}!=expected_records or any(not post["hasIdempotencyKey"] for post in finished_wire["outputPosts"]):
             raise ValueError("The actual HTTP receiver lacks mapped output or idempotency headers.")
         errors=[json.loads(line) for file in (root/"errors").glob("*.jsonl") for line in file.read_text().splitlines() if line.strip()]
@@ -249,11 +270,11 @@ def main():
         if direct_bpmn:q.write_json(output/"retained-checked-model.json",checked_native_model())
         stop(host)
         if retained!=finished or retained_wire!=finished_wire:raise ValueError("The terminal pair or physical HTTP observations changed after another process.")
-        q.write_json(output/"process.json",{"schemaVersion":1,"kind":"actual-direct-bpmn-native-etl-http-recovery" if direct_bpmn else "actual-native-etl-http-recovery","sourceRevision":source,"products":products,"parent":args.parent,"processes":processes,"predecessorExitCode":exit_code,
+        q.write_json(output/"process.json",{"schemaVersion":1,"kind":"actual-direct-bpmn-native-etl-pipeline-cancellation" if args.pipeline_cancel else "actual-direct-bpmn-native-etl-http-recovery" if direct_bpmn else "actual-native-etl-http-recovery","sourceRevision":source,"products":products,"parent":args.parent,"processes":processes,"predecessorExitCode":exit_code,
             "definition":definition,"selection":selection,"workflowExecutionId":execution,"runId":run,"publication":publication,"etlPublication":published,"bindings":bindings,
-            "fixtureSha256":q.digest(fixture_script),"controllerSha256":q.digest(Path(__file__)),"cutAtUtc":cut_at,"businessError":args.business_error,"beforeStores":before_stores,"finishedStores":finished_stores,
+            "fixtureSha256":q.digest(fixture_script),"controllerSha256":q.digest(Path(__file__)),"cutAtUtc":cut_at,"businessError":args.business_error,"pipelineCancel":args.pipeline_cancel,"retryAfterSeconds":retry_after,"beforeStores":before_stores,"finishedStores":finished_stores,
             **({"modelPublication":model_publication,"modelExecutionId":model_execution} if direct_bpmn else {}),
-            "scopeLimits":["Direct start/service/end with one real closed native RunEtl worker; embedding, broader service/event shapes, cancellation propagation and held terminal-fault retry remain unproved." if direct_bpmn else "Real transient HTTP retry and native RunEtl recovery only; no BPMN/model worker bridge or held terminal-fault retry is proved.","The crash cut uses SIGSTOP only to copy committed stores, then SIGKILL; no persisted state or clock is edited.","External HTTP effects remain at least once."]})
+            "scopeLimits":["Pipeline-originated cancellation through one actual direct BPMN/native RunEtl root only; reverse model-to-worker cancellation, embedding, held fault retry and final upgrade/Studio remain unproved." if args.pipeline_cancel else "Direct start/service/end with one real closed native RunEtl worker; embedding, broader service/event shapes, cancellation propagation and held terminal-fault retry remain unproved." if direct_bpmn else "Real transient HTTP retry and native RunEtl recovery only; no BPMN/model worker bridge or held terminal-fault retry is proved.","The crash cut uses SIGSTOP only to copy committed stores, then SIGKILL; no persisted state or clock is edited.","External HTTP effects remain at least once."]})
         print("Actual ETL/native"+("/BPMN chain" if direct_bpmn else " journey")+" completed and survived another Workbench process.",flush=True)
     finally:
         for child in reversed(children):
