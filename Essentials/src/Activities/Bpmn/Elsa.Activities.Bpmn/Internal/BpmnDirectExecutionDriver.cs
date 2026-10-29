@@ -14,7 +14,7 @@ using Elsa.Workflows.Runtime.Services.Checkpoints;
 
 namespace Elsa.Activities.Bpmn.Internal;
 
-/// <summary>The first direct profile uses library semantics and model-owned human work, without native activities.</summary>
+/// <summary>Direct and embedded model execution use the released BPMN semantics and retained host work bindings.</summary>
 internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter committer,
     TimeProvider clock, BpmnModelHostingOptions options, IRuntimeModelExecutionReader? reader = null,
     BpmnNativeWorkBoundary? nativeWork = null, BpmnEmbeddingBoundary? embedding = null) : IRuntimeExecutionProtocolDriver
@@ -276,17 +276,29 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             throw new BpmnModelValidationException("The native service inventory differs from the model's complete retained dependency pins.");
         var process = envelope.Process.Deserialize<BpmnProcessDefinition>(Strict) ?? throw new BpmnModelValidationException("BPMN process definition is missing.");
         if (process.Variables.Count != 0 || process.IsTransaction || process.Elements.Any(item =>
-                (native ? item.ElementType is not (BpmnElementTypes.StartEvent or BpmnElementTypes.EndEvent or BpmnElementTypes.ServiceTask) :
+                (native ? item.ElementType is not (BpmnElementTypes.StartEvent or BpmnElementTypes.EndEvent or BpmnElementTypes.ServiceTask or BpmnElementTypes.BoundaryEvent) :
                     item.ElementType is not (BpmnElementTypes.StartEvent or BpmnElementTypes.EndEvent or BpmnElementTypes.UserTask or BpmnElementTypes.ParallelGateway)) ||
-                item.EventDefinitions.Count != 0 || item.LoopCharacteristics is not null || item.IsForCompensation || item.TriggeredByEvent ||
+                (item.ElementType == BpmnElementTypes.BoundaryEvent ? !native || !IsCodedServiceErrorBoundary(item, process) : item.EventDefinitions.Count != 0) ||
+                item.LoopCharacteristics is not null || item.IsForCompensation || item.TriggeredByEvent ||
                 item.ListenerBindingRef is not null || item.IsTransaction || item.Script is not null || item.Properties.Count != 0))
             throw new BpmnModelValidationException("The BPMN definition contains elements or events outside its declared hosting profile.");
         if (native && (envelope.HumanBindings.Count != 0 || envelope.ServiceBindings!.Count != 1 ||
             process.Elements.Count(item => item.ElementType == BpmnElementTypes.ServiceTask) != 1))
-            throw new BpmnModelValidationException("The current native service profile requires one closed published native worker between plain start/end events.");
+            throw new BpmnModelValidationException("The current native service profile requires one closed published native worker, plain start/end events and optional coded error boundaries.");
+        // This restricted graph can interrupt only the single worker whose authoritative terminal result
+        // is already being consumed. Apply refuses cancellation without that exact retained terminal proof.
         try { return BpmnGraph.Build(process, envelope.HumanBindings.Concat((envelope.ServiceBindings ?? []).Select(binding => binding.BindingId))
-            .Select(id => new BpmnBoundWork(id)).ToArray(), BpmnHostCapabilities.None); }
+            .Select(id => new BpmnBoundWork(id)).ToArray(), native ? BpmnHostCapabilities.SubtreeCancellation : BpmnHostCapabilities.None); }
         catch (BpmnExecutionException exception) { throw new BpmnModelValidationException(exception.Message, exception); }
+    }
+
+    private static bool IsCodedServiceErrorBoundary(BpmnElement element, BpmnProcessDefinition process)
+    {
+        if (!element.CancelActivity || element.BindingRef is not null || element.EventDefinitions.Count != 1 ||
+            !process.Elements.Any(item => item.ElementId == element.AttachedToRef && item.ElementType == BpmnElementTypes.ServiceTask)) return false;
+        var definition = element.EventDefinitions.Single();
+        return definition.Type == BpmnEventDefinitionTypes.Error && definition.Properties.Count == 1 &&
+            definition.Properties.TryGetValue(BpmnEventDefinitionProperties.Code, out var code) && !string.IsNullOrWhiteSpace(code);
     }
 
     internal static Document Read(RuntimeModelExecutionState state)
@@ -331,7 +343,10 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
 
     private static Document Apply(RuntimeModelExecutionContext context, Document prior, BpmnEvaluation evaluation, string commitId)
     {
-        if (evaluation.Commands.Any(command => command is not (BpmnHostCommand.StartWork or BpmnHostCommand.CancelWorkSubtree)))
+        if (evaluation.Commands.Any(command => command is not BpmnHostCommand.StartWork &&
+                (command is not BpmnHostCommand.CancelWorkSubtree cancel || !prior.Work.Any(work => work.InvocationId == cancel.Handle &&
+                    work.ElementId == cancel.ElementId && work.NativeWork is not null && prior.NativeResults?.Any(result =>
+                        result.Origin.IsEquivalentTo(work.NativeWork) && result.Status.IsTerminal()) == true))))
             throw new BpmnModelValidationException("The BPMN evaluation requires an unsupported direct-host binding.");
         var state = evaluation.State.Prune();
         var work = state.ActiveWork.Select(active =>

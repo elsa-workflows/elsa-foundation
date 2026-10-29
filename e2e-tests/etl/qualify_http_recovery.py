@@ -65,6 +65,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--parent", choices=("Sequence", "Flowchart", "RunEtl", "BpmnModel"), default="Sequence")
     parser.add_argument("--embedded-parent", choices=("Root", "Sequence", "Flowchart", "CompensationScope"), help="Invoke the published service model through a real native RunBpmn parent.")
+    parser.add_argument("--business-error-boundary", choices=("matching", "different"), help="Attach a coded error boundary to the actual service task; requires --business-error.")
     parser.add_argument("--queued-native-stage", choices=("start", "checkpoint"), help="With cancellation before admission, use the actual SDK to retain the selected native queue stage first.")
     parser.add_argument("--dispatcher-assembly", type=Path, help="Built owned SDK client required for the queued-native cut.")
     parser.add_argument("--admission-race-order", choices=("cancel-first", "admit-first"), help="Gate an unchanged actual proposal before its provider transaction, commit the competitor, then cold-recover both writers' obligations.")
@@ -81,6 +82,9 @@ def main():
     outcome_group.add_argument("--model-cancel-before-admission", action="store_true", help="Cancel the model while its original native start is owed, kill the host and recover positive retirement without admitting a worker.")
     args = parser.parse_args()
     cancelling=args.pipeline_cancel or args.native_cancel or args.native_parent_cancel or args.model_cancel or args.model_cancel_before_admission
+    if args.business_error_boundary and (not args.business_error or args.parent!='BpmnModel'):
+        parser.error("A business-error boundary requires --parent BpmnModel and --business-error.")
+    caught_business_error=args.business_error_boundary=='matching'
     if cancelling and args.parent != "BpmnModel":parser.error("Cancellation currently qualifies the direct BPMN/native RunEtl root only.")
     if args.embedded_parent and (args.parent!='BpmnModel' or args.model_cancel_before_admission or args.pending_cancellation_crash):
         parser.error("Embedding requires --parent BpmnModel and the normal admitted-worker recovery journey.")
@@ -213,6 +217,11 @@ def main():
             worker_pin={field:publication[field] for field in ("artifactId","artifactHash","artifactVersion","definitionId","definitionVersionId")}
             process={"processId":"direct-etl","elements":[{"elementId":"start","elementType":"startEvent"},{"elementId":"service","elementType":"serviceTask","bindingRef":"pipeline"},{"elementId":"end","elementType":"endEvent"}],
                 "sequenceFlows":[{"flowId":"to-service","sourceRef":"start","targetRef":"service"},{"flowId":"to-end","sourceRef":"service","targetRef":"end"}]}
+            if args.business_error_boundary:
+                process['elements'] += [{'elementId':'error','elementType':'boundaryEvent','attachedToRef':'service','cancelActivity':True,
+                    'eventDefinitions':[{'type':'error','properties':{'code':'etl.rows-rejected' if caught_business_error else 'etl.other-error'}}]},
+                    {'elementId':'error-end','elementType':'endEvent'}]
+                process['sequenceFlows'].append({'flowId':'caught-end','sourceRef':'error','targetRef':'error-end'})
             model_publication=api.request("/bpmn/artifacts",{"requestId":"publish-model","definition":{"formatVersion":2,"process":process,"humanBindings":[],
                 "serviceBindings":[{"bindingId":"pipeline","executable":worker_pin,"businessErrorCode":"etl.rows-rejected"}]}})
             if args.embedded_parent:
@@ -558,11 +567,12 @@ def main():
                 raise
         outcome="cancelled" if cancelling else "businessError" if args.business_error else "succeeded"
         native_terminal="Cancelled" if cancelling else "Completed"
-        model_terminal="Cancelled" if cancelling else "Faulted" if args.business_error else "Completed"
+        model_terminal="Cancelled" if cancelling else "Faulted" if args.business_error and not caught_business_error else "Completed"
+        parent_terminal=model_terminal
         try:
             finished=wait_for(view,lambda value:value["run"]["status"]==outcome and value["native"]["instance"]["status"]==native_terminal and
                 (not direct_bpmn or value["model"]["status"]=="TerminalSettled" and value["model"]["result"]["status"]==model_terminal) and
-                (not native_parent_execution or value['embedding']['instance']['status']==native_terminal),"The actual ETL/native/model chain did not finish after process loss.",120)
+                (not native_parent_execution or value['embedding']['instance']['status']==parent_terminal),"The actual ETL/native/model chain did not finish after process loss.",120)
         except Exception as failure:
             # Retain actual failed production state before any integration writer is changed.
             q.write_json(output/"failed-after-request.json",view());q.write_json(output/"failed-wire.json",wire())
@@ -588,8 +598,15 @@ def main():
             q.write_json(output/'finished-checked-embedding.json',checked_outer)
             outer=finished['embedding'];run_bpmn,=[a for a in outer['activities'] if a['activityType']=='Elsa.Activities.Bpmn.Activities.RunBpmn']
             after=[a for a in outer['activities'] if (a.get('authoredActivityId') or a['executableNodeId'])=='after']
-            if outer['incidents'] or run_bpmn['status']!=native_terminal or (not cancelling and args.embedded_parent!='Root' and (len(after)!=1 or after[0]['status']!='Completed')) or (cancelling and after):
-                raise ValueError('The real native RunBpmn parent did not preserve its completion/cancellation behavior.')
+            faulted=parent_terminal=='Faulted'
+            incidents=outer['incidents']
+            if (run_bpmn['status']!=parent_terminal or
+                    (faulted and (len(incidents)!=1 or incidents[0]['activityExecutionId']!=run_bpmn['activityExecutionId'] or
+                        incidents[0]['failureType']!='ActivityReturnedFault' or incidents[0]['status']!='Blocking' or
+                        incidents[0]['resolutionOutcome']['actionKind']!='FaultWorkflow')) or
+                    (not faulted and incidents) or ((cancelling or faulted) and after) or
+                    (not cancelling and not faulted and args.embedded_parent!='Root' and (len(after)!=1 or after[0]['status']!='Completed'))):
+                raise ValueError('The real native RunBpmn parent did not preserve its completion/fault/cancellation behavior.')
         result=finished["run"];rows=finished["partitions"]["items"];native_view=finished["native"]
         if (result["formatVersion"]!=2 or result["selection"]!=selection or result["terminalResult"]["outcome"]!=outcome or
                 result["acceptedRecords"]!=(2 if cancelling else 3 if args.business_error else 4) or result["rejectedRecords"]!=(1 if args.business_error else 0) or result["filteredRecords"]!=0 or result["outstandingRecords"]!=0 or result["outstandingBytes"]!=0 or
@@ -635,6 +652,7 @@ def main():
         q.write_json(output/"process.json",{"schemaVersion":1,"kind":("actual-native-runbpmn-etl-parent-cancellation" if args.native_parent_cancel else "actual-native-runbpmn-etl-http-recovery") if native_parent_execution else "actual-direct-bpmn-native-etl-model-cancellation" if args.model_cancel else "actual-direct-bpmn-native-etl-worker-cancellation" if args.native_cancel else "actual-direct-bpmn-native-etl-pipeline-cancellation" if args.pipeline_cancel else "actual-direct-bpmn-native-etl-http-recovery" if direct_bpmn else "actual-native-etl-http-recovery","sourceRevision":source,"products":products,"parent":args.parent,"processes":processes,"predecessorExitCode":exit_code,
             "definition":definition,"selection":selection,"workflowExecutionId":execution,"runId":run,"publication":publication,"etlPublication":published,"bindings":bindings,
             "fixtureSha256":q.digest(fixture_script),"controllerSha256":q.digest(Path(__file__)),"cutAtUtc":cut_at,"businessError":args.business_error,"pipelineCancel":args.pipeline_cancel,"nativeCancel":args.native_cancel,"modelCancel":args.model_cancel,"retryAfterSeconds":retry_after,"beforeStores":before_stores,"finishedStores":finished_stores,
+            **({'businessErrorBoundary':args.business_error_boundary} if args.business_error_boundary else {}),
             **({"observedCancelledAfterRetryDeadlineAtUtc":observed_cancelled_after_deadline} if cancelling else {}),
             **({"modelPublication":model_publication,"modelExecutionId":model_execution} if direct_bpmn else {}),
             **({'embeddedParent':args.embedded_parent,'nativeParentExecutionId':native_parent_execution,'nativeParentPublication':native_parent_publication,'nativeParentCancel':args.native_parent_cancel} if native_parent_execution else {}),

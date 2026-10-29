@@ -26,6 +26,51 @@ public sealed class BpmnDirectExecutionTests : IDisposable
     private readonly string database = Path.Combine(Path.GetTempPath(), "elsa-direct-bpmn-" + Guid.NewGuid().ToString("N") + ".sqlite");
 
     [Theory]
+    [InlineData("etl.rows-rejected")]
+    [InlineData("etl.other-error")]
+    public async Task The_native_profile_admits_coded_service_error_boundaries_for_library_matching(string code)
+    {
+        await using var host = await OpenAsync();
+        await using var scope = await ScopeAsync(host);
+        await scope.ServiceProvider.GetRequiredService<BpmnDirectExecutionDriver>().ValidateMaterialAsync(ServiceErrorMaterial(code));
+    }
+
+    [Theory]
+    [InlineData("missing-code")]
+    [InlineData("blank-code")]
+    [InlineData("unknown-property")]
+    [InlineData("timer")]
+    [InlineData("noninterrupting")]
+    [InlineData("wrong-host")]
+    [InlineData("bound-catcher")]
+    public async Task The_native_profile_refuses_error_shapes_without_a_qualified_host_binding(string variant)
+    {
+        await using var host = await OpenAsync();
+        await using var scope = await ScopeAsync(host);
+        await Assert.ThrowsAsync<BpmnModelValidationException>(() => scope.ServiceProvider.GetRequiredService<BpmnDirectExecutionDriver>()
+            .ValidateMaterialAsync(ServiceErrorMaterial("etl.rows-rejected", variant)).AsTask());
+    }
+
+    // Publication validation only; actual ETL/RunBpmn recovery is qualified by the owned HTTP journey.
+    private static RuntimeModelMaterial ServiceErrorMaterial(string code, string? variant = null)
+    {
+        var properties = new Dictionary<string, string> { [BpmnEventDefinitionProperties.Code] = variant == "blank-code" ? " " : code };
+        if (variant == "missing-code") properties.Clear();
+        if (variant == "unknown-property") properties["unknown"] = "refuse";
+        var process = new BpmnProcessDefinition("service-errors", Elements:
+            [new("start", BpmnElementTypes.StartEvent), new("service", BpmnElementTypes.ServiceTask, bindingRef: "worker"),
+                new("end", BpmnElementTypes.EndEvent), new("caught", BpmnElementTypes.EndEvent),
+                new("error", BpmnElementTypes.BoundaryEvent, bindingRef: variant == "bound-catcher" ? "catcher" : null,
+                    attachedToRef: variant == "wrong-host" ? "end" : "service", cancelActivity: variant != "noninterrupting",
+                    eventDefinitions: [new(variant == "timer" ? BpmnEventDefinitionTypes.Timer : BpmnEventDefinitionTypes.Error, properties)])],
+            SequenceFlows: [new("start-service", "start", "service"), new("service-end", "service", "end"), new("error-caught", "error", "caught")]);
+        var pin = new WorkflowExecutableIdentity("worker-artifact", "worker-definition", "worker-version", "1.0.0", "worker-hash");
+        var definition = new BpmnModelDefinition(2, JsonSerializer.SerializeToElement(process, Web), [], [new("worker", pin, code)]);
+        return new(1, pin, new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), BpmnModelProtocol.NativeWorkProfile,
+            JsonSerializer.SerializeToElement(definition, Web), new(1, []), [], [new("worker", pin)], []);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task An_in_flight_native_start_from_the_actual_cancelled_capture_requires_positive_retirement(bool removeCancellationSource)
