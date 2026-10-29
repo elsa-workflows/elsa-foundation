@@ -251,6 +251,23 @@ export function ActivityGraphPublicInterfaceEditor({
   );
 }
 
+export function ActivityGraphVariablesEditor({ context, value, readOnly, onChange }: Pick<StudioActivityDefinitionImplementationEditorProps, "context" | "value" | "readOnly" | "onChange">) {
+  const payload = normalizePayload(value.payload);
+  return <fieldset disabled={readOnly} className="wf-container-variables wf-tokens">
+    <ScopedVariablesEditor
+      context={context}
+      variables={toVariableEditorRecords(payload.variables)}
+      title="Variables"
+      addLabel="Add variable"
+      emptyLabel="No variables defined for this activity."
+      onChange={next => onChange({ ...value, payload: {
+        ...(isRecord(value.payload) ? value.payload : {}),
+        variables: fromVariableEditorRecords(next)
+      } })}
+    />
+  </fieldset>;
+}
+
 export function ActivityGraphImplementationEditor({
   context,
   definitionId,
@@ -704,16 +721,6 @@ export function ActivityGraphImplementationEditor({
     const nextRoot = updateActivity(root, nextSelected.nodeId, () => nextSelected, catalogByVersion);
     commitRoot(nextRoot);
   };
-  const updateVariables = (next: unknown[]) => {
-    commitDocument({
-      ...value,
-      payload: {
-        ...(isRecord(value.payload) ? value.payload : {}),
-        ...payload,
-        variables: fromVariableEditorRecords(next)
-      }
-    });
-  };
   const inspectedNode = selected ?? owner;
   const inspectedCatalogItem = selected ? selectedCatalogItem : ownerCatalogItem;
   const inspectedDescriptor = inspectedCatalogItem ? toActivityDescriptor(inspectedCatalogItem) : null;
@@ -827,16 +834,7 @@ export function ActivityGraphImplementationEditor({
             selectedSupportsScopedVariables={inspectedSupportsVariables}
             readOnly={readOnly}
             variablesPanel={!selected && scopePath.length === 0 ? (
-              <fieldset disabled={readOnly} className="wf-container-variables">
-                <ScopedVariablesEditor
-                  context={context}
-                  variables={toVariableEditorRecords(payload.variables)}
-                  title="Graph variables"
-                  addLabel="Add graph variable"
-                  emptyLabel="No graph variables are defined."
-                  onChange={updateVariables}
-                />
-              </fieldset>
+              <ActivityGraphVariablesEditor context={context} value={value} readOnly={readOnly} onChange={commitDocument} />
             ) : undefined}
             propertyEditors={propertyEditors}
             expressionEditors={expressionEditors}

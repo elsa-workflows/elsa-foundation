@@ -7496,6 +7496,13 @@ button.wf-reference-select {
   padding-top: 8px;
 }
 
+fieldset.wf-container-variables {
+  min-inline-size: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
 .wf-properties-warning {
   display: block;
   margin-top: 3px;
