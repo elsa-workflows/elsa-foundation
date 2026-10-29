@@ -41,9 +41,11 @@ try
         if (args[0] == "--read-bpmn-retirement")
         {
             if (boundModel is null) throw new InvalidDataException("The actual cancelling model is absent.");
-            var originElement = boundModel.Payload.TryGetProperty("cancellations", out var cancellations)
+            var originElement = boundModel.Payload.TryGetProperty("cancellations", out var cancellations) && cancellations.GetArrayLength() != 0
                 ? cancellations.EnumerateArray().Single().GetProperty("origin")
-                : boundModel.Payload.GetProperty("work").EnumerateArray().Single().GetProperty("nativeWork");
+                : boundModel.Payload.GetProperty("work").GetArrayLength() != 0
+                    ? boundModel.Payload.GetProperty("work").EnumerateArray().Single().GetProperty("nativeWork")
+                    : boundModel.Payload.GetProperty("nativeResults").EnumerateArray().Single().GetProperty("origin");
             var origin = originElement.Deserialize<RuntimeModelNativeWorkOrigin>(json)!;
             var sourceIds = new List<string>(); var inputIds = new List<string>();
             await using (var index = new SqliteConnection(boundConnectionString))
