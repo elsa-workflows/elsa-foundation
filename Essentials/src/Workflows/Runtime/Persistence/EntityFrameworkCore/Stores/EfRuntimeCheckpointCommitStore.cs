@@ -441,9 +441,13 @@ public sealed class EfRuntimeCheckpointCommitStore(
         var id = EfWorkflowExecutionStateStore.CreateId(scope, state.WorkflowExecutionId);
         var prior = await context.WorkflowExecutionStates.SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
         if (prior is not null && EfWorkflowExecutionStateStore.ReadChecked(prior, scope, state.WorkflowExecutionId).Status.IsTerminal()) return;
-        if (!commit.PostCommitIntents.Any(intent => intent.Kind == origin.ResultIntentKind &&
-            intent.WorkflowExecutionId == state.WorkflowExecutionId && intent.RecordedAt == commit.Checkpoint.OccurredAt &&
-            intent.Payload is { ValueKind: JsonValueKind.Object }))
+        // The committer materializes intents before this physical boundary. Balanced persistence can fold
+        // those outbox changes and clear their original intent list; only the applied changes prove delivery.
+        if (!commit.StateChanges.PostCommitOutbox.Any(change => change.Operation == RuntimeStateChangeOperation.Upsert &&
+            change.State.Intent.Kind == origin.ResultIntentKind && change.State.Intent.WorkflowExecutionId == state.WorkflowExecutionId &&
+            change.State.Intent.Payload is { ValueKind: JsonValueKind.Object } &&
+            change.State.StimulusDeliverySourceScope == origin.Scope &&
+            change.State.Status is RuntimePostCommitOutboxStatus.Pending or RuntimePostCommitOutboxStatus.Delivering or RuntimePostCommitOutboxStatus.FailedRetryable))
             throw new NotSupportedException("Native model work cannot become terminal without its atomic result-delivery responsibility.");
     }
 

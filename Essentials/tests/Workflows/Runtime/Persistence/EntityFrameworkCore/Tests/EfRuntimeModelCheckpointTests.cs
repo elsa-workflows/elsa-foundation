@@ -199,6 +199,42 @@ public sealed class EfRuntimeModelCheckpointTests
         Assert.Single(await restarted.RuntimePostCommitOutbox.ToArrayAsync());
     }
 
+    [Theory]
+    [InlineData("folded", true)]
+    [InlineData("intent-only", false)]
+    [InlineData("foreign-source-scope", false)]
+    public async Task Model_worker_terminal_requires_materialized_delivery_even_after_a_balanced_fold(string shape, bool accepted)
+    {
+        await using var database = await CreateDatabaseAsync();
+        var admission = WithOrigin(await PrepareAdmissionAsync(database));
+        await using (var context = database.Open()) await Store(context).CommitAsync(admission, Immediate);
+        var worker = admission.StateChanges.WorkflowExecution!.State;
+        var origin = worker.ModelWorkOrigin!;
+        var at = Now.AddSeconds(4);
+        var intent = new RuntimePostCommitIntent("result", worker.WorkflowExecutionId, origin.ResultIntentKind, at,
+            null, "result", JsonSerializer.SerializeToElement(new { origin, status = WorkflowExecutionStatus.Completed }));
+        var outbox = new RuntimePostCommitOutboxItem("worker-complete:result", intent, RuntimePostCommitOutboxStatus.Pending,
+            at, at, null, 0, null, null, null, null, null, 0, null, null,
+            shape == "foreign-source-scope" ? new PersistenceScope("foreign") : origin.Scope, null);
+        var terminal = worker with { Status = WorkflowExecutionStatus.Completed, UpdatedAt = at, CompletedAt = at };
+        var finished = new RuntimeCheckpointCommit("worker-complete", new("worker-complete", RuntimeCheckpointNames.WorkflowCompleted,
+                worker.WorkflowExecutionId, at, [], new Dictionary<string, string>()),
+            new(new(worker.WorkflowExecutionId, RuntimeStateChangeOperation.Upsert, terminal, new Dictionary<string, string>()),
+                null, [], [], [], [], [], postCommitOutbox: shape == "intent-only" ? [] :
+                [new(outbox.OutboxItemId, RuntimeStateChangeOperation.Upsert, outbox, new Dictionary<string, string>())]),
+            shape == "intent-only" ? [intent] : [], new Dictionary<string, string>()) { ExpectedFence = admission.ExpectedFence };
+        await using (var context = database.Open())
+        {
+            if (accepted) await Store(context).CommitAsync(finished, Immediate);
+            else await Assert.ThrowsAsync<NotSupportedException>(() => Store(context).CommitAsync(finished, Immediate).AsTask());
+        }
+        await using var restarted = database.Open();
+        var retained = (await new EfWorkflowExecutionStateStore(restarted, new Access("tenant-a"), new Codec())
+            .FindAsync(worker.WorkflowExecutionId))!;
+        Assert.Equal(accepted ? WorkflowExecutionStatus.Completed : WorkflowExecutionStatus.Running, retained.Status);
+        Assert.Equal(accepted ? 2 : 1, await restarted.RuntimePostCommitOutbox.CountAsync());
+    }
+
     private static RuntimeCheckpointCommit WithOrigin(RuntimeCheckpointCommit admission)
     {
         var model = admission.ExpectedModelExecution!;
