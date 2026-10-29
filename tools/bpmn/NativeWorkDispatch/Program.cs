@@ -84,7 +84,7 @@ try
             services.AddScoped<IRuntimeCheckpointCommitEnricher, AdmissionGate>();
         }
     }
-    services.Replace(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainPolicy>(new CaptureDrainPolicy(checkpointCut || race)));
+    services.Replace(ServiceDescriptor.Singleton<IWorkflowSchedulerDrainPolicy>(new CaptureDrainPolicy(checkpointCut || race || consume)));
     // The orchestration loop follows delivered continuations even when each scheduler pass has a one-item budget.
     // The existing two-cycle budget retains admission and the next queued root step, before activity invocation.
     if (args[0] == "--drain-checkpoint")
@@ -128,13 +128,16 @@ try
         var steps = new List<object>();
         var processor = sdk.GetRequiredService<IRuntimePostCommitOutboxProcessor>();
         var lookup = sdk.GetRequiredService<IPostCommitOutboxLookupStore>();
-        async Task<RuntimeSchedulerDrainResult> Drain(string execution)
+        async Task<object> Drain(string execution)
         {
             var id = "owned-consumption:" + Guid.NewGuid().ToString("N");
             var envelope = new WorkflowExecutionCommandEnvelope(id, execution,
                 new(id, execution, WorkflowExecutionCommandKind.RunSchedulerWork, started, null, new Dictionary<string, string>()),
                 id, WorkflowExecutionCommandDeliveryMode.AtLeastOnce, started, partition: new(origin.Scope.Value));
-            return await sdk.GetRequiredService<IWorkflowDrainOrchestrator>().DrainAsync(envelope, new(execution, maxWorkItems: 1));
+            var actor = await sdk.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(new(execution,
+                WorkflowExecutionActorActivationReason.Recovery, started, "owned-consumption", WorkflowExecutionActorCapabilities.InProcessMailbox,
+                partition: new(origin.Scope.Value)));
+            return await actor.EnqueueAsync(envelope);
         }
         var worker = await workflows.FindAsync(origin.WorkerExecutionId) ?? throw new InvalidOperationException("The real native worker is absent.");
         if (!origin.IsEquivalentTo(worker.ModelWorkOrigin) || (await queue.ListAsync(new(origin.WorkerExecutionId))).Items.Count != 0 ||
