@@ -52,8 +52,9 @@ public sealed class ForEachItemResolutionRuntimeTests
     [Fact]
     public async Task Body_receives_exact_number_text_through_an_any_input()
     {
-        await using var harness = NewHarness("actexec-foreach", "actexec-body-0", "actexec-body-1", "actexec-body-2", "actexec-body-3");
-        string[] numbers = ["9007199254740993", "12345678901234567890", "1234567890.123456789012345", "1.0"];
+        await using var harness = NewHarness("actexec-foreach", "actexec-body-0", "actexec-body-1", "actexec-body-2", "actexec-body-3", "actexec-body-4", "actexec-body-5");
+        // The last two exceed decimal as well as double, so narrowing to either would show.
+        string[] numbers = ["9007199254740993", "12345678901234567890", "1234567890.123456789012345", "1.0", "1234567890123456789012345678901234567890", "1e400"];
 
         var run = await harness.RunAsync(NewExecutable(JsonArray(numbers), ForEachActivity.CurrentItemVariableName, "Elsa.Any", typeof(ForEachAnyItemCaptureActivity)));
 
@@ -169,7 +170,7 @@ public sealed class ForEachAnyItemCaptureActivity : Activity<ForEachCaptureResul
 
     protected override ValueTask<ActivityTransition<ForEachCaptureResult>> ExecuteAsync(ActivityExecutionContext context) =>
         ValueTask.FromResult(ActivityTransition.Complete(new ForEachCaptureResult(
-            Value is JsonElement element ? element.GetRawText() : JsonSerializer.Serialize(Value))));
+            ((JsonElement)Value!).GetRawText())));
 }
 
 public sealed class ForEachIndexCaptureActivity : Activity<ForEachCaptureResult>
