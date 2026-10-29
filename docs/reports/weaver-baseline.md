@@ -130,9 +130,11 @@ Route and API ownership are visible in the [Workflows module](../../Studio/src/e
    Approval execution uses the registered success-reporting no-op executor. Under FullAuto the
    workflow tool creates another domain proposal, and the production deny-all workflow evaluator
    rejects it. The catalog is a hardcoded six-item list and revision reads return `unknown`.
-9. Proposal status becomes Executed before the executor returns. Assistant/tool history remains local
-   to a stream while only user messages are written through the production message API. Session,
-   proposal, audit, feedback and paused-turn stores default to in-memory singletons.
+9. Proposal status becomes Executed before the executor returns. Elsa's production message API writes
+   only user messages; assistant/tool history in the host-driven loop remains local to its stream.
+   Copilot delegates conversation retention to its resumed SDK session; actual SDK retention and
+   recovery remain unverified here. Elsa session, proposal, audit, feedback and paused-turn stores
+   default to in-memory singletons.
 10. Each stream GET starts a new turn for the latest user message. There is no session exclusivity or
     replay cursor. Unresolved paused state is discarded on the next stream preparation. Cancel checks
     access to the supplied session, then addresses a global turn ID without verifying that binding.
