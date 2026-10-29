@@ -115,8 +115,8 @@ It permits:
 - the current time, random values and GUID generation. Evaluators run in UTC with the invariant culture, and
   time comes from the host's `TimeProvider`;
 - functions implemented in .NET that are registered for this profile and exchange only JSON values with
-  the expression. Their effect profile (`Repeatable`, `External`) drives diagnostics and persistence,
-  and never refusal.
+  the expression. Functions carry no effect profile: a call is never refused or skipped because of what
+  it does, and the workflow designer owns the idempotency of external effects (D-6).
 
 It forbids:
 
@@ -124,8 +124,10 @@ It forbids:
 - `getVariable`, `setVariable`, named variable getters/setters, `getInput`, `getOutput`, and
   `getOutputFrom` host functions;
 - workflow/activity/instance identity not declared as a parameter;
-- live .NET objects crossing into the expression. Whether and how that can be switched on is analysis
-  A-1 on epic #3052;
+- live .NET objects crossing into the expression. Scripts that may use objects the host explicitly
+  registers use a separate profile (for example `binding-readonly-interop-v1`; analysis A-1 and the
+  ADR 0046 amendment, V10). A host opt-in allows that profile, and it is pinned in the executable like any
+  profile, so this profile always forbids live objects;
 - any change to engine-owned workflow state: variable mutation, workflow output publication,
   correlation or instance-name changes, and outcome selection;
 - functions not registered for this profile, added through evaluation events, filters,
@@ -134,7 +136,8 @@ It forbids:
 
 The first two forbidden items stay until
 [ADR 0089](../../../docs/adr/0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md)
-(proposed, decision D-7) is accepted. It lets `variables.X` and `getVariable('X')` read through
+(proposed, decision D-7), or its A-4 amendment
+([#3420](https://github.com/elsa-workflows/elsa-foundation/pull/3420)), is accepted. It lets `variables.X` and `getVariable('X')` read through
 publish-resolved declarations.
 
 A result of `undefined` is an error unless the workflow selects the undefined-as-null policy (ADR 0045 §2

@@ -56,7 +56,12 @@ behaviour.
 - **The new name says what still holds:** a binding reads, it never changes engine-owned workflow state.
 - **It allows** the current time (UTC, invariant culture, from the host's `TimeProvider`), random values and GUIDs.
 - **It also allows functions implemented in .NET** that are registered for the profile and exchange only JSON values
-  with the script (D-5). A function's effect profile is guidance, not a reason to refuse it (D-6).
+  with the script (D-5). Functions carry no effect profile; a call is never refused or skipped because of what it
+  does (D-6).
+- **It forbids live .NET objects,** always. Scripts that may use objects the host explicitly registers use a separate
+  profile, for example `binding-readonly-interop-v1` (analysis A-1, ADR 0046 amendment V10). A host opt-in allows that
+  profile, and the executable pins it like any profile, so one profile name never means different behaviour on
+  different hosts.
 - **Spec 095's expression contract defines the profile in full.** That definition is amended alongside this ADR.
 
 The profile is part of the expression definition, so changing it changes expression fingerprints and artifact hashes
