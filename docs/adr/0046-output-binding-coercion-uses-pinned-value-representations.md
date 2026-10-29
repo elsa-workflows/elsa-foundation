@@ -171,6 +171,11 @@ loses the difference between attributes and elements, and mixed content (V6).
 
 ### Dates
 
+This section owns every date and time-zone rule. ADR 0045 §5
+([#3384](https://github.com/elsa-workflows/elsa-foundation/pull/3384)) and ADR 0083
+([#3390](https://github.com/elsa-workflows/elsa-foundation/pull/3390)) state only the engine's clock (UTC, from an
+injectable clock) and point here.
+
 **The rule.** A date means the same instant on every server.
 - **`DateTime`** is normalized to UTC at every adapter. A value without an offset (`"2026-10-28T09:15:00"`) is read as
   UTC; a value with `Z` or an offset is converted to UTC. It is written out with `Z`.
@@ -180,6 +185,10 @@ loses the difference between attributes and elements, and mixed content (V6).
 - **Publish-time literals and variable defaults follow the same rule.** Today they pin the publishing server's offset
   (ADR 0091, Context).
 - **Scripts** keep dates as ISO 8601 strings (see *JavaScript*).
+- **Time zones** are IANA time zone IDs (for example `Europe/Amsterdam`). UTC is the engine's clock, not a restriction
+  on what a workflow stores: a workflow may store a time zone ID as a string, or a time with its offset as
+  `DateTimeOffset`, and convert explicitly with a built-in date helper (D-1; S-1 defines the helpers). The converter's
+  source time zone below is the same kind of value.
 
 **Converted Elsa 3 workflows.** Elsa 3 (3.6.3) read dates in the server's time zone, so the same workflow behaved
 differently per server. Every literal, input and variable default went through `ObjectConverter.ConvertTo`, which
@@ -199,7 +208,7 @@ do not. It follows D-11's model: a visible option on the Elsa 3 converter featur
 - **Source time zone not set:** a literal or variable default without an offset, bound to a `DateTime`,
   `DateTimeOffset` or `DateOnly` member, is refused with a stable diagnostic. The guidance says to set the source time
   zone or to add an offset to the value.
-- **Source time zone set** (for example `Europe/Amsterdam`): the converter writes the value with that zone's offset on
+- **Source time zone set** (an IANA time zone ID, for example `Europe/Amsterdam`): the converter writes the value with that zone's offset on
   that date, so daylight saving is respected, and records the zone on the converted workflow.
 - **A value with `Z` or an offset** converts as written. On a `DateTime` or `DateOnly` member it gets a behaviour
   warning, because the wall-clock hour or the date may differ from what Elsa 3 showed on a non-UTC server.
