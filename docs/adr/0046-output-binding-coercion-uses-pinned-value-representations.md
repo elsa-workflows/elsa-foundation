@@ -36,7 +36,7 @@ The analysis is @FransVanEk's: the
 [A-1 outcome](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6466068155) and its
 [document](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6466075108), with tests run on
 2026-10-28. @j03y-nxxbz drafted this text from it and from his review. Rules V1 to V10 follow the analysis's
-principles P1 to P10.
+principles P1 to P10; V11 is @j03y-nxxbz's addition.
 
 **Why.** Elsa 4 already runs on one value model in practice. Every value at rest is JSON with a type label
 (`DurableValueState`), every value in flight travels in a `ValueEnvelope`, and scripts only ever see JSON. What is
@@ -99,10 +99,34 @@ Changing the copy changes nothing outside the script. Whether and how a script m
 [ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md); input-binding expressions
 never write (D-3). Where a write is allowed, it commits with the step and a fault discards it. A write of a value the
 script read is a read-modify-write under [ADR 0092](https://github.com/elsa-workflows/elsa-foundation/pull/3411).
+The copy is an overlay on the JSON-backed view of *JavaScript*: the script's changes are kept beside the original JSON,
+which stays untouched. This changes the frozen-value contract of spec 095
+(`specs/095-value-flow-redesign/contracts/expression-and-import-contract.md`, lines 105-107) and the note in ADR 0090
+that a loop item is frozen. Approving this amendment approves that change; `ScriptValueIsolationTests` changes with it.
 
 **V10. Live .NET objects in scripts are opt-in.** By default a script sees JSON and registered .NET functions that
 exchange JSON (D-5). A host may opt in to exposing objects it explicitly registers, each a transient resource for that
 attempt (V7). General access to .NET types (Jint's `AllowClr`) is never offered.
+
+**V11. A kind is a JSON shape, not a .NET type.** A variable's type is a kind from the alias registry (ADR 0035): a
+JSON representation plus validation. `DateOnly` is an ISO 8601 string, not the .NET struct with its methods. Workflow
+engineers see and use kinds, in Studio and in scripts (JavaScript, Liquid, and C# scripting once it is added). The
+.NET type exists only inside the activity input and output adapter and inside registered functions (D-5).
+- Working with a value as a .NET object, with its properties and methods, is the opt-in of V10 and never the default.
+  A .NET engineer who opts in may also register their own aliases and expose their properties and methods to scripts.
+- Code-first authors (`WorkflowBuilder.Variable<T>`) are .NET developers by definition. They may use .NET types in
+  their own code; their values are still stored as core values (V7).
+
+*Why.* Elsa has two audiences. Workflow engineers are its consumers: Studio and scripts are their front door, and they
+should not need to know .NET. .NET engineers maintain an Elsa environment and customize it through extension points.
+A company whose workflow engineers do know .NET can open those extension points, with clear documentation, but the
+default stays plain. *Dates* shows what goes wrong otherwise: Elsa 3 exposed dates as .NET `DateTime` values, so the
+same workflow behaved differently on each server.
+
+**Defaults first, extensions defined.** The default implementations are kept simple and built now: JSON values, the
+kinds, registered functions. The extension points above (the object opt-in of V10, registered aliases with properties
+and methods) are defined in this ADR but not built until a real use case asks for them. S-8 builds the default, not
+the opt-in.
 
 ### Adapter rules
 
@@ -113,7 +137,7 @@ attempt (V7). General access to .NET types (Jint's `AllowClr`) is never offered.
 | `{"customerName":…}` into a class with `CustomerName` | property stays empty, no error | Matched case-insensitively; two members that match one property fail with a diagnostic (ADR 0091 decision 2) |
 | A .NET-typed result read into the next activity's input | written camelCased, read case-sensitively, so properties can be lost (inferred) | Both directions use the same baseline copy (ADR 0091 decision 5) |
 | `"5"` into `Int32`, `"true"` into `Boolean`, `5.0` into `Int32` | refused with the defaults; `"5"` accepted where Web options are used | Refused everywhere: no text parsing or truthiness (R5) |
-| A 20-digit integer into `Int64` or `Decimal`, a 29-digit decimal into `Decimal` | exact at the input; ForEach narrows items to `long` or `double` | Exact; no adapter narrows a number unless the target type asks for it |
+| A 20-digit integer into `Int64` or `Decimal`, a 29-digit decimal into `Decimal` | exact at the input; ForEach turns every item number into a `double` (#3421, a bug that can be fixed now) | Exact; no adapter narrows a number unless the target type asks for it |
 | Upper-case GUID | accepted, written lower case | Keep, stated |
 | Dates | see *Dates* | |
 | `"01:30:00"` and `"PT1H30M"` into `TimeSpan` | accepted, refused | ISO 8601 durations are the standard and are written out; `hh:mm:ss` is still read for Elsa 3; `P1M` and `P1Y` are refused (no fixed length) |
@@ -123,7 +147,7 @@ attempt (V7). General access to .NET types (Jint's `AllowClr`) is never offered.
 | Value | Today | Rule |
 |---|---|---|
 | Integer within ±2^53 | exact | Keep |
-| Integer beyond ±2^53, or a `Decimal` with more digits than a double holds | digits lost silently, in and out | A diagnostic when such a value enters a script. A designer who needs it exact holds it as a string; exact money arithmetic goes to a .NET function (D-5) or an activity (reviewer question 4) |
+| Integer beyond ±2^53, or a `Decimal` with more digits than a double holds | digits lost on the way in, also for values the script never touches: the whole input is converted into JavaScript values up front, and Jint holds every number as a double | Values the script does not read pass through exactly. The adapter gives the script a JSON-backed view and writes untouched parts back as their original text. A number the script reads is a JavaScript number, a double (V6, stated). A designer who needs exact digits holds them as a string, and can write them out as a number with `JSON.rawJSON`; exact money arithmetic goes to a .NET function (D-5) or an activity (reviewer question 4) |
 | `0.1 + 0.2` | `0.30000000000000004` | Stated: script arithmetic is double arithmetic |
 | `2.0`, `1e21` | come back as `2`, `1e+21` | Stated: the notation may change, the number does not |
 | Dates | ISO 8601 strings | Stay strings; a JavaScript `Date` (once D-1 enables it) leaves as UTC (`…Z`) |
@@ -185,12 +209,22 @@ today. Its date-heavy scripts are already refused.
 
 ### Kinds
 
-- **One dynamic alias: `Any`,** any valid JSON value (`JsonNode` in memory, `JsonElement` at rest, ADR 0036). Today
-  dynamic data has several names: the `Object` alias, `Elsa.Any`, `Any` in tooling, and the `JsonNode`, `JsonElement`,
-  `JsonObject` and `ExpandoObject` .NET types. `JsonNode`, `JsonElement` and `JsonObject` stay .NET types an activity
-  may declare; `ExpandoObject` leaves with the HTTP body parser.
-- **`Object` is retired.** Its alias and the `Object`-to-`object` mapping go, and a definition that names `Object` reads
-  it as `Any`. This **supersedes part of spec 264**
+- **One dynamic kind, shown in Studio as JSON.** It holds any valid JSON value: an object, an array, a string, a
+  number, a boolean or null (`JsonNode` in memory, `JsonElement` at rest, ADR 0036). Its alias is `Any`; workflow
+  engineers only see the name JSON. Today dynamic data has seven names, and two of them overlap:
+  - Studio's variable type list offers `Object`, which maps to .NET `System.Object`
+    (`DefaultVariableTypeDescriptorProvider.cs:30`);
+  - the engine uses `Elsa.Any` for the same dynamic data (ForEach, BPMN, the input materializer), and about ten places
+    test for either name (`Alias is "Object" or "Elsa.Any"`);
+  - tooling says `Any`, and activities use the `JsonNode`, `JsonElement`, `JsonObject` and `ExpandoObject` .NET types.
+
+  `JsonNode`, `JsonElement` and `JsonObject` stay .NET types an activity may declare; `ExpandoObject` leaves with the
+  HTTP body parser.
+- **`Object` is retired.** `System.Object` means "any .NET object", which is the door V10 and V11 keep closed by
+  default. "Object" is also misleading as a name: in JSON it means `{}` only, while the kind holds arrays and strings
+  too. JSON names exactly what it holds, and anyone with the smallest technical background knows it. The `Object` alias
+  and its mapping to `object` go, and a definition that names `Object` reads it as `Any`. This
+  **supersedes part of spec 264**
   ([Elsa 3 workflow variables](../../specs/264-elsa3-workflow-variable-publish/spec.md)). Spec 264 converts an Elsa 3
   type that Elsa 4 does not know, and `ObjectDictionary` and `HttpHeaders`, to `Object`, and keeps an `Object`
   variable's text starting value as text. Under this amendment those become `Any`: a JSON starting value stays that
@@ -210,7 +244,7 @@ today. Its date-heavy scripts are already refused.
 
 - Matrix rows 10 (live .NET objects in scripts: V10), 19 (value model: V1, V3), 21 (exact JSON casing: ADR 0091),
   22 (binary content and secrets: *Kinds*) and 23 (XML and other formats: *Formats*), and R6 (V8).
-- The positions already on the board, joined: "complex objects are always JSON" (Joey) is V1 and V2; "keep conversion
+- The positions already on the board, joined: "complex objects are always JSON" (Joey) is V1, V2 and V11; "keep conversion
   plans, loosened" (Sipke) is V3; "objects rebuilt on each attempt" (Sipke) is V7.
 - All eight A-1 scenarios work:
   - S-a, an HTTP body changed in a script: V9;
@@ -229,19 +263,34 @@ today. Its date-heavy scripts are already refused.
 - **ADR 0091:** the serializer every adapter uses. Case-insensitive reads and the data rules are stated there.
 - **Spec 264:** superseded in part (*Kinds*).
 - **Defects found by A-1:** #3421, numbers that lose digits silently in ForEach, JavaScript and diagnostic snapshots
-  (V6).
+  (V6). The ForEach and snapshot parts are plain bugs and are fixed without waiting for this amendment. The JavaScript
+  part is fixed by the JSON-backed view (*JavaScript*). Nothing recorded decides that numbers become doubles: ADR 0036
+  chose `JsonNode` because it is lossless on numbers.
+- **Spec 095:** the frozen-value contract changes (V9).
+- **ADR 0090:** detects a change by comparing serialized values. Exact write-back of untouched values is what keeps a
+  variable that a script only read from looking changed.
+- **ADR 0036:** assumes Jint reads `JsonNode` through a `JsonElementConverter`; that converter is gone from main, and
+  the closed engine converts values itself. The JSON-backed view brings the engine back in line with its intent.
 - **Specs and issues:** S-8 is defined against this amendment. It unblocks #3196, #3202 (model part), #3194,
   #3287 (type part) and the custom-function part of #3026.
 
 ### Questions for reviewers
 
 1. @FransVanEk: does this text carry A-1 as you meant it? Two changes from your write-up: V9 no longer assumes scripts
-   may write (that is A-3), and retiring `Object` records the spec 264 supersession.
+   may write (that is A-3), and retiring `Object` records the spec 264 supersession. V11 is new (question 6).
 2. **A model version.** The analysis says the model is versioned and a saved workflow records the version. Executables
    already pin their conversion plans and expression profiles (ADR 0083), and the artifact hash covers both. This text
    proposes no separate model version. Do you see a case that needs one?
 3. **Dates for converted Elsa 3 workflows.** Refuse a date without an offset unless the source time zone is set, and
    convert it with that zone's offset when it is (*Dates*)? Or only warn?
-4. **Numbers in scripts.** A diagnostic only (as above), or should `Int64` values beyond 2^53 enter JavaScript as
-   `BigInt`, so they stay exact?
-5. @sfmskywalker: `Object` retired in favour of `Any`, with the spec 264 supersession. Agreed?
+4. **Numbers in scripts.** Pass-through exact through a JSON-backed view, and a number the script reads is a double
+   (*JavaScript*). Two limits, both from Jint 4.9.1: a number the script copies (`{ id: x.id }`) is read, so it becomes
+   a double; and a lazy array cannot be a real JavaScript array, so arrays of large numbers stay lossy unless we accept
+   an array-like view where `Array.isArray` is false. `BigInt` is no way out: `JSON.stringify` throws on it, and mixing
+   it with numbers throws. Agreed?
+5. @sfmskywalker: `Object` retired in favour of one dynamic kind, alias `Any`, shown in Studio as JSON, with the spec
+   264 supersession. Agreed? @FransVanEk asked for one generic name; Joey proposes JSON as the name workflow engineers
+   see.
+6. **V11 and defaults first.** This is @j03y-nxxbz's position: kinds instead of .NET types for workflow engineers
+   everywhere, and only the default implementations built now. If you think V11 goes too far, he accepts limiting it to
+   scripts (V10) for now. Where do you stand?
