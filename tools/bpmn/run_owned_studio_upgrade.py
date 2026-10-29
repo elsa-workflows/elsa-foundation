@@ -8,6 +8,7 @@ Write {"action":"restart"} or {"action":"finish"} to OUTPUT/command.json.
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
 import gzip
 import importlib.util
 import json
@@ -136,7 +137,7 @@ def main():
         assets = {}
         for name in ("runtime", "design"):
             backup = root / f"{label}-{name}.sqlite"
-            with sqlite3.connect((backend_root / f"{name}.db").as_uri() + "?mode=ro", uri=True) as original, sqlite3.connect(backup) as target:
+            with closing(sqlite3.connect((backend_root / f"{name}.db").as_uri() + "?mode=ro", uri=True)) as original, closing(sqlite3.connect(backup)) as target:
                 original.backup(target)
                 if target.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                     raise ValueError("The actual Studio store backup is corrupt.")
