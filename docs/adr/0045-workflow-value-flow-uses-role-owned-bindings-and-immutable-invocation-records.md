@@ -97,6 +97,9 @@ never silently become `default(T)`.
 These rules apply to native and imported workflows alike. Where a workflow needs Elsa 3 behaviour, it says so through
 a visible policy, never through where it came from.
 
+- **Scope.** These rules apply to declared members: activity inputs and workflow-request members. Inside a JSON value
+  (`Any`), a missing property and a `null` property stay distinct, because the data is stored as received (A-1 P2,
+  [ADR 0091](https://github.com/elsa-workflows/elsa-foundation/pull/3408) decisions 3 and 8).
 - **Requiredness and nullability are separate properties** of an activity input and of a workflow-request member. A
   member can be required and nullable, or optional and non-nullable.
 - **Explicit `null` is a value, not an absence.** It is accepted for every nullable target: activity inputs,
@@ -113,10 +116,19 @@ a visible policy, never through where it came from.
   - An omitted required workflow-request member is refused when the workflow instance is admitted, before the start
     checkpoint, not when a later step reads it.
 - **An undeclared name is not an omitted optional member.** Reading a value no contract declares remains an error.
-  The sentence above about missing dynamic values keeps applying to it.
+  The sentence above about missing dynamic values keeps applying to it. For names a script reads:
+  - a name written literally in the script that resolves to nothing is a publish diagnostic;
+  - a computed name (`variables[name]`, `getVariable(expr)`) that resolves to nothing at run time reads as
+    `undefined` in JavaScript, and a warning is recorded with the read marked absent. Not `null`, which would erase
+    the difference between null and missing; if the `undefined` leaves the script, the boundary rule below applies
+    visibly. In Liquid a missing value is nil, and the recorded warning carries the difference. This answers question 3
+    of the ADR 0089 amendment ([#3420](https://github.com/elsa-workflows/elsa-foundation/pull/3420)).
 - **`undefined` (D-11).** By default the JavaScript-to-workflow boundary keeps its standard materialization: a
   binding whose result is `undefined` is an error ([ADR 0083](0083-javascript-binding-grammar-is-pinned-at-publish.md)),
-  and an object property whose value is `undefined` is dropped. A workflow may select the *undefined-as-null* policy:
+  and an object property whose value is `undefined` is dropped, with a diagnostic, because a lossy conversion is
+  declared, never silent (A-1 P6). `NaN` and `Infinity` become `null`, also with a diagnostic. The JavaScript adapter
+  contract in the ADR 0046 amendment ([#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422), V8) holds
+  these rules. A workflow may select the *undefined-as-null* policy:
   - an `undefined` result materializes as `null`;
   - an `undefined`-valued object property is kept as `null`, at every depth;
   - the policy acts only at the boundary. It does not change JavaScript's own semantics, and it does not rewrite a
