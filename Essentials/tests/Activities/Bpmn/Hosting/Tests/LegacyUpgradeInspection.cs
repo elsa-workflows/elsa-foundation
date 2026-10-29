@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using Microsoft.Data.Sqlite;
 using Xunit;
 
@@ -9,6 +11,11 @@ namespace Elsa.Activities.Bpmn.Hosting.Tests;
 /// <summary>Read-only checks shared by actual saved-store host qualifications.</summary>
 internal static class LegacyUpgradeInspection
 {
+    internal static void AssertStandardHost(OwnedWorkbench host)
+    {
+        using var assembly = File.OpenRead(host.AssemblyPath); using var pe = new PEReader(assembly); var metadata = pe.GetMetadataReader();
+        Assert.DoesNotContain(metadata.TypeDefinitions, type => metadata.GetString(metadata.GetTypeDefinition(type).Name) == "BpmnRecoveryProbeFeature");
+    }
     internal static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
     internal static JsonNode Activity(JsonNode view, string node) =>
         Assert.Single(view["activities"]!.AsArray(), activity => activity!["executableNodeId"]!.GetValue<string>() == node)!;
@@ -42,4 +49,13 @@ internal static class LegacyUpgradeInspection
         Mode = SqliteOpenMode.ReadOnly,
         Pooling = false
     }.ToString());
+
+    internal static async Task BackupAsync(string source, string destination)
+    {
+        if (File.Exists(destination)) throw new IOException("An owned closed backup must not overwrite an existing input.");
+        await using var input = Read(source); await using var output = new SqliteConnection($"Data Source={destination};Pooling=False");
+        await input.OpenAsync(); await output.OpenAsync(); input.BackupDatabase(output);
+        await using var command = output.CreateCommand(); command.CommandText = "PRAGMA integrity_check";
+        Assert.Equal("ok", (string)(await command.ExecuteScalarAsync())!);
+    }
 }

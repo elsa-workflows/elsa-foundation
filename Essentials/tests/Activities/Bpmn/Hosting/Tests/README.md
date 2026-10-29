@@ -20,7 +20,7 @@ python3 tools/bpmn/qualify-hosting.py verify-upgrade \
   --manifest /tmp/elsa-bpmn-legacy-upgrade/manifest.json
 ```
 
-This qualifies only the actual partial-fork capture family. Pending parent callbacks, broadcast cohorts, multi-instance/compensation/called-control captures, other providers and actual Studio behavior require their own changed-host verification. It does not complete T030 or #2898.
+Each upgrade family qualifies its named actual captures. It does not complete T030 or #2898.
 
 The native-parent upgrade family covers six actually committed fault notifications and twelve retained native fault/cancel terminals. The pending captures restore their original combined Runtime/Design database; the terminal matrix restores its original coupled separate stores. The standard Workbench has no recovery probe. Its normal resumption pump delivers the original callback, and a second process preserves the resulting projection/source without repeating it. Sequence retains its Faulted-workflow/Running-parent disposition; an empty queue is not called parent consumption. Flowchart records its native parent fault/incident, while CompensationScope completes Compensated and resolves the child incident. These are the actual pre-writer projections, not a normalization under #3242.
 
@@ -32,7 +32,17 @@ python3 tools/bpmn/qualify-hosting.py verify-upgrade \
   --manifest /tmp/elsa-bpmn-native-parent-upgrade/manifest.json
 ```
 
-Called-workflow acknowledgments, broadcast cohorts, multi-instance/compensation/control recovery and actual Studio behavior remain separate qualification families. These native tests do not establish direct-model settlement or the real native/ETL bridge.
+The called-acknowledgment family restores the actual notice and terminal cuts after the caller committed acceptance but before the sender recorded delivery. The standard pump must acknowledge the original source under a fresh claim without repeating the caller's work. The existing checked EF reader verifies the exact source transport, full pins, committed inbox ordinal and ordinary terminal receipt against consistent stopped backups. Another process preserves the recovered views; the original finish/warning Events complete the pair, and a third process preserves the final views. Timestamp comparisons preserve exact instants while permitting the stored UTC offset rendering.
+
+```sh
+python3 tools/bpmn/qualify-hosting.py resume-upgrade --family called-ack \
+  --manifest specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json \
+  --output /tmp/elsa-bpmn-called-ack-upgrade
+python3 tools/bpmn/qualify-hosting.py verify-upgrade \
+  --manifest /tmp/elsa-bpmn-called-ack-upgrade/manifest.json
+```
+
+Broadcast cohorts, active multi-instance/compensation/control recovery and actual Studio behavior remain separate qualification families. These legacy tests do not establish new direct-model settlement or the real native/ETL bridge.
 
 ```sh
 dotnet test Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj -c Release

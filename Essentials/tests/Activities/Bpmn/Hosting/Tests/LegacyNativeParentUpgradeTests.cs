@@ -1,6 +1,4 @@
 using System.IO.Compression;
-using System.Reflection.Metadata;
-using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -209,11 +207,6 @@ public sealed class LegacyNativeParentUpgradeTests
     private static string Fixture(string relative, string? copied = null) => Environment.GetEnvironmentVariable("ELSA_BPMN_LEGACY_MATRIX_DIRECTORY") is { } root
         ? Path.Combine(root, relative) : Path.Combine(AppContext.BaseDirectory, "Fixtures", copied ?? relative);
 
-    private static void AssertStandardHost(OwnedWorkbench host)
-    {
-        using var assembly = File.OpenRead(host.AssemblyPath); using var pe = new PEReader(assembly); var metadata = pe.GetMetadataReader();
-        Assert.DoesNotContain(metadata.TypeDefinitions, type => metadata.GetString(metadata.GetTypeDefinition(type).Name) == "BpmnRecoveryProbeFeature");
-    }
 
     private static void VerifyAsset(JsonNode manifest, string name, string path) =>
         Assert.Equal(Assert.Single(manifest["assets"]!.AsArray(), asset => asset!["path"]!.GetValue<string>() == name)!["sha256"]!.GetValue<string>(), Hash(File.ReadAllBytes(path)));

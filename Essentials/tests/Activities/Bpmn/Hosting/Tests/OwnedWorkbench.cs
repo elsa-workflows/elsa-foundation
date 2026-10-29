@@ -26,6 +26,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
     public string RuntimeDatabase => Path.Combine(ContentRoot, "runtime.db");
     public string DesignDatabase => designSharesRuntime ? RuntimeDatabase : Path.Combine(ContentRoot, "design.db");
     internal string AssemblyPath => Metadata("BpmnHostingWorkbenchAssembly");
+    internal string ReaderAssemblyPath => Metadata("BpmnHostingReaderAssembly");
 
     public static async Task<OwnedWorkbench> StartAsync(bool directBpmn = false, bool runtimeOnly = false,
         string? legacySnapshotDirectory = null, string? runtimeSnapshotPath = null, double? recoverySweepSeconds = null,

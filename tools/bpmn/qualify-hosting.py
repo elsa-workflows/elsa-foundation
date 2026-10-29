@@ -408,6 +408,8 @@ def verify_upgrade(path: Path) -> dict:
     manifest = json.loads(path.read_text())
     if manifest.get("kind") == "actual-legacy-native-parent-upgrade":
         return verify_native_parent_upgrade(path)
+    if manifest.get("kind") == "actual-legacy-called-ack-upgrade":
+        return verify_called_ack_upgrade(path)
     if manifest.get("schemaVersion") != 1 or manifest.get("kind") != "actual-legacy-partial-fork-upgrade":
         raise ValueError("Unknown upgrade manifest.")
     root = path.parent
@@ -504,6 +506,8 @@ def verify_upgrade(path: Path) -> dict:
 def resume_upgrade(args) -> dict:
     if args.family == "native-parents":
         return resume_native_parent_upgrade(args)
+    if args.family == "called-ack":
+        return resume_called_ack_upgrade(args)
     baseline = args.manifest.resolve(strict=True)
     verify_capture(baseline)
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True, timeout=5).strip()
@@ -723,6 +727,146 @@ def resume_native_parent_upgrade(args) -> dict:
     write_json(output / "manifest.json", manifest); return verify_native_parent_upgrade(output / "manifest.json")
 
 
+def verify_called_ack_inputs(path: Path) -> dict:
+    matrix = json.loads(path.read_text())
+    if (matrix.get("kind") != "actual-pre-writer-baseline-matrix" or matrix.get("gateAComplete") is not True or
+            matrix.get("frozenAuthoringFingerprint") != FROZEN):
+        raise ValueError("Called acknowledgment recovery requires the actual frozen pre-writer matrix.")
+    names = {"called-ack/" + cut + suffix for cut in ("notice", "terminal")
+        for suffix in ("-held-api.json", "-marker.json", "-held.sqlite.gz")}
+    selected = {asset["path"]: asset["sha256"] for asset in matrix["assets"] if asset["path"] in names}
+    if set(selected) != names or len([asset for asset in matrix["assets"] if asset["path"] in names]) != len(names):
+        raise ValueError("The actual called acknowledgment inputs are incomplete or duplicated.")
+    for name, sha in selected.items():
+        if digest(evidence_file(path.parent, name)) != sha: raise ValueError("An original called acknowledgment input differs: " + name)
+    return selected
+
+
+def verify_called_ack_upgrade(path: Path) -> dict:
+    manifest = json.loads(path.read_text()); root = path.parent
+    if manifest.get("schemaVersion") != 1 or manifest.get("kind") != "actual-legacy-called-ack-upgrade":
+        raise ValueError("Unknown called acknowledgment upgrade evidence.")
+    names = {"legacy-called-ack/process.json", "frozen-contract.json"}
+    names.update("legacy-called-ack/" + cut + "-" + phase + ".sqlite.gz"
+        for cut in ("notice", "terminal") for phase in ("recovered", "finished"))
+    declared = {asset["path"]: asset for asset in manifest["assets"]}
+    if set(declared) != names or len(declared) != len(manifest["assets"]):
+        raise ValueError("The called acknowledgment evidence is incomplete or duplicated.")
+    for name, asset in declared.items():
+        if digest(evidence_file(root, name)) != asset["sha256"]: raise ValueError("A called acknowledgment asset differs.")
+    process = json.loads(evidence_file(root, "legacy-called-ack/process.json").read_text()); source = manifest.get("sourceRevision", "")
+    if (not re.fullmatch(r"[0-9a-f]{40}", source) or process.get("sourceRevision") != source or
+            process.get("formatVersion") != 1 or process.get("kind") != manifest["kind"] or
+            process.get("testOnlyRecoveryProbePresent") is not False or
+            process.get("baselineManifestSha256") != manifest.get("baselineManifestSha256") or
+            not process.get("reader", {}).get("productVersion", "").endswith("+" + source)):
+        raise ValueError("The called acknowledgment upgrade lacks its standard host/checked reader source binding.")
+    cases = process["observations"]
+    if len(cases) != 2 or {case["cut"] for case in cases} != {"notice", "terminal"}:
+        raise ValueError("Both actual notice and terminal acknowledgment cuts are required.")
+    key = lambda value: base64.b64encode(value.encode("utf-16-le", errors="surrogatepass")).decode()
+    for case in cases:
+        cut = case["cut"]; original = case["original"]; marker = case["marker"]
+        if (not re.fullmatch(r"[0-9a-f]{40}", case.get("baselineSourceRevision", "")) or case["baselineSourceRevision"] == source or
+                case["inputGzipSha256"] != manifest["baselineAssets"].get("called-ack/" + cut + "-held.sqlite.gz") or
+                case["baselineApiSha256"] != manifest["baselineAssets"].get("called-ack/" + cut + "-held-api.json") or
+                case["markerSha256"] != manifest["baselineAssets"].get("called-ack/" + cut + "-marker.json") or
+                not any(binary["file"] == "Elsa.Workbench.dll" and binary["productVersion"].endswith("+" + source) for binary in case["binaries"]) or
+                len({case["firstProcessId"], case["secondProcessId"], case["thirdProcessId"]}) != 3):
+            raise ValueError("The actual called cut lost its baseline, host or three-process identity.")
+        if (marker["phase"] != "called-control-before-acknowledgment" or
+                marker["providerEvent"] != "ActualIntentDispatcherReturnedBeforeDeliveryResult" or
+                marker["transport"]["batch"]["ordinal"] != (0 if cut == "notice" else 1)):
+            raise ValueError("The actual dispatcher acknowledgment cut differs.")
+        for phase in ("recovered", "finished"):
+            api = case[phase + "Api"]; proof = case[phase + "Proof"]; snapshot = case[phase + "Snapshot"]
+            checked = proof["calledWorkflow"]; facts = checked["facts"]; receipt = api["cases"][0]; completed_pair = cut == "terminal" or phase == "finished"
+            if (proof.get("providerChecked") is not True or proof.get("readOnly") is not True or
+                    proof["snapshotSha256"] != snapshot["databaseSha256"] or checked.get("exactCommittedAcceptanceVerified") is not True or
+                    checked.get("exactPreAcknowledgmentSourceVerified") is not True or checked["sourceIntentFingerprint"] != marker["intentFingerprint"] or
+                    checked["source"]["outboxItemId"] != marker["sourceOutboxItemId"]):
+                raise ValueError("The upgraded cut has no exact checked acceptance/source proof.")
+            source_item = checked["source"]
+            if (source_item["status"] != 2 or source_item["deliveryFencingToken"] <= marker["fencingToken"] or
+                    source_item["deliveringOwnerId"] is not None or source_item["deliveredAt"] is None):
+                raise ValueError("The original source has not been acknowledged by a fresh owner.")
+            transport = source_item["intent"]["payload"]
+            if cut == "terminal": transport = transport["result"]["control"]
+            if transport != marker["transport"]: raise ValueError("The original called transport changed.")
+            for name in ("parent", "child"):
+                view = receipt[name]; before = original[name]["instance"]; observed = view["instance"]; state = facts[name]
+                if (observed["workflowExecutionId"] != before["workflowExecutionId"] or state["workflowExecutionId"] != before["workflowExecutionId"] or
+                        any(observed[field] != before[field] or state["pinnedExecutable"][field] != before[field]
+                            for field in ("artifactId", "artifactHash", "artifactVersion", "definitionId", "definitionVersionId")) or view["incidents"]):
+                    raise ValueError("The actual called execution changed its complete pin or acquired incidents.")
+                expected = "Completed" if phase == "finished" or name == "child" and completed_pair else "Running"
+                if observed["status"] != expected or state["status"] != (3 if expected == "Completed" else 1):
+                    raise ValueError("The actual called cut changed its expected workflow outcome.")
+            calls = [item for item in facts["parentActivities"] if item["execution"]["executableNodeId"] == "node-call"]
+            if len(calls) != 1: raise ValueError("The called invocation was repeated.")
+            call = calls[0]; inbox = call["childControlInbox"]
+            if (inbox["nextOrdinal"] != (2 if completed_pair else 1) or inbox["isTerminalConsumed"] != completed_pair or inbox["pending"] or
+                    inbox["target"]["parentExecutable"] != facts["parent"]["pinnedExecutable"]):
+                raise ValueError("The committed caller inbox does not prove exact acceptance.")
+            if len([item for item in facts["parentActivities"] if item["execution"]["executableNodeId"] == "node-normal"]) != (1 if completed_pair else 0):
+                raise ValueError("The actual normal successor was lost or repeated.")
+            with checked_upgrade_snapshot(root, "legacy-called-ack", snapshot) as connection:
+                verify_retained_native_material(connection, case)
+                rows = connection.execute("SELECT Status, ContentJson FROM elsa_runtime_post_commit_outbox WHERE OutboxItemId = ?", (key(marker["sourceOutboxItemId"]),)).fetchall()
+                if len(rows) != 1: raise ValueError("The physical original acknowledgment source disappeared.")
+                physical_source = json.loads(rows[0][1])
+                if (rows[0][0] != 2 or physical_source["status"] != "Delivered" or physical_source["deliveryFencingToken"] != source_item["deliveryFencingToken"] or
+                        physical_source["deliveredAt"] != source_item["deliveredAt"] or physical_source["intent"]["payload"] != source_item["intent"]["payload"]):
+                    raise ValueError("The physical original acknowledgment source differs from checked delivery.")
+                rows = connection.execute("SELECT ContentJson FROM elsa_runtime_activity_execution_state WHERE ActivityExecutionId = ?", (key(call["invocationId"]),)).fetchall()
+                if len(rows) != 1: raise ValueError("The physical actual caller disappeared.")
+                physical_call = json.loads(rows[0][0]); stored = physical_call["childControlInbox"]
+                if (stored["nextOrdinal"] != inbox["nextOrdinal"] or stored["isTerminalConsumed"] != inbox["isTerminalConsumed"] or stored["pending"] or
+                        stored["target"]["parentExecutable"] != {field: key(value) for field, value in inbox["target"]["parentExecutable"].items()}):
+                    raise ValueError("The physical caller inbox does not prove exact consumption.")
+                for name in ("parent", "child"):
+                    state = facts[name]; rows = connection.execute("SELECT Status, ContentJson FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId = ?", (key(state["workflowExecutionId"]),)).fetchall()
+                    if len(rows) != 1 or rows[0][0] != state["status"] or json.loads(rows[0][1])["pinnedExecutable"] != {field: key(value) for field, value in state["pinnedExecutable"].items()}:
+                        raise ValueError("The physical caller/callee outcome or full pin differs.")
+            if phase == "finished" and (case["warningDelivery"]["startedCount"] != 0 or case["warningDelivery"]["resumedCount"] != 1 or
+                    cut == "notice" and (case["childDelivery"]["startedCount"] != 0 or case["childDelivery"]["resumedCount"] != 1)):
+                raise ValueError("The original called pair did not finish through its normal Events.")
+    frozen = json.loads(evidence_file(root, "frozen-contract.json").read_text())
+    notice = next(case for case in cases if case["cut"] == "notice")
+    if (frozen.get("sourceRevision") != source or frozen.get("oracleSha256") != FROZEN or
+            frozen.get("matchesFrozenFingerprint") is not True or frozen.get("immutableSnapshot") is not True or
+            frozen.get("closedSnapshotSha256") != notice["finishedSnapshot"]["databaseSha256"]):
+        raise ValueError("The upgraded called Design store has no frozen authoring verification.")
+    return {"actualCalledAcknowledgmentCutsRecovered": 2, "wholeStoresVerified": 4, "exactCommittedAcceptanceVerified": True,
+        "frozenAuthoringPreserved": True,
+        "sourceRevision": source, "allLegacyFamiliesRecovered": False, "studioAcceptanceProved": False, "directModelSettlementProved": False}
+
+
+def resume_called_ack_upgrade(args) -> dict:
+    baseline = args.manifest.resolve(strict=True); inputs = verify_called_ack_inputs(baseline)
+    source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True, timeout=5).strip()
+    if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True, timeout=5).strip():
+        raise ValueError("Commit the qualification source before recording exact-source upgrade evidence.")
+    output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False); env = os.environ.copy()
+    env.update(ELSA_BPMN_LEGACY_MATRIX_DIRECTORY=str(baseline.parent), ELSA_BPMN_HOST_EVIDENCE_DIRECTORY=str(output), ELSA_BPMN_HOST_SOURCE_REVISION=source)
+    command = ["dotnet", "test", str(REPO / "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"),
+        "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyCalledAcknowledgmentUpgradeTests",
+        "--logger", "trx;LogFileName=legacy-called-ack-upgrade.trx"]
+    if args.artifacts_path is not None: command += ["--artifacts-path", str(args.artifacts_path.resolve())]
+    with (output / "run.log").open("w") as log:
+        subprocess.run(command, cwd=REPO, env=env, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=3600)
+    if inputs != verify_called_ack_inputs(baseline): raise ValueError("The called upgrade changed an original input.")
+    with tempfile.TemporaryDirectory(prefix="elsa-called-upgraded-design-") as temporary:
+        database = Path(temporary) / "design.sqlite"; database.write_bytes(gzip.decompress((output / "legacy-called-ack/notice-finished.sqlite.gz").read_bytes()))
+        subprocess.run([sys.executable, str(REPO / "e2e-tests/bpmn/verify_published_contracts.py"), "--database", str(database), "--source-revision", source,
+            "--closed-snapshot", "--output", str(output / "frozen-contract.json")], check=True, timeout=60)
+    paths = ["legacy-called-ack/process.json", "frozen-contract.json"] + ["legacy-called-ack/" + cut + "-" + phase + ".sqlite.gz"
+        for cut in ("notice", "terminal") for phase in ("recovered", "finished")]
+    manifest = {"schemaVersion": 1, "kind": "actual-legacy-called-ack-upgrade", "sourceRevision": source,
+        "baselineManifestSha256": digest(baseline), "baselineAssets": inputs, "assets": [{"path": name, "sha256": digest(output / name)} for name in paths]}
+    write_json(output / "manifest.json", manifest); return verify_called_ack_upgrade(output / "manifest.json")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     phases = parser.add_subparsers(dest="phase", required=True)
@@ -736,7 +880,7 @@ def main() -> int:
     upgrade.add_argument("--manifest", type=Path, required=True)
     upgrade.add_argument("--output", type=Path, required=True)
     upgrade.add_argument("--artifacts-path", type=Path)
-    upgrade.add_argument("--family", choices=("partial-forks", "native-parents"), default="partial-forks")
+    upgrade.add_argument("--family", choices=("partial-forks", "native-parents", "called-ack"), default="partial-forks")
     verified_upgrade = phases.add_parser("verify-upgrade")
     verified_upgrade.add_argument("--manifest", type=Path, required=True)
     args = parser.parse_args()

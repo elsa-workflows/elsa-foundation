@@ -2,6 +2,7 @@
   <PropertyGroup>
     <IsTestProject>true</IsTestProject>
     <WorkbenchProject>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../../../../../apps/Elsa.Workbench/Elsa.Workbench.csproj'))</WorkbenchProject>
+    <SnapshotReaderProject>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../../../../../../tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj'))</SnapshotReaderProject>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
@@ -12,6 +13,7 @@
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <ProjectReference Include="../../../../../src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj" />
     <ProjectReference Include="../../../../../apps/Elsa.Workbench/Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../../../tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
   <ItemGroup>
     <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json"
@@ -24,6 +26,8 @@
           Link="Fixtures/legacy-native-terminal-design.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/native-parent-pending/*-api.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/native-parent-pending/*-marker.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/native-parent-pending/*.sqlite.gz"
           Link="Fixtures/native-parent-pending/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/called-ack/*-held-api.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/called-ack/*-marker.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/called-ack/*-held.sqlite.gz"
+          Link="Fixtures/called-ack/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/manifest.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/cases.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/runtime.sqlite;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/design.sqlite"
           Link="Fixtures/legacy-partial-forks/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
@@ -32,7 +36,14 @@
     <MSBuild Projects="$(WorkbenchProject)" Targets="GetTargetPath" Properties="Configuration=$(Configuration)" BuildInParallel="false">
       <Output TaskParameter="TargetOutputs" ItemName="BpmnHostingWorkbenchOutput" />
     </MSBuild>
+    <MSBuild Projects="$(SnapshotReaderProject)" Targets="GetTargetPath" Properties="Configuration=$(Configuration)" BuildInParallel="false">
+      <Output TaskParameter="TargetOutputs" ItemName="BpmnHostingSnapshotReaderOutput" />
+    </MSBuild>
     <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>BpmnHostingReaderAssembly</_Parameter1>
+        <_Parameter2>@(BpmnHostingSnapshotReaderOutput)</_Parameter2>
+      </AssemblyAttribute>
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
         <_Parameter1>BpmnHostingWorkbenchAssembly</_Parameter1>
         <_Parameter2>@(BpmnHostingWorkbenchOutput)</_Parameter2>
