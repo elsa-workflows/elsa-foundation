@@ -8,6 +8,7 @@ The resulting manifest contains only relative evidence paths and binary/source i
 from __future__ import annotations
 
 import argparse
+import base64
 from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 import gzip
@@ -479,9 +480,12 @@ def verify_upgrade(path: Path) -> dict:
                     if applied != process["migrated"]:
                         raise ValueError("The upgraded store's applied migrations disagree with their receipt.")
                     for case in observations:
+                        # The EF physical index uses lossless UTF-16 keys and the unchanged native status enum.
+                        execution_key = base64.b64encode(case["executionId"].encode("utf-16-le", errors="surrogatepass")).decode()
+                        artifact_key = base64.b64encode(case["completed"]["instance"]["artifactId"].encode("utf-16-le", errors="surrogatepass")).decode()
                         rows = connection.execute("SELECT Status, ArtifactId FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId = ?",
-                            (case["executionId"],)).fetchall()
-                        if rows != [("Completed", case["completed"]["instance"]["artifactId"])]:
+                            (execution_key,)).fetchall()
+                        if rows != [(3, artifact_key)]:
                             raise ValueError("The final physical workflow row disagrees with its completed API observation.")
     frozen = json.loads(evidence_file(root, "frozen-contract.json").read_text())
     if (frozen.get("sourceRevision") != source or frozen.get("oracleSha256") != FROZEN or
