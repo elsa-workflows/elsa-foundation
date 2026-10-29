@@ -193,18 +193,26 @@ rule is withdrawn. The withdrawn design for such a capability (ADR 0088 draft, P
 
 *Why.* Elsa 4 resumes from committed state, not by replaying history, so an expression does not have to produce the
 same value twice. What a user relies on is the execution contract (D-2): a recorded step never runs again, recovery
-runs forward from the last recorded point, and a re-run is a new execution with new values. Idempotency of external
-effects belongs to the workflow designer; the engine supplies stable invocation identities to build idempotency keys
-from. §3 already provides the part that matters here: a committed input snapshot is reused on retry and resumption,
+runs forward from the last recorded point, and a re-run is a new execution with new values, whether it starts at the
+beginning or from a point midway (an activity rescheduled or scheduled through a runtime alteration,
+[ADR 0049](0049-runtime-alterations-use-snapshotted-atomic-jobs.md)). History is never rewritten. That a midway re-run
+reads fresh inputs is decision 8 of ADR 0092 ([#3411](https://github.com/elsa-workflows/elsa-foundation/pull/3411));
+today's code still copies the old input snapshot, which spec S-10 changes. Idempotency of external effects belongs to
+the workflow designer; the engine supplies stable invocation identities to build idempotency keys from. Around an
+external effect the engine commits right before and right after it, so the effect lies between two recorded points.
+This sentence states the guarantee only: how the engine provides it is the D-2 details amendment of §3, ADR 0032 and
+ADR 0020, drafted by @sfmskywalker (see *Follow-ups* below). §3 already provides the part that matters here: a committed input snapshot is reused on retry and resumption,
 so a value an expression produced, once committed, does not change.
 
 - **D-1: clock, randomness and GUIDs.** Input-binding expressions and scripts (RunJavaScript) may read the current
   time, generate random values and create GUIDs.
-  - Evaluators run in UTC with the invariant culture. The current time comes from the host's `TimeProvider`, so tests
-    can control it.
-  - UTC is the engine's clock, not a restriction on what a workflow stores: a time with its offset
-    (`DateTimeOffset`) keeps that offset (ADR 0046 amendment, *Dates*,
-    [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422)).
+  - Evaluators run in UTC with the invariant culture. The current time comes from an injectable clock, so tests can
+    control it; spec 095 names the .NET type.
+  - UTC is the engine's clock, not a restriction on what a workflow stores. A time with its offset
+    (`DateTimeOffset`) keeps that offset, and a workflow may store an IANA time zone ID (for example
+    `Europe/Amsterdam`) and convert explicitly with a built-in date helper. The ADR 0046 amendment, *Dates*
+    ([#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422)), owns every date and time-zone rule; S-1
+    defines the helpers.
   - The engine provides built-in helpers for dates and GUIDs. Elsa 3 functions for the same purpose, such as
     `newGuid()` and `new Date()`, convert directly, and their names alone never cause a refusal.
   - An evaluation that was never durably recorded may produce different values when it runs again. A deliberately
@@ -238,7 +246,8 @@ so a value an expression produced, once committed, does not change.
 - **ADR 0083 and spec 095's expression contract:** a new capability-profile name or version. `binding-pure-v1` still
   forbids time and randomness and is replaced there. The function effect profiles of spec 095 (R115 to R119) go with
   it (D-6), in the same amendment ([#3390](https://github.com/elsa-workflows/elsa-foundation/pull/3390)).
-- **The D-2 details of §3 and ADR 0032:**
+- **The D-2 details of §3, ADR 0032 and ADR 0020** (@sfmskywalker). They define how the engine keeps the guarantee
+  stated in *Why*, that it commits right before and right after an external effect:
   - a stable identity for an input evaluation that may have effects;
   - the durability boundary around it;
   - a review of the issue #977 amendment, whose re-materialized snapshot is said to recompute "deterministically" on
