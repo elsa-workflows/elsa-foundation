@@ -1080,6 +1080,13 @@ def verify_controls_upgrade(path: Path) -> dict:
         escalations = stage["escalationsProof"]["calledWorkflows"]; concurrent = stage["concurrentProof"]["calledWorkflows"]; compensation = stage["compensationProof"]["compensation"]
         if len(escalations) != 6 or {(case["kind"], case["interrupting"]) for case in escalations} != {(kind, policy) for kind in ("RunningEscalation", "TerminalEscalation", "SignalAndFailure") for policy in (False, True)}:
             raise ValueError("The six original escalation policies are incomplete.")
+        for case in escalations:
+            if case.get("exactCapabilityAndInboxVerified") is not True or case.get("truthfulChildAndCancellationVerified") is not True: raise ValueError("Sender success does not replace checked capability and committed control consumption.")
+            failure = case["kind"] == "SignalAndFailure"; interrupting = case["interrupting"]
+            parent_status = 4 if failure and not interrupting else 1 if index == 0 else 3
+            child_status = 4 if failure else 5 if case["kind"] == "RunningEscalation" and interrupting else 1 if case["kind"] == "RunningEscalation" and index == 0 else 3
+            if case["parent"]["status"] != parent_status or case["child"]["status"] != child_status or len(case["parentIncidents"]) != (1 if failure and not interrupting else 0) or len(case["childIncidents"]) != (1 if failure else 0):
+                raise ValueError("The truthful authored-failure/cancellation projection changed.")
         if len(concurrent) != 2 or {case["interrupting"] for case in concurrent} != {False, True}: raise ValueError("Both same-binding sibling policies are required.")
         for case in concurrent:
             if case.get("exactSameBindingSecondSemanticSelectionVerified") is not True: raise ValueError("The actual second semantic token selection is unproved.")
