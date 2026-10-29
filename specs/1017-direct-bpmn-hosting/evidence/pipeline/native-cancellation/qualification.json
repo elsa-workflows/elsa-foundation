@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "78b1e582793d6e76410bc357aa55c687bc3e8e1d",
+  "actualJourneys": 1,
+  "workbenchProcesses": 3,
+  "ownedHttpFixtureProcesses": 1,
+  "wholeStores": 6,
+  "rawAssets": 19,
+  "manifestSha256": "efca925589a7ec802de154f06e70c5736855ee5e568761920f4418d7132eb5dd",
+  "originalBaselineAssetsUnchanged": 104,
+  "checks": [
+    {
+      "name": "actual native CancelWorkflow to ETL/direct BPMN recovery",
+      "passed": 1,
+      "skipped": 0,
+      "logSha256": "2c4246eab41b68f7786c4e5d898faa688c3408de37ec8e5b6fa2c8b194659d2e"
+    },
+    {
+      "name": "portable comparisons and rehashed corrupt-copy controls for all four ETL recovery/cancellation families",
+      "passed": 21,
+      "skipped": 0,
+      "logSha256": "2b298fc8be0119fab78c2dc576a3ee6d5d169ca9bc74b5b99711463f2c17abff"
+    }
+  ],
+  "observedCancellation": {
+    "origin": "normal native CancelWorkflow alteration plan after process-loss recovery",
+    "etlStatus": "cancelled",
+    "nativeWorkflowStatus": "Cancelled",
+    "bpmnResultStatus": "Cancelled",
+    "acceptedPhysicalHttpRecords": 2,
+    "outstandingRecords": 0,
+    "outstandingBytes": 0,
+    "etlCancelAndModelResultOwnedBySameCheckpoint": true,
+    "deliveredEtlCancelPayloadMatchesFrozenInvocation": true,
+    "etlResultDisposition": "ProvenParentTerminal",
+    "modelInputReceiptBeforeResultAcknowledgment": true,
+    "observedAfterOriginalRetryDeadlineAtUtc": "2026-10-29T14:20:09.321822+00:00"
+  },
+  "productionSemanticsChanged": false,
+  "adoptedMain": "6ad81f7c7",
+  "scopeLimits": [
+    "Native-worker-originated cancellation into one actual ETL run, with native result delivery into direct BPMN, on SQLite / the built-in single-node actor only.",
+    "The model-to-worker cancellation producer, cancellation-before-worker-admission and pending cancellation/result crashes remain open.",
+    "RunBpmn ETL embedding, held-fault retry, additional fault/race/provider acceptance and final affected-source upgrade/Studio remain open.",
+    "Prior receipts retain their own sources; T035/T039/T040 and broader issue/program acceptance remain incomplete.",
+    "Full-PR rounds0 of6; required CI and protected merge gates remain separate."
+  ],
+  "ownedJourneyChildrenStopped": 4
+}

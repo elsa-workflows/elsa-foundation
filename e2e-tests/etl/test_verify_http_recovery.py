@@ -168,4 +168,43 @@ class ActualDirectPipelineCancellationControls(_ActualRecoveryControls):
         with self.assertRaisesRegex(ValueError,"exact typed ETL consumption receipt"):self.verify()
 
 
+class ActualNativeWorkerCancellationControls(_ActualRecoveryControls):
+    evidence=EVIDENCE.parent/"native-cancellation"
+
+    def test_actual_native_cancel_reaches_etl_without_claiming_a_model_cancel_producer(self):
+        result=self.verify();self.assertEqual(6,result["wholeStoresVerified"])
+        self.assertTrue(result["nativeWorkerOriginatedCancellationProved"])
+        self.assertFalse(result["pipelineOriginatedCancellationProved"]);self.assertFalse(result["modelToWorkerCancellationProved"])
+        self.assertFalse(result["runBpmnEtlIntegrationProved"]);self.assertFalse(result["modelHeldFaultRetryProved"])
+        self.assertEqual(2,result["actualReferenceJourneys"][0]["physicalOutputRecords"])
+
+    def test_a_cancelled_native_header_cannot_replace_the_actual_etl_cancel_source(self):
+        def remove(connection):
+            for identity,raw in connection.execute("SELECT OutboxItemId,ContentJson FROM elsa_runtime_post_commit_outbox").fetchall():
+                if json.loads(raw)["intent"]["kind"]==etl.key("Elsa.Etl.Cancel.v1"):
+                    connection.execute("DELETE FROM elsa_runtime_post_commit_outbox WHERE OutboxItemId=?",(identity,))
+        self.change_store("native-cancel",remove)
+        with self.assertRaisesRegex(ValueError,"actual owed ETL cancel source"):self.verify()
+
+    def test_native_cancel_cannot_redirect_the_frozen_etl_return_address(self):
+        def foreign(connection):
+            for identity,raw in connection.execute("SELECT OutboxItemId,ContentJson FROM elsa_runtime_post_commit_outbox").fetchall():
+                value=json.loads(raw)
+                if value["intent"]["kind"]==etl.key("Elsa.Etl.Cancel.v1"):
+                    value["intent"]["payload"]["resultAddress"]["bookmarkId"]="u16:"+etl.key("foreign-wait")
+                    connection.execute("UPDATE elsa_runtime_post_commit_outbox SET ContentJson=? WHERE OutboxItemId=?",(json.dumps(value),identity))
+        self.change_store("native-cancel",foreign)
+        with self.assertRaisesRegex(ValueError,"exact ETL address or same-checkpoint result responsibility"):self.verify()
+
+    def test_native_cancel_and_model_result_must_belong_to_the_same_terminal_checkpoint(self):
+        def foreign(connection):
+            for identity,raw in connection.execute("SELECT OutboxItemId,ContentJson FROM elsa_runtime_post_commit_outbox").fetchall():
+                value=json.loads(raw)
+                if value["intent"]["kind"]==etl.key("Elsa.Etl.Cancel.v1"):
+                    value["outboxItemId"]=etl.key("foreign-checkpoint:etl-cancel:"+"x"*64)
+                    connection.execute("UPDATE elsa_runtime_post_commit_outbox SET ContentJson=? WHERE OutboxItemId=?",(json.dumps(value),identity))
+        self.change_store("native-cancel",foreign)
+        with self.assertRaisesRegex(ValueError,"exact ETL address or same-checkpoint result responsibility"):self.verify()
+
+
 if __name__=="__main__":unittest.main()
