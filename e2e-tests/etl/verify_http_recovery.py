@@ -896,9 +896,9 @@ def verify(path):
                 result["outstandingRecords"]!=0 or result["outstandingBytes"]!=0 or len(rows)!=2 or any(item["owedBatch"] is not None for item in rows) or
                 not cancelling and not technical and any(not item["http"]["exhausted"] or item["http"]["pageSequence"]!=1 for item in rows)):raise ValueError("The actual ETL terminal or partition accounting differs.")
         if technical:
-            failed=[r['http']['fetch'] for r in rows if r['http']['fetch'] is not None]
+            failed=[r['http']['fetch'] for r in rows if r['partitionOrdinal']==1]
             if (result['terminalResult']['diagnostic']['code']!='etl.snapshot-read-failed' or len(failed)!=1 or failed[0]!=retry):
-                raise ValueError('The actual terminal source rejection lost its retained HTTP retry state.')
+                raise ValueError('The actual snapshot fault lost its original waiting HTTP retry state.')
         if business_error and result["terminalResult"]["diagnostic"]["code"]!="etl.rows-rejected":raise ValueError("The actual ETL business-error key differs.")
         if wire["overflow"] or before_wire["overflow"]:raise ValueError("The physical HTTP observations exceeded their bounds.")
         earlier=[item for item in before_wire["requests"] if item.get("shard")=="shard-b"];later=[item for item in wire["requests"] if item.get("shard")=="shard-b"]

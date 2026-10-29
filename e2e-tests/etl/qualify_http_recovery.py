@@ -648,7 +648,7 @@ def main():
             raise ValueError("The real RunEtl activity did not preserve its typed terminal outcome.")
         if args.technical_fault:
             incident,=native_view['incidents']
-            failed=[r['http']['fetch'] for r in rows if r['http']['fetch'] is not None]
+            failed=[r['http']['fetch'] for r in rows if r['partitionOrdinal']==1]
             if (incident['activityExecutionId']!=etl_activity['activityExecutionId'] or incident['status']!='Blocking' or
                     incident['failureType']!='ActivityReturnedFault' or incident['resolutionOutcome']['actionKind']!='FaultWorkflow' or
                     result['terminalResult']['diagnostic']['code']!='etl.snapshot-read-failed' or len(failed)!=1 or failed[0]!=retry):
