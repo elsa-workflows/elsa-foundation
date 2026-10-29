@@ -70,6 +70,8 @@ def main():
     for source, target in ((backend_source, backend_root), (studio_source, studio_root)):
         for name in ("appsettings.json", "appsettings.Development.json", "shells.json"):
             shutil.copyfile(source / name, target / name)
+        if (source / "nuplane-management.json").exists():
+            shutil.copyfile(source / "nuplane-management.json", target / "nuplane-management.json")
         (target / "packages").mkdir()
     backend_url = f"http://127.0.0.1:{free_port()}"
     studio_url = f"http://127.0.0.1:{free_port()}"
