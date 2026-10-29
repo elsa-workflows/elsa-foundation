@@ -100,7 +100,9 @@ Changing the copy changes nothing outside the script. Whether and how a script m
 never write (D-3). Where a write is allowed, it commits with the step and a fault discards it. A write of a value the
 script read is a read-modify-write under [ADR 0092](https://github.com/elsa-workflows/elsa-foundation/pull/3411).
 The copy is an overlay on the JSON-backed view of *JavaScript*: the script's changes are kept beside the original JSON,
-which stays untouched. This changes the frozen-value contract of spec 095
+which stays untouched. Where a write is allowed, a change the overlay recorded is the script's explicit write of that
+variable (ADR 0090 amendment, [#3425](https://github.com/elsa-workflows/elsa-foundation/pull/3425), C2), and it is written back as the original JSON plus the change (C3), so
+untouched members keep their text. This changes the frozen-value contract of spec 095
 (`specs/095-value-flow-redesign/contracts/expression-and-import-contract.md`, lines 105-107) and the note in ADR 0090
 that a loop item is frozen. Approving this amendment approves that change; `ScriptValueIsolationTests` changes with it.
 
@@ -267,12 +269,12 @@ today. Its date-heavy scripts are already refused.
   part is fixed by the JSON-backed view (*JavaScript*). Nothing recorded decides that numbers become doubles: ADR 0036
   chose `JsonNode` because it is lossless on numbers.
 - **Spec 095:** the frozen-value contract changes (V9).
-- **ADR 0090** (proposed) detects a change by serializing each tracked variable at commit and comparing it with its
-  base (§2, §6). Today a script cannot change a variable it only reads: there is no tracking or write-back, and a test
-  with a large number left the stored text and revision unchanged. Once tracking exists, a tracked read that holds the
-  script's converted double would serialize differently and produce a spurious write, and under §7 a false conflict.
-  ADR 0090 therefore needs either exact write-back of untouched values (the JSON-backed view) or a comparison against
-  the original JSON.
+- **ADR 0090** (proposed, not yet reviewed) detects a change by serializing each tracked variable at commit and
+  comparing it with its base (§2, §6). Every adapter in this ADR may lose detail (V6), so that comparison turns a read
+  into a spurious write and corrupts untouched fields on a real write. Today a read cannot write: there is no
+  tracking, and a test with a large number left the stored text and revision unchanged. The ADR 0090 amendment
+  ([#3425](https://github.com/elsa-workflows/elsa-foundation/pull/3425)) replaces the comparison with explicit writes. In a script, a change the JSON-backed view records is
+  such a write (V9).
 - **ADR 0036:** assumes Jint reads `JsonNode` through a `JsonElementConverter`; that converter is gone from main, and
   the closed engine converts values itself. The JSON-backed view brings the engine back in line with its intent.
 - **Specs and issues:** S-8 is defined against this amendment. It unblocks #3196, #3202 (model part), #3194,
