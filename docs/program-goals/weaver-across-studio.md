@@ -1,6 +1,6 @@
 # Weaver across Studio
 
-- **Status:** Active; owner authorization, 29 October 2026. Program establishment is distinct from product delivery.
+- **Status:** Active; full M0–M5 autonomous delivery authorized, 29 October 2026. Establishment is complete; product acceptance remains open.
 - **Area:** Studio-wide assistant context, tools, review and supported effects through participating modules.
 - **Steward:** Sipke Schoorstra; one implementation leaf at a time, with one integration/review lane.
 - **Charter, decisions and progress:** [Program #3428](https://github.com/elsa-workflows/elsa-foundation/issues/3428).
@@ -26,6 +26,16 @@ Participating modules own resource identity, minimized context and domain guidan
 validation, domain risk assessment, result rendering and application semantics. Provider adapters
 translate the provider-neutral protocol to their SDK, preserving the single-active-provider rule.
 Administrator policy has final veto; the authenticated user remains the permission actor.
+
+The [29 October owner continuation](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6509190533)
+authorizes implementation, tests, documentation, scoped PRs, review, authorized merges and resulting-main
+verification across M0–M5. It supersedes the establishment-only session boundary. Routine choices and
+milestone transitions proceed autonomously; escalate consequential decisions outside scope, missing
+authority or genuine external blockers while continuing independent useful work.
+
+The [M0 baseline](../reports/weaver-baseline.md) records authenticated `missing-auth` diagnostics,
+the actual loaded-module inventory, source wiring findings and the initial finite coverage matrix.
+It does not establish a successful provider turn or applied effect.
 
 ## Delivery plan
 
@@ -86,6 +96,10 @@ Program/epic rollups; Roadmap retains the full hierarchy. One implementation lea
 integration/review lane is the working policy, not an automated WIP enforcement claim. New delivery
 issues enter needs-triage/Backlog; Ready requires maintainer triage, satisfied dependencies and the
 repository readiness cap. Record transitions on the owning issue/PR and keep Project Status aligned.
+The owner delegates this Program's triage, refinement and promotion when its inputs are sufficiently
+clear; respect dependencies and existing claims. Direct owner-requested work may be claimed without
+adding to the Ready queue. Independent subagents may assist investigation and review while the single
+implementation leaf and integration lane remain under one owner.
 Done requires verified completion; the setup task becoming Done does not complete M0 or the Program.
 
 ## Completion
