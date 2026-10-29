@@ -128,6 +128,8 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         var held = false;
         var retried = false;
         var commitId = "model-input:" + BpmnModelIdentity.Create(context.Scope.Value, executionId, command.InputId);
+        DateTimeOffset? timerDecisionAt = timedFrame ? clock.GetUtcNow() : null;
+        if (timerDecisionAt is { } decisionAt && current is not null && decisionAt < current.UpdatedAt) timerDecisionAt = current.UpdatedAt;
         if (command.InputKind == "native-parent-settled")
         {
             if (current?.Lifecycle != RuntimeModelLifecycle.TerminalPendingSettlement) rejection = "parent-already-settled";
@@ -271,7 +273,7 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         }
         if (evaluation is not null)
         {
-            document = Apply(context, document, evaluation, commitId, clock.GetUtcNow());
+            document = Apply(context, document, evaluation, commitId, timerDecisionAt ?? clock.GetUtcNow());
             if (timedFrame && document.Failures is not null)
                 document = document with { Failures = document.Failures.Select(failure => failure.Status == "Open" &&
                     !document.Work.Any(work => work.InvocationId == failure.InvocationId && work.AttemptId == failure.FailedAttemptId)
@@ -295,7 +297,7 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             lifecycle = RuntimeModelLifecycle.TerminalSettled;
         else if (timedFrame && terminal is null)
             lifecycle = document.Failures?.Any(failure => failure.Status == "Open") == true ? RuntimeModelLifecycle.WaitingIncident : RuntimeModelLifecycle.Running;
-        var now = clock.GetUtcNow();
+        var now = timerDecisionAt ?? clock.GetUtcNow();
         if (current is not null && now < current.UpdatedAt) now = current.UpdatedAt;
         var revision = rejection is null ? checked((current?.Revision ?? 0) + 1) : current!.Revision;
         var state = rejection is not null ? current! : new RuntimeModelExecutionState(1, context.Scope, executionId, command.TenantId,
