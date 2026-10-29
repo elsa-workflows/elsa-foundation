@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Bpmn.Model;
 using Elsa.Activities.Bpmn.Core;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Data.Sqlite;
 using Xunit;
 
@@ -10,6 +11,62 @@ namespace Elsa.Activities.Bpmn.Hosting.Tests;
 
 public sealed class DirectBpmnWorkbenchTests
 {
+    [Fact]
+    public async Task Direct_service_work_uses_the_real_coalescing_host_and_returns_its_native_completion()
+    {
+        await using var host = await OwnedWorkbench.StartAsync(directBpmn: true, recoverySweepSeconds: 0.2);
+        await host.LoginAsync();
+        var catalog = await host.GetAsync("/design/activities/definitions?search=Elsa.Activities.Primitives.Activities.WriteLine");
+        var activity = Assert.Single(catalog["items"]!.AsArray(), item =>
+            item!["definition"]!["activityTypeKey"]!.GetValue<string>() == "Elsa.Activities.Primitives.Activities.WriteLine");
+        var nativeDefinition = await host.PostAsync("/design/workflows/definitions/submit", new
+        {
+            name = "Direct BPMN native service worker",
+            state = new { variables = Array.Empty<object>(), inputs = Array.Empty<object>(), outputs = Array.Empty<object>(),
+                rootActivity = new { nodeId = "service-root", activityVersionId = activity!["definition"]!["headVersionId"]!.GetValue<string>(), outputs = Array.Empty<object>(),
+                    inputs = new[] { new { referenceKey = "text", value = new { value = "BPMN service completed.", expressionType = "Literal" } } } } }
+        });
+        var nativePublication = await host.PostAsync($"/publishing/workflows/{nativeDefinition["version"]!["id"]!.GetValue<string>()}/publish", new { });
+        var pin = new WorkflowExecutableIdentity(
+            ArtifactId: nativePublication["artifactId"]!.GetValue<string>(),
+            DefinitionId: nativePublication["definitionId"]!.GetValue<string>(),
+            DefinitionVersionId: nativePublication["definitionVersionId"]!.GetValue<string>(),
+            ArtifactVersion: nativePublication["artifactVersion"]!.GetValue<string>(),
+            ArtifactHash: nativePublication["artifactHash"]!.GetValue<string>());
+        var process = new BpmnProcessDefinition("direct-service", Elements:
+            [new("start", BpmnElementTypes.StartEvent), new("service", BpmnElementTypes.ServiceTask, bindingRef: "native-work"), new("end", BpmnElementTypes.EndEvent)],
+            SequenceFlows: [new("to-service", "start", "service"), new("to-end", "service", "end")]);
+        var definition = new BpmnModelDefinition(2, JsonSerializer.SerializeToElement(process, new JsonSerializerOptions(JsonSerializerDefaults.Web)), [],
+            [new BpmnNativeServiceBinding("native-work", pin, "service.business-error")]);
+        var published = await host.PostAsync("/bpmn/artifacts", new { requestId = "publish-service", definition });
+        var started = await host.PostAsync("/bpmn/executions", new { sourceReferenceId = published["sourceReferenceId"]!.GetValue<string>(), requestId = "start-service" });
+        var executionPath = "/bpmn/executions/" + started["executionId"]!.GetValue<string>();
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
+        var completed = await host.GetAsync(executionPath);
+        while (completed["status"]!.GetValue<string>() != "TerminalSettled")
+        {
+            Assert.True(DateTimeOffset.UtcNow < deadline, "The actual model/native service return did not settle.");
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+            completed = await host.GetAsync(executionPath);
+        }
+        Assert.Equal("Completed", completed["result"]!["status"]!.GetValue<string>());
+        var workers = (await host.GetAsync("/runtime/workflows/instances")).AsArray();
+        var workerId = Assert.Single(workers)!["workflowExecutionId"]!.GetValue<string>();
+        var worker = await host.GetAsync("/runtime/workflows/instances/" + workerId);
+        Assert.Equal("Completed", worker["instance"]!["status"]!.GetValue<string>());
+        Assert.Null(worker["instance"]!["parentWorkflowExecutionId"]);
+        foreach (var field in new[] { "artifactId", "artifactHash", "artifactVersion", "definitionId", "definitionVersionId" })
+            Assert.Equal(JsonSerializer.SerializeToNode(pin, new JsonSerializerOptions(JsonSerializerDefaults.Web))![field]!.GetValue<string>(),
+                worker["instance"]![field]!.GetValue<string>());
+        Assert.Equal("Completed", Assert.Single(worker["activities"]!.AsArray())!["status"]!.GetValue<string>());
+        var previousProcess = host.ProcessId;
+        await host.RestartAsync();
+        Assert.NotEqual(previousProcess, host.ProcessId);
+        await host.LoginAsync();
+        Assert.True(JsonNode.DeepEquals(completed, await host.GetAsync(executionPath)));
+        Assert.Single((await host.GetAsync("/runtime/workflows/instances")).AsArray());
+    }
+
     [Fact]
     public async Task Authenticated_direct_execution_waits_restarts_resumes_and_completes_in_the_real_host()
     {

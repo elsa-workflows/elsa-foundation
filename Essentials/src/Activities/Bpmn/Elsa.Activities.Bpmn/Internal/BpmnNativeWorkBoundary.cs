@@ -17,7 +17,8 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
     IPersistenceAccessContextAccessor access, TimeProvider clock, IRuntimeModelExecutionReader? models = null,
     CoalescingInner<IWorkflowExecutionStateStore>? physicalWorkflows = null,
     CoalescingInner<IActivityExecutionStateStore>? physicalActivities = null,
-    CoalescingInner<IRuntimePostCommitOutboxStore>? physicalOutbox = null)
+    CoalescingInner<IRuntimePostCommitOutboxStore>? physicalOutbox = null,
+    CoalescingInner<IPostCommitOutboxLookupStore>? physicalLookup = null)
 {
     internal const string StartKind = "Elsa.Bpmn.StartNativeWork.v1";
     internal const string ResultKind = "Elsa.Bpmn.NativeWorkResult.v1";
@@ -28,12 +29,11 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
         ? physicalActivities?.Value ?? throw new NotSupportedException("The physical native activity reader is unavailable.") : activities;
     private IRuntimePostCommitOutboxStore PhysicalOutbox => outboxStore.GetType() == typeof(CoalescingRuntimePostCommitOutboxStore)
         ? physicalOutbox?.Value ?? throw new NotSupportedException("The physical native outbox is unavailable.") : outboxStore;
-    private IPostCommitOutboxLookupStore PhysicalLookup => PhysicalOutbox as IPostCommitOutboxLookupStore
-        ?? throw new NotSupportedException("The physical native outbox has no durable lookup.");
+    private IPostCommitOutboxLookupStore PhysicalLookup => physicalLookup?.Value ?? outbox;
 
     internal void EnsureQualified()
     {
-        if (models is null || !ReferenceEquals(outbox, outboxStore) || !checkpoints.SupportsModelAdmission ||
+        if (models is null || !ReferenceEquals(PhysicalLookup, PhysicalOutbox) || !checkpoints.SupportsModelAdmission ||
             !checkpoints.CanCommitModelAdmission(models, PhysicalWorkflows, PhysicalActivities, PhysicalOutbox))
             throw new NotSupportedException("Native BPMN work requires its qualified physical model admission writer and reader.");
     }
