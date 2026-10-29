@@ -1,0 +1,264 @@
+{
+  "readOnly": true,
+  "model": {
+    "formatVersion": 1,
+    "scope": {
+      "value": "default"
+    },
+    "executionId": "bpmn:dd74c426e21d33e18f20e4b24dc69cec0a0c455ef01af980b490a641b7530861",
+    "tenantId": "default",
+    "protocol": {
+      "key": "elsa.bpmn",
+      "version": 1
+    },
+    "executable": {
+      "artifactId": "sha256:dcb279c55932f1614eba72dc884c60977c896fb036289110461c24f3ad8f9dd3",
+      "definitionId": "bpmn-model:sha256:dcb279c55932f1614eba72dc884c60977c896fb036289110461c24f3ad8f9dd3",
+      "definitionVersionId": "sha256:dcb279c55932f1614eba72dc884c60977c896fb036289110461c24f3ad8f9dd3",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:dcb279c55932f1614eba72dc884c60977c896fb036289110461c24f3ad8f9dd3"
+    },
+    "materialIncarnationId": "01c30ba0fb5e4396a6f91de55ecb57e6",
+    "revision": 2,
+    "lifecycle": 3,
+    "authority": {
+      "systemIdentity": "bpmn-runtime",
+      "rootInitiator": "seed-user-516dd8aa49c146bd86326874",
+      "metadata": {}
+    },
+    "createdAt": "2026-10-29T22:24:14.898703\u002B00:00",
+    "updatedAt": "2026-10-29T22:24:18.661282\u002B00:00",
+    "payload": {
+      "formatVersion": 11,
+      "state": {
+        "tokens": [
+          {
+            "tokenId": "token:9",
+            "atElementId": "timeout",
+            "flowId": null,
+            "parentTokenId": "token:4",
+            "status": 4,
+            "producingWorkHandle": "bpmn:dd74c426e21d33e18f20e4b24dc69cec0a0c455ef01af980b490a641b7530861",
+            "iterationKey": null,
+            "kind": null,
+            "stoppedHandle": "bpmn-work:11cf33913c89b8fe5cb64116e54ebde3b8965b9b76f11bda6ff4cdf44e623d5b"
+          }
+        ],
+        "activeWork": [],
+        "diagnostics": [
+          {
+            "diagnosticId": "diag:2",
+            "kind": 0,
+            "message": "BPMN start event \u0027start\u0027 emitted the initial token.",
+            "elementId": "start",
+            "flowId": null,
+            "tokenId": "token:1",
+            "details": {}
+          },
+          {
+            "diagnosticId": "diag:5",
+            "kind": 0,
+            "message": "BPMN token \u0027token:4\u0027 arrived at element \u0027review\u0027 via flow \u0027start-review\u0027.",
+            "elementId": "review",
+            "flowId": "start-review",
+            "tokenId": "token:4",
+            "details": {}
+          },
+          {
+            "diagnosticId": "diag:8",
+            "kind": 1,
+            "message": "BPMN element \u0027review\u0027 started work \u0027review-work\u0027.",
+            "elementId": "review",
+            "flowId": null,
+            "tokenId": "token:4",
+            "details": {}
+          },
+          {
+            "diagnosticId": "diag:11",
+            "kind": 1,
+            "message": "BPMN boundary event \u0027timeout\u0027 armed listener work \u0027timeout-work\u0027 alongside host \u0027review\u0027.",
+            "elementId": "timeout",
+            "flowId": null,
+            "tokenId": "token:9",
+            "details": {}
+          },
+          {
+            "diagnosticId": "diag:15",
+            "kind": 5,
+            "message": "BPMN boundary listener token \u0027token:9\u0027 at \u0027timeout\u0027 was cancelled (bpmn.boundary.superseded-by-host-completion).",
+            "elementId": "timeout",
+            "flowId": null,
+            "tokenId": "token:9",
+            "details": {}
+          },
+          {
+            "diagnosticId": "diag:18",
+            "kind": 0,
+            "message": "BPMN token \u0027token:17\u0027 arrived at element \u0027done\u0027 via flow \u0027review-done\u0027.",
+            "elementId": "done",
+            "flowId": "review-done",
+            "tokenId": "token:17",
+            "details": {}
+          },
+          {
+            "diagnosticId": "diag:20",
+            "kind": 4,
+            "message": "BPMN end event \u0027done\u0027 consumed token \u0027token:17\u0027.",
+            "elementId": "done",
+            "flowId": null,
+            "tokenId": "token:17",
+            "details": {}
+          },
+          {
+            "diagnosticId": "diag:22",
+            "kind": 8,
+            "message": "BPMN process completed with the \u0027Done\u0027 outcome because no live tokens remain.",
+            "elementId": null,
+            "flowId": null,
+            "tokenId": null,
+            "details": {}
+          }
+        ],
+        "sequence": 22,
+        "races": [],
+        "loops": [],
+        "compensables": [],
+        "compensationRuns": [],
+        "terminated": false,
+        "cancelling": false,
+        "pendingFault": null
+      },
+      "work": [],
+      "sourceReferenceId": "bpmn-source:5fb478357dbd9a085dc34dd7c66db9ca3f2be7f193d76ac35038934ba7add579",
+      "failures": []
+    },
+    "terminalResult": {
+      "status": "Completed",
+      "outcome": "Done"
+    }
+  },
+  "inputs": [
+    {
+      "scope": {
+        "value": "default"
+      },
+      "executionId": "bpmn:dd74c426e21d33e18f20e4b24dc69cec0a0c455ef01af980b490a641b7530861",
+      "inputId": "actual-human-decision",
+      "inputKind": "complete-human",
+      "contentFingerprint": "302c98dee538c26113ccb0f787fb6add9486e45a3f567b2915e5de29d54ea7c3",
+      "acceptedRevision": 2,
+      "acceptedAt": "2026-10-29T22:24:18.661282\u002B00:00",
+      "invocationId": "bpmn-work:f2afab324a2833f2bd4dfd9d49178c41be6989dd95c011d8d0e44f1baea03800",
+      "attemptId": "attempt:2011c14ed6557b33008f753f48cfda9e6017c73157cc0044fb7e97c3f0cb618c",
+      "result": {
+        "status": "Accepted",
+        "code": null,
+        "revision": 2,
+        "lifecycle": "TerminalSettled"
+      }
+    },
+    {
+      "scope": {
+        "value": "default"
+      },
+      "executionId": "bpmn:dd74c426e21d33e18f20e4b24dc69cec0a0c455ef01af980b490a641b7530861",
+      "inputId": "start-duration",
+      "inputKind": "start",
+      "contentFingerprint": "d49d0a4b5dd1fc0c87846ab0ee1230ae4ce123b45d5664376e2e56b63dddd216",
+      "acceptedRevision": 1,
+      "acceptedAt": "2026-10-29T22:24:14.898703\u002B00:00",
+      "invocationId": null,
+      "attemptId": null,
+      "result": {
+        "status": "Accepted",
+        "code": null,
+        "revision": 1,
+        "lifecycle": "Running"
+      }
+    },
+    {
+      "scope": {
+        "value": "default"
+      },
+      "executionId": "bpmn:dd74c426e21d33e18f20e4b24dc69cec0a0c455ef01af980b490a641b7530861",
+      "inputId": "timer-elapsed:247c9b8f766a164fd4976380a2ba15560f53fbecf4a0e0fe67695d75d75dab07",
+      "inputKind": "timer-elapsed",
+      "contentFingerprint": "8525bba5251dda7c17fea417c9d7a480871644ea528ed82844ed8c9f64f5dc26",
+      "acceptedRevision": 2,
+      "acceptedAt": "2026-10-29T22:24:45.146106\u002B00:00",
+      "invocationId": "bpmn-work:11cf33913c89b8fe5cb64116e54ebde3b8965b9b76f11bda6ff4cdf44e623d5b",
+      "attemptId": "attempt:bcadbf17903b5ec79b4e4a877714a93c8698e119a6ca12d8a3834210628322f1",
+      "result": {
+        "status": "Rejected",
+        "code": "execution-terminal",
+        "revision": 2,
+        "lifecycle": "TerminalSettled"
+      }
+    }
+  ],
+  "sources": [
+    {
+      "outboxItemId": "model-input:2648d3e8395dee5c147b3fbcd3525f19a235357b628dd1a190043fe85471d411:bpmn-duration:247c9b8f766a164fd4976380a2ba15560f53fbecf4a0e0fe67695d75d75dab07",
+      "intent": {
+        "intentId": "bpmn-duration:247c9b8f766a164fd4976380a2ba15560f53fbecf4a0e0fe67695d75d75dab07",
+        "workflowExecutionId": "bpmn:dd74c426e21d33e18f20e4b24dc69cec0a0c455ef01af980b490a641b7530861",
+        "kind": "Elsa.Bpmn.DurationTimer.v1",
+        "recordedAt": "2026-10-29T22:24:14.898703\u002B00:00",
+        "activityExecutionId": null,
+        "idempotencyKey": "bpmn-duration:247c9b8f766a164fd4976380a2ba15560f53fbecf4a0e0fe67695d75d75dab07",
+        "payload": {
+          "formatVersion": 1,
+          "scope": {
+            "value": "default"
+          },
+          "executionId": "bpmn:dd74c426e21d33e18f20e4b24dc69cec0a0c455ef01af980b490a641b7530861",
+          "executable": {
+            "artifactId": "sha256:dcb279c55932f1614eba72dc884c60977c896fb036289110461c24f3ad8f9dd3",
+            "definitionId": "bpmn-model:sha256:dcb279c55932f1614eba72dc884c60977c896fb036289110461c24f3ad8f9dd3",
+            "definitionVersionId": "sha256:dcb279c55932f1614eba72dc884c60977c896fb036289110461c24f3ad8f9dd3",
+            "artifactVersion": "1.0.0",
+            "artifactHash": "sha256:dcb279c55932f1614eba72dc884c60977c896fb036289110461c24f3ad8f9dd3"
+          },
+          "materialIncarnationId": "01c30ba0fb5e4396a6f91de55ecb57e6",
+          "bindingId": "timeout-work",
+          "invocationId": "bpmn-work:11cf33913c89b8fe5cb64116e54ebde3b8965b9b76f11bda6ff4cdf44e623d5b",
+          "attemptId": "attempt:bcadbf17903b5ec79b4e4a877714a93c8698e119a6ca12d8a3834210628322f1",
+          "dueAt": "2026-10-29T22:24:44.898703\u002B00:00",
+          "sourceOutboxItemId": "model-input:2648d3e8395dee5c147b3fbcd3525f19a235357b628dd1a190043fe85471d411:bpmn-duration:247c9b8f766a164fd4976380a2ba15560f53fbecf4a0e0fe67695d75d75dab07"
+        },
+        "metadata": {},
+        "dependsOnWaitRegistrationId": null,
+        "waitFailurePolicy": null,
+        "isWaitDependent": false,
+        "notBefore": "2026-10-29T22:24:44.898703\u002B00:00"
+      },
+      "status": 2,
+      "recordedAt": "2026-10-29T22:24:14.898703\u002B00:00",
+      "availableAt": null,
+      "retryPolicy": {
+        "maxAttempts": 0,
+        "delay": "00:00:01",
+        "retryUntilAcknowledged": true,
+        "metadata": {}
+      },
+      "deliveryAttemptCount": 2,
+      "deliveringOwnerId": null,
+      "deliveryStartedAt": null,
+      "deliveredAt": "2026-10-29T22:24:46.08611\u002B00:00",
+      "lastFailureMessage": null,
+      "metadata": {
+        "runtime.delivery.firstAttemptedAt": "2026-10-29T22:24:44.9427650\u002B00:00"
+      },
+      "deliveryFencingToken": 2,
+      "deliveryVisibleAfter": null,
+      "stimulusDeliverySourceScope": {
+        "value": "default"
+      },
+      "isTerminal": true
+    }
+  ],
+  "queuedModelInputs": [],
+  "nativeWorkflowRows": 0,
+  "nativeActivityRows": 0,
+  "nativeBookmarkRows": 0
+}
