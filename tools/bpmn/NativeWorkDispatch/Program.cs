@@ -23,6 +23,7 @@ using Elsa.Activities.Primitives;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Flowchart;
 using Elsa.Activities.ControlFlow;
+using Elsa.Serialization.SystemText;
 using Elsa.Events;
 using Elsa.Tasks.Core;
 using Elsa.Etl.Runtime;
@@ -84,6 +85,7 @@ try
         new ActivitiesSequenceFeature().ConfigureServices(services);
         new ActivitiesFlowchartFeature().ConfigureServices(services);
         new ActivitiesControlFlowFeature().ConfigureServices(services);
+        new SerializationFeature().ConfigureServices(services);
     }
     services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
     {
@@ -279,7 +281,8 @@ try
             Product(typeof(ActivitiesBpmnHostingFeature).Assembly), Product(typeof(EtlRuntimeFeature).Assembly), Product(typeof(EtlRuntimeEntityFrameworkCoreFeature).Assembly),
             Product(typeof(EtlWorkflowsRuntimeFeature).Assembly) };
         if (success) products.AddRange([Product(typeof(ActivitiesRuntimeFeature).Assembly), Product(typeof(ActivitiesPrimitivesFeature).Assembly),
-            Product(typeof(ActivitiesSequenceFeature).Assembly), Product(typeof(ActivitiesFlowchartFeature).Assembly), Product(typeof(ActivitiesControlFlowFeature).Assembly)]);
+            Product(typeof(ActivitiesSequenceFeature).Assembly), Product(typeof(ActivitiesFlowchartFeature).Assembly), Product(typeof(ActivitiesControlFlowFeature).Assembly),
+            Product(typeof(SerializationFeature).Assembly)]);
         Console.WriteLine(JsonSerializer.Serialize(new { operation = args[0], startedAtUtc = started, completedAtUtc = DateTimeOffset.UtcNow,
             origin, steps, embeddedParentExecutionId = embeddedParentId, model = consumedModel, worker = await workflows.FindAsync(origin.WorkerExecutionId), receipt, resultSource,
             nativeResultConsumedModel, parentReturnStage, parentResultSource, parentSettlementReceipt, parentSettlementCommand,

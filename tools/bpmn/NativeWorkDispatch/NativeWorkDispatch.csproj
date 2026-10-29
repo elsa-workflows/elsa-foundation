@@ -10,6 +10,7 @@
     <ProjectReference Include="../../../Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
     <ProjectReference Include="../../../Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
     <ProjectReference Include="../../../Essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
+    <ProjectReference Include="../../../Essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="../../../Essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
     <ProjectReference Include="../../../Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj" />
     <ProjectReference Include="../../../Extensions/Etl/src/Workflows/Runtime/Elsa.Etl.Workflows.Runtime.csproj" />
