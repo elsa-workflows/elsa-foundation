@@ -20,7 +20,11 @@ Related:
 Not decided here:
 
 - The value model and conversion, in
-  [ADR 0046](0046-output-binding-coercion-uses-pinned-value-representations.md) and analysis A-1.
+  [ADR 0046](0046-output-binding-coercion-uses-pinned-value-representations.md) and analysis A-1
+  ([outcome](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6466068155), proposed as an
+  ADR 0046 amendment). A-1 defines the adapter at each boundary: what it accepts, produces and loses, including the
+  rules for dates, numbers in scripts and property matching at activity inputs. This ADR is the serializer those
+  adapters use, and it must agree with them (decisions 2 and 5).
 - The representation of null versus missing, in spec S-2 under decision D-10.
 
 This ADR only constrains how those serialize.
@@ -68,6 +72,30 @@ A-5 found on `main`:
 
   Nothing states which settings may differ, or why.
 
+A-1 and a follow-up search over the value path (2026-10-29, `main` at `6432ed240`) found that A-5's list covered the
+configured option sets but not the calls that use none. Wherever data stays `JsonElement` or `JsonNode` (stimulus and
+event payloads, child workflow inputs, bookmark payloads, durable state, expression parameters), nothing is
+transformed. The risk sits where data becomes a .NET type and back:
+
+- **At least four option sets handle workflow values:** System.Text.Json defaults, about eight local
+  `new(JsonSerializerDefaults.Web)` statics, `IPayloadSerializer`, and `ObjectConverter`'s own options.
+- **Defaults are a pattern, not one call.** Activity inputs (`ActivityInputHydrator.cs:97`), expression results
+  coerced to a declared type (`RuntimeActivityInputMaterializer.cs:575`, then `:189`), publish-time literals and
+  variable defaults (`RuntimeInputBindingCompiler.cs:1019`, `:1044`, `:719`), workflow-input validation
+  (`WorkflowExecutableInputValidator.cs:119`) and stateful activity state (`StatefulActivity.cs`) all use the defaults:
+  case-sensitive member matching, PascalCase on write, and a `DateTime` with an offset converted to server-local time.
+- **The two sides of one value disagree.** An activity result is written with Web options, so camelCased
+  (`ActivityCompletionProjector.cs:16,63`), and read into the next activity's input with the defaults, so
+  case-sensitively. A .NET-typed result bound to a .NET-typed input can silently lose its properties. Code-first
+  literals follow the same pattern (`WorkflowBuilder.cs:334` writes Web, `RuntimeInputBindingCompiler.cs` reads with
+  the defaults). This is inferred from the code and not yet reproduced by a test.
+- **The same text is accepted on one path and refused on another.** Web options read numbers from strings (`"5"` into
+  `Int32`); the defaults refuse them.
+- **Numbers lose digits outside the script engine too.** ForEach unwraps each item to `long` or `double`
+  (`ForEach.cs:261`), so a large or precise number changes, and `1.0` becomes `1`.
+- **No `DateTime` converter exists.** Date handling is the System.Text.Json default, or `Convert.ChangeType` for
+  publish-time literals, which pins the publishing server's offset into the executable.
+
 ## Terms
 
 - **Data**: a JSON value Elsa carries but does not own: workflow inputs, outputs, variable values and defaults,
@@ -102,8 +130,10 @@ The baseline:
 - camelCases only the member names of Elsa's own C# types (`PropertyNamingPolicy = CamelCase`). That shapes our own
   contract, not data.
 
-Whether member-name reads stay case-insensitive (today's Web default) is a question for the implementing spec. It
-never affects data.
+Member-name reads are case-insensitive (`PropertyNameCaseInsensitive = true`, today's Web default). This follows A-1's
+agreed rule for activity inputs: `{"customerName":…}` binds to `CustomerName`. It never changes data; it only decides
+which .NET member a JSON member fills. When one JSON object has two members that match the same .NET member (`id` and
+`ID`), the read fails with a diagnostic that names both, instead of letting the last one win silently.
 
 ### 3. Data passes through as the exact text received
 
@@ -117,6 +147,10 @@ a re-parse per value.
 - Validating that value is the job of the endpoint's request contract.
 - A value that a script or an activity changes is a new value and is written in the default format (decision 4).
 - `JsonNode` cannot keep its original text, so values that pass through a script come back in the default format.
+- A value that passes through a script unchanged can still change: the JavaScript engine holds numbers as doubles, so
+  an integer beyond ±2^53 or a long decimal loses digits (`IsolatedJintEngine.cs:168-169`, found by A-1). That loss is
+  the JavaScript adapter's, not the serializer's. A-1 makes it visible with a diagnostic; this ADR does not promise
+  byte-identity for values a script returns.
 
 ### 4. One default output format
 
@@ -141,6 +175,14 @@ At API, persistence and messaging boundaries, data is held as `JsonElement` or `
 dictionary, an `ExpandoObject` or a POCO. A-5 found no data held otherwise on the API paths it traced; this decision
 makes it a rule. Data is deserialized into .NET types only inside an activity or a function that asks for it
 (ADR 0046).
+
+That deserialization is a boundary too, and it uses a copy of the baseline like every other serializer, in both
+directions. Today it does not (see Context): activity inputs, expression-result coercion, publish-time literals and
+stateful activity state use System.Text.Json's defaults, while activity results are written with Web options. Every
+conversion between data and a .NET type, in or out, uses the same baseline copy, so a value written by one activity
+reads back the same in the next. A-1's adapter rules for these conversions (case-insensitive matching, a `DateTime`
+read as UTC) are applied through that copy, not as special cases at each call site. A number is never narrowed to
+`long` or `double` on the way, unless the target type asks for it.
 
 ### 6. Modules never change host-wide options; deviations are a red flag, not a ban
 
@@ -244,6 +286,12 @@ workarounds. Rejected in favour of a register: deviations stay possible, but eac
   - Design-store fingerprints stay valid.
   - Stored hashes are recomputed once.
 - **Nulls.** `IPayloadSerializer` keeps explicit nulls, and existing rows still read the same.
+- **.NET-typed values round trip.** A .NET-typed activity result bound to a .NET-typed input of the same type arrives
+  with every property set. Test this first: it reproduces today's suspected loss (Context).
+- **Activity input matching and dates.** `{"customerName":…}` fills `CustomerName`; `id` and `ID` in one object fail
+  with a diagnostic; `"2026-10-28T09:15:00+05:00"` into `DateTime` gives the same instant on a UTC and a non-UTC server,
+  at run time and in publish-time literals.
+- **Numbers.** A 20-digit integer and a 29-digit decimal pass through ForEach and an activity input unchanged.
 - **Content type.** Every response carrying raw or relaxed-encoded data has `Content-Type: application/json` and
   `X-Content-Type-Options: nosniff`.
 - **S-9 intake checks** on the epic board:
@@ -253,7 +301,9 @@ workarounds. Rejected in favour of a register: deviations stay possible, but eac
   - external clients from the FastEndpoints era;
   - whether NativeEndpoints binds and writes with the group context;
   - the encoder the composed host options actually use;
-  - Studio preference and structured-log responses after the host options change.
+  - Studio preference and structured-log responses after the host options change;
+  - every data-to-.NET conversion on the value path found by the 2026-10-29 search (listed on this PR), each moved to
+    the baseline copy or registered.
 
 ## Open questions
 
@@ -263,6 +313,9 @@ workarounds. Rejected in favour of a register: deviations stay possible, but eac
 3. **Strength.** Is "register entry, or an ADR when data is touched" the right bar for deviations?
 4. **Null representation.** Is it right to leave the representation to S-2, with this ADR only requiring that it be
    kept?
-5. **Placement.** Keep this as a new ADR, or fold it into ADR 0035 or ADR 0046?
+5. **Placement.** Keep this as a new ADR, or fold it into ADR 0035 or ADR 0046? A-1 now proposes an ADR 0046
+   amendment for the value model and the boundary adapters. This ADR proposes to stay separate: 0046 says what each
+   adapter accepts, produces and loses, and 0091 is the one serializer they all use. Each refers to the other, and
+   rules that appear in both (no key policy on data, case-insensitive member reads) are stated once, here.
 6. **Runtime durable state.** Should the frozen runtime durability format adopt decision 3 through a stamped
    migration, or keep re-escaping as a recorded exception?
