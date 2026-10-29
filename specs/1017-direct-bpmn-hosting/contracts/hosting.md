@@ -47,10 +47,12 @@ Service bindings pin FinalFault by default or explicit bounded HoldForRetry. Hol
 | `POST /bpmn/executions/{id}/work/{invocation}/complete` | Request ID, exact attempt ID, supported result | Durable accepted command outcome, or 202 with command identity while durably queued. |
 | `POST /bpmn/executions/{id}/cancel` | Request ID, cancellation reason | Accepted cancellation outcome or durable pending command/settlement identity. |
 | `GET /bpmn/executions/{id}/incidents` | Bounded page size and opaque continuation | Scoped incident ID/cause/invocation/attempt and retryability. |
-| `POST /bpmn/executions/{id}/incidents/{incident}/retry` | Request ID and exact previous attempt | One new attempt and retained retry outcome, or durable pending command identity. |
+| `POST /bpmn/executions/{id}/retry-service` | Request ID, exact incident ID, invocation ID and failed attempt ID | One new attempt and retained retry outcome, or durable pending command identity. |
 | `GET /bpmn/executions/{id}/commands/{request}` | Authorized execution/request identity | Durable accepted-input outcome, pending durable queue admission, or absence; never an actor-cache inference. |
 
 Equivalent command replay returns its stored outcome. A 202 proves durable admission only; clients inspect the retained command result for semantic consumption. Conflicting identity/content or obsolete invocation returns a contextual 409 without mutation; malformed input is 400, unsupported new profile/binding 422 and temporary authoritative-store unavailability 503. Use existing unauthenticated/permission/not-found conventions without disclosing foreign-scope existence. Response status alone never retires an internal owed delivery: the producer requires the exact durable receipt/terminal proof defined above.
+
+The current service policy is definition format3 with explicit `faultPolicy` on its one service binding: `{formatVersion:1,disposition:"FinalFault"|"HoldForRetry",maxAttempts:1..32}`. The budget includes the initial physical attempt; FinalFault requires1. Formats1/2 retain their existing wire and format2 retains default FinalFault. Policy state formats7/8 retain failed native results and the exact pre-failure interpreter snapshot; formats9/10 add cancellation settlement. Older drivers refuse these frames. Incident inspection reports Open, Retried, Retired or Final with the original failed worker/attempt, its ordinal and pinned budget. The retry command requires `bpmn:retry-service` and current execution authorization before dispatch or replay. Authorization and remaining interruption/budget race acceptance still require their dedicated evidence.
 
 ## Initial direct profile
 

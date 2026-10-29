@@ -89,7 +89,7 @@ def model_bridge(read,process,before,finished,business_error,cancelled=False,mod
     return checked,origin,result
 
 
-def physical_business_error_boundary(connection,phase,checked,origin,mode,technical=False):
+def physical_business_error_boundary(connection,phase,checked,origin,mode,technical=False,explicit_final=False):
     model=checked[phase]['model']
     material,=[json.loads(row[0])['material'] for row in connection.execute('SELECT ContentJson FROM elsa_runtime_workflow_executable')
         if json.loads(row[0]).get('material') and json.loads(row[0])['material']['identity']==encoded_tree(model['executable'])]
@@ -100,8 +100,9 @@ def physical_business_error_boundary(connection,phase,checked,origin,mode,techni
         {'elementId':'error-end','elementType':'endEvent'}],
         'sequenceFlows':[{'flowId':'to-service','sourceRef':'start','targetRef':'service'},
             {'flowId':'to-end','sourceRef':'service','targetRef':'end'},{'flowId':'caught-end','sourceRef':'error','targetRef':'error-end'}]}
-    if material['definition']!={'formatVersion':2,'process':process,'humanBindings':[],
-            'serviceBindings':[{'bindingId':'pipeline','executable':origin['workerExecutable'],'businessErrorCode':'etl.rows-rejected'}]}:
+    if material['definition']!={'formatVersion':3 if explicit_final else 2,'process':process,'humanBindings':[],
+            'serviceBindings':[{'bindingId':'pipeline','executable':origin['workerExecutable'],'businessErrorCode':'etl.rows-rejected',
+                **({'faultPolicy':{'formatVersion':1,'disposition':'FinalFault','maxAttempts':1}} if explicit_final else {})}]}:
         raise ValueError('The physical model lost its declared coded business-error boundary or service binding.')
     if phase=='finished':
         terminal=model['terminalResult'];diagnostics=model['payload']['state']['diagnostics']
@@ -114,7 +115,7 @@ def physical_business_error_boundary(connection,phase,checked,origin,mode,techni
             raise ValueError('The actual interpreter lost its exact matched or unmatched business-error disposition.')
 
 
-def physical_model_bridge(connection,phase,checked,origin,result,model_cancel=False,embedded=False,parent_settlement_owed=False):
+def physical_model_bridge(connection,phase,checked,origin,result,model_cancel=False,embedded=False,parent_settlement_owed=False,final_refusal=None):
     observed=checked[phase];model=observed["model"]
     row=connection.execute("SELECT Lifecycle,Revision,ContentJson FROM elsa_runtime_model_execution WHERE ExecutionId=?",(key(model["executionId"]),)).fetchone()
     stored=json.loads(row[2]) if row else None
@@ -136,7 +137,12 @@ def physical_model_bridge(connection,phase,checked,origin,result,model_cancel=Fa
         if row is None or row[0]!=source["status"] or stored["intent"]["payload"]!=source["intent"]["payload"] or stored["deliveredAt"]!=source["deliveredAt"]:
             raise ValueError("The physical native/model delivery source differs from its consumption proof.")
     rows=connection.execute("SELECT InputId,ContentJson FROM elsa_runtime_model_input WHERE ExecutionId=?",(key(model["executionId"]),)).fetchall()
-    if len(rows)!=(1 if phase=="before" else (3 if model_cancel else 2)+int(embedded)-int(parent_settlement_owed)):raise ValueError("The physical model accepted an unexpected input.")
+    if len(rows)!=(1 if phase=="before" else (3 if model_cancel else 2)+int(embedded)-int(parent_settlement_owed)+int(final_refusal is not None)):raise ValueError("The physical model accepted an unexpected input.")
+    if phase=='finished' and final_refusal is not None:
+        stored,=[json.loads(row[1]) for row in rows if row[0]==key(final_refusal['request']['requestId'])]
+        if (stored['inputKind']!=key('retry-service') or stored['acceptedRevision']!=2 or stored['result']!=final_refusal['command']['result'] or
+                stored['invocationId']!=key(origin['invocationId']) or stored['attemptId']!=key(origin['attemptId'])):
+            raise ValueError('The physical final-fault retry refusal lost its exact failed attempt or rejected receipt.')
     receipt=observed["resultInput"]
     if receipt is not None:
         stored,=[json.loads(row[1]) for row in rows if row[0]==key(receipt["inputId"])]
@@ -798,6 +804,8 @@ def verify(path):
             'pendingParentResultCrashProved':False,'modelHeldFaultRetryProved':False}
     business=manifest.get('kind') in ('actual-direct-bpmn-native-etl-business-error','actual-native-runbpmn-etl-business-error')
     technical=manifest.get('kind') in ('actual-direct-bpmn-native-etl-technical-fault','actual-native-runbpmn-etl-technical-fault')
+    explicit_final=manifest.get('explicitFinalFault') is True
+    if explicit_final and manifest.get('kind')!='actual-direct-bpmn-native-etl-technical-fault':raise ValueError('Explicit final-fault retry refusal requires its actual direct technical fault.')
     boundary=manifest.get('businessErrorBoundary')
     if ((business or technical) and boundary not in ('matching','different')) or (not business and not technical and boundary is not None) or technical and boundary!='matching':raise ValueError('Unknown actual business-error boundary qualification.')
     embedded=manifest.get('kind') in ('actual-native-runbpmn-etl-http-recovery','actual-native-runbpmn-etl-parent-cancellation','actual-native-runbpmn-etl-business-error','actual-native-runbpmn-etl-technical-fault')
@@ -827,6 +835,7 @@ def verify(path):
     if model_cancel:names|={"model-cancel-response.json","model-cancel-command.json"}
     if embedded:names|={p+'-checked-embedding.json' for p in ('before','finished','retained')}
     if technical:names|={'lookup-source.csv','lookup-snapshot.csv','snapshot-unavailability.json'}
+    if explicit_final:names.add('final-retry-refusal.json')
     if parent_cancel:names.add('native-parent-cancel-response.json')
     if parent_pending or success_parent is not None:names|={'sdk-consume.json','parent-pending.json','parent-pending-wire.json','parent-pending-checked-model.json','parent-pending-checked-embedding.json'}|{'parent-pending-'+s+'.sqlite.gz' for s in ('elsa','etl-runtime','etl-design')}
     if pending_crash:names|={'pending.json','pending-checked.json','pending-wire.json'}|{'pending-'+s+'.sqlite.gz' for s in ('elsa','etl-runtime','etl-design')}
@@ -839,6 +848,7 @@ def verify(path):
     for case,(parent,business_error) in expected_cases.items():
         def read(name):return json.loads(q.evidence_file(root,case+"/"+name).read_text())
         process=read("process.json");products=process["products"]
+        if (process.get('explicitServiceFaultPolicy')=='FinalFault') is not explicit_final:raise ValueError('The actual explicit final policy differs from its case.')
         if process.get('businessErrorBoundary')!=boundary:raise ValueError('The actual business-error boundary differs from its declared case.')
         if process.get('technicalFault',False) is not technical or technical and (process.get('technicalFaultPolicy')!='FinalFault' or process.get('technicalFaultSource')!='retained-lookup-snapshot-unavailable'):raise ValueError('The actual technical-fault classification or default policy differs.')
         if (business or technical) and process.get('resumptionSweepIntervalSeconds')!=.2:raise ValueError('The actual error recovery lost its declared production resumption configuration.')
@@ -859,6 +869,18 @@ def verify(path):
                     instant(availability['restoredAtUtc'])<=instant(finished['run']['terminalResult']['settledAt'])):
                 raise ValueError('The actual technical fault lacks its unchanged, temporarily unavailable retained lookup snapshot.')
         bridge=model_bridge(read,process,before,finished,business_error,cancelling,model_cancel or parent_cancel,embedded) if direct else None
+        final_refusal=None
+        if explicit_final:
+            final_refusal=read('final-retry-refusal.json');checked,origin,result=bridge;failure,=checked['finished']['model']['payload']['failures']
+            incident=final_refusal['incident'];command=final_refusal['command']
+            if (failure['status']!='Final' or
+                    failure['attemptNumber']!=1 or failure['maxAttempts']!=1 or failure['failedAttemptId']!=origin['attemptId'] or failure['invocationId']!=origin['invocationId'] or
+                    failure['semanticState']!=checked['before']['model']['payload']['state'] or failure['retryAttemptId'] is not None or
+                    failure['resultInputId']!=origin['resultInputId'] or incident['status']!='Final' or incident['incidentId']!=failure['incidentId'] or
+                    final_refusal['request']!={'requestId':'retry-actual-final-service','incidentId':failure['incidentId'],'invocationId':origin['invocationId'],'failedAttemptId':origin['attemptId']} or
+                    final_refusal['httpStatus']!=409 or command['pending'] or command['result']!={'status':'Rejected','code':'execution-terminal','revision':2,'lifecycle':'TerminalSettled'} or
+                    checked['before']['model']['payload']['formatVersion']!=7 or checked['finished']['model']['payload']['formatVersion']!=7):
+                raise ValueError('The actual final semantic fault lost its retained incident, terminal retry refusal or original failure state.')
         if embedded:embedded_etl_parent(read,q.evidence_file(root,case+'/process.json').parent,process,bridge,parent_cancel)
         if success_parent is not None:successful_embedded_parent_return(read,q.evidence_file(root,case+'/process.json').parent,process,bridge)
         if parent_pending:pending_embedded_parent_return(read,q.evidence_file(root,case+'/process.json').parent,process,bridge)
@@ -924,8 +946,8 @@ def verify(path):
                         if store=="elsa":
                             if post_ack and phase=='finished' and connection.execute('SELECT COUNT(*) FROM elsa_runtime_scheduler_work_item').fetchone()[0]:
                                 raise ValueError('The recovered pre-ACK journey retained native/model scheduler work.')
-                            if bridge is not None:physical_model_bridge(connection,phase,*bridge,model_cancel=model_cancel or parent_cancel,embedded=embedded)
-                            if business or technical:physical_business_error_boundary(connection,phase,bridge[0],bridge[1],boundary,technical)
+                            if bridge is not None:physical_model_bridge(connection,phase,*bridge,model_cancel=model_cancel or parent_cancel,embedded=embedded,final_refusal=final_refusal)
+                            if business or technical:physical_business_error_boundary(connection,phase,bridge[0],bridge[1],boundary,technical,explicit_final)
                             if model_cancel and phase=="finished":physical_model_cancellation(connection,read,*bridge)
                             if technical and phase=='finished':
                                 expected_incidents=finished['native']['incidents']+(finished['embedding']['incidents'] if embedded else [])
@@ -997,7 +1019,7 @@ def verify(path):
     if success_parent is not None:result['successfulParentResultCrashStage']=success_parent
     if counterpart:result['directSuccessCounterpartVerified']=True
     if business:result['businessErrorBoundary']=boundary
-    if technical:result.update(technicalFinalFaultProved=True,finalFaultRetryRefusalProved=False)
+    if technical:result.update(technicalFinalFaultProved=True,finalFaultRetryRefusalProved=explicit_final)
     if not direct:result["directOrRunBpmnEtlIntegrationProved"]=False
     if cancelling:result.update(pipelineOriginatedCancellationProved=pipeline_cancel,nativeWorkerOriginatedCancellationProved=worker_cancel,modelToWorkerCancellationProved=model_cancel,modelCancellationBeforeAdmissionProved=False)
     return result

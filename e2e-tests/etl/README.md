@@ -2,6 +2,8 @@
 
 For the execution-model program's source-bound **actual process-loss recovery** of the delivered native ETL path, see [the native HTTP reference](../../specs/1017-direct-bpmn-hosting/evidence/pipeline/native-http-reference/README.md). `qualify_http_recovery.py` uses the normal Workbench/ETL APIs and this directory's loopback fixture; `verify_http_recovery.py` compares its retained whole stores and observations. It covers Sequence/Flowchart success and a real root RunEtl BusinessError without claiming BPMN/model integration.
 
+The later [held-service retry journeys](../../specs/1017-direct-bpmn-hosting/evidence/pipeline/held-service-retry/README.md) qualify one authorized new physical worker/run after a terminal native/ETL fault and two process losses, directly and through all four native RunBpmn parents. `verify_held_service_retry.py` checks their original failed state, active semantic snapshot, pinned budget, exact result/parent consumption and whole stores. [Explicit FinalFault](../../specs/1017-direct-bpmn-hosting/evidence/pipeline/final-service-fault/README.md) separately proves terminal retry refusal. Remaining retry/cancellation/authorization and final upgrade/Studio acceptance is open.
+
 `Test-FiniteFileEtl.ps1` exercises the finite CSV-to-JSONL path through an isolated, owned
 Workbench process. It uses the normal HTTP APIs to inspect host bindings, create/validate/publish
 an ETL definition, publish native workflow definitions, and execute the resulting artifacts. The
