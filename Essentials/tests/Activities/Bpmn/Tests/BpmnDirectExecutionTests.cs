@@ -25,6 +25,58 @@ public sealed class BpmnDirectExecutionTests : IDisposable
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
     private readonly string database = Path.Combine(Path.GetTempPath(), "elsa-direct-bpmn-" + Guid.NewGuid().ToString("N") + ".sqlite");
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task An_in_flight_native_start_from_the_actual_cancelled_capture_requires_positive_retirement(bool removeCancellationSource)
+    {
+        await using (var raw = File.OpenRead(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ActualNativeStartRetirement.sqlite.gz")))
+        await using (var zipped = new System.IO.Compression.GZipStream(raw, System.IO.Compression.CompressionMode.Decompress))
+        await using (var target = File.Create(database)) await zipped.CopyToAsync(target);
+        await using var host = await OpenAsync(configure: services => services.Replace(ServiceDescriptor.Singleton<TimeProvider>(TimeProvider.System)),
+            activityIds: ["retired-root-1", "retired-root-2"]);
+        await using var scope = await ScopeAsync(host);
+        var db = scope.ServiceProvider.GetRequiredService<RuntimeDbContext>();
+        var model = Assert.Single((await scope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>().ListPageAsync(new())).Items);
+        var cancellation = Assert.Single(BpmnDirectExecutionDriver.Read(model).Cancellations!);
+        var origin = cancellation.Origin;
+        if (removeCancellationSource)
+        {
+            var encodedKind = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(BpmnNativeWorkBoundary.CancelKind));
+            Assert.Equal(1, await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM elsa_runtime_post_commit_outbox WHERE ContentJson LIKE {"%" + encodedKind + "%"}"));
+        }
+        var identity = BpmnNativeWorkBoundary.WorkerIdentity(origin.Scope, origin.ExecutionId, origin.InvocationId, origin.AttemptId, origin.WorkerExecutable);
+        var starts = scope.ServiceProvider.GetRequiredService<IWorkflowStartDispatcher>();
+        var result = await starts.DispatchAsync(new(origin.WorkerExecutable.ArtifactId, model.Authority.SystemIdentity,
+            origin.WorkerExecutionId, identity.StartKey, null, null, null, null, null, WorkflowRunKind.PublishedRun,
+            null, WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy, null, null, model.TenantId,
+            new(origin.Scope.Value), model.Authority, WorkflowExecutableStartAuthority.FromModelWork(origin)));
+        if (removeCancellationSource)
+        {
+            // Durable transport acceptance is not retirement: unavailable proof leaves the original work queued.
+            Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, result.CommandDispatch.Status);
+            await AssertNativeEmptyAsync(scope.ServiceProvider);
+            Assert.NotEmpty((await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAsync(new(origin.WorkerExecutionId))).Items);
+            var workerId = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(origin.WorkerExecutionId));
+            Assert.False(await db.RuntimeCheckpointCommits.AnyAsync(row => row.WorkflowExecutionId == workerId));
+            Assert.Equal(2, (await scope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>().FindAsync(model.ExecutionId))!.Revision);
+            return;
+        }
+        Assert.True(result.CommandDispatch.Status == WorkflowExecutionCommandDispatchStatus.Accepted, result.CommandDispatch.Reason);
+        Assert.Null(await scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(origin.WorkerExecutionId));
+        Assert.Empty((await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAsync(new(origin.WorkerExecutionId))).Items);
+        await AssertNativeEmptyAsync(scope.ServiceProvider);
+        var markers = await db.RuntimeCheckpointCommits.AsNoTracking().ToArrayAsync();
+        Assert.Single(markers, row => row.WorkflowExecutionId == Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(origin.WorkerExecutionId)));
+        // Replaying the same stale start must converge without another admission or checkpoint marker.
+        await starts.DispatchAsync(new(origin.WorkerExecutable.ArtifactId, model.Authority.SystemIdentity,
+            origin.WorkerExecutionId, identity.StartKey, null, null, null, null, null, WorkflowRunKind.PublishedRun,
+            null, WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy, null, null, model.TenantId,
+            new(origin.Scope.Value), model.Authority, WorkflowExecutableStartAuthority.FromModelWork(origin)));
+        Assert.Equal(markers.Length, await db.RuntimeCheckpointCommits.CountAsync());
+        await AssertNativeEmptyAsync(scope.ServiceProvider);
+    }
+
     [Fact]
     public async Task Cancellation_keeps_its_exact_receipt_reason_and_final_state_across_provider_restart()
     {
@@ -239,7 +291,8 @@ public sealed class BpmnDirectExecutionTests : IDisposable
         }
     }
 
-    private async Task<WorkflowExecutionHarness> OpenAsync(bool admitNewExecutions = true, Action<IServiceCollection>? configure = null)
+    private async Task<WorkflowExecutionHarness> OpenAsync(bool admitNewExecutions = true, Action<IServiceCollection>? configure = null,
+        params string[] activityIds)
     {
         var host = WorkflowExecutionHarness.Create().ConfigureServices(services =>
         {
@@ -253,7 +306,7 @@ public sealed class BpmnDirectExecutionTests : IDisposable
                 RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('h', 32)
             }).AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
             configure?.Invoke(services);
-        }).Build();
+        }).Build(activityIds);
         try
         {
             foreach (var initializer in host.Services.GetServices<IShellInitializer>()) await initializer.InitializeAsync();

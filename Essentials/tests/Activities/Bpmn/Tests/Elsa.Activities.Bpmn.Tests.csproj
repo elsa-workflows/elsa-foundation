@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Fixtures/LegacyCompensationState.json" LogicalName="Bpmn.LegacyCompensationState.json" />
+    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/pipeline/native-start-retirement/pending-elsa.sqlite.gz" Link="Fixtures/ActualNativeStartRetirement.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
