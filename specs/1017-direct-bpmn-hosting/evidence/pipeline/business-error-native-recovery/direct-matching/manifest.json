@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-direct-bpmn-native-etl-business-error",
+  "sourceRevision": "d55964a76139349eeff722501df473401cce204d",
+  "case": "capture",
+  "businessErrorBoundary": "matching",
+  "assets": [
+    {
+      "path": "capture/before-checked-model.json",
+      "sha256": "0ea1e9e10132c349ef12f935debd414c99020db9109bd56ce9baadfb09d20b88"
+    },
+    {
+      "path": "capture/before-elsa.sqlite.gz",
+      "sha256": "bb00d61bdb2a4d109190cec036ecc4adacc3ca3a3d480e243eebb759b798f13a"
+    },
+    {
+      "path": "capture/before-etl-design.sqlite.gz",
+      "sha256": "8378f032f6d2d984128f015f7f4134c207d68d235f2e7fb3384f393efc6a6ed3"
+    },
+    {
+      "path": "capture/before-etl-runtime.sqlite.gz",
+      "sha256": "910097b9bacc6539548e4782db5920a8b5c1c584ddb251833aaca0771015bb9a"
+    },
+    {
+      "path": "capture/before-wire.json",
+      "sha256": "1d9c127833dc953c76b744ff1fcb4ac57851935c3f297d2f7e2a977088a244ce"
+    },
+    {
+      "path": "capture/before.json",
+      "sha256": "6f6947cd7256ec69ee2f5fc75969f6b9a7a8b2ac9d842bff50836ae2932252e4"
+    },
+    {
+      "path": "capture/finished-checked-model.json",
+      "sha256": "d359f6fa7cc71604120d045ffebeca72b3584fda1957628fc1f448059912abb3"
+    },
+    {
+      "path": "capture/finished-elsa.sqlite.gz",
+      "sha256": "fd8106ab73d2d161d5eb2dd1bde0020fb60c976ff372663a0e37115fc26373cd"
+    },
+    {
+      "path": "capture/finished-etl-design.sqlite.gz",
+      "sha256": "e831fa487d874b30d0a81ea3067a84414a244be3e33f07d156f36a21e44bf29f"
+    },
+    {
+      "path": "capture/finished-etl-runtime.sqlite.gz",
+      "sha256": "6692d2296c820104bbda27bb0a5f476986d438589467c66b7e884122d61a1e8e"
+    },
+    {
+      "path": "capture/finished-wire.json",
+      "sha256": "41b339729a51838d1e763f5a0f3dee3d23a55838adb3af3c3e0fef49e1ea80dd"
+    },
+    {
+      "path": "capture/finished.json",
+      "sha256": "44ec668ccb0d680f21c7f441a8ccdca5f60851553d74e7da0e7202f7d55e5775"
+    },
+    {
+      "path": "capture/process.json",
+      "sha256": "ae6de54023b7a28494933568b6d0a047f8cd1c22ccb6909cbf1618e4b01df906"
+    },
+    {
+      "path": "capture/recovered.json",
+      "sha256": "6f6947cd7256ec69ee2f5fc75969f6b9a7a8b2ac9d842bff50836ae2932252e4"
+    },
+    {
+      "path": "capture/retained-checked-model.json",
+      "sha256": "d359f6fa7cc71604120d045ffebeca72b3584fda1957628fc1f448059912abb3"
+    },
+    {
+      "path": "capture/retained-wire.json",
+      "sha256": "41b339729a51838d1e763f5a0f3dee3d23a55838adb3af3c3e0fef49e1ea80dd"
+    },
+    {
+      "path": "capture/retained.json",
+      "sha256": "44ec668ccb0d680f21c7f441a8ccdca5f60851553d74e7da0e7202f7d55e5775"
+    },
+    {
+      "path": "capture/safe-errors.json",
+      "sha256": "39d679ef113873784635aecb4105d095be0589df94213434a1b57aef5f84c124"
+    }
+  ]
+}

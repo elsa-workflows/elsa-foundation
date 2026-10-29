@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-bpmn-etl-business-error-matrix",
+  "sourceRevision": "d55964a76139349eeff722501df473401cce204d",
+  "cases": [
+    {
+      "name": "direct-matching",
+      "parent": "Direct",
+      "boundary": "matching",
+      "manifest": "direct-matching/manifest.json",
+      "sha256": "2cd58975dbb74c190889e91fb34e3e3ef65e61dc4c8fe73a560754a2e027b7b7"
+    },
+    {
+      "name": "direct-different",
+      "parent": "Direct",
+      "boundary": "different",
+      "manifest": "direct-different/manifest.json",
+      "sha256": "f903b57481cb014d8e0c228c87d111d9c486502a6fed076df188ad797fb457e7"
+    },
+    {
+      "name": "root-matching",
+      "parent": "Root",
+      "boundary": "matching",
+      "manifest": "root-matching/manifest.json",
+      "sha256": "30681a09ed793a0522df3c8fc8ec591805ed8d45b5080ee84d7557e3f7b0b895"
+    },
+    {
+      "name": "root-different",
+      "parent": "Root",
+      "boundary": "different",
+      "manifest": "root-different/manifest.json",
+      "sha256": "bf98e79288bbc786ed879bb6b7772a4f58d65fb3be05d5f7c557faa17ae862d0"
+    },
+    {
+      "name": "sequence-matching",
+      "parent": "Sequence",
+      "boundary": "matching",
+      "manifest": "sequence-matching/manifest.json",
+      "sha256": "7b624ed8d28ffeecf26aecfe6ca81ff4b72ebd0ab1c03996bfdc4f197b4b3df4"
+    },
+    {
+      "name": "sequence-different",
+      "parent": "Sequence",
+      "boundary": "different",
+      "manifest": "sequence-different/manifest.json",
+      "sha256": "e00d6ec73b7258c658292487b2f2a00a9c5b6277799f708076e8b01ae7422c04"
+    },
+    {
+      "name": "flowchart-matching",
+      "parent": "Flowchart",
+      "boundary": "matching",
+      "manifest": "flowchart-matching/manifest.json",
+      "sha256": "4db378c0c2be2f5cf70dbf6d3edb667d4420fb3f682cb061d217d0d0920cfc76"
+    },
+    {
+      "name": "flowchart-different",
+      "parent": "Flowchart",
+      "boundary": "different",
+      "manifest": "flowchart-different/manifest.json",
+      "sha256": "a9249af68348033569be760ef913a65b1318cf77c3e76aec4658debbd4d44be5"
+    },
+    {
+      "name": "compensationscope-matching",
+      "parent": "CompensationScope",
+      "boundary": "matching",
+      "manifest": "compensationscope-matching/manifest.json",
+      "sha256": "8877bb4ab38ef4beb41fe16ac4643fdf8184c428c7b0a557d32cabd7a8dddf04"
+    },
+    {
+      "name": "compensationscope-different",
+      "parent": "CompensationScope",
+      "boundary": "different",
+      "manifest": "compensationscope-different/manifest.json",
+      "sha256": "edb9538caa2fde3de7771b593a5a66e19bf82950eda9ffb297f256fdd10d1f7f"
+    }
+  ]
+}

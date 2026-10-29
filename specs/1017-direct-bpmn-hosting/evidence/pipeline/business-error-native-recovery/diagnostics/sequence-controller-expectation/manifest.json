@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-journey-controller-counterexample",
+  "sourceRevision": "208bcab970e9864ddff987332f5657f066cd1f44",
+  "qualifyingRecovery": false,
+  "assets": [
+    {
+      "path": "capture/before-checked-embedding.json",
+      "sha256": "65ad3445967c9c2d1bf9f0e18c52047cf63804ef55487ef2c576785cc4356b5e"
+    },
+    {
+      "path": "capture/before-checked-model.json",
+      "sha256": "3bc04ded3ff4a1547ec7bde680c2538d63bd6b6993ffef9beae2a6248bcf4194"
+    },
+    {
+      "path": "capture/before-elsa.sqlite.gz",
+      "sha256": "367c16622fa4513eab08ff5f2bdd71ff9b0395e66bae71ea157f907fa37ac7b1"
+    },
+    {
+      "path": "capture/before-etl-design.sqlite.gz",
+      "sha256": "f1bb03f124af3771945dcfb30e6c77df13e77f66c9800c312f40a27638355833"
+    },
+    {
+      "path": "capture/before-etl-runtime.sqlite.gz",
+      "sha256": "de5b25a87e0fa9b41efd414148aeb784934108f35fe52a5bebfdfdd4ec2ee1ff"
+    },
+    {
+      "path": "capture/before-wire.json",
+      "sha256": "9d03fe4b17764ae011c49a9d27f18d32654ffa192e6266eff81db2f60b9adf4a"
+    },
+    {
+      "path": "capture/before.json",
+      "sha256": "7b3516e4998f0a7f1f7f33b5c69ce094ed84f6eb8c97b5c630aa4a42eb2e19ed"
+    },
+    {
+      "path": "capture/failed-after-request.json",
+      "sha256": "7010f88076b999939f721fef0afcb0fb7e1142b19c2a77ed1628d161835deaa0"
+    },
+    {
+      "path": "capture/failed-checked-embedding.json",
+      "sha256": "ada396aa5abc7265240fa5c9ebb9484a02d7a73eb8b375b56e65212e3430878b"
+    },
+    {
+      "path": "capture/failed-checked-model.json",
+      "sha256": "bbd511611be9e1047a46246a2604b5c75829cd7504fd339498a46c831ab98034"
+    },
+    {
+      "path": "capture/failed-elsa.sqlite.gz",
+      "sha256": "0b0df7e6a47db93978e0404f6e5f7a7d6f9591c5c3d217ed30068112ca079179"
+    },
+    {
+      "path": "capture/failed-etl-design.sqlite.gz",
+      "sha256": "8bd9d1313fb67bf09d87f43dd09bc7066333a28a3c1679c03aa0e644fe0ab69b"
+    },
+    {
+      "path": "capture/failed-etl-runtime.sqlite.gz",
+      "sha256": "48589a129dda6776f9826765b215c5ef82d31790bb1b7a0ea1704e1aca1d074f"
+    },
+    {
+      "path": "capture/failed-wire.json",
+      "sha256": "1577838d5b462060eb2de6fd9e3c86b99c0c3dab9b8ce19d9cb20fad4654ca28"
+    },
+    {
+      "path": "capture/failure.json",
+      "sha256": "97e7c70ea997dd4064530a58649dd1ecd59c141cb3ffc094ad461a66c001770a"
+    },
+    {
+      "path": "capture/recovered.json",
+      "sha256": "7b3516e4998f0a7f1f7f33b5c69ce094ed84f6eb8c97b5c630aa4a42eb2e19ed"
+    }
+  ]
+}

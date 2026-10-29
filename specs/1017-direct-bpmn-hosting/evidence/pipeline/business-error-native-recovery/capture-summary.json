@@ -1,0 +1,28 @@
+{
+  "sourceRevision": "d55964a76139349eeff722501df473401cce204d",
+  "cases": 10,
+  "rawAssets": 204,
+  "wholeStores": 60,
+  "ownedChildrenStopped": 40,
+  "supersededChildrenStopped": 41,
+  "diagnostics": [
+    {
+      "name": "sequence-controller-expectation",
+      "sourceRevision": "208bcab970e9864ddff987332f5657f066cd1f44",
+      "assets": 16,
+      "ownedChildrenStopped": 3
+    },
+    {
+      "name": "flowchart-incident-inventory",
+      "sourceRevision": "663464b61595969ba0d5e1ba4183131d147191b6",
+      "assets": 14,
+      "ownedChildrenStopped": 3
+    },
+    {
+      "name": "compensation-absorption",
+      "sourceRevision": "663464b61595969ba0d5e1ba4183131d147191b6",
+      "assets": 16,
+      "ownedChildrenStopped": 3
+    }
+  ]
+}

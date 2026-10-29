@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "executingSource": "d55964a76139349eeff722501df473401cce204d",
+  "runtimeImplementationSource": "663464b61595969ba0d5e1ba4183131d147191b6",
+  "observerOnlyDelta": [
+    "e2e-tests/etl/qualify_http_recovery.py",
+    "e2e-tests/etl/verify_http_recovery.py"
+  ],
+  "actualJourneysPassed": 10,
+  "businessErrorBoundaryModes": [
+    "matching",
+    "different"
+  ],
+  "parentShapes": [
+    "Direct",
+    "Root",
+    "Sequence",
+    "Flowchart",
+    "CompensationScope"
+  ],
+  "qualifyingRawAssets": 204,
+  "wholeStoresVerified": 60,
+  "diagnosticRawAssets": 46,
+  "diagnosticWholeStoresIntegrityChecked": 18,
+  "diagnosticsQualifyAsRecovery": false,
+  "ownedWorkbenchProcesses": 30,
+  "ownedHttpProcesses": 10,
+  "actualSigkillExits": 10,
+  "all40QualifiedListedChildrenStopped": true,
+  "all41RejectedOrSupersededListedChildrenStopped": true,
+  "resumptionSweepIntervalSeconds": 0.2,
+  "httpRetryAfterSeconds": 20,
+  "acceptedRecordsPerCase": 3,
+  "rejectedRecordsPerCase": 1,
+  "physicalHttpOutputRecordsPerCase": 3,
+  "safeErrorRecordsPerCase": 1,
+  "completeWorkerModelParentPinsAndExactReceiptsVerified": true,
+  "sameSourceInterpreterTracesCompared": true,
+  "normalization": [
+    "Only self-referential token.producingWorkHandle equal to model.executionId"
+  ],
+  "capturedFirstPartyProducts": 12,
+  "capturedExternalLibraryHashes": false,
+  "nativeCompositeFaultStatusDecisionResolved": false,
+  "unmatchedNativeDispositions": {
+    "Root": "Faulted; one blocking RunBpmn incident",
+    "Sequence": "Workflow Faulted, composite Running observed; one blocking RunBpmn incident; #3242 undecided",
+    "Flowchart": "Workflow/composite Faulted; two blocking ActivityReturnedFault incidents",
+    "CompensationScope": "Workflow/scope Completed, Compensated; RunBpmn Faulted, incident Resolved with AbsorbFault; no completed forward step to undo"
+  },
+  "bpmnSuite": {
+    "source": "663464b61595969ba0d5e1ba4183131d147191b6",
+    "passed": 400,
+    "listed": 400,
+    "skipped": 0,
+    "newShapeControls": 9,
+    "initialMissingCapabilityControl": {
+      "passed": 7,
+      "failed": 2,
+      "skipped": 0
+    }
+  },
+  "humanModelEmbeddingSuite": {
+    "source": "663464b61595969ba0d5e1ba4183131d147191b6",
+    "passed": 8,
+    "skipped": 0
+  },
+  "standardHostBuild": {
+    "source": "d55964a76139349eeff722501df473401cce204d",
+    "errors": 0,
+    "warnings": 261,
+    "testOnlyProbeEnabled": false
+  },
+  "portableControls": {
+    "passed": 119,
+    "failed": 0,
+    "skipped": 0,
+    "prior": 106,
+    "newPositiveMatrix": 1,
+    "newRehashedNegativeControls": 12
+  },
+  "mapsCheckPassed": true,
+  "testTiers": 123,
+  "frozenBaselineAssetsUnchanged": 104,
+  "frozenBaselineManifestUnchanged": true,
+  "modelHeldFaultRetryProved": false,
+  "technicalFinalFaultProved": false,
+  "finalUpgradeAndStudioProved": false,
+  "fullPrReviewRoundsCompleted": 0,
+  "fullPrReviewRoundBound": 6,
+  "commands": [
+    "dotnet test Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj -c Release --no-restore",
+    "dotnet test Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj -c Release --no-build --no-restore --filter FullyQualifiedName~RunBpmnWorkbenchTests",
+    "python3 -m unittest discover -s e2e-tests/etl -p test_*.py",
+    "dotnet run --project tools/maps/Elsa.Maps.Generator -- check",
+    "dotnet run --project tools/maps/Elsa.Maps.Generator --no-build -- test-tiers-check"
+  ],
+  "validationLogs": [
+    {
+      "path": "validation/bpmn-suite-source663464b61.log",
+      "sha256": "c7535a30bef39afc435ae1167a9dbbb0fedaa1fbe6c6440811b8dd728ae52503"
+    },
+    {
+      "path": "validation/bpmn-list400.log",
+      "sha256": "80c34f96bd8044563d6fd41f91af075ed0227ffaf307eecf4a612ec27ca0523a"
+    },
+    {
+      "path": "validation/human-host-source663464b61.log",
+      "sha256": "34e0ede5351f9ef29e92cb978fb2f69d2420cf0a7448d8fd5de9bf00e3b2d984"
+    },
+    {
+      "path": "validation/source-matched-host-build.log",
+      "sha256": "aff01bcc321407319af014ba9046e4e5a558e82ceeffd2b42ddad241f224f9d4"
+    },
+    {
+      "path": "validation/portable119.log",
+      "sha256": "da720f9469856bcb3ccd1239fdaf0378e20813066f29e28b7646efa5d3a2f355"
+    },
+    {
+      "path": "validation/maps.log",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+    },
+    {
+      "path": "validation/test-tiers123.log",
+      "sha256": "91cc02f2f85c466bbc3d5d675d3bf055059b2c0e5e185229a4c4d99b174f25c4"
+    },
+    {
+      "path": "validation/initial-missing-capability-red.log",
+      "sha256": "ac9e4ea13b9a0379fd9e9302bbd3ea51215dd8b289785732042aea78ee8448d6"
+    },
+    {
+      "path": "validation/frozen-baseline104.log",
+      "sha256": "aac4df16716457bed7d4439629862613dd3319ff9bd6c0959df5fa48deb619a5"
+    }
+  ],
+  "verifierSha256": "08ee8afc6080b85bc41f8576f8aaae6dce676b4ddcf83e633535d0955f50c197",
+  "controlsSha256": "44984e9166393343856f1e6b79bd5d4be0cce3a4dd385ad136af9e75f4c97dcf",
+  "recorderSha256": "ba00d6dab95382765bd5447664ed527d4f4429ee8d9b9cacf9514994ad01d0d5"
+}
