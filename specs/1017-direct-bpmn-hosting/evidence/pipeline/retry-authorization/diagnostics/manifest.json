@@ -1,102 +1,18 @@
 {
   "schemaVersion": 1,
-  "kind": "nonqualifying-auth-denial-status-expectation",
-  "sourceRevision": "22f5f8607daa0c043f91b470b392f78b8b73887b",
-  "reason": "Reader retry was correctly concealed as HTTP404 without an outcome; the initial collector required middleware403 instead of also admitting the existing resource-level404. No production authorization behavior changed.",
-  "wholeStoresIntegrityChecked": 9,
-  "listedChildrenStopped": 5,
-  "assets": [
+  "kind": "authorization-diagnostic-capture-inventory",
+  "cases": [
     {
-      "path": "denial-status/auth-probe-users.json",
-      "sha256": "bdc724d51f5f16aa6fafac8b8ecb28ad97b3e635772f1e67c403dd7f9e493f29"
+      "manifest": "denial-status-manifest.json",
+      "sha256": "cab1c6d7c7824121c67d901bc70cb9a61abf91be7eae90654ebf839e87225063",
+      "sourceRevision": "22f5f8607daa0c043f91b470b392f78b8b73887b",
+      "scope": "Initial overly strict403 expectation rejected actual masked404. Nine whole stores; all5 listed children stopped. Not qualifying."
     },
     {
-      "path": "denial-status/before-checked-model.json",
-      "sha256": "b7bcbc0f8233d939e59734a84efce4b27859ee9cca608ad3c19e649b9661d972"
-    },
-    {
-      "path": "denial-status/before-elsa.sqlite.gz",
-      "sha256": "eb76abef096349bbe44d481270d4125016cd1f07864362838a5b3538d8cf2b42"
-    },
-    {
-      "path": "denial-status/before-etl-design.sqlite.gz",
-      "sha256": "1d23a90d9f613e0311190587314f49b967ff3804db4df83d9e061647494d5613"
-    },
-    {
-      "path": "denial-status/before-etl-runtime.sqlite.gz",
-      "sha256": "6c79fd80ad970af2d88f8f13c696c09e0c8041c2fc732574a32fbfc9e4123a53"
-    },
-    {
-      "path": "denial-status/before-wire.json",
-      "sha256": "9bfe319d783adfedfa8661be9341431912da3a58d66d0456daa51dfd81593229"
-    },
-    {
-      "path": "denial-status/before.json",
-      "sha256": "5d6ce747e64d6f8d1cba6d93fd504d475e1fb39feef64e252ae7e0f5f6fb845c"
-    },
-    {
-      "path": "denial-status/controller.txt",
-      "sha256": "82d9dbb6f27db2542133a07f9948830e03139b9c07fc4de6b11f20cc11e75252"
-    },
-    {
-      "path": "denial-status/failed-elsa.sqlite.gz",
-      "sha256": "674fb4e4072f2a1581337001a609a9a3e3cb5e3d94aa528280a98ba9fd8456ea"
-    },
-    {
-      "path": "denial-status/failed-etl-design.sqlite.gz",
-      "sha256": "df191ac69de7c7f91fb0c74b841b2d2a04babb21d06add720ed7e7fe252e8e31"
-    },
-    {
-      "path": "denial-status/failed-etl-runtime.sqlite.gz",
-      "sha256": "8010fd96aeea83d4e707913ac5e004d99b3e132e996e2c4a67859e9bae297cd4"
-    },
-    {
-      "path": "denial-status/failure.json",
-      "sha256": "cbf8819f9559032a580e24c78cfb728fec6c4775e156395d8d62abbceeb4520e"
-    },
-    {
-      "path": "denial-status/held-after-restart.json",
-      "sha256": "41c9ac61c5af9df9eb3ee15725ae03d45395348a90e4a75b37aa237365bde78f"
-    },
-    {
-      "path": "denial-status/held-checked-model.json",
-      "sha256": "eaf961557d2e479fd470ee7043e29ceec85211bf7c72c709d223d83ec81b468c"
-    },
-    {
-      "path": "denial-status/held-elsa.sqlite.gz",
-      "sha256": "463c041de4ef91d042969541c5eb8df480601e41b6400ceff62627d08a4c4243"
-    },
-    {
-      "path": "denial-status/held-etl-design.sqlite.gz",
-      "sha256": "8251bada00959c00ce61e689c7607efa96c3aa61fa018d2a2b233d6e09ac9ab3"
-    },
-    {
-      "path": "denial-status/held-etl-runtime.sqlite.gz",
-      "sha256": "6e0f947eb45dc2495a2c2afc486040ef7b3bc0b9fa17b9d57c7f1153cf9d8d20"
-    },
-    {
-      "path": "denial-status/held-wire.json",
-      "sha256": "9bfe319d783adfedfa8661be9341431912da3a58d66d0456daa51dfd81593229"
-    },
-    {
-      "path": "denial-status/held.json",
-      "sha256": "41c9ac61c5af9df9eb3ee15725ae03d45395348a90e4a75b37aa237365bde78f"
-    },
-    {
-      "path": "denial-status/lookup-snapshot.csv",
-      "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
-    },
-    {
-      "path": "denial-status/lookup-source.csv",
-      "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
-    },
-    {
-      "path": "denial-status/recovered.json",
-      "sha256": "5d6ce747e64d6f8d1cba6d93fd504d475e1fb39feef64e252ae7e0f5f6fb845c"
-    },
-    {
-      "path": "denial-status/snapshot-unavailability.json",
-      "sha256": "3e3ab5cb39f9af296f2198056ac900158c3016e9fb19e420a11c65b12f5eef6d"
+      "manifest": "pre-order-fix/manifest.json",
+      "sha256": "fc19a9dbea24e7ce7ec6f5352a46f9a2045c3a1028cd63b4d523e8cccbbbd5bd",
+      "sourceRevision": "b14152e7a292d2f312026892e38613550737afc1",
+      "scope": "Five real role/tenant/replay journeys qualify their source behavior and no outcome disclosure. They do not prove read authorization precedes command lookup: source audit and seven failing ordering controls found the old GET ordering. Final fixed-source qualification is separate.45 whole stores/186 raw assets; all30 listed children stopped."
     }
   ]
 }

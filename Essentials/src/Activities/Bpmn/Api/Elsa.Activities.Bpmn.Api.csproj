@@ -3,6 +3,7 @@
     <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Tests" />
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
     <PackageReference Include="NativeEndpoints" />
     <PackageReference Include="CShells.Abstractions" />

@@ -75,11 +75,25 @@ internal sealed class BpmnApiCaller(IHttpContextAccessor contexts, NormalizedPri
     {
         var caller = Current();
         var state = await runtime.FindExecutionAsync(executionId, caller, cancellationToken);
-        var result = await runtime.FindCommandAsync(executionId, requestId, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
         if (!validator.TryGetNormalizedPrincipal(contexts.HttpContext!.User, out var principal)) throw new BpmnModelResourceMissingException();
-        var decision = await authorization.AuthorizeAsync(new(principal, BpmnHostingApi.Read, caller.TenantId, (object?)state ?? result), cancellationToken);
-        if (!decision.Succeeded) throw new BpmnModelResourceMissingException();
+        // Pending admission has no execution state yet. Authorize its command identity
+        // without first loading a retained outcome; this is not an execution-state projection.
+        await RequireReadAsync((object?)state ?? new BpmnModelCommandOutcome(executionId, requestId, false, true, null));
+        var result = await runtime.FindCommandAsync(executionId, requestId, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
+        if (state is null && (!result.Pending || result.Result is not null))
+        {
+            // Admission may have committed between the two reads. The resulting execution
+            // must pass its own resource policy before its retained value is disclosed.
+            var admitted = await runtime.FindExecutionAsync(executionId, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
+            await RequireReadAsync(admitted);
+        }
         return result;
+
+        async ValueTask RequireReadAsync(object resource)
+        {
+            var decision = await authorization.AuthorizeAsync(new(principal, BpmnHostingApi.Read, caller.TenantId, resource), cancellationToken);
+            if (!decision.Succeeded) throw new BpmnModelResourceMissingException();
+        }
     }
 }
 

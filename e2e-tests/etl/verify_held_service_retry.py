@@ -40,14 +40,16 @@ def source_and_receipt(checked,result,revision):
         'A worker result was acknowledged without its exact physical-attempt consumption receipt.')
 
 
-def verify_case(root,expected_parent,source):
+def verify_case(root,expected_parent,source,authorization=False):
     read=lambda name:json.loads((root/name).read_text())
     p=read('process.json');embedded=expected_parent!='direct';products=p['products']
     require(p['schemaVersion']==1 and p['kind']=='actual-model-held-service-retry' and p['sourceRevision']==source and p['parent']=='BpmnModel' and
         p['embeddedParent']==({'root':'Root','sequence':'Sequence','flowchart':'Flowchart','compensationscope':'CompensationScope'}.get(expected_parent)) and
         p['technicalFault'] and not p['businessError'] and p['technicalFaultPolicy']=='HoldForRetry' and p['maxServiceAttempts']==2 and
         p['retryAfterSeconds']==20 and p['resumptionSweepIntervalSeconds']==.2 and p['predecessorExitCode']==p['heldPredecessorExitCode']==-9 and
-        [x['role'] for x in p['processes']]==['http-fixture']+['workbench']*4 and len({x['processId'] for x in p['processes']})==5 and
+        p.get('authorizationControls',False) is authorization and
+        [x['role'] for x in p['processes']]==(['http-fixture','workbench','workbench','auth-sdk','workbench','workbench'] if authorization else ['http-fixture']+['workbench']*4) and
+        len({x['processId'] for x in p['processes']})==(6 if authorization else 5) and
         len({x['controllerProcessId'] for x in p['processes']})==1 and all(x['started'] for x in p['processes']),
         'The held retry lacks its exact policy, source or two real process-loss cuts.')
     require(products['sourceCommit']==source and products['metadataOnly'] and len(products['actualProductVersions'])==12 and
@@ -138,7 +140,70 @@ def verify_case(root,expected_parent,source):
                         require(inv==original_invocation,'The original immutable ETL invocation changed after retry.')
             stores+=1
     if embedded:verify_parent(root,p,observations,final)
+    if authorization:verify_authorization(root,p,h['resultInput'],read('retry-command.json')['accepted'])
     return {'parent':expected_parent,'wholeStoresVerified':stores,'physicalOutputRecords':6,'failedAttemptPreserved':True}
+
+
+def verify_authorization(root,p,original_receipt,retry_command):
+    read=lambda name:json.loads((root/name).read_text());setup=read('auth-probe-users.json');source=p['sourceRevision']
+    expected={'reader':('default',{'bpmn:read'}),'retrier':('default',{'bpmn:retry-service'}),'nobody':('default',set()),'foreign':('bpmn-probe-foreign',{'bpmn:read','bpmn:retry-service'})}
+    def no_credentials(value):
+        if isinstance(value,dict):
+            require(not {key.lower() for key in value}&{'password','passwordhash','access_token','accesstoken','refresh_token','refreshtoken','cookie','cookies','authorization','credentials'},
+                'Public authorization observations contain a credential or cookie field.')
+            for item in value.values():no_credentials(item)
+        elif isinstance(value,list):
+            for item in value:no_credentials(item)
+    no_credentials(setup)
+    users={u['userName'].removeprefix('bpmn-probe-'):u for u in setup['users']}
+    require(setup['operation']=='create-owned-auth-probe-users' and setup['credentialsIncluded'] is False and setup['executionStateSeeded'] is False and
+        len(setup['users'])==4 and set(users)==set(expected) and len({u['userId'] for u in users.values()})==len({u['roleId'] for u in users.values()})==4 and
+        len(setup['products'])==5 and all(x['informationalVersion'].endswith('+'+source) and re.fullmatch('[a-f0-9]{64}',x['sha256']) for x in setup['products']),
+        'The authorization journey lost its normal Identity setup, source or distinct scoped accounts.')
+    for name,(tenant,permissions) in expected.items():
+        require(users[name]['tenantId']==tenant and set(users[name]['permissions'])==permissions,'An owned Identity account acquired a different tenant or permission grant.')
+    for stage in ('before','after','retained'):
+        evidence=read('auth-'+stage+'.json');principals=evidence['principals'];outcomes=evidence['outcomes']
+        no_credentials(evidence)
+        require(evidence['schemaVersion']==1 and evidence['kind']=='actual-bpmn-retry-http-authorization' and evidence['sourceRevision']==source and evidence['stage']==stage and
+            evidence['modelExecutionId']==p['modelExecutionId'] and evidence['credentialsIncluded'] is False and evidence['mockAuthenticationUsed'] is False and
+            len(principals)==4 and {x['profile'] for x in principals}==set(expected),'The actual HTTP authorization stage lost its real signed-in principals or scope.')
+        for principal in principals:
+            profile=principal['profile'];session=principal['session'];user=users[profile];tenant,permissions=expected[profile]
+            require(session['status']=='authenticated' and session['subject']==user['userId'] and session['tenantId']==tenant and set(session['permissions'])==permissions and
+                session['roles']==[user['roleId']], 'The real sign-in principal differs from its stored scoped Identity grant.')
+        wanted=set()
+        for profile in ('anonymous',*expected):
+            for operation in ('read-execution','read-incidents','read-command'):wanted.add((profile,operation))
+            if profile!='reader':wanted.add((profile,'read-unknown-command'))
+            if stage!='before' or profile!='retrier':wanted.add((profile,'retry-before-admission' if stage=='before' else 'retry-replay'))
+        require(len(outcomes)==len(wanted) and {(x['profile'],x['operation']) for x in outcomes}==wanted,'An authorization stage omitted or duplicated a required HTTP probe.')
+        for outcome in outcomes:
+            profile=outcome['profile'];operation=outcome['operation'];allowed=profile=='reader' and operation.startswith('read-') or profile=='retrier' and operation=='retry-replay'
+            codes=[200] if allowed else [401] if profile=='anonymous' else [403,404]
+            require(outcome['permittedHttpStatuses']==codes and outcome['httpStatus'] in codes and outcome['returnedOutcome'] is allowed,
+                'A denied/replayed HTTP operation disclosed an outcome or crossed its actual permission/tenant boundary.')
+        for profile in ('anonymous','retrier','nobody','foreign'):
+            codes=[x['httpStatus'] for x in outcomes if x['profile']==profile and x['operation'] in ('read-command','read-unknown-command')]
+            require(len(set(codes))==1,'Denied existing/missing commands exposed a resource-existence distinction.')
+        command=evidence['expectedCommand'];wanted_command=original_receipt if stage=='before' else retry_command
+        require(command['inputId']==wanted_command['inputId'] and command['result']==wanted_command['result'],'The role-authorized read/replay inspected a different retained command result.')
+    # Identity grants are ordinary persisted user/role writes; no runtime state is seeded.
+    raw=gzip.decompress((root/p['finishedStores']['elsa']['file']).read_bytes())
+    with tempfile.TemporaryDirectory(prefix='elsa-auth-grants-read-') as tmp:
+        db=Path(tmp)/'snapshot.sqlite';db.write_bytes(raw)
+        with closing(sqlite3.connect(db.as_uri()+'?mode=ro&immutable=1',uri=True)) as c:
+            def decode(value):return base64.b64decode(value,validate=True).decode('utf-16le')
+            def values(value):return {decode(x) for x in json.loads(decode(value))}
+            for profile,user in users.items():
+                row=c.execute('SELECT TenantId,UserId,UserName,RoleIdsJson,DirectPermissionsJson,Status,PasswordHash FROM identity_users WHERE UserId=?',(v.key(user['userId']),)).fetchone()
+                require(row is not None and decode(row[0])==user['tenantId'] and decode(row[1])==user['userId'] and decode(row[2])==user['userName'] and
+                    values(row[3])=={user['roleId']} and values(row[4])==set() and row[5]==0 and bool(row[6]),'The real signed-in account lacks its normal stored credential/role relationship.')
+                row=c.execute('SELECT TenantId,RoleId,Name,PermissionsJson,System FROM identity_roles WHERE RoleId=?',(v.key(user['roleId']),)).fetchone()
+                require(row is not None and decode(row[0])==user['tenantId'] and decode(row[1])==user['roleId'] and decode(row[2])==user['userName']+'-role' and
+                    values(row[3])==expected[profile][1] and row[4]==0,'The physical Identity role lost its exact bounded permission or tenant grant.')
+                links=c.execute('SELECT TenantId,UserId,RoleId FROM identity_user_roles WHERE UserId=?',(v.key(user['userId']),)).fetchall()
+                require(len(links)==1 and tuple(decode(x) for x in links[0])==(user['tenantId'],user['userId'],user['roleId']), 'The actual framework user-role membership differs from the authorized principal.')
 
 
 def physical_runtime(c,phase,p,observed,replacement,old,success,command,embedded):
@@ -305,15 +370,18 @@ def verify(path):
     root=path.resolve().parent;manifest=json.loads(path.read_text());source=manifest['sourceRevision'];cases=manifest['cases']
     require(manifest['schemaVersion']==1 and manifest['kind']=='actual-bpmn-etl-held-retry-matrix' and re.fullmatch('[a-f0-9]{40}',source) and
         len(cases)==5 and {c['name'] for c in cases}=={'direct','root','sequence','flowchart','compensationscope'}, 'The held retry matrix lacks every unique direct/native parent.')
+    authorization=manifest.get('authorizationControls',False)
+    require(isinstance(authorization,bool),'The authorization qualification flag is invalid.')
     names={'process.json','before.json','recovered.json','held.json','held-after-restart.json','finished.json','retained.json','retry-command.json','snapshot-unavailability.json',
         'lookup-source.csv','lookup-snapshot.csv'}|{p+'-wire.json' for p in ('before','held','finished','retained')}|{p+'-checked-model.json' for p in ('before','held','finished','retained')}|{
         p+'-checked-replacement.json' for p in ('finished','retained')}|{p+'-'+s+'.sqlite.gz' for p in ('before','held','finished') for s in ('elsa','etl-runtime','etl-design')}
+    if authorization:names|={'auth-probe-users.json','auth-before.json','auth-after.json','auth-retained.json'}
     products=None;traces={};results=[]
     for case in cases:
         directory=case['name'];assets=case['assets'];expected=names|({p+'-checked-embedding.json' for p in ('before','held','finished','retained')} if directory!='direct' else set())
         require(len(assets)==len(expected) and {a['path'] for a in assets}=={directory+'/'+n for n in expected}, 'The held retry case lacks its exact raw assets.')
         for asset in assets:require(q.digest(q.evidence_file(root,asset['path']))==asset['sha256'],'An actual held retry asset differs.')
-        results.append(verify_case(root/directory,directory,source))
+        results.append(verify_case(root/directory,directory,source,authorization))
         process=json.loads((root/directory/'process.json').read_text())
         if products is None:products=process['products']
         require(products==process['products'],'The held retry cases used different first-party host products.')
@@ -327,7 +395,8 @@ def verify(path):
             traces[phase]=state
     return {'actualHeldRetryJourneys':results,'wholeStoresVerified':sum(r['wholeStoresVerified'] for r in results),'sourceRevision':source,
         'oneAuthorizedPhysicalRetryProved':True,'oldFailurePreserved':True,'sameSourceInterpreterTracesCompared':True,
-        'budgetExhaustionProved':False,'heldCancellationProved':False,'obsoleteResultControlsProved':False,'authorizationBeforeReplayProved':False,
+        'budgetExhaustionProved':False,'heldCancellationProved':False,'obsoleteResultControlsProved':False,'authorizationBeforeReplayProved':authorization,
+        'tenantIsolationBeforeReplayProved':authorization,'actualAuthorizationHttpProbes':355 if authorization else 0,
         'finalUpgradeAndStudioProved':False}
 
 
