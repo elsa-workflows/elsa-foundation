@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-bpmn-pending-cancellation-matrix",
+  "sourceRevision": "b2251d591944fd89663748edac064b07cea89aa4",
+  "cases": [
+    {
+      "stage": "model-command",
+      "manifest": "model-command/manifest.json",
+      "sha256": "9a3d2cd03a0788662099940b89782baa3d4c86cde6a8194118bfe9c0693b6e84"
+    },
+    {
+      "stage": "native-terminal",
+      "manifest": "native-terminal/manifest.json",
+      "sha256": "3b96ea740731ce5bca7afeb99c131a1e51257c60b54f2d6ce4e669739ad86647"
+    }
+  ]
+}

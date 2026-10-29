@@ -154,8 +154,107 @@ def physical_model_cancellation(connection,read,checked,origin,result):
         raise ValueError("The model settled before actual downstream cancellation delivery.")
 
 
+def pending_cancellation(read,root,process,bridge,model_cancel):
+    checked,origin,result=bridge;pending=read('pending.json');observed=read('pending-checked.json');model=observed['model'];worker=observed['worker']
+    stage='model-command' if model_cancel else 'native-terminal';before=read('before.json')
+    if (process.get('pendingCancellationStage')!=stage or process.get('pendingPredecessorExitCode')!=-9 or process.get('sweepIntervalsSeconds')!=[.2,300,.2,.2] or
+            instant(process['pendingCutAtUtc'])<=instant(process['cutAtUtc']) or observed['readOnly'] is not True or observed['origin']!=origin or
+            model['executionId']!=origin['executionId'] or model['executable']!=origin['executable'] or model['scope']!=origin['scope'] or model['materialIncarnationId']!=origin['materialIncarnationId'] or
+            worker['workflowExecutionId']!=origin['workerExecutionId'] or worker['pinnedExecutable']!=origin['workerExecutable'] or worker['modelWorkOrigin']!=origin or
+            model['payload']['state']!=checked['before']['model']['payload']['state'] or observed['queuedModelInputs'] or
+            read('pending-wire.json')!=read('before-wire.json') or pending['run']['status']!='running' or pending['run']['runId']!=process['runId'] or
+            pending['run']['selection']!=process['selection'] or pending['run']['acceptedRecords']!=2 or pending['native']['incidents']):
+        raise ValueError('The actual second crash lost its pending source, full invocation, live ETL run or physical effects.')
+    if any(x['inputKind']=='native-result' for x in observed['inputs']):raise ValueError('A native result was already consumed before the pending-result crash.')
+    start,=[s for s in observed['sources'] if s['intent']['kind']=='Elsa.Bpmn.StartNativeWork.v1']
+    if start!=checked['before']['startSource']:raise ValueError('The pending crash changed its already-delivered original native start.')
+    expected_worker='Running' if model_cancel else 'Cancelled'
+    if worker['status']!=(1 if model_cancel else 5) or pending['native']['instance']['status']!=expected_worker or model['revision']!=(2 if model_cancel else 1):
+        raise ValueError('The pending cancellation stage contradicts actual native admission or terminal truth.')
+    activity,=pending['native']['activities'];original,=before['native']['activities']
+    saved_retry=next(x['http']['fetch'] for x in before['partitions']['items'] if x['http']['fetch'] and x['http']['fetch']['lastStatusCode']==429)
+    pending_retry=next(x['http']['fetch'] for x in pending['partitions']['items'] if x['http']['fetch'] and x['http']['fetch']['lastStatusCode']==429)
+    if (activity['activityExecutionId']!=original['activityExecutionId'] or activity['status']!=('Suspended' if model_cancel else 'Cancelled') or
+            pending_retry['notBefore']!=saved_retry['notBefore'] or pending_retry['attemptCount']!=1 or pending_retry['phase']!='waiting'):
+        raise ValueError('The pending cancellation recreated its native invocation or changed the frozen HTTP retry.')
+    sources={s['outboxItemId']:s for s in observed['sources']}
+    if model_cancel:
+        cancellation,=model['payload']['cancellations'];receipt,=[x for x in observed['inputs'] if x['inputKind']=='cancel']
+        cancel=sources[cancellation['sourceOutboxItemId']];final_cancel=checked['finished']['model']['payload']['cancellations'][0]
+        if (model['lifecycle']!=2 or pending['model']['status']!='TerminalPendingSettlement' or model['payload']['work'] or model['payload'].get('nativeResults') or
+                cancellation['origin']!=origin or cancellation['settled'] or cancellation.get('notAdmitted',False) or len(observed['inputs'])!=2 or
+                cancel['intent']['kind']!='Elsa.Bpmn.CancelNativeWork.v1' or cancel['intent']['payload']!=cancellation or cancel['status'] in (2,4) or cancel['deliveredAt'] is not None or
+                receipt['acceptedRevision']!=2 or receipt['result']!=read('model-cancel-response.json')['result'] or receipt['inputId']!='cancel-actual-bpmn-etl' or
+                final_cancel['sourceOutboxItemId']!=cancellation['sourceOutboxItemId'] or final_cancel['origin']!=origin or
+                model['terminalResult']!=checked['finished']['model']['terminalResult'] or any(s['intent']['kind'] in ('Elsa.Bpmn.NativeWorkResult.v1','Elsa.Etl.Cancel.v1') for s in observed['sources'])):
+            raise ValueError('The second crash did not retain the exact model cancellation before worker delivery.')
+    else:
+        native,=[s for s in observed['sources'] if s['intent']['kind']=='Elsa.Bpmn.NativeWorkResult.v1']
+        etl,=[s for s in observed['sources'] if s['intent']['kind']=='Elsa.Etl.Cancel.v1']
+        if len(result['cancellationSources'])!=1:raise ValueError('The pending native result lost its complete cancellation inventory.')
+        inventory,=result['cancellationSources']
+        if (model!=checked['before']['model'] or model['lifecycle']!=0 or pending['model']['status']!='Running' or len(observed['inputs'])!=1 or
+                native['status'] in (2,4) or etl['status'] in (2,4) or native['deliveredAt'] is not None or etl['deliveredAt'] is not None or
+                native['intent']['payload']!=result or native['outboxItemId']!=checked['finished']['resultSource']['outboxItemId'] or
+                inventory!=etl['outboxItemId']):
+            raise ValueError('The second crash lost actual same-checkpoint ETL cancellation and native result responsibility.')
+        native_suffix=':'+native['intent']['intentId'];etl_suffix=':'+etl['intent']['intentId']
+        if native['outboxItemId'][:-len(native_suffix)]!=etl['outboxItemId'][:-len(etl_suffix)]:raise ValueError('Pending ETL cancellation and native result came from different terminal checkpoints.')
+    materials=observed['workerMaterial']
+    if materials['identity']!=origin['workerExecutable']:raise ValueError('The pending cancellation lost its frozen native material.')
+    for store,snapshot in process['pendingStores'].items():
+        file=q.evidence_file(root,snapshot['file']);raw=gzip.decompress(file.read_bytes())
+        if q.digest(file)!=snapshot['gzipSha256'] or hashlib.sha256(raw).hexdigest()!=snapshot['databaseSha256'] or snapshot['observer']['snapshotSha256']!=snapshot['databaseSha256'] or snapshot['observer']['readOnly'] is not True:
+            raise ValueError('An actual provider-observed pending-cancellation store differs.')
+        with tempfile.TemporaryDirectory(prefix='elsa-pending-cancel-read-') as temporary:
+            database=Path(temporary)/'snapshot.sqlite';database.write_bytes(raw)
+            with closing(sqlite3.connect(database.as_uri()+'?mode=ro&immutable=1',uri=True)) as connection:
+                if connection.execute('PRAGMA integrity_check').fetchall()!=[('ok',)]:raise ValueError('A pending-cancellation store failed integrity.')
+                if store=='elsa':
+                    row,=connection.execute('SELECT ContentJson FROM elsa_runtime_model_execution').fetchall();actual=json.loads(row[0])
+                    if actual['payload']!=model['payload'] or actual['revision']!=model['revision'] or actual['terminalResult']!=model['terminalResult'] or actual['executable']!=encoded_tree(model['executable']):raise ValueError('The physical pending model differs from its durable cancellation decision.')
+                    row,=connection.execute('SELECT SchemaVersion,ContentJson FROM elsa_runtime_workflow_execution_state').fetchall();actual=json.loads(row[1])
+                    if row[0]!='2.0.0' or actual['modelWorkOrigin']!=encoded_tree(origin) or actual['status']!=expected_worker or actual['pinnedExecutable']!=encoded_tree(origin['workerExecutable']):raise ValueError('The physical pending worker differs from its true terminal state or exact origin.')
+                    if connection.execute('SELECT COUNT(*) FROM elsa_runtime_bookmark_state').fetchone()[0]!=int(model_cancel):raise ValueError('The physical pending cancellation lost or retained an unexpected native wait.')
+                    rows=[json.loads(x[0]) for x in connection.execute('SELECT ContentJson FROM elsa_runtime_post_commit_outbox')]
+                    if len(rows)!=len(sources):raise ValueError('The physical pending cancellation lost a delivery obligation.')
+                    for source in sources.values():
+                        row,=[z for z in rows if z['outboxItemId']==key(source['outboxItemId'])]
+                        if row['intent']['payload']!=source['intent']['payload'] or row['deliveredAt']!=source['deliveredAt'] or row['status']!=['Pending','Delivering','Delivered','FailedRetryable','FailedFinal'][source['status']]:raise ValueError('The physical pending source differs from its owed acknowledgment state.')
+                    rows=[json.loads(x[0]) for x in connection.execute('SELECT ContentJson FROM elsa_runtime_model_input')]
+                    if len(rows)!=len(observed['inputs']):raise ValueError('The physical pending model already consumed an unobserved result.')
+                    for receipt in observed['inputs']:
+                        row,=[z for z in rows if z['inputId']==key(receipt['inputId'])]
+                        if row['result']!=receipt['result'] or row['acceptedRevision']!=receipt['acceptedRevision'] or row['contentFingerprint']!=key(receipt['contentFingerprint']):raise ValueError('The physical pending model receipt differs from its actual command.')
+                    for source in sources.values():
+                        if source['intent']['kind'] not in ('Elsa.Bpmn.CancelNativeWork.v1','Elsa.Bpmn.NativeWorkResult.v1','Elsa.Etl.Cancel.v1'):continue
+                        suffix=':'+source['intent']['intentId'];commit=source['outboxItemId'][:-len(suffix)]
+                        row=connection.execute('SELECT ContentJson FROM elsa_runtime_checkpoint_commit WHERE CommitId=?',(key(commit),)).fetchone()
+                        if row is None or source['outboxItemId'] not in json.loads(row[0])['pendingPostCommitWorkIds']:raise ValueError('The physical checkpoint lost its original pending cancel/result responsibility.')
+                elif store=='etl-runtime':
+                    row,=connection.execute('SELECT InvocationJson,Status,AcceptedRecords,RejectedRecords FROM elsa_etl_runtime_runs').fetchall();invocation=json.loads(row[0])
+                    if row[1:]!=(1,2,0) or decoded(invocation['runId'])!=process['runId'] or decoded(invocation['resultAddress']['workflowExecutionId'])!=origin['workerExecutionId'] or decoded(invocation['resultAddress']['activityExecutionId'])!=before['native']['activities'][0]['activityExecutionId']:
+                        raise ValueError('The physical pending ETL run lost its original active invocation or completed sibling effects.')
+                    if connection.execute('SELECT COUNT(*) FROM elsa_etl_runtime_terminals').fetchone()[0] or connection.execute('SELECT COUNT(*) FROM elsa_etl_runtime_outbox').fetchone()[0]:raise ValueError('ETL cancellation was already terminal before the pending crash.')
+                    if not model_cancel and etl['intent']['payload']!=invocation:raise ValueError('The pending ETL cancel no longer targets the immutable real invocation.')
+
+
+
 def verify(path):
     manifest=json.loads(path.read_text());root=path.parent
+    if manifest.get('kind')=='actual-bpmn-pending-cancellation-matrix':
+        if manifest.get('schemaVersion')!=1 or len(manifest['cases'])!=2 or {c['stage'] for c in manifest['cases']}!={'model-command','native-terminal'}:
+            raise ValueError('The pending cancellation matrix lacks both actual process cuts.')
+        for case in manifest['cases']:
+            if case['manifest']!=case['stage']+'/manifest.json':raise ValueError('A pending cancellation case changed its bound evidence path.')
+            file=q.evidence_file(root,case['manifest'])
+            if q.digest(file)!=case['sha256']:raise ValueError('A pending cancellation case manifest differs.')
+            result=verify(file)
+            if result['sourceRevision']!=manifest['sourceRevision'] or result['pendingCancellationStage']!=case['stage'] or not result['pendingCancellationCrashProved']:
+                raise ValueError('A pending cancellation case changed its source or actual stage.')
+        return {'sourceRevision':manifest['sourceRevision'],'actualPendingCancellationStages':['model-command','native-terminal'],'pendingCancellationCrashProved':True,
+            'wholeStoresVerified':18,'actualWorkbenchProcesses':8,'actualHttpProcesses':2,'postConsumptionPreAckCrashProved':False,
+            'runBpmnEtlIntegrationProved':False,'modelHeldFaultRetryProved':False}
     model_cancel=manifest.get("kind")=="actual-direct-bpmn-native-etl-model-cancellation"
     pipeline_cancel=manifest.get("kind")=="actual-direct-bpmn-native-etl-pipeline-cancellation"
     worker_cancel=manifest.get("kind")=="actual-direct-bpmn-native-etl-worker-cancellation"
@@ -163,6 +262,8 @@ def verify(path):
     direct=cancelling or manifest.get("kind")=="actual-direct-bpmn-native-etl-recovery"
     if manifest.get("schemaVersion")!=1 or manifest.get("kind") not in ("actual-native-etl-recovery-reference","actual-direct-bpmn-native-etl-recovery","actual-direct-bpmn-native-etl-pipeline-cancellation","actual-direct-bpmn-native-etl-worker-cancellation","actual-direct-bpmn-native-etl-model-cancellation"):raise ValueError("Unknown ETL recovery reference evidence.")
     source=manifest["sourceRevision"];assets=manifest["assets"]
+    stage=manifest.get('pendingCancellationStage');pending_crash=stage is not None
+    if pending_crash and stage!=('model-command' if model_cancel else 'native-terminal' if worker_cancel else None):raise ValueError('Unknown pending cancellation stage.')
     if len(source)!=40 or any(c not in "0123456789abcdef" for c in source):raise ValueError("The ETL reference lacks an exact source.")
     expected_cases={"model-cancel":("BpmnModel",False)} if model_cancel else {"native-cancel":("BpmnModel",False)} if worker_cancel else {"direct-cancel":("BpmnModel",False)} if pipeline_cancel else {"direct-success":("BpmnModel",False),"direct-business":("BpmnModel",True)} if direct else {"sequence":("Sequence",False),"flowchart":("Flowchart",False),"worker-business":("RunEtl",True)}
     names={"before.json","recovered.json","finished.json","retained.json","before-wire.json","finished-wire.json","retained-wire.json","safe-errors.json","process.json"}
@@ -171,6 +272,7 @@ def verify(path):
     if pipeline_cancel:names.add("cancel-response.json")
     if worker_cancel:names.add("native-cancel-response.json")
     if model_cancel:names|={"model-cancel-response.json","model-cancel-command.json"}
+    if pending_crash:names|={'pending.json','pending-checked.json','pending-wire.json'}|{'pending-'+s+'.sqlite.gz' for s in ('elsa','etl-runtime','etl-design')}
     declared={asset["path"] for asset in assets}
     if len(declared)!=len(assets) or declared!={case+"/"+name for case in expected_cases for name in names}:raise ValueError("The ETL recovery bundle lacks its exact actual assets.")
     for asset in assets:
@@ -180,11 +282,12 @@ def verify(path):
         def read(name):return json.loads(q.evidence_file(root,case+"/"+name).read_text())
         process=read("process.json");products=process["products"]
         if (process["sourceRevision"]!=source or process["parent"]!=parent or process["businessError"] is not business_error or process["predecessorExitCode"]!=-9 or
-                [item["role"] for item in process["processes"]]!=["http-fixture","workbench","workbench","workbench"] or len({item["processId"] for item in process["processes"]})!=4):raise ValueError("The actual ETL reference lacks its distinct process-loss/restart provenance.")
+                [item["role"] for item in process["processes"]]!=(["http-fixture"]+["workbench"]*(4 if pending_crash else 3)) or len({item["processId"] for item in process["processes"]})!=(5 if pending_crash else 4)):raise ValueError("The actual ETL reference lacks its distinct process-loss/restart provenance.")
         if products["sourceCommit"]!=source or products["metadataOnly"] is not True or len(products["actualProductVersions"])!=(12 if direct else 6) or any(not item["productVersion"].endswith("+"+source) for item in products["actualProductVersions"]):raise ValueError("The actual Workbench and ETL products differ from their declared source.")
         before=read("before.json");finished=read("finished.json");recovered=read("recovered.json")
         before_wire=read("before-wire.json");wire=read("finished-wire.json")
         bridge=model_bridge(read,process,before,finished,business_error,cancelling,model_cancel) if direct else None
+        if pending_crash:pending_cancellation(read,q.evidence_file(root,case+'/process.json').parent,process,bridge,model_cancel)
         if finished!=read("retained.json") or wire!=read("retained-wire.json"):raise ValueError("The terminal native/ETL views or physical effects changed after another process.")
         identity=process["workflowExecutionId"];run_id=process["runId"];selection=process["selection"]
         old={node(item):item for item in before["native"]["activities"]};current={node(item):item for item in finished["native"]["activities"]}
@@ -278,8 +381,9 @@ def verify(path):
                     cancel_id[:-len(cancel_suffix)]!=result_source["outboxItemId"][:-len(result_suffix)]):
                 raise ValueError("The native cancellation lost its exact ETL address or same-checkpoint result responsibility.")
         results.append({"case":case,"acceptedRecords":accepted,"rejectedRecords":rejected,"physicalOutputRecords":len(records),"businessErrorPreserved":business_error})
-    result={"actualReferenceJourneys":results,"wholeStoresVerified":len(expected_cases)*6,"sourceRevision":source,"directBpmnClosedWorkerIntegrationProved":direct,
+    result={"actualReferenceJourneys":results,"wholeStoresVerified":len(expected_cases)*(9 if pending_crash else 6),"sourceRevision":source,"directBpmnClosedWorkerIntegrationProved":direct,
         "runBpmnEtlIntegrationProved":False,"modelHeldFaultRetryProved":False}
+    result.update(pendingCancellationCrashProved=pending_crash,pendingCancellationStage=stage,postConsumptionPreAckCrashProved=False)
     if not direct:result["directOrRunBpmnEtlIntegrationProved"]=False
     if cancelling:result.update(pipelineOriginatedCancellationProved=pipeline_cancel,nativeWorkerOriginatedCancellationProved=worker_cancel,modelToWorkerCancellationProved=model_cancel,modelCancellationBeforeAdmissionProved=False)
     return result
