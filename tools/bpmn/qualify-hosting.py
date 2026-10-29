@@ -969,8 +969,9 @@ def verify_broadcast_upgrade(path: Path) -> dict:
                     expected_status = {"Pending": 0, "Running": 1, "Suspended": 2, "Completed": 3, "Faulted": 4, "Cancelled": 5}.get(workflow["status"])
                     if len(rows) != 1 or rows[0][0] != expected_status or json.loads(rows[0][1])["status"] != workflow["status"] or json.loads(rows[0][1])["pinnedExecutable"] != {field: key(value) for field, value in workflow["pinnedExecutable"].items()}:
                         raise ValueError("A physical broadcast workflow changed its outcome or complete pin.")
-                    physical_waits = {row[0] for row in connection.execute("SELECT BookmarkId FROM elsa_runtime_bookmark_state WHERE WorkflowExecutionId = ?", (key(workflow["workflowExecutionId"]),))}
-                    if physical_waits != {key(wait["bookmarkId"]) for wait in workflow["bookmarks"]}: raise ValueError("Physical broadcast waits differ from the checked boundary.")
+                    # BookmarkState's established adapter uses raw bounded identities and Revision as generation.
+                    physical_waits = dict(connection.execute("SELECT BookmarkId, Revision FROM elsa_runtime_bookmark_state WHERE WorkflowExecutionId = ?", (workflow["workflowExecutionId"],)))
+                    if physical_waits != {wait["bookmarkId"]: wait["generation"] for wait in workflow["bookmarks"]}: raise ValueError("Physical broadcast wait identities/generations differ from the checked boundary.")
             if phase == "finished" and (any(workflow["bookmarks"] for workflow in proof["workflows"]) or
                     any(workflow["status"] not in ("Completed", "Cancelled") for workflow in proof["allWorkflows"])):
                 raise ValueError("A recovered broadcast execution did not retire through its normal command.")

@@ -395,5 +395,87 @@ class ActualCalledAcknowledgmentUpgradeControls(unittest.TestCase):
             capture.verify_upgrade(self.path)
 
 
+class ActualBroadcastUpgradeControls(unittest.TestCase):
+    def setUp(self):
+        self.original = SCRIPT.parents[2] / "specs/1017-direct-bpmn-hosting/evidence/upgrade/broadcast/manifest.json"
+        capture.verify_upgrade(self.original); self.before = capture.digest(self.original)
+        self.directory = tempfile.TemporaryDirectory(); self.bundle = Path(self.directory.name) / "upgrade"
+        shutil.copytree(self.original.parent, self.bundle); self.path = self.bundle / "manifest.json"
+        self.manifest = json.loads(self.path.read_text()); self.process_path = self.bundle / "legacy-broadcast/process.json"
+        self.process = json.loads(self.process_path.read_text())
+
+    def tearDown(self):
+        self.assertEqual(self.before, capture.digest(self.original)); capture.verify_upgrade(self.original)
+        self.directory.cleanup()
+
+    def case(self, cut):
+        return next(case for case in self.process["observations"] if case["cut"] == cut)
+
+    def rehash(self, path):
+        name = path.relative_to(self.bundle).as_posix()
+        next(asset for asset in self.manifest["assets"] if asset["path"] == name)["sha256"] = capture.digest(path)
+        capture.write_json(self.path, self.manifest)
+
+    def save_process(self):
+        capture.write_json(self.process_path, self.process); self.rehash(self.process_path)
+
+    def mutate_snapshot(self, case, phase, mutate):
+        snapshot = case[phase + "Snapshot"]; path = self.bundle / "legacy-broadcast" / snapshot["file"]
+        database = Path(self.directory.name) / "changed.sqlite"; database.write_bytes(gzip.decompress(path.read_bytes()))
+        with closing(sqlite3.connect(database)) as connection:
+            with connection: mutate(connection)
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        path.write_bytes(gzip.compress(database.read_bytes(), mtime=0)); snapshot["databaseSha256"] = capture.digest(database)
+        snapshot["gzipSha256"] = capture.digest(path); case[phase + "Proof"]["snapshotSha256"] = capture.digest(database)
+        self.rehash(path); self.save_process()
+
+    def test_empty_decision_cannot_be_dropped_after_rehashing(self):
+        self.case("empty-cohort")["recoveredProof"]["source"]["snapshot"] = None; self.save_process()
+        with self.assertRaisesRegex(ValueError, "including empty decisions"): capture.verify_upgrade(self.path)
+
+    def test_delayed_first_delivery_cannot_omit_a_later_listener(self):
+        case = self.case("before-selection"); case["recoveredProof"]["source"]["selectedResumes"].pop(); case["referenceSource"]["selectedResumes"].pop()
+        self.save_process()
+        with self.assertRaisesRegex(ValueError, "Delayed first delivery"): capture.verify_upgrade(self.path)
+
+    def test_retry_cannot_expand_an_installed_cohort(self):
+        case = self.case("after-cohort"); entries = case["recoveredProof"]["source"]["snapshot"]["resumes"]
+        changed = json.loads(json.dumps(entries[0])); changed["bookmarkId"] = "later-match"; entries.append(changed); self.save_process()
+        with self.assertRaisesRegex(ValueError, "original immutable broadcast cohort"): capture.verify_upgrade(self.path)
+
+    def test_already_accepted_callback_cannot_repeat_after_rehashing(self):
+        case = self.case("after-resume")
+        for old in case["originalStopped"]["workflows"]:
+            accepted = next((item for item in old["selectedActivities"] if item["status"] == "Completed"), None)
+            if accepted:
+                current = next(item for item in case["recoveredProof"]["workflows"] if item["workflowExecutionId"] == old["workflowExecutionId"])
+                next(item for item in current["selectedActivities"] if item["activityExecutionId"] == accepted["activityExecutionId"])["attemptCount"] += 1
+                break
+        else: self.fail("The actual pre-crash accepted callback is missing.")
+        self.save_process()
+        with self.assertRaisesRegex(ValueError, "already accepted callback"): capture.verify_upgrade(self.path)
+
+    def test_rearmed_physical_wait_generation_must_survive(self):
+        case = self.case("after-resume"); selected = {item["bookmarkId"] for item in case["recoveredProof"]["source"]["selectedResumes"]}
+        wait = next(wait for workflow in case["originalStopped"]["workflows"] if workflow["selectedActivities"] for wait in workflow["bookmarks"] if wait["bookmarkId"] not in selected)
+        self.mutate_snapshot(case, "recovered", lambda connection: connection.execute("UPDATE elsa_runtime_bookmark_state SET Revision = Revision + 1 WHERE BookmarkId = ?", (wait["bookmarkId"],)))
+        with self.assertRaisesRegex(ValueError, "wait identities/generations"): capture.verify_upgrade(self.path)
+
+    def test_source_must_be_physically_delivered_after_rehashing(self):
+        case = self.case("after-cohort"); identity = base64.b64encode(case["recoveredProof"]["source"]["outboxItemId"].encode("utf-16-le")).decode()
+        self.mutate_snapshot(case, "recovered", lambda connection: connection.execute("UPDATE elsa_runtime_post_commit_outbox SET Status = 0 WHERE OutboxItemId = ?", (identity,)))
+        with self.assertRaisesRegex(ValueError, "physical original broadcast delivery"): capture.verify_upgrade(self.path)
+
+    def test_actual_saved_callback_must_have_completed_text_status(self):
+        case = self.case("after-cohort"); identity = base64.b64encode(case["recoveredProof"]["source"]["selectedResumes"][0]["activityExecutionId"].encode("utf-16-le")).decode()
+        self.mutate_snapshot(case, "recovered", lambda connection: connection.execute("UPDATE elsa_runtime_activity_execution_state SET Status = 'Suspended' WHERE ActivityExecutionId = ?", (identity,)))
+        with self.assertRaisesRegex(ValueError, "physical saved callback did not complete"): capture.verify_upgrade(self.path)
+
+    def test_finished_physical_workflow_cannot_remain_running(self):
+        case = self.case("after-cohort"); identity = base64.b64encode(case["finishedProof"]["workflows"][0]["workflowExecutionId"].encode("utf-16-le")).decode()
+        self.mutate_snapshot(case, "finished", lambda connection: connection.execute("UPDATE elsa_runtime_workflow_execution_state SET Status = 1 WHERE WorkflowExecutionId = ?", (identity,)))
+        with self.assertRaisesRegex(ValueError, "physical broadcast workflow changed its outcome"): capture.verify_upgrade(self.path)
+
+
 if __name__ == "__main__":
     unittest.main()
