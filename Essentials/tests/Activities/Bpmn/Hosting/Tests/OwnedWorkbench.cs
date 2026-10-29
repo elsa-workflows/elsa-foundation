@@ -1,9 +1,12 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Json;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text.Json.Nodes;
+using Microsoft.Data.Sqlite;
 
 namespace Elsa.Activities.Bpmn.Hosting.Tests;
 
@@ -23,7 +26,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
     public string DesignDatabase => Path.Combine(ContentRoot, "design.db");
     internal string AssemblyPath => Metadata("BpmnHostingWorkbenchAssembly");
 
-    public static async Task<OwnedWorkbench> StartAsync(bool directBpmn = false)
+    public static async Task<OwnedWorkbench> StartAsync(bool directBpmn = false, bool runtimeOnly = false)
     {
         var host = new OwnedWorkbench(Directory.CreateTempSubdirectory("elsa-bpmn-hosting-").FullName);
         try
@@ -43,9 +46,21 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
                 foreach (var name in new[] { "WorkflowsRuntimeDistributed", "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence", "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence" })
                     features.AsObject().Remove(name);
             }
+            if (runtimeOnly)
+            {
+                var allowed = new HashSet<string>(StringComparer.Ordinal)
+                {
+                    "ActivitiesBpmnHosting", "ActivitiesBpmnHostingApi", "ActivitiesRuntime", "Events", "Expressions", "FileSystemDistributedLocking", "Primitives", "Serialization", "Tasks",
+                    "WorkflowsRuntimeEntityFrameworkCore", "WorkflowsRuntimeResumption",
+                    "FoundationIdentityAbstractions", "FoundationIdentityApi", "FoundationIdentityAspNetCoreIdentity",
+                    "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore", "IdentityIamEntityFrameworkCore", "IdentityProviderConfigurationEntityFrameworkCore"
+                };
+                foreach (var name in features.AsObject().Select(item => item.Key).Where(name => !allowed.Contains(name)).ToArray())
+                    features.AsObject().Remove(name);
+            }
             features["WorkflowsRuntimeEntityFrameworkCore"]!["ConnectionString"] = "Data Source=runtime.db";
             foreach (var name in new[] { "ActivitiesDesignEntityFrameworkCore", "WorkflowsDesignEntityFrameworkCore", "WorkflowsPublishingEntityFrameworkCore" })
-                features[name]!["ConnectionString"] = "Data Source=design.db";
+                if (features[name] is { } selected) selected["ConnectionString"] = "Data Source=design.db";
             await File.WriteAllTextAsync(shellPath, shells.ToJsonString());
             await host.LaunchAsync();
             return host;
@@ -80,6 +95,41 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
     {
         await StopAsync();
         await LaunchAsync();
+    }
+
+    internal object[] DescribeBinaries(string? sourceRevision)
+    {
+        var binaries = new[] { "Elsa.Workbench", "Elsa.Workflows.Runtime.Core", "Elsa.Workflows.Runtime", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+            "Elsa.Activities.Bpmn.Core", "Elsa.Activities.Bpmn", "Elsa.Activities.Bpmn.Api", "Bpmn.Model", "Bpmn.Semantics" }
+            .Select(name => Path.Combine(Path.GetDirectoryName(AssemblyPath)!, name + ".dll"))
+            .Select(path => new { file = Path.GetFileName(path), productVersion = FileVersionInfo.GetVersionInfo(path).ProductVersion,
+                sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))) }).ToArray();
+        if (sourceRevision is not null && binaries.Single(binary => binary.file == "Elsa.Workbench.dll").productVersion?.Contains(sourceRevision, StringComparison.Ordinal) != true)
+            throw Failure("The owned Workbench product revision does not match its expected evidence source.");
+        return binaries.Cast<object>().ToArray();
+    }
+
+    internal async Task<object?> SnapshotAsync(string name, string? subdirectory = null)
+    {
+        if (process is not null) throw Failure("Stop the owned Workbench before capturing its database");
+        var directory = Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_EVIDENCE_DIRECTORY");
+        if (directory is null) return null;
+        if (subdirectory is not null) directory = Path.Combine(directory, subdirectory);
+        Directory.CreateDirectory(directory);
+        var backup = Path.Combine(ContentRoot, "evidence-backup"); File.Delete(backup);
+        await using (var source = new SqliteConnection($"Data Source={RuntimeDatabase};Mode=ReadOnly;Pooling=False"))
+        await using (var target = new SqliteConnection($"Data Source={backup};Pooling=False"))
+        {
+            await source.OpenAsync(); await target.OpenAsync(); source.BackupDatabase(target);
+            await using var check = target.CreateCommand(); check.CommandText = "PRAGMA integrity_check";
+            if ((string)(await check.ExecuteScalarAsync())! != "ok") throw Failure("The owned Runtime backup failed its integrity check");
+        }
+        var data = await File.ReadAllBytesAsync(backup);
+        var path = Path.Combine(directory, name);
+        await using (var file = File.Create(path))
+        await using (var gzip = new GZipStream(file, CompressionLevel.SmallestSize)) await gzip.WriteAsync(data);
+        return new { file = name, databaseSha256 = Convert.ToHexStringLower(SHA256.HashData(data)),
+            gzipSha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(path))) };
     }
 
     public async Task StopAsync()
@@ -138,14 +188,24 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         catch { process = null; owned.Dispose(); throw; }
         owned.BeginOutputReadLine(); owned.BeginErrorReadLine();
         using var deadline = new CancellationTokenSource(StartupLimit);
-        client.BaseAddress = await listening.Task.WaitAsync(deadline.Token);
-        while (true)
+        string? lastReadiness = null;
+        try
         {
-            if (owned.HasExited) throw Failure("The owned Workbench exited during shell activation");
-            using var ready = await client.GetAsync("/health/ready", deadline.Token);
-            if (ready.IsSuccessStatusCode) return;
-            await Task.Delay(TimeSpan.FromMilliseconds(200), deadline.Token);
+            client.BaseAddress = await listening.Task.WaitAsync(deadline.Token);
+            while (true)
+            {
+                if (owned.HasExited) throw Failure("The owned Workbench exited during shell activation");
+                using var ready = await client.GetAsync("/health/ready", deadline.Token);
+                if (ready.IsSuccessStatusCode) return;
+                lastReadiness = await ready.Content.ReadAsStringAsync(deadline.Token);
+                if (JsonNode.Parse(lastReadiness) is { } readiness && readiness["status"]?.GetValue<string>() == "failed" &&
+                    readiness["code"]?.GetValue<string>() == "shell_activation_failed")
+                    throw Failure("The owned Workbench reported a failed shell activation");
+                await Task.Delay(TimeSpan.FromMilliseconds(200), deadline.Token);
+            }
         }
+        catch (OperationCanceledException exception) when (deadline.IsCancellationRequested)
+        { throw Failure($"The owned Workbench did not become ready. Last readiness response: {lastReadiness}", exception); }
     }
 
     private static string Metadata(string key) => typeof(OwnedWorkbench).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
@@ -159,7 +219,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         return await response.Content.ReadFromJsonAsync<JsonNode>() ?? throw Failure("An owned-host API returned no document");
     }
 
-    private InvalidOperationException Failure(string message) => new($"{message}.{Environment.NewLine}{string.Join(Environment.NewLine, output)}");
+    private InvalidOperationException Failure(string message, Exception? cause = null) => new($"{message}.{Environment.NewLine}{string.Join(Environment.NewLine, output)}", cause);
 
     public async ValueTask DisposeAsync()
     {

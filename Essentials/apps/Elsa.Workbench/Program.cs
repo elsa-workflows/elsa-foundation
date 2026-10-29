@@ -341,6 +341,7 @@ builder.Services.AddCShellsAspNetCore(shells =>
 
             // Runtime vertical slice: execute published WorkflowExecutable artifacts.
             typeof(WorkflowsRuntimeApiFeature).Assembly,
+            typeof(Elsa.Activities.Bpmn.ActivitiesBpmnHostingFeature).Assembly,
             typeof(Elsa.Activities.Bpmn.Api.ActivitiesBpmnHostingApiFeature).Assembly,
 
             // Durable-resumption pump. Every EF Core persistence provider DependsOn this feature, so

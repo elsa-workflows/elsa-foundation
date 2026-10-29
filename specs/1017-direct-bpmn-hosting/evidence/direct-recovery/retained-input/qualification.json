@@ -1,7 +1,7 @@
 {
   "kind": "Obsolete/terminal model-input receipts preserve state and still compare the physical revision",
   "sourceCommit": "1dd83ad436bffcef45377e462e580ea41a5924b9",
-  "sourceBinding": "The host suite was rebuilt and rerun after this source commit and asserts its product revision. Other suites ran over byte-identical production/test sources before commit; registry missing-reader condition was narrowed before final whole architecture verification. No project/package dependencies changed.",
+  "sourceBinding": "The host suite was rebuilt and rerun after source commit 1dd83ad436bffcef45377e462e580ea41a5924b9 and asserts its product revision. The whole BPMN suite was repeated on evidence-only descendant d61bd5d828cf9c54c2b93628e0d36673183c3853, whose production sources are identical. EF/provider checkpoint and runtime contract checks cover unchanged component sources; final whole architecture verification covers the final selector condition and test-only friend grant. No project/package dependencies changed in this slice.",
   "uniquePassingChecks": 1054,
   "results": [
     {
@@ -9,7 +9,7 @@
       "passed": 379,
       "failed": 0,
       "skipped": 0,
-      "trxSha256": "7bdf0e52eee436ca60475127575a4dc0a704c3489894d37afbdbb808765baa40"
+      "trxSha256": "422aef6eb731f392b7dfc0f73cc676629d93ad1f83df33a00f711389eca0c84d"
     },
     {
       "scope": "Runtime model/ownership/drain selection",

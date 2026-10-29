@@ -1,7 +1,4 @@
-using System.Diagnostics;
-using System.IO.Compression;
 using System.Net;
-using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Bpmn.Model;
@@ -39,7 +36,7 @@ public sealed class DirectBpmnWorkbenchTests
         Assert.Equal(published["incarnationId"]!.GetValue<string>(), waiting["materialIncarnationId"]!.GetValue<string>());
         var previousProcess = host.ProcessId;
         await host.StopAsync();
-        var waitingSnapshot = await SnapshotAsync(host, "waiting.sqlite.gz");
+        var waitingSnapshot = await host.SnapshotAsync("waiting.sqlite.gz");
         await host.RestartAsync();
         Assert.NotEqual(previousProcess, host.ProcessId);
         var restartedProcess = host.ProcessId;
@@ -81,18 +78,12 @@ public sealed class DirectBpmnWorkbenchTests
             command.CommandText = $"SELECT COUNT(*) FROM \"{table}\"";
             Assert.Equal(0L, (long)(await command.ExecuteScalarAsync())!);
         }
-        var completedSnapshot = await SnapshotAsync(host, "completed.sqlite.gz");
+        var completedSnapshot = await host.SnapshotAsync("completed.sqlite.gz");
         var evidenceDirectory = Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_EVIDENCE_DIRECTORY");
         if (evidenceDirectory is not null)
         {
-            var binaries = new[] { "Elsa.Workbench", "Elsa.Workflows.Runtime.Core", "Elsa.Workflows.Runtime", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
-                "Elsa.Activities.Bpmn.Core", "Elsa.Activities.Bpmn", "Elsa.Activities.Bpmn.Api", "Bpmn.Model", "Bpmn.Semantics" }
-                .Select(name => Path.Combine(Path.GetDirectoryName(host.AssemblyPath)!, name + ".dll"))
-                .Select(path => new { file = Path.GetFileName(path), productVersion = FileVersionInfo.GetVersionInfo(path).ProductVersion,
-                    sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))) }).ToArray();
             var sourceRevision = Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_SOURCE_REVISION");
-            if (sourceRevision is not null)
-                Assert.Contains(sourceRevision, binaries.Single(binary => binary.file == "Elsa.Workbench.dll").productVersion!);
+            var binaries = host.DescribeBinaries(sourceRevision);
             var evidence = new { formatVersion = 1, sourceRevision, capturedAt = DateTimeOffset.UtcNow,
                 profile = "foundation-direct-v1 / built-in single-node mailbox / EF SQLite / production Workbench authenticated HTTP",
                 originalProcessId = previousProcess, restartedProcessId = restartedProcess, published, started, waiting, recovered, work, obsolete, accepted, completed, late,
@@ -104,26 +95,4 @@ public sealed class DirectBpmnWorkbenchTests
         }
     }
 
-    private static async Task<object?> SnapshotAsync(OwnedWorkbench host, string name)
-    {
-        var directory = Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_EVIDENCE_DIRECTORY");
-        if (directory is null) return null;
-        Directory.CreateDirectory(directory);
-        var backup = Path.Combine(host.ContentRoot, "evidence.sqlite");
-        File.Delete(backup);
-        await using (var source = new SqliteConnection($"Data Source={host.RuntimeDatabase};Mode=ReadOnly;Pooling=False"))
-        await using (var target = new SqliteConnection($"Data Source={backup};Pooling=False"))
-        {
-            await source.OpenAsync(); await target.OpenAsync();
-            source.BackupDatabase(target);
-            await using var check = target.CreateCommand(); check.CommandText = "PRAGMA integrity_check";
-            Assert.Equal("ok", (string)(await check.ExecuteScalarAsync())!);
-        }
-        var data = await File.ReadAllBytesAsync(backup);
-        var path = Path.Combine(directory, name);
-        await using (var output = File.Create(path))
-        await using (var gzip = new GZipStream(output, CompressionLevel.SmallestSize)) await gzip.WriteAsync(data);
-        return new { file = name, databaseSha256 = Convert.ToHexStringLower(SHA256.HashData(data)),
-            gzipSha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(path))) };
-    }
 }
