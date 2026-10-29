@@ -230,7 +230,7 @@ unmatched keys, a `DateTime` read as UTC) are applied through that copy, not as 
 |---|---|---|
 | `IPayloadSerializer` sorts dictionary keys (`DeterministicDictionaryConverter`) and object members (`SortObjectMembers`) | Persisted output must be byte-stable for hashing, and neither a .NET dictionary nor reflection gives a meaningful order | Applies only to our own types and maps. By decision 5 no data is a .NET dictionary, and a `JsonElement` is written raw (decision 3). Keys are written verbatim |
 | Canonical hashing: `DefaultActivityDefinitionHasher`, `GitCanonicalJson` (Git reconciliation content hash), the design-store fingerprints (`EfDesignSupport.Fingerprint`) | A content hash should treat equal values as equal whatever their escaping or whitespace | The hash preimage is a canonical re-serialization with fixed options, never the stored or transmitted text. Never on the wire |
-| Runtime EF Core durability options (frozen, see [serialization rule](../serialization.md)) | The durable format of suspended state changes only through migrations and golden fixtures | Adopting decision 3 there is a stamped format change made through that process. Until then, runtime state re-escapes data, and that exception is recorded |
+| Runtime EF Core durability options (frozen, see [serialization rule](../serialization.md)) | The durable format of suspended state changes only through migrations and golden fixtures | Decision 3 applies there too. S-9 adopts it as a stamped format change made through that process, so suspended state keeps data byte-identical like every other store. Before 4.0 that means regenerated migrations and updated golden fixtures, not an upcaster |
 | Secrets `json`/`jsonb` columns | The database normalizes the text, not our serializer | Secret payloads are not workflow data |
 
 ### 8. Explicit null is kept, and the value model must preserve it
@@ -328,7 +328,7 @@ workarounds. Rejected in favour of a register: deviations stay possible, but eac
 Answers so far: @FransVanEk answered all six on 2026-10-29 (review of this PR). Where his answer is what this ADR
 proposes, @j03y-nxxbz agrees, so questions 1 to 5 wait only for @sfmskywalker:
 1 bytes; 2 relaxed; 3 yes; 4 yes, with S-2 reusing `ValueEnvelope`'s `Absent` and `ExplicitNull` (now in decision 8);
-5 separate. Question 6 is still open (see the end of the question).
+5 separate. Question 6 is answered too: both agree, see the question.
 
 1. **Byte-identical or value-identical.** Is decision 3 a promise of identical bytes for untouched values, including
    the sender's whitespace inside a value, or only of the same JSON value? This ADR proposes bytes.
@@ -341,6 +341,7 @@ proposes, @j03y-nxxbz agrees, so questions 1 to 5 wait only for @sfmskywalker:
    adapter accepts, produces and loses, and 0091 is the one serializer they all use. Each refers to the other, and
    rules that appear in both (no key policy on data, exact member reads) are stated once, here.
 6. **Runtime durable state.** Should the frozen runtime durability format adopt decision 3 through a stamped
-   migration, or keep re-escaping as a recorded exception? @FransVanEk: a stamped migration now, since there is no
-   release yet and suspended state is the most important store. Not yet decided: whether S-9 includes that migration
-   or the exception in decision 7 stays until a later spec.
+   migration, or keep re-escaping as a recorded exception? **Answered (2026-10-29): a stamped migration, in S-9.**
+   @FransVanEk proposed it and @j03y-nxxbz agrees: suspended state is the most important store, identical bytes
+   (question 1) cannot exempt it, and before 4.0 the change costs regenerated migrations and fixtures, while after 4.0
+   it would need an upcaster for every old row. Decision 7's register row says so. @sfmskywalker: agreed?
