@@ -76,6 +76,10 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                 await NativeWork.ValidateRetirementAsync(context, context.Command.Payload.Deserialize<BpmnNativeWorkCancellation>(Strict)
                     ?? throw new BpmnModelValidationException("Native start retirement is missing."), cancellationToken);
                 break;
+            case "retry-service":
+                if (context.State is null) throw new BpmnModelValidationException("The BPMN execution has not started.");
+                _ = Retry(context.Command.Payload);
+                break;
             default: throw new BpmnModelValidationException("The BPMN input kind is unsupported.");
         }
         var prior = await Reader.FindInputAsync(context.WorkItem.WorkflowExecutionId, context.Command.InputId, cancellationToken);
@@ -95,22 +99,29 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         }
         await ValidateShapeAndReplayAsync(context, cancellationToken);
         var graph = Graph(context.Material.Model!);
+        var definition = Definition(context.Material.Model!);
+        var policyFrame = definition.FormatVersion == 3;
         var current = context.State;
         var isEmbeddedInput = command.InputKind is "start-embedded" or "cancel-embedded" or "native-parent-settled";
         var embedded = isEmbeddedInput ? await Embedding.ValidateInputAsync(context, cancellationToken) : ((BpmnEmbeddedInvocation Invocation, StimulusResumeRecipient? Wait)?)null;
-        var document = current is null ? new Document(context.Material.Model!.Profile == BpmnModelProtocol.NativeWorkProfile ? 2 : 1,
-            new BpmnExecutionState(), []) : Read(current);
+        var document = current is null ? new Document(policyFrame ? 7 : context.Material.Model!.Profile == BpmnModelProtocol.NativeWorkProfile ? 2 : 1,
+            new BpmnExecutionState(), [], Failures: policyFrame ? [] : null) : Read(current);
         if (current is null && embedded is { } parent)
-            document = document with { FormatVersion = context.Material.Model!.Profile == BpmnModelProtocol.NativeWorkProfile ? 5 : 3,
+            document = document with { FormatVersion = policyFrame ? 8 : context.Material.Model!.Profile == BpmnModelProtocol.NativeWorkProfile ? 5 : 3,
                 NativeParent = new(BpmnEmbeddingJson.Write(parent.Invocation)) };
         if (current is null && command.InputKind == "start")
             document = document with { SourceReferenceId = command.Payload.Deserialize<Start>(Strict)!.SourceReferenceId };
+        if (policyFrame != (document.Failures is not null))
+            throw new BpmnModelValidationException("The model definition and retained service policy frame differ.");
         BpmnEvaluation? evaluation = null;
         string? rejection = null;
         CompletionInput? completion = null;
         BpmnNativeWorkResult? nativeResult = null;
         var cancelled = false;
         var settledCancellation = false;
+        var held = false;
+        var retried = false;
+        var commitId = "model-input:" + BpmnModelIdentity.Create(context.Scope.Value, executionId, command.InputId);
         if (command.InputKind == "native-parent-settled")
         {
             if (current?.Lifecycle != RuntimeModelLifecycle.TerminalPendingSettlement) rejection = "parent-already-settled";
@@ -121,15 +132,47 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             else
             {
                 cancelled = true;
-                var cancellations = document.Work.Where(item => item.NativeWork is not null).Select(item =>
+                var cancellations = document.Work.Where(item => item.NativeWork is not null &&
+                    document.NativeResults?.Any(result => result.Origin.IsEquivalentTo(item.NativeWork)) != true).Select(item =>
                 {
                     var origin = item.NativeWork!;
                     var decision = "model-input:" + BpmnModelIdentity.Create(context.Scope.Value, executionId, command.InputId);
                     return new BpmnNativeWorkCancellation(origin, RuntimePostCommitOutboxItems.OutboxItemId(decision,
                         BpmnNativeWorkBoundary.CancellationIntentId(origin)));
                 }).ToArray();
-                document = document with { Work = [], FormatVersion = cancellations.Length > 0 ? document.NativeParent is null ? 4 : 6 : document.FormatVersion,
-                    Cancellations = cancellations.Length > 0 ? cancellations : document.Cancellations };
+                document = document with { Work = [], FormatVersion = cancellations.Length > 0
+                        ? policyFrame ? document.NativeParent is null ? 9 : 10 : document.NativeParent is null ? 4 : 6 : document.FormatVersion,
+                    Cancellations = cancellations.Length > 0 ? cancellations : document.Cancellations,
+                    Failures = document.Failures?.Select(failure => failure.Status == "Open"
+                        ? failure with { Status = "Retired", ResolutionInputId = command.InputId } : failure).ToArray() };
+            }
+        }
+        else if (command.InputKind == "retry-service")
+        {
+            var retry = Retry(command.Payload);
+            completion = new(retry.InvocationId, retry.FailedAttemptId);
+            var failure = document.Failures?.SingleOrDefault(item => item.IncidentId == retry.IncidentId);
+            var work = document.Work.SingleOrDefault(item => item.InvocationId == retry.InvocationId && item.AttemptId == retry.FailedAttemptId);
+            var policy = work is null ? null : definition.ServiceBindings?.Single(item => item.BindingId == work.BindingId).FaultPolicy;
+            if (current!.TerminalResult is not null) rejection = "execution-terminal";
+            else if (!policyFrame) rejection = "retry-not-enabled";
+            else if (current.Lifecycle != RuntimeModelLifecycle.WaitingIncident || failure is not { Status: "Open" } || work is null ||
+                failure.InvocationId != retry.InvocationId || failure.FailedAttemptId != retry.FailedAttemptId) rejection = "incident-not-current";
+            else if (policy?.Disposition != BpmnServiceFaultDisposition.HoldForRetry || failure.MaxAttempts != policy.MaxAttempts) rejection = "retry-not-enabled";
+            else if (work.AttemptNumber >= policy.MaxAttempts) rejection = "attempt-budget-exhausted";
+            else
+            {
+                var result = document.NativeResults!.Single(item => item.Origin.ResultInputId == failure.ResultInputId);
+                await NativeWork.ValidateRetainedResultAsync(current, result, cancellationToken);
+                var number = work.AttemptNumber!.Value + 1;
+                var attempt = "attempt:" + BpmnModelIdentity.Create(work.InvocationId, number.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                var binding = definition.ServiceBindings!.Single(item => item.BindingId == work.BindingId);
+                var replacement = work with { AttemptId = attempt, AttemptNumber = number,
+                    NativeWork = NativeOrigin(context, binding, work.InvocationId, attempt, commitId) };
+                document = document with { Work = document.Work.Select(item => item == work ? replacement : item).ToArray(),
+                    Failures = document.Failures!.Select(item => item == failure ? item with
+                        { Status = "Retried", RetryAttemptId = attempt, ResolutionInputId = command.InputId } : item).ToArray() };
+                retried = true;
             }
         }
         else if (command.InputKind == "native-start-retired")
@@ -183,8 +226,19 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                     }
                     else if (nativeResult.Status == WorkflowExecutionStatus.Faulted || nativeResult.Completion?.OutcomeKey == "BusinessError")
                     {
-                        var binding = Definition(context.Material.Model!).ServiceBindings!.Single(item => item.BindingId == work.BindingId);
-                        evaluation = Evaluate(() => BpmnEvaluationComponent.Interpreter.OnWorkFaulted(
+                        var binding = definition.ServiceBindings!.Single(item => item.BindingId == work.BindingId);
+                        if (nativeResult.Status == WorkflowExecutionStatus.Faulted && binding.FaultPolicy is { } policy)
+                        {
+                            held = policy.Disposition == BpmnServiceFaultDisposition.HoldForRetry && work.AttemptNumber < policy.MaxAttempts;
+                            var failedAt = clock.GetUtcNow();
+                            if (failedAt < current.UpdatedAt) failedAt = current.UpdatedAt;
+                            var failure = new ServiceFailure("bpmn-incident:" + BpmnModelIdentity.Create(executionId, work.InvocationId, work.AttemptId),
+                                work.ElementId, work.BindingId, work.TokenId, work.IterationId, work.InvocationId, work.AttemptId,
+                                work.AttemptNumber!.Value, policy.MaxAttempts, failedAt, JsonSerializer.SerializeToElement(document.State, Web),
+                                nativeResult.Origin.ResultInputId, held ? "Open" : "Final", ResolutionInputId: held ? null : command.InputId);
+                            document = document with { Failures = [.. document.Failures!, failure] };
+                        }
+                        if (!held) evaluation = Evaluate(() => BpmnEvaluationComponent.Interpreter.OnWorkFaulted(
                             new(graph, document.State, snapshot, work.BindingId, work.InvocationId, "Native service work failed.")
                             { WorkTokenId = work.TokenId, FaultedIterationId = work.IterationId,
                                 ErrorCode = nativeResult.Status == WorkflowExecutionStatus.Completed ? binding.BusinessErrorCode : null }));
@@ -198,9 +252,8 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             }
         }
 
-        var lifecycle = current?.Lifecycle ?? RuntimeModelLifecycle.Running;
+        var lifecycle = held ? RuntimeModelLifecycle.WaitingIncident : retried ? RuntimeModelLifecycle.Running : current?.Lifecycle ?? RuntimeModelLifecycle.Running;
         JsonElement? terminal = current?.TerminalResult;
-        var commitId = "model-input:" + BpmnModelIdentity.Create(context.Scope.Value, executionId, command.InputId);
         if (cancelled)
         {
             lifecycle = RuntimeModelLifecycle.TerminalSettled;
@@ -234,13 +287,14 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         var state = rejection is not null ? current! : new RuntimeModelExecutionState(1, context.Scope, executionId, command.TenantId,
             context.Material.Model!.Protocol, context.Material.Identity, context.Material.IncarnationId, revision, lifecycle,
             command.Authority, current?.CreatedAt ?? now, now, JsonSerializer.SerializeToElement(document, Web), terminal);
+        if (policyFrame && rejection is null) _ = Read(state);
         var receipt = new RuntimeModelInputReceipt(context.Scope, executionId, command.InputId, command.InputKind,
             fingerprint, revision, now, completion?.InvocationId ?? embedded?.Invocation.NativeInvocationId,
             completion?.AttemptId ?? embedded?.Invocation.NativeAttemptId,
             JsonSerializer.SerializeToElement(new { status = rejection is null ? "Accepted" : "Rejected", code = rejection,
                 revision, lifecycle = lifecycle.ToString() }, Web));
         var starts = rejection is null ? document.Work.Where(work => work.NativeWork is not null &&
-            !(current is null ? [] : Read(current).Work).Any(old => old.InvocationId == work.InvocationId))
+            !(current is null ? [] : Read(current).Work).Any(old => old.InvocationId == work.InvocationId && old.AttemptId == work.AttemptId))
             .Select(work => new RuntimePostCommitIntent(work.NativeWork!.SourceIntentId, executionId, BpmnNativeWorkBoundary.StartKind,
                 now, null, work.NativeWork.SourceIntentId, JsonSerializer.SerializeToElement(work.NativeWork, Web))).ToArray() : [];
         var intents = starts.ToList();
@@ -270,7 +324,7 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             throw new BpmnModelValidationException("The BPMN material profile or binding/input/output contract is unsupported.");
         var envelope = Definition(material);
         var native = material.Profile == BpmnModelProtocol.NativeWorkProfile;
-        if (envelope.FormatVersion != (native ? 2 : 1) || material.Dependencies.Count != (envelope.ServiceBindings?.Count ?? 0) ||
+        if ((native ? envelope.FormatVersion is not (2 or 3) : envelope.FormatVersion != 1) || material.Dependencies.Count != (envelope.ServiceBindings?.Count ?? 0) ||
             (envelope.ServiceBindings ?? []).Any(binding => !material.Dependencies.Any(dependency => dependency.BindingId == binding.BindingId &&
                 WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(dependency.Executable, binding.Executable))))
             throw new BpmnModelValidationException("The native service inventory differs from the model's complete retained dependency pins.");
@@ -285,6 +339,9 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         if (native && (envelope.HumanBindings.Count != 0 || envelope.ServiceBindings!.Count != 1 ||
             process.Elements.Count(item => item.ElementType == BpmnElementTypes.ServiceTask) != 1))
             throw new BpmnModelValidationException("The current native service profile requires one closed published native worker, plain start/end events and optional coded error boundaries.");
+        if (envelope.FormatVersion == 3 && (process.Elements.Count(item => item.ElementType == BpmnElementTypes.StartEvent) != 1 ||
+            process.SequenceFlows.GroupBy(flow => flow.SourceRef, StringComparer.Ordinal).Any(group => group.Count() > 1)))
+            throw new BpmnModelValidationException("The service fault policy profile requires one start and no concurrent outgoing branches.");
         // This restricted graph can interrupt only the single worker whose authoritative terminal result
         // is already being consumed. Apply refuses cancellation without that exact retained terminal proof.
         try { return BpmnGraph.Build(process, envelope.HumanBindings.Concat((envelope.ServiceBindings ?? []).Select(binding => binding.BindingId))
@@ -312,12 +369,14 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                 !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(invocation.Model.Executable, state.Executable)) throw BpmnEmbeddingJson.Invalid();
         }
         var cancelled = state.TerminalResult is { } terminal && terminal.TryGetProperty("status", out var status) && status.GetString() == "Cancelled";
-        // Formats 1-4 keep their original shapes. Embedded native service work and its cancellation
-        // use 5/6 so an older driver refuses them instead of dropping parent or worker responsibility.
-        if (result.FormatVersion is not (1 or 2 or 3 or 4 or 5 or 6) ||
-            (result.FormatVersion is 3 or 5 or 6) != (result.NativeParent is not null) ||
-            (result.FormatVersion is 4 or 6) != (result.Cancellations is not null) ||
-            result.FormatVersion is 4 or 6 && (!cancelled || result.Cancellations!.Count == 0 ||
+        // Formats 1-6 keep their original wire. Policy-bearing work uses 7/8 (cancel obligations 9/10),
+        // so an older driver refuses rather than discarding a retained failure or physical attempt budget.
+        var policyFrame = result.FormatVersion is 7 or 8 or 9 or 10;
+        if (result.FormatVersion is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10) ||
+            (result.FormatVersion is 3 or 5 or 6 or 8 or 10) != (result.NativeParent is not null) ||
+            (result.FormatVersion is 4 or 6 or 9 or 10) != (result.Cancellations is not null) ||
+            policyFrame != (result.Failures is not null) ||
+            result.FormatVersion is 4 or 6 or 9 or 10 && (!cancelled || result.Cancellations!.Count == 0 ||
                 (result.Cancellations.Any(item => !item.Settled) ? state.Lifecycle != RuntimeModelLifecycle.TerminalPendingSettlement :
                     result.NativeParent is null && state.Lifecycle != RuntimeModelLifecycle.TerminalSettled) ||
                 result.Cancellations.Select(item => item.Origin.InvocationId).Distinct(StringComparer.Ordinal).Count() != result.Cancellations.Count ||
@@ -336,8 +395,36 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                 item.NativeWork is { } origin && (!origin.MatchesModel(state) || origin.InvocationId != item.InvocationId || origin.AttemptId != item.AttemptId ||
                     origin.BindingId != item.BindingId || origin.ResultIntentKind != BpmnNativeWorkBoundary.ResultKind ||
                     origin.WorkerExecutionId != BpmnNativeWorkBoundary.WorkerIdentity(origin.Scope, state.ExecutionId, item.InvocationId,
-                        item.AttemptId, origin.WorkerExecutable).WorkflowExecutionId) || (result.FormatVersion is 2 or 5) != (item.NativeWork is not null)))
+                        item.AttemptId, origin.WorkerExecutable).WorkflowExecutionId) || (result.FormatVersion is 2 or 5 or 7 or 8) != (item.NativeWork is not null) ||
+                policyFrame != (item.AttemptNumber is not null) || item.AttemptNumber is < 1 or > BpmnServiceFaultPolicy.MaximumAttempts ||
+                item.AttemptNumber is { } number && item.AttemptId != "attempt:" + BpmnModelIdentity.Create(item.InvocationId,
+                    number.ToString(System.Globalization.CultureInfo.InvariantCulture))))
             throw new BpmnModelValidationException("The BPMN state and exact work inventory differ.");
+        if (result.Failures is { } failures)
+        {
+            if (failures.Select(item => item.IncidentId).Distinct(StringComparer.Ordinal).Count() != failures.Count ||
+                failures.Select(item => item.ResultInputId).Distinct(StringComparer.Ordinal).Count() != failures.Count)
+                throw new BpmnModelValidationException("The retained service failure inventory contains duplicates.");
+            foreach (var failure in failures)
+            {
+                var failedResult = result.NativeResults?.SingleOrDefault(item => item.Origin.ResultInputId == failure.ResultInputId);
+                var snapshot = failure.SemanticState.ValueKind == JsonValueKind.Object
+                    ? failure.SemanticState.Deserialize<BpmnExecutionState>(Web) : null;
+                if (failedResult is null || failedResult.Status != WorkflowExecutionStatus.Faulted || failedResult.FaultCode is not null && string.IsNullOrWhiteSpace(failedResult.FaultCode) ||
+                    !failedResult.Origin.MatchesModel(state) || failedResult.Origin.InvocationId != failure.InvocationId || failedResult.Origin.AttemptId != failure.FailedAttemptId ||
+                    failedResult.Origin.BindingId != failure.BindingId || failure.IncidentId != "bpmn-incident:" + BpmnModelIdentity.Create(state.ExecutionId, failure.InvocationId, failure.FailedAttemptId) ||
+                    failure.AttemptNumber < 1 || failure.MaxAttempts is < 1 or > BpmnServiceFaultPolicy.MaximumAttempts || failure.AttemptNumber > failure.MaxAttempts ||
+                    failure.Status is not ("Open" or "Retried" or "Retired" or "Final") ||
+                    (failure.Status == "Open") != (failure.ResolutionInputId is null) || (failure.Status == "Retried") != (failure.RetryAttemptId is not null) ||
+                    snapshot?.ActiveWork.Any(item => item.TokenId == failure.TokenId && item.ElementId == failure.ElementId && item.NodeId == failure.BindingId && item.IterationId == failure.IterationId) != true ||
+                    failure.Status == "Open" && (state.Lifecycle != RuntimeModelLifecycle.WaitingIncident || state.TerminalResult is not null ||
+                        failure.AttemptNumber >= failure.MaxAttempts || !result.Work.Any(work => work.InvocationId == failure.InvocationId && work.AttemptId == failure.FailedAttemptId && work.AttemptNumber == failure.AttemptNumber) ||
+                        !JsonElement.DeepEquals(failure.SemanticState, JsonSerializer.SerializeToElement(result.State, Web))))
+                    throw new BpmnModelValidationException("A retained service failure lost its original attempt or active semantic snapshot.");
+            }
+            if ((state.Lifecycle == RuntimeModelLifecycle.WaitingIncident) != failures.Any(item => item.Status == "Open"))
+                throw new BpmnModelValidationException("The model incident lifecycle differs from its current held failure.");
+        }
         return result;
     }
 
@@ -360,16 +447,31 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             RuntimeModelNativeWorkOrigin? origin = null;
             if (binding is not null)
             {
-                var intentId = "bpmn-start-native:" + BpmnModelIdentity.Create(invocation, attempt);
-                origin = new(1, context.Scope, context.WorkItem.WorkflowExecutionId, context.Material.Model!.Protocol,
-                    context.Material.Identity, context.Material.IncarnationId, binding.BindingId, invocation, attempt, binding.Executable,
-                    BpmnNativeWorkBoundary.WorkerIdentity(context.Scope, context.WorkItem.WorkflowExecutionId, invocation, attempt, binding.Executable).WorkflowExecutionId,
-                    RuntimePostCommitOutboxItems.OutboxItemId(commitId, intentId), intentId, BpmnNativeWorkBoundary.ResultKind,
-                    "native-result:" + BpmnModelIdentity.Create(context.Scope.Value, context.WorkItem.WorkflowExecutionId, invocation, attempt));
+                origin = NativeOrigin(context, binding, invocation, attempt, commitId);
             }
-            return new Work(active.ElementId, active.NodeId, active.TokenId, active.IterationId, invocation, attempt, origin);
+            return new Work(active.ElementId, active.NodeId, active.TokenId, active.IterationId, invocation, attempt, origin,
+                Definition(context.Material.Model!).FormatVersion == 3 ? 1 : null);
         }).ToArray();
         return prior with { State = state, Work = work };
+    }
+
+    private static RuntimeModelNativeWorkOrigin NativeOrigin(RuntimeModelExecutionContext context, BpmnNativeServiceBinding binding,
+        string invocation, string attempt, string commitId)
+    {
+        var intent = "bpmn-start-native:" + BpmnModelIdentity.Create(invocation, attempt);
+        return new(1, context.Scope, context.WorkItem.WorkflowExecutionId, context.Material.Model!.Protocol,
+            context.Material.Identity, context.Material.IncarnationId, binding.BindingId, invocation, attempt, binding.Executable,
+            BpmnNativeWorkBoundary.WorkerIdentity(context.Scope, context.WorkItem.WorkflowExecutionId, invocation, attempt, binding.Executable).WorkflowExecutionId,
+            RuntimePostCommitOutboxItems.OutboxItemId(commitId, intent), intent, BpmnNativeWorkBoundary.ResultKind,
+            "native-result:" + BpmnModelIdentity.Create(context.Scope.Value, context.WorkItem.WorkflowExecutionId, invocation, attempt));
+    }
+
+    private static RetryInput Retry(JsonElement payload)
+    {
+        var result = payload.Deserialize<RetryInput>(Strict) ?? throw new BpmnModelValidationException("Service retry is missing.");
+        if (new[] { result.IncidentId, result.InvocationId, result.FailedAttemptId }.Any(value => string.IsNullOrWhiteSpace(value) || value.Length > 512))
+            throw new BpmnModelValidationException("Service retry requires its exact incident, invocation and failed attempt.");
+        return result;
     }
 
     private static BpmnEvaluation Evaluate(Func<BpmnEvaluation> action)
@@ -395,10 +497,16 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
     internal sealed record Document(int FormatVersion, BpmnExecutionState State, IReadOnlyList<Work> Work, string? SourceReferenceId = null,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<BpmnNativeWorkResult>? NativeResults = null,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] BpmnEmbeddedParent? NativeParent = null,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<BpmnNativeWorkCancellation>? Cancellations = null);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<BpmnNativeWorkCancellation>? Cancellations = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<ServiceFailure>? Failures = null);
     internal sealed record Work(string ElementId, string BindingId, string TokenId, string? IterationId, string InvocationId, string AttemptId,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RuntimeModelNativeWorkOrigin? NativeWork = null);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] RuntimeModelNativeWorkOrigin? NativeWork = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? AttemptNumber = null);
+    internal sealed record ServiceFailure(string IncidentId, string ElementId, string BindingId, string TokenId, string? IterationId,
+        string InvocationId, string FailedAttemptId, int AttemptNumber, int MaxAttempts, DateTimeOffset FailedAt, JsonElement SemanticState,
+        string ResultInputId, string Status, string? RetryAttemptId = null, string? ResolutionInputId = null);
     private sealed record Start(IReadOnlyDictionary<string, JsonElement>? Inputs = null, string? SourceReferenceId = null);
     private sealed record CompletionInput(string InvocationId, string AttemptId, string[]? Outcomes = null);
     private sealed record CancelInput(string? Reason = null);
+    private sealed record RetryInput(string IncidentId, string InvocationId, string FailedAttemptId);
 }

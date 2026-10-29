@@ -102,3 +102,50 @@ Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding.BpmnNativeServiceBinding(stri
 Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding.BusinessErrorCode.get -> string!
 Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!
 const Elsa.Activities.Bpmn.Core.BpmnModelProtocol.NativeWorkProfile = "foundation-native-work-v1" -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding.BpmnNativeServiceBinding(string! bindingId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! executable, string! businessErrorCode, Elsa.Activities.Bpmn.Core.BpmnServiceFaultPolicy? faultPolicy) -> void
+Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding.FaultPolicy.get -> Elsa.Activities.Bpmn.Core.BpmnServiceFaultPolicy?
+Elsa.Activities.Bpmn.Core.BpmnServiceFaultDisposition
+Elsa.Activities.Bpmn.Core.BpmnServiceFaultDisposition.FinalFault = 0 -> Elsa.Activities.Bpmn.Core.BpmnServiceFaultDisposition
+Elsa.Activities.Bpmn.Core.BpmnServiceFaultDisposition.HoldForRetry = 1 -> Elsa.Activities.Bpmn.Core.BpmnServiceFaultDisposition
+Elsa.Activities.Bpmn.Core.BpmnServiceFaultPolicy.BpmnServiceFaultPolicy(int formatVersion, Elsa.Activities.Bpmn.Core.BpmnServiceFaultDisposition disposition, int maxAttempts) -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceFaultPolicy.FormatVersion.get -> int
+Elsa.Activities.Bpmn.Core.BpmnServiceFaultPolicy.Disposition.get -> Elsa.Activities.Bpmn.Core.BpmnServiceFaultDisposition
+Elsa.Activities.Bpmn.Core.BpmnServiceFaultPolicy.MaxAttempts.get -> int
+const Elsa.Activities.Bpmn.Core.BpmnServiceFaultPolicy.MaximumAttempts = 32 -> int
+Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.ListIncidentsAsync(string! executionId, Elsa.Workflows.Runtime.Core.Models.RuntimeStorePageRequest! request, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeStorePage<Elsa.Activities.Bpmn.Core.BpmnServiceIncident!>!>
+Elsa.Activities.Bpmn.Core.IBpmnModelRuntime.RetryServiceAsync(string! executionId, string! requestId, string! incidentId, string! invocationId, string! failedAttemptId, Elsa.Activities.Bpmn.Core.BpmnModelCaller! caller, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Activities.Bpmn.Core.BpmnModelCommandOutcome!>
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.<Clone>$() -> Elsa.Activities.Bpmn.Core.BpmnServiceIncident!
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.BpmnServiceIncident(string! IncidentId, string! ElementId, string! BindingId, string! InvocationId, string! FailedAttemptId, string! WorkerExecutionId, string! FaultCode, System.DateTimeOffset FailedAt, int AttemptNumber, int MaxAttempts, string! Status, string? RetryAttemptId) -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.Deconstruct(out string! IncidentId, out string! ElementId, out string! BindingId, out string! InvocationId, out string! FailedAttemptId, out string! WorkerExecutionId, out string! FaultCode, out System.DateTimeOffset FailedAt, out int AttemptNumber, out int MaxAttempts, out string! Status, out string? RetryAttemptId) -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.Equals(Elsa.Activities.Bpmn.Core.BpmnServiceIncident? other) -> bool
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.IncidentId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.IncidentId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.ElementId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.ElementId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.BindingId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.BindingId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.InvocationId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.InvocationId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.FailedAttemptId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.FailedAttemptId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.WorkerExecutionId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.WorkerExecutionId.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.FaultCode.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.FaultCode.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.FailedAt.get -> System.DateTimeOffset
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.FailedAt.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.AttemptNumber.get -> int
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.AttemptNumber.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.MaxAttempts.get -> int
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.MaxAttempts.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.Status.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.Status.init -> void
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.RetryAttemptId.get -> string?
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident.RetryAttemptId.init -> void
+override Elsa.Activities.Bpmn.Core.BpmnServiceIncident.Equals(object? obj) -> bool
+override Elsa.Activities.Bpmn.Core.BpmnServiceIncident.GetHashCode() -> int
+override Elsa.Activities.Bpmn.Core.BpmnServiceIncident.ToString() -> string!
+static Elsa.Activities.Bpmn.Core.BpmnServiceIncident.operator !=(Elsa.Activities.Bpmn.Core.BpmnServiceIncident? left, Elsa.Activities.Bpmn.Core.BpmnServiceIncident? right) -> bool
+static Elsa.Activities.Bpmn.Core.BpmnServiceIncident.operator ==(Elsa.Activities.Bpmn.Core.BpmnServiceIncident? left, Elsa.Activities.Bpmn.Core.BpmnServiceIncident? right) -> bool
+Elsa.Activities.Bpmn.Core.BpmnServiceFaultPolicy
+Elsa.Activities.Bpmn.Core.BpmnServiceIncident

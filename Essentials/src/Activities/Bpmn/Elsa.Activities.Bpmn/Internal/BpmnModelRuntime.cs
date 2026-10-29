@@ -18,6 +18,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
 {
     private const string SourceKind = "BpmnModel";
     private const string WorkPagePurpose = "bpmn-human-work-v1";
+    private const string IncidentPagePurpose = "bpmn-service-incidents-v1";
     private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
     private IRuntimeModelExecutionReader States => states ?? throw new RuntimeSchedulerWorkUnavailableException(
         "bpmn.state-unavailable", "The selected host has no model state reader.");
@@ -102,6 +103,48 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         var next = more ? continuations.Encode(WorkPagePurpose,
             JsonSerializer.SerializeToUtf8Bytes(new WorkCursor(scopeKey, executionId, state.Revision, items[^1].InvocationId), Web)) : null;
         return new(request, items.Select(item => new BpmnHumanWork(item.ElementId, item.BindingId, item.TokenId, item.IterationId, item.InvocationId, item.AttemptId)).ToArray(), next);
+    }
+
+    public async ValueTask<RuntimeStorePage<BpmnServiceIncident>> ListIncidentsAsync(string executionId, RuntimeStorePageRequest request,
+        BpmnModelCaller caller, CancellationToken cancellationToken = default)
+    {
+        var scope = Scope(caller);
+        var state = await FindExecutionAsync(executionId, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
+        var scopeKey = BpmnModelIdentity.Create(scope.Value, caller.TenantId ?? "");
+        string? after = null;
+        if (request.ContinuationToken is not null)
+        {
+            var cursor = JsonSerializer.Deserialize<WorkCursor>(continuations.Decode(IncidentPagePurpose, request.ContinuationToken), Web)
+                ?? throw new ArgumentException("The incident continuation is invalid.");
+            if (cursor.Scope != scopeKey || cursor.Execution != executionId || cursor.Revision != state.Revision)
+                throw new ArgumentException("The incident continuation belongs to a different execution snapshot.");
+            after = cursor.After;
+        }
+        var document = BpmnDirectExecutionDriver.Read(state);
+        var items = (document.Failures ?? []).OrderBy(item => item.IncidentId, StringComparer.Ordinal)
+            .Where(item => after is null || string.CompareOrdinal(item.IncidentId, after) > 0).Take(request.Limit + 1).ToArray();
+        var more = items.Length > request.Limit;
+        if (more) items = items[..request.Limit];
+        var next = more ? continuations.Encode(IncidentPagePurpose,
+            JsonSerializer.SerializeToUtf8Bytes(new WorkCursor(scopeKey, executionId, state.Revision, items[^1].IncidentId), Web)) : null;
+        return new(request, items.Select(item =>
+        {
+            var result = document.NativeResults!.Single(result => result.Origin.ResultInputId == item.ResultInputId);
+            return new BpmnServiceIncident(item.IncidentId, item.ElementId, item.BindingId, item.InvocationId, item.FailedAttemptId,
+                result.Origin.WorkerExecutionId, result.FaultCode ?? "bpmn.native-worker-faulted", item.FailedAt, item.AttemptNumber, item.MaxAttempts, item.Status, item.RetryAttemptId);
+        }).ToArray(), next);
+    }
+
+    public async ValueTask<BpmnModelCommandOutcome> RetryServiceAsync(string executionId, string requestId, string incidentId,
+        string invocationId, string failedAttemptId, BpmnModelCaller caller, CancellationToken cancellationToken = default)
+    {
+        Scope(caller); InputId(requestId);
+        if (new[] { incidentId, invocationId, failedAttemptId }.Any(value => string.IsNullOrWhiteSpace(value) || value.Length > 512))
+            throw new ArgumentException("Service retry requires its exact incident, invocation and failed attempt.");
+        var state = await FindExecutionAsync(executionId, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
+        var command = new RuntimeModelExecutionCommand(state.Executable, state.MaterialIncarnationId, requestId, "retry-service",
+            JsonSerializer.SerializeToElement(new { incidentId, invocationId, failedAttemptId }, Web), state.Authority, state.TenantId);
+        return await DispatchAsync(executionId, command, caller, cancellationToken);
     }
 
     public async ValueTask<BpmnModelCommandOutcome> CompleteHumanAsync(string executionId, string requestId, string invocationId,

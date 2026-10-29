@@ -103,17 +103,29 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
         if (!origin.MatchesModel(state) || origin.ExecutionId != context.WorkItem.WorkflowExecutionId ||
             context.Command.InputId != ResultInputId(origin) || !result.Status.IsTerminal())
             throw new BpmnModelValidationException("The native result does not address this exact model invocation.");
+        await ValidateRetainedResultAsync(state, result, cancellationToken);
+        if (BpmnDirectExecutionDriver.Read(state).Cancellations?.Any(item => !item.Settled && origin.IsEquivalentTo(item.Origin)) == true)
+            await RequireCancellationSettlementAsync(result, cancellationToken);
+    }
+
+    internal async ValueTask ValidateRetainedResultAsync(RuntimeModelExecutionState state, BpmnNativeWorkResult result,
+        CancellationToken cancellationToken)
+    {
+        EnsureQualified();
+        var origin = result.Origin;
+        access.Current.EnsureScope(state.Scope);
+        access.Current.EnsureTenantScope(state.TenantId);
+        if (!origin.MatchesModel(state) || !result.Status.IsTerminal())
+            throw new BpmnModelValidationException("The retained native result does not address this model execution.");
         var source = await PhysicalLookup.FindDurableAsync(result.SourceOutboxItemId, cancellationToken)
             ?? throw Unavailable("The retained native result source is unavailable.");
         var worker = await FindWorkerAsync(origin, cancellationToken) ?? throw Unavailable("The native result owner is unavailable.");
         if (worker.Status != result.Status || worker.TenantId != state.TenantId || worker.Authority is null ||
             !WorkflowExecutionAuthoritySnapshot.Matches(state.Authority, worker.Authority.SystemIdentity, worker.Authority.RootInitiator, worker.Authority.Metadata) ||
-            source.StimulusDeliverySourceScope != context.Scope || source.Intent.Kind != ResultKind ||
+            source.StimulusDeliverySourceScope != state.Scope || source.Intent.Kind != ResultKind ||
             source.Intent.WorkflowExecutionId != origin.WorkerExecutionId || source.Intent.Payload is not { } payload ||
             !JsonElement.DeepEquals(payload, JsonSerializer.SerializeToElement(result, Web)))
             throw new BpmnModelValidationException("The native result differs from its committed terminal owner and outbox source.");
-        if (BpmnDirectExecutionDriver.Read(state).Cancellations?.Any(item => !item.Settled && origin.IsEquivalentTo(item.Origin)) == true)
-            await RequireCancellationSettlementAsync(result, cancellationToken);
     }
 
     private async ValueTask RequireCancellationSettlementAsync(BpmnNativeWorkResult result, CancellationToken cancellationToken)

@@ -14,14 +14,14 @@ public sealed class BpmnModelDefinition
     public BpmnModelDefinition(int formatVersion, JsonElement process, IReadOnlyList<string> humanBindings,
         IReadOnlyList<BpmnNativeServiceBinding>? serviceBindings)
     {
-        if (formatVersion is not (1 or 2)) throw new NotSupportedException("The BPMN model definition format is unsupported.");
+        if (formatVersion is not (1 or 2 or 3)) throw new NotSupportedException("The BPMN model definition format is unsupported.");
         if (process.ValueKind != JsonValueKind.Object) throw new ArgumentException("A BPMN process must be an object.", nameof(process));
         ArgumentNullException.ThrowIfNull(humanBindings);
         if (humanBindings.Any(string.IsNullOrWhiteSpace) || humanBindings.Distinct(StringComparer.Ordinal).Count() != humanBindings.Count)
             throw new ArgumentException("BPMN human binding identities must be nonblank and unique.", nameof(humanBindings));
         FormatVersion = formatVersion; Process = process.Clone();
         HumanBindings = Array.AsReadOnly(humanBindings.Order(StringComparer.Ordinal).ToArray());
-        if (formatVersion == 1 && serviceBindings is not null || formatVersion == 2 && serviceBindings is not { Count: > 0 })
+        if (formatVersion == 1 && serviceBindings is not null || formatVersion is 2 or 3 && serviceBindings is not { Count: > 0 })
             throw new ArgumentException("The native service profile requires its explicit versioned binding inventory.", nameof(serviceBindings));
         if (serviceBindings is not null)
         {
@@ -30,6 +30,9 @@ public sealed class BpmnModelDefinition
                 serviceBindings.Any(binding => HumanBindings.Contains(binding.BindingId, StringComparer.Ordinal)))
                 throw new ArgumentException("Human and native service binding identities must be distinct.", nameof(serviceBindings));
             ServiceBindings = Array.AsReadOnly(serviceBindings.OrderBy(binding => binding.BindingId, StringComparer.Ordinal).ToArray());
+            if (formatVersion == 2 && ServiceBindings.Any(binding => binding.FaultPolicy is not null) ||
+                formatVersion == 3 && ServiceBindings.Any(binding => binding.FaultPolicy is null))
+                throw new ArgumentException("Explicit service fault policies require model format 3 and its complete policy inventory.", nameof(serviceBindings));
         }
     }
     public int FormatVersion { get; }
@@ -43,17 +46,48 @@ public sealed class BpmnModelDefinition
 public sealed class BpmnNativeServiceBinding
 {
     public BpmnNativeServiceBinding(string bindingId, WorkflowExecutableIdentity executable, string businessErrorCode)
+        : this(bindingId, executable, businessErrorCode, null) { }
+
+    [JsonConstructor]
+    public BpmnNativeServiceBinding(string bindingId, WorkflowExecutableIdentity executable, string businessErrorCode,
+        BpmnServiceFaultPolicy? faultPolicy)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(bindingId);
         ArgumentException.ThrowIfNullOrWhiteSpace(businessErrorCode);
         ArgumentNullException.ThrowIfNull(executable);
         foreach (var value in new[] { executable.ArtifactId, executable.ArtifactHash, executable.DefinitionId,
                      executable.DefinitionVersionId, executable.ArtifactVersion }) ArgumentException.ThrowIfNullOrWhiteSpace(value);
-        BindingId = bindingId; Executable = executable; BusinessErrorCode = businessErrorCode;
+        BindingId = bindingId; Executable = executable; BusinessErrorCode = businessErrorCode; FaultPolicy = faultPolicy;
     }
     public string BindingId { get; }
     public WorkflowExecutableIdentity Executable { get; }
     public string BusinessErrorCode { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public BpmnServiceFaultPolicy? FaultPolicy { get; }
+}
+
+/// <summary>Disposition of a technical native-worker failure; modeled business errors keep their own semantics.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<BpmnServiceFaultDisposition>))]
+public enum BpmnServiceFaultDisposition { FinalFault, HoldForRetry }
+
+/// <summary>Immutable attempt budget, including the first physical attempt, pinned by model format 3.</summary>
+public sealed class BpmnServiceFaultPolicy
+{
+    public const int MaximumAttempts = 32;
+
+    public BpmnServiceFaultPolicy(int formatVersion, BpmnServiceFaultDisposition disposition, int maxAttempts)
+    {
+        if (formatVersion != 1) throw new NotSupportedException("The service fault policy format is unsupported.");
+        if (disposition is not (BpmnServiceFaultDisposition.FinalFault or BpmnServiceFaultDisposition.HoldForRetry))
+            throw new ArgumentOutOfRangeException(nameof(disposition));
+        if (maxAttempts is < 1 or > MaximumAttempts) throw new ArgumentOutOfRangeException(nameof(maxAttempts));
+        if (disposition == BpmnServiceFaultDisposition.FinalFault && maxAttempts != 1)
+            throw new ArgumentException("FinalFault permits one physical attempt.", nameof(maxAttempts));
+        FormatVersion = formatVersion; Disposition = disposition; MaxAttempts = maxAttempts;
+    }
+    public int FormatVersion { get; }
+    public BpmnServiceFaultDisposition Disposition { get; }
+    public int MaxAttempts { get; }
 }
 
 /// <summary>The protocol and immutable material profile interpreted by the direct BPMN adapter.</summary>

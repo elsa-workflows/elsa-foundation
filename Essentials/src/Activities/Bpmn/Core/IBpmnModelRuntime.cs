@@ -19,6 +19,14 @@ public interface IBpmnModelRuntime
         BpmnModelCaller caller, CancellationToken cancellationToken = default) =>
         ValueTask.FromException<BpmnModelCommandOutcome>(new NotSupportedException("This BPMN host does not support cancellation."));
     ValueTask<BpmnModelCommandOutcome?> FindCommandAsync(string executionId, string requestId, BpmnModelCaller caller, CancellationToken cancellationToken = default);
+    /// <summary>Inspects retained model-owned service failures without projecting them as native activities.</summary>
+    ValueTask<RuntimeStorePage<BpmnServiceIncident>> ListIncidentsAsync(string executionId, RuntimeStorePageRequest request,
+        BpmnModelCaller caller, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RuntimeStorePage<BpmnServiceIncident>>(new NotSupportedException("This BPMN host does not support service incidents."));
+    /// <summary>Retries only the exact current held service failure; identical request replay cannot create another attempt.</summary>
+    ValueTask<BpmnModelCommandOutcome> RetryServiceAsync(string executionId, string requestId, string incidentId,
+        string invocationId, string failedAttemptId, BpmnModelCaller caller, CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<BpmnModelCommandOutcome>(new NotSupportedException("This BPMN host does not support service retry."));
 }
 
 /// <summary>Captured by the authenticated transport; execution authority is never bound from request JSON.</summary>
@@ -32,6 +40,11 @@ public sealed record BpmnModelCommandOutcome(string ExecutionId, string InputId,
 
 public sealed record BpmnHumanWork(string ElementId, string BindingId, string TokenId, string? IterationId,
     string InvocationId, string AttemptId);
+
+/// <summary>Authorized service-failure inspection; failed worker evidence remains retained after resolution.</summary>
+public sealed record BpmnServiceIncident(string IncidentId, string ElementId, string BindingId, string InvocationId,
+    string FailedAttemptId, string WorkerExecutionId, string FaultCode, DateTimeOffset FailedAt,
+    int AttemptNumber, int MaxAttempts, string Status, string? RetryAttemptId);
 
 /// <summary>Missing or foreign-scope model resource. Transports return the same absence response.</summary>
 public sealed class BpmnModelResourceMissingException() : Exception("The BPMN resource is not available.");

@@ -68,6 +68,9 @@ def main():
     parser.add_argument("--parent", choices=("Sequence", "Flowchart", "RunEtl", "BpmnModel"), default="Sequence")
     parser.add_argument("--embedded-parent", choices=("Root", "Sequence", "Flowchart", "CompensationScope"), help="Invoke the published service model through a real native RunBpmn parent.")
     parser.add_argument("--business-error-boundary", choices=("matching", "different"), help="Attach a coded business-error boundary; requires a business-error or technical-fault journey.")
+    service_policy=parser.add_mutually_exclusive_group()
+    service_policy.add_argument('--hold-service-retry',action='store_true',help='Pin HoldForRetry/2 and recover one authorized physical retry after a second process loss.')
+    service_policy.add_argument('--final-service-fault',action='store_true',help='Pin explicit FinalFault/1 and prove a real current incident cannot retry after semantic finality.')
     parser.add_argument("--queued-native-stage", choices=("start", "checkpoint"), help="With cancellation before admission, use the actual SDK to retain the selected native queue stage first.")
     parser.add_argument("--dispatcher-assembly", type=Path, help="Built owned SDK client required for the queued-native cut.")
     parser.add_argument("--admission-race-order", choices=("cancel-first", "admit-first"), help="Gate an unchanged actual proposal before its provider transaction, commit the competitor, then cold-recover both writers' obligations.")
@@ -86,6 +89,8 @@ def main():
     args = parser.parse_args()
     cancelling=args.pipeline_cancel or args.native_cancel or args.native_parent_cancel or args.model_cancel or args.model_cancel_before_admission
     if args.technical_fault and args.parent!='BpmnModel':parser.error("Technical fault currently qualifies the direct BPMN/native RunEtl root.")
+    if (args.hold_service_retry or args.final_service_fault) and (not args.technical_fault or args.business_error_boundary!='matching'):
+        parser.error('The explicit service fault policy journey requires --technical-fault --business-error-boundary matching.')
     if args.business_error_boundary and (not (args.business_error or args.technical_fault) or args.parent!='BpmnModel'):
         parser.error("A business-error boundary requires --parent BpmnModel and a business-error or technical-fault journey.")
     caught_business_error=args.business_error and args.business_error_boundary=='matching'
@@ -232,8 +237,11 @@ def main():
                     'eventDefinitions':[{'type':'error','properties':{'code':'etl.rows-rejected' if args.business_error_boundary=='matching' else 'etl.other-error'}}]},
                     {'elementId':'error-end','elementType':'endEvent'}]
                 process['sequenceFlows'].append({'flowId':'caught-end','sourceRef':'error','targetRef':'error-end'})
-            model_publication=api.request("/bpmn/artifacts",{"requestId":"publish-model","definition":{"formatVersion":2,"process":process,"humanBindings":[],
-                "serviceBindings":[{"bindingId":"pipeline","executable":worker_pin,"businessErrorCode":"etl.rows-rejected"}]}})
+            service_binding={'bindingId':'pipeline','executable':worker_pin,'businessErrorCode':'etl.rows-rejected'}
+            if args.hold_service_retry or args.final_service_fault:
+                service_binding['faultPolicy']={'formatVersion':1,'disposition':'HoldForRetry' if args.hold_service_retry else 'FinalFault','maxAttempts':2 if args.hold_service_retry else 1}
+            model_publication=api.request("/bpmn/artifacts",{"requestId":"publish-model","definition":{"formatVersion":3 if args.hold_service_retry or args.final_service_fault else 2,"process":process,"humanBindings":[],
+                "serviceBindings":[service_binding]}})
             if args.embedded_parent:
                 outer=node("run-bpmn","Elsa.Activities.Bpmn.Activities.RunBpmn",[q.literal("Model",model_publication["sourceReferenceId"])])
                 if args.embedded_parent!='Root':
@@ -466,6 +474,109 @@ def main():
         if args.pending_cancellation_crash or args.pending_parent_result_crash or args.successful_parent_result_crash:
             features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":300};q.write_json(root/"shells.json",shells)
         api=launch();recovered=view();q.write_json(output/"recovered.json",recovered)
+        if args.hold_service_retry:
+            route='/bpmn/executions/'+urllib.parse.quote(model_execution,safe='')
+            held=wait_for(lambda:{'execution':view(),'incidents':api.request(route+'/incidents?limit=10')},
+                lambda value:value['execution']['model']['status']=='WaitingIncident' and value['execution']['run']['status']=='faulted' and
+                    value['execution']['native']['instance']['status']=='Faulted' and len(value['incidents']['items'])==1,
+                'The actual worker failure did not remain a held, nonterminal BPMN incident.',90)
+            checked_held=wait_for(checked_native_model,lambda value:value['resultInput'] is not None and value['resultSource'] is not None and value['resultSource']['status']==2,
+                'The actual held failure did not retain consumption and original source acknowledgment.',90)
+            incident,=held['incidents']['items'];held_document=checked_held['model']['payload'];old_result,=held_document['nativeResults'];failure,=held_document['failures']
+            if (incident['status']!='Open' or incident['attemptNumber']!=1 or incident['maxAttempts']!=2 or incident['faultCode']!='etl.snapshot-read-failed' or
+                    incident['workerExecutionId']!=execution or held['execution']['model']['result'] is not None or
+                    held_document['state']!=json.loads((output/'before-checked-model.json').read_text())['model']['payload']['state'] or
+                    failure['semanticState']!=held_document['state'] or failure['status']!='Open' or wire()!=before_wire or
+                    native_parent_execution and held['execution']['embedding']['instance']['status']!='Running'):
+                raise ValueError('The actual held failure changed token semantics, worker truth, parent wait or prior HTTP effects.')
+            os.kill(host.pid,signal.SIGSTOP)
+            wait_for(lambda:q.process_field(host.pid,'stat'),lambda value:'T' in value,'The second owned host did not quiesce.',5)
+            held_stores=snapshots('held');held_cut=datetime.now(timezone.utc).isoformat()
+            q.write_json(output/'held.json',held);q.write_json(output/'held-checked-model.json',checked_native_model());q.write_json(output/'held-wire.json',wire())
+            if native_parent_execution:q.write_json(output/'held-checked-embedding.json',checked_embedding())
+            stop(host,crash=True);held_exit=host.returncode
+            if held_exit!=-signal.SIGKILL:raise ValueError('The actual held incident did not survive a second process loss.')
+            if lookup_snapshot.exists() or q.digest(unavailable)!=snapshot_unavailability['snapshotSha256Before']:
+                raise ValueError('The retained lookup changed while its failed attempt was held.')
+            unavailable.rename(lookup_snapshot)
+            snapshot_unavailability.update(restoredBeforeAuthorizedRetry=True,restoredAtUtc=datetime.now(timezone.utc).isoformat(),restoredSha256=q.digest(lookup_snapshot))
+            q.write_json(output/'snapshot-unavailability.json',snapshot_unavailability)
+            api=launch()
+            after_restart={'execution':view(),'incidents':api.request(route+'/incidents?limit=10')}
+            if after_restart!=held or checked_native_model()!=checked_held or wire()!=before_wire:
+                raise ValueError('Restoring the external snapshot or restarting revived the held interpreter or failed worker.')
+            while datetime.now(timezone.utc)<utc_instant(retry['notBefore'])+timedelta(seconds=2):
+                if view()!=held['execution'] or wire()!=before_wire:raise ValueError('The held failed attempt revived at its original HTTP retry deadline.')
+                time.sleep(.25)
+            q.write_json(output/'held-after-restart.json',after_restart)
+            request={'requestId':'retry-actual-held-service','incidentId':incident['incidentId'],'invocationId':incident['invocationId'],'failedAttemptId':incident['failedAttemptId']}
+            submitted=api.request(route+'/retry-service',request)
+            accepted=wait_for(lambda:api.request(route+'/commands/'+request['requestId']),lambda value:not value['pending'],
+                'The authorized retry did not retain its exact command result.',90)
+            if accepted['result']['status']!='Accepted' or accepted['result']['revision']!=3 or accepted['result']['lifecycle']!='Running':
+                raise ValueError('The actual retry did not commit one physical attempt for its retained semantic work.')
+            duplicate=api.request(route+'/retry-service',request)
+            if not duplicate['replay'] or duplicate['pending'] or duplicate['result']!=accepted['result']:
+                raise ValueError('Identical authorized retry did not replay the original attempt receipt.')
+            conflict=urllib.request.Request(api.base+route+'/retry-service',data=json.dumps({**request,'failedAttemptId':'conflicting-attempt'}).encode(),headers={'Content-Type':'application/json'})
+            try:
+                with api.opener.open(conflict,timeout=30):raise ValueError('Conflicting retry content was accepted.')
+            except urllib.error.HTTPError as error:
+                if error.code!=409:raise
+            q.write_json(output/'retry-command.json',{'request':request,'submitted':submitted,'accepted':accepted,'duplicate':duplicate,'conflictingContentHttpStatus':409})
+            def retried_run():
+                runs=api.request('/etl/runs?limit=100')['items']
+                if len(runs)!=2:return None
+                item,=[item for item in runs if item['runId']!=run]
+                model=checked_native_model()['model'];origins=[w['nativeWork'] for w in model['payload']['work']]+[r['origin'] for r in model['payload']['nativeResults']]
+                origin=next((o for o in origins if o['workerExecutionId']!=execution),None)
+                if origin is None:return None
+                return {'runId':item['runId'],'origin':origin}
+            replacement=wait_for(retried_run,bool,'The authorized retry did not admit its one actual new worker and ETL run.',90)
+            def pair():
+                second_run=replacement['runId'];worker=replacement['origin']['workerExecutionId'];escaped_second=urllib.parse.quote(second_run,safe='')
+                return {'original':view(),'replacement':{'native':api.view(worker),'run':api.request('/etl/runs/'+escaped_second),
+                    'partitions':api.request('/etl/runs/'+escaped_second+'/connector-partitions?limit=50')},'incidents':api.request(route+'/incidents?limit=10')}
+            final=wait_for(pair,lambda value:value['replacement']['run']['status']=='succeeded' and value['replacement']['native']['instance']['status']=='Completed' and
+                value['original']['model']['status']=='TerminalSettled' and value['original']['model']['result']['status']=='Completed' and
+                (not native_parent_execution or value['original']['embedding']['instance']['status']=='Completed'),
+                'The real held retry did not complete the replacement worker/model/native parent.',120)
+            checked_final=wait_for(checked_native_model,lambda value:len(value['model']['payload']['nativeResults'])==2 and value['model']['revision']==(5 if native_parent_execution else 4),
+                'The actual successful retry lost its original failed attempt or model settlement.',90)
+            checked_replacement=json.loads(subprocess.check_output(['dotnet',str(reader),'--read-bpmn-native',str(root/'elsa.db'),model_execution,replacement['origin']['workerExecutionId']],text=True,timeout=30))
+            original_final=checked_final['model']['payload'];resolved,=original_final['failures'];results=original_final['nativeResults']
+            if (final['original']['run']!=held['execution']['run'] or final['original']['native']!=held['execution']['native'] or results[0]!=old_result or
+                    resolved['semanticState']!=failure['semanticState'] or resolved['status']!='Retried' or resolved['retryAttemptId']!=replacement['origin']['attemptId'] or
+                    replacement['origin']['invocationId']!=incident['invocationId'] or replacement['origin']['attemptId']==incident['failedAttemptId'] or
+                    checked_replacement['worker']['modelWorkOrigin']!=replacement['origin'] or checked_replacement['worker']['pinnedExecutable']!=worker_pin or
+                    checked_replacement['resultInput']['attemptId']!=replacement['origin']['attemptId'] or
+                    final['replacement']['run']['selection']!=selection or final['replacement']['run']['acceptedRecords']!=4 or final['replacement']['run']['rejectedRecords']!=0):
+                raise ValueError('The actual physical retry lost its original failure, logical work, complete pin or successful ETL truth.')
+            final_wire=wire();records=[record for post in final_wire['outputPosts'] for record in post['records']]
+            from collections import Counter
+            if Counter(r['id'] for r in records)!=Counter({1:2,2:2,3:1,4:1}) or any(not p['hasIdempotencyKey'] for p in final_wire['outputPosts']):
+                raise ValueError('The actual new ETL attempt did not retain its at-least-once physical effects and prior two outputs.')
+            q.write_json(output/'finished.json',final);q.write_json(output/'finished-wire.json',final_wire)
+            q.write_json(output/'finished-checked-model.json',checked_final);q.write_json(output/'finished-checked-replacement.json',checked_replacement)
+            if native_parent_execution:q.write_json(output/'finished-checked-embedding.json',checked_embedding())
+            stop(host);finished_stores=snapshots('finished');api=launch()
+            retained=pair();retained_wire=wire();q.write_json(output/'retained.json',retained);q.write_json(output/'retained-wire.json',retained_wire)
+            q.write_json(output/'retained-checked-model.json',checked_native_model())
+            q.write_json(output/'retained-checked-replacement.json',json.loads(subprocess.check_output(['dotnet',str(reader),'--read-bpmn-native',str(root/'elsa.db'),model_execution,replacement['origin']['workerExecutionId']],text=True,timeout=30)))
+            if native_parent_execution:q.write_json(output/'retained-checked-embedding.json',checked_embedding())
+            stop(host)
+            if retained!=final or retained_wire!=final_wire:raise ValueError('The successful retry or prior failed worker changed in another standard process.')
+            q.write_json(output/'process.json',{'schemaVersion':1,'kind':'actual-model-held-service-retry','sourceRevision':source,'products':products,'parent':args.parent,'embeddedParent':args.embedded_parent,
+                'modelExecutionId':model_execution,'workflowExecutionId':execution,'runId':run,'replacementWorkerExecutionId':replacement['origin']['workerExecutionId'],'replacementRunId':replacement['runId'],
+                'processes':processes,'predecessorExitCode':exit_code,'heldPredecessorExitCode':held_exit,'heldCutAtUtc':held_cut,'cutAtUtc':cut_at,
+                'beforeStores':before_stores,'heldStores':held_stores,'finishedStores':finished_stores,'publication':publication,'modelPublication':model_publication,'etlPublication':published,
+                'nativeParentExecutionId':native_parent_execution,'nativeParentPublication':native_parent_publication,'selection':selection,'bindings':bindings,
+                'fixtureSha256':q.digest(fixture_script),'controllerSha256':q.digest(Path(__file__)),'businessError':False,'technicalFault':True,
+                'technicalFaultPolicy':'HoldForRetry','maxServiceAttempts':2,'retryAfterSeconds':retry_after,'resumptionSweepIntervalSeconds':.2,
+                'scopeLimits':['Actual one authorized held-service retry after process loss; old failed state stays terminal, with one new physical worker/run for the same semantic work. Prior effects may repeat.',
+                    'Snapshot availability is repaired externally without changing bytes or SQL state. Budget exhaustion, cancellation while held, old-result controls, provider/retention/rollback and final upgrade/Studio remain separate gates.']})
+            print('Actual held failure survived second SIGKILL; authorized retry completed one new worker and remained stable in another process.',flush=True)
+            return
         if args.pipeline_cancel:
             if recovered["run"]["status"]!="running":raise ValueError("The actual pipeline completed before its cancellation cut.")
             cancelled=api.request("/etl/runs/"+escaped+"/cancel",{})
@@ -612,6 +723,21 @@ def main():
             checked=wait_for(checked_native_model,lambda value:value["resultSource"] is not None and value["resultSource"]["status"]==2 and value["resultInput"] is not None,
                 "The native result remained unacknowledged after model consumption.",90)
             q.write_json(output/"finished-checked-model.json",checked)
+        if args.final_service_fault:
+            route='/bpmn/executions/'+urllib.parse.quote(model_execution,safe='')
+            incident,=api.request(route+'/incidents?limit=10')['items']
+            if incident['status']!='Final' or incident['attemptNumber']!=1 or incident['maxAttempts']!=1:
+                raise ValueError('The explicit final fault lost its retained immutable failure evidence.')
+            refusal={'requestId':'retry-actual-final-service','incidentId':incident['incidentId'],'invocationId':incident['invocationId'],'failedAttemptId':incident['failedAttemptId']}
+            request=urllib.request.Request(api.base+route+'/retry-service',data=json.dumps(refusal).encode(),headers={'Content-Type':'application/json'})
+            try:
+                with api.opener.open(request,timeout=30):raise ValueError('A final semantic fault was allowed to retry.')
+            except urllib.error.HTTPError as error:
+                if error.code!=409:raise
+            receipt=api.request(route+'/commands/'+refusal['requestId'])
+            if receipt['pending'] or receipt['result']['status']!='Rejected' or receipt['result']['code']!='execution-terminal':
+                raise ValueError('The actual final-fault retry did not retain its terminal conflict.')
+            q.write_json(output/'final-retry-refusal.json',{'request':refusal,'incident':incident,'httpStatus':409,'command':receipt})
         if args.model_cancel:
             command=api.request("/bpmn/executions/"+urllib.parse.quote(model_execution,safe="")+"/commands/cancel-actual-bpmn-etl")
             if command["pending"] or command["result"]["status"]!="Accepted" or command["result"]["lifecycle"]!="TerminalPendingSettlement":
@@ -696,6 +822,7 @@ def main():
             **({'businessErrorBoundary':args.business_error_boundary} if args.business_error_boundary else {}),
             **({'technicalFault':True,'technicalFaultPolicy':'FinalFault','technicalFaultSource':'retained-lookup-snapshot-unavailable',
                 'observedFaultedAfterRetryDeadlineAtUtc':observed_cancelled_after_deadline} if args.technical_fault else {}),
+            **({'explicitServiceFaultPolicy':'FinalFault'} if args.final_service_fault else {}),
             **({'resumptionSweepIntervalSeconds':.2} if args.business_error_boundary else {}),
             **({"observedCancelledAfterRetryDeadlineAtUtc":observed_cancelled_after_deadline} if cancelling else {}),
             **({"modelPublication":model_publication,"modelExecutionId":model_execution} if direct_bpmn else {}),

@@ -166,8 +166,13 @@ try
         var boundStart = await boundOutbox.FindDurableAsync(boundOrigin.SourceOutboxItemId);
         var boundInput = await boundModels.FindInputAsync(boundModel.ExecutionId, boundOrigin.ResultInputId);
         RuntimePostCommitOutboxItem? boundResult = null;
-        if (boundModel.Payload.TryGetProperty("nativeResults", out var boundResults) && boundResults.GetArrayLength() != 0)
-            boundResult = await boundOutbox.FindDurableAsync(boundResults[0].GetProperty("sourceOutboxItemId").GetString()!);
+        if (boundModel.Payload.TryGetProperty("nativeResults", out var boundResults))
+        {
+            var terminalResult = boundResults.EnumerateArray().SingleOrDefault(item =>
+                item.GetProperty("origin").GetProperty("resultInputId").GetString() == boundOrigin.ResultInputId);
+            if (terminalResult.ValueKind != JsonValueKind.Undefined)
+                boundResult = await boundOutbox.FindDurableAsync(terminalResult.GetProperty("sourceOutboxItemId").GetString()!);
+        }
         Console.WriteLine(JsonSerializer.Serialize(new { ReadOnly = true, Model = boundModel, Worker = boundWorker,
             StartSource = boundStart, ResultSource = boundResult, ResultInput = boundInput }, json));
         return 0;

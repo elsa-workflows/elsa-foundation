@@ -8,6 +8,7 @@
     <EmbeddedResource Include="Fixtures/LegacyCompensationState.json" LogicalName="Bpmn.LegacyCompensationState.json" />
     <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/pipeline/native-start-retirement/pending-elsa.sqlite.gz" Link="Fixtures/ActualNativeStartRetirement.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/embedding/human-native-recovery/root-complete/waiting-checked.json" Link="Fixtures/ActualHumanEmbedding.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/pipeline/technical-fault-native-recovery/legacy-model-v2.json" Link="Fixtures/ActualNativeModelV2.json" CopyToOutputDirectory="PreserveNewest" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
