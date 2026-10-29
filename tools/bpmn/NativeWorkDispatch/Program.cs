@@ -18,11 +18,12 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using CShells.Lifecycle;
 using Elsa.Activities.Bpmn;
 using Elsa.Activities.Bpmn.Core;
+using Elsa.Activities.Bpmn.Models;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Flowchart;
-using Elsa.Activities.ControlFlow;
+using Elsa.Activities.Compensation;
 using Elsa.Serialization.SystemText;
 using Elsa.Events;
 using Elsa.Tasks.Core;
@@ -84,7 +85,7 @@ try
         new ActivitiesPrimitivesFeature().ConfigureServices(services);
         new ActivitiesSequenceFeature().ConfigureServices(services);
         new ActivitiesFlowchartFeature().ConfigureServices(services);
-        new ActivitiesControlFlowFeature().ConfigureServices(services);
+        new ActivitiesCompensationFeature().ConfigureServices(services);
         new SerializationFeature().ConfigureServices(services);
     }
     services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
@@ -160,6 +161,7 @@ try
             return await actor.EnqueueAsync(envelope);
         }
         string? embeddedParentId = null;
+        string? embeddedParentInvocationId = null;
         if (model.Payload.TryGetProperty("nativeParent", out var embeddedParent) && embeddedParent.ValueKind != JsonValueKind.Null)
         {
             embeddedParentId = owner.GetProperty("nativeParentExecutionId").GetString()!;
@@ -171,6 +173,15 @@ try
             if (text != "u16:" + Convert.ToBase64String(bytes) || actualParent?.Status != (success ? WorkflowExecutionStatus.Running : WorkflowExecutionStatus.Cancelled) ||
                 model.Lifecycle != RuntimeModelLifecycle.Running)
                 throw new InvalidOperationException("This embedded cut requires the original native parent in the selected actual state and its still-running model.");
+            if (success)
+            {
+                embeddedParentInvocationId = owner.GetProperty("nativeParentInvocationId").GetString()!;
+                var activity = await sdk.GetRequiredService<IActivityExecutionStateStore>().FindAsync(embeddedParentId, embeddedParentInvocationId);
+                var saved = activity?.PrivateState?.Value.InlineValue?.Deserialize<RunBpmnState>(json);
+                if (activity?.Status != ActivityExecutionStatus.Suspended || activity.Execution.ActivityType != "Elsa.Activities.Bpmn.Activities.RunBpmn" ||
+                    saved is not { FormatVersion: 1 } || !JsonElement.DeepEquals(saved.Invocation, embeddedParent.GetProperty("invocation")))
+                    throw new InvalidOperationException("The live controller has not identified this model's original actual RunBpmn wait.");
+            }
             if (!success)
             {
                 var delivery = await processor.ProcessAsync(new(1, embeddedParentId, "Elsa.Bpmn.CancelEmbedded.v1"));
@@ -240,12 +251,16 @@ try
                 steps.Add(new { operation = "deliver-parent-result", delivery });
                 if (delivery.AttemptedCount != 1 || delivery.DeliveredCount != 0)
                     throw new InvalidOperationException("The actual native parent result was acknowledged before its model settlement.");
-                if ((await workflows.FindAsync(embeddedParentId!))?.Status != WorkflowExecutionStatus.Completed)
+                var activity = await sdk.GetRequiredService<IActivityExecutionStateStore>().FindAsync(embeddedParentId!, embeddedParentInvocationId!);
+                if (activity?.Status != ActivityExecutionStatus.Completed)
                 {
                     var drain = await Drain(embeddedParentId!); steps.Add(new { operation = "consume-parent-result", drain });
                 }
-                if ((await workflows.FindAsync(embeddedParentId!))?.Status != WorkflowExecutionStatus.Completed)
-                    throw new InvalidOperationException("The actual native parent did not consume and complete its original RunBpmn invocation.");
+                activity = await sdk.GetRequiredService<IActivityExecutionStateStore>().FindAsync(embeddedParentId!, embeddedParentInvocationId!);
+                if (activity?.Status != ActivityExecutionStatus.Completed || activity.TriggerDeliveries?.Any(receipt =>
+                        receipt.Status == ActivityTriggerDeliveryStatus.Consumed && receipt.ProviderId == "elsa.bpmn.native-parent.v1" &&
+                        receipt.PayloadType.Alias == typeof(RunBpmnCompletion).FullName) != true)
+                    throw new InvalidOperationException("The actual native parent did not retain typed consumption of its original RunBpmn invocation.");
                 if (parentReturnStage == "settled")
                 {
                     if ((await queue.ListAsync(new(model.ExecutionId))).Items.Count == 0)
@@ -281,11 +296,12 @@ try
             Product(typeof(ActivitiesBpmnHostingFeature).Assembly), Product(typeof(EtlRuntimeFeature).Assembly), Product(typeof(EtlRuntimeEntityFrameworkCoreFeature).Assembly),
             Product(typeof(EtlWorkflowsRuntimeFeature).Assembly) };
         if (success) products.AddRange([Product(typeof(ActivitiesRuntimeFeature).Assembly), Product(typeof(ActivitiesPrimitivesFeature).Assembly),
-            Product(typeof(ActivitiesSequenceFeature).Assembly), Product(typeof(ActivitiesFlowchartFeature).Assembly), Product(typeof(ActivitiesControlFlowFeature).Assembly),
+            Product(typeof(ActivitiesSequenceFeature).Assembly), Product(typeof(ActivitiesFlowchartFeature).Assembly), Product(typeof(ActivitiesCompensationFeature).Assembly),
             Product(typeof(SerializationFeature).Assembly)]);
         Console.WriteLine(JsonSerializer.Serialize(new { operation = args[0], startedAtUtc = started, completedAtUtc = DateTimeOffset.UtcNow,
             origin, steps, embeddedParentExecutionId = embeddedParentId, model = consumedModel, worker = await workflows.FindAsync(origin.WorkerExecutionId), receipt, resultSource,
             nativeResultConsumedModel, parentReturnStage, parentResultSource, parentSettlementReceipt, parentSettlementCommand,
+            parentActivity = success ? await sdk.GetRequiredService<IActivityExecutionStateStore>().FindAsync(embeddedParentId!, embeddedParentInvocationId!) : null,
             products }, json));
         return 0;
     }

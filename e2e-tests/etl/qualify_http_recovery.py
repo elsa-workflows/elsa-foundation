@@ -467,7 +467,10 @@ def main():
             os.kill(host.pid,signal.SIGSTOP)
             wait_for(lambda:q.process_field(host.pid,'stat'),lambda value:'T' in value,'The pending-parent host did not quiesce.',5)
             dispatcher=args.dispatcher_assembly.resolve(strict=True);nonce=uuid.uuid4().hex
-            q.write_json(root/'owned-bpmn-recovery.json',{'schemaVersion':1,'controllerProcessId':os.getpid(),'modelExecutionId':model_execution,'nativeParentExecutionId':native_parent_execution,'nonce':nonce})
+            original_parent=json.loads((output/'before-checked-embedding.json').read_text())
+            original_run_bpmn,=[a for a in original_parent['activities'] if a['execution']['activityType']=='Elsa.Activities.Bpmn.Activities.RunBpmn']
+            q.write_json(root/'owned-bpmn-recovery.json',{'schemaVersion':1,'controllerProcessId':os.getpid(),'modelExecutionId':model_execution,'nativeParentExecutionId':native_parent_execution,
+                'nativeParentInvocationId':original_run_bpmn['invocationId'],'nonce':nonce})
             sdk=start(['dotnet',str(dispatcher),'--consume-native-success' if args.successful_parent_result_crash else '--consume-native-result',str(root),model_execution,nonce]+
                 (['--parent-return-stage',args.successful_parent_result_crash] if args.successful_parent_result_crash else []),'consumption-sdk')
             sdk_log=root/f'consumption-sdk-{len(processes)-1}.log';sdk.wait(timeout=90)
@@ -482,10 +485,12 @@ def main():
             parent_result,=[s for s in pending_embedding['sources'] if s['intent']['kind']=='Elsa.Bpmn.ResumeNativeParent.v1']
             if args.successful_parent_result_crash:
                 stage=args.successful_parent_result_crash;settled=stage=='settled';parent_consumed=stage!='pending'
+                actual_run_bpmn,=[a for a in pending_embedding['activities'] if a['execution']['activityType']=='Elsa.Activities.Bpmn.Activities.RunBpmn']
                 if (pending_checked['model']['lifecycle']!=(3 if settled else 2) or pending_checked['model']['revision']!=(3 if settled else 2) or pending_checked['worker']['status']!=3 or pending_checked['resultInput']!=consumed['receipt'] or
                         pending_checked['resultSource']['status']!=3 or pending_checked['resultSource']['deliveredAt'] is not None or parent_result['status']!=(3 if parent_consumed else 0) or parent_result['deliveredAt'] is not None or
                         len([r for r in pending_embedding['inputs'] if r['inputKind']=='native-parent-settled'])!=int(settled) or
-                        pending['run']['status']!='succeeded' or pending['embedding']['instance']['status']!=('Completed' if parent_consumed else 'Running') or
+                        pending['run']['status']!='succeeded' or pending['embedding']['instance']['status'] not in (('Running','Completed') if parent_consumed else ('Running',)) or
+                        actual_run_bpmn['status']!=(4 if parent_consumed else 3) or
                         (pending_embedding['queuedModelInputs'] and (not parent_consumed or settled))):
                     raise ValueError('The actual successful parent result did not retain the selected consumption/settlement/ACK boundary.')
             elif (pending_checked['model']['lifecycle']!=2 or pending_checked['model']['revision']!=3 or pending_checked['worker']['status']!=5 or pending_checked['resultInput']!=consumed['receipt'] or
