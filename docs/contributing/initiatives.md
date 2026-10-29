@@ -81,6 +81,19 @@ approved its ADR PR (GitHub does not let authors approve their own PR). The coor
 
 An ADR PR stays a draft until then, so it cannot be merged before everyone has approved.
 
+**Scope.** Every ADR, and every ADR amendment, whose topic is on an initiative's board is agreed through that
+initiative, whoever writes it, including an architect working outside the board. Its PR is opened as a draft, says
+`Part of #N`, and requests every other technical architect. An approval by Code Review or another bot checks the
+change, not the decision, and never counts as agreement.
+
+**An ADR that reached `main` without agreement** is not agreed, whatever its status line says. The coordinator:
+- shows it on the board as in review, not agreed;
+- opens a draft review PR that records in the ADR that it is not yet agreed and links the PR, with any amendment
+  the review proposes;
+- requests every other technical architect on that PR, which then follows the agreement rule above.
+
+Nothing may build on such an ADR (a spec, or another ADR's decision) until its review PR is agreed.
+
 **Reporting work.** Whoever does work for an initiative reports it where it happened (the PR, a review request) and then
 posts one short **pointer comment** on the initiative. Everyone does this, including the coordinator when working as
 an architect. The pointer looks like this:
@@ -96,6 +109,8 @@ an architect. The pointer looks like this:
 - it checks that the work fits the plan, and updates the board;
 - it marks the pointer handled with a 👍 reaction from the coordinator;
 - it applies agreement to ADR PRs that every other technical architect has approved;
+- it lists the changes to `docs/adr/` merged since the last sync, and flags any in the initiative's scope that were
+  merged without every technical architect's approval (see *Scope*);
 - it sets the "Last synced" line on the board;
 - it reports who is blocking whom, and offers reminders and meeting topics, without sending them;
 - it also reads the linked PRs and issues, so that work reported without a pointer (for example a PR approved in the
