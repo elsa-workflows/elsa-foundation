@@ -9,6 +9,10 @@ for (const theme of ["light", "dark"]) {
     const variables = page.getByRole("tabpanel", { name: "Variables", exact: true });
     await expect(variables.getByText("Private to each execution of this activity and available throughout its designer.")).toBeVisible();
     await variables.getByRole("button", { name: "Add variable", exact: true }).click();
+    const storage = variables.getByRole("combobox", { name: "Variable storage driver", exact: true });
+    await expect(storage).toBeEnabled();
+    expect(await storage.locator("option").evaluateAll(options => options.map(option => (option as HTMLOptionElement).value))).toEqual(["", "elsa.json"]);
+    await storage.selectOption("elsa.json");
     await variables.getByRole("textbox", { name: "Variable name", exact: true }).fill("LineCount");
     await variables.getByRole("textbox", { name: "Variable default value", exact: true }).fill("0");
     await expect(page.locator(".ad-revision-gate")).toHaveCount(0);
@@ -33,7 +37,7 @@ for (const theme of ["light", "dark"]) {
     await page.locator(".ad-authoring-advanced > summary").click();
     await page.getByRole("button", { name: "Edit code", exact: true }).click();
     const projection = JSON.parse(await page.getByRole("textbox", { name: "Activity Definition JSON" }).inputValue());
-    expect(projection.implementation.payload.variables[0]).toMatchObject({ name: "LineCount", initialValue: { syntax: "Literal", value: "0" } });
+    expect(projection.implementation.payload.variables[0]).toMatchObject({ name: "LineCount", storageDriverKey: "elsa.json", initialValue: { syntax: "Literal", value: "0" } });
     expect(projection.contract.inputs.map((input: { name: string }) => input.name)).toEqual(["Subtotal", "Shipping"]);
     await expect(page.getByRole("tab", { name: "Code", exact: true })).toBeFocused();
 
