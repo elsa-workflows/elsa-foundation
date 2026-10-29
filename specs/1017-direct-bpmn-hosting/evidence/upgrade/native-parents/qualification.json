@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "executingHostAndRunnerSource": "02602bad34602496314b5cbf7a84a6b2f549124a",
+  "hostSuite": {
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Actual production Workbench native/direct/runtime-only recovery plus legacy partial-fork, pending native-parent and retained terminal witnesses.",
+    "tests": [
+      {
+        "name": "Elsa.Activities.Bpmn.Hosting.Tests.DirectBpmnWorkbenchTests.Authenticated_direct_execution_waits_restarts_resumes_and_completes_in_the_real_host",
+        "outcome": "Passed",
+        "duration": "00:00:06.8377829"
+      },
+      {
+        "name": "Elsa.Activities.Bpmn.Hosting.Tests.LegacyPartialForkUpgradeTests.Actual_legacy_partial_forks_upgrade_and_finish_through_production_commands",
+        "outcome": "Passed",
+        "duration": "00:00:04.7408309"
+      },
+      {
+        "name": "Elsa.Activities.Bpmn.Hosting.Tests.OwnedWorkbenchTests.Actual_native_execution_and_pin_survive_an_owned_host_restart",
+        "outcome": "Passed",
+        "duration": "00:00:07.0821825"
+      },
+      {
+        "name": "Elsa.Activities.Bpmn.Hosting.Tests.LegacyNativeParentUpgradeTests.Actual_native_fault_and_cancel_terminals_preserve_their_projection_after_upgrade_and_restart",
+        "outcome": "Passed",
+        "duration": "00:00:06.0825369"
+      },
+      {
+        "name": "Elsa.Activities.Bpmn.Hosting.Tests.LegacyNativeParentUpgradeTests.Actual_pending_native_parent_faults_recover_with_their_original_composite_projection",
+        "outcome": "Passed",
+        "duration": "00:00:40.8882185"
+      },
+      {
+        "name": "Elsa.Activities.Bpmn.Hosting.Tests.RuntimeOnlyParallelBpmnTests.Partial_fork_recovers_and_joins_in_the_actual_host_without_design_storage",
+        "outcome": "Passed",
+        "duration": "00:00:04.3293030"
+      }
+    ],
+    "trxSha256": "01b396df68ce20d0646562536814e10287629ae69685c1746e6d4c3b0adb7df8"
+  },
+  "evidenceVerifierChecks": {
+    "passed": 23,
+    "failed": 0,
+    "skipped": 0,
+    "command": "ELSA_BPMN_CAPTURE_MANIFEST=specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/manifest.json python3 -m unittest discover -s e2e-tests/bpmn -p test_qualify_hosting.py -v",
+    "scope": "Twelve original capture guards, five partial-fork upgrade controls and six controls over the actual native-parent upgrade bundle.",
+    "nativeControls": [
+      "Sequence terminal disposition cannot be called parent consumption.",
+      "The saved source must be physically Delivered.",
+      "The committed original intent cannot change.",
+      "All five callback pin components must match.",
+      "Compensated cannot be relabelled Done.",
+      "Retained terminal history cannot be revived."
+    ]
+  },
+  "pendingParentRecovery": {
+    "cases": 6,
+    "parentOutcomesApplied": 4,
+    "sequenceTerminalDispositionsWithoutParentConsumption": 2,
+    "secondProcessPreservesSourceAndExecution": true
+  },
+  "nativeTerminalHistory": {
+    "cases": 12,
+    "faultAndCancel": true,
+    "secondProcessPreservesExecution": true
+  },
+  "originalStoreTopologies": {
+    "pendingParent": "One combined Runtime/Design capture per case.",
+    "nativeTerminalHistory": "Coupled separate Runtime and Design captures."
+  },
+  "prequalificationFixtureCorrections": [
+    "Splitting a combined capture caused a template-reference startup conflict; the fixture now preserves that original combined topology.",
+    "The terminal matrix has coupled separate captures; both original stores are restored.",
+    "An initial exact pending-incident-set assertion was wrong for Flowchart: its recorded pre-writer behavior adds the native parent incident. Tests retain original incident IDs and compare the actual pre-writer incident projection, including CompensationScope resolution."
+  ],
+  "frozenAuthoringPreserved": true,
+  "productionChangesInThisSlice": false,
+  "fullPrReviewRounds": 0,
+  "limits": [
+    "These are existing native/BpmnProcess paths; no direct-model terminal settlement or native/ETL service binding is proved.",
+    "Called-workflow acknowledgment, broadcast, active MI/compensation/control and actual Studio acceptance remain open.",
+    "Other-provider upgrade and clustered placement are not qualified; #3242 is not resolved."
+  ],
+  "originalBaselineIntegrity": {
+    "assetsVerified": 104,
+    "wholeStoresVerified": 22,
+    "scope": "Original hash/integrity audit only; not upgraded-host recovery for the remaining families."
+  },
+  "defaultCopiedFixtureRun": {
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Native-parent tests also pass using the normal MSBuild-copied fixtures without a matrix-directory override."
+  },
+  "storeSchemaObservations": {
+    "legacy-pending-parent/flowchart-durable-runtime.sqlite.gz": {
+      "tableCount": 93,
+      "containsDesign": true,
+      "containsIdentityOrSecrets": false
+    },
+    "legacy-pending-parent/compensationscope-balanced-runtime.sqlite.gz": {
+      "tableCount": 93,
+      "containsDesign": true,
+      "containsIdentityOrSecrets": false
+    },
+    "legacy-pending-parent/sequence-balanced-runtime.sqlite.gz": {
+      "tableCount": 93,
+      "containsDesign": true,
+      "containsIdentityOrSecrets": false
+    },
+    "legacy-pending-parent/flowchart-balanced-runtime.sqlite.gz": {
+      "tableCount": 93,
+      "containsDesign": true,
+      "containsIdentityOrSecrets": false
+    },
+    "legacy-pending-parent/sequence-durable-runtime.sqlite.gz": {
+      "tableCount": 93,
+      "containsDesign": true,
+      "containsIdentityOrSecrets": false
+    },
+    "legacy-pending-parent/compensationscope-durable-runtime.sqlite.gz": {
+      "tableCount": 93,
+      "containsDesign": true,
+      "containsIdentityOrSecrets": false
+    },
+    "legacy-native-terminals/native-terminals-design.sqlite.gz": {
+      "tableCount": 43,
+      "containsDesign": true,
+      "containsIdentityOrSecrets": false
+    },
+    "legacy-native-terminals/native-terminals-runtime.sqlite.gz": {
+      "tableCount": 38,
+      "containsDesign": false,
+      "containsIdentityOrSecrets": false
+    }
+  }
+}

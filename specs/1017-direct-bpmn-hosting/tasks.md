@@ -14,6 +14,8 @@
 
 **Current upgrade qualification:** [actual legacy partial forks](evidence/upgrade/partial-forks/README.md) now recover all eight captured LegacyRoot/Sequence/Flowchart/CompensationScope executions in Balanced/Durable modes on the changed production Workbench. Original waits/pins, applied migration history, 59 original executable payloads/incarnations and the frozen published-authoring fingerprint are preserved; normal remaining Event commands finish the runs. This advances T030 for that family only. Pending callbacks, broadcast, multi-instance/compensation/called-control and actual Studio qualification stay open before the pipeline addition; T030 remains unchecked.
 
+[Native parent upgrade](evidence/upgrade/native-parents/README.md) additionally qualifies six pending fault notifications and twelve retained Fault/Cancel terminal histories. Four parent outcomes apply; two Sequence cases preserve their Faulted-workflow/Running-parent disposition without claiming parent consumption. Original sources and recovered views remain unchanged across another process; combined versus coupled separate store topology is preserved. Whole host6/6 and verifier23/23 pass. Called-workflow acknowledgment, broadcast, active MI/compensation/control and actual Studio remain open; no direct-model settlement or native/ETL proof is inferred, and T030 remains unchecked.
+
 ## Phase 1: Setup and actual baseline capture
 
 **Hard ordering**: No affected production writer, schema or payload change before T002. New capture tooling may be implemented first because it operates through the current product commands and does not alter those writers.

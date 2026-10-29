@@ -1,5 +1,6 @@
 """Mechanical capture/upgrade evidence safeguards; host journeys supply recovery proof."""
 import importlib.util
+import base64
 from contextlib import closing
 from datetime import datetime, timezone
 import json
@@ -235,6 +236,88 @@ class ActualUpgradeControls(unittest.TestCase):
         frozen = json.loads(path.read_text()); frozen["closedSnapshotSha256"] = "0" * 64
         capture.write_json(path, frozen); self.rehash(path)
         with self.assertRaisesRegex(ValueError, "frozen authoring verification"):
+            capture.verify_upgrade(self.path)
+
+
+class ActualNativeParentUpgradeControls(unittest.TestCase):
+    def setUp(self):
+        default = SCRIPT.parents[2] / "specs/1017-direct-bpmn-hosting/evidence/upgrade/native-parents/manifest.json"
+        self.original = Path(os.environ.get("ELSA_BPMN_NATIVE_UPGRADE_MANIFEST", default)).resolve(strict=True)
+        capture.verify_upgrade(self.original)
+        self.before = capture.digest(self.original)
+        self.directory = tempfile.TemporaryDirectory()
+        self.bundle = Path(self.directory.name) / "upgrade"
+        shutil.copytree(self.original.parent, self.bundle)
+        self.path = self.bundle / "manifest.json"
+        self.manifest = json.loads(self.path.read_text())
+        self.pending_path = self.bundle / "legacy-pending-parent/process.json"
+        self.pending = json.loads(self.pending_path.read_text())
+
+    def tearDown(self):
+        self.assertEqual(self.before, capture.digest(self.original))
+        capture.verify_upgrade(self.original)
+        self.directory.cleanup()
+
+    def rehash(self, path):
+        name = path.relative_to(self.bundle).as_posix()
+        next(asset for asset in self.manifest["assets"] if asset["path"] == name)["sha256"] = capture.digest(path)
+        capture.write_json(self.path, self.manifest)
+
+    def save_pending(self):
+        capture.write_json(self.pending_path, self.pending); self.rehash(self.pending_path)
+
+    def test_sequence_terminal_disposition_cannot_be_called_parent_consumption(self):
+        case = next(case for case in self.pending["observations"] if case["parent"] == "Sequence")
+        case["parentOutcomeApplied"] = True
+        self.save_pending()
+        with self.assertRaisesRegex(ValueError, "cannot be called parent consumption"):
+            capture.verify_upgrade(self.path)
+
+    def test_saved_callback_must_be_physically_delivered_even_after_rehashing(self):
+        case = self.pending["observations"][0]
+        snapshot = self.bundle / "legacy-pending-parent" / case["snapshot"]["file"]
+        database = Path(self.directory.name) / "changed.sqlite"
+        database.write_bytes(gzip.decompress(snapshot.read_bytes()))
+        with closing(sqlite3.connect(database)) as connection:
+            with connection:
+                connection.execute("UPDATE elsa_runtime_post_commit_outbox SET Status = 0 WHERE OutboxItemId = ?",
+                    (base64.b64encode(case["sourceOutboxItemId"].encode("utf-16-le")).decode(),))
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        snapshot.write_bytes(gzip.compress(database.read_bytes(), mtime=0))
+        case["snapshot"]["databaseSha256"] = capture.digest(database)
+        case["snapshot"]["gzipSha256"] = capture.digest(snapshot)
+        self.rehash(snapshot); self.save_pending()
+        with self.assertRaisesRegex(ValueError, "physical original callback"):
+            capture.verify_upgrade(self.path)
+
+    def test_changed_committed_callback_intent_is_refused_after_rehashing(self):
+        case = self.pending["observations"][0]
+        case["acceptedSource"]["document"]["intent"]["payload"]["Payload"]["ActivityExecutionId"] = "foreign-parent"
+        self.save_pending()
+        with self.assertRaisesRegex(ValueError, "original callback changed"):
+            capture.verify_upgrade(self.path)
+
+    def test_foreign_complete_pin_is_refused_even_when_all_callback_copies_match(self):
+        case = self.pending["observations"][0]
+        for source in ("originalSource", "acceptedSource", "replayedSource"):
+            case[source]["document"]["intent"]["payload"]["Payload"]["PinnedExecutable"]["DefinitionVersionId"] = "foreign-version"
+        self.save_pending()
+        with self.assertRaisesRegex(ValueError, "complete executable pin differs"):
+            capture.verify_upgrade(self.path)
+
+    def test_compensated_parent_cannot_be_relabelled_done_after_rehashing(self):
+        case = next(case for case in self.pending["observations"] if case["parent"] == "CompensationScope")
+        parent = next(activity for activity in case["completed"]["activities"] if activity["executableNodeId"] == "native-parent")
+        parent["outcomeNames"] = ["Done"]
+        self.save_pending()
+        with self.assertRaisesRegex(ValueError, "original composite projection"):
+            capture.verify_upgrade(self.path)
+
+    def test_retained_terminal_cannot_be_revived_after_rehashing(self):
+        path = self.bundle / "legacy-native-terminals/process.json"
+        process = json.loads(path.read_text()); process["observations"][0]["recovered"]["instance"]["status"] = "Running"
+        capture.write_json(path, process); self.rehash(path)
+        with self.assertRaisesRegex(ValueError, "existing native terminal changed"):
             capture.verify_upgrade(self.path)
 
 
