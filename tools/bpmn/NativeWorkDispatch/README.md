@@ -1,0 +1,9 @@
+# Owned native-work queue capture
+
+The ETL/BPMN recovery controller invokes this SDK client against its own temporary Workbench store. It requires that controller's live process, model identity and nonce marker. The model must retain its original Running invocation, exact native pin and undelivered start source; the worker and its queue must still be absent.
+
+`--enqueue-start` uses the existing `IWorkflowSchedulerDrainPolicy` seam to defer inline draining. `--enqueue-checkpoint` requests one normal scheduler work item, leaving the generated WorkflowStarted checkpoint queued. Both call the production `IWorkflowStartDispatcher`, actor/router and qualified EF queue. The same real model-owned worker identity and complete origin are retained. Standard Workbench hosts perform the recovery afterward.
+
+The client composes the normal persistence modes, performs no migration and writes no workflow/activity/bookmark or ETL state. Its output includes the accepted command, exact queued envelope, unchanged model, absence of a native header, expected retirement commit identity and product hashes/versions. These are owned qualification runs; the controller supplies a fresh temporary root and cleans up every process.
+
+Build through the standard build-slot wrapper, then use `e2e-tests/etl/qualify_http_recovery.py` with `--model-cancel-before-admission --queued-native-stage start` or `checkpoint` and the built `--dispatcher-assembly`. The hosting test project and `Elsa.Server.slnx` include this build dependency.
