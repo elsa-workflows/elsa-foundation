@@ -159,7 +159,27 @@ public sealed class LegacyBroadcastUpgradeTests
                 view = await host.GetAsync("/runtime/workflows/instances/" + id);
                 if (view["instance"]!["status"]!.GetValue<string>() == expected["status"]!.GetValue<string>() &&
                     view["activities"]!.AsArray().Count(activity => activity!["status"]!.GetValue<string>() == "Suspended") == expected["bookmarks"]!.AsArray().Count) break;
-                Assert.True(DateTimeOffset.UtcNow < deadline, "A saved broadcast recipient did not reach its expected boundary: " + id); await Task.Delay(100);
+                if (DateTimeOffset.UtcNow >= deadline)
+                {
+                    var processId = host.ProcessId;
+                    await host.StopAsync();
+                    var snapshot = await host.SnapshotAsync("failed-recipient-" + id + ".sqlite.gz", "legacy-broadcast");
+                    if (Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_EVIDENCE_DIRECTORY") is { } evidence)
+                    {
+                        var directory = Path.Combine(evidence, "legacy-broadcast"); Directory.CreateDirectory(directory);
+                        await File.WriteAllTextAsync(Path.Combine(directory, "failed-recipient-" + id + ".json"), JsonSerializer.Serialize(new
+                        {
+                            processId, sourceRevision = Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_SOURCE_REVISION"),
+                            productVersion = FileVersionInfo.GetVersionInfo(host.AssemblyPath).ProductVersion,
+                            expected, observed = view, snapshot
+                        }, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }));
+                    }
+                    var states = string.Join(", ", view["activities"]!.AsArray().Select(activity =>
+                        activity!["activityExecutionId"]!.GetValue<string>() + ":" + activity["status"]!.GetValue<string>()));
+                    Assert.Fail("A saved broadcast recipient did not reach its expected boundary: " + id +
+                        "; expected " + expected["status"] + ", observed " + view["instance"]!["status"] + "; activities " + states);
+                }
+                await Task.Delay(100);
             } while (true);
             foreach (var field in new[] { "artifactId", "artifactHash", "artifactVersion", "definitionId", "definitionVersionId" }) Assert.Equal(expected["pinnedExecutable"]![field]!.GetValue<string>(), view["instance"]![field]!.GetValue<string>());
             Assert.Empty(view["incidents"]!.AsArray()); views[id] = view;
