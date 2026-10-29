@@ -110,6 +110,19 @@ async function chooseStyle(page: Page, name: string) {
   await page.keyboard.press("Escape");
 }
 
+test("independent choices survive a real reload without re-seeding preferences", async ({ page }) => {
+  await page.goto("/workspace-appearance.html?view=appearance");
+  await page.getByRole("radiogroup", { name: "Workspace style", exact: true }).getByRole("radio", { name: "Focus Canvas", exact: true }).click();
+  await page.getByRole("radiogroup", { name: "Color scheme", exact: true }).getByRole("radio", { name: "Drift", exact: true }).click();
+  await page.getByRole("region", { name: "Appearance", exact: true }).getByRole("radio", { name: "Dim", exact: true }).click();
+  await page.getByRole("radiogroup", { name: "Navigation", exact: true }).getByRole("radio", { name: "Top", exact: true }).click();
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-workspace-style", "focus");
+  await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "drift");
+  await expect(page.locator("html")).toHaveAttribute("data-theme-appearance", "dim");
+  await expect(page.locator("html")).toHaveAttribute("data-nav-mode", "top");
+});
+
 test("Focus clears a hidden navigation filter and preserves an explicit expansion across reload", async ({ page }) => {
   await open(page, "quiet", "classic", "dark");
   await page.getByRole("searchbox", { name: "Search modules" }).fill("Workflows");

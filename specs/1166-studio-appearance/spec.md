@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3447-studio-appearance`
 **Created**: 2026-10-29
-**Status**: Approved
+**Status**: Implemented
 **Input**: Owner-approved Quiet Studio, Focus Canvas and Open Studio concepts, with independently selectable color schemes and modes. Implementation authorized in this chat.
 **Issue**: #3447
 **Program-goal state**: none/free-flow

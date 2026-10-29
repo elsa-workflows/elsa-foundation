@@ -5,21 +5,21 @@
 - [x] T002 Review plan.md, research.md, data-model.md and contracts/appearance.md against both constitutions.
 
 ## US1 - Independent appearance
-- [ ] T003 [US1] Add persistence and mounted switching regressions in the host Client/src/__tests__/appearance.test.ts and workspaceAppearance.test.tsx; record the failing baseline.
-- [ ] T004 [US1] Implement independent style/scheme resolution, transient preview, store fallback and reset in host app/themes/appearance.ts, workspaceStyles.ts and components/ThemeProvider.tsx.
-- [ ] T005 [US1] Expose independent accessible choices in host components/ThemeSwitcher.tsx and settings/AppearancePage.tsx, preserving preset selection.
+- [x] T003 [US1] Add persistence and mounted switching regressions in the host Client/src/__tests__/appearance.test.ts and workspaceAppearance.test.tsx; record the failing baseline.
+- [x] T004 [US1] Implement independent style/scheme resolution, transient preview, store fallback and reset in host app/themes/appearance.ts, workspaceStyles.ts and components/ThemeProvider.tsx.
+- [x] T005 [US1] Expose independent accessible choices in host components/ThemeSwitcher.tsx and settings/AppearancePage.tsx, preserving preset selection.
 
 ## US2 - Three complete styles
-- [ ] T006 [US2] Implement semantic surface/edge roles and coherent shared shell/control/settings treatments in host app/ui/tokens.css, themes/workspaceStyles.css and App.tsx.
-- [ ] T007 [US2] Implement list, Sequence, graph and inspector treatments with accessible floating resize and adaptive clearance in Workflows surface-owned styles.
-- [ ] T008 [US2] Add rendered browser journeys and inspect actual screens in Studio/tests/browser for all styles/modes and desktop/narrow layouts.
+- [x] T006 [US2] Implement semantic surface/edge roles and coherent shared shell/control/settings treatments in host app/ui/tokens.css, themes/workspaceStyles.css and App.tsx.
+- [x] T007 [US2] Implement list, Sequence, graph and inspector treatments with accessible floating resize and adaptive clearance in Workflows surface-owned styles.
+- [x] T008 [US2] Add rendered browser journeys and inspect actual screens in Studio/tests/browser for all styles/modes and desktop/narrow layouts.
 
 ## US3 - Compatibility and qualification
-- [ ] T009 [US3] Extend delayed/failed custom-store, legacy preset, preview, reset and live mounted-state tests in host frontend suites.
-- [ ] T010 [US3] Run complete affected frontend suites, types/lint/build/budgets and required Foundation gates; reconcile failures and preserve evidence.
+- [x] T009 [US3] Extend delayed/failed custom-store, legacy preset, preview, reset and live mounted-state tests in host frontend suites.
+- [x] T010 [US3] Run complete affected frontend suites, types/lint/build/budgets and required Foundation gates; reconcile failures and preserve evidence.
 
 ## Delivery
-- [ ] T011 Update Studio/docs/design-tokens.md and UX/ADR guidance for the final additive contract; record validation in this spec and #3447.
+- [x] T011 Update Studio/docs/design-tokens.md and UX/ADR guidance for the final additive contract; record validation in this spec and #3447.
 - [ ] T012 Review the exact diff independently for correctness, standards and acceptance, commit, open one draft PR, attach it and follow review/CI gates.
 
 ## Dependencies and execution
