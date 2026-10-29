@@ -40,6 +40,11 @@ try
     var services = new ServiceCollection();
     services.AddLogging(); services.AddWorkflowRuntime();
     services.AddSingleton<IPersistenceAccessContextAccessor>(new ScopedAccess());
+    if (race)
+    {
+        new EventsFeature().ConfigureServices(services);
+        new ActivitiesBpmnHostingFeature().ConfigureServices(services);
+    }
     services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
     {
         Provider = "Sqlite", ConnectionString = new SqliteConnectionStringBuilder { DataSource = database, Mode = SqliteOpenMode.ReadWrite, Pooling = false }.ToString(),
@@ -48,8 +53,6 @@ try
     services.AddPersistenceModes();
     if (race)
     {
-        new EventsFeature().ConfigureServices(services);
-        new ActivitiesBpmnHostingFeature().ConfigureServices(services);
         if (args.Length == 6)
         {
             var gate = Path.GetFullPath(args[5]);
