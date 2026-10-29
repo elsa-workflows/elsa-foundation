@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "executingSource": "1a10565935b568e42c8431158bfafe77b571c775",
+  "productionChange": "Authorize command inspection before retained-result lookup and reauthorize an admitted execution before disclosure after a pending-admission race.",
+  "runtimeInterpreterOrPersistedWriterChanged": false,
+  "actualJourneys": 5,
+  "rawAssets": 186,
+  "wholeStoresVerified": 45,
+  "actualAuthorizationHttpProbes": 355,
+  "actualHttpSignIns": 60,
+  "normalPasswordBackedIdentityAccounts": 20,
+  "accountRoles": "read-only, retry-only, no permissions, read/retry in foreign tenant",
+  "authExecutionStateSeeded": false,
+  "authFakeHandlerUsed": false,
+  "publicCredentialsOrCookiesIncluded": false,
+  "actualWorkbenchProcesses": 20,
+  "actualHttpProcesses": 5,
+  "actualIdentitySdkProcesses": 5,
+  "all30ListedChildrenStopped": true,
+  "actualSigkillExits": 10,
+  "authorizationBeforeRetryAndReplayProved": true,
+  "authorizationAfterColdRestartProved": true,
+  "tenantIsolationBeforeAndAfterReplayProved": true,
+  "denialsDoNotDiscloseRetainedOutcomes": true,
+  "deniedKnownAndUnknownCommandStatusesEqual": true,
+  "apiInspectionAuthorizesBeforeCommandLookup": true,
+  "admissionRaceReauthorizesActualExecutionBeforeDisclosure": true,
+  "orderingRegressionsRedAgainstOldCaller": 7,
+  "orderingRegressionsGreenInExactSourceBpmnSuite": 7,
+  "targetedOrderingGreenWasBeforeFixCommit": true,
+  "bpmnTestsPassed": 418,
+  "actualHumanHostTestsPassed": 9,
+  "portableControlsPassed": 192,
+  "newPortablePositiveAndCorruptControls": 16,
+  "skippedTests": 0,
+  "standardHostBuildErrors": 0,
+  "testTierRegistrations": 123,
+  "frozenBaselineAssetsVerifiedUnchanged": 104,
+  "frozenBaselineManifestUnchanged": true,
+  "oneAuthorizedPhysicalRetryAndOriginalFailurePreserved": true,
+  "exactNativeParentConsumptionSettlementAndSourcesAcknowledged": true,
+  "priorTwoPhysicalHttpOutputRecordsRepeatInNewAttempt": true,
+  "physicalHttpOutputRecordsPerCase": 6,
+  "oldCapturesRelabeledAsCurrentSource": false,
+  "diagnostics": {
+    "initialObserverSource": "22f5f8607daa0c043f91b470b392f78b8b73887b",
+    "preInspectionOrderingFixSource": "b14152e7a292d2f312026892e38613550737afc1",
+    "includedInQualifyingCounts": false
+  },
+  "obsoleteResultControlsProved": false,
+  "timerInterruptionProved": false,
+  "competingRetryCancelCommitOrdersProved": false,
+  "finalAffectedSourceUpgradeAndStudioProved": false,
+  "nativeCompositeFaultStatusDecisionResolved": false,
+  "fullPrReviewRounds": 0,
+  "completeTaskOrProgramAcceptance": false,
+  "validationLogs": [
+    {
+      "path": "validation/bpmn-tests.txt",
+      "sha256": "d9d1dbe6a17e34b0f12964680542b98dd304399368f5e374df26af8a19418ff7"
+    },
+    {
+      "path": "validation/compensationscope-controller.txt",
+      "sha256": "513f2ab40ee3d69fffcb328e8365dc2af622f5fb5ab919beeae0708bc9554603"
+    },
+    {
+      "path": "validation/direct-controller.txt",
+      "sha256": "1cd0a6454bea35452964e9e8691da52a25232ce1bfbfeca4eb547f0d31e97a95"
+    },
+    {
+      "path": "validation/flowchart-controller.txt",
+      "sha256": "5b3b6af807c7495c1dfbc2b4dd676513732f7723cb56d1009ba7bce7a35c4f24"
+    },
+    {
+      "path": "validation/human-host-tests.txt",
+      "sha256": "efb8851418b59edd3e5feafc6fda7e1ca215c0d8f5b3970c42746687f585c8f7"
+    },
+    {
+      "path": "validation/maps.txt",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+    },
+    {
+      "path": "validation/ordering-green.txt",
+      "sha256": "8432eeb2f59615eb987e14ac33eab080748294685680deb0a420d885fed14ee5"
+    },
+    {
+      "path": "validation/ordering-red.txt",
+      "sha256": "85a2f7f3377ff48491be67761c53a9f693664ae0e8eb60b49f6ffbbe1831654c"
+    },
+    {
+      "path": "validation/portable-tests.txt",
+      "sha256": "6e2a5e31a5319bffa6b855d5463175cb0f2d17354100577260fef2de5fa28f9a"
+    },
+    {
+      "path": "validation/root-controller.txt",
+      "sha256": "6b3d61841c7e444b306040e2627f397b65bc9e719d3c26d04a652a9220c1f8fc"
+    },
+    {
+      "path": "validation/sequence-controller.txt",
+      "sha256": "34ade41eee9ab486bae459963fa43f5948d8fc9e99ac11fe07bc0a5d19072457"
+    },
+    {
+      "path": "validation/standard-host-build.txt",
+      "sha256": "92f3191666e357b7f0e2a04045cc3e60a2cac2f07f66179bb3bab8480ac3a00d"
+    },
+    {
+      "path": "validation/test-tiers.txt",
+      "sha256": "91cc02f2f85c466bbc3d5d675d3bf055059b2c0e5e185229a4c4d99b174f25c4"
+    },
+    {
+      "path": "validation/whole-stores.json",
+      "sha256": "53d31cc7d3806d3cfb677379ddbba119db1009a59502e97c18b1d06dcac2baa2"
+    }
+  ]
+}
