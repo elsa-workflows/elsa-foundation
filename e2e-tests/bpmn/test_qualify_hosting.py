@@ -321,5 +321,79 @@ class ActualNativeParentUpgradeControls(unittest.TestCase):
             capture.verify_upgrade(self.path)
 
 
+class ActualCalledAcknowledgmentUpgradeControls(unittest.TestCase):
+    def setUp(self):
+        self.original = SCRIPT.parents[2] / "specs/1017-direct-bpmn-hosting/evidence/upgrade/called-ack/manifest.json"
+        capture.verify_upgrade(self.original); self.before = capture.digest(self.original)
+        self.directory = tempfile.TemporaryDirectory(); self.bundle = Path(self.directory.name) / "upgrade"
+        shutil.copytree(self.original.parent, self.bundle); self.path = self.bundle / "manifest.json"
+        self.manifest = json.loads(self.path.read_text()); self.process_path = self.bundle / "legacy-called-ack/process.json"
+        self.process = json.loads(self.process_path.read_text()); self.case = self.process["observations"][0]
+
+    def tearDown(self):
+        self.assertEqual(self.before, capture.digest(self.original)); capture.verify_upgrade(self.original)
+        self.directory.cleanup()
+
+    def rehash(self, path):
+        name = path.relative_to(self.bundle).as_posix()
+        next(asset for asset in self.manifest["assets"] if asset["path"] == name)["sha256"] = capture.digest(path)
+        capture.write_json(self.path, self.manifest)
+
+    def save_process(self):
+        capture.write_json(self.process_path, self.process); self.rehash(self.process_path)
+
+    def mutate_snapshot(self, mutate):
+        snapshot = self.case["recoveredSnapshot"]; path = self.bundle / "legacy-called-ack" / snapshot["file"]
+        database = Path(self.directory.name) / "changed.sqlite"; database.write_bytes(gzip.decompress(path.read_bytes()))
+        with closing(sqlite3.connect(database)) as connection:
+            with connection: mutate(connection)
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        path.write_bytes(gzip.compress(database.read_bytes(), mtime=0)); snapshot["databaseSha256"] = capture.digest(database)
+        snapshot["gzipSha256"] = capture.digest(path); self.case["recoveredProof"]["snapshotSha256"] = capture.digest(database)
+        self.rehash(path); self.save_process()
+
+    def test_acknowledged_source_must_be_physically_delivered_after_rehashing(self):
+        identity = base64.b64encode(self.case["marker"]["sourceOutboxItemId"].encode("utf-16-le")).decode()
+        self.mutate_snapshot(lambda connection: connection.execute("UPDATE elsa_runtime_post_commit_outbox SET Status = 0 WHERE OutboxItemId = ?", (identity,)))
+        with self.assertRaisesRegex(ValueError, "physical original acknowledgment source"):
+            capture.verify_upgrade(self.path)
+
+    def test_dispatch_ack_cannot_replace_committed_caller_consumption(self):
+        def lose_acceptance(connection):
+            identity = self.case["marker"]["transport"]["callingActivityExecutionId"]
+            identity = base64.b64encode(identity.encode("utf-16-le")).decode()
+            content = json.loads(connection.execute("SELECT ContentJson FROM elsa_runtime_activity_execution_state WHERE ActivityExecutionId = ?", (identity,)).fetchone()[0])
+            content["childControlInbox"]["nextOrdinal"] = 0
+            connection.execute("UPDATE elsa_runtime_activity_execution_state SET ContentJson = ? WHERE ActivityExecutionId = ?", (json.dumps(content), identity))
+        self.mutate_snapshot(lose_acceptance)
+        with self.assertRaisesRegex(ValueError, "physical caller inbox"):
+            capture.verify_upgrade(self.path)
+
+    def test_repeated_normal_successor_is_refused_after_rehashing(self):
+        activities = self.case["finishedProof"]["calledWorkflow"]["facts"]["parentActivities"]
+        activities.append(next(activity for activity in activities if activity["execution"]["executableNodeId"] == "node-normal"))
+        self.save_process()
+        with self.assertRaisesRegex(ValueError, "normal successor was lost or repeated"):
+            capture.verify_upgrade(self.path)
+
+    def test_foreign_full_parent_pin_is_refused_after_rehashing(self):
+        self.case["recoveredProof"]["calledWorkflow"]["facts"]["parent"]["pinnedExecutable"]["definitionVersionId"] = "foreign"
+        self.save_process()
+        with self.assertRaisesRegex(ValueError, "complete pin"):
+            capture.verify_upgrade(self.path)
+
+    def test_sender_success_without_checked_acceptance_is_refused(self):
+        self.case["recoveredProof"]["calledWorkflow"]["exactCommittedAcceptanceVerified"] = False
+        self.save_process()
+        with self.assertRaisesRegex(ValueError, "exact checked acceptance/source proof"):
+            capture.verify_upgrade(self.path)
+
+    def test_changed_original_transport_is_refused_after_rehashing(self):
+        self.case["recoveredProof"]["calledWorkflow"]["source"]["intent"]["payload"]["callingActivityExecutionId"] = "foreign"
+        self.save_process()
+        with self.assertRaisesRegex(ValueError, "original called transport changed"):
+            capture.verify_upgrade(self.path)
+
+
 if __name__ == "__main__":
     unittest.main()

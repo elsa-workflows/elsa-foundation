@@ -16,6 +16,8 @@
 
 [Native parent upgrade](evidence/upgrade/native-parents/README.md) additionally qualifies six pending fault notifications and twelve retained Fault/Cancel terminal histories. Four parent outcomes apply; two Sequence cases preserve their Faulted-workflow/Running-parent disposition without claiming parent consumption. Original sources and recovered views remain unchanged across another process; combined versus coupled separate store topology is preserved. Whole host6/6 and verifier23/23 pass. Called-workflow acknowledgment, broadcast, active MI/compensation/control and actual Studio remain open; no direct-model settlement or native/ETL proof is inferred, and T030 remains unchecked.
 
+[Called-workflow acknowledgment upgrade](evidence/upgrade/called-ack/README.md) additionally qualifies both actual pre-ACK cuts: the standard pump acknowledges the original notice/terminal sources under fresh claims, checked EF proves committed caller acceptance, normal original Events finish both pairs, and further processes preserve recovered/final views. The frozen authoring contract remains intact. This is legacy native/BpmnProcess recovery; new model settlement, native/ETL bindings, broadcast, active MI/compensation/control and actual Studio remain open. T030 stays unchecked.
+
 ## Phase 1: Setup and actual baseline capture
 
 **Hard ordering**: No affected production writer, schema or payload change before T002. New capture tooling may be implemented first because it operates through the current product commands and does not alter those writers.
