@@ -68,6 +68,7 @@ def main():
     parser.add_argument("--dispatcher-assembly", type=Path, help="Built owned SDK client required for the queued-native cut.")
     parser.add_argument("--admission-race-order", choices=("cancel-first", "admit-first"), help="Gate an unchanged actual proposal before its provider transaction, commit the competitor, then cold-recover both writers' obligations.")
     parser.add_argument("--pending-cancellation-crash", action="store_true", help="With model/native cancellation, kill a second real host while its cancellation/result deliveries remain owed.")
+    parser.add_argument("--consumed-before-ack-crash", action="store_true", help="With pending cancellation, use the production SDK to consume the result before killing the host with source ACK still owed.")
     outcome_group = parser.add_mutually_exclusive_group()
     outcome_group.add_argument("--business-error", action="store_true", help="Reject one actual HTTP record through its declared Int64 schema.")
     outcome_group.add_argument("--pipeline-cancel", action="store_true", help="Cancel the actual ETL run after host recovery and observe native/BPMN cancellation.")
@@ -83,6 +84,8 @@ def main():
         parser.error("An admission race requires the actual queued WorkflowStarted checkpoint cut.")
     if args.pending_cancellation_crash and not (args.model_cancel or args.native_cancel):
         parser.error("A pending cancellation crash requires --model-cancel or --native-cancel.")
+    if args.consumed_before_ack_crash and (not args.pending_cancellation_crash or args.dispatcher_assembly is None):
+        parser.error("The consumed-before-ACK cut requires --pending-cancellation-crash and --dispatcher-assembly.")
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
     if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True).strip():
         raise ValueError("Commit the journey source before recording exact-source evidence.")
@@ -417,13 +420,36 @@ def main():
                         pending_checked["worker"]["status"]!=(1 if args.model_cancel else 5) or
                         any(x["inputKind"]=="native-result" for x in pending_checked["inputs"]) or pending_wire!=before_wire):
                     raise ValueError("The actual cancellation/result source was not still owed at the second process-loss cut.")
+                consumed_evidence={}
+                if args.consumed_before_ack_crash:
+                    dispatcher=args.dispatcher_assembly.resolve(strict=True);nonce=uuid.uuid4().hex
+                    q.write_json(root/"owned-bpmn-recovery.json",{"schemaVersion":1,"controllerProcessId":os.getpid(),"modelExecutionId":model_execution,"nonce":nonce})
+                    sdk=start(["dotnet",str(dispatcher),"--consume-native-result",str(root),model_execution,nonce],"consumption-sdk")
+                    sdk_log=root/f"consumption-sdk-{len(processes)-1}.log";sdk.wait(timeout=90)
+                    consumed=json.loads(sdk_log.read_text());q.write_json(output/"sdk-consume.json",consumed)
+                    if sdk.returncode!=0 or any(source not in p["informationalVersion"] for p in consumed["products"]):
+                        raise ValueError("The source-matched production SDK did not consume the actual result: "+sdk_log.read_text())
+                    os.kill(host.pid,signal.SIGCONT);consumed_view=view();consumed_wire=wire();os.kill(host.pid,signal.SIGSTOP)
+                    wait_for(lambda:q.process_field(host.pid,"stat"),lambda value:"T" in value,"The consumed-before-ACK host did not quiesce.",5)
+                    consumed_cut_at=datetime.now(timezone.utc).isoformat();consumed_stores=snapshots("consumed")
+                    consumed_checked=json.loads(subprocess.check_output(["dotnet",str(reader),"--read-bpmn-retirement",str(root/"elsa.db"),model_execution],text=True,timeout=30))
+                    q.write_json(output/"consumed.json",consumed_view);q.write_json(output/"consumed-checked.json",consumed_checked);q.write_json(output/"consumed-wire.json",consumed_wire)
+                    result_source,=[s for s in consumed_checked["sources"] if s["intent"]["kind"]=="Elsa.Bpmn.NativeWorkResult.v1"]
+                    receipt,=[x for x in consumed_checked["inputs"] if x["inputKind"]=="native-result"]
+                    if (consumed_checked["model"]["lifecycle"]!=3 or consumed_checked["model"]["revision"]!=(3 if args.model_cancel else 2) or
+                            consumed_checked["queuedModelInputs"] or result_source["status"]!=3 or result_source["deliveredAt"] is not None or
+                            receipt!=consumed["receipt"] or consumed_view["run"]["status"]!="cancelled" or consumed_wire!=before_wire):
+                        raise ValueError("The actual consumed result lacks its exact receipt and still-owed source ACK.")
+                    consumed_evidence={"postConsumptionPreAck":True,"consumedStores":consumed_stores,"consumedCutAtUtc":consumed_cut_at,"dispatcherSha256":q.digest(dispatcher)}
                 stop(host,crash=True)
                 if host.returncode!=-signal.SIGKILL:raise ValueError("The pending cancellation host did not lose its actual process.")
                 pending_cancellation_evidence={"pendingCancellationStage":stage,"pendingStores":pending_stores,"pendingCutAtUtc":pending_cut_at,
-                    "pendingPredecessorExitCode":host.returncode,"sweepIntervalsSeconds":[.2,300,.2,.2]}
+                    "pendingPredecessorExitCode":host.returncode,"sweepIntervalsSeconds":[.2,300,.2,.2],**consumed_evidence}
                 print("Actual "+stage+" cancellation/result deliveries retained; second owned Workbench killed.",flush=True)
                 features["WorkflowsRuntimeResumption"]={"SweepIntervalSeconds":.2};q.write_json(root/"shells.json",shells);api=launch()
             except Exception as failure:
+                for child in children:
+                    if child is not host and child is not fixture:stop(child)
                 stop(host);failed_stores=snapshots("failed")
                 q.write_json(output/"failure.json",{"sourceRevision":source,"failureType":type(failure).__name__,"processes":processes,"products":products,
                     "pendingCancellationStage":"model-command" if args.model_cancel else "native-terminal","beforeStores":before_stores,"failedStores":failed_stores})
@@ -500,7 +526,7 @@ def main():
             **({"observedCancelledAfterRetryDeadlineAtUtc":observed_cancelled_after_deadline} if cancelling else {}),
             **({"modelPublication":model_publication,"modelExecutionId":model_execution} if direct_bpmn else {}),
             **(pending_cancellation_evidence or {}),
-            "scopeLimits":["Actual admitted RunEtl/HTTP429 recovery followed by a second process loss with cancellation/result delivery still owed; post-consumption/pre-ACK, embedding, held retry and final upgrade/Studio remain separate gates." if args.pending_cancellation_crash else "BPMN-originated cancellation of an admitted native RunEtl worker after process recovery; cancellation before admission, pending cancel/result crashes, embedding, held retry and final upgrade/Studio remain unproved." if args.model_cancel else "Native-worker-originated cancellation into the actual ETL run and direct BPMN only; model-to-worker cancellation, embedding, held retry and final upgrade/Studio remain unproved." if args.native_cancel else "Pipeline-originated cancellation through one actual direct BPMN/native RunEtl root only; reverse model-to-worker cancellation, embedding, held fault retry and final upgrade/Studio remain unproved." if args.pipeline_cancel else "Direct start/service/end with one real closed native RunEtl worker; embedding, broader service/event shapes, cancellation propagation and held terminal-fault retry remain unproved." if direct_bpmn else "Real transient HTTP retry and native RunEtl recovery only; no BPMN/model worker bridge or held terminal-fault retry is proved.","The crash cut uses SIGSTOP only to copy committed stores, then SIGKILL; no persisted state or clock is edited.","External HTTP effects remain at least once."]})
+            "scopeLimits":["Actual model consumption of the original admitted RunEtl cancellation result, followed by second SIGKILL with native result/model-cancel ACK still owed; fresh standard hosts finish acknowledgment. Embedding, held retry, other providers and final upgrade/Studio remain open." if args.consumed_before_ack_crash else "Actual admitted RunEtl/HTTP429 recovery followed by a second process loss with cancellation/result delivery still owed; post-consumption/pre-ACK, embedding, held retry and final upgrade/Studio remain separate gates." if args.pending_cancellation_crash else "BPMN-originated cancellation of an admitted native RunEtl worker after process recovery; cancellation before admission, pending cancel/result crashes, embedding, held retry and final upgrade/Studio remain unproved." if args.model_cancel else "Native-worker-originated cancellation into the actual ETL run and direct BPMN only; model-to-worker cancellation, embedding, held retry and final upgrade/Studio remain unproved." if args.native_cancel else "Pipeline-originated cancellation through one actual direct BPMN/native RunEtl root only; reverse model-to-worker cancellation, embedding, held fault retry and final upgrade/Studio remain unproved." if args.pipeline_cancel else "Direct start/service/end with one real closed native RunEtl worker; embedding, broader service/event shapes, cancellation propagation and held terminal-fault retry remain unproved." if direct_bpmn else "Real transient HTTP retry and native RunEtl recovery only; no BPMN/model worker bridge or held terminal-fault retry is proved.","The crash cut uses SIGSTOP only to copy committed stores, then SIGKILL; no persisted state or clock is edited.","External HTTP effects remain at least once."]})
         print("Actual ETL/native"+("/BPMN chain" if direct_bpmn else " journey")+" completed and survived another Workbench process.",flush=True)
     finally:
         for child in reversed(children):

@@ -20,16 +20,21 @@ using Elsa.Activities.Bpmn;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Events;
 using Elsa.Tasks.Core;
+using Elsa.Etl.Runtime;
+using Elsa.Etl.Persistence.EntityFrameworkCore;
+using Elsa.Etl.Workflows.Runtime;
 
 // An owned SDK client, not a state seeder: ordinary Start dispatch writes the real protected queue item.
 // The existing drain-policy seam leaves its processing to the standard Workbench recovery host.
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 try
 {
-    if (args.Length is not (4 or 6) || args[0] is not ("--enqueue-start" or "--enqueue-checkpoint" or "--drain-checkpoint" or "--cancel-model") ||
+    if (args.Length is not (4 or 6) || args[0] is not ("--enqueue-start" or "--enqueue-checkpoint" or "--drain-checkpoint" or "--cancel-model" or "--consume-native-result") ||
         args.Length == 6 && args[4] != "--gate")
         throw new ArgumentException("Select an owned enqueue/drain/cancel operation, content root, model id, nonce and optional --gate directory.");
     var race = args[0] is "--drain-checkpoint" or "--cancel-model";
+    var consume = args[0] == "--consume-native-result";
+    if (consume && args.Length != 4) throw new ArgumentException("Consumption uses the original production delivery path without a validation gate.");
     var checkpointCut = args[0] == "--enqueue-checkpoint";
     var root = Path.GetFullPath(args[1]);
     using var marker = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(root, "owned-bpmn-recovery.json")));
@@ -42,10 +47,25 @@ try
     var services = new ServiceCollection();
     services.AddLogging(); services.AddWorkflowRuntime();
     services.AddSingleton<IPersistenceAccessContextAccessor>(new ScopedAccess());
-    if (race)
+    if (race || consume)
     {
         new EventsFeature().ConfigureServices(services);
         new ActivitiesBpmnHostingFeature().ConfigureServices(services);
+    }
+    if (consume)
+    {
+        using var configuration = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(root, "shells.json")));
+        var feature = configuration.RootElement.GetProperty("CShells").GetProperty("Shells").GetProperty("default").GetProperty("Features");
+        var etl = feature.GetProperty("EtlRuntime").Deserialize<EtlRuntimeFeature>(json)!;
+        if (!Path.GetFullPath(etl.SnapshotRoot).StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
+            etl.FileBindings.Any(binding => !Path.GetFullPath(binding.Path).StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal)))
+            throw new InvalidOperationException("ETL file bindings must stay in this controller's owned root.");
+        etl.ConfigureServices(services);
+        var etlDatabase = Path.Combine(root, "etl-runtime.db");
+        if (!File.Exists(etlDatabase)) throw new FileNotFoundException("The actual owned ETL runtime store is absent.");
+        new EtlRuntimeEntityFrameworkCoreFeature { ConnectionString = new SqliteConnectionStringBuilder
+            { DataSource = etlDatabase, Mode = SqliteOpenMode.ReadWrite, Pooling = false }.ToString() }.ConfigureServices(services);
+        new EtlWorkflowsRuntimeFeature().ConfigureServices(services);
     }
     services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
     {
@@ -70,33 +90,93 @@ try
     if (args[0] == "--drain-checkpoint")
         services.Replace(ServiceDescriptor.Singleton(new WorkflowDrainOrchestratorOptions(maxTotalDrainCycles: 2)));
     await using var provider = services.BuildServiceProvider();
-    if (race)
+    if (race || consume)
         foreach (var initializer in provider.GetServices<IShellInitializer>()) await initializer.InitializeAsync();
     await using var scope = provider.CreateAsyncScope();
     var sdk = scope.ServiceProvider;
-    if (race)
+    if (race || consume)
         foreach (var task in sdk.GetServices<IStartupTask>()) await task.ExecuteAsync(CancellationToken.None);
     var models = sdk.GetRequiredService<IRuntimeModelExecutionReader>();
     var model = await models.FindAsync(args[2]) ?? throw new InvalidOperationException("The actual model execution is absent.");
-    if (model.Lifecycle != RuntimeModelLifecycle.Running || model.TerminalResult is not null || model.Protocol != new RuntimeExecutionProtocol("elsa.bpmn", 1))
+    if ((consume ? model.Lifecycle is not (RuntimeModelLifecycle.Running or RuntimeModelLifecycle.TerminalPendingSettlement) :
+            model.Lifecycle != RuntimeModelLifecycle.Running || model.TerminalResult is not null) || model.Protocol != new RuntimeExecutionProtocol("elsa.bpmn", 1))
         throw new InvalidOperationException("Only the original live BPMN invocation may enqueue its worker.");
-    var origin = model.Payload.GetProperty("work").EnumerateArray().Single().GetProperty("nativeWork").Deserialize<RuntimeModelNativeWorkOrigin>(json)!;
+    var originElement = consume && model.Lifecycle == RuntimeModelLifecycle.TerminalPendingSettlement
+        ? model.Payload.GetProperty("cancellations").EnumerateArray().Single().GetProperty("origin")
+        : model.Payload.GetProperty("work").EnumerateArray().Single().GetProperty("nativeWork");
+    var origin = originElement.Deserialize<RuntimeModelNativeWorkOrigin>(json)!;
     var source = await sdk.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(origin.SourceOutboxItemId)
         ?? throw new InvalidOperationException("The actual native start source is absent.");
     var workflows = sdk.GetRequiredService<IWorkflowExecutionStateStore>();
     var queue = sdk.GetRequiredService<IWorkflowSchedulerWorkQueue>();
     if (!origin.MatchesModel(model) || source.StimulusDeliverySourceScope != model.Scope || source.Intent.Kind != "Elsa.Bpmn.StartNativeWork.v1" ||
         source.Intent.WorkflowExecutionId != model.ExecutionId || source.Intent.IntentId != origin.SourceIntentId ||
-        source.Status is RuntimePostCommitOutboxStatus.Delivered or RuntimePostCommitOutboxStatus.FailedFinal ||
+        (consume ? source.Status != RuntimePostCommitOutboxStatus.Delivered : source.Status is RuntimePostCommitOutboxStatus.Delivered or RuntimePostCommitOutboxStatus.FailedFinal) ||
         source.Intent.Payload is not { } payload || !origin.IsEquivalentTo(payload.Deserialize<RuntimeModelNativeWorkOrigin>(json)) ||
-        await workflows.FindAsync(origin.WorkerExecutionId) is not null ||
-        (await queue.ListAsync(new(origin.WorkerExecutionId))).Items.Count != (race ? 1 : 0))
+        !consume && (await workflows.FindAsync(origin.WorkerExecutionId) is not null ||
+            (await queue.ListAsync(new(origin.WorkerExecutionId))).Items.Count != (race ? 1 : 0)))
         throw new InvalidOperationException("The actual pinned native start is not available for this queued-admission cut.");
     object Product(Assembly assembly)
     {
         var path = assembly.Location;
         return new { name = assembly.GetName().Name, informationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion,
             sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))) };
+    }
+    if (consume)
+    {
+        var started = DateTimeOffset.UtcNow;
+        var steps = new List<object>();
+        var processor = sdk.GetRequiredService<IRuntimePostCommitOutboxProcessor>();
+        var lookup = sdk.GetRequiredService<IPostCommitOutboxLookupStore>();
+        async Task<RuntimeSchedulerDrainResult> Drain(string execution)
+        {
+            var id = "owned-consumption:" + Guid.NewGuid().ToString("N");
+            var envelope = new WorkflowExecutionCommandEnvelope(id, execution,
+                new(id, execution, WorkflowExecutionCommandKind.RunSchedulerWork, started, null, new Dictionary<string, string>()),
+                id, WorkflowExecutionCommandDeliveryMode.AtLeastOnce, started, partition: new(origin.Scope.Value));
+            return await sdk.GetRequiredService<IWorkflowDrainOrchestrator>().DrainAsync(envelope, new(execution, maxWorkItems: 1));
+        }
+        var worker = await workflows.FindAsync(origin.WorkerExecutionId) ?? throw new InvalidOperationException("The real native worker is absent.");
+        if (!origin.IsEquivalentTo(worker.ModelWorkOrigin) || (await queue.ListAsync(new(origin.WorkerExecutionId))).Items.Count != 0 ||
+            (await queue.ListAsync(new(model.ExecutionId))).Items.Count != 0 || await models.FindInputAsync(model.ExecutionId, origin.ResultInputId) is not null)
+            throw new InvalidOperationException("This consumption cut requires the original worker with no queued/consumed native result.");
+        if (worker.Status == WorkflowExecutionStatus.Running && model.Lifecycle == RuntimeModelLifecycle.TerminalPendingSettlement)
+        {
+            var delivery = await processor.ProcessAsync(new(1, model.ExecutionId, "Elsa.Bpmn.CancelNativeWork.v1"));
+            steps.Add(new { operation = "deliver-model-cancel", delivery });
+            if (delivery.AttemptedCount != 1 || delivery.DeliveredCount != 0 ||
+                (await queue.ListAsync(new(origin.WorkerExecutionId))).Items.Single().CommandKind != WorkflowExecutionCommandKind.Cancel)
+                throw new InvalidOperationException("The original model cancellation did not retain its real native Cancel command.");
+            var drain = await Drain(origin.WorkerExecutionId); steps.Add(new { operation = "drain-native-cancel", drain });
+            worker = await workflows.FindAsync(origin.WorkerExecutionId) ?? throw new InvalidOperationException("The native worker disappeared.");
+        }
+        if (worker.Status != WorkflowExecutionStatus.Cancelled)
+            throw new InvalidOperationException("Consumption must retain the actual native cancellation.");
+        var etl = await processor.ProcessAsync(new(1, origin.WorkerExecutionId, "Elsa.Etl.Cancel.v1"));
+        steps.Add(new { operation = "deliver-etl-cancel", delivery = etl });
+        if (etl.AttemptedCount != 1 || etl.DeliveredCount != 1)
+            throw new InvalidOperationException("The original ETL cancellation remains owed.");
+        var result = await processor.ProcessAsync(new(1, origin.WorkerExecutionId, "Elsa.Bpmn.NativeWorkResult.v1"));
+        steps.Add(new { operation = "queue-native-result", delivery = result });
+        var queuedModel = (await queue.ListAsync(new(model.ExecutionId))).Items;
+        if (result.AttemptedCount != 1 || result.DeliveredCount != 0 || queuedModel.Count != 1 || queuedModel.Single().CommandKind != WorkflowExecutionCommandKind.ExecuteModel)
+            throw new InvalidOperationException("The original native result was not queued without acknowledgment.");
+        var consumed = await Drain(model.ExecutionId); steps.Add(new { operation = "consume-native-result", drain = consumed });
+        var consumedModel = await models.FindAsync(model.ExecutionId) ?? throw new InvalidOperationException("The consumed model disappeared.");
+        var receipt = await models.FindInputAsync(model.ExecutionId, origin.ResultInputId);
+        var resultAddress = consumedModel.Payload.GetProperty("nativeResults").EnumerateArray().Single().GetProperty("sourceOutboxItemId").GetString()!;
+        var resultSource = await lookup.FindDurableAsync(resultAddress);
+        if (consumedModel.Lifecycle != RuntimeModelLifecycle.TerminalSettled || consumedModel.Revision != model.Revision + 1 || receipt is null ||
+            receipt.Result.GetProperty("status").GetString() != "Accepted" || resultSource is null || resultSource.Status != RuntimePostCommitOutboxStatus.FailedRetryable ||
+            (await queue.ListAsync(new(model.ExecutionId))).Items.Count != 0)
+            throw new InvalidOperationException("The actual native result lacks durable model consumption with source acknowledgment still owed.");
+        Console.WriteLine(JsonSerializer.Serialize(new { operation = args[0], startedAtUtc = started, completedAtUtc = DateTimeOffset.UtcNow,
+            origin, steps, model = consumedModel, worker = await workflows.FindAsync(origin.WorkerExecutionId), receipt, resultSource,
+            products = new[] { Product(Assembly.GetExecutingAssembly()), Product(typeof(IWorkflowStartDispatcher).Assembly),
+                Product(typeof(Elsa.Workflows.Runtime.Services.Executions.WorkflowStartDispatcher).Assembly), Product(typeof(RuntimeEntityFrameworkCoreOptions).Assembly),
+                Product(typeof(ActivitiesBpmnHostingFeature).Assembly), Product(typeof(EtlRuntimeFeature).Assembly), Product(typeof(EtlRuntimeEntityFrameworkCoreFeature).Assembly),
+                Product(typeof(EtlWorkflowsRuntimeFeature).Assembly) } }, json));
+        return 0;
     }
     if (race)
     {

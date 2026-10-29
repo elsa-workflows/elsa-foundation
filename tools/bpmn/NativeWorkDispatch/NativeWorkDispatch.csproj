@@ -6,5 +6,8 @@
     <ProjectReference Include="../../../Essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="../../../Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj" />
     <ProjectReference Include="../../../Essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
+    <ProjectReference Include="../../../Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj" />
+    <ProjectReference Include="../../../Extensions/Etl/src/Workflows/Runtime/Elsa.Etl.Workflows.Runtime.csproj" />
+    <ProjectReference Include="../../../Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
 </Project>
