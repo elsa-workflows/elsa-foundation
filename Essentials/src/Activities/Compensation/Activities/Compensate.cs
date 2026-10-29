@@ -21,6 +21,7 @@ namespace Elsa.Activities.Compensation.Activities;
 /// refuses one inside a handler or one that cannot reach its target. See <c>specs/258-compensation-nesting</c>.
 /// </para>
 /// </remarks>
+[ActivityPalette(AncestorActivityTypes = ["Elsa.Activities.Compensation.Activities.CompensationScope"], Description = "Compensate requires an enclosing Compensation Scope.")]
 [Activity(Icon = "Undo")]
 public sealed class Compensate : StructuralActivity, IRuntimeStructuralActivity
 {

@@ -93,6 +93,7 @@ export interface GraphCanvasInteractionsParams {
    */
   scopeKey: string;
   canAddActivities: boolean;
+  isOfferedActivity?(activity: ActivityCatalogItem): boolean;
   selectedNodeId: string | null;
   catalogByVersion: Map<string, ActivityCatalogItem>;
   select(nodeId: string | null): void;
@@ -185,6 +186,7 @@ export function useGraphCanvasInteractions({
   mode,
   scopeKey,
   canAddActivities,
+  isOfferedActivity,
   selectedNodeId,
   catalogByVersion,
   select,
@@ -225,6 +227,7 @@ export function useGraphCanvasInteractions({
   );
 
   const placementFactory = useCallback((activity: ActivityCatalogItem, position: XYPosition): GraphCanvasPlacement | null => {
+    if (isOfferedActivity && !isOfferedActivity(activity)) return null;
     if (createPlacement) return createPlacement(activity, position);
     const activityNode = createActivityNode(activity, createNodeId(activity));
     return {
@@ -248,7 +251,7 @@ export function useGraphCanvasInteractions({
         }
       }
     };
-  }, [createPlacement]);
+  }, [createPlacement, isOfferedActivity]);
 
   // React Flow's keyboard selection is emitted as a node change, while the inspector is driven by the
   // host's selected node id. Keep both projections aligned so Enter/Space has the same result as a
@@ -399,7 +402,7 @@ export function useGraphCanvasInteractions({
   }, [canAddActivities, mode, nodes.length, onActivityPlaced, placementFactory, stampCanvasNode]);
 
   const tryAddActivityAtClientPoint = useCallback((activity: ActivityCatalogItem, clientX: number, clientY: number) => {
-    if (!canAddActivities) return false;
+    if (!canAddActivities || activity.available === false || (isOfferedActivity && !isOfferedActivity(activity))) return false;
     if (!canvasRef.current) return false;
 
     const canvasRect = canvasRef.current.getBoundingClientRect();
@@ -432,7 +435,7 @@ export function useGraphCanvasInteractions({
 
     placeActivity(activity, position);
     return true;
-  }, [canAddActivities, edges, findEdgeUnderCursor, insertSequenceActivity, isGraphMode, mode, placeActivity, spliceActivityIntoEdge, toCanvasPosition]);
+  }, [canAddActivities, isOfferedActivity, edges, findEdgeUnderCursor, insertSequenceActivity, isGraphMode, mode, placeActivity, spliceActivityIntoEdge, toCanvasPosition]);
 
   // Pointer-based palette drag. Runs alongside the native HTML5 drag so a palette press that never
   // produces a dragstart (touch, or a browser that suppresses it) still lands an activity.
@@ -511,7 +514,7 @@ export function useGraphCanvasInteractions({
 
   const onPaletteClick = (activity: ActivityCatalogItem) => {
     if (suppressPaletteClickRef.current) return;
-    if (!canAddActivities) return;
+    if (!canAddActivities || activity.available === false || (isOfferedActivity && !isOfferedActivity(activity))) return;
     const added = placeActivity(activity);
     if (added) queueCanvasNodeFocus(added.nodeId);
   };

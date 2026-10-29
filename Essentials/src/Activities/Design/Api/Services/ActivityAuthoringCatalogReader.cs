@@ -95,7 +95,8 @@ public sealed class ActivityAuthoringCatalogReader(
                 new Dictionary<string, ActivityArgumentValue>(StringComparer.Ordinal),
                 structure),
             Provenance: new ActivityAuthoringProvenanceView(version.SourceKind, version.SourceId, featureId),
-            IconName: ActivityIconName.ReadFromFacets(version.DesignFacets));
+            IconName: ActivityIconName.ReadFromFacets(version.DesignFacets),
+            PaletteHints: version.DesignFacets.FirstOrDefault(facet => facet.Kind == "elsa.activity-palette" && facet.SchemaVersion == "1")?.Payload.Clone());
     }
 
     private static ActivityInputDescriptorView ToView(InputDefinition input) =>

@@ -1,3 +1,4 @@
+import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Boxes, Code2, Download, ListTree, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
 import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, type StudioActivityPropertyEditorContribution, type StudioAiContributionApi, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
@@ -220,7 +221,7 @@ export function WorkflowEditor({
     details,
     setDetails,
     catalog,
-    paletteCatalog,
+    paletteCatalog: availablePaletteCatalog,
     recommendedDefinitions,
     activityDescriptors,
     availabilityDiagnostics,
@@ -289,6 +290,13 @@ export function WorkflowEditor({
     ? recommendedDefinitions.find(item => item.definitionId === inspectedRecommendationDefinitionId) ?? null
     : null;
 
+  const paletteContext = useMemo(() => getActivityPaletteContext(
+    "workflow-definition", draft?.state.rootActivity, scope?.owner.nodeId, scope?.slot, catalogByVersion
+  ), [draft?.state.rootActivity, scope, catalogByVersion]);
+  const isOfferedActivity = useCallback((activity: ActivityCatalogItem) => isActivityOfferedInContext(activity, paletteContext), [paletteContext]);
+  const paletteCatalog = useMemo(() => availablePaletteCatalog.filter(isOfferedActivity), [availablePaletteCatalog, isOfferedActivity]);
+  const choicesForSlot = (owner: ActivityNode, slot: ChildSlot) => availablePaletteCatalog.filter(activity => isActivityOfferedInContext(activity,
+    getActivityPaletteContext("workflow-definition", draft?.state.rootActivity, owner.nodeId, slot, catalogByVersion)));
   const paletteGroups = useMemo(() => groupActivityPalette(paletteCatalog), [paletteCatalog]);
   const filteredPaletteGroups = useMemo(() => {
     const term = paletteSearch.trim().toLowerCase();
@@ -347,6 +355,7 @@ export function WorkflowEditor({
     catalogByVersion,
     isUnsupportedDesigner,
     isBpmnDesigner,
+    isOfferedActivity,
     // A compensation scope's steps change only through its step list, never by a palette drop on the canvas.
     canAddActivitiesToCanvas: canAddActivitiesToCanvas && scope?.slot.id !== compensationStepsSlotId,
     readOnly: editorDoc.pinned,
@@ -1171,7 +1180,9 @@ export function WorkflowEditor({
           selectedRecommendedVersion={inspectedRecommendation}
           selectedSlots={inspectedSlots}
           inspectingScopeOwner={inspectedIsScopeOwner}
-          catalog={paletteCatalog}
+          catalog={availablePaletteCatalog}
+          choicesForSlot={choicesForSlot}
+          placementNotice={selectedNode ? activityPaletteNotice(inspectedCatalogItem, paletteContext) : undefined}
           catalogByVersion={catalogByVersion}
           selectedSupportsScopedVariables={inspectedSupportsScopedVariables}
           propertyEditors={propertyEditors}

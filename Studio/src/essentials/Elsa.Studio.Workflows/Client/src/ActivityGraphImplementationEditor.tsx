@@ -1,3 +1,4 @@
+import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "./graph-authoring/activityPaletteContext";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Edge, Node, XYPosition } from "@xyflow/react";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Boxes, ListTree, Network, Plus, Redo2, Trash2, Undo2 } from "lucide-react";
@@ -392,7 +393,12 @@ export function ActivityGraphImplementationEditor({
   const selectedCatalogItem = selected ? catalogByVersion.get(selected.activityVersionId) : undefined;
   const selectedIndex = selected ? activities.findIndex(activity => activity.nodeId === selected.nodeId) : -1;
   const selectedSupported = selected ? supportsActivityNode(selected, selectedCatalogItem) : true;
-  const availableActivities = catalog.filter(item => item.available !== false && supportsActivityGraphAuthoring(item));
+  const supportedActivities = catalog.filter(item => item.available !== false && supportsActivityGraphAuthoring(item));
+  const paletteContext = getActivityPaletteContext("activity-definition-graph", root, owner.nodeId, slot, catalogByVersion);
+  const isOfferedActivity = (activity: ActivityCatalogItem) => isActivityOfferedInContext(activity, paletteContext);
+  const availableActivities = supportedActivities.filter(isOfferedActivity);
+  const choicesForSlot = (owner: ActivityNode, slot: ChildSlot) => supportedActivities.filter(activity => isActivityOfferedInContext(activity,
+    getActivityPaletteContext("activity-definition-graph", root, owner.nodeId, slot, catalogByVersion)));
   const filteredPaletteGroups = useMemo(() => {
     const search = paletteSearch.trim().toLocaleLowerCase();
     return groupActivityPalette(availableActivities.filter(activity => !search ||
@@ -520,6 +526,7 @@ export function ActivityGraphImplementationEditor({
     catalogByVersion,
     select: setSelectedNodeId,
     commitCanvas,
+    isOfferedActivity,
     placeActivity,
     createPlacement: isBpmnSlot ? createPlacement : undefined,
     createEdge: isBpmnSlot
@@ -829,7 +836,9 @@ export function ActivityGraphImplementationEditor({
             selectedNodeAvailability={null}
             selectedSlots={inspectedSlots}
             inspectingScopeOwner={!selected}
-            catalog={availableActivities}
+            catalog={supportedActivities}
+            choicesForSlot={choicesForSlot}
+            placementNotice={selected ? activityPaletteNotice(selectedCatalogItem, paletteContext) : undefined}
             catalogByVersion={catalogByVersion}
             selectedSupportsScopedVariables={inspectedSupportsVariables}
             readOnly={readOnly}

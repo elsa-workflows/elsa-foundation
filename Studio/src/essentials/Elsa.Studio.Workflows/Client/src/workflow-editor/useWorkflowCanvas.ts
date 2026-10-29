@@ -67,6 +67,7 @@ interface WorkflowCanvasParams {
   isBpmnDesigner: boolean;
   canAddActivitiesToCanvas: boolean;
   readOnly?: boolean;
+  isOfferedActivity?(activity: ActivityCatalogItem): boolean;
   selectedNodeId: string | null;
   // Document mutations (from useWorkflowDocument). The canvas never touches the reducer directly.
   editDraft(recipe: WorkflowDraftRecipe): void;
@@ -106,6 +107,7 @@ export function useWorkflowCanvas({
   catalogByVersion,
   isUnsupportedDesigner,
   isBpmnDesigner,
+  isOfferedActivity,
   canAddActivitiesToCanvas,
   readOnly = false,
   selectedNodeId,
@@ -250,6 +252,7 @@ export function useWorkflowCanvas({
   // Returns the created ActivityNode when it became the root or landed in the current scope's slot (so
   // callers can restore focus or chain navigation); null for wrapping and rejected/stale outcomes.
   const addActivity = useCallback((activity: ActivityCatalogItem, position?: XYPosition): ActivityNode | null => {
+    if (readOnly || activity.available === false || (isOfferedActivity && !isOfferedActivity(activity))) return null;
     if (draft?.state.rootActivity && isUnsupportedDesigner) {
       return null;
     }
@@ -338,7 +341,7 @@ export function useWorkflowCanvas({
 
     observeReusablePlacement(activity);
     return next;
-  }, [addCatalogActivityToBpmn, catalogByVersion, draft?.state.rootActivity, frames, isBpmnDesigner, isUnsupportedDesigner, editDraftAndSelect, observeReusablePlacement, resetToRoot, pinLayout, setError, setStatus]);
+  }, [readOnly, isOfferedActivity, addCatalogActivityToBpmn, catalogByVersion, draft?.state.rootActivity, frames, isBpmnDesigner, isUnsupportedDesigner, editDraftAndSelect, observeReusablePlacement, resetToRoot, pinLayout, setError, setStatus]);
 
   const resolveRemovedActivityNodeIds = useCallback((deletedNodes: Node<WorkflowNodeData>[]) =>
     collectRemovedGraphNodeIds(
@@ -359,6 +362,7 @@ export function useWorkflowCanvas({
     catalogByVersion,
     select,
     commitCanvas,
+    isOfferedActivity,
     placeActivity: addActivity,
     createPlacement: isBpmnDesigner ? createPlacement : undefined,
     createEdge: isBpmnDesigner
