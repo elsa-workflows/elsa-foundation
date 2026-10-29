@@ -18,6 +18,7 @@ import signal
 import subprocess
 import tempfile
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -95,7 +96,14 @@ def main():
             return lines[0] if lines else None
         url=wait_for(address, lambda value: value is not None, "Owned Workbench did not listen.",180)
         api=q.Api(url)
-        wait_for(lambda: api.request("/health/ready"),lambda value:value.get("status")=="Healthy","Owned Workbench is not ready.")
+        def healthy():
+            if host.poll() is not None:raise RuntimeError(f"The owned Workbench exited before readiness; private logs: {root}")
+            try:
+                with urllib.request.urlopen(url+"/health/ready",timeout=3) as response:return response.status==200
+            except urllib.error.HTTPError as error:
+                if error.code==503:return False
+                raise
+        wait_for(healthy,bool,"Owned Workbench is not ready.",180)
         api.login("admin","Password123!")
         return api
 
