@@ -156,7 +156,7 @@ def verify_obsolete_results(root,p,held):
         sdk['queuedBefore']==[],'The obsolete-result probe lacks its normal source-matched transport.')
     require(before==read('replacement-wait-after.json') and before['replacement']['run']['runId']==p['replacementRunId'] and
         before['replacement']['run']['status']=='running' and before['replacement']['run']['acceptedRecords']==2 and
-        before['replacement']['native']['instance']['status']=='Running' and model==checked['model'] and model['revision']==3 and model['lifecycle']==1 and
+        before['replacement']['native']['instance']['status']=='Running' and model==checked['model'] and model['revision']==3 and model['lifecycle']==0 and
         model['terminalResult'] is None and model['payload']['nativeResults']==[old] and old==held['model']['payload']['nativeResults'][0] and
         model['payload']['state']==held['model']['payload']['state'] and
         model['payload']['work'][0]['nativeWork']==current and origin['invocationId']==current['invocationId'] and origin['attemptId']!=current['attemptId'] and
@@ -204,10 +204,10 @@ def verify_obsolete_results(root,p,held):
                 require(c.execute('PRAGMA integrity_check').fetchall()==[('ok',)],'An obsolete-result wait whole store failed integrity verification.')
                 if store=='elsa':
                     row,=c.execute('SELECT Revision,Lifecycle,ContentJson FROM elsa_runtime_model_execution').fetchall();physical=json.loads(row[2])
-                    require(row[:2]==(3,1) and physical['payload']==model['payload'] and physical['terminalResult'] is None and
+                    require(row[:2]==(3,0) and physical['payload']==model['payload'] and physical['terminalResult'] is None and
                         physical['executable']==v.encoded_tree(model['executable']), 'The physical live replacement model differs from the probe.')
                     inputs=[json.loads(r[0]) for r in c.execute('SELECT ContentJson FROM elsa_runtime_model_input')]
-                    require(len(inputs)==3 and {v.decoded(r['inputKind']) for r in inputs}=={'start-embedded' if p['embeddedParent'] else 'start','native-result','retry-service'} and
+                    require(len(inputs)==3 and {r['inputKind'] for r in inputs}=={v.key(x) for x in ('start-embedded' if p['embeddedParent'] else 'start','native-result','retry-service')} and
                         next(r for r in inputs if r['inputKind']==v.key('native-result'))['result']==receipt['result'] and
                         next(r for r in inputs if r['inputKind']==v.key('native-result'))['contentFingerprint']==v.key(receipt['contentFingerprint']) and
                         not c.execute('SELECT 1 FROM elsa_runtime_scheduler_work_item WHERE WorkflowExecutionId=?',(v.key(model['executionId']),)).fetchall(),
@@ -221,10 +221,10 @@ def verify_obsolete_results(root,p,held):
                         'The physical original result source changed during replay.')
                 elif store=='etl-runtime':
                     rows=c.execute('SELECT RunId,Status,AcceptedRecords,RejectedRecords,InvocationJson FROM elsa_etl_runtime_runs').fetchall()
-                    require(len(rows)==2 and {(v.decoded(r[0]),r[1],r[2],r[3]) for r in rows}=={(p['runId'],4,2,0),(p['replacementRunId'],1,2,0)},
+                    require(len(rows)==2 and {(r[0],r[1],r[2],r[3]) for r in rows}=={(v.key(p['runId']),4,2,0),(v.key(p['replacementRunId']),1,2,0)},
                         'The physical ETL replacement was not live beside the original fault during the probe.')
                     for run,status,accepted,rejected,invocation in rows:
-                        inv=json.loads(invocation);expected=origin if v.decoded(run)==p['runId'] else current
+                        inv=json.loads(invocation);expected=origin if run==v.key(p['runId']) else current
                         require(v.decoded(inv['resultAddress']['workflowExecutionId'])==expected['workerExecutionId'],
                             'The physical ETL attempt lost its native result address during the probe.')
     return 3

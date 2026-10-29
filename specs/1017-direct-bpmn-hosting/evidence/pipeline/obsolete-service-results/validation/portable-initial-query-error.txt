@@ -1,0 +1,17 @@
+..........................................................................................................................E.....................................................................................
+======================================================================
+ERROR: test_physical_original_receipt_cannot_change (test_verify_obsolete_service_results.ActualObsoleteResultControls)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/sipke/.codex/worktrees/f236/elsa-foundation/e2e-tests/etl/test_verify_obsolete_service_results.py", line 75, in test_physical_original_receipt_cannot_change
+    self.store('direct','elsa',change)
+  File "/Users/sipke/.codex/worktrees/f236/elsa-foundation/e2e-tests/etl/test_verify_obsolete_service_results.py", line 20, in store
+    with closing(sqlite3.connect(raw)) as c:action(c);c.commit()
+  File "/Users/sipke/.codex/worktrees/f236/elsa-foundation/e2e-tests/etl/test_verify_obsolete_service_results.py", line 73, in change
+    key,raw=c.execute('SELECT InputId,ContentJson FROM elsa_runtime_model_input WHERE InputKind=?',(v.v.key('native-result'),)).fetchone();value=json.loads(raw);value['contentFingerprint']=v.v.key('other')
+sqlite3.OperationalError: no such column: InputKind
+
+----------------------------------------------------------------------
+Ran 208 tests in 25.393s
+
+FAILED (errors=1)
