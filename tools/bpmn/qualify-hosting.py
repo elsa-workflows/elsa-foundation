@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Capture actual owned-host legacy BPMN inputs before production writer changes.
+"""Capture legacy BPMN inputs and qualify their recovery on the changed production host.
 
 Uses public APIs to park partial forks in the legacy BPMN activity and native parents.
-This is baseline capture, not direct-model hosting or upgraded-host recovery proof.
+Capture and upgrade phases retain separate source identities and immutable inputs.
 The resulting manifest contains only relative evidence paths and binary/source identities.
 """
 from __future__ import annotations
@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from contextlib import closing, contextmanager
 from datetime import datetime, timezone
+import gzip
 import hashlib
 import http.cookiejar
 import json
@@ -21,6 +22,7 @@ import signal
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -401,6 +403,136 @@ def capture(args) -> dict:
         raise
 
 
+def verify_upgrade(path: Path) -> dict:
+    manifest = json.loads(path.read_text())
+    if manifest.get("schemaVersion") != 1 or manifest.get("kind") != "actual-legacy-partial-fork-upgrade":
+        raise ValueError("Unknown upgrade manifest.")
+    root = path.parent
+    assets = {asset["path"]: asset for asset in manifest["assets"]}
+    if len(assets) != len(manifest["assets"]) or set(assets) != {
+            "legacy-partial-forks/process.json", "legacy-partial-forks/upgraded-runtime.sqlite.gz",
+            "legacy-partial-forks/upgraded-design.sqlite.gz", "frozen-contract.json"}:
+        raise ValueError("The upgrade evidence asset set is incomplete or duplicated.")
+    for asset in assets.values():
+        if digest(evidence_file(root, asset["path"])) != asset["sha256"]:
+            raise ValueError("An upgrade asset differs from its retained hash.")
+    process = json.loads(evidence_file(root, "legacy-partial-forks/process.json").read_text())
+    source = process.get("sourceRevision", "")
+    if (process.get("kind") != manifest["kind"] or process.get("formatVersion") != 1 or
+            not re.fullmatch(r"[0-9a-f]{40}", source) or source != manifest.get("sourceRevision") or
+            not re.fullmatch(r"[0-9a-f]{40}", process.get("baselineSourceRevision", "")) or
+            source == process["baselineSourceRevision"]):
+        raise ValueError("The upgrade does not identify distinct exact source revisions.")
+    if (process.get("baselineManifestSha256") != manifest.get("baselineManifestSha256") or
+            process["baselineSourceRevision"] != manifest.get("baselineSourceRevision") or
+            process.get("baselineAssets") != manifest.get("baselineAssets")):
+        raise ValueError("The recovered source observations do not match the declared baseline.")
+    if not process.get("binaries") or not any(binary["file"] == "Elsa.Workbench.dll" and
+            binary["productVersion"].endswith("+" + source) for binary in process["binaries"]):
+        raise ValueError("The upgrade has no source-bound production Workbench.")
+    observations = process["observations"]
+    if len(observations) != 8 or {(case["parent"], case["persistenceMode"]) for case in observations} != {
+            (parent, mode) for parent in ("LegacyRoot", "Sequence", "Flowchart", "CompensationScope") for mode in ("Balanced", "Durable")}:
+        raise ValueError("The actual upgraded parent/persistence-mode matrix is incomplete.")
+    if len({case["executionId"] for case in observations}) != 8:
+        raise ValueError("Upgraded executions are not distinct.")
+    for case in observations:
+        recovered, completed = case["recovered"], case["completed"]
+        if observe_partial(recovered, True)["workflowExecutionId"] != case["executionId"]:
+            raise ValueError("The recovered wait does not identify its actual execution.")
+        if (completed["instance"]["status"] != "Completed" or completed["incidents"] or
+                case["delivery"]["startedCount"] != 0 or case["delivery"]["resumedCount"] != 1):
+            raise ValueError("An upgraded execution did not finish through its one normal resume.")
+        for key in ("workflowExecutionId", "artifactId", "artifactHash", "artifactVersion", "definitionId", "definitionVersionId"):
+            if recovered["instance"][key] != completed["instance"][key]:
+                raise ValueError("An upgraded execution changed its immutable pin.")
+        for node in ("wait-a", "wait-b"):
+            before = [activity for activity in recovered["activities"] if activity["executableNodeId"] == node]
+            after = [activity for activity in completed["activities"] if activity["executableNodeId"] == node]
+            if (len(before) != 1 or len(after) != 1 or after[0]["activityExecutionId"] != before[0]["activityExecutionId"] or
+                    after[0]["status"] != "Completed" or after[0]["outcomeNames"] != ["Done"]):
+                raise ValueError("An upgraded branch lost or repeated its exact continuation.")
+        successors = [activity for activity in completed["activities"] if activity["executableNodeId"] == "after-bpmn"]
+        if case["parent"] != "LegacyRoot" and (len(successors) != 1 or successors[0]["status"] != "Completed"):
+            raise ValueError("An upgraded native parent did not continue exactly once.")
+    with tempfile.TemporaryDirectory(prefix="elsa-upgrade-verify-") as temporary:
+        for key, name in (("snapshot", "runtime"), ("designSnapshot", "design")):
+            snapshot = process[key]
+            compressed = evidence_file(root, "legacy-partial-forks/" + snapshot["file"])
+            if digest(compressed) != snapshot["gzipSha256"]:
+                raise ValueError("An upgraded whole-store snapshot differs.")
+            raw = gzip.decompress(compressed.read_bytes())
+            if hashlib.sha256(raw).hexdigest() != snapshot["databaseSha256"]:
+                raise ValueError("An upgraded whole-store payload differs.")
+            database = Path(temporary) / (name + ".sqlite"); database.write_bytes(raw)
+            with closing(sqlite3.connect(database.as_uri() + "?mode=ro&immutable=1", uri=True)) as connection:
+                if connection.execute("pragma integrity_check").fetchall() != [("ok",)]:
+                    raise ValueError("An upgraded whole-store snapshot is not intact.")
+                if name == "runtime":
+                    artifacts = {identity: incarnation + ":" + hashlib.sha256(content.encode()).hexdigest()
+                        for identity, incarnation, content in connection.execute(
+                            "SELECT Id, IncarnationId, ContentJson FROM elsa_runtime_workflow_executable WHERE IsModelMaterial = 0")}
+                    if any(artifacts.get(identity) != value for identity, value in process["retainedArtifacts"].items()):
+                        raise ValueError("An original executable's bytes or physical incarnation changed during upgrade.")
+                    applied = [identity + "|" + version for identity, version in connection.execute(
+                        "SELECT MigrationId, ProductVersion FROM __EFMigrationsHistory_ElsaRuntime ORDER BY MigrationId")]
+                    if applied != process["migrated"]:
+                        raise ValueError("The upgraded store's applied migrations disagree with their receipt.")
+                    for case in observations:
+                        rows = connection.execute("SELECT Status, ArtifactId FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId = ?",
+                            (case["executionId"],)).fetchall()
+                        if rows != [("Completed", case["completed"]["instance"]["artifactId"])]:
+                            raise ValueError("The final physical workflow row disagrees with its completed API observation.")
+    frozen = json.loads(evidence_file(root, "frozen-contract.json").read_text())
+    if (frozen.get("sourceRevision") != source or frozen.get("oracleSha256") != FROZEN or
+            frozen.get("matchesFrozenFingerprint") is not True or frozen.get("immutableSnapshot") is not True or
+            frozen.get("closedSnapshotSha256") != process["designSnapshot"]["databaseSha256"]):
+        raise ValueError("The upgraded Design store has no frozen authoring verification.")
+    if (not set(process["originalMigrations"]).issubset(process["migrated"]) or not process["retainedArtifactCount"] or
+            len(process["retainedArtifacts"]) != process["retainedArtifactCount"]):
+        raise ValueError("The upgrade lost applied migrations or retained executable material.")
+    return {"actualLegacyExecutionsRecovered": 8, "wholeStoresVerified": 2, "frozenAuthoringPreserved": True,
+            "sourceRevision": source, "allLegacyFamiliesRecovered": False, "studioAcceptanceProved": False}
+
+
+def resume_upgrade(args) -> dict:
+    baseline = args.manifest.resolve(strict=True)
+    verify_capture(baseline)
+    source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True, timeout=5).strip()
+    if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True, timeout=5).strip():
+        raise ValueError("Commit the qualification source before recording exact-source upgrade evidence.")
+    output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False)
+    env = os.environ.copy()
+    env.update(ELSA_BPMN_LEGACY_CAPTURE_DIRECTORY=str(baseline.parent), ELSA_BPMN_HOST_EVIDENCE_DIRECTORY=str(output),
+        ELSA_BPMN_HOST_SOURCE_REVISION=source)
+    project = REPO / "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"
+    command = ["dotnet", "test", str(project), "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "--filter",
+        "FullyQualifiedName~LegacyPartialForkUpgradeTests", "--logger", "trx;LogFileName=legacy-partial-fork-upgrade.trx"]
+    if args.artifacts_path is not None:
+        command += ["--artifacts-path", str(args.artifacts_path.resolve())]
+    with (output / "run.log").open("w") as log:
+        subprocess.run(command, cwd=REPO, env=env, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=3600)
+    process = json.loads((output / "legacy-partial-forks/process.json").read_text())
+    if (process["baselineManifestSha256"] != digest(baseline) or
+            process["baselineSourceRevision"] != json.loads(baseline.read_text())["executingSourceCommit"]):
+        raise ValueError("The host test did not recover the requested baseline.")
+    with tempfile.TemporaryDirectory(prefix="elsa-upgraded-design-") as temporary:
+        database = Path(temporary) / "design.sqlite"
+        database.write_bytes(gzip.decompress((output / "legacy-partial-forks/upgraded-design.sqlite.gz").read_bytes()))
+        subprocess.run([sys.executable, str(REPO / "e2e-tests/bpmn/verify_published_contracts.py"), "--database", str(database),
+            "--source-revision", source, "--closed-snapshot", "--output", str(output / "frozen-contract.json")], check=True, timeout=60)
+    verify_capture(baseline)
+    paths = ["legacy-partial-forks/process.json", "legacy-partial-forks/upgraded-runtime.sqlite.gz",
+        "legacy-partial-forks/upgraded-design.sqlite.gz", "frozen-contract.json"]
+    manifest = {"schemaVersion": 1, "kind": "actual-legacy-partial-fork-upgrade", "sourceRevision": source,
+        "baselineManifestSha256": digest(baseline), "baselineSourceRevision": process["baselineSourceRevision"],
+        "baselineAssets": {asset["path"]: asset["sha256"] for asset in json.loads(baseline.read_text())["assets"]
+            if asset["path"] in ("runtime.sqlite", "design.sqlite", "cases.json")},
+        "assets": [{"path": name, "sha256": digest(output / name)} for name in paths]}
+    write_json(output / "manifest.json", manifest)
+    return verify_upgrade(output / "manifest.json")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     phases = parser.add_subparsers(dest="phase", required=True)
@@ -410,9 +542,18 @@ def main() -> int:
     prepare.add_argument("--base-url", required=True)
     verify = phases.add_parser("verify-capture")
     verify.add_argument("--manifest", type=Path, required=True)
+    upgrade = phases.add_parser("resume-upgrade")
+    upgrade.add_argument("--manifest", type=Path, required=True)
+    upgrade.add_argument("--output", type=Path, required=True)
+    upgrade.add_argument("--artifacts-path", type=Path)
+    verified_upgrade = phases.add_parser("verify-upgrade")
+    verified_upgrade.add_argument("--manifest", type=Path, required=True)
     args = parser.parse_args()
     try:
-        result = capture(args) if args.phase == "capture-baseline" else verify_capture(args.manifest.resolve(strict=True))
+        if args.phase == "capture-baseline": result = capture(args)
+        elif args.phase == "resume-upgrade": result = resume_upgrade(args)
+        elif args.phase == "verify-upgrade": result = verify_upgrade(args.manifest.resolve(strict=True))
+        else: result = verify_capture(args.manifest.resolve(strict=True))
         print(json.dumps(result, indent=2))
         return 0
     except (OSError, ValueError, KeyError, sqlite3.Error, subprocess.SubprocessError, TimeoutError, RuntimeError) as error:

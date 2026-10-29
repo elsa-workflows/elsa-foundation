@@ -13,6 +13,10 @@
     <ProjectReference Include="../../../../../src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj" />
     <ProjectReference Include="../../../../../apps/Elsa.Workbench/Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/manifest.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/cases.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/runtime.sqlite;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/design.sqlite"
+          Link="Fixtures/legacy-partial-forks/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
   <!-- Build and launch the real host; never load its assembly or reproduce its composition in this test process. -->
   <Target Name="DescribeBpmnHostingWorkbench" BeforeTargets="GetAssemblyAttributes">
     <MSBuild Projects="$(WorkbenchProject)" Targets="GetTargetPath" Properties="Configuration=$(Configuration)" BuildInParallel="false">

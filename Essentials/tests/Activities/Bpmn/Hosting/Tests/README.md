@@ -6,7 +6,21 @@ The native witness publishes and executes through normal authenticated APIs, kil
 
 The runtime-only witness selects an explicit runtime/authentication feature set, including the existing file-system lock provider needed by Tasks. It configures no Design/publication services or stores. A genuine parallel process has two model human waits, completes one, exits/restarts and completes the surviving wait. One modeled human wait after the join makes the join observable; replay cannot add a second wait, and its completion produces one terminal result. The test inspects all owned SQLite table catalogs for Design storage, preserves pins/incarnation and verifies four input receipts/checkpoints with zero native workflow/activity/bookmark rows. Workbench explicitly discovers both BPMN implementation and API assemblies, so the profile does not rely on legacy authoring features being enabled.
 
-Set `ELSA_BPMN_HOST_EVIDENCE_DIRECTORY` to an output directory to retain public HTTP observations, exact binary product versions/hashes and consistent SQLite backups of the stopped host at wait and completion. The runtime-only parallel evidence is written to its `runtime-only-parallel/` subdirectory. `ELSA_BPMN_HOST_SOURCE_REVISION` additionally checks that the host's product version contains the expected committed source revision. Identity/Design databases and full configuration are not exported; runtime-only evidence includes feature names and SQLite table catalogs. These are same-source process witnesses; changed-binary/legacy recovery, clustered model placement, timer/broadcast/cancellation/settlement, native/ETL bindings and Studio remain separate gates.
+Set `ELSA_BPMN_HOST_EVIDENCE_DIRECTORY` to an output directory to retain public HTTP observations, exact binary product versions/hashes and consistent SQLite backups of the stopped host at wait and completion. The runtime-only parallel evidence is written to its `runtime-only-parallel/` subdirectory. `ELSA_BPMN_HOST_SOURCE_REVISION` additionally checks that the host's product version contains the expected committed source revision. The direct witnesses export Runtime only, without Identity/Design databases or full configuration; runtime-only evidence includes feature names and SQLite table catalogs. These are same-source process witnesses. Clustered model placement, timer/broadcast/cancellation/settlement, native/ETL bindings and Studio remain separate gates.
+
+The legacy upgrade witness copies the actual pre-writer partial-fork Runtime and Design snapshots into a new owned content root before starting the changed production host. It verifies additive migration history and all original executable bytes/incarnations, recovers the eight retained execution/wait identities, and sends the remaining normal Event stimulus. Legacy roots and Sequence/Flowchart/CompensationScope must each finish once in Balanced and Durable mode. It checks that the original captures remain unchanged. This witness also exports the stopped upgraded Design store for the frozen published-authoring verifier; Identity/configuration remain excluded.
+
+The repeatable runner checks the original capture bundle before and after recovery, requires committed source, rebuilds/runs the actual host test, checks the upgraded frozen authoring contract and writes a separately verifiable evidence manifest. Use a new output directory for each run:
+
+```sh
+python3 tools/bpmn/qualify-hosting.py resume-upgrade \
+  --manifest specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/manifest.json \
+  --output /tmp/elsa-bpmn-legacy-upgrade
+python3 tools/bpmn/qualify-hosting.py verify-upgrade \
+  --manifest /tmp/elsa-bpmn-legacy-upgrade/manifest.json
+```
+
+This qualifies only the actual partial-fork capture family. Pending parent callbacks, broadcast cohorts, multi-instance/compensation/called-control captures, other providers and actual Studio behavior require their own changed-host verification. It does not complete T030 or #2898.
 
 ```sh
 dotnet test Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj -c Release

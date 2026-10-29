@@ -26,7 +26,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
     public string DesignDatabase => Path.Combine(ContentRoot, "design.db");
     internal string AssemblyPath => Metadata("BpmnHostingWorkbenchAssembly");
 
-    public static async Task<OwnedWorkbench> StartAsync(bool directBpmn = false, bool runtimeOnly = false)
+    public static async Task<OwnedWorkbench> StartAsync(bool directBpmn = false, bool runtimeOnly = false, string? legacySnapshotDirectory = null)
     {
         var host = new OwnedWorkbench(Directory.CreateTempSubdirectory("elsa-bpmn-hosting-").FullName);
         try
@@ -34,6 +34,9 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
             var source = Metadata("BpmnHostingWorkbenchSource");
             foreach (var name in new[] { "appsettings.json", "appsettings.Development.json", "shells.json" })
                 File.Copy(Path.Combine(source, name), Path.Combine(host.ContentRoot, name));
+            if (legacySnapshotDirectory is not null)
+                foreach (var name in new[] { "runtime", "design" })
+                    File.Copy(Path.Combine(legacySnapshotDirectory, name + ".sqlite"), Path.Combine(host.ContentRoot, name + ".db"));
             Directory.CreateDirectory(Path.Combine(host.ContentRoot, "packages"));
             var shellPath = Path.Combine(host.ContentRoot, "shells.json");
             var shells = JsonNode.Parse(await File.ReadAllTextAsync(shellPath))!;
@@ -109,7 +112,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         return binaries.Cast<object>().ToArray();
     }
 
-    internal async Task<object?> SnapshotAsync(string name, string? subdirectory = null)
+    internal async Task<object?> SnapshotAsync(string name, string? subdirectory = null, bool design = false)
     {
         if (process is not null) throw Failure("Stop the owned Workbench before capturing its database");
         var directory = Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_EVIDENCE_DIRECTORY");
@@ -117,7 +120,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         if (subdirectory is not null) directory = Path.Combine(directory, subdirectory);
         Directory.CreateDirectory(directory);
         var backup = Path.Combine(ContentRoot, "evidence-backup"); File.Delete(backup);
-        await using (var source = new SqliteConnection($"Data Source={RuntimeDatabase};Mode=ReadOnly;Pooling=False"))
+        await using (var source = new SqliteConnection($"Data Source={(design ? DesignDatabase : RuntimeDatabase)};Mode=ReadOnly;Pooling=False"))
         await using (var target = new SqliteConnection($"Data Source={backup};Pooling=False"))
         {
             await source.OpenAsync(); await target.OpenAsync(); source.BackupDatabase(target);
