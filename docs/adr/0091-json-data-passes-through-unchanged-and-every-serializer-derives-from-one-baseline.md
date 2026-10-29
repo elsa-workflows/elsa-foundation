@@ -91,8 +91,9 @@ transformed. The risk sits where data becomes a .NET type and back:
   the defaults). This is inferred from the code and not yet reproduced by a test.
 - **The same text is accepted on one path and refused on another.** Web options read numbers from strings (`"5"` into
   `Int32`); the defaults refuse them.
-- **Numbers lose digits outside the script engine too.** ForEach unwraps each item to `long` or `double`
-  (`ForEach.cs:261`), so a large or precise number changes, and `1.0` becomes `1`.
+- **Numbers lose digits outside the script engine too.** ForEach turns every item number into a `double`
+  (`ForEach.cs:261`: the conditional `long : double` has type `double`), so a large or precise number changes, `1.0`
+  becomes `1`, and `1e400` faults the loop (#3421).
 - **No `DateTime` converter exists.** Date handling is the System.Text.Json default, or `Convert.ChangeType` for
   publish-time literals, which pins the publishing server's offset into the executable.
 
@@ -146,11 +147,12 @@ a re-parse per value.
 - An indented writer does not re-indent such a value.
 - Validating that value is the job of the endpoint's request contract.
 - A value that a script or an activity changes is a new value and is written in the default format (decision 4).
-- `JsonNode` cannot keep its original text, so values that pass through a script come back in the default format.
-- A value that passes through a script unchanged can still change: the JavaScript engine holds numbers as doubles, so
-  an integer beyond ±2^53 or a long decimal loses digits (`IsolatedJintEngine.cs:168-169`, found by A-1). That loss is
-  the JavaScript adapter's, not the serializer's. A-1 makes it visible with a diagnostic; this ADR does not promise
-  byte-identity for values a script returns.
+- A value that passes through a script unchanged can change today: the adapter converts the whole input into
+  JavaScript values up front, and Jint holds every number as a double, so an integer beyond ±2^53 or a long decimal
+  loses digits (`IsolatedJintEngine.cs:168-169`, found by A-1). That loss is the JavaScript adapter's, not the
+  serializer's. The ADR 0046 amendment ([#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422)) fixes
+  it there: the script reads a JSON-backed view, and parts it does not read are written back as their original text.
+  Values the script reads or computes are new values and come back in the default format.
 
 ### 4. One default output format
 
