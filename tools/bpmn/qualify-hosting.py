@@ -406,6 +406,8 @@ def capture(args) -> dict:
 
 def verify_upgrade(path: Path) -> dict:
     manifest = json.loads(path.read_text())
+    if manifest.get("kind") == "actual-legacy-native-parent-upgrade":
+        return verify_native_parent_upgrade(path)
     if manifest.get("schemaVersion") != 1 or manifest.get("kind") != "actual-legacy-partial-fork-upgrade":
         raise ValueError("Unknown upgrade manifest.")
     root = path.parent
@@ -500,6 +502,8 @@ def verify_upgrade(path: Path) -> dict:
 
 
 def resume_upgrade(args) -> dict:
+    if args.family == "native-parents":
+        return resume_native_parent_upgrade(args)
     baseline = args.manifest.resolve(strict=True)
     verify_capture(baseline)
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True, timeout=5).strip()
@@ -537,6 +541,188 @@ def resume_upgrade(args) -> dict:
     return verify_upgrade(output / "manifest.json")
 
 
+def verify_native_parent_inputs(path: Path) -> dict:
+    matrix = json.loads(path.read_text())
+    if (matrix.get("kind") != "actual-pre-writer-baseline-matrix" or matrix.get("gateAComplete") is not True or
+            matrix.get("frozenAuthoringFingerprint") != FROZEN):
+        raise ValueError("The native-parent upgrade requires the actual frozen pre-writer matrix.")
+    names = {"native-parents/api.json", "native-parents/runtime.sqlite.gz", "native-parents/design.sqlite.gz"}
+    names.update("native-parent-pending/" + parent + "-" + mode + suffix
+        for parent in ("sequence", "flowchart", "compensationscope") for mode in ("balanced", "durable")
+        for suffix in ("-api.json", "-marker.json", ".sqlite.gz"))
+    selected = {asset["path"]: asset for asset in matrix["assets"] if asset["path"] in names}
+    if set(selected) != names or len([asset for asset in matrix["assets"] if asset["path"] in names]) != len(selected):
+        raise ValueError("The native-parent matrix omits an original coupled store or observation.")
+    for name, asset in selected.items():
+        if digest(evidence_file(path.parent, name)) != asset["sha256"]:
+            raise ValueError("An original native-parent input differs: " + name)
+    return {name: asset["sha256"] for name, asset in selected.items()}
+
+
+@contextmanager
+def checked_upgrade_snapshot(root: Path, directory: str, snapshot: dict):
+    file = evidence_file(root, directory + "/" + snapshot["file"])
+    if digest(file) != snapshot["gzipSha256"]:
+        raise ValueError("An upgraded native snapshot differs from its process receipt.")
+    raw = gzip.decompress(file.read_bytes())
+    if hashlib.sha256(raw).hexdigest() != snapshot["databaseSha256"]:
+        raise ValueError("An upgraded native database differs from its retained bytes.")
+    with tempfile.TemporaryDirectory(prefix="elsa-native-upgrade-verify-") as temporary:
+        database = Path(temporary) / "snapshot.sqlite"; database.write_bytes(raw)
+        with closing(sqlite3.connect(database.as_uri() + "?mode=ro&immutable=1", uri=True)) as connection:
+            if connection.execute("pragma integrity_check").fetchall() != [("ok",)]:
+                raise ValueError("An upgraded native snapshot failed integrity verification.")
+            yield connection
+
+
+def verify_retained_native_material(connection, process):
+    material = {identity: incarnation + ":" + hashlib.sha256(content.encode()).hexdigest()
+        for identity, incarnation, content in connection.execute(
+            "SELECT Id, IncarnationId, ContentJson FROM elsa_runtime_workflow_executable WHERE IsModelMaterial = 0")}
+    if not process["retainedArtifacts"] or any(material.get(identity) != value for identity, value in process["retainedArtifacts"].items()):
+        raise ValueError("An original native executable's bytes or incarnation changed.")
+    applied = [identity + "|" + version for identity, version in connection.execute(
+        "SELECT MigrationId, ProductVersion FROM __EFMigrationsHistory_ElsaRuntime ORDER BY MigrationId")]
+    if applied != process["migrations"] or not set(process["originalMigrations"]).issubset(applied):
+        raise ValueError("The native upgrade lost its applied migration history.")
+
+
+def verify_native_parent_upgrade(path: Path) -> dict:
+    manifest = json.loads(path.read_text()); root = path.parent
+    if manifest.get("schemaVersion") != 1 or manifest.get("kind") != "actual-legacy-native-parent-upgrade":
+        raise ValueError("Unknown native-parent upgrade evidence.")
+    names = {"legacy-pending-parent/process.json", "legacy-native-terminals/process.json", "frozen-contract.json",
+        "legacy-native-terminals/native-terminals-runtime.sqlite.gz", "legacy-native-terminals/native-terminals-design.sqlite.gz"}
+    names.update("legacy-pending-parent/" + parent + "-" + mode + "-runtime.sqlite.gz"
+        for parent in ("sequence", "flowchart", "compensationscope") for mode in ("balanced", "durable"))
+    declared = {asset["path"]: asset for asset in manifest["assets"]}
+    if set(declared) != names or len(declared) != len(manifest["assets"]):
+        raise ValueError("The native upgrade evidence set is incomplete or duplicated.")
+    for name, asset in declared.items():
+        if digest(evidence_file(root, name)) != asset["sha256"]:
+            raise ValueError("A native upgrade asset differs from its retained hash.")
+    pending = json.loads(evidence_file(root, "legacy-pending-parent/process.json").read_text())
+    terminals = json.loads(evidence_file(root, "legacy-native-terminals/process.json").read_text())
+    source = manifest.get("sourceRevision", "")
+    if not re.fullmatch(r"[0-9a-f]{40}", source): raise ValueError("The native upgrade has no exact source identity.")
+    for process, kind in ((pending, "actual-legacy-pending-parent-upgrade"), (terminals, "actual-legacy-native-terminal-upgrade")):
+        if (process.get("kind") != kind or process.get("formatVersion") != 1 or
+                process.get("sourceRevision") != source or process.get("testOnlyRecoveryProbePresent") is not False or
+                process.get("baselineManifestSha256") != manifest.get("baselineManifestSha256") or
+                process.get("referenceReceiptSha256") != manifest["baselineAssets"].get("native-parents/api.json") or
+                not any(binary["file"] == "Elsa.Workbench.dll" and binary["productVersion"].endswith("+" + source)
+                    for binary in process.get("binaries", process.get("observations", [{}])[0].get("binaries", [])))):
+            raise ValueError("The native upgrade lacks its standard-host source or baseline binding.")
+    observations = pending["observations"]
+    if len(observations) != 6 or {(case["parent"], case["persistenceMode"]) for case in observations} != {
+            (parent, mode) for parent in ("Sequence", "Flowchart", "CompensationScope") for mode in ("Balanced", "Durable")}:
+        raise ValueError("The pending native-parent upgrade matrix is incomplete.")
+    key = lambda text: base64.b64encode(text.encode("utf-16-le", errors="surrogatepass")).decode()
+    statuses = {"Completed": 3, "Faulted": 4, "Cancelled": 5}
+    for case in observations:
+        parent = case["parent"]; view = case["completed"]
+        expected = "Completed" if parent == "CompensationScope" else "Faulted"
+        native = [activity for activity in view["activities"] if activity["executableNodeId"] == "native-parent"]
+        child = [activity for activity in view["activities"] if activity["executableNodeId"] == "legacy-bpmn"]
+        expected_parent = {"Sequence": "Running", "Flowchart": "Faulted", "CompensationScope": "Completed"}[parent]
+        if (view["instance"]["status"] != expected or len(native) != 1 or native[0]["status"] != expected_parent or
+                len(child) != 1 or child[0]["status"] != "Faulted" or
+                native[0]["outcomeNames"] != (["Compensated"] if parent == "CompensationScope" else []) or
+                any(activity["executableNodeId"] == "after-bpmn" for activity in view["activities"])):
+            raise ValueError("An upgraded pending parent changed its original composite projection.")
+        if case.get("parentOutcomeApplied") is not (parent != "Sequence") or parent == "Sequence" and "not claimed" not in case["callbackDisposition"]:
+            raise ValueError("Native terminal disposition cannot be called parent consumption.")
+        for field in ("workflowExecutionId", "artifactId", "artifactHash", "artifactVersion", "definitionId", "definitionVersionId"):
+            if case["captured"]["instance"][field] != view["instance"][field]: raise ValueError("An upgraded native callback changed its complete pin.")
+        for node in ("native-parent", "legacy-bpmn", "node-held"):
+            before = [activity for activity in case["captured"]["activities"] if activity["executableNodeId"] == node]
+            after = [activity for activity in view["activities"] if activity["executableNodeId"] == node]
+            if len(before) != 1 or len(after) != 1 or before[0]["activityExecutionId"] != after[0]["activityExecutionId"]:
+                raise ValueError("An upgraded native callback replaced its original invocation.")
+        if (case["completed"] != case["replayed"] or case["originalProcessId"] == case["restartedProcessId"] or
+                case["acceptedSource"]["status"] != 2 or case["originalSource"]["status"] != 0 or
+                case["acceptedSource"]["document"]["intent"] != case["originalSource"]["document"]["intent"] or
+                case["acceptedSource"] != case["replayedSource"]):
+            raise ValueError("The original callback changed, remained owed or repeated after restart.")
+        name = "native-parent-pending/" + case["caseId"] + ".sqlite.gz"
+        if case["inputGzipSha256"] != manifest["baselineAssets"].get(name) or case["baselineSourceRevision"] == source:
+            raise ValueError("A native parent was not recovered from its original captured store.")
+        original = case["originalSource"]["document"]
+        intent = original["intent"]; work = intent["payload"]; payload = work["Payload"]
+        if (original["outboxItemId"] != key(case["sourceOutboxItemId"]) or intent["workflowExecutionId"] != key(case["executionId"]) or
+                work["WorkflowExecutionId"] != case["executionId"] or work["CommandKind"] != 8 or
+                payload["ActivityExecutionId"] != native[0]["activityExecutionId"] or payload["CompletedChildActivityExecutionId"] != child[0]["activityExecutionId"]):
+            raise ValueError("The original callback does not address its exact native parent and BPMN child.")
+        for stored, api in (("ArtifactId", "artifactId"), ("ArtifactHash", "artifactHash"), ("ArtifactVersion", "artifactVersion"),
+                ("DefinitionId", "definitionId"), ("DefinitionVersionId", "definitionVersionId")):
+            if payload["PinnedExecutable"][stored] != view["instance"][api]:
+                raise ValueError("The original callback's complete executable pin differs.")
+        with checked_upgrade_snapshot(root, "legacy-pending-parent", case["snapshot"]) as connection:
+            verify_retained_native_material(connection, case)
+            row = connection.execute("SELECT Status, Revision, ContentJson FROM elsa_runtime_post_commit_outbox WHERE OutboxItemId = ?",
+                (key(case["sourceOutboxItemId"]),)).fetchall()
+            accepted = case["acceptedSource"]
+            if (len(row) != 1 or row[0][0] != 2 or row[0][1] != accepted["revision"] or
+                    hashlib.sha256(row[0][2].encode()).hexdigest() != accepted["contentSha256"] or json.loads(row[0][2]) != accepted["document"]):
+                raise ValueError("The physical original callback disagrees with its delivery receipt.")
+            row = connection.execute("SELECT Status, ArtifactId FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId = ?",
+                (key(case["executionId"]),)).fetchall()
+            if row != [(statuses[expected], key(view["instance"]["artifactId"]))]:
+                raise ValueError("The physical native terminal row disagrees with its outcome.")
+            if connection.execute("SELECT COUNT(*) FROM elsa_runtime_scheduler_work_item WHERE WorkflowExecutionId = ?", (key(case["executionId"]),)).fetchone() != (0,):
+                raise ValueError("An upgraded native terminal still has queued callback work.")
+    if len(terminals["observations"]) != 12 or {(case["parent"], case["persistenceMode"], case["outcome"]) for case in terminals["observations"]} != {
+            (parent, mode, outcome) for parent in ("Sequence", "Flowchart", "CompensationScope") for mode in ("Balanced", "Durable") for outcome in ("Fault", "Cancel")}:
+        raise ValueError("The retained native terminal matrix is incomplete.")
+    if (terminals["inputGzipSha256"] != manifest["baselineAssets"].get("native-parents/runtime.sqlite.gz") or
+            terminals["inputDesignGzipSha256"] != manifest["baselineAssets"].get("native-parents/design.sqlite.gz") or terminals["baselineSourceRevision"] == source):
+        raise ValueError("The retained native terminals do not identify their original coupled stores.")
+    with checked_upgrade_snapshot(root, "legacy-native-terminals", terminals["snapshot"]) as connection:
+        verify_retained_native_material(connection, terminals)
+        for case in terminals["observations"]:
+            before, after = case["baseline"], case["recovered"]
+            for name in ("workflowExecutionId", "artifactId", "artifactHash", "artifactVersion", "definitionId", "definitionVersionId", "status"):
+                if before["instance"][name] != after["instance"][name]: raise ValueError("An existing native terminal changed its pin or status.")
+            rows = connection.execute("SELECT Status FROM elsa_runtime_workflow_execution_state WHERE WorkflowExecutionId = ?",
+                (key(case["executionId"]),)).fetchall()
+            if rows != [(statuses[after["instance"]["status"]],)]: raise ValueError("A retained native terminal disagrees with its physical state.")
+    with checked_upgrade_snapshot(root, "legacy-native-terminals", terminals["designSnapshot"]): pass
+    frozen = json.loads(evidence_file(root, "frozen-contract.json").read_text())
+    if (frozen.get("sourceRevision") != source or frozen.get("oracleSha256") != FROZEN or frozen.get("matchesFrozenFingerprint") is not True or frozen.get("immutableSnapshot") is not True or
+            frozen.get("closedSnapshotSha256") != terminals["designSnapshot"]["databaseSha256"]):
+        raise ValueError("The native terminal upgrade lost its frozen authoring verification.")
+    return {"pendingParentRecoveries": 6, "nativeParentOutcomesApplied": 4, "terminalDispositionsWithoutParentConsumption": 2,
+        "retainedNativeTerminals": 12, "wholeStoresVerified": 8,
+        "frozenAuthoringPreserved": True, "sourceRevision": source, "allLegacyFamiliesRecovered": False, "studioAcceptanceProved": False}
+
+
+def resume_native_parent_upgrade(args) -> dict:
+    baseline = args.manifest.resolve(strict=True); inputs = verify_native_parent_inputs(baseline)
+    source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True, timeout=5).strip()
+    if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True, timeout=5).strip():
+        raise ValueError("Commit the qualification source before recording exact-source upgrade evidence.")
+    output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False); env = os.environ.copy()
+    env.update(ELSA_BPMN_LEGACY_MATRIX_DIRECTORY=str(baseline.parent), ELSA_BPMN_HOST_EVIDENCE_DIRECTORY=str(output), ELSA_BPMN_HOST_SOURCE_REVISION=source)
+    command = ["dotnet", "test", str(REPO / "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"),
+        "-c", "Release", "-m:2", "-p:RestoreLockedMode=true", "-p:ElsaBpmnRecoveryProbe=false", "--filter", "FullyQualifiedName~LegacyNativeParentUpgradeTests",
+        "--logger", "trx;LogFileName=legacy-native-parent-upgrade.trx"]
+    if args.artifacts_path is not None: command += ["--artifacts-path", str(args.artifacts_path.resolve())]
+    with (output / "run.log").open("w") as log:
+        subprocess.run(command, cwd=REPO, env=env, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=3600)
+    terminals = json.loads((output / "legacy-native-terminals/process.json").read_text())
+    with tempfile.TemporaryDirectory(prefix="elsa-native-upgraded-design-") as temporary:
+        database = Path(temporary) / "design.sqlite"; database.write_bytes(gzip.decompress((output / "legacy-native-terminals/native-terminals-design.sqlite.gz").read_bytes()))
+        subprocess.run([sys.executable, str(REPO / "e2e-tests/bpmn/verify_published_contracts.py"), "--database", str(database), "--source-revision", source,
+            "--closed-snapshot", "--output", str(output / "frozen-contract.json")], check=True, timeout=60)
+    if inputs != verify_native_parent_inputs(baseline): raise ValueError("The native upgrade changed an original input.")
+    paths = ["legacy-pending-parent/process.json", "legacy-native-terminals/process.json", "frozen-contract.json",
+        "legacy-native-terminals/native-terminals-runtime.sqlite.gz", "legacy-native-terminals/native-terminals-design.sqlite.gz"]
+    paths += ["legacy-pending-parent/" + case["caseId"] + "-runtime.sqlite.gz" for case in json.loads((output / "legacy-pending-parent/process.json").read_text())["observations"]]
+    manifest = {"schemaVersion": 1, "kind": "actual-legacy-native-parent-upgrade", "sourceRevision": source,
+        "baselineManifestSha256": digest(baseline), "baselineAssets": inputs, "assets": [{"path": name, "sha256": digest(output / name)} for name in paths]}
+    write_json(output / "manifest.json", manifest); return verify_native_parent_upgrade(output / "manifest.json")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     phases = parser.add_subparsers(dest="phase", required=True)
@@ -550,6 +736,7 @@ def main() -> int:
     upgrade.add_argument("--manifest", type=Path, required=True)
     upgrade.add_argument("--output", type=Path, required=True)
     upgrade.add_argument("--artifacts-path", type=Path)
+    upgrade.add_argument("--family", choices=("partial-forks", "native-parents"), default="partial-forks")
     verified_upgrade = phases.add_parser("verify-upgrade")
     verified_upgrade.add_argument("--manifest", type=Path, required=True)
     args = parser.parse_args()

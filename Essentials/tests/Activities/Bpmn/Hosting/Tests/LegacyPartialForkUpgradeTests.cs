@@ -1,9 +1,8 @@
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Microsoft.Data.Sqlite;
 using Xunit;
+using static Elsa.Activities.Bpmn.Hosting.Tests.LegacyUpgradeInspection;
 
 namespace Elsa.Activities.Bpmn.Hosting.Tests;
 
@@ -109,43 +108,10 @@ public sealed class LegacyPartialForkUpgradeTests
         }
     }
 
-    private static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
     private static void AssertClosedCapture(string directory)
     {
         foreach (var name in new[] { "runtime.sqlite", "design.sqlite" })
             foreach (var suffix in new[] { "-wal", "-shm", "-journal" })
                 Assert.False(File.Exists(Path.Combine(directory, name + suffix)), "The original capture must remain closed and immutable.");
     }
-    private static JsonNode Activity(JsonNode view, string node) =>
-        Assert.Single(view["activities"]!.AsArray(), activity => activity!["executableNodeId"]!.GetValue<string>() == node)!;
-    private static void SamePin(JsonNode expected, JsonNode actual)
-    {
-        foreach (var field in new[] { "workflowExecutionId", "artifactId", "artifactHash", "artifactVersion", "definitionId", "definitionVersionId" })
-            Assert.Equal(expected[field]!.GetValue<string>(), actual[field]!.GetValue<string>());
-    }
-    private static async Task<List<string>> MigrationsAsync(string database, bool immutable = false)
-    {
-        await using var connection = Read(database, immutable);
-        await connection.OpenAsync(); await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT MigrationId, ProductVersion FROM __EFMigrationsHistory_ElsaRuntime ORDER BY MigrationId";
-        await using var reader = await command.ExecuteReaderAsync(); var rows = new List<string>();
-        while (await reader.ReadAsync()) rows.Add(reader.GetString(0) + "|" + reader.GetString(1));
-        return rows;
-    }
-    private static async Task<SortedDictionary<string, string>> ArtifactsAsync(string database, bool immutable = false)
-    {
-        await using var connection = Read(database, immutable);
-        await connection.OpenAsync(); await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT Id, IncarnationId, ContentJson FROM elsa_runtime_workflow_executable ORDER BY Id";
-        await using var reader = await command.ExecuteReaderAsync(); var rows = new SortedDictionary<string, string>(StringComparer.Ordinal);
-        while (await reader.ReadAsync()) rows.Add(reader.GetString(0), reader.GetString(1) + ":" + Hash(Encoding.UTF8.GetBytes(reader.GetString(2))));
-        return rows;
-    }
-
-    private static SqliteConnection Read(string database, bool immutable) => new(new SqliteConnectionStringBuilder
-    {
-        DataSource = immutable ? new Uri(Path.GetFullPath(database)).AbsoluteUri + "?immutable=1" : database,
-        Mode = SqliteOpenMode.ReadOnly,
-        Pooling = false
-    }.ToString());
 }

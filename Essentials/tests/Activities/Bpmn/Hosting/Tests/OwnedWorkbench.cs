@@ -17,18 +17,25 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
     private readonly ConcurrentQueue<string> output = new();
     private HttpClient client = new(new HttpClientHandler { CookieContainer = new CookieContainer() });
     private Process? process;
+    private bool designSharesRuntime;
 
     private OwnedWorkbench(string root) => ContentRoot = root;
 
     public string ContentRoot { get; }
     public int ProcessId => process?.Id ?? throw new InvalidOperationException("The owned Workbench is stopped.");
     public string RuntimeDatabase => Path.Combine(ContentRoot, "runtime.db");
-    public string DesignDatabase => Path.Combine(ContentRoot, "design.db");
+    public string DesignDatabase => designSharesRuntime ? RuntimeDatabase : Path.Combine(ContentRoot, "design.db");
     internal string AssemblyPath => Metadata("BpmnHostingWorkbenchAssembly");
 
-    public static async Task<OwnedWorkbench> StartAsync(bool directBpmn = false, bool runtimeOnly = false, string? legacySnapshotDirectory = null)
+    public static async Task<OwnedWorkbench> StartAsync(bool directBpmn = false, bool runtimeOnly = false,
+        string? legacySnapshotDirectory = null, string? runtimeSnapshotPath = null, double? recoverySweepSeconds = null,
+        bool legacyCombinedStore = false)
     {
-        var host = new OwnedWorkbench(Directory.CreateTempSubdirectory("elsa-bpmn-hosting-").FullName);
+        if (legacySnapshotDirectory is not null && runtimeSnapshotPath is not null)
+            throw new ArgumentException("Select one actual legacy snapshot source.");
+        if (legacyCombinedStore && (runtimeSnapshotPath is null || runtimeOnly))
+            throw new ArgumentException("A combined legacy capture requires its whole Runtime/Design store and a combined host profile.");
+        var host = new OwnedWorkbench(Directory.CreateTempSubdirectory("elsa-bpmn-hosting-").FullName) { designSharesRuntime = legacyCombinedStore };
         try
         {
             var source = Metadata("BpmnHostingWorkbenchSource");
@@ -37,10 +44,14 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
             if (legacySnapshotDirectory is not null)
                 foreach (var name in new[] { "runtime", "design" })
                     File.Copy(Path.Combine(legacySnapshotDirectory, name + ".sqlite"), Path.Combine(host.ContentRoot, name + ".db"));
+            if (runtimeSnapshotPath is not null)
+                File.Copy(runtimeSnapshotPath, host.RuntimeDatabase);
             Directory.CreateDirectory(Path.Combine(host.ContentRoot, "packages"));
             var shellPath = Path.Combine(host.ContentRoot, "shells.json");
             var shells = JsonNode.Parse(await File.ReadAllTextAsync(shellPath))!;
             var features = shells["CShells"]!["Shells"]!["default"]!["Features"]!;
+            if (recoverySweepSeconds is { } interval)
+                features["WorkflowsRuntimeResumption"] = new JsonObject { ["SweepIntervalSeconds"] = interval };
             if (directBpmn)
             {
                 features["ActivitiesBpmnHosting"] = new JsonObject { ["AdmitNewExecutions"] = true };
@@ -63,7 +74,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
             }
             features["WorkflowsRuntimeEntityFrameworkCore"]!["ConnectionString"] = "Data Source=runtime.db";
             foreach (var name in new[] { "ActivitiesDesignEntityFrameworkCore", "WorkflowsDesignEntityFrameworkCore", "WorkflowsPublishingEntityFrameworkCore" })
-                if (features[name] is { } selected) selected["ConnectionString"] = "Data Source=design.db";
+                if (features[name] is { } selected) selected["ConnectionString"] = legacyCombinedStore ? "Data Source=runtime.db" : "Data Source=design.db";
             await File.WriteAllTextAsync(shellPath, shells.ToJsonString());
             await host.LaunchAsync();
             return host;

@@ -14,6 +14,16 @@
     <ProjectReference Include="../../../../../apps/Elsa.Workbench/Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json"
+          Link="Fixtures/legacy-baseline-manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/native-parents/api.json"
+          Link="Fixtures/legacy-native-terminal-baseline.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/native-parents/runtime.sqlite.gz"
+          Link="Fixtures/legacy-native-terminal-baseline.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/native-parents/design.sqlite.gz"
+          Link="Fixtures/legacy-native-terminal-design.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/native-parent-pending/*-api.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/native-parent-pending/*-marker.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/native-parent-pending/*.sqlite.gz"
+          Link="Fixtures/native-parent-pending/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/manifest.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/cases.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/runtime.sqlite;../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/design.sqlite"
           Link="Fixtures/legacy-partial-forks/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
