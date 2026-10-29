@@ -235,7 +235,8 @@ def main():
                     detail=api.request('/runtime/workflows/instances/'+native_parent_execution+'/activity-executions/'+activities[0]['activityExecutionId'])
                     if len(detail['bookmarks'])!=1:return None
                     identity=detail['bookmarks'][0]['stimulusHash']
-                    try:api.request('/bpmn/executions/'+identity)
+                    try:
+                        with api.opener.open(api.base+'/bpmn/executions/'+urllib.parse.quote(identity,safe=''),timeout=30) as response:json.load(response)
                     except urllib.error.HTTPError as error:
                         if error.code==404:return None
                         raise
