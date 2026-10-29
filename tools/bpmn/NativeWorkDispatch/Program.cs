@@ -209,6 +209,7 @@ try
         var nativeResultConsumedModel = consumedModel;
         RuntimePostCommitOutboxItem? parentResultSource = null;
         RuntimeModelInputReceipt? parentSettlementReceipt = null;
+        RuntimeModelExecutionCommand? parentSettlementCommand = null;
         if (success)
         {
             if (consumedModel.Revision != 2 || consumedModel.TerminalResult?.GetProperty("status").GetString() != "Completed")
@@ -234,7 +235,7 @@ try
                     if ((await queue.ListAsync(new(model.ExecutionId))).Items.Count == 0)
                     {
                         parentResultSource = await lookup.FindDurableAsync(parentResultSource.OutboxItemId) ?? throw new InvalidOperationException("The parent result disappeared.");
-                        var delay = parentResultSource.AvailableAt - DateTimeOffset.UtcNow;
+                        var delay = (parentResultSource.AvailableAt ?? throw new InvalidOperationException("The pending parent source has no retained retry deadline.")) - DateTimeOffset.UtcNow;
                         if (delay > TimeSpan.FromSeconds(30)) throw new InvalidOperationException("The original parent source is not due within this owned capture's bound.");
                         if (delay > TimeSpan.Zero) await Task.Delay(delay);
                         var settle = await processor.ProcessAsync(new(1, model.ExecutionId, "Elsa.Bpmn.ResumeNativeParent.v1"));
@@ -242,13 +243,17 @@ try
                         if (settle.AttemptedCount != 1 || settle.DeliveredCount != 0)
                             throw new InvalidOperationException("The parent source did not queue its exact model settlement without acknowledgment.");
                     }
+                    var work = (await queue.ListAsync(new(model.ExecutionId))).Items.Single();
+                    parentSettlementCommand = work.Payload?.Deserialize<RuntimeModelExecutionCommand>(json)
+                        ?? throw new InvalidOperationException("The real model settlement command is absent.");
+                    if (work.CommandKind != WorkflowExecutionCommandKind.ExecuteModel || parentSettlementCommand.InputKind != "native-parent-settled")
+                        throw new InvalidOperationException("The real queued input is not native-parent settlement.");
                     var drain = await Drain(model.ExecutionId); steps.Add(new { operation = "consume-parent-settlement", drain });
                 }
             }
             consumedModel = await models.FindAsync(model.ExecutionId) ?? throw new InvalidOperationException("The final model disappeared.");
             parentResultSource = await lookup.FindDurableAsync(parentResultSource.OutboxItemId) ?? throw new InvalidOperationException("The original parent result disappeared.");
-            var settlementId = "native-parent-settled:" + BpmnModelIdentity.Create(parentResultSource.OutboxItemId);
-            parentSettlementReceipt = await models.FindInputAsync(model.ExecutionId, settlementId);
+            parentSettlementReceipt = parentSettlementCommand is null ? null : await models.FindInputAsync(model.ExecutionId, parentSettlementCommand.InputId);
             if (consumedModel.Revision != (parentReturnStage == "settled" ? 3 : 2) ||
                 consumedModel.Lifecycle != (parentReturnStage == "settled" ? RuntimeModelLifecycle.TerminalSettled : RuntimeModelLifecycle.TerminalPendingSettlement) ||
                 (parentSettlementReceipt is not null) != (parentReturnStage == "settled") || parentResultSource.DeliveredAt is not null ||
@@ -257,7 +262,7 @@ try
         }
         Console.WriteLine(JsonSerializer.Serialize(new { operation = args[0], startedAtUtc = started, completedAtUtc = DateTimeOffset.UtcNow,
             origin, steps, embeddedParentExecutionId = embeddedParentId, model = consumedModel, worker = await workflows.FindAsync(origin.WorkerExecutionId), receipt, resultSource,
-            nativeResultConsumedModel, parentReturnStage, parentResultSource, parentSettlementReceipt,
+            nativeResultConsumedModel, parentReturnStage, parentResultSource, parentSettlementReceipt, parentSettlementCommand,
             products = new[] { Product(Assembly.GetExecutingAssembly()), Product(typeof(IWorkflowStartDispatcher).Assembly),
                 Product(typeof(Elsa.Workflows.Runtime.Services.Executions.WorkflowStartDispatcher).Assembly), Product(typeof(RuntimeEntityFrameworkCoreOptions).Assembly),
                 Product(typeof(ActivitiesBpmnHostingFeature).Assembly), Product(typeof(EtlRuntimeFeature).Assembly), Product(typeof(EtlRuntimeEntityFrameworkCoreFeature).Assembly),
