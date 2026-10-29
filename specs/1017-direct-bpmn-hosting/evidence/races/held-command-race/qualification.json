@@ -1,0 +1,133 @@
+{
+  "schemaVersion": 1,
+  "executingSource": "7414d8a13ee6cd2f65923914065b075602437ca2",
+  "productionRuntimeChanged": false,
+  "actualConcurrentSubmissionJourneys": 10,
+  "orders": [
+    "retry-first",
+    "cancel-first"
+  ],
+  "parents": [
+    "direct",
+    "Root",
+    "Sequence",
+    "Flowchart",
+    "CompensationScope"
+  ],
+  "rawAssets": 412,
+  "wholeStoresVerified": 120,
+  "actualWorkbenchProcesses": 40,
+  "actualSdkProcesses": 20,
+  "actualHttpProcesses": 10,
+  "all70ListedChildrenStopped": true,
+  "actualSigkillExits": 20,
+  "unchangedOriginalProposalObservedWithActualOwnershipLease": true,
+  "separateCompetitorDurablyQueuedWithSuccessorFence": true,
+  "physicalFenceGreaterThanOriginalLease": true,
+  "staleProposalDidNotAdvanceRevisionTwo": true,
+  "bothOriginalCommandsRetainedInProtectedFifo": true,
+  "actualFreshHostRetryThenCancelCommitOrderProved": true,
+  "actualFreshHostCancelThenRetryRefusalCommitOrderProved": true,
+  "sameModelQueueBypassed": false,
+  "twoSimultaneousProviderProposalsManufactured": false,
+  "firstLeaseArtificiallyExpired": false,
+  "retryFirstCreatesOneBoundedReplacementInvocation": true,
+  "exactReplacementStartPositivelyRetiredBeforeSourceAck": true,
+  "newPhysicalNativeWorkers": 0,
+  "newEtlRuns": 0,
+  "newHttpEffects": 0,
+  "originalFailedNativeEtlTruthAndSemanticSnapshotPreserved": true,
+  "actualOriginalNativeParentTypedCancellationConsumptionAndSettlementProved": true,
+  "fourthHostViewsAndPhysicalHttpStable": true,
+  "sqlExecutionStateOrClockEdited": false,
+  "portableEtlControlsPassed": 240,
+  "newPositiveAndCorruptControls": 16,
+  "portableBpmnControlsPassed": 27,
+  "skippedTests": 0,
+  "standardHostSdkBuildErrors": 0,
+  "testTierRegistrations": 123,
+  "frozenBaselineAssetsVerifiedUnchanged": 104,
+  "originalFrozenManifestUnchanged": true,
+  "earlierProductionDurationSource": "a2c2e47751d595c9489f889593ed4d7427ef6076",
+  "earlierBpmn431AndActualHumanDuration2HumanHost9NativeService1Source": "a2c2e47751d595c9489f889593ed4d7427ef6076",
+  "earlierDotnetResultsRelabelledAsThisSource": false,
+  "workerDurationMatrixRetainsExecutingSource": "8dc088bae4463b8a9279a1f25036ac14b1715cd6",
+  "directModelBroadcastProviderRetentionRollbackFinalUpgradeStudioProved": false,
+  "nativeCompositeFaultStatusDecisionResolved": false,
+  "fullPrReviewRounds": 0,
+  "completeTaskOrProgramAcceptance": false,
+  "validationLogs": [
+    {
+      "path": "validation/cancel-first-compensationscope-controller.txt",
+      "sha256": "1e223b0f9409f9341953f6f45e807a625d1b01ad837feee73d36eac1ad5f35ca"
+    },
+    {
+      "path": "validation/cancel-first-direct-controller.txt",
+      "sha256": "08c56d7caffb1cf7a7c024d20f260c10da1aa9f64376e9a5255ad8ff7a37dd37"
+    },
+    {
+      "path": "validation/cancel-first-flowchart-controller.txt",
+      "sha256": "15b8f1d64c61881af8f109fd8018663a072f16e2effefc3bc2e6ab89849c9b03"
+    },
+    {
+      "path": "validation/cancel-first-root-controller.txt",
+      "sha256": "48c83ae6b48fcc657e878d922e4836b2eccbd6aef1c40d08d6baf0aa2b47629e"
+    },
+    {
+      "path": "validation/cancel-first-sequence-controller.txt",
+      "sha256": "ddfa8344d9223f54178789abf7899a11692f4fd78f0f020e6c1ba64af777106f"
+    },
+    {
+      "path": "validation/frozen-baseline.txt",
+      "sha256": "e352cc586632d116c40ca015d1b03561ed77f2202538b9f659349def73e559ca"
+    },
+    {
+      "path": "validation/maps.txt",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+    },
+    {
+      "path": "validation/new-controls.txt",
+      "sha256": "404e09bca2d4f458dbcf9d7c44c05b90a1eb11958b5f8924011619a4fed63c7e"
+    },
+    {
+      "path": "validation/portable-bpmn.txt",
+      "sha256": "3eacba743445ae183c22c60bdcad083961354d020d2076eba4c2646534238386"
+    },
+    {
+      "path": "validation/portable-etl.txt",
+      "sha256": "f5975ffc2b1c8ce3f009f97cc6fd176b111c0ad4ddf958a0fdd7e1036f4557aa"
+    },
+    {
+      "path": "validation/retry-first-compensationscope-controller.txt",
+      "sha256": "6a3ca707dc59d81ece34b8a2a2728ce07a8b5e8f1c6ba86d9dd2b85c35cf9486"
+    },
+    {
+      "path": "validation/retry-first-direct-controller.txt",
+      "sha256": "b4f98a6d086c45308ff853b705b2354458766c45956dc0baab47a2e2aa77f428"
+    },
+    {
+      "path": "validation/retry-first-flowchart-controller.txt",
+      "sha256": "eb7da5932f1fb324dda4740863a269dcc705edda49e51ef8f693588269eeb034"
+    },
+    {
+      "path": "validation/retry-first-root-controller.txt",
+      "sha256": "513dcebca677cbab50577b3bb4095090f61113036f7ebd6819e31482c4a2527a"
+    },
+    {
+      "path": "validation/retry-first-sequence-controller.txt",
+      "sha256": "8ac4d5cc1a4d9fa28791f56d9a9c1a39478a2c117f61ae4e48a422dc01b7654e"
+    },
+    {
+      "path": "validation/standard-host-sdk-build.txt",
+      "sha256": "0ed2d87b2b1de0ff5f0d314915770447d195e512d721cf27d8ba28aa998df394"
+    },
+    {
+      "path": "validation/test-tiers.txt",
+      "sha256": "91cc02f2f85c466bbc3d5d675d3bf055059b2c0e5e185229a4c4d99b174f25c4"
+    },
+    {
+      "path": "validation/whole-stores.json",
+      "sha256": "f21b8d2bc3f2e08937182a9f9bcbb10d5155458cdd6945a456099f7762a03925"
+    }
+  ]
+}
