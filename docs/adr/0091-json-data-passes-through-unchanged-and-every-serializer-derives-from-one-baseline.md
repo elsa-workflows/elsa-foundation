@@ -131,10 +131,22 @@ The baseline:
 - camelCases only the member names of Elsa's own C# types (`PropertyNamingPolicy = CamelCase`). That shapes our own
   contract, not data.
 
-Member-name reads are case-insensitive (`PropertyNameCaseInsensitive = true`, today's Web default). This follows A-1's
-agreed rule for activity inputs: `{"customerName":…}` binds to `CustomerName`. It never changes data; it only decides
-which .NET member a JSON member fills. When one JSON object has two members that match the same .NET member (`id` and
-`ID`), the read fails with a diagnostic that names both, instead of letting the last one win silently.
+Member-name reads are exact (`PropertyNameCaseInsensitive = false`, unlike today's Web default). No read guesses
+which member a key was meant for. A JSON member fills a .NET member only when its name is exactly the member's JSON
+name: the name the baseline's naming policy gives it, or the name an annotation gives it
+(`[JsonPropertyName("customer_name")]`). Matching never changes data; it only decides which .NET member a JSON member
+fills.
+- **A JSON key that matches no member gives a diagnostic** that names the key and the target type
+  (System.Text.Json's unmapped-member handling), so a key is never dropped silently. A required member that is missing
+  already fails under D-10.
+- Because the match is exact, two keys can no longer match one member (`id` and `ID`), so that ambiguity needs no
+  rule.
+- This applies to data becoming a .NET type (decision 5) and to Elsa's own contracts, which keep the camelCase naming
+  policy in both directions.
+
+This follows A-1 as corrected by @FransVanEk on 2026-10-29
+([comment](https://github.com/elsa-workflows/elsa-foundation/issues/3052#issuecomment-6496154563)). It replaces the
+case-insensitive reads this ADR first proposed.
 
 ### 3. Data passes through as the exact text received
 
@@ -185,8 +197,8 @@ That deserialization is a boundary too, and it uses a copy of the baseline like 
 directions. Today it does not (see Context): activity inputs, expression-result coercion, publish-time literals and
 stateful activity state use System.Text.Json's defaults, while activity results are written with Web options. Every
 conversion between data and a .NET type, in or out, uses the same baseline copy, so a value written by one activity
-reads back the same in the next. A-1's adapter rules for these conversions (case-insensitive matching, a `DateTime`
-read as UTC) are applied through that copy, not as special cases at each call site. A number is never narrowed to
+reads back the same in the next. A-1's adapter rules for these conversions (exact member matching with a diagnostic for
+unmatched keys, a `DateTime` read as UTC) are applied through that copy, not as special cases at each call site. A number is never narrowed to
 `long` or `double` on the way, unless the target type asks for it.
 
 ### 6. Modules never change host-wide options; deviations are a red flag, not a ban
@@ -226,7 +238,8 @@ read as UTC) are applied through that copy, not as special cases at each call si
 The baseline keeps nulls (decision 2). That alone does not let readers tell an explicit `null` from a missing member,
 because `JsonElement?` and `object?` merge them on read. Members that must distinguish them under D-10 need a
 representation that keeps the difference. One example is a non-nullable `JsonElement` where `Undefined` means missing,
-with a writer that omits it. Spec S-2 chooses that representation. This ADR only requires that the serializer keep
+with a writer that omits it. For declared members, S-2 reuses the `Absent` and `ExplicitNull` states that
+`ValueEnvelope` already has, rather than inventing a new representation. Spec S-2 chooses that representation. This ADR only requires that the serializer keep
 whatever S-2 chooses.
 
 ## Consequences
@@ -312,6 +325,11 @@ workarounds. Rejected in favour of a register: deviations stay possible, but eac
 
 ## Open questions
 
+Answers so far: @FransVanEk answered all six on 2026-10-29 (review of this PR). Where his answer is what this ADR
+proposes, @j03y-nxxbz agrees, so questions 1 to 5 wait only for @sfmskywalker:
+1 bytes; 2 relaxed; 3 yes; 4 yes, with S-2 reusing `ValueEnvelope`'s `Absent` and `ExplicitNull` (now in decision 8);
+5 separate. Question 6 is still open (see the end of the question).
+
 1. **Byte-identical or value-identical.** Is decision 3 a promise of identical bytes for untouched values, including
    the sender's whitespace inside a value, or only of the same JSON value? This ADR proposes bytes.
 2. **Encoder.** Relaxed (proposed) or the stricter default encoder for decision 4?
@@ -321,6 +339,8 @@ workarounds. Rejected in favour of a register: deviations stay possible, but eac
 5. **Placement.** Keep this as a new ADR, or fold it into ADR 0035 or ADR 0046? A-1 now proposes an ADR 0046
    amendment for the value model and the boundary adapters. This ADR proposes to stay separate: 0046 says what each
    adapter accepts, produces and loses, and 0091 is the one serializer they all use. Each refers to the other, and
-   rules that appear in both (no key policy on data, case-insensitive member reads) are stated once, here.
+   rules that appear in both (no key policy on data, exact member reads) are stated once, here.
 6. **Runtime durable state.** Should the frozen runtime durability format adopt decision 3 through a stamped
-   migration, or keep re-escaping as a recorded exception?
+   migration, or keep re-escaping as a recorded exception? @FransVanEk: a stamped migration now, since there is no
+   release yet and suspended state is the most important store. Not yet decided: whether S-9 includes that migration
+   or the exception in decision 7 stays until a later spec.
