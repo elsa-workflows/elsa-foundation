@@ -92,7 +92,9 @@ restart or retry it is rebuilt from the core value, never restored. Recovery run
 **V8. Null, missing and undefined.** Null and missing are two states of the core model (`ExplicitNull`, `Absent`).
 `undefined` exists only in JavaScript, so it is a rule of the JavaScript adapter: the visible policy of D-11
 ([#3388](https://github.com/elsa-workflows/elsa-foundation/pull/3388),
-[#3390](https://github.com/elsa-workflows/elsa-foundation/pull/3390)). NaN and Infinity become null with a diagnostic.
+[#3390](https://github.com/elsa-workflows/elsa-foundation/pull/3390)). An `undefined`-valued property that the default
+drops gives a diagnostic, and NaN and Infinity become null with a diagnostic, because a lossy conversion is declared,
+never silent (V6).
 
 **V9. A script works on its own copy.** A script gets a changeable copy of what it reads (today the objects are frozen).
 Changing the copy changes nothing outside the script. Whether and how a script may write a change back is A-3 and
@@ -108,7 +110,9 @@ that a loop item is frozen. Approving this amendment approves that change; `Scri
 
 **V10. Live .NET objects in scripts are opt-in.** By default a script sees JSON and registered .NET functions that
 exchange JSON (D-5). A host may opt in to exposing objects it explicitly registers, each a transient resource for that
-attempt (V7). General access to .NET types (Jint's `AllowClr`) is never offered.
+attempt (V7). The opt-in is a separate script profile (ADR 0083, for example `binding-readonly-interop-v1`), not a
+host switch on the default profile, so one profile name always means one behaviour and a published executable records
+which one it uses. General access to .NET types (Jint's `AllowClr`) is never offered.
 
 **V11. A kind is a JSON shape, not a .NET type.** A variable's type is a kind from the alias registry (ADR 0035): a
 JSON representation plus validation. `DateOnly` is an ISO 8601 string, not the .NET struct with its methods. Workflow
@@ -136,7 +140,7 @@ the opt-in.
 
 | Value | Today (tested or read) | Rule |
 |---|---|---|
-| `{"customerName":…}` into a class with `CustomerName` | property stays empty, no error | Matched case-insensitively; two members that match one property fail with a diagnostic (ADR 0091 decision 2) |
+| `{"customerName":…}` into a class with `CustomerName` | property stays empty, no error | Matched exactly: `customerName` is `CustomerName`'s name under the baseline's camelCase policy. Any other name is mapped with `[JsonPropertyName]`. A key that matches no member gives a diagnostic, so nothing is lost silently (ADR 0091 decision 2) |
 | A .NET-typed result read into the next activity's input | written camelCased, read case-sensitively, so properties can be lost (inferred) | Both directions use the same baseline copy (ADR 0091 decision 5) |
 | `"5"` into `Int32`, `"true"` into `Boolean`, `5.0` into `Int32` | refused with the defaults; `"5"` accepted where Web options are used | Refused everywhere: no text parsing or truthiness (R5) |
 | A 20-digit integer into `Int64` or `Decimal`, a 29-digit decimal into `Decimal` | exact at the input; ForEach turns every item number into a `double` (#3421, a bug that can be fixed now) | Exact; no adapter narrows a number unless the target type asks for it |
@@ -262,7 +266,8 @@ today. Its date-heavy scripts are already refused.
 ### What it touches
 
 - **ADR 0035** alias registry: `Object` leaves, `DateOnly` and `TimeOnly` join.
-- **ADR 0091:** the serializer every adapter uses. Case-insensitive reads and the data rules are stated there.
+- **ADR 0091:** the serializer every adapter uses. Exact member reads, the diagnostic for unmatched keys and the data
+  rules are stated there.
 - **Spec 264:** superseded in part (*Kinds*).
 - **Defects found by A-1:** #3421, numbers that lose digits silently in ForEach, JavaScript and diagnostic snapshots
   (V6). The ForEach and snapshot parts are plain bugs and are fixed without waiting for this amendment. The JavaScript
