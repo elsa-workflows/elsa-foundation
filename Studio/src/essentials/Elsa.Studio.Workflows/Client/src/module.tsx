@@ -14,6 +14,7 @@ import {
   httpWorkflowTestStimulusEditor,
   schedulingWorkflowTestStimulusEditor
 } from "./workflowTestStimulusEditors";
+import { registerWorkflowAgent } from "./workflowAgent";
 import { compensationTargetPropertyEditor } from "./CompensationTargetEditor";
 
 const WorkflowManagementPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowManagementPage })));
@@ -51,6 +52,7 @@ export { capabilityIds, resolveCapabilityLink } from "./api/capabilities";
 
 export function register(api: ElsaStudioModuleApi) {
   setDialogs(api.dialogs);
+  const weaver = registerWorkflowAgent(api.agent);
   const expressionToolingIdentity = {
     backend: api.backend.baseUrl || "same-origin",
     subject: api.runtime.identity?.subject?.trim() || "anonymous",
@@ -119,19 +121,19 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-definitions",
         path: "/workflows/definitions",
         label: "Workflow definitions",
-        component: () => deferred("workflow definitions", <WorkflowManagementPage context={api.backend} ai={api.ai} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors?.list() ?? []} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors()} testStimulusEditors={api.workflowTestStimulusEditors?.list() ?? []} workflowDesignerPanels={api.workflowDesigner.panels.list()} autosaveEnabledByDefault={api.runtime.workflows?.autosaveEnabledByDefault ?? true} />)
+        component: () => deferred("workflow definitions", <WorkflowManagementPage context={api.backend} ai={api.agent} weaver={weaver} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors?.list() ?? []} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors()} testStimulusEditors={api.workflowTestStimulusEditors?.list() ?? []} workflowDesignerPanels={api.workflowDesigner.panels.list()} autosaveEnabledByDefault={api.runtime.workflows?.autosaveEnabledByDefault ?? true} />)
       },
       {
         id: "workflows-executables",
         path: "/workflows/executables",
         label: "Workflow executables",
-        component: () => deferred("workflow executables", <WorkflowExecutablesPage context={api.backend} ai={api.ai} runInputEditors={runInputEditors()} />)
+        component: () => deferred("workflow executables", <WorkflowExecutablesPage context={api.backend} ai={api.agent} runInputEditors={runInputEditors()} />)
       },
       {
         id: "workflows-executable-inspector",
         path: "/workflows/executables/:artifactId",
         label: "Executable Inspector",
-        component: () => deferred("executable inspector", <WorkflowExecutableInspectorPage context={api.backend} ai={api.ai} runInputEditors={runInputEditors()} />)
+        component: () => deferred("executable inspector", <WorkflowExecutableInspectorPage context={api.backend} ai={api.agent} runInputEditors={runInputEditors()} />)
       },
       {
         id: "workflows-instances",
@@ -143,7 +145,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-instance-detail",
         path: "/workflows/instances/:workflowExecutionId",
         label: "Workflow run",
-        component: ({ navigate }) => deferred("workflow run", <WorkflowInstanceDetailsPage context={api.backend} ai={api.ai} expressionEditors={api.expressionEditors.list()} navigate={navigate} />)
+        component: ({ navigate }) => deferred("workflow run", <WorkflowInstanceDetailsPage context={api.backend} ai={api.agent} expressionEditors={api.expressionEditors.list()} navigate={navigate} />)
       },
       {
         id: "workflows-activity-availability",

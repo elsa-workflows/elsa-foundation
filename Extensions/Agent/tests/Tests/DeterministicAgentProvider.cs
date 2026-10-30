@@ -3,7 +3,7 @@ using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using static Elsa.Agent.Core.Services.AgentProviderPrimitives;
 
-namespace Elsa.Agent.Core.Services;
+namespace Elsa.Agent.Tests;
 
 /// <summary>
 /// A provider with no external dependencies that drives a scripted multi-step turn based on prompt keywords.
@@ -11,7 +11,7 @@ namespace Elsa.Agent.Core.Services;
 /// without a real model. The tools it names ("echo", "apply-change") are resolved from the registry by the
 /// orchestrator, so callers register matching <see cref="IAgentTool"/>s to exercise behavior.
 /// </summary>
-public sealed class DeterministicAgentProvider : IAgentProvider
+internal sealed class DeterministicAgentProvider : IAgentProvider
 {
     public const string Id = "deterministic-test";
 

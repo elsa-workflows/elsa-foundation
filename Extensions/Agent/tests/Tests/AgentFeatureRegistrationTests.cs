@@ -1,5 +1,5 @@
 using Elsa.Agent.Core.Contracts;
-using Elsa.Agent.Core.Extensions;
+using Elsa.Agent.Extensions;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
 using Elsa.Agent.GitHubCopilot;
@@ -15,12 +15,9 @@ public sealed class AgentFeatureRegistrationTests
     [Fact]
     public async Task Github_copilot_feature_registers_provider_facade()
     {
-        var services = new ServiceCollection();
-
-        new GitHubCopilotAgentFeature().ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
-
-        var agentProvider = Assert.Single(provider.GetServices<IAgentProvider>());
+        using var provider = AgentTestServices.Create(services => new GitHubCopilotAgentFeature().ConfigureServices(services));
+        using var scope = provider.CreateScope();
+        var agentProvider = Assert.Single(scope.ServiceProvider.GetServices<IAgentProvider>());
         Assert.IsType<GitHubCopilotAgentProvider>(agentProvider);
         var diagnostics = await agentProvider.GetDiagnosticsAsync();
         Assert.Equal(AgentProviderKind.ProviderSdkBinding, diagnostics.Kind);
@@ -33,10 +30,9 @@ public sealed class AgentFeatureRegistrationTests
     [Fact]
     public void Workflow_agent_feature_registers_capabilities_and_context()
     {
-        var services = new ServiceCollection();
-
-        new FoundationWorkflowsAgentFeature().ConfigureServices(services);
-        using var provider = services.BuildServiceProvider();
+        using var root = AgentTestServices.Create(services => new FoundationWorkflowsAgentFeature().ConfigureServices(services));
+        using var scope = root.CreateScope();
+        var provider = scope.ServiceProvider;
 
         Assert.NotNull(provider.GetRequiredService<IWorkflowChangeProposalService>());
         Assert.Contains(provider.GetServices<IAgentCapabilityProvider>(), x => x.GetCapabilitiesAsync().AsTask().Result.Any(c => c.Id == "workflow.explain"));
@@ -80,11 +76,8 @@ public sealed class AgentFeatureRegistrationTests
     [Fact]
     public async Task Orchestrator_sends_latest_user_message_and_context_to_provider()
     {
-        var services = new ServiceCollection();
-        services.AddFoundationAgentAbstractions();
         var provider = new CapturingAgentProvider();
-        services.AddSingleton<IAgentProvider>(provider);
-        using var sp = services.BuildServiceProvider();
+        using var sp = AgentTestServices.Create(services => services.AddSingleton<IAgentProvider>(provider));
         using var scope = sp.CreateScope();
         var sessions = scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
         var streaming = scope.ServiceProvider.GetRequiredService<IAgentStreamingService>();

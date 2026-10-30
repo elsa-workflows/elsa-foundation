@@ -1,6 +1,7 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { AlertTriangle, Check, Loader2, Play, X } from "lucide-react";
 import type { StudioAgentResultRendererContribution } from "../../sdk";
+import { AgentResultBoundary } from "./AgentResultBoundary";
 import type { AgentActionProposal } from "./agentTypes";
 
 export function AgentProposalReview({
@@ -10,7 +11,8 @@ export function AgentProposalReview({
   resultRenderers = [],
   onApprove,
   onDeny,
-  onExecute
+  onExecute,
+  onRetryConfirmation
 }: {
   proposals: AgentActionProposal[];
   disabled?: boolean;
@@ -19,6 +21,7 @@ export function AgentProposalReview({
   onApprove(proposal: AgentActionProposal): void;
   onDeny(proposal: AgentActionProposal): void;
   onExecute(proposal: AgentActionProposal): void;
+  onRetryConfirmation?(proposal: AgentActionProposal): void;
 }) {
   if (proposals.length === 0) {
     return null;
@@ -30,8 +33,6 @@ export function AgentProposalReview({
         const reviewable = isReviewable(proposal);
         const pending = pendingProposalIds?.has(proposal.id) ?? false;
         const controlsDisabled = disabled || pending || proposal.isLoading || Boolean(proposal.disabledReason);
-        const resultRenderer = findResultRenderer(proposal, resultRenderers);
-        const ResultRenderer = resultRenderer?.component;
         return (
           <article key={proposal.id} className="agent-proposal" data-risk={proposal.risk} data-status={proposal.status}>
             <header>
@@ -51,11 +52,7 @@ export function AgentProposalReview({
               </ul>
             ) : null}
             {proposal.audit ? <AuditDetails proposal={proposal} /> : null}
-            {ResultRenderer ? (
-              <div className="agent-proposal-result" aria-label={resultRenderer.displayName}>
-                <ResultRenderer proposal={proposal} resourceTarget={proposal.resourceTarget} result={proposal.result} resultType={proposal.resultType} />
-              </div>
-            ) : <GenericResultFallback proposal={proposal} />}
+            <AgentResultBoundary key={`${proposal.id}:${proposal.status}`} fallback={<GenericResultFallback proposal={proposal} />}><ProposalPresentation proposal={proposal} renderers={resultRenderers} /></AgentResultBoundary>
             {proposal.risks && proposal.risks.length > 0 ? (
               <ul aria-label="Proposal risks">
                 {proposal.risks.map((risk, index) => <li key={`${risk}-${index}`}>{risk}</li>)}
@@ -67,6 +64,7 @@ export function AgentProposalReview({
             {proposal.disabledReason ? <small className="agent-proposal-disabled">{proposal.disabledReason}</small> : null}
             {!reviewable ? <small>Proposal details are still loading. Approval is available after review details arrive.</small> : null}
             <footer>
+              {proposal.confirmationPending && onRetryConfirmation ? <button type="button" disabled={controlsDisabled} onClick={() => onRetryConfirmation(proposal)}>Retry confirmation</button> : null}
               <button type="button" disabled={controlsDisabled || proposal.status !== "awaiting-approval" || !reviewable} onClick={() => onApprove(proposal)}>
                 <Check size={14} /> Approve
               </button>
@@ -84,6 +82,12 @@ export function AgentProposalReview({
   );
 }
 
+function ProposalPresentation({ proposal, renderers }: { proposal: AgentActionProposal; renderers: StudioAgentResultRendererContribution[] }) {
+  const renderer = findResultRenderer(proposal, renderers);
+  const Component = renderer?.component;
+  return Component ? <div className="agent-proposal-result" aria-label={renderer.displayName}><Suspense fallback={<div><p>Loading module presentation…</p><GenericResultFallback proposal={proposal} /></div>}><Component proposal={proposal} resourceTarget={proposal.resourceTarget} result={proposal.result} resultType={proposal.resultType} preparedInvocation={proposal.preparedInvocation} toolResult={proposal.toolResult} /></Suspense></div> : <GenericResultFallback proposal={proposal} />;
+}
+
 function findResultRenderer(
   proposal: AgentActionProposal,
   renderers: StudioAgentResultRendererContribution[]
@@ -92,14 +96,19 @@ function findResultRenderer(
     proposal,
     resourceTarget: proposal.resourceTarget,
     result: proposal.result,
-    resultType: proposal.resultType
+    resultType: proposal.resultType,
+    preparedInvocation: proposal.preparedInvocation,
+    toolResult: proposal.toolResult
   };
   const explicitRenderer = renderers.find(renderer => renderer.id === proposal.resultRendererId);
-  if (explicitRenderer) {
+  if (explicitRenderer && (!explicitRenderer.moduleId || explicitRenderer.moduleId === proposal.resourceTarget?.moduleId)
+    && (!explicitRenderer.schemaVersions || explicitRenderer.schemaVersions.includes(proposal.toolResult?.payload?.schemaVersion ?? proposal.preparedInvocation?.preview.schemaVersion ?? ""))) {
     return explicitRenderer;
   }
 
   return [...renderers]
+    .filter(renderer => (!renderer.moduleId || renderer.moduleId === proposal.resourceTarget?.moduleId)
+      && (!renderer.schemaVersions || renderer.schemaVersions.includes(proposal.toolResult?.payload?.schemaVersion ?? proposal.preparedInvocation?.preview.schemaVersion ?? "")))
     .sort((left, right) => (left.order ?? 500) - (right.order ?? 500) || left.displayName.localeCompare(right.displayName))
     .find(renderer => (!!proposal.resourceTarget?.resourceType && renderer.resourceTypes?.includes(proposal.resourceTarget.resourceType))
       || (!!proposal.resultType && renderer.resultTypes?.includes(proposal.resultType))
@@ -107,14 +116,14 @@ function findResultRenderer(
 }
 
 function GenericResultFallback({ proposal }: { proposal: AgentActionProposal }) {
-  if (proposal.result === undefined) {
-    return null;
-  }
+  const result = proposal.result ?? proposal.toolResult?.payload ?? proposal.toolResult?.receipt?.evidence ?? proposal.preparedInvocation?.preview;
+  if (result === undefined) return null;
 
   return (
     <div className="agent-proposal-result" aria-label="Structured result">
       <span>Structured result</span>
-      <pre>{formatStructuredValue(proposal.result)}</pre>
+      {proposal.toolResult?.receipt ? <small>Observed revision: {proposal.toolResult.receipt.after.revision ?? "unversioned"}</small> : null}
+      <pre>{formatStructuredValue(result)}</pre>
     </div>
   );
 }
@@ -141,6 +150,7 @@ function ResourceTargetDetails({ proposal }: { proposal: AgentActionProposal }) 
           <dd>{target.resourceId}</dd>
         </div>
       ) : null}
+      {target.revision ? <div><dt>Revision</dt><dd>{target.revision}</dd></div> : null}
       {target.moduleId ? (
         <div>
           <dt>Module</dt>

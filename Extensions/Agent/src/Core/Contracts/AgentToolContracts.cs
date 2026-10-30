@@ -17,7 +17,7 @@ public enum AgentToolDispatchOutcome
     Denied
 }
 
-/// <summary>Describes a server-side tool that the agent can call. The descriptor is what the model sees.</summary>
+/// <summary>An installed module's trusted tool contract, including its supported execution location.</summary>
 public sealed record AgentToolDescriptor(
     string Name,
     string DisplayName,
@@ -26,7 +26,16 @@ public sealed record AgentToolDescriptor(
     AgentRisk Risk,
     string JsonSchema,
     IReadOnlyCollection<string> RequiredPermissions,
-    IReadOnlyCollection<string> AgentScopes);
+    IReadOnlyCollection<string> AgentScopes)
+{
+    public string ModuleId { get; init; } = string.Empty;
+    public string ContractVersion { get; init; } = "1";
+    public AgentExecutionLocation ExecutionLocation { get; init; } = AgentExecutionLocation.Server;
+    public string? ResultType { get; init; }
+    public string? ResultSchemaVersion { get; init; }
+    public string? ResultJsonSchema { get; init; }
+    public string? ResultRendererId { get; init; }
+}
 
 /// <summary>A concrete request to run a tool, produced by the orchestrator from a provider tool call.</summary>
 public sealed record AgentToolInvocation(
@@ -35,7 +44,13 @@ public sealed record AgentToolInvocation(
     string SessionId,
     string ActorId,
     IReadOnlyDictionary<string, object?> Arguments,
-    IReadOnlyCollection<AgentContextAttachment> Context);
+    IReadOnlyCollection<AgentContextAttachment> Context)
+{
+    public string TurnId { get; init; } = string.Empty;
+    public string TenantId { get; init; } = string.Empty;
+    public AgentClientBinding? Client { get; init; }
+    public bool AllowMutations { get; init; } = true;
+}
 
 /// <summary>The result of <see cref="IAgentToolInvoker.DispatchAsync"/>.</summary>
 public sealed record AgentToolDispatch(
@@ -56,17 +71,17 @@ public interface IAgentTool
 {
     AgentToolDescriptor Descriptor { get; }
 
-    Task<AgentResult<AgentToolResult>> InvokeAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default);
+    Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default);
+
+    Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Catalog of registered tools.</summary>
 public interface IAgentToolRegistry
 {
-    IReadOnlyCollection<AgentToolDescriptor> Descriptors { get; }
+    Task<IReadOnlyCollection<IAgentTool>> ListAsync(CancellationToken cancellationToken = default);
 
-    IReadOnlyCollection<IAgentTool> Tools { get; }
-
-    IAgentTool? Find(string toolName);
+    Task<IAgentTool?> FindAsync(string toolName, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

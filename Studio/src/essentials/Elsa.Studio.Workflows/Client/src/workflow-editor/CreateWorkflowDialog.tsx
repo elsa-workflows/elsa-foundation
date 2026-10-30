@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
-import type { StudioAiContributionApi, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
+import type { StudioAgentRegistry, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem } from "../workflowTypes";
 import { type CreateWorkflowDraft, type WorkflowMetadataSuggestion } from "./editorTypes";
 import { getCreateRootActivity, parseWorkflowMetadataSuggestion } from "./editorHelpers";
@@ -15,7 +15,7 @@ export function CreateWorkflowDialog({ draft, catalog, catalogState = "ready", c
   catalogError?: string;
   creating: boolean;
   submitError?: string;
-  ai: StudioAiContributionApi;
+  ai: StudioAgentRegistry;
   suggestMetadataAction?: StudioAiPromptActionContribution | null;
   onChange(draft: CreateWorkflowDraft): void;
   onClose(): void;

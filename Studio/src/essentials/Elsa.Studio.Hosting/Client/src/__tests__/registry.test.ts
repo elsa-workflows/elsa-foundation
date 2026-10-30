@@ -70,7 +70,7 @@ describe("studio registry", () => {
     expect(api.agent.toolSlots.slot.id).toBe(studioSlotIds.agentToolSlots);
     expect(api.agent.toolContracts.slot.id).toBe(studioSlotIds.agentToolContracts);
     expect(api.agent.resultRenderers.slot.id).toBe(studioSlotIds.agentResultRenderers);
-    expect(api.ai.tools.slot.id).toBe(studioSlotIds.aiTools);
+    expect(api.agent.promptActions.slot.id).toBe(studioSlotIds.agentPromptActions);
   });
 
   it("lets third-party modules register driver-specific Test Run stimulus editors", () => {
@@ -416,7 +416,7 @@ describe("studio registry", () => {
     });
     const listener = vi.fn();
 
-    api.ai.promptActions.add({
+    api.agent.promptActions.add({
       id: "explain-resource",
       label: "Explain",
       placement: "selection",
@@ -428,7 +428,7 @@ describe("studio registry", () => {
     unsubscribe();
     api.ai.dispatchPrompt({ message: "This should not be observed." });
 
-    expect(api.ai.promptActions.list()).toEqual([expect.objectContaining({ id: "explain-resource" })]);
+    expect(api.agent.promptActions.list()).toEqual([expect.objectContaining({ id: "explain-resource" })]);
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalledWith({ message: "Explain this workflow." });
   });
