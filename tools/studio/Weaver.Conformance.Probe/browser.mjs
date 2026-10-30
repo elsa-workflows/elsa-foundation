@@ -202,6 +202,12 @@ async function resource() {
   const before = await owner("owner-before", witness.ownerEndpoint);
   const layoutBefore = await owner("layout-before", "/_elsa/studio/preferences/home-layout", { "X-Elsa-Studio-Host-Id": witness.hostId });
   result.ownerBefore = before.receipt;
+  await page.goto(studio + "/dashboard");
+  if (before.value.visible) await expect(page.getByTestId("acme-home-widget")).toBeVisible();
+  else await expect(page.getByTestId("acme-home-widget")).toHaveCount(0);
+  await screenshot("home-before");
+  await page.goto(studio + witness.route);
+  await expect(page.getByTestId("acme-home-revision")).toHaveText(before.value.revision);
   command(witness.readTool, {});
   const readMessage = responseFor("/messages");
   await page.getByRole("button", { name: "Read with Weaver", exact: true }).click();
