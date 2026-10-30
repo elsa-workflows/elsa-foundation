@@ -1,0 +1,69 @@
+{
+  "projects": [
+    {
+      "name": "bpmn",
+      "listed": 473,
+      "passed": 473,
+      "expansions": []
+    },
+    {
+      "name": "runtime",
+      "listed": 3072,
+      "passed": 3083,
+      "expansions": [
+        {
+          "test": "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident",
+          "listed": 1,
+          "executed": 2
+        },
+        {
+          "test": "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running",
+          "listed": 1,
+          "executed": 4
+        },
+        {
+          "test": "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches",
+          "listed": 1,
+          "executed": 8
+        }
+      ]
+    },
+    {
+      "name": "hosting",
+      "listed": 39,
+      "passed": 39,
+      "expansions": []
+    },
+    {
+      "name": "runtime-ef",
+      "listed": 1788,
+      "passed": 1788,
+      "expansions": []
+    },
+    {
+      "name": "architecture",
+      "listed": 585,
+      "passed": 594,
+      "expansions": [
+        {
+          "test": "Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Canonical_domain_api_depends_on_capability_aggregation_and_registers_one_stable_declaration",
+          "listed": 1,
+          "executed": 5
+        },
+        {
+          "test": "Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_collectible_api_explorer_artifact_is_rejected",
+          "listed": 1,
+          "executed": 6
+        }
+      ]
+    },
+    {
+      "name": "native-providers",
+      "listed": 212,
+      "passed": 212,
+      "expansions": []
+    }
+  ],
+  "passed": 6189,
+  "skipped": 0
+}
