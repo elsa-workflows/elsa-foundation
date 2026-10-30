@@ -1,0 +1,28 @@
+{
+  "checkedAtUtc": "2026-10-30T13:07:27.642064+00:00",
+  "primaryHosts": [
+    67683,
+    67707,
+    68215,
+    68304,
+    68309,
+    68627
+  ],
+  "diagnosticHosts": [
+    62348,
+    62412,
+    64476,
+    64982,
+    65024,
+    66150
+  ],
+  "allTwelveListedHostsAbsent": true,
+  "qualificationTabsAbsent": [
+    15,
+    16
+  ],
+  "userTabsUntouched": [
+    4,
+    11
+  ]
+}

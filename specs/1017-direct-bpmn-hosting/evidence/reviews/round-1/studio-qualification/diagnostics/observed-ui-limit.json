@@ -1,0 +1,13 @@
+{
+  "sourceRevision": "cb0354a5b507271b67c5923a700d88f950975e25",
+  "observation": "On the first captures, an early Details selection was followed by Timeline during initial runtime loading. Selecting Details after observing loaded graph content showed the correct completed run kind.",
+  "causeEstablished": false,
+  "productOrVerifierChanged": false,
+  "secondCaptures": "The repeated journeys wait for the actual graph view before selecting Details and preserve the explicit run kind.",
+  "otherObservedLimits": [
+    "Initial browser sign-in returns to Workbench root; navigation back to the configured Studio opens it normally.",
+    "A transient run record id and its workflow instance id are distinct; an initial read using the transient id returned404 and was corrected from the visible Run/Instance link.",
+    "Existing transient snapshot layout sidecar behavior retains its previously recorded scope."
+  ],
+  "disposition": "Preserve as an observation for remaining Studio program qualification, not full direct-model Studio acceptance."
+}

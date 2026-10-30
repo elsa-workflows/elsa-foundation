@@ -1,0 +1,164 @@
+Browser tab: 16, Title: "Elsa Studio", URL: "http://127.0.0.1:64042/workflows/instances/14mI6pmHQuJ".
+1 AXWebArea Elsa Studio, URL: 127.0.0.1:64042/workflows/instances/14mI6pmHQuJ
+	2 container root
+		3 container
+			4 link Description: Elsa Studio Foundation, Value: 127.0.0.1:64042/
+			5 button (expanded) Description: Collapse navigation, Secondary Actions: Collapse
+				6 image
+			7 search text field (settable) Search modules
+			8 container Main
+				9 link Description: Home, Value: 127.0.0.1:64042/dashboard
+				10 link Description: Workflows, Value: 127.0.0.1:64042/workflows/definitions
+				11 link Description: Runs, Value: 127.0.0.1:64042/workflows/instances
+			12 container More tools
+				13 button (collapsed) More tools, Secondary Actions: Expand
+			14 container Settings
+				15 link Description: Settings, Value: 127.0.0.1:64042/settings
+			16 container Environment and account
+				17 container Description: Configured backend endpoint: 127.0.0.1:64041, Help: Configured backend endpoint; connectivity is not measured
+					18 text Backend API
+					19 text 127.0.0.1:64041
+				20 pop up button (collapsed) Description: Account: Administrator, Help: Administrator, ID: radix-_r_0_, Secondary Actions: Expand
+		21 container
+			22 text Studio /  Runs
+			23 heading Runs, Value: 1
+				24 text Runs
+			25 button (collapsed) Weaver, Secondary Actions: Expand
+				26 image
+				27 text Weaver
+			28 link Description: GitHub, Value: github.com/elsa-workflows/elsa-foundation-studio
+			29 link Description: Designer source, Value: github.com/elsa-workflows/elsa-foundation-designer
+			30 Colour mode
+				31 radio button Description: Light, Help: Light mode, Value: 0
+				32 radio button Description: Dark, Help: Dark mode, Value: 1
+				33 radio button Description: Dim, Help: Dim mode, Value: 0
+			34 pop up button (collapsed) Description: Select theme, Help: Classic · Classic · Dark, ID: radix-_r_7_, Secondary Actions: Expand
+				35 image
+		331 container
+			332 text WORKFLOW MANAGEMENT
+			333 heading Run, Value: 2
+				334 text Run
+			335 text WORKFLOW INSTANCE ID 14mI6pmHQuJ
+			336 button Runs
+				337 image
+				338 text Runs
+			339 button Open run incidents: No active incidents
+			340 button Review workflow definition
+				341 image
+				342 text Review workflow definition
+			343 button Refresh
+				344 image
+				345 text Refresh
+			346 checkbox Pause following, Value: 1, Help: Follow recorded updates without changing the inspected occurrence. Pausing observation does not stop execution.
+			347 text Execution on this canvas
+			348 button Explain
+				349 image
+				350 text Explain
+			351 container Workflow run canvas
+				352 container
+					353 text PINNED RUNTIME EXECUTABLE
+					354 heading BPMN execution model · reviewed host 4.0.0, Help: BPMN execution model · reviewed host (14iBsLEuiJS), Value: 3
+						355 text BPMN execution model · reviewed host 4.0.0
+					356 text COMPLETED
+				357 button Root
+				358 container Execution scope
+					359 button All executions
+				361 container
+					362 container
+						363 image
+							364 edge Description: Connection from Start (start), Done output, to Upgraded route layout (route). Not selected., Value: 0
+						365 image
+							366 edge Description: Connection from Upgraded route layout (route), Done output, to Default timer (wait). Not selected., Value: 0
+								367 text default
+						368 image
+							369 edge Value: 0, Description: Connection from Upgraded route layout (route), Done output, to Other complete (other-end). Not selected.
+								370 text Never
+						371 image
+							372 edge Description: Connection from Default timer (wait), Done output, to Default complete (end). Not selected., Value: 0
+						373 node Description: Start. Node ID: start. Activity type: unknown. State: authoring. Not selected., Value: 0
+							374 container Start event
+								375 text Start
+						376 node Description: Upgraded route layout. Node ID: route. Activity type: unknown. State: authoring. Not selected., Value: 0
+							377 container Exclusive gateway
+								378 text Upgraded route layout
+						379 node Description: Default timer. Node ID: wait. Activity type: unknown. Run state: Completed. Not selected., Value: 0
+							380 container Intermediate catch event
+								381 text Default timer
+								382 text Intermediate catch event
+						383 node Description: Default complete. Node ID: end. Activity type: unknown. State: authoring. Not selected., Value: 0
+							384 container End event
+								385 text Default complete
+						386 node Description: Other complete. Node ID: other-end. Activity type: unknown. State: authoring. Not selected., Value: 0
+							387 container End event
+								388 text Other complete
+					389 image
+					390 image Mini Map
+					391 container Control Panel
+						392 button Zoom In
+							393 image
+						394 button Zoom Out
+							395 image
+						396 button Fit View
+							397 image
+						398 button Toggle Interactivity
+							399 image
+					400 link Description: React Flow attribution, Value: reactflow.dev/
+			401 splitter Description: Resize run details panel, Value: 400
+			402 container Run details panel
+				403 tab group Run details tabs
+					404 tab (selectable, settable, boolean) TIMELINE, Help: Timeline, Value: 0
+					405 tab (selectable, settable, boolean) ACTIVITY, Help: Activity, Value: 0
+					406 tab (selectable, settable, boolean) ISSUES, Help: Issues, Value: 0
+					407 tab (selected, settable, boolean) DETAILS, Help: Details, Value: 1
+				408 button Description: Collapse run details panel, Help: Collapse
+					409 image
+				410 button Description: Maximize run details panel, Help: Maximize
+					411 image
+				412 definition list
+					413 container STATUS
+						414 text STATUS
+					415 text Completed
+					416 container RUN KIND
+						417 text RUN KIND
+					418 text Published Run
+					419 container ARTIFACT
+						420 text ARTIFACT
+					421 container
+						422 text artifact-ab58de69c318 4.0.0
+					423 container DEFINITION
+						424 text DEFINITION
+					425 container BPMN execution model · reviewed host (14iBsLEuiJS · 14mI6mWaDKr)
+						426 text BPMN execution model · reviewed host
+						427 text 14iBsLEuiJS · 14mI6mWaDKr
+					428 container CREATED
+						429 text CREATED
+					430 text 10/30/2026, 2:00:43 PM
+					431 container STARTED
+						432 text STARTED
+					433 text 10/30/2026, 2:00:43 PM
+					434 container COMPLETED
+						435 text COMPLETED
+					436 text 10/30/2026, 2:00:48 PM
+					437 container CORRELATION
+						438 text CORRELATION
+					439 text None
+					440 container CHECKPOINT CADENCE
+						441 text CHECKPOINT CADENCE
+					442 container
+						443 text Balanced This run checkpoints at boundaries, so inspection shows boundary-level detail.
+					444 container INSPECTION DETAIL
+						445 text INSPECTION DETAIL
+					446 text Boundary-level
+				447 text Per-activity evidence inside a segment is folded to the commit boundary, so timeline values reflect the durable boundary.
+		321 container Bottom panel
+			322 tab group Bottom panels
+				323 tab (selected, settable, boolean) Console, Value: 1
+				324 tab (selectable, settable, boolean) Structured Logs, Value: 0
+				325 tab (selectable, settable, boolean) OpenTelemetry, Value: 0
+			326 container Bottom panel controls
+				327 button Description: Expand bottom panel, Help: Expand
+					328 image
+				329 button Description: Maximize bottom panel, Help: Maximize
+					330 image
+
+The focused UI element is 407 tab (selected, settable, boolean) DETAILS, Help: Details, Value: 1

@@ -1,0 +1,18 @@
+[
+  {
+    "family": "original",
+    "publishedVersion": "3.0.0",
+    "publishedRunId": "14mHvvQbsDl",
+    "testRunId": "14mHxuCTDIb",
+    "transientTestRunId": "14mHxu37Fcl",
+    "screenshotsVisuallyInspected": true
+  },
+  {
+    "family": "layout",
+    "publishedVersion": "4.0.0",
+    "publishedRunId": "14mI6pmHQuJ",
+    "testRunId": "14mI8ZXND8p",
+    "transientTestRunId": "14mI8ZNiRKm",
+    "screenshotsVisuallyInspected": true
+  }
+]
