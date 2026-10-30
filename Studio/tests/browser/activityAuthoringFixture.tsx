@@ -1,6 +1,7 @@
 import { useMemo, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AnonymousAuthProvider, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { ActivityDefinitionWorkbench } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionWorkbench";
 import { ActivityDefinitionDraftEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDraftEditor";
 import { activityGraphSchema2ImplementationEditorContribution } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphContribution";
 import { inputReferenceContribution } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/inputReferenceContribution";
@@ -42,14 +43,17 @@ export function ActivityAuthoringFixture() {
         if (url === "/capabilities") return { capabilities: [
           { id: "elsa.api.activity-design", contractVersion: "1", links: [
             ["activity-definition", "definitions/{definitionId}"], ["activity-definition-draft", "drafts/{draftId}"],
+            ["activity-definition-drafts", "definitions/{definitionId}/drafts"], ["activity-definition-versions", "definitions/{definitionId}/versions"],
             ["activity-authoring-capabilities", "authoring-capabilities"], ["activity-catalog", "catalog"],
             ["activity-draft-validation", "drafts/{draftId}/validate"], ["activity-draft-contract-proposals", "drafts/{draftId}/proposals"]
           ].map(([rel, path]) => ({ rel, href: `fixture/${path}`, templated: path.includes("{") })) },
           { id: "elsa.api.expressions", contractVersion: "1", links: [{ rel: "expression-descriptors", href: "fixture/expressions" }] }
         ] };
+        if (url.startsWith("/fixture/definitions/quote-activity/drafts?")) return { items: [], nextCursor: null };
+        if (url.startsWith("/fixture/definitions/quote-activity/versions?")) return { items: [], nextCursor: null };
         if (url === "/fixture/drafts/quote-draft") return structuredClone(draft.current);
         if (url === "/fixture/definitions/quote-activity") return {
-          definition: { definitionId: "quote-activity", activityTypeKey: "elsa.user.quote", tenantId: "browser-fixture", displayName: "Prepare order quote", category: "Commerce", description: "A reusable quote activity.", contentAuthority: { kind: "Design", authorityKey: "elsa.activity-design" }, headVersionId: null, recommendedVersionId: null },
+          definition: { definitionId: "quote-activity", activityTypeKey: parameters.has("long-identities") ? `elsa.user.quote.${"0123456789abcdef".repeat(8)}` : "elsa.user.quote", tenantId: "browser-fixture", displayName: "Prepare order quote", category: "Commerce", description: "A reusable quote activity.", contentAuthority: { kind: "Design", authorityKey: "elsa.activity-design" }, headVersionId: null, recommendedVersionId: null },
           lifecycle: { draftCount: 1, versionCount: 0, head: null, recommendation: null }, actions: [], updatedAt: timestamp
         };
         if (url === "/fixture/authoring-capabilities" && parameters.get("capabilities") === "unavailable") throw new Error("Authoring capabilities unavailable in this fixture scenario");
@@ -81,7 +85,7 @@ export function ActivityAuthoringFixture() {
   }) as unknown as StudioEndpointContext, [parameters]);
   const navigation = getStudioNavigation([{ id: "home", label: "Home", path: "/dashboard", placement: "main" }, { id: "workflows", label: "Workflows", path: "/workflows/definitions", placement: "main" }, { id: "activities", label: "Activity definitions", path: "/workflows/activity-definitions", placement: "main" }]);
   return <ThemeProvider><AnonymousAuthProvider><ShellFrame navigation={navigation} panels={[]} path="/workflows/activity-definitions" title="Activity definitions" backendBaseUrl="https://backend.example" enabledFeatures={["Elsa.Studio.Workflows"]} onNavigate={() => undefined}>
-    <QueryClientProvider client={client}><ActivityDefinitionDraftEditor context={context} definitionId="quote-activity" draftId="quote-draft" activityEditors={[activityGraphSchema2ImplementationEditorContribution]} expressionEditors={[inputReferenceContribution]} identity={{ tenantId: "browser-fixture", subject: "browser-author" }} onNavigationGuardChange={() => undefined} onBack={() => undefined} onOpenDraft={() => undefined} onOpenVersion={() => undefined} onOpenStudioPath={() => undefined} /></QueryClientProvider>
+    <QueryClientProvider client={client}>{parameters.get("view") === "overview" ? <ActivityDefinitionWorkbench context={context} definitionId="quote-activity" section="overview" selectedDraftId={null} selectedVersionId={null} activityEditors={[activityGraphSchema2ImplementationEditorContribution]} onNavigate={() => undefined} onPlanUpgrade={() => undefined} /> : <ActivityDefinitionDraftEditor context={context} definitionId="quote-activity" draftId="quote-draft" activityEditors={[activityGraphSchema2ImplementationEditorContribution]} expressionEditors={[inputReferenceContribution]} identity={{ tenantId: "browser-fixture", subject: "browser-author" }} onNavigationGuardChange={() => undefined} onBack={() => undefined} onOpenDraft={() => undefined} onOpenVersion={() => undefined} onOpenStudioPath={() => undefined} />}</QueryClientProvider>
   </ShellFrame></AnonymousAuthProvider></ThemeProvider>;
 }
 

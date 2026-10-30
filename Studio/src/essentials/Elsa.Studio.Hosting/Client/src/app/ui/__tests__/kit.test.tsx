@@ -8,7 +8,7 @@ import { StudioActionNotice } from "../feedback/ActionNotice";
 import { StatusPill } from "../feedback/StatusPill";
 import { StudioListContainer, StudioListRow } from "../list/ListRow";
 import { StudioSparkline, StudioStatTile } from "../stat/StatTile";
-import { CopyableIdentifier } from "../identity/CopyableIdentifier";
+import { CopyableIdentifier, CopyableValue } from "../identity/CopyableIdentifier";
 
 let cleanup: (() => void) | null = null;
 
@@ -53,6 +53,53 @@ describe("StudioButton", () => {
 });
 
 describe("CopyableIdentifier", () => {
+  it("does not report an old clipboard completion against a newly selected value", async () => {
+    let finish!: () => void;
+    const writeText = vi.fn().mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; })).mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    function Selection() {
+      const [value, setValue] = useState("old-id");
+      return <><CopyableValue label="Selected ID" value={value} /><button onClick={() => setValue("new-id")}>Select next</button></>;
+    }
+    const host = mount(<Selection />);
+    host.querySelector<HTMLButtonElement>('[aria-label="Copy Selected ID"]')!.click();
+    flushSync(() => host.querySelectorAll<HTMLButtonElement>("button")[1].click());
+    expect(host.querySelector(".studio-copyable-identifier__value")?.textContent).toBe("new-id");
+    finish();
+    await Promise.resolve();
+    expect(host.querySelector("[role='status']")).toBeNull();
+    host.querySelector<HTMLButtonElement>('[aria-label="Copy Selected ID"]')!.click();
+    await vi.waitFor(() => expect(writeText).toHaveBeenLastCalledWith("new-id"));
+    await vi.waitFor(() => expect(host.querySelector("[role='status']")?.textContent).toBe("Selected ID copied"));
+  });
+
+  it("copies a full inline value without duplicating its label or activating its containing row", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const activate = vi.fn();
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const value = "elsa.user.qualified-activity/0123456789abcdefghijklmnopqrstuvwxyz";
+    const host = mount(<div onClick={activate} onKeyDown={activate}><dl><dt>Type key</dt><dd><code><CopyableValue label="Type key" value={value} /></code></dd></dl></div>);
+    expect(host.querySelector("code > span")).not.toBeNull();
+    expect(host.querySelector(".studio-copyable-identifier__label")).toBeNull();
+    expect(host.querySelector(".studio-copyable-identifier__value")?.textContent).toBe(value);
+    const button = host.querySelector<HTMLButtonElement>("button")!;
+    button.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(value));
+    expect(activate).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(host.querySelector("[role='status']")?.textContent).toBe("Type key copied"));
+  });
+
+  it("leaves absent values plain and preserves zero-valued revisions", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const host = mount(<><CopyableValue label="Source" value={null} placeholder="Not disclosed" /><CopyableValue label="Revision" value={0} /></>);
+    expect(host.textContent).toContain("Not disclosed");
+    expect(host.querySelectorAll("button")).toHaveLength(1);
+    host.querySelector("button")!.click();
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith("0"));
+  });
+
   it("exposes the exact identifier and copies it with a local accessible confirmation", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { clipboard: { writeText } });
@@ -116,7 +163,7 @@ describe("CopyableIdentifier", () => {
     await vi.waitFor(() =>
       expect(host.querySelector("[role='status']")?.textContent).toBe("Node ID copied"));
     await vi.waitFor(
-      () => expect(host.querySelector("[role='status']")?.textContent).toBe(""),
+      () => expect(host.querySelector("[role='status']")).toBeNull(),
       { timeout: 2_000 });
   });
 });

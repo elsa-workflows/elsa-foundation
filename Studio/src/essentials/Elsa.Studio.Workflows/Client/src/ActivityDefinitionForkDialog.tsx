@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   StudioHttpError,
@@ -166,9 +167,9 @@ export function ActivityDefinitionForkDialog({
   >
     {!preview ? <>
       <dl className="ad-review-facts">
-        <div><dt>Source definition</dt><dd><code>{definition.definition.definitionId}</code></dd></div>
-        <div><dt>Recommended version</dt><dd>{recommendation.version} · {recommendation.lifecycle}<br /><code>{recommendation.versionId}</code></dd></div>
-        <div><dt>Source provider</dt><dd><code>{recommendation.providerKey}</code> · schema {recommendation.providerSchemaVersion}</dd></div>
+        <div><dt>Source definition</dt><dd><code><CopyableValue label="Source definition" value={definition.definition.definitionId} /></code></dd></div>
+        <div><dt>Recommended version</dt><dd>{recommendation.version} · {recommendation.lifecycle}<br /><code><CopyableValue label="Recommended version ID" value={recommendation.versionId} /></code></dd></div>
+        <div><dt>Source provider</dt><dd><code><CopyableValue label="Source provider" value={recommendation.providerKey} /></code> · schema {recommendation.providerSchemaVersion}</dd></div>
       </dl>
       <p className="ad-dialog-note">Forking always starts from the one recommended active version. Studio does not offer an explicit version override.</p>
       <label className="ad-dialog-field"><span>Category</span><input value={category} maxLength={200} onChange={event => setCategory(event.target.value)} /></label>
@@ -188,11 +189,11 @@ export function ActivityDefinitionForkDialog({
 function ForkReview({ preview }: { preview: ActivityDefinitionForkPreview }) {
   return <>
     <dl className="ad-review-facts">
-      <div><dt>Exact source</dt><dd>{preview.source.version} · {preview.source.lifecycle}<br /><code>{preview.source.versionId}</code></dd></div>
-      <div><dt>New Activity Type Key</dt><dd><code>{preview.target.activityTypeKey}</code></dd></div>
-      <div><dt>New definition</dt><dd><code>{preview.target.definitionId}</code></dd></div>
-      <div><dt>Initial draft</dt><dd><code>{preview.target.draftId}</code></dd></div>
-      <div><dt>Provider conversion</dt><dd><code>{preview.providerMigration.sourceProviderKey}</code> schema {preview.providerMigration.sourceProviderSchemaVersion} → <code>{preview.providerMigration.targetProviderKey}</code> schema {preview.providerMigration.targetProviderSchemaVersion}</dd></div>
+      <div><dt>Exact source</dt><dd>{preview.source.version} · {preview.source.lifecycle}<br /><code><CopyableValue label="Exact source version ID" value={preview.source.versionId} /></code></dd></div>
+      <div><dt>New Activity Type Key</dt><dd><code><CopyableValue label="New Activity Type Key" value={preview.target.activityTypeKey} /></code></dd></div>
+      <div><dt>New definition</dt><dd><code><CopyableValue label="New definition" value={preview.target.definitionId} /></code></dd></div>
+      <div><dt>Initial draft</dt><dd><code><CopyableValue label="Initial draft" value={preview.target.draftId} /></code></dd></div>
+      <div><dt>Provider conversion</dt><dd><code><CopyableValue label="Source provider key" value={preview.providerMigration.sourceProviderKey} /></code> schema {preview.providerMigration.sourceProviderSchemaVersion} → <code><CopyableValue label="Target provider key" value={preview.providerMigration.targetProviderKey} /></code> schema {preview.providerMigration.targetProviderSchemaVersion}</dd></div>
       <div><dt>Public contract</dt><dd>{contractSummary(preview.target.contract)} · {preview.contractComparison.isCompatible ? "compatible" : "incompatible"}</dd></div>
       <div><dt>Reservation expires</dt><dd>{formatTimestamp(preview.expiresAt)}</dd></div>
     </dl>

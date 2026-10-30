@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import {
   useEffect,
   useMemo,
@@ -544,7 +545,7 @@ export function Elsa3ReusableImportPage({
         </div>
         {uploadResult ? (
           <dl style={styles.identityGrid}>
-            <div><dt>Collection handle</dt><dd><code>{uploadResult.collectionHandle}</code></dd></div>
+            <div><dt>Collection handle</dt><dd><code><CopyableValue label="Collection handle" value={uploadResult.collectionHandle} /></code></dd></div>
             <div><dt>Exact source versions</dt><dd>{uploadResult.sourceVersionCount}</dd></div>
             <div><dt>Accepted bytes</dt><dd>{formatBytes(uploadResult.contentLength)}</dd></div>
             <div><dt>Expires</dt><dd>{formatDateTime(uploadResult.expiresAt)}</dd></div>
@@ -564,8 +565,8 @@ export function Elsa3ReusableImportPage({
             </span>
           </header>
           <dl style={styles.identityGrid}>
-            <div><dt>Immutable handle</dt><dd><code>{analysis.collectionHandle}</code></dd></div>
-            <div><dt>Plan ID</dt><dd><code>{analysis.planId}</code></dd></div>
+            <div><dt>Immutable handle</dt><dd><code><CopyableValue label="Immutable handle" value={analysis.collectionHandle} /></code></dd></div>
+            <div><dt>Plan ID</dt><dd><code><CopyableValue label="Plan ID" value={analysis.planId} /></code></dd></div>
           </dl>
           {completeCycles.length ? (
             <section style={styles.warning} aria-label="Complete dependency cycles">
@@ -619,7 +620,7 @@ export function Elsa3ReusableImportPage({
             {selectedItems.map(item => (
               <span key={item.sourceVersionId}>
                 <strong>{item.sourceDefinitionId} v{item.sourceVersion}</strong>
-                <code>{item.sourceVersionId}</code>
+                <code><CopyableValue label="Source version ID" value={item.sourceVersionId} /></code>
                 {readiness?.addedDependencySourceVersionIds.includes(item.sourceVersionId) ? <small>Required dependency</small> : <small>Requested owner</small>}
               </span>
             ))}
@@ -646,8 +647,8 @@ export function Elsa3ReusableImportPage({
             <span style={styles.safetyBadge}><ShieldCheck size={15} /> Atomic exact apply</span>
           </header>
           <dl style={styles.identityGrid}>
-            <div><dt>Plan ID</dt><dd><code>{analysis.planId}</code></dd></div>
-            <div><dt>Collection handle</dt><dd><code>{analysis.collectionHandle}</code></dd></div>
+            <div><dt>Plan ID</dt><dd><code><CopyableValue label="Plan ID" value={analysis.planId} /></code></dd></div>
+            <div><dt>Collection handle</dt><dd><code><CopyableValue label="Immutable handle" value={analysis.collectionHandle} /></code></dd></div>
             <div><dt>Idempotency key</dt><dd><code>{idempotencyKey}</code></dd></div>
             <div><dt>Access scope</dt><dd>Current authorized tenant and user</dd></div>
             <div><dt>Exact source versions</dt><dd>{summary.exactSourceVersions}</dd></div>
@@ -751,12 +752,12 @@ function SourceVersionRow({
       <details>
         <summary>Deterministic technical IDs</summary>
         <dl style={styles.technicalIds}>
-          <dt>Source version ID</dt><dd><code>{item.sourceVersionId}</code></dd>
-          <dt>Workflow definition ID</dt><dd><code>{item.workflowDefinitionId}</code></dd>
-          <dt>Workflow version ID</dt><dd><code>{item.workflowVersionId}</code></dd>
-          {item.activityDefinitionId ? <><dt>Activity Definition ID</dt><dd><code>{item.activityDefinitionId}</code></dd></> : null}
-          {item.activityDefinitionVersionId ? <><dt>Activity Definition version ID</dt><dd><code>{item.activityDefinitionVersionId}</code></dd></> : null}
-          <dt>Source fingerprint</dt><dd><code>{item.sourceFingerprint}</code></dd>
+          <dt>Source version ID</dt><dd><code><CopyableValue label="Source version ID" value={item.sourceVersionId} /></code></dd>
+          <dt>Workflow definition ID</dt><dd><code><CopyableValue label="Workflow definition ID" value={item.workflowDefinitionId} /></code></dd>
+          <dt>Workflow version ID</dt><dd><code><CopyableValue label="Workflow version ID" value={item.workflowVersionId} /></code></dd>
+          {item.activityDefinitionId ? <><dt>Activity Definition ID</dt><dd><code><CopyableValue label="Activity Definition ID" value={item.activityDefinitionId} /></code></dd></> : null}
+          {item.activityDefinitionVersionId ? <><dt>Activity Definition version ID</dt><dd><code><CopyableValue label="Activity Definition version ID" value={item.activityDefinitionVersionId} /></code></dd></> : null}
+          <dt>Source fingerprint</dt><dd><code><CopyableValue label="Source fingerprint" value={item.sourceFingerprint} /></code></dd>
         </dl>
       </details>
     </article>
@@ -817,7 +818,7 @@ function ImportReceipt({
         <span style={unpublished ? styles.warningBadge : styles.successBadge} data-receipt-outcome={outcomeLabel}>
           {unpublished ? <XCircle size={14} /> : <CheckCircle2 size={14} />} {outcomeLabel}
         </span>
-        <code>{receipt.receiptId}</code>
+        <code><CopyableValue label="Receipt ID" value={receipt.receiptId} /></code>
       </header>
       {unpublished ? (
         <p style={styles.resume} role="status">
@@ -825,9 +826,9 @@ function ImportReceipt({
         </p>
       ) : null}
       <dl style={styles.identityGrid}>
-        <div><dt>Plan ID</dt><dd><code>{receipt.planId}</code></dd></div>
-        <div><dt>Collection handle</dt><dd><code>{receipt.collectionHandle}</code></dd></div>
-        <div><dt>Selection fingerprint</dt><dd><code>{receipt.selectionFingerprint}</code></dd></div>
+        <div><dt>Plan ID</dt><dd><code><CopyableValue label="Plan ID" value={receipt.planId} /></code></dd></div>
+        <div><dt>Collection handle</dt><dd><code><CopyableValue label="Collection handle" value={receipt.collectionHandle} /></code></dd></div>
+        <div><dt>Selection fingerprint</dt><dd><code><CopyableValue label="Selection fingerprint" value={receipt.selectionFingerprint} /></code></dd></div>
         <div><dt>Completed</dt><dd>{formatDateTime(receipt.completedAt)}</dd></div>
       </dl>
       <div style={styles.receiptSources}>

@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, GitBranch, Layers3, Pencil, RefreshCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -150,7 +151,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   }
   if (!detail) return null;
 
-  const provider = detail.lifecycle.recommendation?.providerKey ?? detail.lifecycle.head?.providerKey ?? "Not established";
+  const provider = detail.lifecycle.recommendation?.providerKey ?? detail.lifecycle.head?.providerKey ?? null;
   const tabs: { id: Section; label: string }[] = [
     { id: "overview", label: "Overview" },
     ...(designOwned ? [{ id: "drafts" as const, label: "Drafts" }] : []),
@@ -218,15 +219,15 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   </>;
 }
 
-function IdentityDetails({ detail, provider }: { detail: ActivityDefinitionManagementView; provider: string }) {
+function IdentityDetails({ detail, provider }: { detail: ActivityDefinitionManagementView; provider: string | null }) {
   return <dl className="ad-identity-strip">
-    <div><dt>Activity Type Key</dt><dd><code>{detail.definition.activityTypeKey}</code></dd></div>
-    <div><dt>Definition identity</dt><dd><code>{detail.definition.definitionId}</code></dd></div>
+    <div><dt>Activity Type Key</dt><dd><code><CopyableValue label="Activity Type Key" value={detail.definition.activityTypeKey} /></code></dd></div>
+    <div><dt>Definition identity</dt><dd><code><CopyableValue label="Definition identity" value={detail.definition.definitionId} /></code></dd></div>
     <div><dt>Authority</dt><dd>{isActivityDefinitionEnumValue(detail.definition.contentAuthority.kind, "Design") ? "Design owned" : "Source owned"}</dd></div>
-    <div><dt>Authority key</dt><dd><code>{detail.definition.contentAuthority.authorityKey}</code></dd></div>
-    {!isActivityDefinitionEnumValue(detail.definition.contentAuthority.kind, "Design") ? <div><dt>Source identity</dt><dd><code>{detail.definition.contentAuthority.sourceId ?? "Not disclosed"}</code></dd></div> : null}
-    <div><dt>Provider</dt><dd>{provider}</dd></div>
-    <div><dt>Recommended version</dt><dd>{detail.lifecycle.recommendation ? `${detail.lifecycle.recommendation.version} · ${detail.lifecycle.recommendation.lifecycle}` : "Not recommended"}</dd></div>
+    <div><dt>Authority key</dt><dd><code><CopyableValue label="Authority key" value={detail.definition.contentAuthority.authorityKey} /></code></dd></div>
+    {!isActivityDefinitionEnumValue(detail.definition.contentAuthority.kind, "Design") ? <div><dt>Source identity</dt><dd><code><CopyableValue label="Source identity" value={detail.definition.contentAuthority.sourceId} placeholder="Not disclosed" /></code></dd></div> : null}
+    <div><dt>Provider</dt><dd><CopyableValue label="Provider" value={provider} placeholder="Not established" /></dd></div>
+    <div><dt>Recommended version</dt><dd>{detail.lifecycle.recommendation ? <><CopyableValue label="Recommended version" value={detail.lifecycle.recommendation.version} /> · {detail.lifecycle.recommendation.lifecycle}</> : "Not recommended"}</dd></div>
   </dl>;
 }
 
@@ -239,7 +240,7 @@ function DesignedOverview({ detail, activeDrafts, onOpen, onOpenWorkflows }: { d
   </div>;
 }
 
-function Overview({ detail, provider, designOwned, versionQuery, onOpen }: { detail: ActivityDefinitionManagementView; provider: string; designOwned: boolean; versionQuery: ReturnType<typeof useActivityDefinitionVersion>; onOpen(section: Section): void }) {
+function Overview({ detail, provider, designOwned, versionQuery, onOpen }: { detail: ActivityDefinitionManagementView; provider: string | null; designOwned: boolean; versionQuery: ReturnType<typeof useActivityDefinitionVersion>; onOpen(section: Section): void }) {
   if (!designOwned) return <div className="ad-source-overview">
     <dl className="ad-source-summary">
       <div><dt>Category</dt><dd>{detail.definition.category}</dd></div>
@@ -316,11 +317,11 @@ function SelectedVersion({ item, compact, actionLabel, actionAllowed, onCreate, 
   return <div className="ad-selected-version">
     <div className="ad-selected-record" aria-label="Selected exact version">
       <strong>Version {compact ? displayActivityDefinitionVersion(item.version.version) : item.version.version}{item.isRecommended ? " · Recommended" : ""}</strong>
-      {!compact ? <span><code>{item.version.versionId}</code> · {item.version.lifecycle} · {item.providerKey} · schema {item.providerSchemaVersion}</span> : <span>{item.version.lifecycle}</span>}
+      {!compact ? <span><code><CopyableValue label="Activity Definition version ID" value={item.version.versionId} /></code> · {item.version.lifecycle} · {item.providerKey} · schema {item.providerSchemaVersion}</span> : <span>{item.version.lifecycle}</span>}
       {!compact ? actions : null}
       <details className="ad-technical-details"><summary>Version details</summary>
         {compact ? actions : null}
-        {compact ? <p><code>{item.version.versionId}</code> · {item.version.version} · {item.providerKey} · schema {item.providerSchemaVersion}</p> : null}
+        {compact ? <p><code><CopyableValue label="Activity Definition version ID" value={item.version.versionId} /></code> · {item.version.version} · {item.providerKey} · schema {item.providerSchemaVersion}</p> : null}
         <button type="button" onClick={onPlanUpgrade}>Plan broad upgrade from this exact version</button>
       </details>
     </div>

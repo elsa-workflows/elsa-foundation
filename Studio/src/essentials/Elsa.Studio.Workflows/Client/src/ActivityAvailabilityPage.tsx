@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, EyeOff, ListChecks, Save, Search, Shield, SlidersHorizontal, X } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -418,7 +419,7 @@ function ActivityAvailabilityDetails({
           {metadata.map(([label, value]) => value?.trim() ? (
             <React.Fragment key={label}>
               <dt>{label}</dt>
-              <dd><code>{value}</code></dd>
+              <dd><code>{["Type", "Definition ID", "Version"].includes(label) ? <CopyableValue label={label} value={value} /> : value}</code></dd>
             </React.Fragment>
           ) : null)}
         </dl>

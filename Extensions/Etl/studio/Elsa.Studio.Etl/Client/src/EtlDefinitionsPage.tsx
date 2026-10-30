@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useId, useRef, useState } from "react";
 import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { classifyEtlApiError, EtlApiError, invalidateEtlApiCapabilityCache, type EtlApiFailureKind } from "./etlApi";
@@ -667,7 +668,7 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
         </div>
         {isDirty ? <p className="etl-notice" role="status">Unsaved edits. Save the draft before validation or publication.</p> : null}
         {validation && validation.revision === visibleDraft.revision ? <p role="status" aria-live="polite">
-          Validation for revision {validation.revision}: version {validation.definitionVersion}{validation.contentHash ? <> · <code>{validation.contentHash}</code></> : " · no publishable artifact"}.
+          Validation for revision {validation.revision}: version {validation.definitionVersion}{validation.contentHash ? <> · <code><CopyableValue label="Content hash" value={validation.contentHash} /></code></> : " · no publishable artifact"}.
         </p> : null}
         <PipelineEditor
           pipeline={visiblePipeline}
@@ -720,7 +721,7 @@ function EtlDefinitionWorkspace<TPipeline extends EtlPipeline | EtlPipelineV2, T
         {artifactLoading ? <p role="status" aria-live="polite">Loading selected immutable artifact…</p> : null}
         {artifact && selectedVersion && artifact.version.selection === selectedVersion.selection ? <section className="etl-editor-section" aria-label="Published ETL artifact">
           <h3>Published artifact · version {artifact.version.definitionVersion}</h3>
-          <p>Exact selection: <code>{artifact.version.selection}</code></p>
+          <p>Exact selection: <code><CopyableValue label="Published pipeline selection" value={artifact.version.selection} /></code></p>
           <PipelineEditor pipeline={artifact.pipeline} onChange={() => {}} bindings={visibleBindings} readOnly />
         </section> : null}
       </section> : null}

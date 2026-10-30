@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import { Suspense } from "react";
 import { AlertCircle, Check, Flag, MapPin, Wrench } from "lucide-react";
 import type { StudioEndpointContext, StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
@@ -194,8 +195,8 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
         ) : null}
         <dl className="wf-runtime-meta">
           <div><dt>Dispatch</dt><dd title={view.commandDispatchStatus ?? view.status}>{view.commandDispatchStatus ?? view.status}</dd></div>
-          <div><dt>Test Run</dt><dd title={view.testRunId}>{view.testRunId}</dd></div>
-          <div><dt>Artifact</dt><dd title={view.artifactId ?? "None"}>{view.artifactId ?? "None"}</dd></div>
+          <div><dt>Test Run</dt><dd><CopyableValue label="Test Run" value={view.testRunId} /></dd></div>
+          <div><dt>Artifact</dt><dd><CopyableValue label="Artifact" value={view.artifactId} placeholder="None" /></dd></div>
           <div>
             <dt>Run / Instance</dt>
             <dd title={workflowExecutionId ?? "None"}>

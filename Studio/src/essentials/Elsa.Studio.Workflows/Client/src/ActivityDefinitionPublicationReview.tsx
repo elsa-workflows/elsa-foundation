@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { AlertTriangle, CheckCircle2, ExternalLink, GitCompareArrows, LocateFixed, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -298,8 +299,8 @@ export function ActivityDefinitionPublicationReview({
 
 function PublicationSummary({ preflight, publishedOutcome, compact = false }: { preflight: ActivityPublicationPreflight; publishedOutcome: ActivityPublicationReceipt["outcome"]; compact?: boolean }) {
   if (!compact) return <dl className="ad-publication-summary">
-    <div><dt>Exact draft revision</dt><dd>{preflight.draftRevision}</dd></div>
-    <div><dt>Published head</dt><dd>{publishedOutcome ? `${publishedOutcome.version} · ${publishedOutcome.definitionVersionId}` : preflight.definitionHeadVersionId ?? "No published head"}</dd></div>
+    <div><dt>Exact draft revision</dt><dd><CopyableValue label="Exact draft revision" value={preflight.draftRevision} /></dd></div>
+    <div><dt>Published head</dt><dd>{publishedOutcome ? <>{publishedOutcome.version} · <CopyableValue label="Published head version ID" value={publishedOutcome.definitionVersionId} /></> : <CopyableValue label="Published head version ID" value={preflight.definitionHeadVersionId} placeholder="No published head" />}</dd></div>
     <div><dt>Baseline</dt><dd>{publishedOutcome ? "This draft is now published" : preflight.hasBaseline ? "Compared with published head" : "First publication · no published baseline exists"}</dd></div>
     <div><dt>Required bump</dt><dd>{preflight.diff?.requiredBump ?? "None"}</dd></div>
   </dl>;
@@ -313,8 +314,8 @@ function PublicationSummary({ preflight, publishedOutcome, compact = false }: { 
     <details className="ad-publication-technical-details">
       <summary>Exact publication identities</summary>
       <dl className="ad-publication-summary">
-        <div><dt>Exact draft revision</dt><dd>{preflight.draftRevision}</dd></div>
-        <div><dt>Published head</dt><dd>{publishedOutcome ? `${publishedOutcome.version} · ${publishedOutcome.definitionVersionId}` : preflight.definitionHeadVersionId ?? "No published head"}</dd></div>
+        <div><dt>Exact draft revision</dt><dd><CopyableValue label="Exact draft revision" value={preflight.draftRevision} /></dd></div>
+        <div><dt>Published head</dt><dd>{publishedOutcome ? <>{publishedOutcome.version} · <CopyableValue label="Published head version ID" value={publishedOutcome.definitionVersionId} /></> : <CopyableValue label="Published head version ID" value={preflight.definitionHeadVersionId} placeholder="No published head" />}</dd></div>
         <div><dt>Required bump</dt><dd>{preflight.diff?.requiredBump ?? "None"}</dd></div>
       </dl>
     </details>

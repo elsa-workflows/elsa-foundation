@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import { getIntrinsicActivityDisplay } from "../runtimeActivityDisplay";
 import {
   useCallback,
@@ -945,14 +946,11 @@ function BoundaryTechnicalDetails({
     <details key={selectedActivityExecutionId ?? "unselected"} className="wf-boundary-technical">
       <summary>Technical details</summary>
       <dl className="wf-boundary-technical-grid">
-        <dt>Definition ID</dt>
-        <dd>{boundary.definitionId}</dd>
+        <dt>Definition ID</dt><dd><CopyableValue label="Definition ID" value={boundary.definitionId} /></dd>
         <dt>Definition version</dt>
         <dd>{boundary.version} · {boundary.definitionVersionId}</dd>
-        <dt>Boundary execution</dt>
-        <dd>{inspection.activityExecutionId}</dd>
-        <dt>Execution scope</dt>
-        <dd>{boundary.executionScopeId}</dd>
+        <dt>Boundary execution</dt><dd><CopyableValue label="Boundary execution" value={inspection.activityExecutionId} /></dd>
+        <dt>Execution scope</dt><dd><CopyableValue label="Execution scope" value={boundary.executionScopeId} /></dd>
         <dt>Attempt</dt>
         <dd>{inspection.attempt ? `${inspection.attempt.attemptNumber} of ${inspection.attempt.totalAttempts ?? "?"}` : "1"}</dd>
         <dt>Descendant aggregate</dt>
@@ -971,14 +969,12 @@ function BoundaryTechnicalDetails({
         ) : null}
         {selectedActivityExecutionId ? (
           <>
-            <dt>Selected activity execution</dt>
-            <dd>{selectedActivityExecutionId}</dd>
+            <dt>Selected activity execution</dt><dd><CopyableValue label="Selected activity execution" value={selectedActivityExecutionId} /></dd>
           </>
         ) : null}
         {selectedInspection ? (
           <>
-            <dt>Selected executable node</dt>
-            <dd>{selectedInspection.executableNodeId}</dd>
+            <dt>Selected executable node</dt><dd><CopyableValue label="Selected executable node" value={selectedInspection.executableNodeId} /></dd>
             <dt>Selected activity type</dt>
             <dd>{selectedInspection.activityType} · {selectedInspection.activityTypeVersion}</dd>
             <dt>Selected sequence</dt>

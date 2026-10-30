@@ -4420,3 +4420,37 @@ html[data-theme-material] .studio-stat-tile {
   white-space: nowrap;
   border: 0;
 }
+
+/* Detail fields already have a visible label. Keep their full, wrapping value beside a quiet action. */
+.studio-copyable-identifier--inline {
+  display: inline-flex;
+  max-width: 100%;
+  vertical-align: middle;
+  font: inherit;
+}
+
+.studio-copyable-identifier--inline .studio-copyable-identifier__value {
+  overflow: visible;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: inherit;
+  font: inherit;
+}
+
+.studio-copyable-identifier--inline .studio-copyable-identifier__button {
+  flex: 0 0 1.65rem;
+  width: 1.65rem;
+  height: 1.65rem;
+  min-height: 1.65rem;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.studio-copyable-identifier--inline .studio-copyable-identifier__button:hover,
+.studio-copyable-identifier--inline .studio-copyable-identifier__button:focus-visible {
+  color: var(--studio-text);
+  border-color: var(--studio-border);
+  background: var(--studio-material-hover-bg);
+}

@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import { useEffect, useRef, useState, type UIEvent } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { ArrowRight, RefreshCw } from "lucide-react";
@@ -261,9 +262,9 @@ function DependencyRow({
 }) {
   const sourceHref = exactOwnerHref(item);
   return <tr className={selected ? "is-selected" : ""}>
-    <td data-label={direction === "inbound" ? "Used in" : "Version"}><strong>{referenceLabel(item.owner)}</strong><code>{referenceIdentity(item.owner)}</code></td>
+    <td data-label={direction === "inbound" ? "Used in" : "Version"}><strong>{referenceLabel(item.owner)}</strong><code><CopyableValue label="Dependency owner identity" value={referenceIdentity(item.owner)} /></code></td>
     <td data-label="Where"><strong>{item.occurrence.occurrenceId}</strong><span>{item.occurrence.nodeOrigin.length} origin steps</span></td>
-    <td data-label={direction === "inbound" ? "Activity" : "Uses"}><strong>{referenceLabel(item.dependency)}</strong><code>{referenceIdentity(item.dependency)}</code></td>
+    <td data-label={direction === "inbound" ? "Activity" : "Uses"}><strong>{referenceLabel(item.dependency)}</strong><code><CopyableValue label="Dependency target identity" value={referenceIdentity(item.dependency)} /></code></td>
     <td data-label="Evidence"><strong>{item.isDirect ? "Direct" : `Transitive depth ${item.depth}`}</strong><span>{item.owner.kind}</span></td>
     <td data-label="Path"><button type="button" aria-pressed={selected} onClick={onSelect}>View path</button>{sourceHref ? <StudioLink href={sourceHref}>Open source</StudioLink> : <span>Source unavailable</span>}</td>
   </tr>;
@@ -275,7 +276,7 @@ function DependencyPath({ item }: { item: ActivityDefinitionDependencyItem }) {
   return <section className="ad-dependency-path" aria-labelledby="dependency-path-title">
     <header><div><span>{cycle ? "Complete cycle path" : "Complete exact-version path"}</span><h3 id="dependency-path-title">{item.relationshipId}</h3></div><strong>{path.length} nodes</strong></header>
     <ol>{path.map((reference, index) => <li key={`${referenceIdentity(reference)}:${index}`}>
-      <span>{index + 1}</span><div><strong>{referenceLabel(reference)}</strong><code>{referenceIdentity(reference)}</code></div>{index < path.length - 1 ? <ArrowRight size={16} aria-hidden /> : null}
+      <span>{index + 1}</span><div><strong>{referenceLabel(reference)}</strong><code><CopyableValue label="Dependency identity" value={referenceIdentity(reference)} /></code></div>{index < path.length - 1 ? <ArrowRight size={16} aria-hidden /> : null}
     </li>)}</ol>
   </section>;
 }

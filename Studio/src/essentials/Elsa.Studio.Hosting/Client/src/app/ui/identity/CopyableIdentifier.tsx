@@ -1,17 +1,34 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+
+/** A copy action for a visible information value; absent values stay plain placeholders. */
+export function CopyableValue({ label, value, placeholder = "—" }: {
+  label: string;
+  value?: string | number | null;
+  placeholder?: ReactNode;
+}) {
+  return value == null || value === "" ? <>{placeholder}</> : <CopyableIdentifier inline label={label} value={String(value)} />;
+}
 
 export interface CopyableIdentifierProps {
   label: string;
   value: string;
   className?: string;
+  /** Value and copy action only, for an already-labelled information field. Keeps the full value readable. */
+  inline?: boolean;
 }
 
-export function CopyableIdentifier({ label, value, className }: CopyableIdentifierProps) {
+export function CopyableIdentifier({ label, value, className, inline = false }: CopyableIdentifierProps) {
   const valueRef = useRef<HTMLSpanElement | null>(null);
+  const currentValue = useRef(value);
+  currentValue.current = value;
   const [displayValue, setDisplayValue] = useState(value);
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
 
   useEffect(() => {
+    if (inline) {
+      setDisplayValue(value);
+      return;
+    }
     const element = valueRef.current;
     if (!element) return;
 
@@ -27,7 +44,9 @@ export function CopyableIdentifier({ label, value, className }: CopyableIdentifi
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
     observer?.observe(element);
     return () => observer?.disconnect();
-  }, [value]);
+  }, [value, inline]);
+
+  useEffect(() => setCopyState("idle"), [value]);
 
   useEffect(() => {
     if (copyState === "idle") return;
@@ -38,9 +57,9 @@ export function CopyableIdentifier({ label, value, className }: CopyableIdentifi
   const copy = async () => {
     try {
       await copyExactText(value);
-      setCopyState("copied");
+      if (currentValue.current === value) setCopyState("copied");
     } catch {
-      setCopyState("failed");
+      if (currentValue.current === value) setCopyState("failed");
     }
   };
 
@@ -50,30 +69,32 @@ export function CopyableIdentifier({ label, value, className }: CopyableIdentifi
       ? `Could not copy ${label}`
       : "";
 
+  const Container = inline ? "span" : "div";
   return (
-    <div className={["studio-copyable-identifier", className].filter(Boolean).join(" ")}>
-      <span className="studio-copyable-identifier__label">{label}</span>
+    <Container className={["studio-copyable-identifier", inline && "studio-copyable-identifier--inline", className].filter(Boolean).join(" ")}>
+      {!inline ? <span className="studio-copyable-identifier__label">{label}</span> : null}
       <span
         ref={valueRef}
         className="studio-copyable-identifier__value"
         title={value}
         aria-label={`${label}: ${value}`}
       >
-        {displayValue}
+        {inline ? value : displayValue}
       </span>
       <button
         type="button"
         className="studio-copyable-identifier__button"
         aria-label={`Copy ${label}`}
         title={`Copy ${label}`}
-        onClick={() => void copy()}
+        onClick={event => { event.stopPropagation(); void copy(); }}
+        onKeyDown={event => { if (event.key === "Enter" || event.key === " ") event.stopPropagation(); }}
       >
         {copyState === "copied" ? <CheckIcon /> : <CopyIcon />}
       </button>
-      <span className="studio-copyable-identifier__announcement" role="status" aria-live="polite">
+      <span className="studio-copyable-identifier__announcement" role={announcement ? "status" : undefined} aria-live="polite">
         {announcement}
       </span>
-    </div>
+    </Container>
   );
 }
 

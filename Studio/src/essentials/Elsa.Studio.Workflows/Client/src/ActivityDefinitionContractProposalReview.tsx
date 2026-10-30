@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import {
@@ -163,10 +164,10 @@ export function ActivityDefinitionContractProposalReview({
     <ActivityDefinitionContractProposalStatus phase={phase} failure={failure} />
     {proposal && phase !== "stale" ? <>
       <details className="ad-proposal-technical"><summary>Technical details</summary><dl className="ad-publication-summary" aria-label="Exact proposal binding">
-        <div><dt>Draft revision</dt><dd>{proposal.revision}</dd></div>
-        <div><dt>Provider</dt><dd>{proposal.providerKey}</dd></div>
-        <div><dt>Provider schema</dt><dd>{proposal.providerSchemaVersion}</dd></div>
-        <div><dt>Implementation fingerprint</dt><dd><code>{proposal.manifestFingerprint}</code></dd></div>
+        <div><dt>Draft revision</dt><dd><CopyableValue label="Draft revision" value={proposal.revision} /></dd></div>
+        <div><dt>Provider</dt><dd><CopyableValue label="Provider" value={proposal.providerKey} /></dd></div>
+        <div><dt>Provider schema</dt><dd><CopyableValue label="Provider schema" value={proposal.providerSchemaVersion} /></dd></div>
+        <div><dt>Implementation fingerprint</dt><dd><code><CopyableValue label="Implementation fingerprint" value={proposal.manifestFingerprint} /></code></dd></div>
       </dl></details>
       {reviews.length ? <ActivityDefinitionContractProposalChangeList
         reviews={reviews}

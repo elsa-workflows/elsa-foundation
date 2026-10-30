@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import React, { useId, useRef } from "react";
 import { Ban, Cable, ShieldCheck, Trash2, X } from "lucide-react";
 import { useDialogFocus } from "@elsa-workflows/studio-sdk";
@@ -48,11 +49,11 @@ export function ConnectionDetailDialog({ connection, descriptors, busy, notifica
           return <div key={name}><dt>{field?.displayName || name}</dt><dd>{displayValue}</dd></div>;
         })}</dl></section> : null}
         <details className="connections-technical"><summary>Technical details</summary><dl className="connections-summary">
-          <div><dt>Name</dt><dd><code>{connection.name}</code></dd></div>
-          <div><dt>Type</dt><dd><code>{connection.typeName}</code></dd></div>
-          <div><dt>Auth scheme</dt><dd><code>{connection.authScheme}</code></dd></div>
-          <div><dt>Owner</dt><dd>{connection.owner || "—"}</dd></div>
-          <div><dt>Managed by</dt><dd>{connection.managedBy || "—"}</dd></div>
+          <div><dt>Name</dt><dd><code><CopyableValue label="Connection name" value={connection.name} /></code></dd></div>
+          <div><dt>Type</dt><dd><code><CopyableValue label="Connection type" value={connection.typeName} /></code></dd></div>
+          <div><dt>Auth scheme</dt><dd><code><CopyableValue label="Authentication scheme" value={connection.authScheme} /></code></dd></div>
+          <div><dt>Owner</dt><dd><CopyableValue label="Connection owner" value={connection.owner} /></dd></div>
+          <div><dt>Managed by</dt><dd><CopyableValue label="Managed by" value={connection.managedBy} /></dd></div>
           <div><dt>Credential fields</dt><dd>{connection.secretFieldNames.join(", ") || "None"}</dd></div>
         </dl></details>
       </div>

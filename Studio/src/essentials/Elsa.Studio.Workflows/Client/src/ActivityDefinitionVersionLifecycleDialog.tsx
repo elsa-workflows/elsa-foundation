@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -155,11 +156,11 @@ export function ActivityDefinitionVersionLifecycleDialog({
     onClose={onClose}
   >
     <dl className="ad-review-facts" aria-label="Exact lifecycle binding">
-      <div><dt>Definition</dt><dd><code>{definition.definition.definitionId}</code></dd></div>
-      <div><dt>Version</dt><dd>{version.version.version} · <code>{version.version.versionId}</code></dd></div>
+      <div><dt>Definition</dt><dd><code><CopyableValue label="Definition ID" value={definition.definition.definitionId} /></code></dd></div>
+      <div><dt>Version</dt><dd>{version.version.version} · <code><CopyableValue label="Version ID" value={version.version.versionId} /></code></dd></div>
       <div><dt>Expected lifecycle</dt><dd>{expectedTargetLifecycle}</dd></div>
-      <div><dt>Expected head</dt><dd><code>{definition.lifecycle.head?.versionId ?? "No head"}</code></dd></div>
-      <div><dt>Current recommendation</dt><dd><code>{definition.lifecycle.recommendation?.versionId ?? "No recommendation"}</code></dd></div>
+      <div><dt>Expected head</dt><dd><code><CopyableValue label="Expected head" value={definition.lifecycle.head?.versionId} placeholder="No head" /></code></dd></div>
+      <div><dt>Current recommendation</dt><dd><code><CopyableValue label="Current recommendation" value={definition.lifecycle.recommendation?.versionId} placeholder="No recommendation" /></code></dd></div>
     </dl>
 
     <section className="ad-impact-group is-warning" aria-labelledby="lifecycle-impact-title">

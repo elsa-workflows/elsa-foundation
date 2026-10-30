@@ -1,3 +1,4 @@
+import { CopyableValue } from "../ui/identity/CopyableIdentifier";
 import React from "react";
 import { Check, RotateCcw } from "lucide-react";
 import type { WorkflowGraphOperationBatch, WorkflowGraphOperationBatchApplyResult } from "./agentTypes";
@@ -45,8 +46,8 @@ export function AgentWorkflowBatchReview({
             </header>
             <dl>
               <div><dt>Schema</dt><dd>{item.batch.schemaVersion}</dd></div>
-              <div><dt>Workflow</dt><dd>{item.batch.workflowDefinitionId}</dd></div>
-              {item.batch.baseRevision ? <div><dt>Revision</dt><dd>{item.batch.baseRevision}</dd></div> : null}
+              <div><dt>Workflow</dt><dd><CopyableValue label="Workflow" value={item.batch.workflowDefinitionId} /></dd></div>
+              {item.batch.baseRevision ? <div><dt>Revision</dt><dd><CopyableValue label="Revision" value={item.batch.baseRevision} /></dd></div> : null}
             </dl>
             <div className="agent-workflow-operation-groups" aria-label="Operation summary">
               {summary.map(group => (

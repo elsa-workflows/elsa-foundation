@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
@@ -612,7 +613,7 @@ function DetailRow({ name, value }: { name: string; value?: string | null }) {
   return (
     <>
       <dt>{name}</dt>
-      <dd>{value}</dd>
+      <dd><CopyableValue label={name} value={value} /></dd>
     </>
   );
 }

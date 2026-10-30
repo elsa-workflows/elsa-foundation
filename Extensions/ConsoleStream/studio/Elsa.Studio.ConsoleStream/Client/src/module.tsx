@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as signalR from "@microsoft/signalr";
 import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -467,7 +468,7 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
           <div className={`console-stream-line ${line.stream}`} key={line.id}>
             <span>{new Date(line.timestamp).toLocaleTimeString()}</span>
             <small>{line.sourceLabel ?? "local"}</small>
-            <code>{line.renderedText}</code>
+            <code><CopyableValue label="Console line" value={line.renderedText} placeholder="" /></code>
           </div>
         ))}
       </div>

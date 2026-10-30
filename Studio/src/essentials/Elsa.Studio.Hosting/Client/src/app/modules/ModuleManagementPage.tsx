@@ -1,3 +1,4 @@
+import { CopyableValue } from "../ui/identity/CopyableIdentifier";
 import React, { useMemo, useRef, useState } from "react";
 import { Boxes, CloudUpload, RefreshCcw, Trash2 } from "lucide-react";
 import type { ElsaStudioModuleApi } from "../../sdk";
@@ -475,7 +476,7 @@ function ModuleInspector({
         <div>
           <span>{host.label} / {host.runtime}</span>
           <h3>{selectedRow?.displayName ?? registry.host.displayName}</h3>
-          <code>{selectedRow?.id ?? registry.host.id}</code>
+          <code><CopyableValue label="Module ID" value={selectedRow?.id ?? registry.host.id} /></code>
         </div>
         <StatusChip tone={statusTone(selectedRow?.status ?? "available")}>{selectedRow?.status ?? "available"}</StatusChip>
       </div>
@@ -503,11 +504,11 @@ function OverviewTab({ host, registry, selectedRow }: { host: HostModel; registr
         <div><dt>Source kind</dt><dd>{selectedRow?.sourceKind ?? "host"}</dd></div>
         <div><dt>Package source</dt><dd>{selectedRow?.origin === "nuplane" ? selectedRow.packageSource : "n/a"}</dd></div>
         <div><dt>Nuplane state</dt><dd>{selectedRow?.nuplaneState ?? "n/a"}</dd></div>
-        <div><dt>Package</dt><dd>{selectedRow?.packageId ?? "n/a"}</dd></div>
-        <div><dt>Version</dt><dd>{selectedRow?.version || "n/a"}</dd></div>
+        <div><dt>Package</dt><dd><CopyableValue label="Package ID" value={selectedRow?.packageId} placeholder="n/a" /></dd></div>
+        <div><dt>Version</dt><dd><CopyableValue label="Package version" value={selectedRow?.version} placeholder="n/a" /></dd></div>
         <div><dt>Compatibility</dt><dd>{selectedRow?.module ? <StatusChip tone={compatibilityTone(selectedRow.module.compatibility)}>{selectedRow.module.compatibility}</StatusChip> : "n/a"}</dd></div>
       </dl>
-      <p className="modules-muted">Content root: <code>{registry.host.contentRootPath}</code></p>
+      <p className="modules-muted">Content root: <code><CopyableValue label="Content root" value={registry.host.contentRootPath} /></code></p>
     </div>
   );
 }
@@ -544,11 +545,11 @@ function PackageTab({
       {selectedPackage ? (
         <>
           <dl className="modules-metadata">
-            <div><dt>Package</dt><dd>{selectedPackage.id}</dd></div>
-            <div><dt>Version</dt><dd>{selectedPackage.version}</dd></div>
+            <div><dt>Package</dt><dd><CopyableValue label="Package" value={selectedPackage.id} /></dd></div>
+            <div><dt>Version</dt><dd><CopyableValue label="Version" value={selectedPackage.version} /></dd></div>
             <div><dt>Feed</dt><dd>{selectedPackage.feedName || "n/a"}</dd></div>
             <div><dt>Source</dt><dd>{selectedPackage.sourceName || "n/a"}</dd></div>
-            <div><dt>Install path</dt><dd><code>{selectedPackage.installPath}</code></dd></div>
+            <div><dt>Install path</dt><dd><code><CopyableValue label="Install path" value={selectedPackage.installPath} /></code></dd></div>
           </dl>
           <PackageDependencies package={selectedPackage} />
         </>
@@ -619,7 +620,7 @@ function StudioManifestView({ manifest }: { manifest: ModuleManagementStudioMani
   return (
     <div className="modules-manifest-view">
       <dl className="modules-metadata">
-        <div><dt>Entry</dt><dd>{manifest.entry}</dd></div>
+        <div><dt>Entry</dt><dd><CopyableValue label="Entry" value={manifest.entry} /></dd></div>
         <div><dt>Styles</dt><dd>{manifest.styles.length}</dd></div>
         <div><dt>Capabilities</dt><dd>{manifest.capabilities.length}</dd></div>
       </dl>
@@ -627,7 +628,7 @@ function StudioManifestView({ manifest }: { manifest: ModuleManagementStudioMani
         <>
           <h5>Styles</h5>
           <ul className="modules-manifest-list">
-            {manifest.styles.map(style => <li key={style}><code>{style}</code></li>)}
+            {manifest.styles.map(style => <li key={style}><code><CopyableValue label="Stylesheet path" value={style} /></code></li>)}
           </ul>
         </>
       ) : null}

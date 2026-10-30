@@ -27,7 +27,7 @@ describe("AgentProposalReview", () => {
       />
     );
 
-    const buttons = Array.from(container.querySelectorAll("button"));
+    const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>("button:not(.studio-copyable-identifier__button)"));
     expect(container.textContent).toContain("Add timeout branch");
     expect(buttons.map(button => button.textContent?.trim())).toEqual(["Approve", "Deny", "Apply"]);
     expect(buttons[2].disabled).toBe(true);
@@ -117,13 +117,15 @@ describe("AgentProposalReview", () => {
       />
     );
 
-    const buttons = Array.from(container.querySelectorAll("button"));
+    const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>("button:not(.studio-copyable-identifier__button)"));
     expect(container.textContent).toContain("Stripe API key");
     expect(container.textContent).toContain("Policy service is unavailable.");
     expect(container.textContent).toContain("Administrator approval is required");
     expect(container.textContent).toContain("Loading review state.");
     expect(container.textContent).toContain("Waiting for administrator approval.");
+    expect(buttons.length).toBeGreaterThan(0);
     expect(buttons.every(button => button.disabled)).toBe(true);
+    expect(container.querySelector<HTMLButtonElement>('[aria-label="Copy ID"]')?.disabled).toBe(false);
 
     // The risk chip is rendered and the article carries data-risk so the by-severity CSS
     // (admin/critical -> strong danger tone) has a hook to key off.
