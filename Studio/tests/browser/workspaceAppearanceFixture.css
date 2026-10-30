@@ -1,0 +1,16 @@
+/* Only the reused editor fixture's outer wrapper needs sizing; production controls/styles are unchanged. */
+.content:has(> .activity-duplicate-editor) {
+  display: flex;
+  padding: 0;
+  overflow: hidden;
+}
+
+.activity-duplicate-editor,
+.activity-duplicate-editor > .wf-editor {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}

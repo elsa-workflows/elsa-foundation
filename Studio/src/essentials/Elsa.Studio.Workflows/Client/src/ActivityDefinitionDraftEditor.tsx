@@ -604,13 +604,16 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
 
   return <main className={`ad-page ad-draft-editor${graphDesignerActive ? " is-graph-designer" : ""}`} aria-labelledby="activity-draft-title">
     <div className="ad-draft-editor-toolbar">
-      <button type="button" className="ad-back" onClick={() => onBack()} disabled={revisionSensitiveActionsBlocked}><ArrowLeft size={16} /> Activity Definition</button>
       <header className="ad-workbench-header">
-        <div className="ad-draft-heading">
-          <span className="ad-kicker">{draftIsActive ? "Draft" : "Published draft"}</span>
-          <div className="ad-draft-title-line">
+        <div className="ad-draft-identity">
+          <button type="button" className="ad-back ad-draft-back" aria-label="Back to Activity Definition" title="Back to Activity Definition" onClick={() => onBack()} disabled={revisionSensitiveActionsBlocked}><ArrowLeft size={18} aria-hidden /><span className="wf-visually-hidden">Activity Definition</span></button>
+          <div className="ad-draft-heading">
             <h1 id="activity-draft-title">{draftHeaderTitle(definitionDisplayName, draft)}</h1>
-            <span className={`ad-save-chip is-${draftIsActive && !contractLocallyValid ? "failed" : draftIsActive ? status : "published"}`}>{draftIsActive ? contractLocallyValid ? saveStatusLabel(status, draft.revision, false) : "Finish editing" : "Published"}</span>
+            <div className="ad-draft-context">
+              <span>{draftIsActive ? "Draft" : "Published draft"}</span>
+              <span aria-hidden>·</span>
+              <span className={`ad-save-chip is-${draftIsActive && !contractLocallyValid ? "failed" : draftIsActive ? status : "published"}`}>{draftIsActive ? contractLocallyValid ? saveStatusLabel(status, draft.revision, false) : "Finish editing" : "Published"}</span>
+            </div>
           </div>
         </div>
         <div className="ad-header-actions ad-authoring-toolbar-actions">

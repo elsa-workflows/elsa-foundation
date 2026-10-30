@@ -27,6 +27,7 @@ const noRenderedPanel = () => {
 let replaceActivity: (next: ActivityNode) => void = noRenderedPanel;
 let replaceDraftId: (next: string) => void = noRenderedPanel;
 let replaceEditors: (next: StudioActivityPropertyEditorContribution[]) => void = noRenderedPanel;
+let replaceReadOnly: (next: boolean) => void = noRenderedPanel;
 
 const backendExpressionDescriptors: StudioExpressionDescriptor[] = [
   { type: "Literal", displayName: "Literal", editingMode: "literal" },
@@ -49,6 +50,7 @@ afterEach(() => {
   replaceActivity = noRenderedPanel;
   replaceDraftId = noRenderedPanel;
   replaceEditors = noRenderedPanel;
+  replaceReadOnly = noRenderedPanel;
   unmountActivePanel();
 });
 
@@ -65,12 +67,15 @@ function renderPanel(
     expressionDescriptorStatus?: "loading" | "ready" | "failed";
     draftId?: string;
     strictMode?: boolean;
+    readOnly?: boolean;
     onRetryDescriptors?(): void;
     onChange?(activity: ActivityNode): void;
     updateActivity?: boolean;
   } = {}
 ) {
   const container = document.createElement("div");
+  // Embedded authoring surfaces supply a scoped token root that also owns their overlays.
+  container.className = "wf-tokens";
   document.body.appendChild(container);
   const root = createRoot(container);
   const descriptor: StudioActivityDescriptor = {
@@ -86,15 +91,18 @@ function renderPanel(
     const [currentActivity, setCurrentActivity] = React.useState(initialActivity);
     const [currentDraftId, setCurrentDraftId] = React.useState(options.draftId);
     const [currentEditors, setCurrentEditors] = React.useState(options.editors ?? []);
+    const [readOnly, setReadOnly] = React.useState(options.readOnly ?? false);
     replaceActivity = setCurrentActivity;
     replaceDraftId = setCurrentDraftId;
     replaceEditors = setCurrentEditors;
+    replaceReadOnly = setReadOnly;
     const handleChange = (nextActivity: ActivityNode) => {
       options.onChange?.(nextActivity);
       if (options.updateActivity !== false) setCurrentActivity(nextActivity);
     };
     const panel = (
       <ActivityPropertiesPanel
+        readOnly={readOnly}
         draftId={currentDraftId}
         activity={currentActivity}
         descriptor={descriptor}
@@ -138,6 +146,39 @@ function propertyLabels(container: HTMLElement) {
 }
 
 describe("activity property organization", () => {
+  it("locks an already expanded editor without disabling Close or accepting stale edits", () => {
+    const changes: ActivityNode[] = [];
+    let lateEdit: ((value: unknown) => void) | undefined;
+    const container = renderPanel([input("Condition", { isWrapped: true })], {
+      activity: activity({ condition: { typeName: "System.String", expression: { type: "JavaScript", value: "original" } } }),
+      expressionEditors: [{
+        id: "locking-editor",
+        supports: () => true,
+        surfaces: { expanded: props => {
+          lateEdit ??= props.onChange;
+          return <textarea value={String(props.value)} disabled={props.disabled} onChange={event => props.onChange(event.currentTarget.value)} />;
+        } }
+      }],
+      onChange: next => changes.push(next)
+    });
+    clickButton(container, "Open expanded Condition editor");
+    const dialog = container.querySelector<HTMLElement>(".wf-property-editor-dialog")!;
+    const editor = dialog.querySelector<HTMLTextAreaElement>("textarea")!;
+    expect(editor.disabled).toBe(false);
+    flushSync(() => replaceReadOnly(true));
+    expect(editor.disabled).toBe(true);
+    const pickers = [...dialog.querySelectorAll<HTMLButtonElement>(".wf-syntax-picker-trigger")];
+    expect(pickers).toHaveLength(2);
+    expect(pickers.every(button => button.disabled)).toBe(true);
+    expect(dialog.querySelector<HTMLButtonElement>("button[aria-label='Close Condition editor']")!.disabled).toBe(false);
+    expect(lateEdit).toBeDefined();
+    flushSync(() => lateEdit!("late edit"));
+    expect(changes).toHaveLength(0);
+    flushSync(() => replaceReadOnly(false));
+    expect(editor.disabled).toBe(false);
+    expect(editor.value).toBe("original");
+  });
+
   it("does not invent expression types when the backend returns none", () => {
     const container = renderPanel([
       input("Message", { isWrapped: true, defaultSyntax: "Literal" })

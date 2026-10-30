@@ -96,6 +96,18 @@ zeroes shadows, makes `--studio-focus` the solid ring colour and brightens the t
 tokens. If a module genuinely needs a High-contrast-only adjustment (e.g. thickening a hairline it
 draws with a literal width), it may guard on `html[data-theme-appearance="high-contrast"]`.
 
+### Independent workspace style and color scheme
+
+Appearance offers optional `quiet`, `focus` and `open` workspace styles, independently of the
+selected color scheme and mode. Existing theme presets remain compatible; absent overrides
+retain their original typography, shape and layout. See [ADR 0023](adr/0023-separate-workspace-style-and-color-scheme.md).
+
+The host publishes optional `data-workspace-style` and informational `data-color-scheme`
+attributes. Modules may use the former for surface-owned composition treatment, alongside
+`data-theme-layout`. A color-scheme identity never selects component behavior. Explicit styles
+own typography, shape and elevation; the scheme supplies colors and supported mode variants.
+Navigation overrides still win over workspace defaults (left for Quiet/Focus, top for Open).
+
 ## Layer 2 — the `--studio-*` semantic tokens (STABLE)
 
 These are the primary module-facing surface. Stable: renamed or removed only with a major
@@ -112,6 +124,10 @@ version bump and a migration note.
 | `--studio-text` | primary foreground |
 | `--studio-text-muted` | secondary/label foreground |
 | `--studio-border` | hairline border/divider |
+| `--studio-edge-subtle` | decorative separators; default aliases the border |
+| `--studio-edge-control` | interactive field/control boundary; default aliases the border |
+| `--studio-canvas` | authoring canvas surface; default aliases the page background |
+| `--studio-panel` | tool/property panel surface; default aliases the raised surface |
 
 ### Accent & focus
 
@@ -218,7 +234,8 @@ Texture/grid: `--studio-material-texture`, `--studio-material-texture-size`,
    This rule is about `data-theme` (which theme). The mode and layout attributes are not theme
    selectors and stay allowed: `[data-theme-mode="dark"]` for the colour scheme,
    `[data-theme-appearance="high-contrast"]` for a High-contrast-only adjustment the tokens
-   cannot express, and `[data-theme-layout="…"]` for arrangement (see [Modes and the `<html>` attributes](#modes-and-the-html-attributes)).
+   cannot express, `[data-theme-layout="…"]` for arrangement and `[data-workspace-style="…"]`
+   for an explicit workspace treatment (see [Modes and the `<html>` attributes](#modes-and-the-html-attributes)).
 4. **Gate every material treatment on `[data-theme-material]`.** Flat themes — every built-in:
    `classic`, `meridian`, `drift`, `schematic`, `atelier`, `elsa-cloud`, `signal`, `dusk` — must stay flat. Any rule
    consuming a `--studio-material-*` token belongs inside an `html[data-theme-material] …`

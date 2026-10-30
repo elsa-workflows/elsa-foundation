@@ -4,6 +4,7 @@ import { authSessionEndedEvent, type ElsaStudioModuleApi } from "@elsa-workflows
 import { setDialogs } from "./workflow-editor/dialogs";
 import { createObjectExpressionEditorContribution } from "./objectExpressionEditor";
 import "./styles.css";
+import "./workspaceAppearance.css";
 import { registerVariableReferenceContribution } from "./variableReferenceContribution";
 import { registerInputReferenceContribution } from "./inputReferenceContribution";
 import { WorkflowLazyBoundary } from "./WorkflowLazyBoundary";

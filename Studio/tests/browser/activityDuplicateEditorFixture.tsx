@@ -9,6 +9,7 @@ import type {
   StudioEndpointContext,
   StudioExpressionEditorContribution
 } from "@elsa-workflows/studio-sdk";
+import { activityGraphDiagnosticFocusEvent } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphDiagnosticFocus";
 import { ActivityGraphImplementationEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor";
 import { WorkflowEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor";
 import { WorkflowInstanceDetailsWorkbench } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
@@ -19,6 +20,8 @@ import {
   sequenceActivity,
   sequenceNode,
   forEachActivity,
+  ifActivity,
+  ifNode,
   whileActivity,
   whileNode,
   forEachNode,
@@ -135,8 +138,10 @@ function editorDraft(): WorkflowDraft {
   };
 }
 
+const rootSlots = new URLSearchParams(window.location.search).get("root-slots");
 const slotAssignment = new URLSearchParams(window.location.search).get("slot-assignment");
 function sequenceRootActivity(): ActivityNode {
+  if (rootSlots) return ifNode("if-root", rootSlots === "empty" ? null : leafNode("then-sibling"), rootSlots === "filled" ? sequenceNode("else-sequence", [leafNode("else-leaf")]) : null);
   if (slotAssignment) {
     const loop = whileNode("while", null);
     return slotAssignment === "root" ? loop : sequenceNode("sequence-root", [loop]);
@@ -215,6 +220,8 @@ function ActivityDuplicateEditorFixtureContent() {
 function ControlledActivityGraphFixture({ context }: { context: StudioEndpointContext }) {
   const [value, setValue] = useState<StudioActivityDefinitionImplementationEditorProps["value"]>(() => adaptivePorts && sessionStorage.getItem(adaptiveStorageKey)
     ? JSON.parse(sessionStorage.getItem(adaptiveStorageKey)!) : activityGraphSequenceValue());
+  const readOnly = new URLSearchParams(window.location.search).has("read-only");
+  const [diagnosticResult, setDiagnosticResult] = useState("");
   return <><ActivityGraphImplementationEditor
     context={context}
     definitionId="definition-1"
@@ -229,9 +236,11 @@ function ControlledActivityGraphFixture({ context }: { context: StudioEndpointCo
     graphAuthoringPanels={[]}
     historyResetKey="draft-1:activity-sequence"
     value={value}
-    readOnly={false}
+    readOnly={readOnly}
     onChange={next => { setValue(next); if (adaptivePorts) sessionStorage.setItem(adaptiveStorageKey, JSON.stringify(next)); }}
-  />{slotAssignment ? <output hidden data-testid="activity-graph-payload">{JSON.stringify(value.payload)}</output> : null}</>;
+  />{rootSlots && readOnly ? <><button onClick={() => document.querySelector("[data-provider-diagnostic-focus-root]")!.dispatchEvent(new CustomEvent(activityGraphDiagnosticFocusEvent, {
+    cancelable: true, detail: { location: { referenceKey: "else-leaf" }, complete: (result: { kind: string }) => setDiagnosticResult(result.kind) }
+  }))}>Focus Else diagnostic</button><output data-testid="diagnostic-result">{diagnosticResult}</output></> : null}{slotAssignment || rootSlots ? <output hidden data-testid="activity-graph-payload">{JSON.stringify(value.payload)}</output> : null}</>;
 }
 
 function createEditorContext(live?: { status: string; disconnected: boolean }): StudioEndpointContext {
@@ -244,7 +253,7 @@ function createEditorContext(live?: { status: string; disconnected: boolean }): 
     { ...writeLineCatalog, activityVersionId: "decision-v1", activityTypeKey: "Elsa.BpmnDecision", displayName: "BPMN Decision", category: "BPMN", paletteHints: { containerModes: ["bpmn"], description: "BPMN Decision is intended for a gateway in a BPMN Process." } },
     { ...writeLineCatalog, activityVersionId: "complete-v1", activityTypeKey: "Elsa.Complete", displayName: "Complete", paletteHints: { resourceKinds: ["activity-definition-graph"] } }
   ] : [];
-  const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity, ...(slotAssignment ? [whileActivity] : []), ...paletteFixtures, ...(adaptivePorts ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : [])];
+  const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity, ...(slotAssignment ? [whileActivity] : []), ...(rootSlots ? [ifActivity] : []), ...paletteFixtures, ...(adaptivePorts ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : [])];
   const compiled = (node: ActivityNode): object => ({
     executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
     activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown",

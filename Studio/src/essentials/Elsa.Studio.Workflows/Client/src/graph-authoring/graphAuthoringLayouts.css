@@ -30,13 +30,13 @@
  */
 
 /* Floating (Drift): palette and inspector float as islands over a full-bleed canvas. */
-html[data-theme-layout="floating"] .wf-editor-body > .wf-canvas-shell {
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body > .wf-canvas-shell {
   grid-row: 1;
   grid-column: 1 / -1;
 }
 
-html[data-theme-layout="floating"] .wf-editor-body > .wf-palette,
-html[data-theme-layout="floating"] .wf-editor-body > .wf-inspector {
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body > .wf-palette,
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body > .wf-inspector {
   z-index: 3;
   grid-row: 1;
   margin: 12px;
@@ -45,23 +45,23 @@ html[data-theme-layout="floating"] .wf-editor-body > .wf-inspector {
   box-shadow: var(--wf-shadow-overlay);
 }
 
-html[data-theme-layout="floating"] .wf-editor-body > .wf-side-resize-handle,
-html[data-theme-layout="floating"] .wf-editor-body > .wf-side-resize-spacer {
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body > .wf-side-resize-handle,
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body > .wf-side-resize-spacer {
   display: none;
 }
 
 /* The canvas's own chrome sits between the islands rather than underneath them. */
-html[data-theme-layout="floating"] .wf-editor-body:not(.palette-maximized):not(.inspector-maximized) > .wf-canvas-shell > :not(.wf-canvas) {
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body:not(.palette-maximized):not(.inspector-maximized) > .wf-canvas-shell > :not(.wf-canvas) {
   margin-right: calc(var(--wf-inspector-width, 320px) + 24px);
   margin-left: calc(var(--wf-palette-width, 260px) + 24px);
 }
 
-html[data-theme-layout="floating"] .wf-editor-body.palette-absent > .wf-canvas-shell > :not(.wf-canvas) {
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-editor-body.palette-absent > .wf-canvas-shell > :not(.wf-canvas) {
   margin-left: 12px;
 }
 
-html[data-theme-layout="floating"] .wf-canvas-tabs,
-html[data-theme-layout="floating"] .wf-breadcrumb {
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-canvas-tabs,
+html[data-theme-layout="floating"]:not([data-workspace-style]) .wf-breadcrumb {
   border-bottom: 0;
 }
 

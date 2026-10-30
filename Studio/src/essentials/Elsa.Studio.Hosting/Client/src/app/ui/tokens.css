@@ -30,6 +30,10 @@
   --studio-text: var(--foreground);
   --studio-text-muted: var(--muted-foreground);
   --studio-border: var(--border);
+  --studio-edge-subtle: var(--studio-border);
+  --studio-edge-control: var(--studio-border);
+  --studio-canvas: var(--studio-bg);
+  --studio-panel: var(--studio-surface);
   --studio-accent: var(--primary);
   --studio-accent-text: var(--primary-foreground);
   --studio-accent-soft: color-mix(in srgb, var(--primary) 10%, transparent);
@@ -98,7 +102,7 @@ html[data-theme-mode="dark"] {
  * therefore covers both Dark and Dim: the shared one below for Meridian, Drift, Schematic, Atelier and Dusk,
  * and Classic's, Elsa Cloud's and Signal's own.
  */
-html[data-theme="classic"] {
+html:where(:not([data-workspace-style]))[data-theme="classic"] {
   --shadow-sm: 0 1px 2px oklch(0.21 0.04 266 / 0.04);
   --shadow-md: 0 1px 2px oklch(0.21 0.04 266 / 0.04), 0 4px 12px -4px oklch(0.21 0.04 266 / 0.08);
   --shadow-lg: 0 1px 2px oklch(0.21 0.04 266 / 0.04), 0 12px 28px -8px oklch(0.21 0.04 266 / 0.12);
@@ -108,7 +112,7 @@ html[data-theme="classic"] {
   --studio-title-weight: 600;
 }
 
-html[data-theme="meridian"] {
+html:where(:not([data-workspace-style]))[data-theme="meridian"] {
   --shadow-sm: 0 1px 2px oklch(0.25 0.03 265 / 0.07);
   --shadow-md: 0 1px 2px oklch(0.25 0.03 265 / 0.05), 0 6px 16px -4px oklch(0.25 0.03 265 / 0.12);
   --shadow-lg: 0 2px 6px oklch(0.25 0.03 265 / 0.05), 0 18px 44px -10px oklch(0.25 0.03 265 / 0.2);
@@ -118,7 +122,7 @@ html[data-theme="meridian"] {
 }
 
 /* Drift floats: larger, softer, more diffuse shadows so panels read as islands over the canvas. */
-html[data-theme="drift"] {
+html:where(:not([data-workspace-style]))[data-theme="drift"] {
   --shadow-sm: 0 1px 3px oklch(0.3 0.03 200 / 0.08);
   --shadow-md: 0 2px 4px oklch(0.3 0.03 200 / 0.05), 0 10px 24px -6px oklch(0.3 0.03 200 / 0.14);
   --shadow-lg: 0 2px 6px oklch(0.3 0.03 200 / 0.05), 0 22px 50px -12px oklch(0.3 0.03 200 / 0.22);
@@ -128,7 +132,7 @@ html[data-theme="drift"] {
 }
 
 /* Schematic is drafted, not lit: near-flat elevation, crisp one-pixel shadows. */
-html[data-theme="schematic"] {
+html:where(:not([data-workspace-style]))[data-theme="schematic"] {
   --shadow-sm: 0 1px 0 oklch(0.3 0.04 250 / 0.08);
   --shadow-md: 0 1px 0 oklch(0.3 0.04 250 / 0.08), 0 4px 10px -4px oklch(0.3 0.04 250 / 0.14);
   --shadow-lg: 0 1px 0 oklch(0.3 0.04 250 / 0.1), 0 10px 24px -8px oklch(0.3 0.04 250 / 0.2);
@@ -137,7 +141,7 @@ html[data-theme="schematic"] {
 }
 
 /* Atelier is warm paper: soft, warm-tinted shadows and serif titles at the face's only weight. */
-html[data-theme="atelier"] {
+html:where(:not([data-workspace-style]))[data-theme="atelier"] {
   --shadow-sm: 0 1px 2px oklch(0.3 0.03 60 / 0.07);
   --shadow-md: 0 1px 2px oklch(0.3 0.03 60 / 0.05), 0 8px 20px -6px oklch(0.3 0.03 60 / 0.12);
   --shadow-lg: 0 2px 6px oklch(0.3 0.03 60 / 0.05), 0 20px 48px -12px oklch(0.3 0.03 60 / 0.2);
@@ -152,7 +156,7 @@ html[data-theme="atelier"] {
 /* Elsa Cloud separates cards from the ground by a hairline border first and a soft shadow second, so
    elevation stays subtle in every mode. This is its light recipe; Dark and Dim override it below with
    a recipe of their own rather than the shared dark one. Titles are medium weight, not bold. */
-html[data-theme="elsa-cloud"] {
+html:where(:not([data-workspace-style]))[data-theme="elsa-cloud"] {
   --shadow-sm: 0 1px 2px oklch(0.2 0.02 285 / 0.06);
   --shadow-md: 0 1px 2px oklch(0.2 0.02 285 / 0.05), 0 6px 16px -6px oklch(0.2 0.02 285 / 0.12);
   --shadow-lg: 0 2px 6px oklch(0.2 0.02 285 / 0.05), 0 18px 44px -12px oklch(0.2 0.02 285 / 0.2);
@@ -164,7 +168,7 @@ html[data-theme="elsa-cloud"] {
 
 /* Signal is an instrument panel: a hairline border separates surfaces and the shadows stay almost flat in every
    mode. This is its light recipe; Dark and Dim override it below. Titles are semibold, not bold. */
-html[data-theme="signal"] {
+html:where(:not([data-workspace-style]))[data-theme="signal"] {
   --shadow-sm: 0 1px 0 oklch(0.2 0.02 125 / 0.05);
   --shadow-md: 0 1px 2px oklch(0.2 0.02 125 / 0.06), 0 4px 10px -6px oklch(0.2 0.02 125 / 0.1);
   --shadow-lg: 0 1px 3px oklch(0.2 0.02 125 / 0.07), 0 10px 24px -10px oklch(0.2 0.02 125 / 0.16);
@@ -180,7 +184,7 @@ html[data-theme="signal"] {
 }
 
 /* Dusk's light recipe: soft violet-tinted shadows. Dark and Dim use the shared dark recipe below. */
-html[data-theme="dusk"] {
+html:where(:not([data-workspace-style]))[data-theme="dusk"] {
   --shadow-sm: 0 1px 2px oklch(0.25 0.05 292 / 0.07);
   --shadow-md: 0 1px 2px oklch(0.25 0.05 292 / 0.05), 0 6px 16px -4px oklch(0.25 0.05 292 / 0.12);
   --shadow-lg: 0 2px 6px oklch(0.25 0.05 292 / 0.05), 0 18px 44px -10px oklch(0.25 0.05 292 / 0.2);
@@ -189,7 +193,7 @@ html[data-theme="dusk"] {
   --studio-accent-soft: color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
-html:is([data-theme="meridian"], [data-theme="drift"], [data-theme="schematic"], [data-theme="atelier"], [data-theme="dusk"])[data-theme-mode="dark"] {
+html:where(:not([data-workspace-style])):is([data-theme="meridian"], [data-theme="drift"], [data-theme="schematic"], [data-theme="atelier"], [data-theme="dusk"])[data-theme-mode="dark"] {
   --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
   --shadow-md: 0 1px 2px oklch(0 0 0 / 0.3), 0 8px 20px -6px oklch(0 0 0 / 0.45);
   --shadow-lg: 0 2px 6px oklch(0 0 0 / 0.3), 0 22px 50px -12px oklch(0 0 0 / 0.6);
@@ -198,7 +202,7 @@ html:is([data-theme="meridian"], [data-theme="drift"], [data-theme="schematic"],
 }
 
 /* Classic's dark recipe: hairline first, a tight slate shadow second — Elsa 3's dark cards. */
-html[data-theme="classic"][data-theme-mode="dark"] {
+html:where(:not([data-workspace-style]))[data-theme="classic"][data-theme-mode="dark"] {
   --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.25);
   --shadow-md: 0 1px 2px oklch(0 0 0 / 0.25), 0 6px 14px -6px oklch(0 0 0 / 0.4);
   --shadow-lg: 0 2px 6px oklch(0 0 0 / 0.25), 0 14px 32px -12px oklch(0 0 0 / 0.5);
@@ -207,7 +211,7 @@ html[data-theme="classic"][data-theme-mode="dark"] {
 }
 
 /* Signal's dark recipe: near-flat, the hairline border does the separating. */
-html[data-theme="signal"][data-theme-mode="dark"] {
+html:where(:not([data-workspace-style]))[data-theme="signal"][data-theme-mode="dark"] {
   --shadow-sm: 0 1px 0 oklch(0 0 0 / 0.3);
   --shadow-md: 0 1px 2px oklch(0 0 0 / 0.3), 0 4px 10px -6px oklch(0 0 0 / 0.45);
   --shadow-lg: 0 1px 3px oklch(0 0 0 / 0.32), 0 10px 24px -10px oklch(0 0 0 / 0.5);
@@ -216,7 +220,7 @@ html[data-theme="signal"][data-theme-mode="dark"] {
 }
 
 /* Elsa Cloud's dark recipe: lighter and tighter than the shared one, matching the console's subtle shadows. */
-html[data-theme="elsa-cloud"][data-theme-mode="dark"] {
+html:where(:not([data-workspace-style]))[data-theme="elsa-cloud"][data-theme-mode="dark"] {
   --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.25);
   --shadow-md: 0 1px 2px oklch(0 0 0 / 0.25), 0 6px 14px -6px oklch(0 0 0 / 0.4);
   --shadow-lg: 0 2px 6px oklch(0 0 0 / 0.25), 0 14px 32px -12px oklch(0 0 0 / 0.5);

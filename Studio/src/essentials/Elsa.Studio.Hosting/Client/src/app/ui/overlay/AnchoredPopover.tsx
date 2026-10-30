@@ -29,6 +29,8 @@ export type AnchoredPopoverDismissReason = "anchor-hidden" | "outside-pointer";
 
 export interface AnchoredPopoverProps extends AnchoredPopoverOptions {
   anchorRef: RefObject<HTMLElement | null>;
+  /** Keeps nested popovers within their modal's stacking and focus scope. Defaults to document.body. */
+  portalContainer?: Element | DocumentFragment | null;
   open: boolean;
   children: ReactNode;
   className?: string;
@@ -71,6 +73,7 @@ export function calculateAnchoredPopoverPosition(
 
 export function AnchoredPopover({
   anchorRef,
+  portalContainer,
   open,
   children,
   className,
@@ -129,7 +132,7 @@ export function AnchoredPopover({
       return;
     }
     updatePosition();
-  }, [open, updatePosition]);
+  }, [open, portalContainer, updatePosition]);
 
   useEffect(() => {
     if (!open) return;
@@ -152,7 +155,7 @@ export function AnchoredPopover({
         animationFrameRef.current = null;
       }
     };
-  }, [anchorRef, open, schedulePositionUpdate]);
+  }, [anchorRef, open, portalContainer, schedulePositionUpdate]);
 
   useEffect(() => {
     if (!open) return;
@@ -191,7 +194,7 @@ export function AnchoredPopover({
     >
       {children}
     </div>,
-    document.body
+    portalContainer ?? document.body
   );
 }
 
