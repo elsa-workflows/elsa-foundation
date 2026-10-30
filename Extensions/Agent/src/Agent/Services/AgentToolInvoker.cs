@@ -30,6 +30,8 @@ internal sealed class DefaultAgentToolInvoker(
         var descriptor = tool.Descriptor;
         if (!Enum.IsDefined(descriptor.Mutability) || !Enum.IsDefined(descriptor.ExecutionLocation) || !Enum.IsDefined(descriptor.Risk))
             return await DeniedAsync("agent.tool.contract_invalid", "The installed tool declares an unsupported execution contract.", 409);
+        if (descriptor.ExecutionLocation == AgentExecutionLocation.ClientWorkingState && tool is not IAgentClientTool)
+            return await DeniedAsync("agent.tool.client_unavailable", "The installed client tool has no completion contract.", 409);
         if (descriptor.Mutability == AgentToolMutability.Mutating && !invocation.AllowMutations)
             return await DeniedAsync("agent.tool.continuation_read_only", "A receipt continuation cannot authorize another mutation.", 403);
         var availability = await policyEvaluator.EvaluateAvailabilityAsync(session.Policy, cancellationToken);

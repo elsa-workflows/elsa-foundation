@@ -17,7 +17,7 @@ import type {
   AgentStreamEvent
 } from "../agent/agentTypes";
 
-export type WeaverChatState = "idle" | "streaming";
+export type WeaverChatState = "idle" | "streaming" | "awaiting-review";
 // The Weaver "auto-apply" control selects the session's server-side autonomy mode.
 export type WeaverAutoApplyMode = AgentAutonomyMode;
 
@@ -112,6 +112,8 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
   autoApplyModeRef.current = autoApplyMode;
   // Correlation id for the in-flight turn, when a caller asked for the response routed back (see send()).
   const turnRequestIdRef = useRef<string | null>(null);
+  const turnMessageIdRef = useRef<string | null>(null);
+  const settledRequestIdsRef = useRef(new Set<string>());
   // Accumulated assistant text per message id, so a correlated turn can publish its final answer.
   const assistantTextByIdRef = useRef(new Map<string, string>());
 
@@ -238,6 +240,14 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
         setProposals(current => upsertProposal(current, normalizeProposal(event.proposalId, event.proposal)));
         maybeAutoApplyProposal(event.proposalId, event.proposal);
         break;
+      case "review-requested":
+        // The retained turn is paused, not completed. Only its observed receipt continuation
+        // can settle the original correlated request.
+        setChatState("awaiting-review");
+        setMessages(current => current.map(message => message.status === "streaming" ? { ...message, status: "pending", content: message.content === ASSISTANT_PLACEHOLDER ? "Waiting for review of the proposed change." : message.content } : message));
+        streamRef.current?.close();
+        streamRef.current = null;
+        break;
       case "clarification-requested":
         setMessages(current => [...current, { id: event.clarification.id, role: "assistant", content: event.clarification.prompt, status: "completed" }]);
         // Weaver needs more input from the user in the chat; release any correlated caller so it stops waiting.
@@ -269,13 +279,15 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     setChatState("idle");
     setFollowups([]);
     turnIdRef.current = null;
+    turnMessageIdRef.current = null;
   }
 
   // Route a correlated turn's outcome back to the caller (e.g. the Create dialog) exactly once. Defaults
   // to the in-flight turn, but a superseded/errored turn can pass its own captured id (the ref may have
   // since moved on to a newer turn — in that case we publish without clearing the newer turn's id).
   const publishTurnResult = useCallback((status: "completed" | "cancelled" | "failed", text: string, requestId = turnRequestIdRef.current) => {
-    if (!requestId) return;
+    if (!requestId || settledRequestIdsRef.current.has(requestId)) return;
+    settledRequestIdsRef.current.add(requestId);
     if (turnRequestIdRef.current === requestId) turnRequestIdRef.current = null;
     api.agent.publishPromptResult({ requestId, status, text, autoApply: autoApplyModeRef.current === "full-auto" });
   }, [api]);
@@ -317,6 +329,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       // The user stopped (or started another turn) while we were awaiting; do not re-open a stream.
       if (turnGenerationRef.current !== generation) return settle("cancelled");
       setMessages(current => [...current, { id: response.messageId, role: "assistant", content: ASSISTANT_PLACEHOLDER, status: "streaming" }]);
+      turnMessageIdRef.current = response.messageId;
       streamRef.current?.close();
       streamRef.current = subscribeStream(
         api.backend,
@@ -349,6 +362,11 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     if (!message || !ready) return;
     if (request.agent) {
       setError("The requested assistant is unavailable; the prompt was not delivered.");
+      if (request.requestId) api.agent.publishPromptResult({ requestId: request.requestId, status: "failed", text: "" });
+      return;
+    }
+    if (chatState === "awaiting-review") {
+      setError("Review the pending proposal before sending another request; the prompt was not delivered.");
       if (request.requestId) api.agent.publishPromptResult({ requestId: request.requestId, status: "failed", text: "" });
       return;
     }
@@ -412,17 +430,28 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     updateProposal(proposal.id, { status: response.approvalStatus });
   }), [agentClient, updateProposal, withProposalDecision]);
 
+  const resumeFromOutcome = useCallback((session: string) => {
+    const generation = turnGenerationRef.current;
+    const requestId = turnRequestIdRef.current;
+    const messageId = turnMessageIdRef.current;
+    streamRef.current?.close();
+    setChatState("streaming");
+    setMessages(current => current.map(message => message.id === messageId && message.status === "pending" ? { ...message, status: "streaming", content: ASSISTANT_PLACEHOLDER } : message));
+    streamRef.current = subscribeStream(api.backend, `/_elsa/agent/sessions/${encodeURIComponent(session)}/stream`, handleStreamEvent,
+      streamError => {
+        if (generation !== turnGenerationRef.current) return;
+        setError(getAgentErrorMessage(streamError)); publishTurnResult("failed", "", requestId); finishTurn();
+      }, { defaultMessageId: messageId ?? undefined });
+  }, [api.backend, handleStreamEvent, publishTurnResult, subscribeStream]);
+
   const denyProposal = useCallback((proposal: AgentActionProposal) => void withProposalDecision(proposal.id, async () => {
     const response = await agentClient.denyProposal(proposal.id, { revision: proposal.revision });
     updateProposal(proposal.id, { status: response.approvalStatus });
-  }), [agentClient, updateProposal, withProposalDecision]);
-
-  const resumeFromReceipt = useCallback((session: string) => {
-    streamRef.current?.close();
-    setChatState("streaming");
-    streamRef.current = subscribeStream(api.backend, `/_elsa/agent/sessions/${encodeURIComponent(session)}/stream`, handleStreamEvent,
-      streamError => { setError(getAgentErrorMessage(streamError)); finishTurn(); });
-  }, [api.backend, handleStreamEvent, subscribeStream]);
+    publishTurnResult("cancelled", "");
+    const session = proposal.preparedInvocation?.sessionId ?? sessionIdRef.current;
+    if (session) resumeFromOutcome(session);
+    else finishTurn();
+  }), [agentClient, publishTurnResult, resumeFromOutcome, updateProposal, withProposalDecision]);
 
   const executeProposal = useCallback((proposal: AgentActionProposal) => void withProposalDecision(proposal.id, async () => {
     let response = await agentClient.executeProposal(proposal.id, { revision: proposal.revision });
@@ -430,6 +459,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     if (response.clientInvocation) {
       const invocation = response.clientInvocation;
       const deliveryGeneration = turnGenerationRef.current;
+      const requestId = turnRequestIdRef.current;
       const cancellation = new AbortController(); clientControllersRef.current.add(cancellation);
       turnIdRef.current = invocation.turnId;
       setChatState("streaming");
@@ -437,18 +467,18 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
         const acknowledgement = await clientRunner.run(invocation, cancellation.signal);
         response = await agentClient.acknowledgeClient(invocation.sessionId, invocation.invocationId, acknowledgement);
         // Continue the retained turn from its stored receipt; never resend the original prompt.
-        if (deliveryGeneration === turnGenerationRef.current) resumeFromReceipt(invocation.sessionId);
+        if (deliveryGeneration === turnGenerationRef.current) resumeFromOutcome(invocation.sessionId);
       } catch (error) {
         updateProposal(proposal.id, { status: "uncertain", error: "The dispatched change could not be confirmed. It will not be replayed." });
-        setChatState("idle");
+        if (deliveryGeneration === turnGenerationRef.current) { publishTurnResult("failed", "", requestId); finishTurn(); }
         throw error;
       } finally { clientControllersRef.current.delete(cancellation); }
     } else if (response.toolResult) {
       const session = proposal.preparedInvocation?.sessionId ?? sessionIdRef.current;
-      if (session) resumeFromReceipt(session);
+      if (session) resumeFromOutcome(session);
     }
     updateProposal(proposal.id, { status: response.approvalStatus, toolResult: response.toolResult, result: response.toolResult?.payload, resultType: response.toolResult?.payload?.typeId });
-  }), [agentClient, clientRunner, resumeFromReceipt, updateProposal, withProposalDecision]);
+  }), [agentClient, clientRunner, publishTurnResult, resumeFromOutcome, updateProposal, withProposalDecision]);
 
   function maybeAutoApplyProposal(proposalId: string, payload?: AgentActionProposalPayload) {
     const prepared = payload?.preparedInvocation;
@@ -458,7 +488,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       await agentClient.approveProposal(proposalId, { revision });
       const response = await agentClient.executeProposal(proposalId, { revision });
       updateProposal(proposalId, { status: response.approvalStatus, toolResult: response.toolResult, result: response.toolResult?.payload, resultType: response.toolResult?.payload?.typeId });
-      if (response.toolResult) resumeFromReceipt(prepared.sessionId);
+      if (response.toolResult) resumeFromOutcome(prepared.sessionId);
     });
   }
 

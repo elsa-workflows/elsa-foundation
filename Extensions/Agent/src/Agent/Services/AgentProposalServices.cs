@@ -196,7 +196,9 @@ internal sealed class InMemoryAgentProposalService(
             var access = await AccessAsync(proposalId, actorId, cancellationToken);
             if (access.Error is { } error) return new(null, error);
             var proposal = access.Proposal!;
-            var prepared = proposal.PreparedInvocation!;
+            if (proposal.PreparedInvocation is not { ExecutionLocation: AgentExecutionLocation.ClientWorkingState, Client: not null } prepared
+                || acknowledgement.Client is null)
+                return AgentResult<AgentProposalExecutionResult>.Failure("agent.invocation.client_unavailable", "The retained invocation is not a bound client operation.", 409);
             if (!Enum.IsDefined(acknowledgement.Outcome))
                 return AgentResult<AgentProposalExecutionResult>.Failure("agent.invocation.outcome_invalid", "The acknowledgement outcome is unsupported.", 400);
             if (proposal.SessionId != sessionId || prepared.InvocationId != invocationId || prepared.Client != acknowledgement.Client
@@ -209,9 +211,11 @@ internal sealed class InMemoryAgentProposalService(
             if (proposal.Status is not AgentActionProposalStatus.AwaitingClient and not AgentActionProposalStatus.Uncertain)
                 return AgentResult<AgentProposalExecutionResult>.Failure("agent.invocation.not_pending", "The client invocation is not pending completion.", 409);
             AgentResult<AgentProposalExecutionResult> completion;
+            var completionValidated = false;
             try
             {
                 completion = await executor.CompleteClientAsync(proposal, acknowledgement, cancellationToken);
+                completionValidated = completion.Succeeded && completion.Value is not null;
             }
             catch (OperationCanceledException)
             {
@@ -224,10 +228,15 @@ internal sealed class InMemoryAgentProposalService(
                 completion = AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(proposal,
                     "Client completion could not be validated. Its reported effect remains uncertain and will not be replayed."));
             }
+            if (!completion.Succeeded || completion.Value is null)
+                completion = AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(proposal,
+                    "Client completion validation is unavailable. Its reported effect remains uncertain and will not be replayed."));
             completion = StoreOutcome(proposal, completion);
             // An unvalidated application report cannot poison the slot for a later valid receipt.
             // Completion validation never executes the effect, so reconsidering such a report is safe.
-            if (completion.Succeeded && (completion.Value?.Executed == true || acknowledgement.Outcome != AgentClientOutcome.Applied))
+            if (completionValidated && completion.Succeeded && (completion.Value?.Executed == true
+                || acknowledgement.Outcome == AgentClientOutcome.Refused && completion.Value?.Status == "refused"
+                || acknowledgement.Outcome == AgentClientOutcome.Uncertain && completion.Value?.Status == "uncertain"))
                 store.Acknowledgements[invocationId] = digest;
             await AuditAsync(store.Proposals[proposalId], completion.Value?.Executed == true ? AgentAuditEventKind.ProposalExecuted : AgentAuditEventKind.ProposalFailed,
                 actorId, completion.Value?.Executed == true ? "The originating client supplied an admitted local effect receipt." : "The reported client outcome is refused or uncertain.", CancellationToken.None);

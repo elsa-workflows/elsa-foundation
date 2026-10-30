@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -19,7 +20,10 @@ def prepare(output: Path, version: str) -> dict:
     if not source_core.is_file():
         raise ValueError(f"The public Studio Core project is unavailable: {source_core}")
     project = (templates / "WeaverJourney.Studio.csproj.in").read_text()
-    project = project.replace("__REFERENCES__", f'    <ProjectReference Include="{escape(str(source_core))}" />')
+    packages = ET.parse(repository / "Studio/Directory.Packages.props").getroot()
+    cshells = next(item.attrib["Version"] for item in packages.iter("PackageVersion") if item.attrib.get("Include") == "CShells.Abstractions")
+    references = f'    <ProjectReference Include="{escape(str(source_core))}" />\n    <PackageReference Include="CShells.Abstractions" Version="{escape(cshells)}" />'
+    project = project.replace("__REFERENCES__", references)
     project = project.replace("__FIXTURE_VERSION__", escape(version))
     (output / "Weaver.Journey.Studio.csproj").write_text(project)
     (output / "WeaverJourneyStudioFeature.cs").write_bytes((templates / "WeaverJourney.Studio.cs.in").read_bytes())
@@ -35,6 +39,7 @@ def prepare(output: Path, version: str) -> dict:
         "moduleId": "Weaver.Journey",
         "project": str(output / "Weaver.Journey.Studio.csproj"),
         "sourceProjectReferences": [str(source_core)],
+        "publicPackageDependencies": {"CShells.Abstractions": cshells},
         "templateSha256": {
             name: hashlib.sha256((templates / name).read_bytes()).hexdigest()
             for name in ["WeaverJourney.Studio.csproj.in", "WeaverJourney.Studio.cs.in", "WeaverJourney.Studio.module.js.in"]

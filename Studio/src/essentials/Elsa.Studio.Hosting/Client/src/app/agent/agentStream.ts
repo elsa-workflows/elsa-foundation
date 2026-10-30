@@ -255,6 +255,8 @@ function normalizeStreamEvent(value: unknown, defaultMessageId?: string): AgentS
         messageId,
         proposal: readObject<AgentActionProposalPayload>(event, "proposal") ?? readObject<AgentActionProposalPayload>(data, "proposal") ?? payload as AgentActionProposalPayload | undefined
       };
+    case "tool-approval-requested":
+      return { type: "review-requested", messageId };
     case "message-completed":
     case "completed":
     case "assistant.completed":

@@ -10,12 +10,19 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
 {
     public async Task Handle(AgentContextCollecting domainEvent, CancellationToken cancellationToken)
     {
+        var request = domainEvent.Request;
+        var callerIds = new HashSet<string>(StringComparer.Ordinal);
+        if (request.CallerAttachments.Any(attachment => !callerIds.Add(attachment.Id)))
+        {
+            domainEvent.Diagnostics.Add(new("host", "agent.context.duplicate_id", "Caller context attachment IDs must be unique within one prompt.", true));
+            return;
+        }
+
         var registered = sources.ToList();
         var duplicate = registered.GroupBy(x => x.Descriptor.Id, StringComparer.Ordinal).FirstOrDefault(x => x.Count() > 1);
         if (duplicate is not null)
             throw new AgentContributionException($"Duplicate agent context source '{duplicate.Key}'.");
 
-        var request = domainEvent.Request;
         var claimed = new HashSet<string>(StringComparer.Ordinal);
         foreach (var source in registered)
         {

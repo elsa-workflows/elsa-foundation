@@ -69,6 +69,22 @@ public sealed class AgentToolInvokerTests
     }
 
     [Fact]
+    public async Task A_client_tool_without_its_completion_counterpart_is_refused_before_preparation_or_review()
+    {
+        var tool = new ProposalClientToolWithoutCompletion(new ProposalClientTool());
+        using var fixture = await ProposalFixture.CreateAsync(tool);
+
+        var dispatch = await fixture.Invoker.DispatchAsync(fixture.Invocation(), fixture.Session.Policy);
+
+        Assert.Equal(AgentToolDispatchOutcome.Denied, dispatch.Outcome);
+        Assert.Equal("agent.tool.client_unavailable", dispatch.Error?.Code);
+        Assert.Null(dispatch.Proposal);
+        Assert.Equal(0, tool.PrepareCalls);
+        Assert.Equal(0, tool.ExecuteCalls);
+        Assert.DoesNotContain(await fixture.Audit.ListAsync(fixture.Session.Id), entry => entry.Kind == AgentAuditEventKind.ProposalCreated);
+    }
+
+    [Fact]
     public async Task Repeated_mutating_call_returns_its_receipt_without_repreparing_the_changed_resource()
     {
         using var fixture = await ProposalFixture.CreateAsync(new ProposalMutationTool(), AgentPolicy.Default with { AutonomyMode = AgentAutonomyMode.FullAuto });

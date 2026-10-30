@@ -232,7 +232,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     if (!tools.Any(x => string.Equals(x.Descriptor.Name, call.ToolName, StringComparison.OrdinalIgnoreCase)))
                         dispatch = AgentToolDispatch.Denied(new("agent.tool.not_admitted", "This tool is not admitted for the current turn.", 403));
                     else if (!TryParseArguments(call.Arguments, out var arguments))
-                        dispatch = AgentToolDispatch.Denied(new("agent.tool.invalid_arguments", "Tool arguments are not a JSON object.", 400));
+                        dispatch = AgentToolDispatch.Denied(new("agent.tool.invalid_arguments", "Tool arguments must be a JSON object with unique property names.", 400));
                     else
                         dispatch = await toolInvoker.DispatchAsync(new(call.ToolCallId, call.ToolName, sessionId, session.ActorId, arguments, prepared.Context)
                         {
@@ -347,7 +347,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 return true;
             }
         }
-        catch (JsonException) { }
+        catch (Exception error) when (error is JsonException or ArgumentException) { }
         arguments = new Dictionary<string, object?>();
         return false;
     }

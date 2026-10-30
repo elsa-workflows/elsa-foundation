@@ -25,10 +25,11 @@ async function readDefinition(request: APIRequestContext) {
 
 test("real composed Studio reviews a native layout edit, observes working state and keeps persistence explicit", async ({ page, request }, testInfo) => {
   // No page.route or fabricated backend responses: all transport reaches the owned composed host.
-  const before = await readDefinition(request);
   await page.goto(`/workflows/definitions?definition=${encodeURIComponent(definitionId!)}`);
   const node = page.locator(`.react-flow__node[data-id="${nodeId}"]`);
   await expect(node).toBeVisible();
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const before = await readDefinition(request);
   const priorPosition = await node.getAttribute("style");
   await page.getByRole("button", { name: /^Weaver/ }).click();
   const dock = page.getByRole("region", { name: "Weaver assistant" });
@@ -57,6 +58,9 @@ test("real composed Studio reviews a native layout edit, observes working state 
   await expect(node).not.toHaveAttribute("style", priorPosition!);
   await expect(node).toHaveAttribute("style", /translate\(480px, 320px\)/);
   expect((await readDefinition(request)).draft).toEqual(before.draft);
+  const nativeScreenshot = testInfo.outputPath("native-observed-working-state.png");
+  await page.screenshot({ path: nativeScreenshot, fullPage: true });
+  await testInfo.attach("native-observed-working-state", { path: nativeScreenshot, contentType: "image/png" });
   await proposal.getByRole("button", { name: "Undo whole change" }).click();
   await expect(node).toHaveAttribute("style", priorPosition!);
   expect((await readDefinition(request)).draft).toEqual(before.draft);
@@ -101,5 +105,8 @@ test("an unrelated module contributes context, review and a persisted owner-obse
   expect(duplicate.ok()).toBe(true);
   const repeated = await page.request.get(backendPath("/_qualification/weaver/note"));
   expect(await repeated.json()).toEqual(observed);
+  const noteScreenshot = testInfo.outputPath("module-observed-persisted-note.png");
+  await page.screenshot({ path: noteScreenshot, fullPage: true });
+  await testInfo.attach("module-observed-persisted-note", { path: noteScreenshot, contentType: "image/png" });
   await testInfo.attach("observed-note-effect", { body: JSON.stringify({ source: delivered.source, requestId: delivered.requestId, before, receipt: executionBody.data.toolResult.receipt, observed }, null, 2), contentType: "application/json" });
 });

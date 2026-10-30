@@ -4,6 +4,18 @@ import { subscribeAgentSessionStream } from "../agentStream";
 import type { AgentStreamEvent } from "../agentTypes";
 
 describe("agent stream", () => {
+  it("recognizes the actual camel-case review pause without inventing completion", async () => {
+    const events: AgentStreamEvent[] = [];
+    const fetch = vi.fn(async () => new Response(streamFrom([
+      `data: ${JSON.stringify({ kind: "proposalCreated", proposalId: "proposal", payload: { title: "Review" } })}\n\n`,
+      `data: ${JSON.stringify({ kind: "toolApprovalRequested" })}\n\n`
+    ]), { status: 200 }));
+    subscribeAgentSessionStream(createEndpointContext("https://foundation.example/"), "/stream", event => events.push(event), error => { throw error; }, { fetch: fetch as typeof globalThis.fetch, defaultMessageId: "msg" });
+    await flushPromises();
+    expect(events.map(event => event.type)).toEqual(["proposal-created", "review-requested"]);
+    expect(events[1]).toEqual({ type: "review-requested", messageId: "msg" });
+  });
+
   it("attaches endpoint access tokens to stream requests", async () => {
     const fetch = vi.fn(async () => new Response(streamFrom([
       `data: ${JSON.stringify({ type: "message-completed", messageId: "msg_01" })}\n\n`

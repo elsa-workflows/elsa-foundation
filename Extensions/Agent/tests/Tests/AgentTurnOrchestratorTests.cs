@@ -12,6 +12,21 @@ namespace Elsa.Agent.Tests;
 public sealed class AgentTurnOrchestratorTests
 {
     [Fact]
+    public async Task Duplicate_provider_argument_names_are_refused_without_invoking_the_tool_or_breaking_the_stream()
+    {
+        using var root = Build(new LoopingToolProvider("""{"text":"first","text":"second"}"""), [new EchoTool()], maxSteps: 1);
+
+        var events = await RunAsync(root, LoopingToolProvider.Id, "read state");
+
+        var outcome = Assert.IsType<AgentToolCallOutcome>(Assert.Single(events, x => x.Kind == AgentStreamEventKind.ToolCallCompleted).Payload);
+        Assert.False(outcome.Succeeded);
+        Assert.Contains("unique property names", outcome.Summary);
+        Assert.Equal(AgentStreamEventKind.Completed, events[^1].Kind);
+        using var scope = root.CreateScope();
+        Assert.DoesNotContain(await scope.ServiceProvider.GetRequiredService<IAgentAuditReader>().ListAsync(), x => x.Kind == AgentAuditEventKind.ToolInvoked);
+    }
+
+    [Fact]
     public async Task Case_variant_session_urls_share_one_foreground_lease()
     {
         using var root = Build(new DeterministicAgentProvider(), [new EchoTool()]);
@@ -395,7 +410,7 @@ public sealed class AgentTurnOrchestratorTests
             => Task.FromResult(new AgentProviderDiagnostics(ProviderId, true, "ok", AgentProviderKind.ProviderSdkBinding, [AgentProviderOperation.Chat], AgentProviderRiskProfile.ReadOnly, new Dictionary<string, string>()));
     }
 
-    private sealed class LoopingToolProvider : IAgentProvider
+    private sealed class LoopingToolProvider(string argumentsJson = """{"text":"x"}""") : IAgentProvider
     {
         public const string Id = "looping-test";
 
@@ -416,7 +431,7 @@ public sealed class AgentTurnOrchestratorTests
                 null,
                 DateTimeOffset.UtcNow,
                 null,
-                new AgentToolCallRequest(toolCallId, DeterministicAgentProvider.ReadOnlyToolName, """{"text":"x"}""", AgentRisk.ReadOnly, false));
+                new AgentToolCallRequest(toolCallId, DeterministicAgentProvider.ReadOnlyToolName, argumentsJson, AgentRisk.ReadOnly, false));
         }
 
         public Task<AgentToolApprovalResult> ApproveToolAsync(AgentProviderToolApprovalRequest request, CancellationToken cancellationToken = default)

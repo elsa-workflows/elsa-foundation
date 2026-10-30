@@ -72,7 +72,7 @@ export function WeaverSurface({
     }
   }, [incomingPrompt, session.ready]);
 
-  const composerDisabled = !session.ready;
+  const composerDisabled = !session.ready || session.chatState === "awaiting-review";
 
   return (
     <section className="weaver-surface" data-variant={variant} aria-label="Weaver assistant" aria-busy={session.busy}>

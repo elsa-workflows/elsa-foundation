@@ -2,6 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>Weaver.Journey</AssemblyName>
+    <StaticWebAssetBasePath>_content/$(AssemblyName)</StaticWebAssetBasePath>
     <PackageId>Weaver.Journey.Studio</PackageId>
     <Version>__FIXTURE_VERSION__</Version>
     <ImplicitUsings>enable</ImplicitUsings>

@@ -21,7 +21,7 @@ export type AgentSessionStatus = "active" | "completed" | "cancelled" | "failed"
 export type AgentMessageRole = "user" | "assistant" | "system" | "tool" | "progress" | "error";
 export type AgentMessageStatus = "pending" | "streaming" | "completed" | "failed" | "cancelled";
 export type AgentProposalStatus = "draft" | "awaiting-approval" | "approved" | "denied" | "edited" | "expired" | "executed" | "failed" | "cancelled" | "awaiting-client" | "uncertain" | "executing";
-export type AgentStreamEventType = "turn-started" | "message-started" | "message-delta" | "context-used" | "clarification-requested" | "proposal-created" | "progress" | "step-started" | "step-completed" | "tool-call-requested" | "tool-call-started" | "tool-call-completed" | "plan-updated" | "message-completed" | "turn-cancelled" | "error";
+export type AgentStreamEventType = "turn-started" | "message-started" | "message-delta" | "context-used" | "clarification-requested" | "proposal-created" | "review-requested" | "progress" | "step-started" | "step-completed" | "tool-call-requested" | "tool-call-started" | "tool-call-completed" | "plan-updated" | "message-completed" | "turn-cancelled" | "error";
 
 export interface AgentPlanStep {
   id: string;
@@ -175,6 +175,7 @@ export interface AgentClarificationRequest {
 }
 
 export type AgentStreamEvent =
+  | { type: "review-requested"; messageId: string }
   | { type: "module-result"; messageId: string; result: StudioAgentToolResult }
   | { type: "turn-started"; turnId: string; maxSteps: number }
   | { type: "message-started"; messageId: string; role: AgentMessageRole }

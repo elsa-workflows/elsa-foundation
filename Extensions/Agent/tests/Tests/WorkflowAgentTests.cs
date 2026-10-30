@@ -69,6 +69,53 @@ public sealed class WorkflowAgentTests
     }
 
     [Theory]
+    [InlineData("workflow.request")]
+    [InlineData("workflow.definition")]
+    public async Task Real_collection_rejects_colliding_caller_id_before_any_module_read(string kind)
+    {
+        const string sharedId = "DUPLICATE-CALLER-ID-SECRET-6307";
+        var reads = new ReadCountingContextSource();
+        using var root = AgentTestServices.Create(services =>
+        {
+            new FoundationWorkflowsAgentFeature().ConfigureServices(services);
+            services.AddScoped<IAgentContextProvider>(_ => reads);
+        });
+        using var scope = root.CreateScope();
+        var admitted = Snapshot() with { Id = sharedId };
+        if (kind == "workflow.request")
+            admitted = admitted with
+            {
+                ContentType = kind,
+                Content = JsonSerializer.SerializeToElement(new { requestKind = "workflow-definition", referenceId = "wf-1", intent = "Explain the referenced workflow." })
+            };
+        var unknown = admitted with { ModuleId = "Uninstalled.Module", ContentType = "unknown.context", Sensitivity = AgentContextSensitivity.Secret };
+        var request = Request(admitted) with { CallerAttachments = [admitted, unknown] };
+
+        var result = await scope.ServiceProvider.GetRequiredService<IAgentContextCollector>().CollectAsync(AgentPolicy.Default, request);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("agent.context.incomplete", result.Error?.Code);
+        var contribution = Assert.IsType<AgentContextContribution>(result.Value);
+        var diagnostic = Assert.Single(contribution.Diagnostics);
+        Assert.Equal("agent.context.duplicate_id", diagnostic.Code);
+        Assert.True(diagnostic.Required);
+        Assert.Empty(contribution.Attachments);
+        Assert.Equal(0, reads.ReadCount);
+        Assert.DoesNotContain(sharedId, JsonSerializer.Serialize(result));
+    }
+
+    private sealed class ReadCountingContextSource : IAgentContextProvider
+    {
+        public int ReadCount { get; private set; }
+        public AgentContextProviderDescriptor Descriptor { get; } = new("probe.domain-read", "Probe.Module", "*", ["probe.context"], ["1"], [], false);
+        public ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
+        {
+            ReadCount++;
+            return ValueTask.FromResult(new AgentContextContribution([], []));
+        }
+    }
+
+    [Theory]
     [InlineData("workflow.request", AgentContextSensitivity.Secret)]
     [InlineData("workflow.definition", AgentContextSensitivity.Secret)]
     [InlineData("workflow.request", AgentContextSensitivity.SecretRedacted)]

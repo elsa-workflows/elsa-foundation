@@ -40,13 +40,15 @@ internal sealed class DefaultAgentActionProposalExecutor(
     public async Task<AgentResult<AgentProposalExecutionResult>> CompleteClientAsync(AgentActionProposal proposal,
         AgentClientAcknowledgement acknowledgement, CancellationToken cancellationToken = default)
     {
+        if (proposal.PreparedInvocation is not { ExecutionLocation: AgentExecutionLocation.ClientWorkingState, Client: not null } prepared)
+            return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.client_unavailable", "This proposal has no bound client completion contract.", 409);
         var resolved = await ResolveAsync(proposal, cancellationToken);
         if (resolved.Error is not null)
             return AgentResult<AgentProposalExecutionResult>.Success(Uncertain(proposal,
                 "A client result was reported after its execution contract, authority or lifetime changed. The effect is unverified and will not be replayed."));
-        var prepared = proposal.PreparedInvocation!;
-        if (prepared.ExecutionLocation != AgentExecutionLocation.ClientWorkingState || resolved.Tool is not IAgentClientTool clientTool)
-            return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.client_unavailable", "The installed tool does not support this client completion.", 409);
+        if (resolved.Tool is not IAgentClientTool clientTool)
+            return AgentResult<AgentProposalExecutionResult>.Success(Uncertain(proposal,
+                "The installed tool no longer supports validation of the dispatched client operation. Its reported effect remains uncertain and will not be replayed."));
         if (acknowledgement.Outcome == AgentClientOutcome.Uncertain)
             return AgentResult<AgentProposalExecutionResult>.Success(Uncertain(proposal,
                 "The originating client could not establish whether the operation completed. It will not be replayed."));

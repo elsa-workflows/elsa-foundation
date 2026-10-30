@@ -37,6 +37,8 @@ After the owning delivery run starts fresh Studio/backend processes with the pub
 ```sh
 ELSA_WEAVER_OWNED_URL=http://127.0.0.1:owned-studio-port \
 ELSA_WEAVER_OWNED_BACKEND_URL=http://127.0.0.1:owned-backend-port \
+ELSA_WEAVER_OWNED_AUTH_STATE=/absolute/private/fresh-normal-login-storage-state.json \
+ELSA_WEAVER_OWNED_ARTIFACTS=/absolute/private/owned-browser-results \
 ELSA_WEAVER_WORKFLOW_ID=owned-definition-id \
 ELSA_WEAVER_ACTIVITY_ID=owned-node-id \
 pnpm --dir Studio exec playwright test --config tests/browser/playwright.weaver-composed.config.ts

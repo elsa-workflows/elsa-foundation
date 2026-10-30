@@ -143,6 +143,29 @@ public sealed class AgentProposalTests
     }
 
     [Fact]
+    public async Task A_null_client_acknowledgement_cannot_overwrite_a_real_server_effects_uncertainty()
+    {
+        using var fixture = await ProposalFixture.CreateAsync(new ProposalMutationTool { FailAfterEffect = true });
+        var proposal = await fixture.ProposeAsync();
+        await fixture.ApproveAsync(proposal);
+        var original = await fixture.ExecuteAsync(proposal);
+        Assert.Equal("new", fixture.Mutation!.Value);
+        Assert.Equal("uncertain", original.Value?.Status);
+        var originalResult = await fixture.Proposals.FindResultAsync(proposal.Id);
+        var forged = new AgentClientAcknowledgement(null!, proposal.PreparedInvocation!.ApprovalDigest,
+            AgentClientOutcome.Applied, "Pretend this server invocation was a client request.", null, null);
+
+        var rejected = await fixture.AcknowledgeAsync(proposal, forged);
+
+        Assert.Equal("agent.invocation.client_unavailable", rejected.Error?.Code);
+        Assert.Equal(AgentActionProposalStatus.Uncertain, (await fixture.Proposals.FindAsync(proposal.Id))?.Status);
+        Assert.Same(originalResult, await fixture.Proposals.FindResultAsync(proposal.Id));
+        Assert.Same(original.Value, (await fixture.ExecuteAsync(proposal)).Value);
+        Assert.Equal("new", fixture.Mutation.Value);
+        Assert.Equal(1, fixture.Mutation.ExecuteCalls);
+    }
+
+    [Fact]
     public async Task Cancellation_before_dispatch_preserves_approved_state_and_zero_effects()
     {
         using var fixture = await ProposalFixture.CreateAsync(new ProposalMutationTool());
@@ -226,6 +249,69 @@ public sealed class AgentProposalTests
         Assert.True(accepted.Value?.Executed);
         Assert.Equal(0, fixture.Client!.ExecuteCalls);
         Assert.Equal(2, fixture.Client.CompleteCalls);
+    }
+
+    [Fact]
+    public async Task A_dispatched_client_tool_losing_completion_stays_uncertain_until_its_counterpart_returns()
+    {
+        var tool = new ProposalClientTool();
+        var registry = new MutableProposalToolRegistry(tool);
+        using var fixture = await ProposalFixture.CreateAsync(tool, configure: services =>
+            services.Replace(ServiceDescriptor.Scoped<IAgentToolRegistry>(_ => registry)));
+        var proposal = await fixture.ProposeAsync();
+        await fixture.ApproveAsync(proposal);
+        Assert.Equal("awaiting-client", (await fixture.ExecuteAsync(proposal)).Value?.Status);
+        var missingCompletion = new ProposalClientToolWithoutCompletion(tool);
+        registry.Current = missingCompletion;
+
+        var unresolved = await fixture.AcknowledgeAsync(proposal);
+
+        Assert.True(unresolved.Succeeded);
+        Assert.Equal("uncertain", unresolved.Value?.Status);
+        Assert.Equal(AgentActionProposalStatus.Uncertain, (await fixture.Proposals.FindAsync(proposal.Id))?.Status);
+        Assert.Equal(0, tool.CompleteCalls);
+        Assert.Same(unresolved.Value, (await fixture.ExecuteAsync(proposal)).Value);
+        Assert.Equal(0, missingCompletion.PrepareCalls);
+        Assert.Equal(0, missingCompletion.ExecuteCalls);
+
+        registry.Current = tool;
+        var accepted = await fixture.AcknowledgeAsync(proposal);
+        Assert.True(accepted.Value?.Executed);
+        Assert.Equal(AgentActionProposalStatus.Executed, (await fixture.Proposals.FindAsync(proposal.Id))?.Status);
+        Assert.Equal(1, tool.CompleteCalls);
+        Assert.Equal(0, tool.ExecuteCalls);
+        Assert.Same(accepted.Value!.ToolResult, await fixture.Proposals.FindResultAsync(proposal.Id));
+    }
+
+    [Theory]
+    [InlineData(AgentClientOutcome.Applied)]
+    [InlineData(AgentClientOutcome.Refused)]
+    [InlineData(AgentClientOutcome.Uncertain)]
+    public async Task A_typed_completion_executor_failure_preserves_later_evidence_without_redispatch(AgentClientOutcome reported)
+    {
+        TemporarilyUnavailableCompletionExecutor? replacement = null;
+        using var fixture = await ProposalFixture.CreateAsync(new ProposalClientTool(), configure: services =>
+        {
+            services.AddScoped<DefaultAgentActionProposalExecutor>();
+            services.Replace(ServiceDescriptor.Scoped<IAgentActionProposalExecutor>(provider =>
+                replacement = new(provider.GetRequiredService<DefaultAgentActionProposalExecutor>())));
+        });
+        var proposal = await fixture.ProposeAsync();
+        await fixture.ApproveAsync(proposal);
+        Assert.Equal("awaiting-client", (await fixture.ExecuteAsync(proposal)).Value?.Status);
+
+        var unresolved = await fixture.AcknowledgeAsync(proposal, fixture.Acknowledgement(proposal) with { Outcome = reported });
+
+        Assert.True(unresolved.Succeeded);
+        Assert.Equal("uncertain", unresolved.Value?.Status);
+        Assert.Equal(AgentActionProposalStatus.Uncertain, (await fixture.Proposals.FindAsync(proposal.Id))?.Status);
+        Assert.Same(unresolved.Value, (await fixture.ExecuteAsync(proposal)).Value);
+        Assert.Equal(0, fixture.Client!.CompleteCalls);
+        replacement!.Unavailable = false;
+        var accepted = await fixture.AcknowledgeAsync(proposal);
+        Assert.True(accepted.Value?.Executed);
+        Assert.Equal(1, fixture.Client.CompleteCalls);
+        Assert.Equal(0, fixture.Client.ExecuteCalls);
     }
 
     [Theory]
@@ -405,6 +491,44 @@ internal sealed class ProposalTestClock : TimeProvider
     private DateTimeOffset _now = DateTimeOffset.UtcNow;
     public override DateTimeOffset GetUtcNow() => _now;
     public void Advance(TimeSpan value) => _now += value;
+}
+
+internal sealed class MutableProposalToolRegistry(IAgentTool tool) : IAgentToolRegistry
+{
+    public IAgentTool Current { get; set; } = tool;
+    public Task<IReadOnlyCollection<IAgentTool>> ListAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyCollection<IAgentTool>>([Current]);
+    public Task<IAgentTool?> FindAsync(string toolName, CancellationToken cancellationToken = default)
+        => Task.FromResult<IAgentTool?>(string.Equals(Current.Descriptor.Name, toolName, StringComparison.OrdinalIgnoreCase) ? Current : null);
+}
+
+internal sealed class ProposalClientToolWithoutCompletion(ProposalClientTool tool) : IAgentTool
+{
+    public int PrepareCalls { get; private set; }
+    public int ExecuteCalls { get; private set; }
+    public AgentToolDescriptor Descriptor => tool.Descriptor;
+    public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+    {
+        PrepareCalls++;
+        return tool.PrepareAsync(invocation, cancellationToken);
+    }
+    public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
+    {
+        ExecuteCalls++;
+        return tool.ExecuteAsync(invocation, cancellationToken);
+    }
+}
+
+internal sealed class TemporarilyUnavailableCompletionExecutor(DefaultAgentActionProposalExecutor inner) : IAgentActionProposalExecutor
+{
+    public bool Unavailable { get; set; } = true;
+    public Task<AgentResult<AgentProposalExecutionResult>> ExecuteAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
+        => inner.ExecuteAsync(proposal, cancellationToken);
+    public Task<AgentResult<AgentProposalExecutionResult>> CompleteClientAsync(AgentActionProposal proposal,
+        AgentClientAcknowledgement acknowledgement, CancellationToken cancellationToken = default)
+        => Unavailable
+            ? Task.FromResult(AgentResult<AgentProposalExecutionResult>.Failure("test.completion_unavailable", "Completion validation is temporarily unavailable.", 409))
+            : inner.CompleteClientAsync(proposal, acknowledgement, cancellationToken);
 }
 
 internal sealed class ProposalMutationTool : IAgentTool

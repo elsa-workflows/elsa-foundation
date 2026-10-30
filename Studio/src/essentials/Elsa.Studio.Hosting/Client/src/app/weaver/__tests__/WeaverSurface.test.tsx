@@ -169,6 +169,7 @@ describe("WeaverSurface", () => {
   });
   it("requires local review even in FullAuto and waits for observed acknowledgement before resuming", async () => {
     const api = readyApi(); const client = readyClient();
+    const results: unknown[] = []; api.agent.onPromptResult(result => results.push(result));
     client.bootstrap = vi.fn(async () => ({ ...await readyClient().bootstrap(), policy: { ... (await readyClient().bootstrap()).policy, defaultAutonomyMode: "full-auto" } }));
     const invocation = preparedInvocation(api);
     let observe!: (value: { outcome: "applied"; summary: string; after: typeof invocation.target; result: { typeId: string; schemaVersion: string; data: { value: number } } }) => void;
@@ -178,13 +179,16 @@ describe("WeaverSurface", () => {
     client.acknowledgeClient = vi.fn(async () => ({ proposalId: "proposal", approvalStatus: "executed", executed: true, toolResult: { toolCallId: "call", toolName: "sample_change", succeeded: true, content: "Observed sample value 2.", payload: { typeId: "sample.result", schemaVersion: "1", data: { value: 2 } } } }));
     let streams = 0;
     const subscribeStream = vi.fn((_ctx, _url, emit) => {
-      if (++streams === 1) emit({ type: "proposal-created", proposalId: "proposal", messageId: "msg", proposal: { title: "Change sample", summary: "Set sample value to 2.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } });
-      emit({ type: "message-completed", messageId: "msg" });
+      if (++streams === 1) {
+        emit({ type: "proposal-created", proposalId: "proposal", messageId: "msg", proposal: { title: "Change sample", summary: "Set sample value to 2.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } });
+        emit({ type: "review-requested", messageId: "msg" });
+      } else emit({ type: "message-completed", messageId: "msg" });
       return { close() {} };
     }) as unknown as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
-    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} />);
-    await flushPromises(); typeAndSend(container, "Change sample"); await flushPromises();
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "delivery", requestId: "original-request", message: "Change sample" }} />);
+    await flushPromises();
     expect(client.approveProposal).not.toHaveBeenCalled(); expect(execute).not.toHaveBeenCalled();
+    expect(buttonByText(container, "Approve")!.disabled).toBe(false); expect(results).toEqual([]);
     flushSync(() => buttonByText(container, "Approve")!.click()); await flushPromises();
     flushSync(() => buttonByText(container, "Apply")!.click()); await flushPromises();
     expect(container.querySelector('[data-status="awaiting-client"]')).toBeTruthy(); expect(client.acknowledgeClient).not.toHaveBeenCalled();
@@ -192,6 +196,33 @@ describe("WeaverSurface", () => {
     await flushPromises();
     expect(client.acknowledgeClient).toHaveBeenCalledWith("agt_1", "i", expect.objectContaining({ approvalDigest: "digest", outcome: "applied", after: expect.objectContaining({ revision: "r2" }) }));
     expect(container.querySelector('[data-status="executed"]')).toBeTruthy(); expect(streams).toBe(2); expect(client.sendMessage).toHaveBeenCalledTimes(1);
+    expect(subscribeStream).toHaveBeenLastCalledWith(api.backend, "/_elsa/agent/sessions/agt_1/stream", expect.any(Function), expect.any(Function), { defaultMessageId: "msg_1" });
+    expect(results).toEqual([expect.objectContaining({ requestId: "original-request", status: "completed" })]);
+    unmount();
+  });
+
+  it.each(["outcome-stream", "acknowledgement"])("settles a retained caller once after terminal %s failure without replay", async failure => {
+    const api = readyApi(); const client = readyClient(); const invocation = preparedInvocation(api);
+    const results: unknown[] = []; api.agent.onPromptResult(result => results.push(result));
+    const toolResult = { toolCallId: "call", toolName: "sample_change", succeeded: true, content: "Observed sample value.", payload: { typeId: "sample.result", schemaVersion: "1", data: { value: 2 } } };
+    api.agent.toolContracts.add({ id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Change", description: "Change sample", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], executionLocation: "clientWorkingState", contractVersion: "1", executeClient: async () => ({ outcome: "applied", summary: "Observed.", after: { ...invocation.target!, revision: "r2" }, result: toolResult.payload }) });
+    client.executeProposal = vi.fn(async () => failure === "acknowledgement" ? { proposalId: "proposal", approvalStatus: "awaiting-client", executed: false, clientInvocation: invocation } : { proposalId: "proposal", approvalStatus: "executed", executed: true, toolResult });
+    client.acknowledgeClient = vi.fn(async () => { throw new Error("Acknowledgement transport lost."); });
+    let streams = 0;
+    const subscribeStream = ((_context, _url, emit, failed) => {
+      if (++streams === 1) {
+        emit({ type: "proposal-created", proposalId: "proposal", messageId: "msg", proposal: { title: "Change", summary: "Change sample.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } });
+        emit({ type: "review-requested", messageId: "msg" });
+      } else { failed(new Error("Outcome transport lost.")); failed(new Error("Repeated terminal notification.")); }
+      return { close() {} };
+    }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "delivery", requestId: "terminal-request", message: "Change sample" }} />);
+    await flushPromises(); flushSync(() => buttonByText(container, "Approve")!.click()); await flushPromises();
+    flushSync(() => buttonByText(container, "Apply")!.click()); await flushPromises();
+    expect(results).toEqual([expect.objectContaining({ requestId: "terminal-request", status: "failed" })]);
+    expect(client.sendMessage).toHaveBeenCalledTimes(1); expect(client.executeProposal).toHaveBeenCalledTimes(1);
+    expect(container.querySelector(".weaver-surface")?.getAttribute("aria-busy")).toBe("false");
+    if (failure === "acknowledgement") expect(container.querySelector('[data-status="uncertain"]')).toBeTruthy();
     unmount();
   });
 
@@ -204,18 +235,27 @@ describe("WeaverSurface", () => {
     expect(subscribeStream).not.toHaveBeenCalled(); expect(container.textContent).toContain("already accepted"); unmount();
   });
 
-  it("honors a server module's explicit review requirement in FullAuto", async () => {
+  it("honors server review in FullAuto and continues a denial without executing or settling twice", async () => {
     const api = readyApi(); const client = readyClient();
+    const results: unknown[] = []; api.agent.onPromptResult(result => results.push(result));
     client.bootstrap = vi.fn(async () => ({ ...await readyClient().bootstrap(), policy: { ... (await readyClient().bootstrap()).policy, defaultAutonomyMode: "full-auto" } }));
     const invocation = preparedInvocation(api); invocation.executionLocation = "server"; invocation.client = null;
+    let streams = 0;
     const subscribeStream = ((_context, _url, emit) => {
-      emit({ type: "proposal-created", proposalId: "review", messageId: "msg", proposal: { title: "Server change", summary: "The module requires explicit review.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } });
-      emit({ type: "message-completed", messageId: "msg" }); return { close() {} };
+      if (++streams === 1) {
+        emit({ type: "proposal-created", proposalId: "review", messageId: "msg", proposal: { title: "Server change", summary: "The module requires explicit review.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } });
+        emit({ type: "review-requested", messageId: "msg" });
+      } else emit({ type: "message-completed", messageId: "msg" });
+      return { close() {} };
     }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
-    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} />);
-    await flushPromises(); typeAndSend(container, "Propose server change"); await flushPromises();
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "delivery", requestId: "denied-request", message: "Propose server change" }} />);
+    await flushPromises();
     expect(client.approveProposal).not.toHaveBeenCalled(); expect(client.executeProposal).not.toHaveBeenCalled();
-    expect(container.querySelector('[data-status="awaiting-approval"]')).toBeTruthy(); unmount();
+    expect(container.querySelector('[data-status="awaiting-approval"]')).toBeTruthy(); expect(results).toEqual([]);
+    flushSync(() => buttonByText(container, "Deny")!.click()); await flushPromises();
+    expect(streams).toBe(2); expect(client.sendMessage).toHaveBeenCalledTimes(1); expect(client.executeProposal).not.toHaveBeenCalled();
+    expect(results).toEqual([expect.objectContaining({ requestId: "denied-request", status: "cancelled" })]);
+    expect(container.querySelector('[data-status="denied"]')).toBeTruthy(); unmount();
   });
 
 });
