@@ -55,7 +55,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
           <Flag size={11} aria-hidden="true" /> Start
         </span>
       ) : null}
-      <WorkflowNodeContextToolbar nodeId={id} data={nodeData} selected={!!selected} offset={ports.toolbarOffset} />
+      <WorkflowNodeContextToolbar nodeId={id} data={nodeData} selected={!!selected} position={ports.toolbarPosition} offset={ports.toolbarOffset} />
       {availability ? (
         <span className="wf-node-availability" title={`No longer available for new use · ${getAvailabilityStateLabel(availability.state)}`}>
           <AlertTriangle size={13} />

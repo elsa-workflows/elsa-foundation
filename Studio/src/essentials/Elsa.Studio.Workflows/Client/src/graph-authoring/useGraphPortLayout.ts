@@ -10,7 +10,7 @@ function nodeRect(node?: InternalNode): PortNodeRect | undefined {
 }
 
 /** Subscribe only to this node's connections; placement never enters saved graph data. */
-export function useGraphPortLayout(id: string, sourceIds: readonly string[], acceptsInbound: boolean): GraphPortLayout & { toolbarOffset: number } {
+export function useGraphPortLayout(id: string, sourceIds: readonly string[], acceptsInbound: boolean): GraphPortLayout & { toolbarPosition: Position; toolbarOffset: number } {
   const previous = useRef<GraphPortLayout | undefined>(undefined);
   const updateNodeInternals = useUpdateNodeInternals();
   const measured = useStore(state => Boolean(nodeRect(state.nodeLookup.get(id))));
@@ -39,9 +39,13 @@ export function useGraphPortLayout(id: string, sourceIds: readonly string[], acc
     return { layout, history };
   }, (left, right) => JSON.stringify(left) === JSON.stringify(right));
   const { layout } = snapshot;
+  const occupied = new Set([layout.target?.side, ...layout.sources.map(port => port.side)]);
+  const toolbarPosition = layout.sources.some(port => port.side === Position.Top)
+    ? [Position.Bottom, Position.Right, Position.Left, Position.Top].find(side => !occupied.has(side)) ?? Position.Top
+    : Position.Top;
   // Labels scale with the canvas; NodeToolbar stays at screen size. Clear the 18px pill and
   // its 10px outside gap at the current zoom, plus the toolbar's usual 10px breathing room.
-  const toolbarOffset = useStore(state => layout.sources.some(port => port.side === Position.Top)
+  const toolbarOffset = useStore(state => layout.sources.some(port => port.side === toolbarPosition)
     ? 28 * state.transform[2] + 10 : 10);
 
   useLayoutEffect(() => {
@@ -49,5 +53,5 @@ export function useGraphPortLayout(id: string, sourceIds: readonly string[], acc
     // React Flow measures in the next animation frame, after the handles and card have moved.
     if (measured) updateNodeInternals(id);
   }, [id, snapshot, measured, updateNodeInternals]);
-  return { ...layout, toolbarOffset };
+  return { ...layout, toolbarPosition, toolbarOffset };
 }

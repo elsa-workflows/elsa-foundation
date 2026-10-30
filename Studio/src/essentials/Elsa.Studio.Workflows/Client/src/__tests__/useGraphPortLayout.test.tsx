@@ -80,4 +80,12 @@ describe("graph port store integration", () => {
     flushSync(() => store.getState().setEdges([edge("a", "b")]));
     expect(result().sources[0].side).toBe("bottom");
   });
+
+  it("uses a free side for tools when a named outcome faces up", () => {
+    mount([n("a", 0, 300), n("b", 0, 0), n("c", 0, 600)], [edge("a", "b")]);
+    expect(result().sources[0].side).toBe("top");
+    expect(result().toolbarPosition).toBe("bottom");
+    flushSync(() => store.getState().setEdges([edge("a", "b"), edge("c", "a")]));
+    expect(result().toolbarPosition).toBe("right");
+  });
 });

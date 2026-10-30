@@ -88,9 +88,13 @@ test("top-facing outcome labels remain clear of selected-node tools at different
       const a = (await label.boundingBox())!, b = (await toolbar.boundingBox())!;
       return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
     }).toBe(false);
+    if (zoom === 0) {
+      const tools = (await toolbar.boundingBox())!, neighbour = (await node(page, "write-two").boundingBox())!;
+      expect(tools.y).toBeGreaterThan(neighbour.y + neighbour.height);
+      await page.screenshot({ path: testInfo.outputPath("top-outcome-tools.png") });
+    }
     if (zoom < 2) await page.locator(".react-flow__controls-zoomin").click();
   }
-  await page.screenshot({ path: testInfo.outputPath("top-outcome-tools.png") });
 });
 
 test("draws a new connection from an adaptive handle and retains its logical outcome", async ({ page }) => {
