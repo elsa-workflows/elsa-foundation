@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Configuration;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
@@ -36,10 +37,12 @@ using Elsa.Etl.Workflows.Runtime;
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 try
 {
-    if (args.Length is not (4 or 6) || args[0] is not ("--enqueue-start" or "--enqueue-checkpoint" or "--drain-checkpoint" or "--cancel-model" or "--retry-held-model" or "--cancel-held-model" or "--consume-native-result" or "--consume-native-success" or "--create-auth-probe-users" or "--probe-obsolete-result") ||
+    if (args.Length is not (4 or 6) || args[0] is not ("--enqueue-start" or "--enqueue-checkpoint" or "--drain-checkpoint" or "--cancel-model" or "--retry-held-model" or "--cancel-held-model" or "--consume-native-result" or "--consume-native-success" or "--create-auth-probe-users" or "--probe-obsolete-result" or "--retire-and-sweep") ||
         args.Length == 6 && args[4] != (args[0] == "--consume-native-success" ? "--parent-return-stage" : "--gate"))
         throw new ArgumentException("Select an owned enqueue/drain/cancel operation, content root, model id, nonce and optional --gate directory.");
     var heldRace = args[0] is "--retry-held-model" or "--cancel-held-model";
+    var retention = args[0] == "--retire-and-sweep";
+    if (retention && args.Length != 4) throw new ArgumentException("Publication retirement/collection uses the existing ports without a proposal gate.");
     var race = heldRace || args[0] is "--drain-checkpoint" or "--cancel-model";
     var obsolete = args[0] == "--probe-obsolete-result";
     if (obsolete && args.Length != 4) throw new ArgumentException("Obsolete-result controls use the normal model mailbox without a proposal gate.");
@@ -103,6 +106,7 @@ try
         Pooling = false, CacheWorkflowExecutables = false, RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('r', 32)
     });
     services.AddPersistenceModes();
+    if (retention) services.Configure<WorkflowExecutableGarbageCollectionOptions>(options => options.ArtifactCreationGracePeriod = TimeSpan.Zero);
     if (race)
     {
         if (args.Length == 6)
@@ -128,6 +132,11 @@ try
         foreach (var task in sdk.GetServices<IStartupTask>()) await task.ExecuteAsync(CancellationToken.None);
     var models = sdk.GetRequiredService<IRuntimeModelExecutionReader>();
     var model = await models.FindAsync(args[2]) ?? throw new InvalidOperationException("The actual model execution is absent.");
+    if (retention)
+    {
+        await MaterialRetentionProbe.RunAsync(sdk, owner, model, json);
+        return 0;
+    }
     if (heldRace)
     {
         if (model.Lifecycle != RuntimeModelLifecycle.WaitingIncident || model.Revision != 2 || model.TerminalResult is not null ||

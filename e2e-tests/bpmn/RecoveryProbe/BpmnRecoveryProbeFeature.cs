@@ -147,7 +147,7 @@ public class BpmnRecoveryProbeFeature : IShellFeature
         }
         public async ValueTask DispatchAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
         {
-            await control.CutModelCancellationAsync(source, cancellationToken);
+            await control.CutNativeWorkBeforeDispatchAsync(source, cancellationToken);
             var cut = await control.CaptureCalledControlClaimAsync(source.Intent, outbox, access, cancellationToken);
             await inner.DispatchAsync(source, cancellationToken);
             await control.CutCalledControlBeforeAcknowledgmentAsync(cut, outbox, cancellationToken);
@@ -601,21 +601,35 @@ internal sealed class RecoveryProbeControl(string directory) : IDisposable
         }
     }
 
-    public async ValueTask CutModelCancellationAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken)
+    public async ValueTask CutNativeWorkBeforeDispatchAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken)
     {
+        var expectedPhase = source.Intent.Kind switch
+        {
+            "Elsa.Bpmn.CancelNativeWork.v1" => "before-native-cancel",
+            "Elsa.Bpmn.StartNativeWork.v1" => "before-native-start",
+            _ => null
+        };
         var path = Path.Combine(directory, "plan.json");
-        if (!File.Exists(path) || source.Intent.Kind != "Elsa.Bpmn.CancelNativeWork.v1") return;
+        if (expectedPhase is null || !File.Exists(path)) return;
         var plan = JsonSerializer.Deserialize<Plan>(await File.ReadAllTextAsync(path, cancellationToken), Json)
-            ?? throw new InvalidDataException("The owned cancellation plan is empty.");
-        if (plan.Phase != "before-native-cancel" || plan.TargetExecutionId is null ||
-            source.Intent.Payload?.GetProperty("origin").GetProperty("executionId").GetString() != plan.TargetExecutionId) return;
+            ?? throw new InvalidDataException("The owned native-work plan is empty.");
+        if (plan.Phase != expectedPhase || expectedPhase == "before-native-cancel" && plan.TargetExecutionId is null) return;
+        var executionId = expectedPhase == "before-native-start" ? source.Intent.Payload?.GetProperty("executionId").GetString()
+            : source.Intent.Payload?.GetProperty("origin").GetProperty("executionId").GetString();
+        if (plan.TargetExecutionId is not null && executionId != plan.TargetExecutionId) return;
         if (!Regex.IsMatch(plan.CaseId, "^[a-z0-9-]{1,64}$", RegexOptions.CultureInvariant))
-            throw new InvalidDataException("The owned cancellation case name is invalid.");
+            throw new InvalidDataException("The owned native-work case name is invalid.");
         var caseDirectory = Path.Combine(directory, plan.CaseId); Directory.CreateDirectory(caseDirectory);
         var token = Path.Combine(caseDirectory, "claimed");
         try { using var claimed = new FileStream(token, FileMode.CreateNew, FileAccess.Write, FileShare.Read); claimed.Flush(true); }
-        catch (IOException) when (File.Exists(token)) { return; }
-        var marker = new { plan.CaseId, Phase = plan.Phase, ProviderEvent = "ActualNativeCancellationSourceBeforeDispatcher",
+        catch (IOException) when (File.Exists(token))
+        {
+            if (expectedPhase == "before-native-start")
+                while (!File.Exists(Path.Combine(caseDirectory, "release"))) await Task.Delay(100, cancellationToken);
+            return;
+        }
+        var marker = new { plan.CaseId, Phase = plan.Phase, ProviderEvent = expectedPhase == "before-native-cancel"
+                ? "ActualNativeCancellationSourceBeforeDispatcher" : "ActualNativeStartSourceBeforeDispatcher",
             SourceOutboxItemId = source.SourceOutboxItemId, source.SourceCommitId, source.IntentFingerprint,
             Scope = source.Scope.Value, source.Claim.OwnerId, source.Claim.FencingToken, source.Claim.VisibleAfter,
             source.Intent.WorkflowExecutionId, source.Intent.Payload, CapturedAtUtc = DateTimeOffset.UtcNow };
