@@ -31,3 +31,7 @@ XML import/export lives in the separate [interchange module](../Interchange/READ
 The old Foundation engine, behavior registry/contexts, graph/coordinator/mutator, semantic state DTOs and `PruneForPersistence` are removed. Integrations consuming those retired preview APIs must use the library's neutral contracts or a supported host adapter. The frozen authoring surface and supported stored-state representations remain independently qualified. Tests guard public Semantics simple-name collisions and the deleted source/type/pruning surfaces.
 
 The [post-deletion standard-host and Studio qualification](../../../../../specs/1006-bpmn-library-adoption/evidence/post-deletion-host-qualification.md) records actual frozen-v1 continuation after writer removal, strict real-child calls, registered import/broadcast and normal browser authoring/publication/execution/reload/export. Its pinned build and evidence scopes remain distinct from final required checks and resulting-main verification.
+
+## Cross-domain contributions
+
+`BpmnStructureHandler` implements the Design Core `IActivityStructureHandler` contract. Its child-slot projection includes `ActivityChildOutcomeProjection` records for the built-in Decision type: named conditional flows and the optional literal `Outcome` input are owned here. Publishing pins matching child invocation contracts through that generic projection. The authored BPMN schema and activity fingerprint remain unchanged.
