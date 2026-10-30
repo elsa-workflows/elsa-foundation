@@ -1,1 +1,3 @@
 One early Details selection on the original layout run was followed by Timeline during initial runtime loading. The positive capture was taken only after the graph was visibly loaded and Details selected. Cause remains unconfirmed; no product or verifier change is claimed. This repeats the previously recorded observation and is retained separately from successful captures.
+
+The two original publication AX observations are retained byte-exact as original/layout-published-dom.raw.txt.gz. Their verifier-facing text copies strip line-ending spaces/tabs only so repository whitespace checks pass; no observation content or positive assertion changed. The API source diff is similarly compressed byte-exact.

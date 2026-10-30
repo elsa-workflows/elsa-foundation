@@ -2,9 +2,9 @@
   "sourceRevision": "4f46ac55c482b3b68932ca74f147439bfdacda49",
   "assets": [
     {
-      "path": "Elsa.Persistence.EntityFramework.source.diff",
-      "sha256": "b4644a6761e468a0785472d5fe3c7a2cd1106b300294b67bbaadb107e7043f42",
-      "bytes": 9964
+      "path": "Elsa.Persistence.EntityFramework.source.diff.gz",
+      "sha256": "6080607a44a023278298f112fe4d9a5d556ff45d3553b14c17514794c154dc9c",
+      "bytes": 2942
     },
     {
       "path": "README.md",

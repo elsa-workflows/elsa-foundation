@@ -54,13 +54,23 @@
     },
     {
       "path": "diagnostics/README.txt",
-      "sha256": "54f7d778e683d5d5b38a80828a5952492cb947b353e8b6586b2ffb021f4bf285",
-      "bytes": 376
+      "sha256": "36f2346bf0b0865097bcf7a4bcbb503f6ef30edc674c54c213f1995bcac62d79",
+      "bytes": 708
     },
     {
       "path": "diagnostics/early-legacy-details.txt",
       "sha256": "1c7f14da04172d746990746e73794d04f5d0b77f5699fd189b386caf9e1c4730",
       "bytes": 6565
+    },
+    {
+      "path": "diagnostics/layout-published-dom.raw.txt.gz",
+      "sha256": "ab5f50abe190e8d01433f42ff88c1b596c9e72dd4883807076baee67bcf1c3b1",
+      "bytes": 394
+    },
+    {
+      "path": "diagnostics/original-published-dom.raw.txt.gz",
+      "sha256": "c27832ad7c665854924be8f58614a6b4f93a714245822a5dbaff2a8c82d7f88c",
+      "bytes": 407
     },
     {
       "path": "studio/layout/definition-after.json",
@@ -134,8 +144,8 @@
     },
     {
       "path": "studio/layout/published-dom.txt",
-      "sha256": "12d7424e441e91f369c42bd3b3f26ff28d8f3f2e4a4bb116d7da3df2f55b77bd",
-      "bytes": 848
+      "sha256": "7a0375efa78b1a37f6e2949da965a9ec851e0470681977a42e0d50eeb78b6ad4",
+      "bytes": 846
     },
     {
       "path": "studio/layout/published-run-api.json",
@@ -229,7 +239,7 @@
     },
     {
       "path": "studio/manifest.json",
-      "sha256": "f25eae5356d054b837b55417ca01f6a3577d5e287dd5177b91711fabf24a497e",
+      "sha256": "1c649cdbd5c62b163caf69fbf3ed6fc8b7bcbdab0bc693f9a21b5a6da3b26cc7",
       "bytes": 12862
     },
     {
@@ -304,8 +314,8 @@
     },
     {
       "path": "studio/original/published-dom.txt",
-      "sha256": "5b9505caaf866532a4e5984d491dfca9fb7cbfce2a1b3de16aab03c3827a4788",
-      "bytes": 890
+      "sha256": "674bcb66db4db194691346b71f41bfdc027ba4f7cb1d3641a42ba84966f7f140",
+      "bytes": 888
     },
     {
       "path": "studio/original/published-run-api.json",
@@ -436,6 +446,11 @@
       "path": "support/package.py",
       "sha256": "1a6c9e53948c084baa235fc927907fc5c7b0d8fcdbdc4bdfc2c9a34a6136f252",
       "bytes": 1624
+    },
+    {
+      "path": "support/repository-controls.txt",
+      "sha256": "8c0b45ea38507c449574d2fb2104d3d51c0fb91c2147372b88921eac81933f8f",
+      "bytes": 1708
     },
     {
       "path": "support/standard-hosts.txt",

@@ -6,9 +6,9 @@ Browser tab: 18, Title: "Elsa Studio", URL: "http://127.0.0.1:55895/workflows/de
 				5 text Published
 			21 container Version 4.0.0 is active in default.
 				22 heading Version 4.0.0 is active in default., Value: 4, ID: publication-success-title
-					24 text Version 
+					24 text Version
 					25 text 4.0.0
-					26 text  is active in 
+					26 text  is active in
 					27 text default
 					28 text .
 				23 button (collapsed) Technical details, Secondary Actions: Expand

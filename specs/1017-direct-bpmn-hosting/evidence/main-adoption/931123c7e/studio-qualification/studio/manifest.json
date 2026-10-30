@@ -108,7 +108,7 @@
     },
     {
       "path": "layout/published-dom.txt",
-      "sha256": "12d7424e441e91f369c42bd3b3f26ff28d8f3f2e4a4bb116d7da3df2f55b77bd"
+      "sha256": "7a0375efa78b1a37f6e2949da965a9ec851e0470681977a42e0d50eeb78b6ad4"
     },
     {
       "path": "layout/published-run-api.json",
@@ -242,7 +242,7 @@
     },
     {
       "path": "original/published-dom.txt",
-      "sha256": "5b9505caaf866532a4e5984d491dfca9fb7cbfce2a1b3de16aab03c3827a4788"
+      "sha256": "674bcb66db4db194691346b71f41bfdc027ba4f7cb1d3641a42ba84966f7f140"
     },
     {
       "path": "original/published-run-api.json",
