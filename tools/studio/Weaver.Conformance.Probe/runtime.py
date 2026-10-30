@@ -18,6 +18,7 @@ from artifacts import check, sha, write_json
 
 DEVELOPER_PORTS = {5089, 5095, 7030, 7243}
 STARTUP_OBSERVATION_SECONDS = 120
+SHUTDOWN_OBSERVATION_SECONDS = 15
 RUNTIME_ENVIRONMENT = {"PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "TZ", "DOTNET_ROOT",
                        "SSL_CERT_FILE", "SSL_CERT_DIR", "ASPNETCORE_ENVIRONMENT", "DOTNET_ENVIRONMENT", "WEAVER_FRONTEND_AUDIT"}
 
@@ -162,11 +163,15 @@ def server(run, name, origin):
     finally:
         if process.poll() is None:
             process.terminate()
-            try:
-                process.wait(timeout=15)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=10)
+            while True:
+                try:
+                    process.wait(timeout=SHUTDOWN_OBSERVATION_SECONDS)
+                    break
+                except subprocess.TimeoutExpired:
+                    started.setdefault("shutdownObservations", []).append({"status": "pending", "pid": process.pid, "at": time.time()})
+                    private_json(run.root / (name + "-process.json"), started)
+                    # SIGTERM was sent once. A pending shutdown remains this same owned
+                    # process; retain the original exception until it actually exits.
         cache_files = {key: [str(path.relative_to(Path(folder))) for path in Path(folder).rglob("*") if path.is_file()]
                        for key, folder in caches.items()}
         started.update(stoppedAt=time.time(), exitCode=process.returncode, runtimeCacheFiles=cache_files)

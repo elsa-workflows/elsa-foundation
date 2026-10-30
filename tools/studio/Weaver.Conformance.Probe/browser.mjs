@@ -9,7 +9,7 @@ const { chromium, expect } = require("@playwright/test");
 const configPath = process.argv[2];
 if (!configPath || !path.isAbsolute(configPath)) throw new Error("Supply an absolute private browser configuration path.");
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed"]);
+const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount"]);
 if (!supported.has(config.journey)) throw new Error("Unsupported browser journey: " + config.journey);
 const witness = JSON.parse(fs.readFileSync(new URL("./witness.json", import.meta.url), "utf8"));
 function need(condition, message) { if (!condition) throw new Error(message); }
@@ -158,6 +158,53 @@ async function accepted(responsePromise, name) {
   const value = JSON.parse(rawBody);
   result.evidence.push(retain(name, { url: response.url(), status: response.status(), request: response.request().postDataJSON(), response: value }));
   return { response, value };
+}
+async function interceptAcknowledgement(mode) {
+  const pattern = backend + "/_elsa/agent/sessions/*/client-invocations/*/acknowledgements";
+  let resolveObservation;
+  const completed = new Promise(resolve => { resolveObservation = resolve; });
+  const timeout = setTimeout(() => resolveObservation({ error: new Error("No actual workflow ACK reached the interception boundary within 30 seconds.") }), 30000);
+  let intercepted = false;
+  const handler = async route => {
+    if (intercepted || route.request().method() !== "POST") return route.continue();
+    intercepted = true;
+    const request = route.request();
+    try {
+      const originalText = request.postData(), original = request.postDataJSON();
+      expect(original).toMatchObject({ outcome: "applied", result: { typeId: "workflows.layout-change", schemaVersion: "1", data: { observed: true } } });
+      result.evidence.push(retain(mode + "-original-ack", { url: request.url(), rawBody: originalText, request: original }));
+      if (mode === "malformed-result") {
+        const changed = structuredClone(original);
+        changed.result.schemaVersion = "unsupported-witness-schema";
+        const restored = structuredClone(changed); restored.result.schemaVersion = original.result.schemaVersion;
+        expect(restored).toEqual(original);
+        result.evidence.push(retain("malformed-result-forwarded-ack", { url: request.url(), request: changed, changedPaths: ["result.schemaVersion"] }));
+        await route.continue({ postData: JSON.stringify(changed) });
+        clearTimeout(timeout); resolveObservation({ url: request.url(), original, originalText, changed });
+      } else {
+        // Forward the actual browser ACK once, retaining the server's genuine response before losing delivery.
+        const response = await route.fetch();
+        const rawBody = await response.text();
+        result.evidence.push(retain("lost-confirmation-accepted-http", { url: request.url(), status: response.status(), rawBody }));
+        const value = JSON.parse(rawBody);
+        need(response.status() === 200, "The ACK whose delivery is lost must actually be accepted by the native server.");
+        expect(value.data).toMatchObject({ executed: true, status: "executed", toolResult: { succeeded: true, receipt: { scope: "clientWorkingState" } } });
+        await route.abort("failed");
+        clearTimeout(timeout); resolveObservation({ url: request.url(), original, originalText, value, responseLost: true });
+      }
+    } catch (error) {
+      result.evidence.push(retain(mode + "-interception-failure", { type: error.name, message: error.message }));
+      try { await route.abort("failed"); } catch { /* Preserve the first diagnostic. */ }
+      clearTimeout(timeout); resolveObservation({ error });
+    }
+  };
+  await page.route(pattern, handler);
+  return { completed, dispose: () => { clearTimeout(timeout); return page.unroute(pattern, handler); } };
+}
+function observedLifecycle(ack, status, summary) {
+  expect(ack.value).toMatchObject({ error: null, data: { executed: false, status, summary, toolResult: {
+    succeeded: false, content: summary, payload: { typeId: "agent.operation-outcome", schemaVersion: "1", data: { status } }, receipt: null
+  } } });
 }
 async function proposalFor(action, name) {
   const message = responseFor("/messages");
@@ -314,29 +361,59 @@ async function workflow() {
     // Navigate with native SPA routing: the open assistant survives while the editor binding is disposed.
     await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Home", exact: true }).click();
     await expect(activity).toHaveCount(0);
-    const execution = responseFor("/execute");
+    const execution = responseFor("/execute"), acknowledged = responseFor("/acknowledgements");
     await proposal.getByRole("button", { name: "Apply", exact: true }).click();
-    const delivered = await execution;
-    result.evidence.push(retain("removed-client-execute", { status: delivered.status(), response: await delivered.json() }));
-    await expect(proposal).not.toHaveAttribute("data-status", "executed");
-    await expect(proposal).toContainText(/originating|unavailable|refused/i);
+    const delivered = await accepted(execution, "removed-client-execute");
+    need(delivered.response.status() === 202, "Removed-client control must reach the actual browser execution boundary.");
+    const ack = await accepted(acknowledged, "removed-client-ack");
+    const actualAck = ack.response.request().postDataJSON();
+    expect(actualAck).toMatchObject({ outcome: "refused", summary: "The originating workflow editor is unavailable." });
+    need(actualAck.result == null && actualAck.after == null, "Removed editor unexpectedly returned an applied observation.");
+    observedLifecycle(ack, "refused", "The originating client refused the operation before application.");
+    await expect(proposal).toHaveAttribute("data-status", "refused");
+    await expect(proposal).toContainText(ack.value.data.summary);
     const after = await owner("owner-after", definitionPath);
     expect(after.value.draft).toEqual(before.value.draft);
     result.ownerAfter = after.receipt;
+    expect(owningWrites).toEqual([]);
+    expect(requests.filter(item => item.url.endsWith("/execute"))).toHaveLength(1);
+    expect(requests.filter(item => item.url.endsWith("/acknowledgements"))).toHaveLength(1);
     result.observations = { ownerObserved: true, noFalseSuccess: true, noReplay: true };
     result.expectedFailureObserved = true;
-    result.actual = { stage: "client-execution", diagnostic: "originating-client-unavailable" };
+    result.actual = { stage: "client-execution", diagnostic: actualAck.summary };
     result.status = "failed";
     return;
   }
-  const executed = responseFor("/execute"), acknowledged = responseFor("/acknowledgements");
+  const special = ["malformed-result", "lost-confirmation"].includes(config.journey);
+  const interception = special ? await interceptAcknowledgement(config.journey) : null;
+  const executed = responseFor("/execute");
+  const acknowledged = config.journey === "lost-confirmation" ? null : responseFor("/acknowledgements");
   await proposal.getByRole("button", { name: "Apply", exact: true }).click();
   const delivery = await accepted(executed, "workflow-execute");
   need(delivery.response.status() === 202, "Workflow application must be delivered to its originating browser.");
-  const ack = await accepted(acknowledged, "workflow-ack");
-  expect(ack.response.request().postDataJSON()).toMatchObject({ outcome: "applied", result: { typeId: "workflows.layout-change", data: { ...args, observed: true } } });
-  expect(ack.value.data?.toolResult?.receipt?.scope).toBe("clientWorkingState");
-  await expect(proposal).toHaveAttribute("data-status", "executed");
+  let intercepted, ack;
+  if (interception) {
+    intercepted = await interception.completed;
+    await interception.dispose();
+    if (intercepted.error) throw intercepted.error;
+    expect(intercepted.original).toMatchObject({ outcome: "applied", result: { typeId: "workflows.layout-change", data: { ...args, observed: true } } });
+  }
+  if (acknowledged) ack = await accepted(acknowledged, "workflow-ack");
+  if (config.journey === "malformed-result") {
+    observedLifecycle(ack, "uncertain", "The reported client effect did not validate against the exact prepared operation. Its outcome is uncertain and will not be replayed.");
+    await expect(proposal).toHaveAttribute("data-status", "uncertain");
+    await expect(proposal).toContainText(ack.value.data.summary);
+    await expect(proposal.getByRole("button", { name: "Retry confirmation", exact: true })).toHaveCount(0);
+  } else if (config.journey === "lost-confirmation") {
+    await expect(proposal).toHaveAttribute("data-status", "uncertain");
+    await expect(proposal).toContainText("Confirmation was not received. Retry sends the same observed receipt without running the change again.");
+    await expect(proposal.getByRole("button", { name: "Retry confirmation", exact: true })).toBeEnabled();
+    result.evidence.push(retain("lost-confirmation-uncertain-ui", { status: await proposal.getAttribute("data-status"), text: await proposal.innerText() }));
+  } else {
+    expect(ack.response.request().postDataJSON()).toMatchObject({ outcome: "applied", result: { typeId: "workflows.layout-change", data: { ...args, observed: true } } });
+    expect(ack.value.data?.toolResult?.receipt?.scope).toBe("clientWorkingState");
+    await expect(proposal).toHaveAttribute("data-status", "executed");
+  }
   await expect(activity).toHaveAttribute("style", /translate\(480px, 320px\)/);
   const workingApplied = await workingDraft("working-applied");
   expect(workingApplied.state).toEqual(workingBefore.state);
@@ -350,12 +427,52 @@ async function workflow() {
   result.observations.workingStateChanged = true;
   expect((await owner("owner-after-local-apply", definitionPath)).value.draft).toEqual(before.value.draft);
   // Observe beyond the native autosave interval, retaining every attempted owning write.
-  await expect(dock()).toHaveAttribute("aria-busy", "false");
+  if (config.journey !== "lost-confirmation") await expect(dock()).toHaveAttribute("aria-busy", "false");
   await page.waitForTimeout(1600);
   expect((await owner("owner-after-autosave-window", definitionPath)).value.draft).toEqual(before.value.draft);
   expect(owningWrites).toEqual([]);
   result.observations.noImplicitSave = true;
   await screenshot("workflow-local");
+  if (config.journey === "malformed-result") {
+    const after = await owner("owner-after", definitionPath);
+    expect(after.value.draft).toEqual(before.value.draft);
+    expect(requests.filter(item => item.url.endsWith("/execute"))).toHaveLength(1);
+    expect(requests.filter(item => item.url.endsWith("/acknowledgements"))).toHaveLength(1);
+    result.ownerAfter = after.receipt;
+    result.observations = { ...result.observations, ownerObserved: true, noFalseSuccess: true, noReplay: true, actualLocalApply: true, exactSchemaMutation: true };
+    result.expectedFailureObserved = true;
+    result.actual = { stage: "client-acknowledgement", diagnostic: ack.value.data.summary };
+    result.status = "failed";
+    return;
+  }
+  if (config.journey === "lost-confirmation") {
+    const retried = responseFor("/acknowledgements");
+    await proposal.getByRole("button", { name: "Retry confirmation", exact: true }).click();
+    const confirmed = await accepted(retried, "confirmation-retry");
+    expect(confirmed.response.url()).toBe(intercepted.url);
+    expect(confirmed.response.request().postData()).toBe(intercepted.originalText);
+    expect(confirmed.response.request().postDataJSON()).toEqual(intercepted.original);
+    expect(confirmed.value).toEqual(intercepted.value);
+    await expect(proposal).toHaveAttribute("data-status", "executed");
+    expect(await workingDraft("working-after-confirmation-retry")).toEqual(workingApplied);
+    await proposal.getByRole("button", { name: "Undo whole change", exact: true }).click();
+    await expect(activity).toHaveAttribute("style", position);
+    expect(await workingDraft("working-after-confirmation-undo")).toEqual(workingBefore);
+    await nativeValidation("validation-after-confirmation-undo");
+    const after = await owner("owner-after", definitionPath);
+    expect(after.value.draft).toEqual(before.value.draft);
+    expect(owningWrites).toEqual([]);
+    expect(requests.filter(item => item.url.endsWith("/execute"))).toHaveLength(1);
+    expect(requests.filter(item => item.url.endsWith("/acknowledgements"))).toHaveLength(2);
+    result.ownerAfter = after.receipt;
+    result.observations = { ...result.observations, ownerObserved: true, noFalseSuccess: true, noReplay: true, responseLost: true, uncertain: true,
+      sameAcknowledgement: true, sameInvocation: true, retainedResult: true, wholeUndo: true };
+    result.expectedFailureObserved = true;
+    result.actual = { stage: "client-confirmation-delivery", diagnostic: "net::ERR_FAILED" };
+    need(failedRequests.some(item => item.url === diagnosticUrl(intercepted.url) && item.errorText === result.actual.diagnostic), "The real accepted ACK response was not observed as lost browser delivery.");
+    result.status = "failed";
+    return;
+  }
   if (config.journey === "duplicate-ack") {
     const duplicate = await page.request.post(ack.response.url(), { data: ack.response.request().postDataJSON() });
     need(duplicate.ok(), "Identical accepted ACK did not return its retained result.");
@@ -402,12 +519,158 @@ async function workflow() {
   result.observations.explicitSaveReadback = true;
   await screenshot("workflow-saved-reloaded");
 }
+async function rendererUnavailable() {
+  const { definitionId, activityId, definitionPath, draftPath, htmlCanary } = config.workflow ?? {};
+  need(definitionId && activityId && definitionPath && draftPath && typeof htmlCanary === "string" && htmlCanary.includes("<"),
+    "Renderer fallback needs a real workflow with an authored markup-like activity display name.");
+  await page.goto(studio + "/workflows/definitions?definition=" + encodeURIComponent(definitionId));
+  await expect(page.locator(".react-flow__node").locator("xpath=self::*[@data-id=" + xpathString(activityId) + "]")).toBeVisible();
+  owningDraftPath = new URL(localPath(draftPath), backend).pathname;
+  const before = await owner("owner-before", definitionPath);
+  result.ownerBefore = before.receipt;
+  const workingBefore = await workingDraft("working-before");
+  need(workingBefore.activityPresentation?.some(item => item.nodeId === activityId && item.displayName === htmlCanary),
+    "The markup-like label must come from the actual owning workflow presentation.");
+  await page.getByRole("button", { name: /^Weaver/ }).click();
+  const selected = command("workflow_read_graph", {});
+  const message = responseFor("/messages");
+  await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
+  await dock().getByLabel("Ask Weaver", { exact: true }).fill("Read the open workflow graph.");
+  await dock().getByRole("button", { name: "Send message", exact: true }).click();
+  const sent = await accepted(message, "renderer-read-message");
+  const article = dock().getByRole("region", { name: "Module results", exact: true }).locator('article[data-succeeded="true"]').last();
+  const fallback = article.locator(":scope > pre");
+  await expect(fallback).toBeVisible();
+  await expect(dock()).toHaveAttribute("aria-busy", "false");
+  const text = await fallback.textContent();
+  const payload = JSON.parse(text);
+  expect(payload).toMatchObject({ typeId: "workflows.graph", schemaVersion: "1", data: { workflowDefinitionId: definitionId } });
+  expect(payload.data.activities).toEqual(expect.arrayContaining([expect.objectContaining({ id: activityId, displayName: htmlCanary })]));
+  await expect(fallback.locator("*")).toHaveCount(0);
+  expect(await fallback.evaluate(element => element.childElementCount)).toBe(0);
+  const composer = dock().getByLabel("Ask Weaver", { exact: true });
+  await expect(composer).toBeEnabled();
+  await composer.fill("Another explicit request remains available.");
+  await expect(dock().getByRole("button", { name: "Send message", exact: true })).toBeEnabled();
+  await composer.fill(""); // Checking the common controls does not submit a second intent.
+  expect(await workingDraft("working-after")).toEqual(workingBefore);
+  const after = await owner("owner-after", definitionPath);
+  expect(after.value).toEqual(before.value);
+  expect(owningWrites).toEqual([]);
+  expect(requests.filter(request => new URL(request.url).pathname.endsWith("/messages"))).toHaveLength(1);
+  result.ownerAfter = after.receipt;
+  result.evidence.push(retain("structured-fallback", { commandId: selected.commandId, toolName: selected.toolName,
+    messageId: sent.value.data?.message?.id, payload, text, childElementCount: await fallback.evaluate(element => element.childElementCount),
+    presentation: "native structured JSON fallback for workflows.graph" }));
+  result.observations = { safeGenericPresentation: true, commonControls: true, ownerObserved: true };
+  await screenshot("renderer-fallback");
+}
+
+async function consumedIntentRemount() {
+  need(path.isAbsolute(config.traceFile ?? "") && fs.existsSync(config.traceFile), "Remount proof needs the actual selected provider trace.");
+  const offset = fs.statSync(config.traceFile).size;
+  const callsFor = commandId => {
+    const bytes = fs.readFileSync(config.traceFile).subarray(offset);
+    need(bytes.length === 0 || bytes.at(-1) === 10, "A partial provider trace cannot prove no replay.");
+    return bytes.toString("utf8").split("\n").filter(Boolean).map(line => JSON.parse(line))
+      .filter(row => row.kind === config.provider + ".call" && row.data.commandId === commandId)
+      .map(row => ({ kind: row.kind, commandId: row.data.commandId, toolName: row.data.toolName }));
+  };
+  await page.goto(studio + witness.route);
+  await expect(page.getByTestId("acme-home-revision")).toBeVisible();
+  const before = await owner("owner-before", witness.ownerEndpoint);
+  result.ownerBefore = before.receipt;
+  const selected = command(witness.readTool, {});
+  const message = responseFor("/messages");
+  await page.getByRole("button", { name: "Read with Weaver", exact: true }).click();
+  const sent = await accepted(message, "consumed-intent");
+  const original = sent.response.request().postDataJSON();
+  need(typeof original.requestId === "string" && original.requestId && original.source?.moduleId === witness.moduleId,
+    "The module action must deliver a correlated shell intent.");
+  await expect(dock().getByTestId("acme-home-result")).toContainText("The owning resource reports");
+  await expect(dock()).toHaveAttribute("aria-busy", "false");
+  expect(callsFor(selected.commandId)).toHaveLength(1);
+  const sessionPath = new URL(sent.response.url()).pathname.replace(/\/messages$/, "");
+  const sessionBefore = await owner("session-before-remount", sessionPath);
+  // Use native SPA navigation so the App retaining the consumed shell intent survives.
+  await page.getByLabel("Search modules", { exact: true }).fill("Features");
+  await page.getByRole("link", { name: "Features", exact: true }).click();
+  await expect(page).toHaveURL(studio + "/features");
+  await page.getByLabel("Search modules", { exact: true }).fill("");
+  await page.getByRole("tab", { name: "Studio", exact: true }).click();
+  const tokenResponse = await page.request.get(backend + "/_elsa/identity/token");
+  need(tokenResponse.status() === 200, "Normal cookie-backed Studio management token exchange failed.");
+  const token = (await tokenResponse.json()).accessToken;
+  need(typeof token === "string" && token, "Normal token exchange returned no access token.");
+  const hostRead = async endpoint => {
+    const response = await page.request.get(studio + endpoint, { headers: { Authorization: "Bearer " + token } });
+    need(response.status() === 200, "Native Studio observation failed HTTP " + response.status());
+    return response.json();
+  };
+  const generationBefore = await hostRead("/__qualification/generation");
+  const catalog = await hostRead("/modularity/features");
+  const target = catalog.features.find(feature => feature.id === witness.studioFeature);
+  need(target?.enabled === true, "The installed resource Studio feature must be enabled before its real remount transition.");
+  const oldDock = await dock().elementHandle();
+  need(oldDock, "The original assistant must exist before native feature application.");
+  const timeOrigin = await page.evaluate(() => performance.timeOrigin);
+  const moduleEvents = [];
+  await page.exposeFunction("observeQualificationModulesChanged", event => moduleEvents.push(event));
+  await page.evaluate(() => window.addEventListener("elsa-studio:modules-changed", event =>
+    void window.observeQualificationModulesChanged({ type: event.type, timeStamp: event.timeStamp })));
+  await page.getByLabel("Filter features", { exact: true }).fill(target.id);
+  await nativeEnter("remount-disable-feature", page.getByRole("switch", { name: "Disable " + (target.displayName || target.id), exact: true }), "Disable resource Studio feature");
+  await nativeEnter("remount-review", page.getByRole("button", { name: "Review changes", exact: true }), "Review changes");
+  const dialog = page.locator('[role="dialog"][aria-label="Feature impact review"]');
+  await expect(dialog).toBeVisible();
+  const applied = page.waitForResponse(response => new URL(response.url()).origin === studio
+    && new URL(response.url()).pathname === "/modularity/features/apply" && response.request().method() === "POST");
+  const bootstrap = page.waitForResponse(response => new URL(response.url()).origin === backend
+    && new URL(response.url()).pathname === "/_elsa/agent/bootstrap");
+  await nativeEnter("remount-apply", dialog.getByRole("button", { name: "Apply", exact: true }), "Apply reviewed Studio feature change");
+  const appliedResponse = await applied;
+  need(appliedResponse.status() === 200, "The native Studio feature apply was refused.");
+  const appliedValue = await appliedResponse.json();
+  need(appliedValue.reloadedShellCount > 0 && appliedValue.catalog.revision !== catalog.revision,
+    "Native feature apply did not report a new configuration and shell generation.");
+  expect(appliedValue.catalog.features.find(feature => feature.id === target.id)?.enabled).toBe(false);
+  await expect.poll(() => moduleEvents.length).toBe(1);
+  await expect.poll(() => oldDock.evaluate(element => element.isConnected)).toBe(false);
+  await bootstrap;
+  await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
+  await expect(dock()).toHaveAttribute("aria-busy", "false");
+  const windowStartedAt = Date.now();
+  await page.waitForTimeout(1000);
+  const generationAfter = await hostRead("/__qualification/generation");
+  need(generationBefore.generation && generationAfter.generation !== generationBefore.generation,
+    "The actual Studio serving generation did not change.");
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(timeOrigin);
+  expect(requests.filter(request => new URL(request.url).pathname.endsWith("/messages"))).toHaveLength(1);
+  expect(callsFor(selected.commandId)).toHaveLength(1);
+  const sessionAfter = await owner("session-after-remount", sessionPath);
+  const userMessages = session => session.value.data.messages.filter(message => String(message.role).toLowerCase() === "user")
+    .map(message => ({ id: message.id, requestId: message.requestId, source: message.source, content: message.content }));
+  expect(userMessages(sessionAfter)).toEqual(userMessages(sessionBefore));
+  const after = await owner("owner-after", witness.ownerEndpoint);
+  expect(after.value).toEqual(before.value);
+  result.ownerAfter = after.receipt;
+  result.evidence.push(retain("native-intent-remount", { nativeOperation: "Studio feature apply", featureId: target.id,
+    enabledBefore: target.enabled, enabledAfter: false, catalogRevisionBefore: catalog.revision,
+    catalogRevisionAfter: appliedValue.catalog.revision, reloadedShellCount: appliedValue.reloadedShellCount,
+    generationBefore, generationAfter, moduleEvents, originalRequestId: original.requestId, originalSource: original.source,
+    commandId: selected.commandId, providerCalls: callsFor(selected.commandId), observationWindowMilliseconds: Date.now() - windowStartedAt }));
+  result.observations = { nativeReconciliation: true, noResubmission: true };
+  await screenshot("native-remount-without-replay");
+}
+
 function xpathString(value) {
   need(typeof value === "string" && !value.includes("'"), "Workflow ID must be a supported native identifier.");
   return "'" + value + "'";
 }
 try {
-  if (["workflow", "duplicate-ack", "client-binding-removed"].includes(config.journey)) await workflow();
+  if (config.journey === "renderer-unavailable") await rendererUnavailable();
+  else if (config.journey === "consumed-intent-remount") await consumedIntentRemount();
+  else if (["workflow", "duplicate-ack", "client-binding-removed", "malformed-result", "lost-confirmation"].includes(config.journey)) await workflow();
   else await resource();
   need(pageErrors.length === 0, "Studio raised browser errors: " + pageErrors.join("; "));
   if (!result.expectedFailureObserved) result.status = "passed";

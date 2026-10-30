@@ -14,6 +14,76 @@ import runtime
 
 
 class RuntimeObservationTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "posix", "Requires a real POSIX SIGTERM handler")
+    def test_pending_shutdown_keeps_the_signalled_process_until_it_exits(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            published = root / "published"
+            published.mkdir()
+            release = published / "release"
+            signalled = published / "signalled"
+            (published / "host.py").write_text('''import argparse, signal, time
+from pathlib import Path
+p=argparse.ArgumentParser();p.add_argument('--contentRoot');p.add_argument('--urls');a=p.parse_args()
+root=Path(a.contentRoot)
+signal_count=0
+def terminate(signum, frame):
+ global signal_count
+ signal_count+=1
+ (root/'signalled').write_text(str(signal_count))
+signal.signal(signal.SIGTERM,terminate)
+print('Now listening on: '+a.urls,flush=True)
+print('WEAVER_BACKEND_CONSUMER_READY',flush=True)
+while not (signal_count and (root/'release').exists()): time.sleep(.01)
+''')
+            run = SimpleNamespace(root=root, dotnet=sys.executable, profiles={"backend": {
+                "published": published, "assembly": "host.py", "env": dict(os.environ)}})
+            original = RuntimeError("Original qualification failure")
+            failures = []
+
+            def launch():
+                try:
+                    with runtime.server(run, "backend", runtime.owned_origin()):
+                        raise original
+                except Exception as error:
+                    failures.append(error)
+
+            with patch.object(runtime, "SHUTDOWN_OBSERVATION_SECONDS", .03):
+                worker = threading.Thread(target=launch)
+                worker.start()
+                try:
+                    pending = None
+                    deadline = time.monotonic() + 5
+                    while time.monotonic() < deadline and worker.is_alive():
+                        path = root / "backend-process.json"
+                        if path.exists():
+                            try:
+                                item = json.loads(path.read_text())
+                                if len(item.get("shutdownObservations", [])) >= 2:
+                                    pending = item
+                                    break
+                            except json.JSONDecodeError:
+                                pass  # Receipt writer may be between truncate and flush.
+                        time.sleep(.01)
+                    self.assertIsNotNone(pending, "The signalled child must remain observable during shutdown: " + repr(failures))
+                    self.assertTrue(worker.is_alive())
+                    os.kill(pending["pid"], 0)
+                    self.assertEqual(signalled.read_text(), "1")
+                    self.assertTrue(all(item["status"] == "pending" and item["pid"] == pending["pid"]
+                                        for item in pending["shutdownObservations"]))
+                    self.assertNotIn("exitCode", pending)
+                finally:
+                    release.touch()
+                    worker.join(10)
+                self.assertFalse(worker.is_alive(), "The same child did not finish after its private release")
+                self.assertEqual(failures, [original])
+                final = json.loads((root / "backend-process.json").read_text())
+                self.assertEqual(final["pid"], pending["pid"])
+                self.assertEqual(final["exitCode"], 0)
+                self.assertEqual(final["runtimeCacheFiles"], {"NUGET_PACKAGES": [], "NUGET_HTTP_CACHE_PATH": []})
+                self.assertGreaterEqual(final["stoppedAt"], final["shutdownObservations"][-1]["at"])
+                self.assertEqual(signalled.read_text(), "1")
+
     def test_pending_startup_keeps_the_same_process_until_it_can_confirm_readiness(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory).resolve()
