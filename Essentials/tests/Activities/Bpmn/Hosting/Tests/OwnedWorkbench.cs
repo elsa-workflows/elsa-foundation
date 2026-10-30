@@ -131,7 +131,8 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
     internal object[] DescribeBinaries(string? sourceRevision, bool includePublishing = false)
     {
         var binaries = new[] { "Elsa.Workbench", "Elsa.Workflows.Runtime.Core", "Elsa.Workflows.Runtime", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
-            "Elsa.Activities.Bpmn.Core", "Elsa.Activities.Bpmn", "Elsa.Activities.Bpmn.Api", "Bpmn.Model", "Bpmn.Semantics" }
+            "Elsa.Activities.Bpmn.Core", "Elsa.Activities.Bpmn", "Elsa.Activities.Bpmn.Api", "Bpmn.Model", "Bpmn.Semantics",
+            "Elsa.Workflows.Design.Core", "Elsa.Workflows.Design.Api", "Elsa.Workflows.Design.Persistence.EntityFrameworkCore", "Elsa.Persistence.EntityFramework" }
             .Concat(includePublishing ? new[] { "Elsa.Workflows.Publishing.Core", "Elsa.Workflows.Publishing" } : [])
             .Select(name => Path.Combine(Path.GetDirectoryName(AssemblyPath)!, name + ".dll"))
             .Select(path => new { file = Path.GetFileName(path), productVersion = FileVersionInfo.GetVersionInfo(path).ProductVersion,

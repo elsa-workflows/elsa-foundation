@@ -15,8 +15,8 @@ public sealed class WorkflowsDesignRetainedMigrationTests
     [InlineData("SqlServer", "20260928040712_Initial", "20261030020433_Initial", null)]
     [InlineData("PostgreSql", "20260928040711_Initial", "20261030020432_Initial", null)]
     [InlineData("MySql", "20260928040709_Initial", "20261030020430_Initial", null)]
-    [InlineData("SqlServer", "20260928040712_Initial", "20261030020433_Initial", "elsa_retained")]
-    [InlineData("PostgreSql", "20260928040711_Initial", "20261030020432_Initial", "elsa_retained")]
+    [InlineData("SqlServer", "20260928040712_Initial", "20261030020433_Initial", "elsa_alt")]
+    [InlineData("PostgreSql", "20260928040711_Initial", "20261030020432_Initial", "elsa_alt")]
     public void Retained_baseline_and_additive_templates_script_without_opening_a_database(string provider, string baseline, string templates, string? schema)
     {
         var type = Assert.Single(ModuleContextCatalog.Contexts(provider), type => typeof(WorkflowsDesignDbContext).IsAssignableFrom(type));

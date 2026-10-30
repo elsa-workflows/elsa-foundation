@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.WorkflowsDesign.MySql
 {
     /// <inheritdoc />
+    [Elsa.Persistence.EntityFramework.EfMigrationIncludes("20260928040709_Initial")]
     public partial class WorkflowTemplates : Migration
     {
         /// <inheritdoc />

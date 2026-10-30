@@ -5,7 +5,6 @@ using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Primitives.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
@@ -53,7 +52,7 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         EfSchemaVersionMaterializationInterceptor.EnsureAdded(optionsBuilder);
-        ((IDbContextOptionsBuilderInfrastructure)optionsBuilder).AddOrUpdateExtension(new WorkflowsDesignMigrationHistoryOptions());
+        EfMigrationsHistory.EnsureAdded(optionsBuilder);
     }
 
     /// <summary>

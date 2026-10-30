@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.WorkflowsDesign.SqlServer
 {
     /// <inheritdoc />
+    [Elsa.Persistence.EntityFramework.EfMigrationIncludes("20260928040712_Initial")]
     public partial class WorkflowTemplates : Migration
     {
         /// <inheritdoc />

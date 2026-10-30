@@ -44,8 +44,10 @@ does not freeze other modules or complete the release-wide baseline policy under
 
 The template change #3472 briefly regenerated Design's September Initial as an October cumulative Initial.
 Both histories exist in actual captured stores. Design retains the original September migration and uses the
-same October ID for the additive template migration. Its internal history decorator recognizes the known
-October cumulative IDs as including the September baseline, including the guards in offline idempotent SQL.
+same October ID for the additive template migration. Its four template migrations declare the included September baseline with `EfMigrationIncludes`. The shared
+history decorator reads this metadata per context, including the guards in offline idempotent SQL. The provider
+binding installs the same service before pooling freezes options; module-specific service registrations must
+not split EF's internal provider cache.
 It leaves every physical history row unchanged; a database created by the cumulative writer must not recreate
 its existing tables. A fresh installation records both migrations normally, while an original September store
 applies only the template addition. This narrowly scoped preview bridge is not a general baseline-alias API.

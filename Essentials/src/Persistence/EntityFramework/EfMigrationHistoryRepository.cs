@@ -1,33 +1,33 @@
+using System.Reflection;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
+namespace Elsa.Persistence.EntityFramework;
 
 /// <summary>
-/// Recognizes the cumulative template Initial written by #3472 as including the retained September baseline.
-/// The physical history is never rewritten. All subsequent Design changes use incremental migrations.
+/// Recognizes an explicitly declared cumulative migration without rewriting physical history.
+/// Installed uniformly by the provider binding so module metadata does not fragment EF's service-provider cache.
 /// </summary>
-internal sealed class WorkflowsDesignMigrationHistory(IHistoryRepository inner, IRelationalTypeMappingSource mappings) : IHistoryRepository
+internal sealed class EfMigrationHistoryRepository(IHistoryRepository inner, IRelationalTypeMappingSource mappings, IMigrationsAssembly migrations) : IHistoryRepository
 {
-    private static readonly IReadOnlyDictionary<string, string> CumulativeInitials = new Dictionary<string, string>
-    {
-        ["20260928040709_Initial"] = "20261030020430_Initial",
-        ["20260928040711_Initial"] = "20261030020432_Initial",
-        ["20260928040712_Initial"] = "20261030020433_Initial",
-        ["20260928040714_Initial"] = "20261030020434_Initial"
-    };
+    private readonly IReadOnlyDictionary<string, string> cumulativeInitials = migrations.Migrations
+        .SelectMany(migration => migration.Value.GetCustomAttributes<EfMigrationIncludesAttribute>()
+            .Select(includes => new KeyValuePair<string, string>(includes.MigrationId, migration.Key)))
+        .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
 
     public IReadOnlyList<HistoryRow> GetAppliedMigrations() => IncludeBaseline(inner.GetAppliedMigrations());
 
     public async Task<IReadOnlyList<HistoryRow>> GetAppliedMigrationsAsync(CancellationToken cancellationToken = default) =>
         IncludeBaseline(await inner.GetAppliedMigrationsAsync(cancellationToken));
 
-    private static IReadOnlyList<HistoryRow> IncludeBaseline(IReadOnlyList<HistoryRow> rows)
+    private IReadOnlyList<HistoryRow> IncludeBaseline(IReadOnlyList<HistoryRow> rows)
     {
+        if (cumulativeInitials.Count == 0)
+            return rows;
         var result = rows.ToList();
-        foreach (var (baseline, cumulative) in CumulativeInitials)
+        foreach (var (baseline, cumulative) in cumulativeInitials)
             if (!rows.Any(row => row.MigrationId == baseline) && rows.FirstOrDefault(row => row.MigrationId == cumulative) is { } applied)
                 result.Add(new HistoryRow(baseline, applied.ProductVersion));
         return result.OrderBy(row => row.MigrationId, StringComparer.Ordinal).ToArray();
@@ -37,7 +37,7 @@ internal sealed class WorkflowsDesignMigrationHistory(IHistoryRepository inner, 
 
     private string IncludeCumulativeGuard(string script, string migrationId)
     {
-        if (!CumulativeInitials.TryGetValue(migrationId, out var cumulative))
+        if (!cumulativeInitials.TryGetValue(migrationId, out var cumulative))
             return script;
         // Preserve the provider's quoting, configured history schema and block syntax. Both IDs mean this
         // baseline's tables already exist. Refuse an unexpected provider shape instead of emitting unsafe SQL.
@@ -46,7 +46,7 @@ internal sealed class WorkflowsDesignMigrationHistory(IHistoryRepository inner, 
         var comparison = "= " + baselineLiteral;
         var index = script.IndexOf(comparison, StringComparison.Ordinal);
         if (index < 0 || index != script.LastIndexOf(comparison, StringComparison.Ordinal))
-            throw new NotSupportedException("The Workflows Design baseline guard does not recognize this provider's migration-history predicate.");
+            throw new NotSupportedException("The cumulative migration baseline guard does not recognize this provider's migration-history predicate.");
         return script.Replace(comparison, $"IN ({baselineLiteral}, {mapping.GenerateSqlLiteral(cumulative)})", StringComparison.Ordinal);
     }
 
@@ -68,9 +68,10 @@ internal sealed class WorkflowsDesignMigrationHistory(IHistoryRepository inner, 
 }
 
 /// <summary>Decorates this module's actual provider history service, including its migration lock.</summary>
-internal sealed class WorkflowsDesignMigrationHistoryOptions : IDbContextOptionsExtension
+internal sealed class EfMigrationHistoryOptionsExtension : IDbContextOptionsExtension
 {
-    public DbContextOptionsExtensionInfo Info => new OptionsInfo(this);
+    private DbContextOptionsExtensionInfo? info;
+    public DbContextOptionsExtensionInfo Info => info ??= new OptionsInfo(this);
 
     public void ApplyServices(IServiceCollection services)
     {
@@ -78,20 +79,20 @@ internal sealed class WorkflowsDesignMigrationHistoryOptions : IDbContextOptions
         if (original is null)
             return; // Non-relational contexts have no migration history.
         services.Remove(original);
-        services.AddScoped<IHistoryRepository>(provider => new WorkflowsDesignMigrationHistory(
+        services.AddScoped<IHistoryRepository>(provider => new EfMigrationHistoryRepository(
             (IHistoryRepository)(original.ImplementationInstance ?? original.ImplementationFactory?.Invoke(provider) ??
                 ActivatorUtilities.CreateInstance(provider, original.ImplementationType!)),
-            provider.GetRequiredService<IRelationalTypeMappingSource>()));
+            provider.GetRequiredService<IRelationalTypeMappingSource>(), provider.GetRequiredService<IMigrationsAssembly>()));
     }
 
     public void Validate(IDbContextOptions options) { }
 
-    private sealed class OptionsInfo(WorkflowsDesignMigrationHistoryOptions extension) : DbContextOptionsExtensionInfo(extension)
+    private sealed class OptionsInfo(EfMigrationHistoryOptionsExtension extension) : DbContextOptionsExtensionInfo(extension)
     {
         public override bool IsDatabaseProvider => false;
-        public override string LogFragment => "RetainedDesignBaseline ";
+        public override string LogFragment => "CumulativeMigrationBaseline ";
         public override int GetServiceProviderHashCode() => 0;
         public override bool ShouldUseSameServiceProvider(DbContextOptionsExtensionInfo other) => other is OptionsInfo;
-        public override void PopulateDebugInfo(IDictionary<string, string> debugInfo) => debugInfo["Elsa:RetainedDesignBaseline"] = "1";
+        public override void PopulateDebugInfo(IDictionary<string, string> debugInfo) => debugInfo["Elsa:CumulativeMigrationBaseline"] = "1";
     }
 }

@@ -285,7 +285,8 @@ try
         var directory = Path.GetDirectoryName(Path.GetFullPath(args[1]))!;
         var required = new[] { "Elsa.Workbench.dll", "Elsa.Activities.Bpmn.dll", "Elsa.Activities.Bpmn.Interchange.dll",
             "Elsa.Workflows.Runtime.Core.dll", "Elsa.Workflows.Runtime.dll", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
-            "Elsa.Activities.Runtime.dll", "Elsa.Activities.DispatchWorkflow.Runtime.dll", "Elsa.Serialization.SystemText.dll" };
+            "Elsa.Activities.Runtime.dll", "Elsa.Activities.DispatchWorkflow.Runtime.dll", "Elsa.Serialization.SystemText.dll",
+            "Elsa.Workflows.Design.Core.dll", "Elsa.Workflows.Design.Api.dll", "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll", "Elsa.Persistence.EntityFramework.dll" };
         var products = required.Select(name => {
             var path = Path.Combine(directory, name);
             var version = System.Diagnostics.FileVersionInfo.GetVersionInfo(path).ProductVersion
