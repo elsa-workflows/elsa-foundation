@@ -13,6 +13,7 @@ import shutil
 import signal
 import subprocess
 import tempfile
+import time
 import urllib.error
 import urllib.request
 
@@ -46,7 +47,7 @@ def main():
     for name in ('WorkflowsRuntimeDistributed', 'WorkflowsRuntimeDistributedEntityFrameworkCorePersistence', 'WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence'): features.pop(name, None)
     features['WorkflowsRuntimeEntityFrameworkCore']['ConnectionString'] = 'Data Source=runtime.db;Pooling=False'
     for name in ('ActivitiesDesignEntityFrameworkCore', 'WorkflowsDesignEntityFrameworkCore', 'WorkflowsPublishingEntityFrameworkCore'): features[name]['ConnectionString'] = 'Data Source=design.db;Pooling=False'
-    children = []; processes = []; exits = []; logs = []; snapshots = {}; host = None; api = None; native_parent = None; stage = 'start'; observations = 0
+    children = []; processes = []; exits = []; logs = []; snapshots = {}; observer_unavailable = []; host = None; api = None; native_parent = None; stage = 'start'
 
     def owned(child):
         record = next(p for p in processes if p['processId'] == child.pid)
@@ -77,16 +78,28 @@ def main():
                 raise
         wait(healthy, bool, 'The owned host did not become ready.'); api.login('admin', 'Password123!')
     def capture(label):
-        owned(host); os.kill(host.pid, signal.SIGSTOP)
-        try:
-            wait(lambda: 'T' in q.process_field(host.pid, 'stat'), bool, 'The owned host did not stop for capture.', 5)
-            rows = {}
-            for store in ('runtime', 'design'):
-                raw = root / (label + '-' + store + '.sqlite'); receipt = read('--backup-sqlite', root / (store + '.db'), raw)
-                path = output / (label + '-' + store + '.sqlite.gz'); path.write_bytes(gzip.compress(raw.read_bytes()))
-                rows[store] = {'file': path.name, 'databaseSha256': q.digest(raw), 'gzipSha256': q.digest(path), 'observer': receipt}
-            snapshots[label] = rows
-        finally: owned(host); os.kill(host.pid, signal.SIGCONT)
+        for attempt in range(1, 4):
+            owned(host); os.kill(host.pid, signal.SIGSTOP)
+            try:
+                wait(lambda: 'T' in q.process_field(host.pid, 'stat'), bool, 'The owned host did not stop for capture.', 5)
+                rows = []
+                for store in ('runtime', 'design'):
+                    raw = root / (label + '-' + str(attempt) + '-' + store + '.sqlite')
+                    rows.append((store, raw, read('--backup-sqlite', root / (store + '.db'), raw)))
+            except b.ObservationUnavailable as error:
+                observer_unavailable.append({'operation': error.operation, 'failureType': error.failure_type, 'label': label,
+                    'attempt': attempt, 'observedAtUtc': datetime.now(timezone.utc).isoformat(), 'sourceStateEdited': False})
+                q.write_json(output / 'observer-unavailable.json', observer_unavailable)
+                if error.failure_type != 'SqliteException' or attempt == 3: raise
+            else:
+                snapshots[label] = {}
+                for store, raw, receipt in rows:
+                    path = output / (label + '-' + store + '.sqlite.gz'); path.write_bytes(gzip.compress(raw.read_bytes()))
+                    snapshots[label][store] = {'file': path.name, 'databaseSha256': q.digest(raw), 'gzipSha256': q.digest(path), 'observer': receipt}
+                return
+            finally: owned(host); os.kill(host.pid, signal.SIGCONT)
+            # Resume any interrupted real transaction before retrying the entire coupled capture.
+            time.sleep(.1)
     def node(identity, kind, inputs=None, structure=None): return q.node(identity, api.activity(kind), inputs, structure)
     def publish(name, root_node):
         draft = api.request('/design/workflows/definitions/submit', {'name': name, 'state': {'variables': [], 'inputs': [], 'outputs': [], 'rootActivity': root_node}})
@@ -190,13 +203,16 @@ def main():
         q.write_json(output / 'process.json', {'schemaVersion': 1, 'kind': 'actual-pending-event-sibling-interruption', 'sourceRevision': source, 'parent': args.parent,
             'modelExecutionId': model_id, 'nativeParentExecutionId': native_parent, 'workers': workers, 'cancelledWorker': workers[0], 'publication': publication,
             'workerPublication': worker_publication, 'parentPublication': parent_publication, 'processes': processes, 'exits': exits, 'products': products,
-            'snapshots': snapshots, 'pendingCapturedAtUtc': pending_at, 'submitted': submitted, 'stateSeeded': False, 'clockEdited': False, 'standardRecoveryHosts': True})
+            'snapshots': snapshots, 'observerUnavailable': observer_unavailable, 'pendingCapturedAtUtc': pending_at, 'submitted': submitted, 'stateSeeded': False, 'clockEdited': False, 'standardRecoveryHosts': True})
         print(json.dumps({'sourceRevision': source, 'parent': args.parent, 'wholeStores': 6, 'ownedHosts': 3}))
     except Exception as error:
+        capture_failure = None
         if host is not None and host.poll() is None:
             try: capture('failed')
+            except Exception as capture_error: capture_failure = type(capture_error).__name__
             finally: stop(host)
-        q.write_json(output / 'failure.json', {'stage': stage, 'sourceRevision': source, 'parent': args.parent, 'type': type(error).__name__, 'processes': processes, 'exits': exits, 'snapshots': snapshots, 'qualifiesJourney': False})
+        q.write_json(output / 'failure.json', {'stage': stage, 'sourceRevision': source, 'parent': args.parent, 'type': type(error).__name__, 'processes': processes, 'exits': exits,
+            'snapshots': snapshots, 'observerUnavailable': observer_unavailable, 'failureCaptureError': capture_failure, 'qualifiesJourney': False})
         raise
     finally:
         for child in reversed(children): stop(child)
