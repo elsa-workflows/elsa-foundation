@@ -14,17 +14,31 @@ public sealed class BpmnModelDefinition
         IReadOnlyList<BpmnNativeServiceBinding>? serviceBindings)
         : this(formatVersion, process, humanBindings, serviceBindings, null) { }
 
-    [JsonConstructor]
     public BpmnModelDefinition(int formatVersion, JsonElement process, IReadOnlyList<string> humanBindings,
         IReadOnlyList<BpmnNativeServiceBinding>? serviceBindings, IReadOnlyList<string>? timerBindings)
+        : this(formatVersion, process, humanBindings, serviceBindings, timerBindings, null) { }
+
+    [JsonConstructor]
+    public BpmnModelDefinition(int formatVersion, JsonElement process, IReadOnlyList<string> humanBindings,
+        IReadOnlyList<BpmnNativeServiceBinding>? serviceBindings, IReadOnlyList<string>? timerBindings,
+        IReadOnlyList<BpmnNativeEventBinding>? nativeEventBindings)
     {
-        if (formatVersion is not (1 or 2 or 3 or 4)) throw new NotSupportedException("The BPMN model definition format is unsupported.");
+        if (formatVersion is not (1 or 2 or 3 or 4 or 5)) throw new NotSupportedException("The BPMN model definition format is unsupported.");
         if (process.ValueKind != JsonValueKind.Object) throw new ArgumentException("A BPMN process must be an object.", nameof(process));
         ArgumentNullException.ThrowIfNull(humanBindings);
         if (humanBindings.Any(string.IsNullOrWhiteSpace) || humanBindings.Distinct(StringComparer.Ordinal).Count() != humanBindings.Count)
             throw new ArgumentException("BPMN human binding identities must be nonblank and unique.", nameof(humanBindings));
         FormatVersion = formatVersion; Process = process.Clone();
         HumanBindings = Array.AsReadOnly(humanBindings.Order(StringComparer.Ordinal).ToArray());
+        if (formatVersion == 5 ? nativeEventBindings is not { Count: > 0 } || humanBindings.Count != 0 || serviceBindings is not null : nativeEventBindings is not null)
+            throw new ArgumentException("Native event work requires model format 5 and its complete, exclusive binding inventory.", nameof(nativeEventBindings));
+        if (nativeEventBindings is not null)
+        {
+            if (nativeEventBindings.Any(binding => binding is null) ||
+                nativeEventBindings.Select(binding => binding.BindingId).Distinct(StringComparer.Ordinal).Count() != nativeEventBindings.Count)
+                throw new ArgumentException("Native event binding identities must be unique.", nameof(nativeEventBindings));
+            NativeEventBindings = Array.AsReadOnly(nativeEventBindings.OrderBy(binding => binding.BindingId, StringComparer.Ordinal).ToArray());
+        }
         if (formatVersion == 4 ? timerBindings is not { Count: > 0 } : timerBindings is not null)
             throw new ArgumentException("Duration timers require model format 4 and its complete binding inventory.", nameof(timerBindings));
         if (timerBindings is not null)
@@ -55,6 +69,23 @@ public sealed class BpmnModelDefinition
     public IReadOnlyList<BpmnNativeServiceBinding>? ServiceBindings { get; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<string>? TimerBindings { get; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<BpmnNativeEventBinding>? NativeEventBindings { get; }
+}
+
+/// <summary>One signal catch's complete published native Event worker pin.</summary>
+public sealed class BpmnNativeEventBinding
+{
+    public BpmnNativeEventBinding(string bindingId, WorkflowExecutableIdentity executable)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(bindingId);
+        ArgumentNullException.ThrowIfNull(executable);
+        foreach (var value in new[] { executable.ArtifactId, executable.ArtifactHash, executable.DefinitionId,
+                     executable.DefinitionVersionId, executable.ArtifactVersion }) ArgumentException.ThrowIfNullOrWhiteSpace(value);
+        BindingId = bindingId; Executable = executable;
+    }
+    public string BindingId { get; }
+    public WorkflowExecutableIdentity Executable { get; }
 }
 
 /// <summary>One service task's complete published native worker pin and modeled business-error code.</summary>

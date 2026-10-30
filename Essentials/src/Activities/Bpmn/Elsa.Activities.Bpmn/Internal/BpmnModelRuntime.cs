@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Bpmn.Model;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -30,9 +31,21 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         if (!materials.SupportsModelMaterial || !sources.CanWriteRootReferences(materials))
             throw new NotSupportedException("The selected artifact/source providers cannot publish model material safely.");
         var seed = new WorkflowExecutableIdentity("pending", "pending", "pending", "1.0.0", "pending");
-        var dependencies = (definition.ServiceBindings ?? []).Select(binding => new RuntimeModelDependency(binding.BindingId, binding.Executable)).ToArray();
+        var dependencies = (definition.ServiceBindings ?? []).Select(binding => new RuntimeModelDependency(binding.BindingId, binding.Executable))
+            .Concat((definition.NativeEventBindings ?? []).Select(binding => new RuntimeModelDependency(binding.BindingId, binding.Executable))).ToArray();
         foreach (var binding in definition.ServiceBindings ?? [])
-            await ValidatePublishedWorkerAsync(binding, caller, cancellationToken);
+            await ValidatePublishedWorkerAsync(binding.Executable, caller, cancellationToken);
+        foreach (var binding in definition.NativeEventBindings ?? [])
+        {
+            var worker = await ValidatePublishedWorkerAsync(binding.Executable, caller, cancellationToken);
+            var process = definition.Process.Deserialize<BpmnProcessDefinition>(Web) ?? throw new BpmnModelValidationException("BPMN process definition is missing.");
+            var catches = process.Elements.Where(element => element.BindingRef == binding.BindingId).ToArray();
+            if (catches.Length != 1 || catches[0].ElementType != BpmnElementTypes.IntermediateCatchEvent ||
+                catches[0].EventDefinitions.Count != 1 || catches[0].EventDefinitions.Single().Type != BpmnEventDefinitionTypes.Signal ||
+                !catches[0].EventDefinitions.Single().Properties.TryGetValue(BpmnEventDefinitionProperties.Name, out var name))
+                throw new BpmnModelValidationException("A native event binding requires one named signal catch.");
+            ValidateEventWorker(worker.RootActivity, name);
+        }
         var profile = definition.FormatVersion == 1 ? BpmnModelProtocol.Profile : BpmnModelProtocol.NativeWorkProfile;
         var material = new RuntimeModelMaterial(1, seed, new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), profile,
             JsonSerializer.SerializeToElement(definition, Web), new(1, []), [], dependencies, []);
@@ -259,26 +272,46 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         return access.Current.Scope ?? throw new BpmnModelValidationException("A model operation requires an explicit persistence scope.");
     }
 
-    private async ValueTask ValidatePublishedWorkerAsync(BpmnNativeServiceBinding binding, BpmnModelCaller caller,
+    private async ValueTask<WorkflowExecutable> ValidatePublishedWorkerAsync(WorkflowExecutableIdentity executable, BpmnModelCaller caller,
         CancellationToken cancellationToken)
     {
-        var native = await materials.FindMaterialAsync(binding.Executable.ArtifactId, cancellationToken);
-        if (native?.NativeWorkflow is not { } worker || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(native.Identity, binding.Executable) ||
+        var native = await materials.FindMaterialAsync(executable.ArtifactId, cancellationToken);
+        if (native?.NativeWorkflow is not { } worker || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(native.Identity, executable) ||
             worker.InputContract.Inputs.Count != 0)
-            throw new BpmnModelValidationException("A native service binding requires its complete native pin and a closed worker input contract.");
-        var query = new WorkflowExecutableSourceReferenceArtifactPageQuery(binding.Executable.ArtifactId);
+            throw new BpmnModelValidationException("A native work binding requires its complete native pin and a closed worker input contract.");
+        var query = new WorkflowExecutableSourceReferenceArtifactPageQuery(executable.ArtifactId);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         while (true)
         {
             var page = await sources.ListByArtifactPageAsync(query, cancellationToken);
             if (page.Items.Any(source => source.Scope == WorkflowExecutableReferenceScope.Published && source.TenantId == caller.TenantId &&
-                source.IsLive(clock.GetUtcNow()) && source.DefinitionId == binding.Executable.DefinitionId &&
-                source.DefinitionVersionId == binding.Executable.DefinitionVersionId && source.ArtifactVersion == binding.Executable.ArtifactVersion)) return;
+                source.IsLive(clock.GetUtcNow()) && source.DefinitionId == executable.DefinitionId &&
+                source.DefinitionVersionId == executable.DefinitionVersionId && source.ArtifactVersion == executable.ArtifactVersion)) return worker;
             if (page.NextContinuationToken is null) break;
             if (!seen.Add(page.NextContinuationToken)) throw new BpmnModelValidationException("The worker publication source page did not advance.");
-            query = new(binding.Executable.ArtifactId, continuationToken: page.NextContinuationToken);
+            query = new(executable.ArtifactId, continuationToken: page.NextContinuationToken);
         }
         throw new BpmnModelValidationException("The native worker pin has no live published source in this tenant.");
+    }
+
+    internal static void ValidateEventWorker(ExecutableNode root, string name)
+    {
+        if (root.ActivityType != "Elsa.Activities.Primitives.Activities.Event" || root.ChildSlots.Count != 0 ||
+            !Literal("EventName", out var eventName) || eventName.ValueKind != JsonValueKind.String || eventName.GetString() != name ||
+            !Literal("CanStartWorkflow", out var canStart) || canStart.ValueKind != JsonValueKind.False ||
+            root.InputBindings.TryGetValue("CorrelationId", out var correlation) &&
+                (correlation.Source != RuntimeInputBindingSource.Literal || correlation.LiteralValue is not { } value ||
+                    value.ValueKind != JsonValueKind.Null && (value.ValueKind != JsonValueKind.String || !string.IsNullOrWhiteSpace(value.GetString()))))
+            throw new BpmnModelValidationException("A signal catch requires a closed native Event worker with the same fixed name, CanStartWorkflow=false and no correlation filter.");
+
+        bool Literal(string key, out JsonElement value)
+        {
+            value = default;
+            if (!root.InputBindings.TryGetValue(key, out var binding) || binding.Source != RuntimeInputBindingSource.Literal || binding.LiteralValue is not { } literal)
+                return false;
+            value = literal;
+            return true;
+        }
     }
     private static void InputId(string value)
     {

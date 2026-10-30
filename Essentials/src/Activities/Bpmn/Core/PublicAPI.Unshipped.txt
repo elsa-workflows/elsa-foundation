@@ -151,3 +151,9 @@ static Elsa.Activities.Bpmn.Core.BpmnServiceIncident.operator !=(Elsa.Activities
 static Elsa.Activities.Bpmn.Core.BpmnServiceIncident.operator ==(Elsa.Activities.Bpmn.Core.BpmnServiceIncident? left, Elsa.Activities.Bpmn.Core.BpmnServiceIncident? right) -> bool
 Elsa.Activities.Bpmn.Core.BpmnServiceFaultPolicy
 Elsa.Activities.Bpmn.Core.BpmnServiceIncident
+Elsa.Activities.Bpmn.Core.BpmnModelDefinition.BpmnModelDefinition(int formatVersion, System.Text.Json.JsonElement process, System.Collections.Generic.IReadOnlyList<string!>! humanBindings, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnNativeServiceBinding!>? serviceBindings, System.Collections.Generic.IReadOnlyList<string!>? timerBindings, System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding!>? nativeEventBindings) -> void
+Elsa.Activities.Bpmn.Core.BpmnModelDefinition.NativeEventBindings.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding!>?
+Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding
+Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding.BpmnNativeEventBinding(string! bindingId, Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity! executable) -> void
+Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding.BindingId.get -> string!
+Elsa.Activities.Bpmn.Core.BpmnNativeEventBinding.Executable.get -> Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!

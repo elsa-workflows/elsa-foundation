@@ -236,8 +236,8 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                     }
                     else if (nativeResult.Status == WorkflowExecutionStatus.Faulted || nativeResult.Completion?.OutcomeKey == "BusinessError")
                     {
-                        var binding = definition.ServiceBindings!.Single(item => item.BindingId == work.BindingId);
-                        if (nativeResult.Status == WorkflowExecutionStatus.Faulted && binding.FaultPolicy is { } policy)
+                        var binding = definition.ServiceBindings?.Single(item => item.BindingId == work.BindingId);
+                        if (nativeResult.Status == WorkflowExecutionStatus.Faulted && binding?.FaultPolicy is { } policy)
                         {
                             held = policy.Disposition == BpmnServiceFaultDisposition.HoldForRetry && work.AttemptNumber < policy.MaxAttempts;
                             var failedAt = clock.GetUtcNow();
@@ -249,9 +249,10 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                             document = document with { Failures = [.. document.Failures!, failure] };
                         }
                         if (!held) evaluation = Evaluate(() => BpmnEvaluationComponent.Interpreter.OnWorkFaulted(
-                            new(graph, document.State, snapshot, work.BindingId, work.InvocationId, "Native service work failed.")
+                            new(graph, document.State, snapshot, work.BindingId, work.InvocationId,
+                                binding is null ? "Native event work failed." : "Native service work failed.")
                             { WorkTokenId = work.TokenId, FaultedIterationId = work.IterationId,
-                                ErrorCode = nativeResult.Status == WorkflowExecutionStatus.Completed ? binding.BusinessErrorCode : null }));
+                                ErrorCode = nativeResult.Status == WorkflowExecutionStatus.Completed ? binding?.BusinessErrorCode : null }));
                     }
                     else evaluation = Evaluate(() => BpmnEvaluationComponent.Interpreter.OnWorkCompleted(
                         new(graph, document.State, snapshot, work.BindingId, work.InvocationId,
@@ -347,21 +348,26 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         var envelope = Definition(material);
         var native = material.Profile == BpmnModelProtocol.NativeWorkProfile;
         var timed = envelope.FormatVersion == 4;
-        if ((native ? envelope.FormatVersion is not (2 or 3 or 4) : envelope.FormatVersion != 1) || material.Dependencies.Count != (envelope.ServiceBindings?.Count ?? 0) ||
-            (envelope.ServiceBindings ?? []).Any(binding => !material.Dependencies.Any(dependency => dependency.BindingId == binding.BindingId &&
+        var events = envelope.FormatVersion == 5;
+        var dependencies = (envelope.ServiceBindings ?? []).Select(binding => new RuntimeModelDependency(binding.BindingId, binding.Executable))
+            .Concat((envelope.NativeEventBindings ?? []).Select(binding => new RuntimeModelDependency(binding.BindingId, binding.Executable))).ToArray();
+        if ((native ? envelope.FormatVersion is not (2 or 3 or 4 or 5) : envelope.FormatVersion != 1) || material.Dependencies.Count != dependencies.Length ||
+            dependencies.Any(binding => !material.Dependencies.Any(dependency => dependency.BindingId == binding.BindingId &&
                 WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(dependency.Executable, binding.Executable))))
-            throw new BpmnModelValidationException("The native service inventory differs from the model's complete retained dependency pins.");
+            throw new BpmnModelValidationException("The native work inventory differs from the model's complete retained dependency pins.");
         var process = envelope.Process.Deserialize<BpmnProcessDefinition>(Strict) ?? throw new BpmnModelValidationException("BPMN process definition is missing.");
         if (process.Variables.Count != 0 || process.IsTransaction || process.Elements.Any(item =>
-                (timed ? item.ElementType is not (BpmnElementTypes.StartEvent or BpmnElementTypes.EndEvent or BpmnElementTypes.ServiceTask or BpmnElementTypes.UserTask or BpmnElementTypes.ParallelGateway or BpmnElementTypes.BoundaryEvent) :
+                (events ? item.ElementType is not (BpmnElementTypes.StartEvent or BpmnElementTypes.EndEvent or BpmnElementTypes.ParallelGateway or BpmnElementTypes.IntermediateCatchEvent) :
+                    timed ? item.ElementType is not (BpmnElementTypes.StartEvent or BpmnElementTypes.EndEvent or BpmnElementTypes.ServiceTask or BpmnElementTypes.UserTask or BpmnElementTypes.ParallelGateway or BpmnElementTypes.BoundaryEvent) :
                     native ? item.ElementType is not (BpmnElementTypes.StartEvent or BpmnElementTypes.EndEvent or BpmnElementTypes.ServiceTask or BpmnElementTypes.BoundaryEvent) :
                     item.ElementType is not (BpmnElementTypes.StartEvent or BpmnElementTypes.EndEvent or BpmnElementTypes.UserTask or BpmnElementTypes.ParallelGateway)) ||
-                (item.ElementType == BpmnElementTypes.BoundaryEvent ? !native ||
+                (events && item.ElementType == BpmnElementTypes.IntermediateCatchEvent ? !IsSignalCatch(item, envelope) :
+                    item.ElementType == BpmnElementTypes.BoundaryEvent ? !native ||
                     !(IsCodedServiceErrorBoundary(item, process) || timed && IsDurationBoundary(item, process, envelope)) : item.EventDefinitions.Count != 0) ||
                 item.LoopCharacteristics is not null || item.IsForCompensation || item.TriggeredByEvent ||
                 item.ListenerBindingRef is not null || item.IsTransaction || item.Script is not null || item.Properties.Count != 0))
             throw new BpmnModelValidationException("The BPMN definition contains elements or events outside its declared hosting profile.");
-        if (native && !timed && (envelope.HumanBindings.Count != 0 || envelope.ServiceBindings!.Count != 1 ||
+        if (native && !timed && !events && (envelope.HumanBindings.Count != 0 || envelope.ServiceBindings!.Count != 1 ||
             process.Elements.Count(item => item.ElementType == BpmnElementTypes.ServiceTask) != 1))
             throw new BpmnModelValidationException("The current native service profile requires one closed published native worker, plain start/end events and optional coded error boundaries.");
         if (timed && (process.Elements.Any(item => item.ElementType == BpmnElementTypes.UserTask && !envelope.HumanBindings.Contains(item.BindingRef!, StringComparer.Ordinal) ||
@@ -377,9 +383,15 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             throw new BpmnModelValidationException("The initial timed native-service profile routes its worker and boundary outcomes directly to end events.");
         try { return BpmnGraph.Build(process, envelope.HumanBindings.Concat((envelope.ServiceBindings ?? []).Select(binding => binding.BindingId))
             .Concat(envelope.TimerBindings ?? [])
+            .Concat((envelope.NativeEventBindings ?? []).Select(binding => binding.BindingId))
             .Select(id => new BpmnBoundWork(id)).ToArray(), native ? BpmnHostCapabilities.SubtreeCancellation : BpmnHostCapabilities.None); }
         catch (BpmnExecutionException exception) { throw new BpmnModelValidationException(exception.Message, exception); }
     }
+
+    private static bool IsSignalCatch(BpmnElement element, BpmnModelDefinition definition) =>
+        element.EventDefinitions.Count == 1 && element.EventDefinitions.Single() is { Type: BpmnEventDefinitionTypes.Signal } signal &&
+        signal.Properties.Count == 1 && signal.Properties.TryGetValue(BpmnEventDefinitionProperties.Name, out var name) && !string.IsNullOrWhiteSpace(name) &&
+        definition.NativeEventBindings?.Any(binding => binding.BindingId == element.BindingRef) == true;
 
     private static bool IsDurationBoundary(BpmnElement element, BpmnProcessDefinition process, BpmnModelDefinition definition)
     {
@@ -503,11 +515,14 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             var invocation = "bpmn-work:" + BpmnModelIdentity.Create(context.Scope.Value, context.WorkItem.WorkflowExecutionId, active.TokenId, active.ElementId, active.NodeId);
             var attempt = "attempt:" + BpmnModelIdentity.Create(invocation, "1");
             var binding = definition.ServiceBindings?.SingleOrDefault(item => item.BindingId == active.NodeId);
+            var eventBinding = definition.NativeEventBindings?.SingleOrDefault(item => item.BindingId == active.NodeId);
             RuntimeModelNativeWorkOrigin? origin = null;
             if (binding is not null)
             {
                 origin = NativeOrigin(context, binding, invocation, attempt, commitId);
             }
+            else if (eventBinding is not null)
+                origin = NativeOrigin(context, eventBinding.BindingId, eventBinding.Executable, invocation, attempt, commitId);
             BpmnDurationTimer? timer = null;
             if (definition.TimerBindings?.Contains(active.NodeId, StringComparer.Ordinal) == true)
             {
@@ -527,11 +542,15 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
 
     private static RuntimeModelNativeWorkOrigin NativeOrigin(RuntimeModelExecutionContext context, BpmnNativeServiceBinding binding,
         string invocation, string attempt, string commitId)
+        => NativeOrigin(context, binding.BindingId, binding.Executable, invocation, attempt, commitId);
+
+    private static RuntimeModelNativeWorkOrigin NativeOrigin(RuntimeModelExecutionContext context, string bindingId, WorkflowExecutableIdentity executable,
+        string invocation, string attempt, string commitId)
     {
         var intent = "bpmn-start-native:" + BpmnModelIdentity.Create(invocation, attempt);
         return new(1, context.Scope, context.WorkItem.WorkflowExecutionId, context.Material.Model!.Protocol,
-            context.Material.Identity, context.Material.IncarnationId, binding.BindingId, invocation, attempt, binding.Executable,
-            BpmnNativeWorkBoundary.WorkerIdentity(context.Scope, context.WorkItem.WorkflowExecutionId, invocation, attempt, binding.Executable).WorkflowExecutionId,
+            context.Material.Identity, context.Material.IncarnationId, bindingId, invocation, attempt, executable,
+            BpmnNativeWorkBoundary.WorkerIdentity(context.Scope, context.WorkItem.WorkflowExecutionId, invocation, attempt, executable).WorkflowExecutionId,
             RuntimePostCommitOutboxItems.OutboxItemId(commitId, intent), intent, BpmnNativeWorkBoundary.ResultKind,
             "native-result:" + BpmnModelIdentity.Create(context.Scope.Value, context.WorkItem.WorkflowExecutionId, invocation, attempt));
     }
