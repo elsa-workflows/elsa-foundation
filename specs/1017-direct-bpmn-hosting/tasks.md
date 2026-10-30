@@ -10,7 +10,7 @@
 
 **Delivery focus:** [owner-confirmed direct recovery first](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6480176858), then real recoverable ETL/native integration. The [qualification index](evidence/qualification.md) maps all22 FRs/six SCs and the five #2898 criteria. The [affected-main repeat](evidence/main-adoption/d7ee22b16/README.md) atd7ee22b16 passes32 hosting/594 Architecture tests, all six actual legacy families, direct/embedded partial forks and both actual Studio families. Original104 frozen assets remain unchanged. Provider/storage receipts keep their distinct source and non-SQLite host limits.
 
-**Current completion:** T001–T041 and T043–T044 are evidenced below. T042 remains open for the owner's preview version-magnitude choice; T045–T047 retain full-PR review, required CI, protected merge and post-merge verification. No merge, #2907 direct-model Studio or broader program completion is claimed. Inline historical increments below retain their then-open limits; current completion is the checkbox and the consolidated evidence index, not a relabelled earlier-source pass.
+**Current completion:** T001–T040 are evidenced below. T041/T043/T044 reopen for adopted template-main Design migration compatibility; prior receipts retain their sources. T042 remains open for the owner's preview version-magnitude choice; T045–T047 retain full-PR review, required CI, protected merge and post-merge verification. No merge, #2907 direct-model Studio or broader program completion is claimed. Inline historical increments below retain their then-open limits; current completion is the checkbox and the consolidated evidence index, not a relabelled earlier-source pass.
 
 ## Phase 1: Setup and actual baseline capture
 
@@ -183,3 +183,6 @@ Final affected Studio repetition now passes atcb0354a5b in [Studio qualification
 
 
 Adopted main931123c7e (workflow templates3472) after the completed cb0354a5b Studio qualification. Its Design persistence/Initial migration changes require affected actual old-store and Studio repetition before round2; T041/T043/T044 reopen for that integration. Earlier successful receipts retain their sources and are not invalidated or relabelled latest-main proof.
+
+
+Adopted-template repair scope: retain the original September Design migrations for all four providers; add only the template table/index at the already observed October IDs. An internal Design history decorator recognizes the known cumulative October writer as containing the original baseline, without rewriting its physical history. Offline scripts retain provider quoting/schema/guards. The generator now protects Design alongside Runtime and provides an explicit Design incremental mode. The actual current-writer template/native wait input was captured at1ae57d214 before these edits, alongside the red legacy startup TRX. Actual old/new changed-host and provider verification remain required; no successful repair is claimed from code or offline checks alone.

@@ -120,3 +120,8 @@ Map every FR/SC and #2898 criterion to actual evidence. Remove unused duplicatio
 ## Complexity Tracking
 
 No governance exception requested. Extra surface is confined to concrete missing material/state/dispatch and the two actual native/BPMN bridge consumers. Avoid new general buses, provider umbrellas, public engine abstractions without consumers, copied checkpoint engines or repeated artifact ledgers.
+
+
+### Adopted template-main compatibility
+
+The real legacy recovery journey exposed regenerated Workflows Design Initial migrations after main931123c7e. Retain Design history as part of the saved-execution/authoring boundary, using the [EF tooling exception and narrowly scoped known-cumulative baseline bridge](../../tools/ef/README.md). Reuse the existing provider migration/history seam; no public extension point or execution architecture is added. Qualify both actual pre-template stores and the actual October writer's saved template/native wait, then repeat affected Studio behavior. This integration repair does not complete the release-wide #1976 policy or #2907 direct-model Studio.

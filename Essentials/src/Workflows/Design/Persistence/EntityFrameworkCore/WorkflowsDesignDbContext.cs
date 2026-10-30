@@ -5,6 +5,7 @@ using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Constants;
 using Elsa.Primitives.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
@@ -49,8 +50,11 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
     EfSchemaChain IEfSchemaVersionedContext.SchemaChain => WorkflowsDesignEfModule.Chain;
 
     /// <summary>Every instance checks its rows' stamps, however its options were built.</summary>
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
         EfSchemaVersionMaterializationInterceptor.EnsureAdded(optionsBuilder);
+        ((IDbContextOptionsBuilderInfrastructure)optionsBuilder).AddOrUpdateExtension(new WorkflowsDesignMigrationHistoryOptions());
+    }
 
     /// <summary>
     /// The string columns this module compares or orders in SQL beyond the ones a key or an index already

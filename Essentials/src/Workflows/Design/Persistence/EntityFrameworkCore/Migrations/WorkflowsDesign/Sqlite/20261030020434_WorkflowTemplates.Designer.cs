@@ -8,36 +8,32 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.WorkflowsDesign.PostgreSql
+namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.WorkflowsDesign.Sqlite
 {
-    [DbContext(typeof(WorkflowsDesignPostgreSqlDbContext))]
-    [Migration("20261030020432_Initial")]
-    partial class Initial
+    [DbContext(typeof(WorkflowsDesignSqliteDbContext))]
+    [Migration("20261030020434_Initial")]
+    partial class WorkflowTemplates
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.10")
-                .HasAnnotation("Relational:MaxIdentifierLength", 63);
-
-            // NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns omitted: the module stays provider-free.
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
 
             modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfDatabaseIdentityRow", b =>
                 {
                     b.Property<int>("Id")
-                        .HasColumnType("integer");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("DatabaseIdentity")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -50,45 +46,44 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("Family")
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DatabaseIdentity")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("FinalizedVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("FinishHistoryJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("FinishJson")
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("HistoryJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("HoldsJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IntentJson")
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("bigint");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Family");
 
@@ -101,71 +96,62 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(65)
-                        .HasColumnType("character varying(65)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IdLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DeletedReason")
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DescriptionSearchKey")
                         .HasMaxLength(1792)
-                        .HasColumnType("character varying(1792)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Id")
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IdSearchKey")
                         .IsRequired()
                         .HasMaxLength(896)
-                        .HasColumnType("character varying(896)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<bool>("IsSourceOwned")
-                        .HasColumnType("boolean");
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .IsConcurrencyToken()
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("NameSearchKey")
                         .HasMaxLength(1792)
-                        .HasColumnType("character varying(1792)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
 
@@ -182,54 +168,47 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(65)
-                        .HasColumnType("character varying(65)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IdLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Id")
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SourceVersionId")
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("StateSource")
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowDefinitionId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowDefinitionIdLookupHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
 
@@ -244,55 +223,49 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(65)
-                        .HasColumnType("character varying(65)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IdLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivityPresentationJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Id")
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .IsConcurrencyToken()
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("RecordsJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowDefinitionDraftId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowDefinitionDraftIdLookupHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
 
@@ -308,68 +281,60 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(65)
-                        .HasColumnType("character varying(65)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IdLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("DefinitionIdLookupHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Id")
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .IsConcurrencyToken()
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SemVerSortKey")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset?>("SourceCreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SourceDraftId")
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("StateSource")
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Version")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
 
@@ -386,55 +351,49 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(65)
-                        .HasColumnType("character varying(65)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("IdLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ActivityPresentationJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Id")
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .IsConcurrencyToken()
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("RecordsJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowDefinitionVersionId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("WorkflowDefinitionVersionIdLookupHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
 
@@ -450,60 +409,52 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(65)
-                        .HasColumnType("character varying(65)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("OperationKindLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("OperationKeyLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("OperationKey")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("OperationKind")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("RequestFingerprint")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ResultFingerprint")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ResultJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("ScopeKey", "OperationKindLookupHash", "OperationKeyLookupHash");
 
@@ -516,50 +467,45 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(65)
-                        .HasColumnType("character varying(65)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Id")
                         .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
                         .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Revision")
                         .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .UseCollation("C");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("ScopeKey", "Id");
 

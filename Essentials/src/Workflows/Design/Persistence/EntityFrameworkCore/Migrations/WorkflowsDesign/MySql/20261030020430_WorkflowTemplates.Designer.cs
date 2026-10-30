@@ -12,7 +12,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
 {
     [DbContext(typeof(WorkflowsDesignMySqlDbContext))]
     [Migration("20261030020430_Initial")]
-    partial class Initial
+    partial class WorkflowTemplates
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
