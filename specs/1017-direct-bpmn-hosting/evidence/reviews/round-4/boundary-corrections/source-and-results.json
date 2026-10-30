@@ -1,0 +1,112 @@
+{
+  "builtBaseCommit": "c2504c399e6c25aa6d4edb3b8a12b4da93cd7706",
+  "qualificationBoundary": "Worktree corrections over merged main c2504c399. Executing assemblies identify this base; exact implicated source/test hashes bind the compiled changes. Not final-head CI or old waiting-host recovery.",
+  "sourceSha256": {
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnDurationTimer.cs": "696ebc633d272a09001e4b660838f8861058c7fb0d3109f5eb79e151ad68f5f4",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnNativeWorkDelivery.cs": "ea61005f6f7015d6cad80a1d6c46fad7bc5cfd3df63dc370a0788023744ae6f9",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingDelivery.cs": "9f6410ab4273b49742b5d122e0cb9b52de1239ac2b7f9291693a9e4666c91bb1",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/RuntimeExecutionProtocolRouter.cs": "7575020146a06b23ab0c4a3e916949c246cea878625f8493f76870359fccaced",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnDirectExecutionTests.RoundFour.cs": "57d9b9b6060cad6046bb15bcad3556851370f92a423fc9b0102f3ba0ce7fe4d0",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfModelAdmissionLeaseTests.cs": "3c80f46fea319dc1ea7a60ff346f7e01e00e9cd35284703d65b2c3920ab079a7"
+  },
+  "results": [
+    {
+      "case": "owned-delivery-red",
+      "counters": {
+        "total": "7",
+        "executed": "7",
+        "passed": "0",
+        "failed": "7",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "case": "owned-delivery-green",
+      "counters": {
+        "total": "7",
+        "executed": "7",
+        "passed": "7",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "case": "admission-lease-red",
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "1",
+        "failed": "1",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "case": "admission-lease-green",
+      "counters": {
+        "total": "2",
+        "executed": "2",
+        "passed": "2",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    }
+  ],
+  "findingA1Remaining": true,
+  "redProductionSource": "c2504c399e6c25aa6d4edb3b8a12b4da93cd7706",
+  "greenSourceGroups": {
+    "owned-delivery": [
+      "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnDurationTimer.cs",
+      "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnNativeWorkDelivery.cs",
+      "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingDelivery.cs",
+      "Essentials/tests/Activities/Bpmn/Tests/BpmnDirectExecutionTests.RoundFour.cs"
+    ],
+    "admission-lease": [
+      "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/RuntimeExecutionProtocolRouter.cs",
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfModelAdmissionLeaseTests.cs"
+    ]
+  }
+}

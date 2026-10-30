@@ -15,6 +15,18 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
 {
     public async ValueTask HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
     {
+        try { await HandleCoreAsync(source, cancellationToken); }
+        catch (JsonException exception) { throw InvalidOwnedJson(source, exception); }
+        catch (BpmnModelValidationException exception) when (exception.InnerException is JsonException cause)
+        { throw InvalidOwnedJson(source, cause); }
+    }
+
+    private static BpmnModelValidationException InvalidOwnedJson(PostCommitDeliveryContext source, JsonException exception) =>
+        new($"BPMN delivery '{source.Intent.Kind}' for execution '{source.Intent.WorkflowExecutionId}', " +
+            $"outbox source '{source.SourceOutboxItemId}' in scope '{source.Scope.Value}' has invalid owned JSON.", exception);
+
+    private async ValueTask HandleCoreAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken)
+    {
         await boundary.RevalidateSourceAsync(source, cancellationToken);
         var reader = models ?? throw new NotSupportedException("Native BPMN work requires qualified model state persistence.");
         if (actors is not InProcessWorkflowExecutionActorProvider)

@@ -68,6 +68,18 @@ internal sealed class BpmnDurationTimerDelivery(BpmnNativeWorkBoundary sources, 
 
     public async ValueTask HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
     {
+        try { await HandleCoreAsync(source, cancellationToken); }
+        catch (JsonException exception) { throw InvalidOwnedJson(source, exception); }
+        catch (BpmnModelValidationException exception) when (exception.InnerException is JsonException cause)
+        { throw InvalidOwnedJson(source, cause); }
+    }
+
+    private static BpmnModelValidationException InvalidOwnedJson(PostCommitDeliveryContext source, JsonException exception) =>
+        new($"BPMN delivery '{source.Intent.Kind}' for execution '{source.Intent.WorkflowExecutionId}', " +
+            $"outbox source '{source.SourceOutboxItemId}' in scope '{source.Scope.Value}' has invalid owned JSON.", exception);
+
+    private async ValueTask HandleCoreAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken)
+    {
         await sources.RevalidateSourceAsync(source, cancellationToken);
         if (source.Intent.Kind != BpmnDurationTimer.Kind || source.Intent.Payload is not { } payload)
             throw new BpmnModelValidationException("The duration timer delivery is missing its typed source.");

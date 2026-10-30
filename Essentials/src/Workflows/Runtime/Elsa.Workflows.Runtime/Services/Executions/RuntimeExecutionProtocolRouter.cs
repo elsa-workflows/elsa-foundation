@@ -40,7 +40,8 @@ internal sealed class RuntimeExecutionProtocolRouter(RuntimeExecutionProtocolSel
             await selected.Driver.ValidateInputAsync(selected.Context, cancellationToken);
             RuntimeSchedulerWorkItem? queued = null;
             await materialLeases.ExecuteAsync(selected.Context.Material.Identity,
-                "model-admission:" + work.WorkItemId, async token =>
+                // Each physical write attempt needs its own lease, including overlapping command replays.
+                "model-admission:" + work.WorkItemId + ":" + Guid.NewGuid().ToString("N"), async token =>
                 {
                     await selector.SelectAsync(work, token);
                     queued = await queue.EnqueueAsync(work, token);
