@@ -136,7 +136,7 @@ public class AdmissionQueueGate : DispatchProxy
         { return method.Invoke(Inner, args); }
         catch (TargetInvocationException e) { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(e.InnerException!).Throw(); throw; }
     }
-    async ValueTask<RuntimeSchedulerWorkItem> Enqueue(RuntimeSchedulerWorkItem work, CancellationToken token)
+    private async ValueTask<RuntimeSchedulerWorkItem> Enqueue(RuntimeSchedulerWorkItem work, CancellationToken token)
     { Entered.SetResult(); await Release.Task.WaitAsync(token); return await Inner.EnqueueAsync(work, token); }
 }
 public sealed class AdmissionDriver : IRuntimeExecutionProtocolDriver
@@ -145,11 +145,11 @@ public sealed class AdmissionDriver : IRuntimeExecutionProtocolDriver
     public ValueTask ValidateInputAsync(RuntimeModelExecutionContext c, CancellationToken t = default) => ValueTask.CompletedTask;
     public ValueTask ExecuteAsync(RuntimeModelExecutionContext c, CancellationToken t = default) => ValueTask.CompletedTask;
 }
-sealed class AdmissionUniqueLeaseManager(IWorkflowExecutableRootWriteLeaseManager inner) : IWorkflowExecutableRootWriteLeaseManager
+internal sealed class AdmissionUniqueLeaseManager(IWorkflowExecutableRootWriteLeaseManager inner) : IWorkflowExecutableRootWriteLeaseManager
 {
     public ValueTask ExecuteAsync(string id, string lease, Func<CancellationToken, ValueTask> write, CancellationToken t = default) => inner.ExecuteAsync(id, lease + ":" + Guid.NewGuid().ToString("N"), write, t);
     public ValueTask ExecuteAsync(WorkflowExecutableIdentity pin, string lease, Func<CancellationToken, ValueTask> write, CancellationToken t = default) => inner.ExecuteAsync(pin, lease + ":" + Guid.NewGuid().ToString("N"), write, t);
 }
-sealed class AdmissionStubDrain : IWorkflowSchedulerDrainer { public ValueTask<RuntimeSchedulerDrainResult> DrainAsync(RuntimeSchedulerDrainRequest r, CancellationToken t = default) => ValueTask.FromResult(new RuntimeSchedulerDrainResult(r.WorkflowExecutionId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, [])); }
-sealed class AdmissionAccess : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new("default")); }
-sealed class AdmissionCodec : IRuntimeRecoveryContinuationCodec { public string Encode(string p, ReadOnlySpan<byte> b) => p + ":" + Convert.ToBase64String(b); public byte[] Decode(string p, string t) => Convert.FromBase64String(t[(p.Length + 1)..]); }
+internal sealed class AdmissionStubDrain : IWorkflowSchedulerDrainer { public ValueTask<RuntimeSchedulerDrainResult> DrainAsync(RuntimeSchedulerDrainRequest r, CancellationToken t = default) => ValueTask.FromResult(new RuntimeSchedulerDrainResult(r.WorkflowExecutionId, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, [])); }
+internal sealed class AdmissionAccess : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new("default")); }
+internal sealed class AdmissionCodec : IRuntimeRecoveryContinuationCodec { public string Encode(string p, ReadOnlySpan<byte> b) => p + ":" + Convert.ToBase64String(b); public byte[] Decode(string p, string t) => Convert.FromBase64String(t[(p.Length + 1)..]); }

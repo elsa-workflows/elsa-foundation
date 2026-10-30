@@ -11,20 +11,22 @@ namespace Elsa.Activities.Bpmn.Hosting.Tests;
 public sealed class LegacyFaultSettlementWorkbenchTests
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task The_standard_runtime_only_host_settles_actual_old_fault_responsibility_and_retains_it_after_process_loss(bool admitted)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task The_standard_runtime_only_host_settles_actual_old_fault_responsibility_and_retains_it_after_process_loss(bool admitted, bool waiting)
     {
         var temporary = Directory.CreateTempSubdirectory("elsa-old-fault-upgrade-");
         try
         {
-            var fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "legacy-fault", admitted ? "concurrent-admitted-terminal.sqlite.gz" : "concurrent-terminal.sqlite.gz");
+            var fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "legacy-fault", waiting ? "old-waiting.snapshot.sqlite.gz" :
+                admitted ? "concurrent-admitted-terminal.sqlite.gz" : "concurrent-terminal.sqlite.gz");
             var original = Path.Combine(temporary.FullName, "original.sqlite");
             await using (var input = File.OpenRead(fixture))
             await using (var gzip = new GZipStream(input, CompressionMode.Decompress))
             await using (var output = File.Create(original)) await gzip.CopyToAsync(output);
             await using var host = await OwnedWorkbench.StartAsync(directBpmn: true, runtimeOnly: true,
-                runtimeSnapshotPath: original, recoverySweepSeconds: 0.2);
+                runtimeSnapshotPath: original, recoverySweepSeconds: 0.2, runtimeFlowchart: waiting);
             LegacyUpgradeInspection.AssertStandardHost(host);
             const string model = "bpmn:29ce72ce3be41205dfa938e934fbac80cb4cca8c3508df1b2dd86fa94dfdc220";
             // Retain the exact normally captured identity; the stores remain isolated.
@@ -43,7 +45,8 @@ public sealed class LegacyFaultSettlementWorkbenchTests
                 if (final["model"]!["payload"]?["cancellations"] is JsonArray cancellations &&
                     cancellations.All(item => item!["settled"]!.GetValue<bool>()) && final["model"]!["lifecycle"]!.GetValue<int>() == 3 &&
                     final["sources"]!.AsArray().All(item => item!["status"]!.GetValue<int>() == 2) && final["queuedModelInputs"]!.AsArray().Count == 0) break;
-                if (DateTimeOffset.UtcNow >= limit) throw new InvalidOperationException("Actual old fault responsibility did not settle: " + final);
+                if (DateTimeOffset.UtcNow >= limit) throw host.Failure("Actual old fault responsibility did not settle: " + final +
+                    "\nPhysical responsibility: " + await ObserveAsync("--read-bpmn-retirement", host.RuntimeDatabase, id));
                 await Task.Delay(200);
             }
             var truth = await ObserveAsync("--read-bpmn-retirement", host.RuntimeDatabase, id);
@@ -63,7 +66,7 @@ public sealed class LegacyFaultSettlementWorkbenchTests
             Assert.Contains(truth["inputs"]!.AsArray(), input => input!["inputKind"]!.GetValue<string>() == receiptKind && input["result"]!["status"]!.GetValue<string>() == "Accepted");
             Assert.Empty(truth["queuedNativeWork"]!.AsArray());
             Assert.False(File.Exists(host.DesignDatabase));
-            var name = admitted ? "old-admitted-fault" : "old-unadmitted-fault";
+            var name = waiting ? "old-admitted-waiting-fault" : admitted ? "old-admitted-fault" : "old-unadmitted-fault";
             await host.StopAsync(); var firstExit = host.LastStoppedExitCode;
             var completedStore = await host.SnapshotAsync("completed-runtime.sqlite.gz", name);
             await host.RestartAsync(recoverySweepSeconds: 0.2); await host.LoginAsync();
@@ -86,9 +89,9 @@ public sealed class LegacyFaultSettlementWorkbenchTests
                 foreach (var item in new[] { ("before.json", before), ("completed.json", final), ("retained.json", retained), ("truth.json", truth), ("retained-truth.json", retainedTruth), ("api.json", api) })
                     await File.WriteAllTextAsync(Path.Combine(folder, item.Item1), item.Item2.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
                 await File.WriteAllTextAsync(Path.Combine(folder, "case.json"), JsonSerializer.Serialize(new { kind = "actual-old-final-fault-workbench-recovery", sourceRevision = source,
-                    admitted, modelExecutionId = id, fixtureSha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(fixture))),
+                    admitted, waiting, modelExecutionId = id, fixtureSha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(fixture))),
                     first, second, firstExit, secondExit, runtimeOnly = true, completedStore, retainedStore,
-                    binaries = host.DescribeBinaries(source), scopeLimit = "Two actual normally produced old fault cuts over SQLite, standard runtime-only Workbench; no Studio, ETL or other-provider claim." }, new JsonSerializerOptions { WriteIndented = true }));
+                    binaries = host.DescribeBinaries(source), scopeLimit = "Actual normally produced old fault cuts over SQLite, standard runtime-only Workbench; no Studio, ETL or other-provider claim." }, new JsonSerializerOptions { WriteIndented = true }));
             }
 
             async Task<JsonNode> ObserveAsync(string mode, string database, string execution)
@@ -108,11 +111,17 @@ public sealed class LegacyFaultSettlementWorkbenchTests
             {
                 // This fixture's model key is bound to the producer's ordinary start request and material.
                 // The producer logs are retained with the whole snapshot; no database row is changed here.
-                var log = Path.Combine(AppContext.BaseDirectory, "Fixtures", "legacy-fault", "admitted-old-writer.log.gz");
-                await using var input = File.OpenRead(log); await using var gzip = new GZipStream(input, CompressionMode.Decompress);
-                using var text = new StreamReader(gzip);
+                var log = Path.Combine(AppContext.BaseDirectory, "Fixtures", "legacy-fault", waiting ? "waiting-old-writer.log" : "admitted-old-writer.log.gz");
+                await using var input = File.OpenRead(log);
+                using var gzip = waiting ? null : new GZipStream(input, CompressionMode.Decompress, leaveOpen: true);
+                using var text = new StreamReader(gzip is null ? input : gzip);
                 while (await text.ReadLineAsync() is { } line)
-                    if (line.StartsWith("START ", StringComparison.Ordinal)) return JsonNode.Parse(line[6..])!["ExecutionId"]!.GetValue<string>();
+                {
+                    if (waiting && line.StartsWith("FINAL MODEL ", StringComparison.Ordinal))
+                        return JsonNode.Parse(line["FINAL MODEL ".Length..])!["executionId"]!.GetValue<string>();
+                    if (!waiting && line.StartsWith("START ", StringComparison.Ordinal))
+                        return JsonNode.Parse(line[6..])!["ExecutionId"]!.GetValue<string>();
+                }
                 throw new InvalidDataException("The normal admitted producer lacks its actual start identity.");
             }
         }

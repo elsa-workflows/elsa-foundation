@@ -6,12 +6,27 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Activities.Bpmn.Tests;
 
 public sealed partial class BpmnDirectExecutionTests
 {
+    [Fact]
+    public async Task Legacy_fault_recovery_visits_each_page_of_each_host_partition_and_ignores_other_protocols()
+    {
+        var observed = new List<(string Scope, string? Continuation)>();
+        await using var host = await OpenAsync(configure: services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<IPersistenceScopeSource>(new RecoveryScopeSource()));
+            services.Replace(ServiceDescriptor.Scoped<IRuntimeModelExecutionReader>(provider =>
+                new OtherProtocolPageReader(provider.GetRequiredService<IPersistenceAccessContextAccessor>(), observed)));
+        });
+        Assert.Equal(new[] { "startup-a", "startup-a", "startup-b", "startup-b" }, observed.Select(item => item.Scope));
+        Assert.Equal(new string?[] { null, "next", null, "next" }, observed.Select(item => item.Continuation));
+    }
+
     [Theory]
     [InlineData(BpmnDurationTimer.Kind)]
     [InlineData(BpmnNativeWorkBoundary.StartKind)]
@@ -74,5 +89,32 @@ public sealed partial class BpmnDirectExecutionTests
     {
         public Func<MethodInfo, object?[]?, object?> Callback = null!;
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) => Callback(targetMethod!, args);
+    }
+
+    private sealed class RecoveryScopeSource : IPersistenceScopeSource
+    {
+        public ValueTask<IReadOnlyList<PersistenceScope>> GetScopesAsync(CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyList<PersistenceScope>>([new("startup-a"), new("startup-b")]);
+    }
+
+    private sealed class OtherProtocolPageReader(IPersistenceAccessContextAccessor access,
+        List<(string Scope, string? Continuation)> observed) : IRuntimeModelExecutionReader
+    {
+        public ValueTask<RuntimeModelExecutionState?> FindAsync(string executionId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<RuntimeModelExecutionState?>(null);
+        public ValueTask<RuntimeModelInputReceipt?> FindInputAsync(string executionId, string inputId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<RuntimeModelInputReceipt?>(null);
+        public ValueTask<RuntimeStorePage<RuntimeModelExecutionState>> ListPageAsync(RuntimeStorePageRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            var scope = access.Current.RequireScope();
+            observed.Add((scope.Value, request.ContinuationToken));
+            var now = DateTimeOffset.UtcNow;
+            var state = new RuntimeModelExecutionState(1, scope, "other-protocol-execution", scope.Value, new("other.protocol", 1),
+                Material().Identity, "other-material", 1, RuntimeModelLifecycle.Running, new("system", "owner"), now, now,
+                JsonSerializer.SerializeToElement(new { }), null);
+            return ValueTask.FromResult(new RuntimeStorePage<RuntimeModelExecutionState>(request, [state],
+                request.ContinuationToken is null ? "next" : null));
+        }
     }
 }

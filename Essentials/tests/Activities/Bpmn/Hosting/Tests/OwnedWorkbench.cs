@@ -31,7 +31,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
 
     public static async Task<OwnedWorkbench> StartAsync(bool directBpmn = false, bool runtimeOnly = false,
         string? legacySnapshotDirectory = null, string? runtimeSnapshotPath = null, double? recoverySweepSeconds = null,
-        bool legacyCombinedStore = false)
+        bool legacyCombinedStore = false, bool runtimeFlowchart = false)
     {
         if (legacySnapshotDirectory is not null && runtimeSnapshotPath is not null)
             throw new ArgumentException("Select one actual legacy snapshot source.");
@@ -71,6 +71,14 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
                     "FoundationIdentityAbstractions", "FoundationIdentityApi", "FoundationIdentityAspNetCoreIdentity",
                     "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore", "IdentityIamEntityFrameworkCore", "IdentityProviderConfigurationEntityFrameworkCore"
                 };
+                if (runtimeFlowchart)
+                {
+                    allowed.Add("ActivitiesFlowchart");
+                    allowed.Add("ActivitiesPrimitives");
+                    allowed.Add("WorkflowsRuntimeCheckpointPersistence");
+                    features["ActivitiesFlowchart"] = new JsonObject();
+                    features["ActivitiesPrimitives"] = new JsonObject();
+                }
                 foreach (var name in features.AsObject().Select(item => item.Key).Where(name => !allowed.Contains(name)).ToArray())
                     features.AsObject().Remove(name);
             }
@@ -296,7 +304,7 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         return await response.Content.ReadFromJsonAsync<JsonNode>() ?? throw Failure("An owned-host API returned no document");
     }
 
-    private InvalidOperationException Failure(string message, Exception? cause = null) => new($"{message}.{Environment.NewLine}{string.Join(Environment.NewLine, output)}", cause);
+    internal InvalidOperationException Failure(string message, Exception? cause = null) => new($"{message}.{Environment.NewLine}{string.Join(Environment.NewLine, output)}", cause);
 
     public async ValueTask DisposeAsync()
     {

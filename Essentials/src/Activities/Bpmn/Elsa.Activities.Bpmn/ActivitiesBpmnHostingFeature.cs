@@ -8,6 +8,7 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
+using Elsa.Tasks.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -27,6 +28,7 @@ public class ActivitiesBpmnHostingFeature : IShellFeature
     public virtual void ConfigureServices(IServiceCollection services)
     {
         services.AddRuntimeModelHosting();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, BpmnLegacyFaultWorkRecovery>());
         services.TryAddScoped<BpmnDirectExecutionDriver>();
         services.TryAddScoped<BpmnNativeWorkBoundary>();
         services.TryAddScoped<BpmnNativeWorkDelivery>();
