@@ -63,7 +63,9 @@
     <ProjectReference Include="../../../../Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Api\Elsa.Agent.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Elsa.Agent\Elsa.Agent.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Core\Elsa.Agent.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Workflows\Elsa.Agent.Workflows.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Bpmn\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Bpmn\Api\Elsa.Activities.Bpmn.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Bpmn\Core\Elsa.Activities.Bpmn.Core.csproj" />

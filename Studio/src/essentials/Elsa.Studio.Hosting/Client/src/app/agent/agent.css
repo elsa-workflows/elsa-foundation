@@ -112,8 +112,7 @@
 .agent-panel-header button,
 .agent-feedback button,
 .agent-composer button,
-.agent-proposal footer button,
-.agent-workflow-batch footer button {
+.agent-proposal footer button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -130,8 +129,7 @@
 .agent-panel-header button:hover:not(:disabled),
 .agent-feedback button:hover:not(:disabled),
 .agent-composer button:hover:not(:disabled),
-.agent-proposal footer button:hover:not(:disabled),
-.agent-workflow-batch footer button:hover:not(:disabled) {
+.agent-proposal footer button:hover:not(:disabled) {
   border-color: var(--studio-accent);
 }
 
@@ -323,8 +321,7 @@
   font-size: 0.85rem;
 }
 
-.agent-proposals,
-.agent-workflow-batches {
+.agent-proposals {
   display: grid;
   gap: 0.75rem;
   max-height: 16rem;
@@ -332,16 +329,14 @@
   padding: 0 1rem 1rem;
 }
 
-.agent-proposal,
-.agent-workflow-batch {
+.agent-proposal {
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius-md);
   background: var(--studio-surface);
   padding: 0.75rem;
 }
 
-.agent-proposal header,
-.agent-workflow-batch header {
+.agent-proposal header {
   display: grid;
   gap: 0.4rem;
 }
@@ -423,84 +418,10 @@
   font: inherit;
 }
 
-.agent-proposal footer,
-.agent-workflow-batch footer {
+.agent-proposal footer {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
-}
-
-.agent-workflow-batch header span {
-  color: var(--studio-text-muted);
-  font-size: 0.72rem;
-  text-transform: uppercase;
-}
-
-.agent-workflow-batch dl {
-  display: grid;
-  gap: 0.35rem;
-  margin: 0.65rem 0;
-  font-size: 0.78rem;
-}
-
-.agent-workflow-batch dl div {
-  display: grid;
-  grid-template-columns: 5rem 1fr;
-  gap: 0.5rem;
-}
-
-.agent-workflow-batch dt {
-  color: var(--studio-text-muted);
-}
-
-.agent-workflow-batch dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.agent-workflow-operation-groups {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.agent-workflow-operation-groups span {
-  border: 1px solid var(--studio-border);
-  border-radius: 999px;
-  background: var(--studio-surface-muted);
-  padding: 0.2rem 0.5rem;
-  color: var(--studio-text-muted);
-  font-size: 0.72rem;
-}
-
-.agent-workflow-apply-result {
-  display: grid;
-  gap: 0.35rem;
-  margin-top: 0.6rem;
-  border: 1px solid var(--studio-success);
-  border-radius: var(--studio-radius-sm);
-  padding: 0.5rem;
-  font-size: 0.76rem;
-}
-
-.agent-workflow-apply-result ul {
-  display: grid;
-  gap: 0.25rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.agent-workflow-apply-result li {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 0.45rem;
-}
-
-.agent-workflow-batch-error {
-  display: block;
-  margin-top: 0.55rem;
-  color: var(--studio-danger);
 }
 
 html[data-theme-material] .agent-launcher,
@@ -523,20 +444,17 @@ html[data-theme-material] .agent-prompt-starters button,
 html[data-theme-material] .agent-message-body,
 html[data-theme-material] .agent-provider-status,
 html[data-theme-material] .agent-proposal-result,
-html[data-theme-material] .agent-workflow-operation-groups span,
 html[data-theme-material] .agent-composer textarea,
 html[data-theme-material] .agent-panel-header button,
 html[data-theme-material] .agent-composer button,
-html[data-theme-material] .agent-proposal footer button,
-html[data-theme-material] .agent-workflow-batch footer button {
+html[data-theme-material] .agent-proposal footer button {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-control-bg);
   background-size: var(--studio-material-panel-bg-size);
   box-shadow: var(--studio-material-inset-low);
 }
 
-html[data-theme-material] .agent-proposal,
-html[data-theme-material] .agent-workflow-batch {
+html[data-theme-material] .agent-proposal {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-panel-bg);
   background-size: var(--studio-material-panel-bg-size);

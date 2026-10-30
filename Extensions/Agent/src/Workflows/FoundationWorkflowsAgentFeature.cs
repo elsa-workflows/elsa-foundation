@@ -11,12 +11,14 @@ namespace Elsa.Agent.Workflows;
 [ShellFeature(
     name: "FoundationWorkflowsAgent",
     DisplayName = "Foundation Workflows Agent",
-    Description = "Registers workflow explanation, troubleshooting, and reviewable workflow-change proposal seams for the agent foundation."
+    Description = "Registers workflow explanation, troubleshooting, and reviewable workflow-change proposal seams for the agent foundation.",
+    DependsOn = new object[] { typeof(FoundationAgentAbstractionsFeature) }
 )]
-public sealed class FoundationWorkflowsAgentFeature : IShellFeature
+public class FoundationWorkflowsAgentFeature : FoundationAgentAbstractionsFeature
 {
-    public void ConfigureServices(IServiceCollection services)
+    public override void ConfigureServices(IServiceCollection services)
     {
+        base.ConfigureServices(services);
         services.AddFoundationWorkflowsAgent();
     }
 }

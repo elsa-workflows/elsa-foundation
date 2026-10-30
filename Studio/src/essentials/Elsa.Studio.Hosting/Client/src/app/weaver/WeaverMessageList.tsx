@@ -50,7 +50,7 @@ export function WeaverMessageList({
       <div className="weaver-empty">
         <Bot size={24} />
         <strong>Ask Weaver about the current Studio context.</strong>
-        <span>Weaver can read context, run tools, and propose reviewable changes to your workflow.</span>
+        <span>Weaver can read context, run tools, and propose reviewable changes in the current Studio context.</span>
       </div>
     );
   }

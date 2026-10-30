@@ -1,8 +1,23 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAgentClient } from "../agentClient";
-import type { StudioEndpointContext } from "../../../sdk";
+import { StudioHttpError, type StudioEndpointContext } from "../../../sdk";
 
 describe("agent client", () => {
+  it.each((["approveProposal", "denyProposal", "executeProposal"] as const)
+    .flatMap(decision => ["http", "wrapped"].map(transport => ({ decision, transport }))))("preserves authoritative terminal $decision data on $transport refusal", async ({ decision, transport }) => {
+    const context = stubContext();
+    const envelope = { error: { code: "agent.proposal.expired", message: "The reviewed invocation expired.", statusCode: 409 }, data: { proposalId: "proposal", executed: false, status: "expired", resourceType: "sample", resourceId: "one", summary: "Nothing was applied.", clientInvocation: null, toolResult: null } };
+    context.http.postJson = async <T>() => { if (transport === "http") throw new StudioHttpError(409, envelope.error.message, null, envelope); return envelope as T; };
+    await expect(createAgentClient(context)[decision]("proposal", { revision: "r1" })).rejects.toMatchObject({ status: 409, code: "agent.proposal.expired", message: envelope.error.message, terminalOutcome: { proposalId: "proposal", approvalStatus: "expired", executed: false, toolResult: null } });
+  });
+
+  it.each([{ status: "approved", proposalId: "proposal" }, { status: "expired", proposalId: "another-proposal" }])("does not treat nonterminal or unrelated data as a terminal outcome: %j", async data => {
+    const context = stubContext(); const error = new StudioHttpError(409, "Refresh the review before retrying.", null, { error: { code: "agent.conflict", message: "Refresh the review before retrying." }, data: { ...data, executed: false } });
+    context.http.postJson = vi.fn(async () => { throw error; });
+    await expect(createAgentClient(context).executeProposal("proposal", { revision: "r1" })).rejects.toBe(error);
+    expect(error).not.toHaveProperty("terminalOutcome");
+  });
+
   it("uses provider-agnostic backend endpoints", async () => {
     const context = stubContext();
     const client = createAgentClient(context);
@@ -43,7 +58,7 @@ describe("agent client", () => {
       role: "user",
       content: "Explain this workflow.",
       capabilityId: "workflow.explain",
-      contextAttachments: [expect.objectContaining({ id: "ctx_01", kind: "workflow.definition", summary: "[secret redacted]" })]
+      contextAttachments: [expect.objectContaining({ id: "ctx_01", contentType: "workflow.definition", summary: "[secret redacted]" })]
     }));
     expect(context.http.postJson).not.toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
       contextAttachments: [expect.objectContaining({ summary: expect.stringContaining("super-secret") })]
@@ -77,6 +92,7 @@ describe("agent client", () => {
         label: "Hello World",
         contentType: "workflow.definition",
         content: graph,
+        references: { revision: "rev-7" },
         sensitivity: "internal",
         scope: "screen"
       }]
@@ -188,6 +204,17 @@ describe("agent client", () => {
     expect(approval).toMatchObject({ proposalId: "prop_01", approvalStatus: "approved" });
     expect(execution).toMatchObject({ proposalId: "prop_01", approvalStatus: "executed" });
   });
+  it("retains a generated delivery ID across retries and exposes duplicate/admission warnings", async () => {
+    const context = stubContext();
+    context.http.postJson = vi.fn(async () => ({ data: { message: { id: "message", status: "completed" }, warnings: [{ code: "agent.message.duplicate", message: "Already accepted.", target: "delivery" }] } })) as typeof context.http.postJson;
+    const client = createAgentClient(context);
+    const request = { message: "Inspect", mode: "explain" as const, contextAttachments: [] };
+    const first = await client.sendMessage("session", request); await client.sendMessage("session", request);
+    const calls = (context.http.postJson as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][1].requestId).toBeTruthy(); expect(calls[1][1].requestId).toBe(calls[0][1].requestId);
+    expect(first).toMatchObject({ status: "completed", warnings: [{ code: "agent.message.duplicate", target: "delivery" }] });
+  });
+
 });
 
 function stubContext(): StudioEndpointContext {

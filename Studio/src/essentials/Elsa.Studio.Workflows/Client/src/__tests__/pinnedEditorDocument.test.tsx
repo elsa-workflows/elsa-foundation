@@ -8,7 +8,6 @@ import { useWorkflowDocument, type WorkflowDocumentApi } from "../workflow-edito
 import { usePinnedEditorDocument } from "../workflow-editor/usePinnedEditorDocument";
 import { getDraftSignature } from "../workflow-editor/editorHelpers";
 import { useWorkflowGraphOperationBatch } from "../workflow-editor/useWorkflowGraphOperationBatch";
-import { workflowGraphOperationApplyEvent, workflowGraphOperationUndoEvent } from "../workflowGraphOperationBatch";
 import { writeLine } from "./fixtures";
 
 const snapshot: WorkflowDraft = { id: "draft", definitionId: "definition", state: { rootActivity: { nodeId: "write", activityVersionId: writeLine.activityVersionId, inputs: [], outputs: [] } }, layout: [], validationErrors: [] };
@@ -23,7 +22,7 @@ function Probe() {
   editable = useWorkflowDocument();
   workspace = usePinnedEditorDocument({ document: editable, context: currentContext, definitionId: "definition", catalog: [writeLine] });
   const bridge = { draft: editable.state.draft, details: { definition: { id: "definition" } } as WorkflowDefinitionDetails,
-    catalog: [writeLine], replaceDraftByBatch: workspace.replaceDraftByBatch, canEdit: workspace.canEdit, setStatus: () => {}, setError: () => {} };
+    catalog: [writeLine], document: workspace, holdForReview: () => false, reviewHeld: false, canEdit: workspace.canEdit, setStatus: () => {}, setError: () => {} };
   useWorkflowGraphOperationBatch(bridge);
   return null;
 }
@@ -94,29 +93,9 @@ it("rejects delayed authoring callbacks from an earlier authorization session", 
   flushSync(() => workspace.editDraft(() => changed)); expect(editable.state.draft).toBe(changed);
 });
 
-it("rejects queued graph apply and undo while inspecting, without consuming the editable undo point", () => {
-  const apply = () => {
-    const respond = vi.fn();
-    flushSync(() => window.dispatchEvent(new CustomEvent(workflowGraphOperationApplyEvent, { detail: { respond,
-      batch: { schemaVersion: "elsa.workflow-graph-operation-batch.v1", workflowDefinitionId: "definition", operations: [
-        { id: "position", kind: "set-designer-position", parameters: { activityId: "write", x: 100, y: 200 } }
-      ] } } })));
-    return respond.mock.calls[0][0];
-  };
-  const undo = (undoToken: string) => {
-    const respond = vi.fn();
-    flushSync(() => window.dispatchEvent(new CustomEvent(workflowGraphOperationUndoEvent, { detail: { respond, undoToken } })));
-    return respond.mock.calls[0][0];
-  };
-  const result = apply(); expect(result.ok).toBe(true);
-  const actual = editable.state.draft!;
-  flushSync(() => editable.startTestRun({ snapshot: actual, draftSignature: getDraftSignature(actual), endpointContext: context,
-    view: { testRunId: "new-test", definitionId: "definition", definitionVersionId: "draft:1", status: "DispatchAccepted" } }));
+it("rejects native compared batch replacement while inspecting", () => {
   flushSync(() => workspace.showSnapshot());
-  expect(apply()).toMatchObject({ ok: false, message: expect.stringContaining("Return to editing") });
-  expect(undo(result.result.undoToken)).toMatchObject({ ok: false, message: expect.stringContaining("Return to editing") });
-  expect(editable.state.draft).toBe(actual);
-  flushSync(() => workspace.returnToEditing());
-  expect(undo(result.result.undoToken).ok).toBe(true);
-  expect(editable.state.draft?.layout).toEqual(snapshot.layout);
+  flushSync(() => workspace.compareAndReplaceDraftByBatch("reviewed", "definition", getDraftSignature(snapshot), null, changed, null));
+  expect(editable.state.draft).toBe(snapshot);
+  expect(editable.state.batchTransaction).toBeUndefined();
 });

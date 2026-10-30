@@ -15,12 +15,14 @@ namespace Elsa.Agent.Api;
 [ShellFeature(
     name: "FoundationAgentApi",
     DisplayName = "Foundation Agent API",
-    Description = "Exposes provider-agnostic agent bootstrap, session, message, stream, proposal, feedback, and audit endpoints."
+    Description = "Exposes provider-agnostic agent bootstrap, session, message, stream, proposal, feedback, and audit endpoints.",
+    DependsOn = new object[] { typeof(FoundationAgentAbstractionsFeature) }
 )]
-public class FoundationAgentApiFeature : IWebShellFeature
+public class FoundationAgentApiFeature : FoundationAgentAbstractionsFeature, IWebShellFeature
 {
-    public virtual void ConfigureServices(IServiceCollection services)
+    public override void ConfigureServices(IServiceCollection services)
     {
+        base.ConfigureServices(services);
         services.AddElsaEndpoints();
         services.AddFoundationAgentApi();
         services.AddDynamicEndpointApiExplorerRefresh();

@@ -243,7 +243,7 @@ describe("workflows module", () => {
     const dispatchPrompt = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const { api, container, unmount } = await renderRegisteredRoute("/workflows/definitions", testApi => {
-      testApi.ai.promptActions.add({
+      testApi.agent.promptActions.add({
         id: "weaver.workflows.explain-definition",
         label: "Explain workflow definition",
         placement: "selection",
@@ -251,10 +251,10 @@ describe("workflows module", () => {
         createPrompt: context => ({
           message: "Explain this workflow definition.",
           mode: "enqueue",
-          attachments: [{ kind: "workflow-definition", referenceId: (context as { id: string }).id }]
+          attachments: [{ id: "definition-context", source: "workflow", label: "Definition", contentType: "workflow.definition", sensitivity: "internal", scope: "selection", sourceId: (context as { id: string }).id }]
         })
       });
-      testApi.ai.dispatchPrompt = dispatchPrompt;
+      testApi.agent.dispatchPrompt = dispatchPrompt;
     });
 
     await waitForText(container, "Latest version");
@@ -278,7 +278,7 @@ describe("workflows module", () => {
     await click(buttonByText(menu, "Explain"));
     expect(dispatchPrompt).toHaveBeenCalledWith(expect.objectContaining({
       message: "Explain this workflow definition.",
-      attachments: [expect.objectContaining({ kind: "workflow-definition", referenceId: "definition-1" })]
+      attachments: [expect.objectContaining({ contentType: "workflow.definition", sourceId: "definition-1" })]
     }));
     expect(new URLSearchParams(window.location.search).has("definition")).toBe(false);
 
@@ -2783,7 +2783,7 @@ describe("workflows module", () => {
     const dispatchPrompt = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables", api => {
-      api.ai.promptActions.add({
+      api.agent.promptActions.add({
         id: "weaver.workflows.explain-executable",
         label: "Explain executable",
         placement: "selection",
@@ -2791,10 +2791,10 @@ describe("workflows module", () => {
         createPrompt: context => ({
           message: "Explain this workflow executable.",
           mode: "enqueue",
-          attachments: [{ kind: "workflow-executable", referenceId: (context as { artifactId: string }).artifactId }]
+          attachments: [{ id: "executable-context", source: "workflow", label: "Executable", contentType: "workflow.executable", sensitivity: "internal", scope: "selection", sourceId: (context as { artifactId: string }).artifactId }]
         })
       });
-      api.ai.dispatchPrompt = dispatchPrompt;
+      api.agent.dispatchPrompt = dispatchPrompt;
     });
 
     await waitForText(container, "artifact-1");
@@ -2802,7 +2802,7 @@ describe("workflows module", () => {
 
     expect(dispatchPrompt).toHaveBeenCalledWith(expect.objectContaining({
       message: "Explain this workflow executable.",
-      attachments: [expect.objectContaining({ kind: "workflow-executable", referenceId: "artifact-1" })]
+      attachments: [expect.objectContaining({ contentType: "workflow.executable", sourceId: "artifact-1" })]
     }));
     expect(container.textContent).toContain("Sent artifact-1 to Weaver");
 
@@ -3140,8 +3140,7 @@ describe("workflows module", () => {
     await click(buttonByText(container, "Apply filters"));
     await waitForText(container, "wfexec-test");
     expect(container.textContent).toContain("Test Run");
-    expect(container.textContent).toContain("2 activities");
-    expect(container.textContent).toContain("1 incidents");
+    expect(container.querySelector('[title="2 activities · 1 incidents"]')).not.toBeNull();
     await click(rowByLabel(container, "Inspect workflow run wfexec-test · definition-1 · Completed · Current health unavailable"));
 
     expect(window.location.pathname).toBe("/workflows/instances/wfexec-test");
@@ -3157,7 +3156,7 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("shows definition and version ids in the runs list before and after the name loads", async () => {
+  it("discloses exact run identities before and after the workflow name loads", async () => {
     let resolveDefinitions!: (value: Response) => void;
     const definitions = new Promise<Response>(done => { resolveDefinitions = done; });
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -3174,21 +3173,25 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances");
 
     await waitForText(container, "wfexec-1");
-    const expectRunIdentity = (name: string) => {
+    const expectRunIdentity = async (name: string) => {
       const row = container.querySelector(".wf-grid-row");
       expect(row?.querySelector(".wf-run-inspect strong")?.textContent).toBe(name);
       expect(row?.querySelector(".wf-run-inspect")?.getAttribute("aria-label")).toBe(`Inspect workflow run wfexec-1 · ${name}`);
       expect(row?.getAttribute("aria-label")).toContain(`wfexec-1 · ${name} ·`);
-      for (const [label, value] of [["Execution ID", "wfexec-1"], ["Definition ID", "definition-1"], ["Definition version ID", "version-1"]]) {
-        expect(row?.querySelector(`.studio-copyable-identifier__value[aria-label="${label}: ${value}"]`)?.getAttribute("title")).toBe(value);
-        expect([...row?.querySelectorAll("button") ?? []].some(button => button.getAttribute("aria-label") === `Copy ${label}`)).toBe(true);
+      expect(row?.querySelector('.studio-copyable-identifier__value[aria-label="Execution ID: wfexec-1"]')?.getAttribute("title")).toBe("wfexec-1");
+      await click(row!.querySelector('[aria-label="Identifiers for wfexec-1"]')!);
+      const dialog = document.body.querySelector('[role="dialog"]')!;
+      for (const [label, value] of [["Definition ID", "definition-1"], ["Definition version ID", "version-1"]]) {
+        expect(dialog.querySelector(`.studio-copyable-identifier__value[aria-label="${label}: ${value}"]`)?.getAttribute("title")).toBe(value);
+        expect([...dialog.querySelectorAll("button")].some(button => button.getAttribute("aria-label") === `Copy ${label}`)).toBe(true);
       }
+      await click(dialog.querySelector('[aria-label="Close identifiers"]')!);
     };
-    expectRunIdentity("definition-1");
+    await expectRunIdentity("definition-1");
 
     resolveDefinitions(response({ items: [definition({ id: "definition-1", name: "Order fulfillment" })] }));
     await waitForText(container, "Order fulfillment");
-    expectRunIdentity("Order fulfillment");
+    await expectRunIdentity("Order fulfillment");
 
     await unmount();
   });
@@ -5078,14 +5081,14 @@ async function openCreateDialogWithSuggest() {
 
   const captured: { requestId?: string } = {};
   const rendered = await renderRegisteredRoute("/workflows/definitions", api => {
-    api.ai.promptActions.add({
+    api.agent.promptActions.add({
       id: "weaver.workflows.suggest-create-metadata",
       label: "Suggest name and description",
       placement: "field-adornment",
       contextKind: "workflow-create-draft",
       createPrompt: () => ({ message: "suggest", mode: "enqueue", attachments: [] })
     });
-    api.ai.dispatchPrompt = request => { captured.requestId = request.requestId; };
+    api.agent.dispatchPrompt = request => { captured.requestId = request.requestId; };
   });
 
   await waitForText(rendered.container, "Hello World");
@@ -5096,7 +5099,7 @@ async function openCreateDialogWithSuggest() {
 
   const publishSuggestion = async (result: { text: string; status?: "completed" | "cancelled" | "failed"; autoApply?: boolean }) => {
     expect(captured.requestId).toBeTruthy();
-    flushSync(() => rendered.api.ai.publishPromptResult({ requestId: captured.requestId!, status: "completed", ...result }));
+    flushSync(() => rendered.api.agent.publishPromptResult({ requestId: captured.requestId!, status: "completed", ...result }));
     await flushPromises();
   };
 

@@ -1,10 +1,14 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDefinitionDetails, WorkflowDraft } from "../workflowTypes";
 import type { StudioActivityDescriptor } from "@elsa-workflows/studio-sdk";
 import { collectWorkflowContextActivities, collectWorkflowContextConnections, getDraftRevision } from "./editorHelpers";
+import { authSessionEndedEvent, authSessionStartedEvent } from "@elsa-workflows/studio-sdk";
+import type { WorkflowAgentController } from "../workflowAgent";
 import { indexActivityPresentation } from "../activityPresentation";
 
 interface WorkflowContextBridgeParams {
+  controller?: WorkflowAgentController;
+  clientId: string;
   details: WorkflowDefinitionDetails | null;
   draft: WorkflowDraft | null;
   selectedNode: ActivityNode | null;
@@ -20,10 +24,9 @@ function resolveActivityType(node: ActivityNode | null, descriptor: StudioActivi
   return descriptor?.typeName ?? (node ? catalogByVersion.get(node.activityVersionId)?.activityTypeKey ?? node.activityVersionId : null);
 }
 
-// Publishes a snapshot of the open workflow (identity, selection, activities, connections, diagnostics)
-// onto `window.__ELSA_STUDIO_WORKFLOW_CONTEXT__` so Weaver's out-of-band tooling can read the live design.
-// Kept in sync with the current draft/selection and cleared when the editor unmounts or switches workflow.
+// Owns a bounded snapshot in the native module instance; no global window context.
 export function useWorkflowContextBridge({
+  controller, clientId,
   details,
   draft,
   selectedNode,
@@ -51,30 +54,32 @@ export function useWorkflowContextBridge({
     [draft]
   );
 
+  const selectionKey = JSON.stringify([details?.definition?.id, selectedNodeId]);
+  const generation = useMemo(() => {
+    void selectionKey; // A new originating selection creates a new lifetime even when the draft is unchanged.
+    return globalThis.crypto?.randomUUID?.() ?? `generation-${Date.now()}-${Math.random()}`;
+  }, [selectionKey]);
+  const authorized = useRef(true);
   useEffect(() => {
-    if (!details || !draft) return;
-
-    window.__ELSA_STUDIO_WORKFLOW_CONTEXT__ = {
-      workflowId: details.definition.id,
-      workflowDefinitionId: details.definition.id,
-      workflowVersionId: draft.sourceVersionId ?? null,
-      draftId: draft.id,
-      revision: getDraftRevision(draft),
-      selectedNodeId,
-      selectedActivityType: resolveActivityType(selectedNode, selectedDescriptor, catalogByVersion),
-      inspectedNodeId: inspectedNode?.nodeId ?? null,
-      inspectedActivityType: resolveActivityType(inspectedNode, inspectedDescriptor, catalogByVersion),
-      inspectedIsScopeOwner,
-      summary: details.definition.name,
-      activities,
-      connections,
-      diagnostics
+    const end = () => { authorized.current = false; if (controller) controller.snapshot = null; };
+    // A new authentication session requires a fresh editor lifetime; old prepared actions stay invalid.
+    window.addEventListener(authSessionEndedEvent, end); window.addEventListener(authSessionStartedEvent, end);
+    return () => { window.removeEventListener(authSessionEndedEvent, end); window.removeEventListener(authSessionStartedEvent, end); };
+  }, [controller]);
+  useEffect(() => {
+    if (!controller || !details?.definition || !draft || !authorized.current) return;
+    const target = { moduleId: "Elsa.Studio.Workflows", resourceType: "workflow-definition", resourceId: details.definition.id, revision: getDraftRevision(draft), displayName: details.definition.name };
+    const attachment = {
+      id: `workflow:${details.definition.id}`, moduleId: "Elsa.Studio.Workflows", schemaVersion: "1", target,
+      source: "workflow", sourceId: details.definition.id, label: details.definition.name, contentType: "workflow.definition", sensitivity: "internal" as const,
+      scope: selectedNodeId ? "selection" : "screen", origin: "clientSnapshot" as const, client: { clientId, generationId: generation }, agentScopes: ["workflow-author"],
+      summary: details.definition.name, references: { workflowDefinitionId: details.definition.id, draftId: draft.id, revision: target.revision },
+      content: { workflowDefinitionId: details.definition.id, draftId: draft.id, revision: target.revision, selectedNodeId,
+        selectedActivityType: resolveActivityType(selectedNode, selectedDescriptor, catalogByVersion),
+        inspectedNodeId: inspectedNode?.nodeId ?? null, inspectedActivityType: resolveActivityType(inspectedNode, inspectedDescriptor, catalogByVersion), inspectedIsScopeOwner,
+        activities, connections, diagnostics, positions: draft.layout.map(item => ({ nodeId: item.nodeId, x: item.x, y: item.y })) }
     };
-
-    return () => {
-      if (window.__ELSA_STUDIO_WORKFLOW_CONTEXT__?.workflowId === details.definition.id) {
-        window.__ELSA_STUDIO_WORKFLOW_CONTEXT__ = undefined;
-      }
-    };
-  }, [activities, catalogByVersion, connections, details, diagnostics, draft, inspectedDescriptor, inspectedIsScopeOwner, inspectedNode, selectedDescriptor, selectedNode, selectedNodeId]);
+    controller.snapshot = attachment;
+    return () => { if (controller.snapshot === attachment) controller.snapshot = null; };
+  }, [activities, catalogByVersion, clientId, connections, controller, details, diagnostics, draft, generation, inspectedDescriptor, inspectedIsScopeOwner, inspectedNode, selectedDescriptor, selectedNode, selectedNodeId]);
 }

@@ -89,7 +89,7 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Agent core (sessions, policy, context, proposals, provider facade, audit) | [`Extensions/Agent/src/Core/EXTENSION_POINTS.md`](Extensions/Agent/src/Core/EXTENSION_POINTS.md) |
+| Agent foundation (sessions, policy, context, proposals, provider facade, audit) | [`Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md`](Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md) |
 | Foundation Identity (authentication providers, IAM contracts, permissions, ownership capabilities) | [`Essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/Core/EXTENSION_POINTS.md) |
 | Foundation Identity ASP.NET Core Identity EF adapter (opt-in framework stores, authentication, session invalidation, and seeding over the shared EF authority) | [`Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Foundation Identity EF persistence (opt-in complete IAM authority and provider-configuration backend; OpenIddict boundary) | [`Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md`](Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/README.md) |

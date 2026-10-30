@@ -138,6 +138,7 @@
       "Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj",
       "Extensions/Agent/src/Api/Elsa.Agent.Api.csproj",
       "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj",
+      "Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj",
       "Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj",
       "Extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj",
       "Extensions/Etl/src/Api/Elsa.Etl.Api.csproj",
