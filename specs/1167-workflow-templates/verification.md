@@ -11,7 +11,7 @@ hosts/databases and leaves existing development hosts untouched.
 | Shared persistence schema/migration whole suite | 501 passed, no skips |
 | Architecture whole suite after graph restore | 592 passed, no skips |
 | Generated solution filters | Fresh |
-| Workflows frontend whole suite | 199 files, 2703 tests passed |
+| Workflows frontend whole suite | 201 files, 2722 tests passed |
 | Workflows/browser TypeScript | Passed |
 | Changed-file ESLint / template CSS stylelint | Passed; existing autofocus and generation-ref advisory warnings |
 | Workflows production bundle | Passed without raising budgets |
@@ -30,8 +30,8 @@ fail; restoring it returns all four browser journeys to green. The delayed-Back
 regression also failed when Ctrl+Z bypassed the inert editor through its window
 listener; guarding that listener preserves declarations during the pending save.
 
-Production frontend output: entry 110.65 kB; stylesheet 167.32 kB; authenticated
-Definitions total 385.01 kB (387.50 budget); activity upgrades 376.30 kB (379.00 budget).
+Production frontend output: entry 110.65 kB; stylesheet 167.69 kB; authenticated
+Definitions total 385.38 kB (387.50 budget); activity upgrades 376.67 kB (379.00 budget).
 Heavy template management/editor surfaces stay deferred. Four provider Initial
 migrations were regenerated; local owned persistence execution is SQLite. Required
 CI supplies the provider matrix and whole-server build gates; pending checks are not
@@ -65,3 +65,11 @@ Templates do not register a workflow-definition Weaver controller. The complete
 Workflows suite now passes2703 cases in199 files; all four template browser journeys
 and TypeScript checks pass. The combined production bundle passes main's existing
 budgets (385.01/387.50kB); this feature does not raise them.
+
+
+Final graph-port integration: merged main c986f9ddf. The fixture conflict retains
+both the exported createEditorContext helper and main's conditional adaptive-port
+snapshot restoration. No template production logic changed. All18 combined template
+and adaptive-port browser cases pass; the whole frontend is201 files/2722 tests.
+Architecture592 and maps pass. Updated combined bundles remain within the same
+main budgets (Definitions385.38/387.50kB, upgrades376.67/379.00kB).

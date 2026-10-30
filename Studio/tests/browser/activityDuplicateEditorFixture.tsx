@@ -29,8 +29,11 @@ import { JavaScriptExpandedEditor, JavaScriptInlineEditor } from "../../../Exten
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import { createActivityNode, getChildSlots } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
 import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
+import { activityGraphLayoutFromDesign } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphDocumentAdapter";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+const adaptivePorts = new URLSearchParams(window.location.search).get("adaptive-ports");
+const adaptiveStorageKey = `adaptive-ports:${window.location.search}`;
 
 const writeLineCatalog: ActivityCatalogItem = {
   ...writeLine,
@@ -49,8 +52,16 @@ const writeLineCatalog: ActivityCatalogItem = {
     isWrapped: true,
     defaultSyntax: "Literal"
   }],
-  ports: [{ name: "Done", displayName: "Done", isBrowsable: true }],
+  ports: adaptivePorts === "branches" ? [
+    { type: "outcome", name: "True", displayName: "True", isBrowsable: true },
+    { type: "outcome", name: "False", displayName: "False", isBrowsable: true }
+  ] : [{ name: "Done", displayName: "Done", isBrowsable: true }],
   available: true
+};
+const denseOutcomeCatalog: ActivityCatalogItem = {
+  ...writeLineCatalog,
+  activityVersionId: "dense-outcomes-v1",
+  ports: Array.from({ length: 30 }, (_, index) => ({ type: "outcome", name: `Case ${index + 1}`, displayName: `Case ${index + 1}` }))
 };
 
 const workflowStartFixture = new URLSearchParams(window.location.search).has("workflow-start");
@@ -90,11 +101,32 @@ function editorDraft(): WorkflowDraft {
     source: { nodeId: "write-one", port: "Done" },
     target: { nodeId: "write-two" }
   }];
+  if (adaptivePorts && !sequence) {
+    if (composition === "bpmn") {
+      root.structure!.payload = { activities: [notifyBuyer, leafNode("write-two")],
+        elements: [
+          { elementId: "write-one", elementType: "task", childNodeId: "write-one" },
+          { elementId: "write-two", elementType: "task", childNodeId: "write-two" }
+        ], sequenceFlows: [{ flowId: "flow-write-one-write-two", sourceRef: "write-one", targetRef: "write-two" }] };
+    } else {
+      root.structure!.payload.activities = [adaptivePorts === "dense" ? { ...notifyBuyer, activityVersionId: denseOutcomeCatalog.activityVersionId } : notifyBuyer, leafNode("write-two"), leafNode("write-three")];
+      root.structure!.payload.connections = [{ id: "flow-write-one-write-two",
+        source: { nodeId: "write-one", port: adaptivePorts === "branches" ? "True" : "Done" }, target: { nodeId: "write-two" } },
+      ...(adaptivePorts === "branches" ? [{ id: "flow-false", source: { nodeId: "write-one", port: "False" }, target: { nodeId: "write-three" } }] : [])];
+      if (adaptivePorts === "dense") root.structure!.payload.connections = Array.from({ length: 30 }, (_, index) => ({
+        id: `flow-case-${index + 1}`, source: { nodeId: "write-one", port: `Case ${index + 1}` }, target: { nodeId: "write-two" }
+      }));
+    }
+  }
   return {
     id: "draft-1",
     definitionId: "definition-1",
     state: { variables: [], rootActivity: root, inputs: [], outputs: [] },
-    layout: [
+    layout: adaptivePorts ? [
+      { nodeId: "write-one", x: 200, y: 80 },
+      { nodeId: "write-two", x: adaptivePorts === "offset" ? 305 : 200, y: adaptivePorts === "offset" ? 430 : adaptivePorts === "dense" ? 1100 : 320 },
+      { nodeId: "write-three", x: 600, y: 80 }
+    ] : [
       { nodeId: "write-one", x: 420, y: 180 },
       { nodeId: "write-two", x: 720, y: 180 }
     ],
@@ -117,6 +149,10 @@ function sequenceRootActivity(): ActivityNode {
 }
 
 function activityGraphSequenceValue(): StudioActivityDefinitionImplementationEditorProps["value"] {
+  if (adaptivePorts) {
+    const draft = editorDraft();
+    return { payload: { rootActivity: draft.state.rootActivity, variables: [], outputMappings: [], outcomeMappings: [] }, layout: activityGraphLayoutFromDesign(draft.layout) };
+  }
   return {
     payload: {
       rootActivity: new URLSearchParams(window.location.search).get("composition") === "bpmn" ? createActivityNode(bpmnActivity, "bpmn-root") : sequenceRootActivity(),
@@ -177,7 +213,8 @@ function ActivityDuplicateEditorFixtureContent() {
 }
 
 function ControlledActivityGraphFixture({ context }: { context: StudioEndpointContext }) {
-  const [value, setValue] = useState(activityGraphSequenceValue);
+  const [value, setValue] = useState<StudioActivityDefinitionImplementationEditorProps["value"]>(() => adaptivePorts && sessionStorage.getItem(adaptiveStorageKey)
+    ? JSON.parse(sessionStorage.getItem(adaptiveStorageKey)!) : activityGraphSequenceValue());
   return <><ActivityGraphImplementationEditor
     context={context}
     definitionId="definition-1"
@@ -193,12 +230,13 @@ function ControlledActivityGraphFixture({ context }: { context: StudioEndpointCo
     historyResetKey="draft-1:activity-sequence"
     value={value}
     readOnly={false}
-    onChange={setValue}
+    onChange={next => { setValue(next); if (adaptivePorts) sessionStorage.setItem(adaptiveStorageKey, JSON.stringify(next)); }}
   />{slotAssignment ? <output hidden data-testid="activity-graph-payload">{JSON.stringify(value.payload)}</output> : null}</>;
 }
 
 export function createEditorContext(live?: { status: string; disconnected: boolean }): StudioEndpointContext {
-  const draft = editorDraft();
+  let draft = adaptivePorts && new URLSearchParams(window.location.search).get("host") !== "activity" && sessionStorage.getItem(adaptiveStorageKey)
+    ? JSON.parse(sessionStorage.getItem(adaptiveStorageKey)!) as WorkflowDraft : editorDraft();
   const runCanvas = new URLSearchParams(window.location.search).get("run-canvas");
   const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");
   const paletteFixtures: ActivityCatalogItem[] = new URLSearchParams(window.location.search).has("palette-context") ? [
@@ -206,7 +244,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
     { ...writeLineCatalog, activityVersionId: "decision-v1", activityTypeKey: "Elsa.BpmnDecision", displayName: "BPMN Decision", category: "BPMN", paletteHints: { containerModes: ["bpmn"], description: "BPMN Decision is intended for a gateway in a BPMN Process." } },
     { ...writeLineCatalog, activityVersionId: "complete-v1", activityTypeKey: "Elsa.Complete", displayName: "Complete", paletteHints: { resourceKinds: ["activity-definition-graph"] } }
   ] : [];
-  const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity, ...(slotAssignment ? [whileActivity] : []), ...paletteFixtures, ...(workflowStartFixture ? [httpEndpointCatalog] : [])];
+  const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity, ...(slotAssignment ? [whileActivity] : []), ...paletteFixtures, ...(adaptivePorts ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : [])];
   const compiled = (node: ActivityNode): object => ({
     executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
     activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown",
@@ -264,7 +302,8 @@ export function createEditorContext(live?: { status: string; disconnected: boole
               {
                 id: "elsa.api.workflow-design",
                 contractVersion: "1",
-                links: [{ rel: "workflow-definitions", href: "design/workflows/definitions" }]
+                links: [{ rel: "workflow-definitions", href: "design/workflows/definitions" },
+                  ...(adaptivePorts ? [{ rel: "workflow-drafts", href: "design/workflows/drafts/{draftId}", templated: true }] : [])]
               },
               {
                 id: "elsa.api.activity-design",
@@ -315,7 +354,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
         };
         if (runCanvas && url === "/runtime/workflows/executables/editor-artifact") return {
           artifactId: "editor-artifact", rootActivity: compiled(draft.state.rootActivity!),
-          ...(live ? { chosenReference: { sourceReferenceId: "fixture-reference", activityPresentation: draft.activityPresentation?.map(item => ({ ...item, executableNodeId: `exec-${item.nodeId}` })) } } : {})
+          ...(live ? { chosenReference: { sourceReferenceId: "fixture-reference", ...(adaptivePorts ? { layout: draft.layout } : {}), activityPresentation: draft.activityPresentation?.map(item => ({ ...item, executableNodeId: `exec-${item.nodeId}` })) } } : {})
         };
         if (runCanvas && url.startsWith("/runtime/workflows/instances/editor-execution/activity-executions?")) {
           const query = new URL(url, "http://fixture").searchParams;
@@ -349,7 +388,13 @@ export function createEditorContext(live?: { status: string; disconnected: boole
         if (runCanvas && url === "/publishing/draft-options") return { options: [] };
         return {};
       },
-      putJson: async () => draft,
+      putJson: async (_url: string, body: unknown) => {
+        if (adaptivePorts) {
+          draft = { ...draft, ...body as object };
+          sessionStorage.setItem(adaptiveStorageKey, JSON.stringify(draft));
+        }
+        return draft;
+      },
       requestJson: async (url: string) => runCanvas && url === "/publishing/draft-runs" ? runView : {},
       deleteJson: async () => undefined
     }
