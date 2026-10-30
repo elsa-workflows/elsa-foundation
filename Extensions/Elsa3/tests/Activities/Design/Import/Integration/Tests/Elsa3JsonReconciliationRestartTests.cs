@@ -70,20 +70,21 @@ public sealed class Elsa3JsonReconciliationRestartTests : IDisposable
     [Fact]
     public async Task What_an_earlier_start_committed_but_did_not_publish_is_published_on_the_next_start()
     {
-        WriteHttpHello(1, "http.json");
-        var host = await Elsa3ImportHost.StartAsync(withHttp: true, reconcileFolder: EmptyFolder());
+        Copy("caller-routes-outcome", "caller.json");
+        Copy("reusable-two-outcomes", "approval.json");
+        var host = await Elsa3ImportHost.StartAsync(reconcileFolder: EmptyFolder());
         try
         {
-            // The commit of an earlier start whose publish step never ran.
-            await ApplyWithoutPublishingAsync(host, HttpHello(1));
-            Assert.Null(await host.ActivePublicationAsync("http-hello"));
+            // The commit of an earlier start whose workflow publish step never ran (its reusable was published).
+            await ApplyWithoutPublishingAsync(host, Fixture("caller-routes-outcome"), Fixture("reusable-two-outcomes"));
+            Assert.Null(await host.ActivePublicationAsync("caller"));
 
             host = await host.RestartAsync(_folder.FullName);
 
-            Assert.NotNull(await host.ActivePublicationAsync("http-hello"));
-            using var response = await host.Client.PostAsync("workflows/http/elsa3/hello", new StringContent("{}", Encoding.UTF8, "application/json"));
-            Assert.True(response.StatusCode == HttpStatusCode.OK,
-                $"{(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}\n{string.Join("\n", host.Warnings.Entries)}");
+            var caller = await host.ActivePublicationAsync("caller");
+            Assert.True(caller is not null, string.Join(" | ", host.Warnings.Entries));
+            var run = await host.RunAsync(caller.Value.Workflow);
+            Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
         }
         finally
         {
@@ -173,15 +174,20 @@ public sealed class Elsa3JsonReconciliationRestartTests : IDisposable
         return outcomes[version.SourceVersionId];
     }
 
-    /// <summary>Commits <paramref name="definition"/> as the folder import does, without its publish step.</summary>
-    private static async Task<ReusableActivityImportApplyResult> ApplyWithoutPublishingAsync(Elsa3ImportHost host, JsonNode definition)
+    /// <summary>
+    /// Commits <paramref name="definitions"/> as the folder import does, without its workflow publish step: the import
+    /// still publishes reusables, as the folder import's commit does.
+    /// </summary>
+    private static async Task<ReusableActivityImportApplyResult> ApplyWithoutPublishingAsync(Elsa3ImportHost host, params JsonNode[] definitions)
     {
         await using var scope = await host.Shell.ServiceProvider.GetRequiredService<IPersistenceOperationScopeFactory>()
             .CreateAsync(new PersistenceScope(Elsa3ImportHost.TenantId));
+        scope.ServiceProvider.GetRequiredService<Elsa3StartupPublishingGrant>().Grant(Elsa3ImportHost.TenantId);
         var importer = scope.ServiceProvider.GetRequiredService<IReusableActivityCollectionImporter>();
+        var web = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         var collection = new ReusableActivityImportCollection(
             "restart-test",
-            [definition.Deserialize<Elsa3WorkflowDefinition>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!]);
+            definitions.Select(definition => definition.Deserialize<Elsa3WorkflowDefinition>(web)!).ToArray());
         var plan = await importer.AnalyzeAsync(collection);
         return await importer.ApplyAsync(new(plan.PlanId, collection, plan.Items.Select(item => item.SourceVersionId).ToArray(), TenantId: Elsa3ImportHost.TenantId));
     }
@@ -222,6 +228,9 @@ public sealed class Elsa3JsonReconciliationRestartTests : IDisposable
 
     private void WriteHttpHello(int version, string fileName) =>
         File.WriteAllText(Path.Join(_folder.FullName, fileName), HttpHello(version).ToJsonString());
+
+    private static JsonNode Fixture(string name) =>
+        JsonNode.Parse(File.ReadAllText(Path.Join(AppContext.BaseDirectory, "Fixtures", $"{name}.json")))!;
 
     private void Copy(string fixture, string fileName) =>
         File.Copy(Path.Join(AppContext.BaseDirectory, "Fixtures", $"{fixture}.json"), Path.Join(_folder.FullName, fileName));
