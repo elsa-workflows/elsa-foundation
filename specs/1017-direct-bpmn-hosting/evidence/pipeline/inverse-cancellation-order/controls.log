@@ -1,0 +1,18 @@
+test_a_delivered_cancel_cannot_claim_the_pending_cut (test_verify_inverse_cancellation.InverseCancellationControls) ... ok
+test_a_foreign_native_registration_cannot_claim_parent_consumption (test_verify_inverse_cancellation.InverseCancellationControls) ... ok
+test_a_pre_deadline_observation_cannot_prove_no_late_retry (test_verify_inverse_cancellation.InverseCancellationControls) ... ok
+test_a_premature_accepted_receipt_cannot_be_hidden (test_verify_inverse_cancellation.InverseCancellationControls) ... ok
+test_a_premature_model_terminal_cannot_be_hidden (test_verify_inverse_cancellation.InverseCancellationControls) ... ok
+test_a_replacement_result_address_cannot_pass_as_the_original (test_verify_inverse_cancellation.InverseCancellationControls) ... ok
+test_a_terminal_etl_store_cannot_be_substituted_into_the_pending_cut (test_verify_inverse_cancellation.InverseCancellationControls) ... ok
+test_all_five_actual_cases_verify_sixty_whole_stores (test_verify_inverse_cancellation.InverseCancellationControls) ... ok
+test_an_unrelated_dependency_error_cannot_stand_in_for_pending_etl_cancellation (test_verify_inverse_cancellation.InverseCancellationControls) ... ok
+test_graceful_exit_cannot_claim_process_loss (test_verify_inverse_cancellation.InverseCancellationControls) ... ok
+test_physical_model_settlement_cannot_hide_behind_unchanged_checked_json (test_verify_inverse_cancellation.InverseCancellationControls) ... ok
+test_the_cancel_inventory_cannot_drop_its_actual_etl_source (test_verify_inverse_cancellation.InverseCancellationControls) ... ok
+test_the_original_queued_input_cannot_disappear (test_verify_inverse_cancellation.InverseCancellationControls) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.413s
+
+OK
