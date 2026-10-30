@@ -8,7 +8,6 @@ Write {"action":"restart"} or {"action":"finish"} to OUTPUT/command.json.
 from __future__ import annotations
 
 import argparse
-from contextlib import closing
 import gzip
 import importlib.util
 import json
@@ -16,7 +15,7 @@ import os
 from pathlib import Path
 import shutil
 import socket
-import sqlite3
+import signal
 import subprocess
 import sys
 import tempfile
@@ -109,13 +108,20 @@ def main():
             cwd=directory, env={**os.environ, "ASPNETCORE_ENVIRONMENT": "Development"}, stdout=log, stderr=subprocess.STDOUT)
         children.append(child)
         processes.append({"role": label, "processId": child.pid, "controllerProcessId": os.getpid(),
-            "started": process_field(child.pid, "lstart"), "assemblyName": assembly.name, "assemblySha256": digest(assembly)})
+            "started": process_field(child.pid, "lstart"), "executable": process_field(child.pid, "comm"),
+            "assemblyName": assembly.name, "assemblySha256": digest(assembly)})
         return child
+
+    def owned(child):
+        record = next(item for item in processes if item["processId"] == child.pid)
+        if (child.poll() is not None or int(process_field(child.pid, "ppid")) != os.getpid() or
+                process_field(child.pid, "lstart") != record["started"] or
+                process_field(child.pid, "comm") != record["executable"]):
+            raise ValueError("The owned host identity changed.")
 
     def stop(child):
         if child.poll() is None:
-            if int(process_field(child.pid, "ppid")) != os.getpid():
-                raise ValueError("The controller no longer owns this child.")
+            owned(child)
             child.terminate()
             try: child.wait(timeout=30)
             except subprocess.TimeoutExpired:
@@ -135,25 +141,28 @@ def main():
 
     def snapshot(label):
         assets = {}
+        # Keep the coupled stores at one owned-host cut and use the same SQLite
+        # provider as Workbench. Python only reads the resulting closed evidence.
+        owned(backend); os.kill(backend.pid, signal.SIGSTOP)
+        try:
+            end = time.monotonic() + 5
+            while "T" not in process_field(backend.pid, "stat"):
+                if time.monotonic() >= end: raise TimeoutError("The owned Workbench did not pause.")
+                time.sleep(.02)
+            for name in ("runtime", "design"):
+                backup = root / f"{label}-{name}.sqlite"
+                observer = json.loads(subprocess.check_output(["dotnet", str(args.reader_assembly), "--backup-sqlite",
+                    str(backend_root / f"{name}.db"), str(backup)], text=True, timeout=30))
+                if observer.get("readOnly") is not True or observer.get("snapshotSha256") != digest(backup):
+                    raise ValueError("The provider backup lacks its read-only closed-store receipt.")
+                assets[name] = {"observer": observer, "captureCut": "same-owned-workbench-paused-across-provider-backups"}
+        finally:
+            owned(backend); os.kill(backend.pid, signal.SIGCONT)
         for name in ("runtime", "design"):
             backup = root / f"{label}-{name}.sqlite"
-            working = root / f"{label}-{name}-backup-working.sqlite"
-            with closing(sqlite3.connect((backend_root / f"{name}.db").as_uri() + "?mode=ro", uri=True)) as original, closing(sqlite3.connect(working)) as target:
-                original.backup(target)
-                # The backup inherits WAL mode. Make this new owned copy standalone;
-                # Python/SQLite can otherwise leave empty WAL/SHM sidecars after close.
-                if target.execute("PRAGMA journal_mode=DELETE").fetchone() != ("delete",):
-                    raise ValueError("The owned backup did not become a standalone database.")
-                if target.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
-                    raise ValueError("The actual Studio store backup is corrupt.")
-            if Path(str(working) + "-wal").exists():
-                raise ValueError("The closed owned backup unexpectedly retains a WAL.")
-            # SQLite may leave an unused SHM after leaving WAL mode.
-            # Copy the closed DELETE-mode main file to a fresh immutable evidence path.
-            shutil.copyfile(working, backup)
             compressed = output / f"{label}-{name}.sqlite.gz"
             with backup.open("rb") as raw, gzip.open(compressed, "wb") as target: shutil.copyfileobj(raw, target)
-            assets[name] = {"file": compressed.name, "databaseSha256": digest(backup), "gzipSha256": digest(compressed)}
+            assets[name].update(file=compressed.name, databaseSha256=digest(backup), gzipSha256=digest(compressed))
         subprocess.run([sys.executable, str(REPO / "e2e-tests/bpmn/verify_published_contracts.py"), "--database", str(root / f"{label}-design.sqlite"),
             "--source-revision", source, "--closed-snapshot", "--output", str(output / f"{label}-frozen-contract.json")], check=True, stdout=subprocess.DEVNULL)
         return assets
