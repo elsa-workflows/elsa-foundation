@@ -86,14 +86,21 @@ def verify(path):
         require(stages['partial']['model'] == stages['recovered']['model'] and stages['partial']['directCounterpart'] == stages['recovered']['directCounterpart'],
             'The fresh process changed an already accepted partial branch.')
         require(stages['final'] == stages['retained'], 'A further cold process changed the settled parallel models or native return.')
-        final = stages['final']; settled = next(i for i in final['inputs'] if i['inputId'] == origin['settledInputId'])
+        final = stages['final']; settlements = [i for i in final['inputs'] if i['inputKind'] == 'native-parent-settled']
+        require(len(settlements) == 1, 'The actual native parent lacks one exact model settlement receipt.')
+        settled = settlements[0]
         require(final['model']['lifecycle'] == final['directCounterpart']['lifecycle'] == 3 and
             final['model']['terminalResult'] == final['directCounterpart']['terminalResult'] == {'status': 'Completed', 'outcome': 'Done'} and
             final['nativeParent']['status'] == 3 and not final['bookmarks'] and len(final['activities']) == (1 if parent == 'Root' else 3) and
             all(a['status'] == 4 for a in final['activities']) and len(final['sources']) == 2 and all(s['status'] == 2 for s in final['sources']) and
-            settled['acceptedRevision'] == 5 and settled['invocationId'] == origin['nativeInvocationId'] and settled['attemptId'] == origin['nativeAttemptId'],
+            settled['result']['status'] == 'Accepted' and settled['acceptedRevision'] == 5 and
+            settled['invocationId'] == origin['nativeInvocationId'] and settled['attemptId'] == origin['nativeAttemptId'],
             'The actual native parallel parent did not consume and settle its exact result once.')
         source_row = next(s for s in final['sources'] if s['intent']['kind'] == v.RESULT)
+        require({s['intent']['kind'] for s in final['sources']} == {v.START, v.RESULT} and
+            next(s for s in final['sources'] if s['intent']['kind'] == v.START)['intent']['payload'] == original['payload']['nativeParent']['invocation'] and
+            source_row['intent']['payload'] == {'FormatVersion': 1, 'Invocation': original['payload']['nativeParent']['invocation'], 'Result': final['model']['terminalResult']},
+            'The exact original native start/result source payload changed.')
         require(v.timestamp(source_row['deliveredAt']) >= v.timestamp(settled['acceptedAt']), 'The parent result was acknowledged before exact model settlement.')
         for identity in (original['executionId'], direct['executionId']):
             for stage in ('left-replay', 'right-replay', 'late-right-replay'):
@@ -126,8 +133,9 @@ def verify(path):
                             receipt = json.loads(row[0]) if row else {}
                             require(receipt.get('invocationId') == v.key(work['invocationId']) and receipt.get('attemptId') == v.key(work['attemptId']),
                                 'The observed human-work ledger is not bound to its physical invocation/attempt receipt.')
-                    require(connection.execute('SELECT COUNT(*) FROM elsa_runtime_activity_execution_state').fetchone()[0] == (1 if parent == 'Root' else 3),
-                        'The physical native continuation ran more than once.')
+                    expected_activities = 1 if parent == 'Root' else 2 if phase == 'partial' else 3
+                    require(connection.execute('SELECT COUNT(*) FROM elsa_runtime_activity_execution_state').fetchone()[0] == expected_activities,
+                        'The physical native activity count differs from the partial/completed boundary.')
     return {'sourceRevision': source, 'actualParentPairs': 4, 'modelExecutionsCompleted': 8, 'wholeStoresVerified': 24,
         'partialBranchesPreservedAcrossProcessLoss': True, 'singleLogicalJoins': 8, 'directEmbeddedTracesEqual': True,
         'normalization': 'Only tokens.producingWorkHandle: owning model ID or observed local human invocation mapped by exact element/binding/token/iteration.',

@@ -1,0 +1,54 @@
+[
+  {
+    "parent": "CompensationScope",
+    "sourceRevision": "53c64a05a7ec5cb0c9cea67220441d34a0642924",
+    "bothRevision": 2,
+    "onlyKnownModelLocalProducerHandlesDiffer": true,
+    "normalizationField": "tokens[*].producingWorkHandle",
+    "normalizationWorkKey": [
+      "elementId",
+      "bindingId",
+      "tokenId",
+      "iterationId"
+    ]
+  },
+  {
+    "parent": "Flowchart",
+    "sourceRevision": "53c64a05a7ec5cb0c9cea67220441d34a0642924",
+    "bothRevision": 2,
+    "onlyKnownModelLocalProducerHandlesDiffer": true,
+    "normalizationField": "tokens[*].producingWorkHandle",
+    "normalizationWorkKey": [
+      "elementId",
+      "bindingId",
+      "tokenId",
+      "iterationId"
+    ]
+  },
+  {
+    "parent": "Root",
+    "sourceRevision": "53c64a05a7ec5cb0c9cea67220441d34a0642924",
+    "bothRevision": 2,
+    "onlyKnownModelLocalProducerHandlesDiffer": true,
+    "normalizationField": "tokens[*].producingWorkHandle",
+    "normalizationWorkKey": [
+      "elementId",
+      "bindingId",
+      "tokenId",
+      "iterationId"
+    ]
+  },
+  {
+    "parent": "Sequence",
+    "sourceRevision": "53c64a05a7ec5cb0c9cea67220441d34a0642924",
+    "bothRevision": 2,
+    "onlyKnownModelLocalProducerHandlesDiffer": true,
+    "normalizationField": "tokens[*].producingWorkHandle",
+    "normalizationWorkKey": [
+      "elementId",
+      "bindingId",
+      "tokenId",
+      "iterationId"
+    ]
+  }
+]

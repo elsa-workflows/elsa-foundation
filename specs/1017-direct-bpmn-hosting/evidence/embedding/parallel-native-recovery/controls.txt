@@ -1,0 +1,26 @@
+test_a_different_local_work_handle_is_not_collapsed_to_one_placeholder (test_verify_parallel_embedding.ParallelEmbeddingEvidenceControls) ... ok
+test_a_foreign_model_work_handle_is_not_normalized (test_verify_parallel_embedding.ParallelEmbeddingEvidenceControls) ... ok
+test_actual_four_parent_pairs_verify_with_twenty_four_whole_stores (test_verify_parallel_embedding.ParallelEmbeddingEvidenceControls) ... ok
+test_an_omitted_parent_case_is_rejected (test_verify_parallel_embedding.ParallelEmbeddingEvidenceControls) ... ok
+test_rehashed_deleted_physical_left_receipt_is_rejected (test_verify_parallel_embedding.ParallelEmbeddingEvidenceControls) ... FAIL
+test_rehashed_different_library_is_not_qualified_as_released_zero_five (test_verify_parallel_embedding.ParallelEmbeddingEvidenceControls) ... ok
+test_rehashed_duplicate_process_identity_cannot_prove_restart (test_verify_parallel_embedding.ParallelEmbeddingEvidenceControls) ... ok
+test_rehashed_invented_work_token_in_the_ledger_is_rejected (test_verify_parallel_embedding.ParallelEmbeddingEvidenceControls) ... ok
+test_rehashed_native_parent_relabel_is_rejected (test_verify_parallel_embedding.ParallelEmbeddingEvidenceControls) ... ok
+test_rehashed_premature_parent_ack_is_rejected (test_verify_parallel_embedding.ParallelEmbeddingEvidenceControls) ... ok
+test_rehashed_semantic_token_change_is_not_normalized (test_verify_parallel_embedding.ParallelEmbeddingEvidenceControls) ... ok
+test_rehashed_token_order_change_is_not_normalized (test_verify_parallel_embedding.ParallelEmbeddingEvidenceControls) ... ok
+test_two_matching_but_rehashed_false_traces_do_not_replace_physical_state (test_verify_parallel_embedding.ParallelEmbeddingEvidenceControls) ... ok
+
+======================================================================
+FAIL: test_rehashed_deleted_physical_left_receipt_is_rejected (test_verify_parallel_embedding.ParallelEmbeddingEvidenceControls)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/bpmn/test_verify_parallel_embedding.py", line 82, in test_rehashed_deleted_physical_left_receipt_is_rejected
+    with self.assertRaisesRegex(ValueError, 'physical model input set'): self.verify()
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.450s
+
+FAILED (failures=1)
