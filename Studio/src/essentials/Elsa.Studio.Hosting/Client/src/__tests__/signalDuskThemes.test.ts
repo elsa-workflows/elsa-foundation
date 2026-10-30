@@ -30,13 +30,13 @@ describe("Signal", () => {
       .filter(Boolean);
 
     expect(selectors.length).toBeGreaterThan(0);
-    expect(selectors.every(selector => selector.startsWith('html[data-theme="signal"]'))).toBe(true);
+    expect(selectors.every(selector => selector.startsWith('html:where(:not([data-workspace-style]))[data-theme="signal"]'))).toBe(true);
     expect(stylesCss).toContain('@import "./themes/signal.css";');
   });
 
   it("declares its own elevation recipes for light and dark, with a semibold title weight", () => {
-    const light = ruleDeclarations(tokensCss, 'html[data-theme="signal"]');
-    const dark = ruleDeclarations(tokensCss, 'html[data-theme="signal"][data-theme-mode="dark"]');
+    const light = ruleDeclarations(tokensCss, 'html:where(:not([data-workspace-style]))[data-theme="signal"]');
+    const dark = ruleDeclarations(tokensCss, 'html:where(:not([data-workspace-style]))[data-theme="signal"][data-theme-mode="dark"]');
 
     for (const recipe of [light, dark]) {
       expect(Object.keys(recipe)).toEqual(expect.arrayContaining(["--shadow-sm", "--shadow-md", "--shadow-lg", "--shadow-xl"]));
@@ -45,7 +45,7 @@ describe("Signal", () => {
   });
 
   it("is denser than the default: every type-size token steps down from the shared defaults", () => {
-    const light = ruleDeclarations(tokensCss, 'html[data-theme="signal"]');
+    const light = ruleDeclarations(tokensCss, 'html:where(:not([data-workspace-style]))[data-theme="signal"]');
     const defaults = ruleDeclarations(tokensCss, ":root");
 
     for (const token of ["--studio-page-title-size", "--studio-section-title-size", "--studio-body-size", "--studio-label-size"]) {

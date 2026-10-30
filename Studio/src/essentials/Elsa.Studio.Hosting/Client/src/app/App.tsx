@@ -46,7 +46,7 @@ import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, getStudioRuntimeSettings } from "./runtime";
 import { StudioAuthBoundary, createStudioAuthManager, createStudioEndpointContext } from "./auth/studioAuth";
 import { loadStudioModules } from "./loader";
-import { ThemeProvider, useNavMode } from "./components/ThemeProvider";
+import { ThemeProvider, useNavMode, useWorkspaceStyle } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { UserMenu } from "./components/UserMenu";
 import { defaultThemeStoreCapabilities, getThemeStoreCapabilities, type ThemeStoreCapabilities } from "./themes/themeStoreApi";
@@ -87,6 +87,7 @@ import { isDashboardPath, isNavigationItemActive } from "./navigation/active";
 import elsaLogo from "../assets/images/icon.png";
 import { WeaverSurface } from "./weaver";
 import "./styles.css";
+import "./themes/workspaceStyles.css";
 import { AgentLauncher, createAgentClient, type AgentSessionIndicatorSession } from "./agent";
 import "./agent/agent.css";
 import "./weaver/weaver.css";
@@ -491,7 +492,14 @@ export function ShellFrame({
   children: React.ReactNode;
 }) {
   const [navQuery, setNavQuery] = useState("");
-  const [navCollapsed, setNavCollapsed] = useState(() => getInitialBoolean(sidebarCollapsedStorageKey, false));
+  const workspaceStyle = useWorkspaceStyle();
+  const [navCollapsedChoice, setNavCollapsedChoice] = useState<boolean | null>(() => {
+    try {
+      const saved = window.localStorage.getItem(sidebarCollapsedStorageKey);
+      return saved === "true" ? true : saved === "false" ? false : null;
+    } catch { return null; }
+  });
+  const navCollapsed = navCollapsedChoice ?? workspaceStyle === "focus";
   const [moreToolsOpen, setMoreToolsOpen] = useState(() => readMoreToolsOpen());
   const [topMoreToolsOpen, setTopMoreToolsOpen] = useState(false);
   const [dismissedMoreToolsQuery, setDismissedMoreToolsQuery] = useState<string | null>(null);
@@ -505,8 +513,12 @@ export function ShellFrame({
   const visibleNavigation = filterAccessibleNavigation(navigation, access);
 
   useEffect(() => {
-    if (navCollapsed) window.localStorage.setItem(sidebarCollapsedStorageKey, "true");
-    else window.localStorage.removeItem(sidebarCollapsedStorageKey);
+    if (navCollapsedChoice === null) window.localStorage.removeItem(sidebarCollapsedStorageKey);
+    else window.localStorage.setItem(sidebarCollapsedStorageKey, String(navCollapsedChoice));
+  }, [navCollapsedChoice]);
+
+  useEffect(() => {
+    if (navCollapsed) setNavQuery("");
   }, [navCollapsed]);
 
   useEffect(() => {
@@ -514,14 +526,14 @@ export function ShellFrame({
   }, [moreToolsOpen]);
 
   useEffect(() => {
-    const onAppearanceReset = () => setNavCollapsed(false);
+    const onAppearanceReset = () => setNavCollapsedChoice(null);
     window.addEventListener(appearanceResetEventName, onAppearanceReset);
     return () => window.removeEventListener(appearanceResetEventName, onAppearanceReset);
   }, []);
 
   function toggleNavCollapsed() {
-    setNavCollapsed(current => {
-      const next = !current;
+    setNavCollapsedChoice(() => {
+      const next = !navCollapsed;
       if (next) {
         // The search box is hidden while collapsed, so drop any active filter rather than
         // leaving the nav invisibly filtered.

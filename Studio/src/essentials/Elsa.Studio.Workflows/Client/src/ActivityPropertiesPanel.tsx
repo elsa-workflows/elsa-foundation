@@ -1,4 +1,5 @@
 import { type KeyboardEvent as ReactKeyboardEvent, memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Braces, Cable, Code2, KeyRound, Maximize2, SlidersHorizontal, Type, X, type LucideIcon } from "lucide-react";
 import { AdvancedSection, AnchoredPopover } from "@elsa-workflows/studio-ui";
 import {
@@ -99,6 +100,7 @@ export interface ActivityPropertiesPanelProps {
   expressionEditors: StudioExpressionEditorContribution[];
   expressionDescriptors: StudioExpressionDescriptor[];
   expressionDescriptorStatus: "loading" | "ready" | "failed";
+  readOnly?: boolean;
   onRetryDescriptors?: () => void;
   descriptorStatus: "loading" | "ready" | "failed";
   // Variables visible from this activity's scope (nearest-scope first) for the Variable picker, plus
@@ -126,6 +128,7 @@ export function ActivityPropertiesPanel({
   expressionEditors,
   expressionDescriptors,
   expressionDescriptorStatus,
+  readOnly = false,
   onRetryDescriptors,
   descriptorStatus,
   visibleVariables,
@@ -141,12 +144,15 @@ export function ActivityPropertiesPanel({
   const effectiveDictionarySessionScope = dictionarySessionScope ?? generatedDictionarySessionScope;
   const effectiveExpressionEditorSessionScope = expressionEditorSessionScope ?? effectiveDictionarySessionScope;
   const latestActivity = useRef(activity);
+  const latestReadOnly = useRef(readOnly);
+  latestReadOnly.current = readOnly;
   const renderedActivity = useRef(activity);
   if (renderedActivity.current !== activity) {
     latestActivity.current = activity;
     renderedActivity.current = activity;
   }
   const commitInputChange = useCallback((nextActivity: ActivityNode, input: StudioActivityInputDescriptor) => {
+    if (latestReadOnly.current) return;
     const current = latestActivity.current;
     if (current.nodeId !== nextActivity.nodeId) {
       onChange(nextActivity);
@@ -221,6 +227,7 @@ export function ActivityPropertiesPanel({
           key={input.name}
           activity={activity}
           activityDescriptor={descriptor}
+          readOnly={readOnly}
           endpointContext={context}
           draftId={draftId}
           expressionTooling={expressionTooling}
@@ -451,6 +458,7 @@ function useExpressionToolingAuthorization(scope: string) {
 }
 
 type PropertyRowProps = {
+  readOnly: boolean;
   activity: ActivityNode;
   activityDescriptor: StudioActivityDescriptor;
   endpointContext: StudioEndpointContext;
@@ -478,6 +486,7 @@ type PropertyRowProps = {
 };
 
 function PropertyRow({
+  readOnly: panelReadOnly,
   activity,
   activityDescriptor,
   endpointContext,
@@ -503,7 +512,7 @@ function PropertyRow({
   onDisclosureFallbackChange,
   onChange
 }: PropertyRowProps) {
-  const readOnly = input.isReadOnly === true;
+  const readOnly = panelReadOnly || input.isReadOnly === true;
   // A secret-only input offers the secret picker and nothing else: no other syntax, no literal or expanded
   // editor and no conversion control, so no control on the row can write anything but a Secret Reference
   // or a clear (elsa-foundation spec 188, workflow secret safety).
@@ -1112,7 +1121,9 @@ function PropertyRow({
       {provider && dynamicOptions.status === "ready" && dynamicOptions.options.length === 0 ? (
         <p className="wf-property-options-status" role="status">No options available.</p>
       ) : null}
-      {expanded ? (
+      {/* User interaction opens this after rowRef mounts. Embedders scope theme tokens with
+          .wf-tokens; without a resource scope the dialog inherits the document theme. */}
+      {expanded && rowRef.current ? createPortal(
         <ExpandedPropertyEditor
           input={input}
           dictionarySessionScope={dictionarySessionScope}
@@ -1135,7 +1146,8 @@ function PropertyRow({
           onConversionChange={next => onChange(writeInputValue(activity, input, next), input)}
           onSyntaxChange={setSyntax}
           onClose={closeExpanded}
-        />
+        />,
+        rowRef.current.closest(".wf-tokens, .wf-editor, .wf-page") ?? rowRef.current.ownerDocument.body
       ) : null}
     </div>
   );
@@ -1150,6 +1162,7 @@ const MemoizedPropertyRow = memo(PropertyRow, arePropertyRowPropsEqual);
  */
 function arePropertyRowPropsEqual(previous: PropertyRowProps, next: PropertyRowProps) {
   if (
+    previous.readOnly !== next.readOnly ||
     previous.activityDescriptor !== next.activityDescriptor ||
     previous.endpointContext !== next.endpointContext ||
     previous.draftId !== next.draftId ||
@@ -1583,6 +1596,7 @@ export function SyntaxPicker({
   const selectedIndex = Math.max(0, descriptors.findIndex(descriptor => descriptor.type === value));
   const unavailableReasons = descriptors.map(getUnavailableReason);
   const availableIndices = descriptors.flatMap((_, index) => unavailableReasons[index] ? [] : [index]);
+
   const className = [
     "wf-syntax-picker-trigger",
     iconOnly ? variant : "",
@@ -1598,6 +1612,7 @@ export function SyntaxPicker({
   }, [activeIndex, open]);
 
   const openPicker = (index = selectedIndex) => {
+    if (disabled) return;
     setActiveIndex(unavailableReasons[index] ? availableIndices[0] ?? -1 : index);
     setOpen(true);
   };
@@ -1619,7 +1634,7 @@ export function SyntaxPicker({
 
   const selectOption = (index: number) => {
     const descriptor = descriptors[index];
-    if (!descriptor || unavailableReasons[index]) return;
+    if (disabled || !descriptor || unavailableReasons[index]) return;
     onChange(descriptor.type);
     closePicker(true);
   };
@@ -1691,6 +1706,8 @@ export function SyntaxPicker({
       </button>
       <AnchoredPopover
         anchorRef={triggerRef}
+        // Opening is an interaction after the trigger mounts; keep its menu in the modal layer.
+        portalContainer={triggerRef.current?.closest(".wf-property-editor-dialog") ?? undefined}
         open={open}
         className="wf-syntax-picker-menu"
         minWidth={iconOnly ? 176 : 0}
@@ -1710,7 +1727,7 @@ export function SyntaxPicker({
                 aria-label={unavailableReason ? `${optionLabel} — ${unavailableReason}` : optionLabel}
                 aria-selected={selectedOption}
                 aria-disabled={unavailableReason ? true : undefined}
-                disabled={!!unavailableReason}
+                disabled={disabled || !!unavailableReason}
                 title={unavailableReason ?? undefined}
                 tabIndex={-1}
                 key={descriptor.type}

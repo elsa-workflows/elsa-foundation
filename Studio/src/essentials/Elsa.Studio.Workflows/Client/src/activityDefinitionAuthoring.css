@@ -1,27 +1,47 @@
+.ad-draft-editor .ad-draft-editor-toolbar {
+  min-width: 0;
+  flex: 0 0 auto;
+  padding: .75rem 1rem;
+  border-bottom: 1px solid var(--studio-edge-subtle);
+  background: var(--studio-surface);
+}
+
+.ad-draft-editor .ad-workbench-header {
+  display: flex;
+  min-width: 0;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.ad-draft-identity { display: flex; flex: 1 1 18rem; min-width: 0; align-items: center; gap: .75rem; }
+.ad-draft-heading { flex: 1 1 0; min-width: 0; }
+.ad-draft-editor .ad-draft-heading h1 { margin: 0; font-size: var(--studio-section-title-size); line-height: 1.35; overflow-wrap: anywhere; }
+.ad-draft-editor .ad-draft-back { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 2.5rem; height: 2.5rem; margin: 0; padding: 0; border-radius: var(--studio-radius); }
+.ad-draft-back:hover:not(:disabled) { background: var(--studio-surface-muted); }
+.ad-draft-back:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
+.ad-draft-context { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin-top: .2rem; color: var(--studio-text-muted); font-size: var(--studio-label-size); }
+.ad-draft-context .ad-save-chip { min-height: 0; padding: 0; border-radius: 0; background: transparent; font-weight: 500; }
+.ad-draft-context .ad-save-chip.is-saved,
+.ad-draft-context .ad-save-chip.is-published { color: var(--studio-text-muted); }
+
 .ad-authoring-toolbar-actions {
+  /* Columns mirror publication, Test Run, Save now and Advanced; update them when adding actions. */
+  display: grid;
+  grid-template-columns: minmax(0, 16rem) repeat(3, max-content);
   flex: 0 0 auto;
   max-width: 100%;
-  align-items: flex-start;
-  flex-wrap: wrap;
+  align-items: start;
   justify-content: flex-end;
 }
 
-.ad-publication-toolbar {
-  display: grid;
-  grid-template-rows: 2.4rem minmax(1.5rem, auto);
-  gap: .25rem;
-  flex: 0 0 16rem;
-  width: 16rem;
-  max-width: 100%;
-  min-width: 0;
-}
+/* Status occupies its own final row, so feedback never moves the action targets. */
+.ad-publication-toolbar { display: contents; }
 
-.ad-draft-editor.is-graph-designer .ad-draft-editor-toolbar,
-.ad-draft-editor.is-graph-designer .ad-workbench-header {
-  align-items: flex-start;
-}
-
-.ad-draft-heading { flex: 1 1 0; min-width: 0; }
 .ad-authoring-toolbar-actions > button,
 .ad-publication-toolbar-trigger,
 .ad-authoring-advanced > summary {
@@ -41,13 +61,17 @@
 }
 
 .ad-publication-toolbar-trigger {
-  width: 100%;
+  /* Fit the longest review label without shifting the following actions. */
+  width: 16rem;
+  max-width: 100%;
   border-color: var(--studio-accent);
   color: var(--studio-accent-text);
   background: var(--studio-accent);
 }
 
 .ad-publication-toolbar-status {
+  order: 1;
+  grid-column: 1 / -1;
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
   overflow-wrap: anywhere;
@@ -115,14 +139,16 @@
 
 @media (max-width: 850px) {
   .ad-workbench-header { flex-direction: column; }
+  .ad-draft-identity { flex-basis: 100%; }
   .ad-authoring-toolbar-actions { justify-content: flex-start; }
-  .ad-draft-editor.is-graph-designer .ad-draft-editor-toolbar { flex-wrap: wrap; }
-  .ad-draft-editor.is-graph-designer .ad-workbench-header { flex-basis: 100%; }
 }
 
 @media (max-width: 600px) {
-  .ad-draft-editor.is-graph-designer .ad-workbench-header { width: 100%; }
-  .ad-publication-toolbar { width: 100%; }
+  .ad-draft-editor .ad-draft-heading h1 { min-height: 2lh; }
+  .ad-draft-editor .ad-authoring-toolbar-actions { display: grid; width: 100%; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+  .ad-authoring-toolbar-actions .ad-publication-toolbar-trigger { grid-column: 1 / -1; width: 100%; max-width: none; }
+  .ad-authoring-toolbar-actions > button,
+  .ad-authoring-advanced > summary { min-width: 0; padding: .45rem .35rem; gap: .25rem; font-size: var(--studio-label-size); }
 }
 
 @media (max-width: 560px) {

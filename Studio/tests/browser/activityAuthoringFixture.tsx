@@ -49,7 +49,7 @@ export function ActivityAuthoringFixture() {
         ] };
         if (url === "/fixture/drafts/quote-draft") return structuredClone(draft.current);
         if (url === "/fixture/definitions/quote-activity") return {
-          definition: { definitionId: "quote-activity", activityTypeKey: "elsa.user.quote", tenantId: "browser-fixture", displayName: "Prepare order quote", category: "Commerce", description: "A reusable quote activity.", contentAuthority: { kind: "Design", authorityKey: "elsa.activity-design" }, headVersionId: null, recommendedVersionId: null },
+          definition: { definitionId: "quote-activity", activityTypeKey: "elsa.user.quote", tenantId: "browser-fixture", displayName: parameters.get("name") ?? "Prepare order quote", category: "Commerce", description: "A reusable quote activity.", contentAuthority: { kind: "Design", authorityKey: "elsa.activity-design" }, headVersionId: null, recommendedVersionId: null },
           lifecycle: { draftCount: 1, versionCount: 0, head: null, recommendation: null }, actions: [], updatedAt: timestamp
         };
         if (url === "/fixture/authoring-capabilities" && parameters.get("capabilities") === "unavailable") throw new Error("Authoring capabilities unavailable in this fixture scenario");
