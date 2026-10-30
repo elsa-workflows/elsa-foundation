@@ -1,0 +1,92 @@
+[
+  {
+    "path": "Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.Tests.dll",
+    "sha256": "6a28d737c25e926ea89d6f78b52411b16688042040ecaee27841fb38c386586b",
+    "versions": [
+      "1.0.0+f6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1"
+    ],
+    "sha256AfterTesting": "6a28d737c25e926ea89d6f78b52411b16688042040ecaee27841fb38c386586b",
+    "unchangedAfterTesting": true
+  },
+  {
+    "path": "Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.dll",
+    "sha256": "98c9cc27dbc5ade2c12f1317ea3f525d8412f170df5a61eef2d29a38032ef0e1",
+    "versions": [
+      "1.0.0+f6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1"
+    ],
+    "sha256AfterTesting": "98c9cc27dbc5ade2c12f1317ea3f525d8412f170df5a61eef2d29a38032ef0e1",
+    "unchangedAfterTesting": true
+  },
+  {
+    "path": "Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Core.dll",
+    "sha256": "440e18e0e0fc9e2844a74f1b698ea135bb6f3409674c0bc530637223fcfb1124",
+    "versions": [
+      "1.0.0+f6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1"
+    ],
+    "sha256AfterTesting": "440e18e0e0fc9e2844a74f1b698ea135bb6f3409674c0bc530637223fcfb1124",
+    "unchangedAfterTesting": true
+  },
+  {
+    "path": "Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+    "sha256": "c7930cabf227e011c89d9bb0092753240130b6e1b81d2ac2d40bd255fda132e0",
+    "versions": [
+      "1.0.0+f6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1"
+    ],
+    "sha256AfterTesting": "c7930cabf227e011c89d9bb0092753240130b6e1b81d2ac2d40bd255fda132e0",
+    "unchangedAfterTesting": true
+  },
+  {
+    "path": "Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.dll",
+    "sha256": "8ec1c2d9e45a86d51f4cf48bbfe74fcae51552de861175a384e251ed6635125d",
+    "versions": [
+      "1.0.0+f6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1"
+    ],
+    "sha256AfterTesting": "8ec1c2d9e45a86d51f4cf48bbfe74fcae51552de861175a384e251ed6635125d",
+    "unchangedAfterTesting": true
+  },
+  {
+    "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.dll",
+    "sha256": "98c9cc27dbc5ade2c12f1317ea3f525d8412f170df5a61eef2d29a38032ef0e1",
+    "versions": [
+      "1.0.0+f6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1"
+    ],
+    "sha256AfterTesting": "98c9cc27dbc5ade2c12f1317ea3f525d8412f170df5a61eef2d29a38032ef0e1",
+    "unchangedAfterTesting": true
+  },
+  {
+    "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Core.dll",
+    "sha256": "440e18e0e0fc9e2844a74f1b698ea135bb6f3409674c0bc530637223fcfb1124",
+    "versions": [
+      "1.0.0+f6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1"
+    ],
+    "sha256AfterTesting": "440e18e0e0fc9e2844a74f1b698ea135bb6f3409674c0bc530637223fcfb1124",
+    "unchangedAfterTesting": true
+  },
+  {
+    "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll",
+    "sha256": "87d3cc744dabb4066a2c8a6978ebba862cc545a0a0c3f0ddae3d035b152b166d",
+    "versions": [
+      "1.0.0+f6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1"
+    ],
+    "sha256AfterTesting": "87d3cc744dabb4066a2c8a6978ebba862cc545a0a0c3f0ddae3d035b152b166d",
+    "unchangedAfterTesting": true
+  },
+  {
+    "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+    "sha256": "c7930cabf227e011c89d9bb0092753240130b6e1b81d2ac2d40bd255fda132e0",
+    "versions": [
+      "1.0.0+f6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1"
+    ],
+    "sha256AfterTesting": "c7930cabf227e011c89d9bb0092753240130b6e1b81d2ac2d40bd255fda132e0",
+    "unchangedAfterTesting": true
+  },
+  {
+    "path": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.dll",
+    "sha256": "8ec1c2d9e45a86d51f4cf48bbfe74fcae51552de861175a384e251ed6635125d",
+    "versions": [
+      "1.0.0+f6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1"
+    ],
+    "sha256AfterTesting": "8ec1c2d9e45a86d51f4cf48bbfe74fcae51552de861175a384e251ed6635125d",
+    "unchangedAfterTesting": true
+  }
+]

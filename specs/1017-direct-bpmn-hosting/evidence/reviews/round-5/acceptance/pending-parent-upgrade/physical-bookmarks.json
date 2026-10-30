@@ -1,0 +1,19 @@
+[
+  {
+    "bookmarkId": "review-event-3:attempt:1:trigger:1",
+    "workflowExecutionId": "wfexec:start:v1:a7203484cd6ef8cf324a6db6e3f24d710a922645598845d5b95aba68ae70a121",
+    "activityExecutionId": "review-event-3",
+    "executableNodeId": "wait",
+    "resumeTargetId": "wait:resume-target:event",
+    "stimulusType": "Event",
+    "stimulusHash": "sha256:117a36044b0fb340a27df25053d8582ecd8b2d1de6e24de93c2481374cdb0f52",
+    "payload": null,
+    "metadata": {
+      "runtime.schedulerWorkItemId": "053463f42f1b9460:create-bookmark:review-event-3:attempt:1:trigger:1",
+      "runtime.commandId": "a96c5f739db728c0:create-bookmark:review-event-3:attempt:1:trigger:1",
+      "runtime.reason": "ActivitySuspended"
+    },
+    "createdAt": "2026-10-30T23:38:49.852447+00:00",
+    "expiresAt": null
+  }
+]

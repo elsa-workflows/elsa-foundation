@@ -1,0 +1,79 @@
+Runtime assembly: 1.0.0+1e707d58fc2148be3715d50616dfdb69dc82ae65
+Runtime file: /private/tmp/elsa-2898-full-pr-r5-standards/reproduction-probe/bin/Release/net10.0/Elsa.Workflows.Runtime.dll
+Elsa.Workflows.Runtime.Core: 1.0.0+1e707d58fc2148be3715d50616dfdb69dc82ae65
+Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore: 1.0.0+1e707d58fc2148be3715d50616dfdb69dc82ae65
+missing typed payload control: Elsa.Workflows.Runtime.Core.Exceptions.RuntimeSchedulerWorkUnavailableException inner= message=The scheduler item is not a supported model input.
+   at Elsa.Workflows.Runtime.Services.Executions.RuntimeExecutionProtocolSelector.SelectAsync(RuntimeSchedulerWorkItem work, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/RuntimeExecutionProtocolSelector.cs:line 38
+   at Program.<>c__DisplayClass0_0.<<<Main>$>g__Inspect|3>d.MoveNext() in /private/tmp/elsa-2898-full-pr-r5-standards/reproduction-probe/Program.cs:line 46
+malformed retained owned command: System.Text.Json.JsonException inner= message=The JSON value could not be converted to Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionCommand. Path: $ | LineNumber: 0 | BytePositionInLine: 25.
+   at System.Text.Json.ThrowHelper.ThrowJsonException_DeserializeUnableToConvertValue(Type propertyType)
+   at System.Text.Json.Serialization.Converters.ObjectWithParameterizedConstructorConverter`1.OnTryRead(Utf8JsonReader& reader, Type typeToConvert, JsonSerializerOptions options, ReadStack& state, T& value)
+   at System.Text.Json.Serialization.JsonConverter`1.TryRead(Utf8JsonReader& reader, Type typeToConvert, JsonSerializerOptions options, ReadStack& state, T& value, Boolean& isPopulatedValue)
+   at System.Text.Json.Serialization.JsonConverter`1.ReadCore(Utf8JsonReader& reader, T& value, JsonSerializerOptions options, ReadStack& state)
+   at System.Text.Json.Serialization.Metadata.JsonTypeInfo`1.Deserialize(Utf8JsonReader& reader, ReadStack& state)
+   at System.Text.Json.JsonSerializer.ReadFromSpan[TValue](ReadOnlySpan`1 utf8Json, JsonTypeInfo`1 jsonTypeInfo, Nullable`1 actualByteCount)
+   at System.Text.Json.JsonSerializer.Deserialize[TValue](JsonElement element, JsonSerializerOptions options)
+   at Elsa.Workflows.Runtime.Services.Executions.RuntimeExecutionProtocolSelector.SelectAsync(RuntimeSchedulerWorkItem work, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/RuntimeExecutionProtocolSelector.cs:line 42
+   at Program.<>c__DisplayClass0_0.<<<Main>$>g__Inspect|3>d.MoveNext() in /private/tmp/elsa-2898-full-pr-r5-standards/reproduction-probe/Program.cs:line 46
+public drainer: System.Text.Json.JsonException inner= message=The JSON value could not be converted to Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionCommand. Path: $ | LineNumber: 0 | BytePositionInLine: 25.
+   at System.Text.Json.ThrowHelper.ThrowJsonException_DeserializeUnableToConvertValue(Type propertyType)
+   at System.Text.Json.Serialization.Converters.ObjectWithParameterizedConstructorConverter`1.OnTryRead(Utf8JsonReader& reader, Type typeToConvert, JsonSerializerOptions options, ReadStack& state, T& value)
+   at System.Text.Json.Serialization.JsonConverter`1.TryRead(Utf8JsonReader& reader, Type typeToConvert, JsonSerializerOptions options, ReadStack& state, T& value, Boolean& isPopulatedValue)
+   at System.Text.Json.Serialization.JsonConverter`1.ReadCore(Utf8JsonReader& reader, T& value, JsonSerializerOptions options, ReadStack& state)
+   at System.Text.Json.Serialization.Metadata.JsonTypeInfo`1.Deserialize(Utf8JsonReader& reader, ReadStack& state)
+   at System.Text.Json.JsonSerializer.ReadFromSpan[TValue](ReadOnlySpan`1 utf8Json, JsonTypeInfo`1 jsonTypeInfo, Nullable`1 actualByteCount)
+   at System.Text.Json.JsonSerializer.Deserialize[TValue](JsonElement element, JsonSerializerOptions options)
+   at Elsa.Workflows.Runtime.Services.Executions.RuntimeExecutionProtocolSelector.SelectAsync(RuntimeSchedulerWorkItem work, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/RuntimeExecutionProtocolSelector.cs:line 42
+   at Elsa.Workflows.Runtime.Services.Scheduler.WorkflowSchedulerDrainer.ValidateProtocolBeforeClaimAsync(RuntimeSchedulerWorkItem item, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs:line 586
+   at Program.<>c__DisplayClass0_0.<<<Main>$>g__Claim|1>d.MoveNext() in /private/tmp/elsa-2898-full-pr-r5-standards/reproduction-probe/Program.cs:line 29
+--- End of stack trace from previous location ---
+   at Elsa.Workflows.Runtime.Services.Scheduler.WorkflowSchedulerDrainer.AcquireNextAsync(String workflowExecutionId, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs:line 556
+   at Elsa.Workflows.Runtime.Services.Scheduler.WorkflowSchedulerDrainer.DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs:line 162
+   at Program.<Main>$(String[] args) in /private/tmp/elsa-2898-full-pr-r5-standards/reproduction-probe/Program.cs:line 36
+Public drainer preclaim validation calls=1, claim mutations=0
+provider marker failure: Microsoft.EntityFrameworkCore.DbUpdateException inner=Microsoft.Data.Sqlite.SqliteException message=An error occurred while saving the entity changes. See the inner exception for details.
+   at Microsoft.EntityFrameworkCore.Update.ReaderModificationCommandBatch.ExecuteAsync(IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Update.Internal.BatchExecutor.ExecuteAsync(IEnumerable`1 commandBatches, IRelationalConnection connection, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalDatabase.SaveChangesAsync(IList`1 entries, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(IList`1 entriesToSave, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.ChangeTracking.Internal.StateManager.SaveChangesAsync(StateManager stateManager, Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync(Boolean acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointCommitStore.<>c__DisplayClass21_0.<<CommitCoreAsync>g__CommitNewAsync|0>d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs:line 394
+--- End of stack trace from previous location ---
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointCommitStore.<>c__DisplayClass21_0.<<CommitCoreAsync>g__CommitNewAsync|0>d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs:line 426
+--- End of stack trace from previous location ---
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointCommitStore.<>c__DisplayClass21_0.<<CommitCoreAsync>g__CommitNewAsync|0>d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs:line 426
+--- End of stack trace from previous location ---
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointCommitStore.<>c__DisplayClass21_1.<<CommitCoreAsync>g__ExecuteCheckpointAsync|2>d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs:line 251
+--- End of stack trace from previous location ---
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointCommitStore.CommitCoreAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs:line 255
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRuntimeCheckpointCommitStore.CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs:line 149
+   at ProviderProbe.RunAsync() in /private/tmp/elsa-2898-full-pr-r5-standards/reproduction-probe/ProviderProbe.cs:line 41
+marker fault triggered=True
+elsa_runtime_model_execution count=0
+elsa_runtime_model_input count=0
+elsa_runtime_checkpoint_commit count=0
+same valid commit without provider fault=RuntimeCheckpointCommitStoreResult { PendingPostCommitWorkIds = System.String[], ConsumedSchedulerWorkItemIds = System.String[] }
+physical EF queue drainer: System.Text.Json.JsonException inner= message=The JSON value could not be converted to Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionCommand. Path: $ | LineNumber: 0 | BytePositionInLine: 25.
+   at System.Text.Json.ThrowHelper.ThrowJsonException_DeserializeUnableToConvertValue(Type propertyType)
+   at System.Text.Json.Serialization.Converters.ObjectWithParameterizedConstructorConverter`1.OnTryRead(Utf8JsonReader& reader, Type typeToConvert, JsonSerializerOptions options, ReadStack& state, T& value)
+   at System.Text.Json.Serialization.JsonConverter`1.TryRead(Utf8JsonReader& reader, Type typeToConvert, JsonSerializerOptions options, ReadStack& state, T& value, Boolean& isPopulatedValue)
+   at System.Text.Json.Serialization.JsonConverter`1.ReadCore(Utf8JsonReader& reader, T& value, JsonSerializerOptions options, ReadStack& state)
+   at System.Text.Json.Serialization.Metadata.JsonTypeInfo`1.Deserialize(Utf8JsonReader& reader, ReadStack& state)
+   at System.Text.Json.JsonSerializer.ReadFromSpan[TValue](ReadOnlySpan`1 utf8Json, JsonTypeInfo`1 jsonTypeInfo, Nullable`1 actualByteCount)
+   at System.Text.Json.JsonSerializer.Deserialize[TValue](JsonElement element, JsonSerializerOptions options)
+   at Elsa.Workflows.Runtime.Services.Executions.RuntimeExecutionProtocolSelector.SelectAsync(RuntimeSchedulerWorkItem work, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/RuntimeExecutionProtocolSelector.cs:line 42
+   at Elsa.Workflows.Runtime.Services.Scheduler.WorkflowSchedulerDrainer.ValidateProtocolBeforeClaimAsync(RuntimeSchedulerWorkItem item, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs:line 586
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfSchedulerWorkQueueStore.<>c__DisplayClass26_0.<<ClaimAsync>b__0>d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfSchedulerWorkQueueStore.cs:line 341
+--- End of stack trace from previous location ---
+   at Elsa.Persistence.EntityFramework.EfWriteRetry.<>c__DisplayClass9_0`1.<<RunAsync>b__0>d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/EfWriteRetry.cs:line 78
+--- End of stack trace from previous location ---
+   at Elsa.Persistence.EntityFramework.EfWriteRetry.RunUntilSettledAsync[T](DbContext context, Func`1 attempt, Func`2 exhausted, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/EfWriteRetry.cs:line 129
+   at Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfSchedulerWorkQueueStore.ClaimAsync(RuntimeSchedulerWorkClaimRequest request, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfSchedulerWorkQueueStore.cs:line 334
+   at Elsa.Workflows.Runtime.Services.Scheduler.WorkflowSchedulerDrainer.AcquireNextAsync(String workflowExecutionId, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs:line 556
+   at Elsa.Workflows.Runtime.Services.Scheduler.WorkflowSchedulerDrainer.DrainAsync(RuntimeSchedulerDrainRequest request, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs:line 162
+   at ProviderProbe.RunAsync() in /private/tmp/elsa-2898-full-pr-r5-standards/reproduction-probe/ProviderProbe.cs:line 66
+physical queue retained: revision=1, owner=<null>, token=0

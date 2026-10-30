@@ -1,0 +1,188 @@
+info: CShells.AspNetCore.Extensions.ApplicationBuilderExtensions[0]
+      Configuring CShells middleware and endpoints
+info: CShells.AspNetCore.Extensions.ApplicationBuilderExtensions[0]
+      CShells middleware and endpoints configured successfully
+warn: Microsoft.EntityFrameworkCore.Model.Validation[30000]
+      The entity type 'OpenIddictEntityFrameworkCoreApplication' is configured to use schema 'Identity', but SQLite does not support schemas. This configuration will be ignored by the SQLite provider.
+warn: Microsoft.EntityFrameworkCore.Model.Validation[30000]
+      The entity type 'OpenIddictEntityFrameworkCoreAuthorization' is configured to use schema 'Identity', but SQLite does not support schemas. This configuration will be ignored by the SQLite provider.
+warn: Microsoft.EntityFrameworkCore.Model.Validation[30000]
+      The entity type 'OpenIddictEntityFrameworkCoreScope' is configured to use schema 'Identity', but SQLite does not support schemas. This configuration will be ignored by the SQLite provider.
+warn: Microsoft.EntityFrameworkCore.Model.Validation[30000]
+      The entity type 'OpenIddictEntityFrameworkCoreToken' is configured to use schema 'Identity', but SQLite does not support schemas. This configuration will be ignored by the SQLite provider.
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://127.0.0.1:53821
+info: Elsa.Workbench.Readiness.DefaultShellWarmup[0]
+      Preparing default shell default after the server began listening
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Development
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: /tmp/elsa-2898-full-pr-r5-acceptance/second-start-control/host
+info: CShells.Features.RuntimeFeatureCatalog[0]
+      Committed runtime feature catalog generation 1 with 121 feature(s): DiagnosticsOpenTelemetryEngineBridge, RuntimeFaultStackTrace, ActivitiesBpmn, ActivitiesBpmnHosting, ActivitiesBpmnHostingApi, ActivitiesBpmnInterchange, ActivitiesCompensation, ActivitiesControlFlow, ActivitiesDesignApi, ActivitiesDesignEntityFrameworkCore, ActivitiesDesignReconciliation, ClrActivityReconciliation, ActivitiesDispatchWorkflowDesign, ActivitiesDispatchWorkflowRuntime, ActivitiesFlowchart, ActivitiesGraphDesign, ActivitiesGraphRuntime, ActivitiesHttp, ActivitiesPrimitives, ActivitiesRuntime, BackgroundActivities, ActivitiesScheduling, ActivitiesSequence, FoundationAgentAbstractions, FoundationAgentApi, GitHubCopilotAgent, FoundationWorkflowsAgent, ApiCapabilities, AttentionApi, MemoryCache, Connections, ConnectionsApi, ConnectionsDesign, ConnectionsWorkflows, DiagnosticsOpenTelemetry, DiagnosticsOpenTelemetryEntityFrameworkCore, DiagnosticsStructuredLogs, DiagnosticsStructuredLogsEntityFrameworkCore, EtlDesign, EtlDesignApi, EtlDesignEntityFrameworkCore, EtlRuntimeEntityFrameworkCore, EtlRuntime, EtlRuntimeApi, EtlWorkflowsDesign, EtlWorkflowsRuntime, Events, Expressions, ExpressionsApi, JavaScriptExpressions, JavaScriptJintEngine, JavaScriptRenderingEndpoints, JavaScriptRendering, Liquid, FoundationIdentityAbstractions, FoundationIdentityApi, FoundationIdentityAspNetCoreIdentity, FoundationIdentityAspNetCoreIdentityEntityFrameworkCore, FoundationIdentityOidc, FoundationIdentityOpenIddict, IdentityIamEntityFrameworkCore, IdentityProviderConfigurationEntityFrameworkCore, Http, HttpJavaScript, DatabaseDistributedLocking, FileSystemDistributedLocking, Mediator, ModularityApi, ModularityAttention, Primitives, RulesRuntimeEntityFrameworkCore, RulesRuntime, RulesWorkflowsDesign, RulesWorkflowsRuntime, Secrets, SecretsAttention, SecretsApi, SecretsEntityFrameworkCore, SecretsWorkflows, Serialization.Newtonsoft, Serialization, StudioPreferences, StudioPreferencesApi, StudioPreferencesEntityFrameworkCore, Tasks, WorkflowsDashboard, WorkflowsDashboardEntityFrameworkCore, WorkflowsDesignApi, JavaScriptWorkflowsDesign, WorkflowsDesignEntityFrameworkCore, JsonWorkflowReconciliation, WorkflowDesignValidations, WorkflowsExecutionEvidence, WorkflowsPublishing, WorkflowsPublishingApi, WorkflowsPublishingEntityFrameworkCore, WorkflowsRuntimeTracing, WorkflowsRuntimeAttention, WorkflowsActivationChannels, WorkflowsRuntimeApi, WorkflowsRuntimeTriggers, WorkflowsRuntimeCheckpointPersistence, WorkflowsRuntimeDistributed, WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence, WorkflowsRuntimeDistributedEntityFrameworkCorePersistence, WorkflowsRuntimeHttp, JavaScriptEndpoints, JavaScriptActivities, WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence, WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence, WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence, WorkflowsRuntimeEntityFrameworkCore, WorkflowsRuntimeOperationalStateEntityFrameworkCorePersistence, WorkflowsRuntimeAlterationEntityFrameworkCorePersistence, WorkflowsRuntimeWorkflowExecutionEntityFrameworkCorePersistence, WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence, JsonWorkflowArtifactReconciliation, WorkflowsRuntimeReferenceGarbageCollection, WorkflowsRuntimeResumption, WorkflowsRuntimeRecurringTriggers, WorkflowsRuntimeScheduling
+info: Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding.EfCoreIdentitySeeder[0]
+      Seeded EF Core ASP.NET Core Identity administrator account. Sign in at /_elsa/identity/login with username 'admin' (development/demo only).
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Serialization.SystemText.Services.JsonPayloadConvertersInitializingStartupTask completed with outcome success after 6.584 ms
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Workflows.Runtime.Services.Recovery.ValidateRuntimeRecoveryContinuationCodecStartupTask completed with outcome success after 0.053 ms
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Workflows.Runtime.Services.Executions.RuntimeExecutionProtocolsStartupTask completed with outcome success after 3.958 ms
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Activities.Bpmn.Internal.BpmnLegacyFaultWorkRecovery completed with outcome success after 133.444 ms
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Activities.Runtime.Tasks.RegisterActivityTypesStartupTask completed with outcome success after 803.362 ms
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Serialization.SystemText.Startup.SeedWellKnownTypesStartupTask completed with outcome success after 1.462 ms
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Workflows.Runtime.Api.Services.ValidateActivityStateViewProjectorsStartupTask completed with outcome success after 0.051 ms
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Workflows.Runtime.Services.ActivityExecutions.ValidateActivityExecutionHierarchyCursorCodecStartupTask completed with outcome success after 0.016 ms
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Shell 'default#1' path prefix: '(none)', route prefix: '(none)', combined: '(none)'
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering middleware for 1 feature(s) in shell 'default#1'
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': bpmn/executions/{id}/commands/{request}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': bpmn/executions/{id}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': bpmn/artifacts
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': bpmn/executions/{id}/retry-service
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': bpmn/executions/{id}/cancel
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': bpmn/executions/{id}/work/{invocation}/complete
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': bpmn/executions/{id}/incidents
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': bpmn/executions/{id}/work
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': bpmn/executions
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /capabilities
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/identity/bootstrap
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/identity/capabilities
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/identity/session
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/identity/token
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/identity/challenge/{provider}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/identity/logout/{provider}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/identity/refresh
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/identity/login
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/identity/login
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': modularity/features/apply
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': modularity/features
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/activation-slots/{definitionId}/{slotName}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/activation-slots/{definitionId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/descendants
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/layout
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/{workflowExecutionId}/activity-executions
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/state-view
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/value-evidence/{evidenceId}/payload
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/alteration-plans/{planId}/cancel
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/alteration-plans/{planId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/alteration-plans/{planId}/jobs/{jobId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/alteration-plans/{planId}/jobs/page
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/alteration-plans
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/diagnostics/settings
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/diagnostics/settings
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/dispatches/{dispatchId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/dispatches
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/dispatches/{dispatchId}/redrive
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/executables/{artifactId}/execute
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/executables/{artifactId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/executables
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/executables/{artifactId}/provenance
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/{workflowExecutionId}/incidents
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/{workflowExecutionId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/{workflowExecutionId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/page
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/stimuli
+info: CShells.Lifecycle.ShellLifecycleLogger[1000]
+      Shell default#1 transitioned Initializing → Active
+info: CShells.Lifecycle.ShellRegistry[0]
+      Activated shell default#1 with 24 feature(s)
+info: Elsa.Workbench.Readiness.DefaultShellWarmup[0]
+      Default shell default generation 1 is ready after 6784.062 ms
+warn: Elsa.Workflows.Runtime.Services.Checkpoints.RuntimePostCommitOutboxProcessor[67901]
+      Runtime post-commit intent retry deferred. OutboxItemId=model-input:f38b12d000866bcca80e0e1bfe619de0c3189e250263692bec1bd5aaa2ea1644:bpmn-cancel-native:34f801f01ed176501c76259e731d806f3b41684dc2f2f0a4eae567b7c5ccee65 IntentId=bpmn-cancel-native:34f801f01ed176501c76259e731d806f3b41684dc2f2f0a4eae567b7c5ccee65 IntentKind=Elsa.Bpmn.CancelNativeWork.v1 DispatchId=(null) DeliveryAttemptCount=1 NextAvailableAt=10/30/2026 23:40:11 +00:00
+      Elsa.Workflows.Runtime.Core.Exceptions.RuntimePostCommitDeliveryException: Cancellation of the original native worker remains owed.
+         at Elsa.Activities.Bpmn.Internal.BpmnNativeWorkDelivery.HandleCoreAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnNativeWorkDelivery.cs:line 60
+         at Elsa.Activities.Bpmn.Internal.BpmnNativeWorkDelivery.HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnNativeWorkDelivery.cs:line 18
+         at Elsa.Workflows.Runtime.Services.Checkpoints.RuntimePostCommitOutboxProcessor.<>c__DisplayClass31_0.<<ProcessClaimedItemAsync>b__0>d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitOutboxProcessor.cs:line 264
+      --- End of stack trace from previous location ---
+         at Elsa.Workflows.Runtime.Services.Claims.FencedClaimLease`1.RunAsync[TResult](TClaim claim, Func`2 sideEffect, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Claims/FencedClaimLease.cs:line 84
+warn: Elsa.Workflows.Runtime.Services.Checkpoints.RuntimePostCommitOutboxProcessor[67901]
+      Runtime post-commit intent retry deferred. OutboxItemId=commit:bpmn-native-cancel:c944a04a4c76448cc50f38c7fe58eaaca9c33a1e05adcbd9a9cace406d7855e3:cancel:bpmn-native-result:8d28faff74704bcaf15fb18d9da85a568978e7ebc3ea0ad2a4a7490478858d53 IntentId=bpmn-native-result:8d28faff74704bcaf15fb18d9da85a568978e7ebc3ea0ad2a4a7490478858d53 IntentKind=Elsa.Bpmn.NativeWorkResult.v1 DispatchId=(null) DeliveryAttemptCount=1 NextAvailableAt=10/30/2026 23:40:13 +00:00
+      Elsa.Workflows.Runtime.Core.Exceptions.RuntimePostCommitDeliveryException: The native result is durably queued and remains owed until model consumption.
+         at Elsa.Activities.Bpmn.Internal.BpmnNativeWorkDelivery.HandleCoreAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnNativeWorkDelivery.cs:line 143
+         at Elsa.Activities.Bpmn.Internal.BpmnNativeWorkDelivery.HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnNativeWorkDelivery.cs:line 18
+         at Elsa.Workflows.Runtime.Services.Checkpoints.RuntimePostCommitOutboxProcessor.<>c__DisplayClass31_0.<<ProcessClaimedItemAsync>b__0>d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitOutboxProcessor.cs:line 264
+      --- End of stack trace from previous location ---
+         at Elsa.Workflows.Runtime.Services.Claims.FencedClaimLease`1.RunAsync[TResult](TClaim claim, Func`2 sideEffect, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Claims/FencedClaimLease.cs:line 84
+warn: Elsa.Workflows.Runtime.Services.Checkpoints.RuntimePostCommitOutboxProcessor[67901]
+      Runtime post-commit intent retry deferred. OutboxItemId=model-input:f38b12d000866bcca80e0e1bfe619de0c3189e250263692bec1bd5aaa2ea1644:bpmn-cancel-native:34f801f01ed176501c76259e731d806f3b41684dc2f2f0a4eae567b7c5ccee65 IntentId=bpmn-cancel-native:34f801f01ed176501c76259e731d806f3b41684dc2f2f0a4eae567b7c5ccee65 IntentKind=Elsa.Bpmn.CancelNativeWork.v1 DispatchId=(null) DeliveryAttemptCount=2 NextAvailableAt=10/30/2026 23:40:13 +00:00
+      Elsa.Workflows.Runtime.Core.Exceptions.RuntimePostCommitDeliveryException: The actual native terminal result has not settled the model cancellation.
+         at Elsa.Activities.Bpmn.Internal.BpmnNativeWorkDelivery.HandleCoreAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnNativeWorkDelivery.cs:line 70
+         at Elsa.Activities.Bpmn.Internal.BpmnNativeWorkDelivery.HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnNativeWorkDelivery.cs:line 18
+         at Elsa.Workflows.Runtime.Services.Checkpoints.RuntimePostCommitOutboxProcessor.<>c__DisplayClass31_0.<<ProcessClaimedItemAsync>b__0>d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitOutboxProcessor.cs:line 264
+      --- End of stack trace from previous location ---
+         at Elsa.Workflows.Runtime.Services.Claims.FencedClaimLease`1.RunAsync[TResult](TClaim claim, Func`2 sideEffect, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Claims/FencedClaimLease.cs:line 84
+info: Microsoft.Hosting.Lifetime[0]
+      Application is shutting down...
+info: CShells.Hosting.CShellsStartupHostedService[0]
+      CShells shutdown: draining 1 active shell(s).
+info: CShells.Lifecycle.ShellLifecycleLogger[1000]
+      Shell default#1 transitioned Active → Draining
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Removing endpoints for shell 'default#1' generation 1 (Draining)
+info: CShells.Lifecycle.ShellLifecycleLogger[1000]
+      Shell default#1 transitioned Draining → Drained
+info: CShells.Lifecycle.ShellLifecycleLogger[1000]
+      Shell default#1 transitioned Drained → Disposed

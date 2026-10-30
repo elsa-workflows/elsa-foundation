@@ -1,0 +1,191 @@
+{
+  "beforeModelRedrive": 8,
+  "afterModelRedrive": 8,
+  "afterExplicitPassivation": 0,
+  "replays": [
+    {
+      "ExecutionId": "bpmn:906eff42f4dfad4b85f1b3e63d28c2e6616d9bcb650fc0575f29c687f790b564",
+      "Replay": true,
+      "Pending": false,
+      "mailboxes": 0
+    },
+    {
+      "ExecutionId": "bpmn:1d0660ed97e53925194645feba97c1aba33bcaea1c0492f44df491471806fb42",
+      "Replay": true,
+      "Pending": false,
+      "mailboxes": 0
+    },
+    {
+      "ExecutionId": "bpmn:fa6e220be2333b647a27150bde13aa628fcbe1c43effe9f545ab91e52f5b29c8",
+      "Replay": true,
+      "Pending": false,
+      "mailboxes": 0
+    },
+    {
+      "ExecutionId": "bpmn:b5240a378c5ab03b66c91a7a5c0cc19a0386f0a938e680939c2b5abfdee96bc1",
+      "Replay": true,
+      "Pending": false,
+      "mailboxes": 0
+    },
+    {
+      "ExecutionId": "bpmn:f22e3cfac16fa3dc06684ff4f4f66e17ead9a77864098bd0cff97603c1bd25b9",
+      "Replay": true,
+      "Pending": false,
+      "mailboxes": 0
+    },
+    {
+      "ExecutionId": "bpmn:782a5c2398d8716fcd6f1212807e18ebf9b1cf115c593676ba8c07d96faeb892",
+      "Replay": true,
+      "Pending": false,
+      "mailboxes": 0
+    },
+    {
+      "ExecutionId": "bpmn:a17013e9d48ae28aab213c281cf8b5e813cab8cace393f8ca269067e622c52a5",
+      "Replay": true,
+      "Pending": false,
+      "mailboxes": 0
+    },
+    {
+      "ExecutionId": "bpmn:425f2d0bd63b75d2742cdfc40ca923bfd09d6a32c4289a7f129abdc904c7dff8",
+      "Replay": true,
+      "Pending": false,
+      "mailboxes": 0
+    }
+  ],
+  "modelRedrives": [
+    {
+      "id": "bpmn:906eff42f4dfad4b85f1b3e63d28c2e6616d9bcb650fc0575f29c687f790b564",
+      "status": "Accepted",
+      "terminalMetadata": null,
+      "mailboxes": 8
+    },
+    {
+      "id": "bpmn:1d0660ed97e53925194645feba97c1aba33bcaea1c0492f44df491471806fb42",
+      "status": "Accepted",
+      "terminalMetadata": null,
+      "mailboxes": 8
+    },
+    {
+      "id": "bpmn:fa6e220be2333b647a27150bde13aa628fcbe1c43effe9f545ab91e52f5b29c8",
+      "status": "Accepted",
+      "terminalMetadata": null,
+      "mailboxes": 8
+    },
+    {
+      "id": "bpmn:b5240a378c5ab03b66c91a7a5c0cc19a0386f0a938e680939c2b5abfdee96bc1",
+      "status": "Accepted",
+      "terminalMetadata": null,
+      "mailboxes": 8
+    },
+    {
+      "id": "bpmn:f22e3cfac16fa3dc06684ff4f4f66e17ead9a77864098bd0cff97603c1bd25b9",
+      "status": "Accepted",
+      "terminalMetadata": null,
+      "mailboxes": 8
+    },
+    {
+      "id": "bpmn:782a5c2398d8716fcd6f1212807e18ebf9b1cf115c593676ba8c07d96faeb892",
+      "status": "Accepted",
+      "terminalMetadata": null,
+      "mailboxes": 8
+    },
+    {
+      "id": "bpmn:a17013e9d48ae28aab213c281cf8b5e813cab8cace393f8ca269067e622c52a5",
+      "status": "Accepted",
+      "terminalMetadata": null,
+      "mailboxes": 8
+    },
+    {
+      "id": "bpmn:425f2d0bd63b75d2742cdfc40ca923bfd09d6a32c4289a7f129abdc904c7dff8",
+      "status": "Accepted",
+      "terminalMetadata": null,
+      "mailboxes": 8
+    }
+  ],
+  "passivateOnTerminal": true,
+  "before": 0,
+  "starts": [
+    {
+      "ExecutionId": "bpmn:906eff42f4dfad4b85f1b3e63d28c2e6616d9bcb650fc0575f29c687f790b564",
+      "Pending": false,
+      "lifecycle": "TerminalSettled",
+      "status": "Completed",
+      "queue": 0,
+      "mailboxes": 1
+    },
+    {
+      "ExecutionId": "bpmn:1d0660ed97e53925194645feba97c1aba33bcaea1c0492f44df491471806fb42",
+      "Pending": false,
+      "lifecycle": "TerminalSettled",
+      "status": "Completed",
+      "queue": 0,
+      "mailboxes": 2
+    },
+    {
+      "ExecutionId": "bpmn:fa6e220be2333b647a27150bde13aa628fcbe1c43effe9f545ab91e52f5b29c8",
+      "Pending": false,
+      "lifecycle": "TerminalSettled",
+      "status": "Completed",
+      "queue": 0,
+      "mailboxes": 3
+    },
+    {
+      "ExecutionId": "bpmn:b5240a378c5ab03b66c91a7a5c0cc19a0386f0a938e680939c2b5abfdee96bc1",
+      "Pending": false,
+      "lifecycle": "TerminalSettled",
+      "status": "Completed",
+      "queue": 0,
+      "mailboxes": 4
+    },
+    {
+      "ExecutionId": "bpmn:f22e3cfac16fa3dc06684ff4f4f66e17ead9a77864098bd0cff97603c1bd25b9",
+      "Pending": false,
+      "lifecycle": "TerminalSettled",
+      "status": "Completed",
+      "queue": 0,
+      "mailboxes": 5
+    },
+    {
+      "ExecutionId": "bpmn:782a5c2398d8716fcd6f1212807e18ebf9b1cf115c593676ba8c07d96faeb892",
+      "Pending": false,
+      "lifecycle": "TerminalSettled",
+      "status": "Completed",
+      "queue": 0,
+      "mailboxes": 6
+    },
+    {
+      "ExecutionId": "bpmn:a17013e9d48ae28aab213c281cf8b5e813cab8cace393f8ca269067e622c52a5",
+      "Pending": false,
+      "lifecycle": "TerminalSettled",
+      "status": "Completed",
+      "queue": 0,
+      "mailboxes": 7
+    },
+    {
+      "ExecutionId": "bpmn:425f2d0bd63b75d2742cdfc40ca923bfd09d6a32c4289a7f129abdc904c7dff8",
+      "Pending": false,
+      "lifecycle": "TerminalSettled",
+      "status": "Completed",
+      "queue": 0,
+      "mailboxes": 8
+    }
+  ],
+  "assemblies": [
+    {
+      "name": "Elsa.Activities.Bpmn.Core",
+      "source": "1.0.0\u002Bf6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1"
+    },
+    {
+      "name": "Elsa.Activities.Bpmn",
+      "source": "1.0.0\u002Bf6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime",
+      "source": "1.0.0\u002Bf6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+      "source": "1.0.0\u002Bf6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1"
+    }
+  ]
+}

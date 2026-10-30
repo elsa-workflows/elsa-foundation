@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-28
 
-**Status**: Implemented — prepared for this implementation merge only: round4 corrections and affected runtime/Studio qualification are evidenced. Round5, owner version magnitude, scan, required CI and protected/post-main delivery remain open.
+**Status**: In progress — full-PR round5 retains four P2 findings: terminal mailbox eviction, shared owned-envelope errors, model-only provider failures and actual old pending-parent fault recovery. Corrections, affected qualification and delivery gates remain open.
 
 **Input**: Deliver existing [#2898](https://github.com/elsa-workflows/elsa-foundation/issues/2898) within [program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892), after verified #2735 adoption: direct and embedded BPMN hosting, restart and operational races, real recoverable pipeline invocation, and supported human-task/incident commands. Preserve authoring and saved executions. Broader operational and Studio acceptance remains [#2907](https://github.com/elsa-workflows/elsa-foundation/issues/2907).
 

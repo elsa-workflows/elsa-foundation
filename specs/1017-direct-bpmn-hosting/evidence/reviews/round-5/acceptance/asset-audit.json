@@ -1,0 +1,12 @@
+{
+  "counts": {
+    "baseline/manifest.json": 104,
+    "reviews/round-4/qualification/manifest.json": 212,
+    "reviews/round-4/qualification/studio/manifest.json": 66,
+    "reviews/round-4/fault-recovery/manifest.json": 42,
+    "embedding/parallel-native-recovery/manifest.json": 52,
+    "pipeline/held-service-retry/manifest.json": 0
+  },
+  "total": 476,
+  "failures": []
+}

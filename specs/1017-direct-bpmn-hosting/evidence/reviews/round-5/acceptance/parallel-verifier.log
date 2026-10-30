@@ -1,0 +1,11 @@
+{
+  "sourceRevision": "c34c1f4e1f279c66598a5ab83a8c2cc05e9b4a72",
+  "actualParentPairs": 4,
+  "modelExecutionsCompleted": 8,
+  "wholeStoresVerified": 24,
+  "partialBranchesPreservedAcrossProcessLoss": true,
+  "singleLogicalJoins": 8,
+  "directEmbeddedTracesEqual": true,
+  "normalization": "Only tokens.producingWorkHandle: owning model ID or observed local human invocation mapped by exact element/binding/token/iteration.",
+  "etlOrStudioAcceptanceProved": false
+}
