@@ -90,6 +90,7 @@ test("a stale server proposal shows its terminal refusal and drains without anot
     await expect(stale.proposal).toHaveAttribute("data-status", "failed");
     await expect(stale.dock.getByLabel("Ask Weaver")).toBeEnabled();
     await expect(stale.dock).toHaveAttribute("aria-busy", "false");
+    await sendReadOnlyFollowup(page, stale);
     expect(await readNote(page.request)).toEqual(changed);
     const screenshot = testInfo.outputPath("stale-owner-refusal.png");
     await page.screenshot({ path: screenshot, fullPage: true });
@@ -153,34 +154,89 @@ test("a real Save A response delayed until after native Weaver B cannot release 
   } finally { release(); await page.unroute(saveURL); }
 });
 
-test("genuine approved-proposal expiry refuses without effects, drains and accepts a new prompt", async ({ page }, testInfo) => {
+test("a dropped real accepted acknowledgement response retries its exact receipt without another native edit", async ({ page }, testInfo) => {
+  await page.goto(`/workflows/definitions?definition=${encodeURIComponent(definitionId!)}`);
+  const node = page.locator(`.react-flow__node[data-id="${nodeId}"]`); await expect(node).toBeVisible();
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const before = await readDefinition(page.request); const priorPosition = await node.getAttribute("style");
+  const acknowledgements: unknown[] = []; let accepted: unknown; let executions = 0;
+  page.on("request", request => { if (request.method() === "POST" && request.url().endsWith("/execute")) executions++; });
+  await page.route("**/client-invocations/*/acknowledgements", async route => {
+    acknowledgements.push(route.request().postDataJSON());
+    if (acknowledgements.length !== 1) { await route.continue(); return; }
+    // The owning backend accepts the actual receipt. Only its browser response is lost.
+    const original = await route.fetch(); expect(original.ok()).toBe(true); accepted = await original.json();
+    expect(accepted).toMatchObject({ data: { executed: true, toolResult: { succeeded: true } } });
+    await route.abort("failed");
+  });
+  try {
+    await page.getByRole("button", { name: /^Weaver/ }).click();
+    const dock = page.getByRole("region", { name: "Weaver assistant" });
+    await dock.getByLabel("Ask Weaver").fill(JSON.stringify({ toolName: "workflow_set_designer_position", arguments: { activityId: nodeId, x: 480, y: 320 } }));
+    const sent = page.waitForResponse(response => response.url().endsWith("/messages") && response.request().method() === "POST");
+    await dock.getByRole("button", { name: "Send message" }).click(); const delivered = await sent; expect(delivered.ok()).toBe(true);
+    const proposal = dock.locator(".agent-proposal").first(); await expect(proposal).toHaveAttribute("data-status", "awaiting-approval");
+    await approveReviewed(page, proposal); await proposal.getByRole("button", { name: "Apply", exact: true }).click();
+    await expect(proposal.getByRole("button", { name: "Retry confirmation", exact: true })).toBeEnabled();
+    await expect(dock.getByLabel("Ask Weaver")).toBeDisabled();
+    await expect(node).toHaveAttribute("style", /translate\(480px, 320px\)/);
+    const confirmed = page.waitForResponse(response => response.url().endsWith("/acknowledgements") && response.request().method() === "POST");
+    await proposal.getByRole("button", { name: "Retry confirmation", exact: true }).click();
+    const retry = await confirmed; expect(retry.ok()).toBe(true); const retryResult = await retry.json();
+    expect(acknowledgements).toHaveLength(2); expect(acknowledgements[1]).toEqual(acknowledgements[0]); expect(executions).toBe(1);
+    await expect(proposal).toHaveAttribute("data-status", "executed");
+    await sendReadOnlyFollowup(page, { dock, messagesURL: delivered.url() });
+    expect((await readDefinition(page.request)).draft).toEqual(before.draft);
+    const screenshot = testInfo.outputPath("accepted-acknowledgement-response-recovered.png");
+    await page.screenshot({ path: screenshot, fullPage: true });
+    await testInfo.attach("accepted-acknowledgement-response-recovered", { path: screenshot, contentType: "image/png" });
+    await proposal.getByRole("button", { name: "Undo whole change" }).click(); await expect(node).toHaveAttribute("style", priorPosition!);
+    await testInfo.attach("exact-acknowledgement-retry", { body: JSON.stringify({ controlledRealResponseDrop: true, accepted, retryResult, acknowledgements, executions, persistedDraftUnchanged: true, wholeUndoRestored: true, sameSessionFollowupAccepted: true }, null, 2), contentType: "application/json" });
+  } finally { await page.unroute("**/client-invocations/*/acknowledgements"); }
+});
+
+test("genuine expiry before and after approval drains both retained outcomes without effects", async ({ page, context }, testInfo) => {
   test.setTimeout(8 * 60_000);
   const before = await readNote(page.request);
-  const prepared = await prepareNote(page, `Must never persist after expiry ${Date.now()}`);
-  const approved = await approveReviewed(page, prepared.proposal);
-  const expiresAt = Date.parse(approved.data.preparedInvocation.expiresAt);
-  expect(Number.isFinite(expiresAt)).toBe(true);
-  const waitMs = Math.max(0, expiresAt - Date.now() + 1000);
-  expect(waitMs).toBeLessThan(6 * 60_000);
-  const waitingStartedAt = new Date().toISOString();
-  // Real wall clock only: no fake clock, clock endpoint, altered proposal or accelerated lifetime.
-  await page.waitForTimeout(waitMs);
-  const expired = page.waitForResponse(response => response.url().endsWith("/execute") && response.request().method() === "POST");
-  await prepared.proposal.getByRole("button", { name: "Apply", exact: true }).click();
-  const response = await expired; expect(response.status()).toBe(409);
-  const terminal = await response.json(); expect(terminal.data).toMatchObject({ status: "expired", executed: false, toolResult: null });
-  await expect(prepared.proposal).toHaveAttribute("data-status", "expired");
+  // Prepare the unapproved proposal first, so the later approved proposal's actual expiry covers both.
+  const awaitingApproval = await prepareNote(page, `Never approve after expiry ${Date.now()}`);
+  const approvedPage = await context.newPage();
+  try {
+    const prepared = await prepareNote(approvedPage, `Never apply after expiry ${Date.now()}`);
+    const approved = await approveReviewed(approvedPage, prepared.proposal);
+    const expiresAt = Date.parse(approved.data.preparedInvocation.expiresAt);
+    expect(Number.isFinite(expiresAt)).toBe(true);
+    const waitMs = Math.max(0, expiresAt - Date.now() + 1000); expect(waitMs).toBeLessThan(6 * 60_000);
+    const waitingStartedAt = new Date().toISOString();
+    // One genuine wall-clock wait; no fake clock, altered proposal or accelerated lifetime.
+    await page.waitForTimeout(waitMs);
+    const approvalRefused = page.waitForResponse(response => response.url().endsWith("/approve") && response.request().method() === "POST");
+    await awaitingApproval.proposal.getByRole("button", { name: "Approve", exact: true }).click();
+    const first = await approvalRefused; expect(first.status()).toBe(409); const beforeApprovalTerminal = await first.json();
+    expect(beforeApprovalTerminal.data).toMatchObject({ status: "expired", executed: false, toolResult: null });
+    await expect(awaitingApproval.proposal).toHaveAttribute("data-status", "expired");
+    await sendReadOnlyFollowup(page, awaitingApproval);
+    const executionRefused = approvedPage.waitForResponse(response => response.url().endsWith("/execute") && response.request().method() === "POST");
+    await prepared.proposal.getByRole("button", { name: "Apply", exact: true }).click();
+    const second = await executionRefused; expect(second.status()).toBe(409); const afterApprovalTerminal = await second.json();
+    expect(afterApprovalTerminal.data).toMatchObject({ status: "expired", executed: false, toolResult: null });
+    await expect(prepared.proposal).toHaveAttribute("data-status", "expired");
+    await sendReadOnlyFollowup(approvedPage, prepared);
+    expect(await readNote(page.request)).toEqual(before);
+    const screenshot = testInfo.outputPath("genuine-expiry-refusal-and-recovery.png");
+    await page.screenshot({ path: screenshot, fullPage: true });
+    await testInfo.attach("genuine-expiry-refusal-and-recovery", { path: screenshot, contentType: "image/png" });
+    await testInfo.attach("genuine-expiry-no-effect", { body: JSON.stringify({ waitingStartedAt, approvedExpiresAt: approved.data.preparedInvocation.expiresAt, waitMs, actualAttemptAt: new Date().toISOString(), beforeApprovalTerminal, afterApprovalTerminal, before, after: await readNote(page.request), sameSessionFollowupsAccepted: true }, null, 2), contentType: "application/json" });
+  } finally { await approvedPage.close(); }
+});
+
+async function sendReadOnlyFollowup(page: Page, prepared: { dock: Locator; messagesURL: string }) {
   await expect(prepared.dock.getByLabel("Ask Weaver")).toBeEnabled();
   const next = page.waitForResponse(response => response.url() === prepared.messagesURL && response.request().method() === "POST");
-  await prepared.dock.getByLabel("Ask Weaver").fill("Summarize the admitted note context without changing it.");
+  await prepared.dock.getByLabel("Ask Weaver").fill("Summarize the admitted context without changing it.");
   await prepared.dock.getByRole("button", { name: "Send message" }).click(); expect((await next).ok()).toBe(true);
   await expect(prepared.dock).toHaveAttribute("aria-busy", "false");
-  expect(await readNote(page.request)).toEqual(before);
-  const screenshot = testInfo.outputPath("genuine-expiry-refusal-and-recovery.png");
-  await page.screenshot({ path: screenshot, fullPage: true });
-  await testInfo.attach("genuine-expiry-refusal-and-recovery", { path: screenshot, contentType: "image/png" });
-  await testInfo.attach("genuine-expiry-no-effect", { body: JSON.stringify({ waitingStartedAt, approvedExpiresAt: approved.data.preparedInvocation.expiresAt, waitMs, actualAttemptAt: new Date().toISOString(), terminal, before, after: await readNote(page.request), sameSessionMessagesURL: prepared.messagesURL }, null, 2), contentType: "application/json" });
-});
+}
 
 async function readNote(request: APIRequestContext) {
   const response = await request.get(backendPath("/_qualification/weaver/note")); expect(response.ok()).toBe(true);

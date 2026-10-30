@@ -4,11 +4,144 @@ import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
 import { createStudioRegistry } from "../../registry";
 import { createEndpointContext, StudioHttpError, type StudioAgentPreparedInvocation } from "../../../sdk";
-import { createAgentClient, type AgentClient } from "../../agent/agentClient";
+import { AgentExecutionError, createAgentClient, type AgentClient } from "../../agent/agentClient";
 import type { AgentStreamEvent } from "../../agent/agentTypes";
 import { WeaverSurface } from "../WeaverSurface";
 
 describe("WeaverSurface", () => {
+  it("retains a late automatic server receipt after Stop without reopening its cancelled turn", async () => {
+    const api = readyApi(); const client = readyClient(); const invocation = preparedInvocation(api);
+    invocation.executionLocation = "server"; invocation.client = null; invocation.requiresApproval = false;
+    client.bootstrap = vi.fn<AgentClient["bootstrap"]>(async () => ({ ...await readyClient().bootstrap(), policy: { ...(await readyClient().bootstrap()).policy, defaultAutonomyMode: "full-auto" } }));
+    let deliver!: (value: Awaited<ReturnType<AgentClient["executeProposal"]>>) => void;
+    client.executeProposal = vi.fn<AgentClient["executeProposal"]>(() => new Promise(resolve => { deliver = resolve; }));
+    const results: unknown[] = []; api.agent.onPromptResult(value => results.push(value)); let streams = 0;
+    const subscribeStream = ((_context, _url, emit) => {
+      if (++streams === 1) { emit({ type: "turn-started", turnId: "turn", maxSteps: 1 }); emit({ type: "proposal-created", proposalId: "proposal", messageId: "msg_1", proposal: { title: "Change", summary: "Review change.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } }); emit({ type: "review-requested", messageId: "msg_1" }); }
+      else emit({ type: "message-completed", messageId: "msg_1" });
+      return { close() {} };
+    }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "auto", requestId: "auto-request", message: "Change" }} />);
+    try {
+      await flushPromises(); expect(client.executeProposal).toHaveBeenCalledTimes(1); flushSync(() => buttonByText(container, "Stop")!.click()); await flushPromises();
+      const payload = { typeId: "sample.result", schemaVersion: "1", data: { value: 2 } };
+      deliver({ proposalId: "proposal", approvalStatus: "executed", executed: true, toolResult: { toolCallId: "call", toolName: "sample_change", succeeded: true, content: "Owner committed.", payload, receipt: { invocationId: "i", before: invocation.target!, after: { ...invocation.target!, revision: "r2" }, scope: "serverPersisted", evidence: payload } } }); await flushPromises();
+      expect(streams).toBe(1); expect(container.querySelector('[data-status="executed"]')).toBeTruthy(); expect(container.textContent).toContain("r2");
+      expect(results).toEqual([expect.objectContaining({ requestId: "auto-request", status: "cancelled" })]);
+    } finally { unmount(); }
+  });
+
+  it("refuses a late client202 after Stop before dispatch without replacing a newer turn", async () => {
+    const api = readyApi(); const client = readyClient(); const invocation = preparedInvocation(api);
+    const mutate = vi.fn(async () => ({ outcome: "applied" as const, summary: "Must not run." }));
+    api.agent.toolContracts.add({ id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], executionLocation: "clientWorkingState", contractVersion: "1", executeClient: mutate });
+    let deliver!: (value: Awaited<ReturnType<AgentClient["executeProposal"]>>) => void;
+    client.executeProposal = vi.fn<AgentClient["executeProposal"]>(() => new Promise(resolve => { deliver = resolve; }));
+    client.acknowledgeClient = vi.fn<AgentClient["acknowledgeClient"]>(async () => ({ proposalId: "proposal", approvalStatus: "failed", executed: false }));
+    const results: unknown[] = []; api.agent.onPromptResult(value => results.push(value)); let streams = 0;
+    const subscribeStream = ((_context, _url, emit) => {
+      if (++streams === 1) { emit({ type: "turn-started", turnId: "turn", maxSteps: 1 }); emit({ type: "proposal-created", proposalId: "proposal", messageId: "msg_1", proposal: { title: "Change", summary: "Review change.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } }); emit({ type: "review-requested", messageId: "msg_1" }); }
+      else emit({ type: "message-started", messageId: "new", role: "assistant" });
+      return { close() {} };
+    }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "late", requestId: "late-request", message: "Change" }} />);
+    try {
+      await flushPromises(); flushSync(() => buttonByText(container, "Approve")!.click()); await flushPromises(); flushSync(() => buttonByText(container, "Apply")!.click()); await flushPromises();
+      const stop = buttonByText(container, "Stop")!; expect(stop).toBeTruthy(); flushSync(() => stop.click()); await flushPromises();
+      typeAndSend(container, "New request"); await flushPromises();
+      deliver({ proposalId: "proposal", approvalStatus: "awaiting-client", executed: false, clientInvocation: invocation }); await flushPromises();
+      expect(mutate).not.toHaveBeenCalled(); expect(client.acknowledgeClient).toHaveBeenCalledWith("agt_1", "i", expect.objectContaining({ outcome: "refused" }));
+      expect(streams).toBe(2); expect(container.querySelector(".weaver-surface")?.getAttribute("aria-busy")).toBe("true");
+      expect(results).toEqual([expect.objectContaining({ requestId: "late-request", status: "cancelled" })]);
+    } finally { unmount(); }
+  });
+
+  it.each(["module", "ack"])("admits a late %s observation after Stop without reopening or hijacking a newer turn", async phase => {
+    const fixture = await pendingConfirmationFixture(phase === "module");
+    try {
+      flushSync(() => buttonByText(fixture.container, "Stop")!.click()); await flushPromises();
+      typeAndSend(fixture.container, "A new request"); await flushPromises(); expect(fixture.client.sendMessage).toHaveBeenCalledTimes(2);
+      if (phase === "module") { fixture.resolveObservation(); await flushPromises(); }
+      expect(fixture.client.acknowledgeClient).toHaveBeenCalledTimes(1);
+      fixture.rejectAcknowledgement(); await flushPromises();
+      expect(fixture.streams()).toBe(2); expect(fixture.container.querySelector(".weaver-surface")?.getAttribute("aria-busy")).toBe("true");
+      fixture.finishNewTurn(); await flushPromises();
+      flushSync(() => buttonByText(fixture.container, "Retry confirmation")!.click()); await flushPromises();
+      expect(fixture.mutate).toHaveBeenCalledTimes(1); expect(fixture.streams()).toBe(2);
+      expect(fixture.results).toEqual([expect.objectContaining({ requestId: "pending-request", status: "cancelled" })]);
+    } finally { fixture.unmount(); }
+  });
+
+  it("settles an unmounted pending confirmation truthfully once without a late stream reopen", async () => {
+    const fixture = await pendingConfirmationFixture(false);
+    fixture.unmount(); fixture.resolveAcknowledgement(); await flushPromises();
+    expect(fixture.results).toEqual([expect.objectContaining({ requestId: "pending-request", status: "failed", text: expect.stringContaining("may already have been applied") })]);
+    expect(fixture.streams()).toBe(1); expect(fixture.mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("admits a generic uncertain acknowledgement for a noncloneable module observation and drains", async () => {
+    const fixture = await pendingConfirmationFixture(false, true);
+    try {
+      expect(fixture.client.acknowledgeClient).toHaveBeenCalledWith("agt_1", "i", expect.objectContaining({ outcome: "uncertain", client: expect.any(Object), approvalDigest: "digest" }));
+      const acknowledgement = vi.mocked(fixture.client.acknowledgeClient).mock.calls[0][2];
+      expect(acknowledgement).not.toHaveProperty("result"); expect(acknowledgement).not.toHaveProperty("after");
+      expect(fixture.container.querySelector('[data-status="uncertain"]')).toBeTruthy(); expect(fixture.container.querySelector('[data-succeeded="true"]')).toBeNull();
+      expect(fixture.streams()).toBe(2); typeAndSend(fixture.container, "Inspect"); await flushPromises(); expect(fixture.client.sendMessage).toHaveBeenCalledTimes(2);
+    } finally { fixture.unmount(); }
+  });
+  it.each(["approve", "deny", "autonomy-approve"])("drains terminal expiry from %s without executing or stranding the caller", async action => {
+    const api = readyApi(); const client = readyClient(); const invocation = preparedInvocation(api);
+    invocation.executionLocation = "server"; invocation.client = null; invocation.requiresApproval = action !== "autonomy-approve";
+    if (action === "autonomy-approve") client.bootstrap = vi.fn<AgentClient["bootstrap"]>(async () => ({ ...await readyClient().bootstrap(), policy: { ...(await readyClient().bootstrap()).policy, defaultAutonomyMode: "full-auto" } }));
+    const failure = new AgentExecutionError(409, "The reviewed invocation expired.", "agent.proposal.expired", { proposalId: "proposal", approvalStatus: "expired", executed: false }, {});
+    if (action === "deny") client.denyProposal = vi.fn(async () => { throw failure; });
+    else client.approveProposal = vi.fn(async () => { throw failure; });
+    const results: unknown[] = []; api.agent.onPromptResult(value => results.push(value)); let streams = 0;
+    const subscribeStream = ((_context, _url, emit) => {
+      if (++streams === 1) { emit({ type: "proposal-created", proposalId: "proposal", messageId: "msg_1", proposal: { title: "Review resource", summary: "Review the resource change.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } }); emit({ type: "review-requested", messageId: "msg_1" }); }
+      else emit({ type: "message-completed", messageId: "msg_1" });
+      return { close() {} };
+    }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "expiry", requestId: "expiry-request", message: "Review resource" }} />);
+    await flushPromises();
+    if (action !== "autonomy-approve") { flushSync(() => buttonByText(container, action === "deny" ? "Deny" : "Approve")!.click()); await flushPromises(); }
+    expect(container.querySelector('[data-status="expired"]')).toBeTruthy(); expect(client.executeProposal).not.toHaveBeenCalled();
+    expect(results).toEqual([expect.objectContaining({ requestId: "expiry-request", status: "failed" })]); expect(streams).toBe(2);
+    typeAndSend(container, "Inspect current resource"); await flushPromises(); expect(client.sendMessage).toHaveBeenCalledTimes(2); expect(results).toHaveLength(1);
+    unmount();
+  });
+
+  it.each([1, 2])("retries an accepted acknowledgement lost %s times using only the exact observed receipt", async losses => {
+    const api = readyApi(); const client = readyClient(); const invocation = preparedInvocation(api);
+    const observed = { outcome: "applied" as const, summary: "Observed value 2.", after: { ...invocation.target!, revision: "r2" }, result: { typeId: "sample.result", schemaVersion: "1", data: { value: 2 } } };
+    const mutate = vi.fn(async () => observed);
+    api.agent.toolContracts.add({ id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Change", description: "Change sample", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], executionLocation: "clientWorkingState", contractVersion: "1", executeClient: mutate });
+    client.executeProposal = vi.fn<AgentClient["executeProposal"]>(async () => ({ proposalId: "proposal", approvalStatus: "awaiting-client", executed: false, clientInvocation: invocation }));
+    const receipts: string[] = []; let acceptedReceipt: string | null = null;
+    client.acknowledgeClient = vi.fn<AgentClient["acknowledgeClient"]>(async (_session, _id, receipt) => {
+      const wire = JSON.stringify(receipt); receipts.push(wire); acceptedReceipt ??= wire; expect(wire).toBe(acceptedReceipt);
+      if (receipts.length <= losses) throw new Error("Response lost after the server accepted this exact receipt.");
+      return { proposalId: "proposal", approvalStatus: "executed", executed: true, toolResult: { toolCallId: "call", toolName: "sample_change", succeeded: true, content: "Recorded owning receipt.", payload: observed.result } };
+    });
+    const results: unknown[] = []; api.agent.onPromptResult(value => results.push(value)); let streams = 0;
+    const subscribeStream = ((_context, _url, emit) => {
+      if (++streams === 1) { emit({ type: "proposal-created", proposalId: "proposal", messageId: "msg_1", proposal: { title: "Change resource", summary: "Review resource change.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } }); emit({ type: "review-requested", messageId: "msg_1" }); }
+      else emit({ type: "message-completed", messageId: "msg_1" });
+      return { close() {} };
+    }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "lost", requestId: "lost-request", message: "Change resource" }} />);
+    await flushPromises(); flushSync(() => buttonByText(container, "Approve")!.click()); await flushPromises(); flushSync(() => buttonByText(container, "Apply")!.click()); await flushPromises();
+    for (let attempt = 0; attempt < losses; attempt++) {
+      expect(results).toEqual([]); expect(container.querySelector<HTMLTextAreaElement>("textarea")!.disabled).toBe(true);
+      const retry = buttonByText(container, "Retry confirmation")!; expect(retry).toBeTruthy(); expect(retry.disabled).toBe(false);
+      flushSync(() => retry.click()); await flushPromises();
+    }
+    expect(mutate).toHaveBeenCalledTimes(1); expect(client.executeProposal).toHaveBeenCalledTimes(1); expect(receipts).toHaveLength(losses + 1);
+    expect(container.querySelector('[data-status="executed"]')).toBeTruthy(); expect(results).toEqual([expect.objectContaining({ requestId: "lost-request", status: "completed" })]);
+    expect(streams).toBe(2); expect(client.sendMessage).toHaveBeenCalledTimes(1);
+    typeAndSend(container, "Inspect current resource"); await flushPromises(); expect(client.sendMessage).toHaveBeenCalledTimes(2); expect(results).toHaveLength(1);
+    unmount();
+  });
   it.each(["expired", "failed"])("drains an authoritative server %s refusal and releases the original caller without replay", async status => {
     const api = readyApi(); const client = readyClient(); const invocation = preparedInvocation(api); invocation.executionLocation = "server"; invocation.client = null;
     const results: unknown[] = []; api.agent.onPromptResult(value => results.push(value));
@@ -244,7 +377,8 @@ describe("WeaverSurface", () => {
     const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "delivery", requestId: "terminal-request", message: "Change sample" }} />);
     await flushPromises(); flushSync(() => buttonByText(container, "Approve")!.click()); await flushPromises();
     flushSync(() => buttonByText(container, "Apply")!.click()); await flushPromises();
-    expect(results).toEqual([expect.objectContaining({ requestId: "terminal-request", status: "failed" })]);
+    if (failure === "acknowledgement") { expect(results).toEqual([]); expect(buttonByText(container, "Retry confirmation")).toBeTruthy(); expect(container.querySelector<HTMLTextAreaElement>("textarea")!.disabled).toBe(true); }
+    else expect(results).toEqual([expect.objectContaining({ requestId: "terminal-request", status: "failed" })]);
     expect(client.sendMessage).toHaveBeenCalledTimes(1); expect(client.executeProposal).toHaveBeenCalledTimes(1);
     expect(container.querySelector(".weaver-surface")?.getAttribute("aria-busy")).toBe("false");
     if (failure === "acknowledgement") expect(container.querySelector('[data-status="uncertain"]')).toBeTruthy();
@@ -284,6 +418,27 @@ describe("WeaverSurface", () => {
   });
 
 });
+
+async function pendingConfirmationFixture(deferObservation: boolean, malformed = false) {
+  const api = readyApi(); const client = readyClient(); const invocation = preparedInvocation(api);
+  const observed = { outcome: "applied" as const, summary: "Observed.", after: { ...invocation.target!, revision: "r2" }, result: { typeId: "sample.result", schemaVersion: "1", data: malformed ? { invalid: () => {} } : { value: 2 } } };
+  let observation!: (value: typeof observed) => void, accept!: (value: Awaited<ReturnType<AgentClient["acknowledgeClient"]>>) => void, reject!: (error: Error) => void;
+  const mutate = vi.fn(() => deferObservation ? new Promise<typeof observed>(resolve => { observation = resolve; }) : Promise.resolve(observed));
+  api.agent.toolContracts.add({ id: "sample_change", slotId: "sample", moduleId: "Sample", displayName: "Change", description: "Change", surfaces: ["*"], inputSchema: {}, resourceTargetSchema: {}, resultSchema: {}, risk: "review-required", invocationModes: ["proposal"], executionLocation: "clientWorkingState", contractVersion: "1", executeClient: mutate });
+  client.executeProposal = vi.fn<AgentClient["executeProposal"]>(async () => ({ proposalId: "proposal", approvalStatus: "awaiting-client", executed: false, clientInvocation: invocation }));
+  const recorded = { proposalId: "proposal", approvalStatus: "executed" as const, executed: true, toolResult: { toolCallId: "call", toolName: "sample_change", succeeded: true, content: "Recorded owner receipt.", payload: { typeId: "sample.result", schemaVersion: "1", data: { value: 2 } } } };
+  client.acknowledgeClient = malformed ? vi.fn<AgentClient["acknowledgeClient"]>(async () => ({ proposalId: "proposal", approvalStatus: "uncertain", executed: false, toolResult: { toolCallId: "call", toolName: "sample_change", succeeded: false, content: "Application is uncertain." } })) : vi.fn<AgentClient["acknowledgeClient"]>().mockImplementationOnce(() => new Promise((resolve, failed) => { accept = resolve; reject = failed; })).mockResolvedValue(recorded);
+  const results: unknown[] = []; api.agent.onPromptResult(value => results.push(value)); let streams = 0; let finishNew!: () => void;
+  const subscribeStream = ((_context, _url, emit) => {
+    if (++streams === 1) { emit({ type: "proposal-created", proposalId: "proposal", messageId: "msg_1", proposal: { title: "Change", summary: "Review change.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } }); emit({ type: "review-requested", messageId: "msg_1" }); }
+    else if (malformed) emit({ type: "message-completed", messageId: "msg_1" });
+    else { emit({ type: "message-started", messageId: "new", role: "assistant" }); finishNew = () => emit({ type: "message-completed", messageId: "new" }); }
+    return { close() {} };
+  }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+  const mounted = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "pending", requestId: "pending-request", message: "Change" }} />);
+  await flushPromises(); flushSync(() => buttonByText(mounted.container, "Approve")!.click()); await flushPromises(); flushSync(() => buttonByText(mounted.container, "Apply")!.click()); await flushPromises();
+  return { ...mounted, client, mutate, results, streams: () => streams, resolveObservation: () => observation(observed), rejectAcknowledgement: () => reject(new Error("Accepted response was lost.")), resolveAcknowledgement: () => accept(recorded), finishNewTurn: () => finishNew() };
+}
 
 function typeAndSend(container: HTMLElement, value: string) {
   const textarea = container.querySelector("textarea")!;

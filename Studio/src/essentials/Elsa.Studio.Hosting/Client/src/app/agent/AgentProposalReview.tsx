@@ -11,7 +11,8 @@ export function AgentProposalReview({
   resultRenderers = [],
   onApprove,
   onDeny,
-  onExecute
+  onExecute,
+  onRetryConfirmation
 }: {
   proposals: AgentActionProposal[];
   disabled?: boolean;
@@ -20,6 +21,7 @@ export function AgentProposalReview({
   onApprove(proposal: AgentActionProposal): void;
   onDeny(proposal: AgentActionProposal): void;
   onExecute(proposal: AgentActionProposal): void;
+  onRetryConfirmation?(proposal: AgentActionProposal): void;
 }) {
   if (proposals.length === 0) {
     return null;
@@ -62,6 +64,7 @@ export function AgentProposalReview({
             {proposal.disabledReason ? <small className="agent-proposal-disabled">{proposal.disabledReason}</small> : null}
             {!reviewable ? <small>Proposal details are still loading. Approval is available after review details arrive.</small> : null}
             <footer>
+              {proposal.confirmationPending && onRetryConfirmation ? <button type="button" disabled={controlsDisabled} onClick={() => onRetryConfirmation(proposal)}>Retry confirmation</button> : null}
               <button type="button" disabled={controlsDisabled || proposal.status !== "awaiting-approval" || !reviewable} onClick={() => onApprove(proposal)}>
                 <Check size={14} /> Approve
               </button>

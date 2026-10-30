@@ -123,6 +123,7 @@ export interface AgentActionProposal {
   disabledReason?: string;
   isLoading?: boolean;
   error?: string;
+  confirmationPending?: boolean;
   audit?: AgentProposalAuditState;
   preparedInvocation?: StudioAgentPreparedInvocation;
   toolResult?: StudioAgentToolResult;

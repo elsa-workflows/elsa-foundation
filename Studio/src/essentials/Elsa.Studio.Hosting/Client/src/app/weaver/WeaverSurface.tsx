@@ -72,7 +72,7 @@ export function WeaverSurface({
     }
   }, [incomingPrompt, session.ready]);
 
-  const composerDisabled = !session.ready || session.chatState === "awaiting-review";
+  const composerDisabled = !session.ready || session.chatState === "awaiting-review" || session.chatState === "awaiting-confirmation";
 
   return (
     <section className="weaver-surface" data-variant={variant} aria-label="Weaver assistant" aria-busy={session.busy}>
@@ -120,12 +120,13 @@ export function WeaverSurface({
           onApprove={session.approveProposal}
           onDeny={session.denyProposal}
           onExecute={session.executeProposal}
+          onRetryConfirmation={session.retryConfirmation}
         />
       </div>
 
       <WeaverComposer
         disabled={composerDisabled}
-        busy={session.busy}
+        busy={session.busy || (session.chatState !== "idle" && session.pendingProposalIds.size > 0)}
         followups={session.followups}
         onSubmit={session.send}
         onStop={session.stop}

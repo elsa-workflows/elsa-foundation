@@ -9,6 +9,7 @@ import { createClientInvocationRunner } from "../agent/clientInvocationRunner";
 import type {
   AgentActionProposal,
   AgentActionProposalPayload,
+  AgentClientAcknowledgement,
   AgentAutonomyMode,
   AgentBootstrapResponse,
   AgentMessageViewModel,
@@ -17,7 +18,7 @@ import type {
   AgentStreamEvent
 } from "../agent/agentTypes";
 
-export type WeaverChatState = "idle" | "streaming" | "awaiting-review";
+export type WeaverChatState = "idle" | "streaming" | "awaiting-review" | "awaiting-confirmation";
 // The Weaver "auto-apply" control selects the session's server-side autonomy mode.
 export type WeaverAutoApplyMode = AgentAutonomyMode;
 
@@ -67,11 +68,13 @@ export interface UseWeaverSession {
   approveProposal(proposal: AgentActionProposal): void;
   denyProposal(proposal: AgentActionProposal): void;
   executeProposal(proposal: AgentActionProposal): void;
+  retryConfirmation(proposal: AgentActionProposal): void;
   submitFeedback(messageId: string, rating: "positive" | "negative"): void;
   setAutoApplyMode(mode: WeaverAutoApplyMode): void;
 }
 
 const ASSISTANT_PLACEHOLDER = "Awaiting assistant response…";
+type ClientConfirmation = { invocation: NonNullable<AgentActionProposal["preparedInvocation"]>; acknowledgement: AgentClientAcknowledgement; generation: number };
 
 const DISABLED_POLICY: AgentBootstrapResponse["policy"] = {
   contextVisibility: true,
@@ -97,6 +100,8 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
   const [pendingProposalIds, setPendingProposalIds] = useState<ReadonlySet<string>>(new Set());
 
   const clientControllersRef = useRef(new Set<AbortController>());
+  const clientConfirmationsRef = useRef(new Map<string, ClientConfirmation>());
+  const mountedRef = useRef(true);
   const turnAbortRef = useRef<AbortController | null>(null);
   const turnIdRef = useRef<string | null>(null);
   // Bumped whenever a turn starts or is stopped, so an in-flight startTurn can detect that it was
@@ -138,11 +143,6 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
   // Belt-and-suspenders: never let a requested mode exceed the ceiling, even if the UI offered it.
   const selectAutoApplyMode = useCallback((mode: WeaverAutoApplyMode) => {
     setAutoApplyMode(current => allowedAutoApplyModesRef.current.includes(mode) ? mode : current);
-  }, []);
-
-  useEffect(() => () => {
-    streamRef.current?.close(); turnAbortRef.current?.abort();
-    for (const controller of clientControllersRef.current) controller.abort();
   }, []);
 
   useEffect(() => {
@@ -292,6 +292,21 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     api.agent.publishPromptResult({ requestId, status, text, autoApply: autoApplyModeRef.current === "full-auto" });
   }, [api]);
 
+  useEffect(() => {
+    mountedRef.current = true;
+    const controllers = clientControllersRef.current;
+    const confirmations = clientConfirmationsRef.current;
+    const generation = turnGenerationRef;
+    return () => {
+      const uncertain = controllers.size > 0 || [...confirmations.values()].some(item => item.generation === generation.current);
+      mountedRef.current = false;
+      generation.current++;
+      streamRef.current?.close(); turnAbortRef.current?.abort();
+      for (const controller of controllers) controller.abort();
+      publishTurnResult("failed", uncertain ? "The assistant closed before confirmation; the observed change may already have been applied." : "The assistant closed before completing the request.");
+    };
+  }, [publishTurnResult]);
+
   const startTurn = useCallback(async (request: StudioAgentPromptRequest) => {
     const { message, requestId } = request;
     const deliveryId = requestId ?? globalThis.crypto?.randomUUID?.() ?? `message-${Date.now()}-${Math.random()}`;
@@ -365,8 +380,8 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       if (request.requestId) api.agent.publishPromptResult({ requestId: request.requestId, status: "failed", text: "" });
       return;
     }
-    if (chatState === "awaiting-review") {
-      setError("Review the pending proposal before sending another request; the prompt was not delivered.");
+    if (chatState === "awaiting-review" || chatState === "awaiting-confirmation") {
+      setError(chatState === "awaiting-confirmation" ? "Confirm the observed result before sending another request; the prompt was not delivered." : "Review the pending proposal before sending another request; the prompt was not delivered.");
       if (request.requestId) api.agent.publishPromptResult({ requestId: request.requestId, status: "failed", text: "" });
       return;
     }
@@ -402,6 +417,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     setMessages(current => current.map(message => message.status === "streaming" ? { ...message, status: "cancelled" } : message));
     publishTurnResult("cancelled", "");
     finishTurn();
+    setProposals(current => current.map(proposal => clientConfirmationsRef.current.has(proposal.id) ? { ...proposal, status: "uncertain", error: "Stopped waiting for confirmation. The observed change may already have been applied; retry only confirms its receipt." } : proposal));
   }, [agentClient, publishTurnResult]);
 
   const removeFollowup = useCallback((id: string) => setFollowups(current => current.filter(item => item.id !== id)), []);
@@ -425,11 +441,6 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     setProposals(current => current.map(proposal => proposal.id === proposalId ? { ...proposal, ...changes } : proposal));
   }, []);
 
-  const approveProposal = useCallback((proposal: AgentActionProposal) => void withProposalDecision(proposal.id, async () => {
-    const response = await agentClient.approveProposal(proposal.id, { revision: proposal.revision });
-    updateProposal(proposal.id, { status: response.approvalStatus });
-  }), [agentClient, updateProposal, withProposalDecision]);
-
   const resumeFromOutcome = useCallback((session: string) => {
     const generation = turnGenerationRef.current;
     const requestId = turnRequestIdRef.current;
@@ -444,20 +455,11 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       }, { defaultMessageId: messageId ?? undefined });
   }, [api.backend, handleStreamEvent, publishTurnResult, subscribeStream]);
 
-  const denyProposal = useCallback((proposal: AgentActionProposal) => void withProposalDecision(proposal.id, async () => {
-    const response = await agentClient.denyProposal(proposal.id, { revision: proposal.revision });
-    updateProposal(proposal.id, { status: response.approvalStatus });
-    publishTurnResult("cancelled", "");
-    const session = proposal.preparedInvocation?.sessionId ?? sessionIdRef.current;
-    if (session) resumeFromOutcome(session);
-    else finishTurn();
-  }), [agentClient, publishTurnResult, resumeFromOutcome, updateProposal, withProposalDecision]);
-
-  const executeApprovedProposal = useCallback(async (proposalId: string, revision: string | undefined, prepared?: AgentActionProposal["preparedInvocation"]) => {
+  const runReviewedDecision = useCallback(async (action: "approveProposal" | "denyProposal" | "executeProposal", proposalId: string, revision: string | undefined, prepared?: AgentActionProposal["preparedInvocation"]) => {
     const generation = turnGenerationRef.current;
     const requestId = turnRequestIdRef.current;
     try {
-      return await agentClient.executeProposal(proposalId, { revision });
+      return await agentClient[action](proposalId, { revision });
     } catch (error) {
       if (!(error instanceof AgentExecutionError)) throw error;
       const outcome = error.terminalOutcome;
@@ -475,22 +477,69 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     }
   }, [agentClient, publishTurnResult, resumeFromOutcome, updateProposal]);
 
+  const approveProposal = useCallback((proposal: AgentActionProposal) => void withProposalDecision(proposal.id, async () => {
+    const response = await runReviewedDecision("approveProposal", proposal.id, proposal.revision, proposal.preparedInvocation);
+    if (response) updateProposal(proposal.id, { status: response.approvalStatus });
+  }), [runReviewedDecision, updateProposal, withProposalDecision]);
+
+  const denyProposal = useCallback((proposal: AgentActionProposal) => void withProposalDecision(proposal.id, async () => {
+    const response = await runReviewedDecision("denyProposal", proposal.id, proposal.revision, proposal.preparedInvocation);
+    if (!response) return;
+    updateProposal(proposal.id, { status: response.approvalStatus });
+    publishTurnResult("cancelled", "");
+    const session = proposal.preparedInvocation?.sessionId ?? sessionIdRef.current;
+    if (session) resumeFromOutcome(session);
+    else finishTurn();
+  }), [publishTurnResult, resumeFromOutcome, runReviewedDecision, updateProposal, withProposalDecision]);
+
+  const confirmClientResult = useCallback(async (proposalId: string, confirmation: ClientConfirmation) => {
+    const generation = confirmation.generation;
+    try {
+      const response = await agentClient.acknowledgeClient(confirmation.invocation.sessionId, confirmation.invocation.invocationId, confirmation.acknowledgement);
+      clientConfirmationsRef.current.delete(proposalId);
+      if (!mountedRef.current) return;
+      updateProposal(proposalId, { confirmationPending: false, status: response.approvalStatus, toolResult: response.toolResult, result: response.toolResult?.payload, resultType: response.toolResult?.payload?.typeId, error: undefined });
+      if (generation === turnGenerationRef.current) resumeFromOutcome(confirmation.invocation.sessionId);
+    } catch (error) {
+      if (!mountedRef.current) return;
+      updateProposal(proposalId, { status: "uncertain", confirmationPending: true, error: `Confirmation was not received. Retry sends the same observed receipt without running the change again. ${getAgentErrorMessage(error)}` });
+      if (generation === turnGenerationRef.current) setChatState("awaiting-confirmation");
+    }
+  }, [agentClient, resumeFromOutcome, updateProposal]);
+
+  const retryConfirmation = useCallback((proposal: AgentActionProposal) => void withProposalDecision(proposal.id, async () => {
+    const confirmation = clientConfirmationsRef.current.get(proposal.id);
+    if (!confirmation) throw new Error("The originating observed receipt is unavailable.");
+    updateProposal(proposal.id, { status: "awaiting-client", error: undefined });
+    if (confirmation.generation === turnGenerationRef.current) setChatState("streaming");
+    await confirmClientResult(proposal.id, confirmation);
+  }), [confirmClientResult, updateProposal, withProposalDecision]);
+
   const executeProposal = useCallback((proposal: AgentActionProposal) => void withProposalDecision(proposal.id, async () => {
-    let response = await executeApprovedProposal(proposal.id, proposal.revision, proposal.preparedInvocation);
+    const deliveryGeneration = turnGenerationRef.current;
+    const requestId = turnRequestIdRef.current;
+    const response = await runReviewedDecision("executeProposal", proposal.id, proposal.revision, proposal.preparedInvocation);
     if (!response) return;
     updateProposal(proposal.id, { status: response.approvalStatus });
     if (response.clientInvocation) {
       const invocation = response.clientInvocation;
-      const deliveryGeneration = turnGenerationRef.current;
-      const requestId = turnRequestIdRef.current;
       const cancellation = new AbortController(); clientControllersRef.current.add(cancellation);
-      turnIdRef.current = invocation.turnId;
-      setChatState("streaming");
+      if (deliveryGeneration !== turnGenerationRef.current) cancellation.abort();
+      else { turnIdRef.current = invocation.turnId; setChatState("streaming"); }
       try {
-        const acknowledgement = await clientRunner.run(invocation, cancellation.signal);
-        response = await agentClient.acknowledgeClient(invocation.sessionId, invocation.invocationId, acknowledgement);
-        // Continue the retained turn from its stored receipt; never resend the original prompt.
-        if (deliveryGeneration === turnGenerationRef.current) resumeFromOutcome(invocation.sessionId);
+        let acknowledgement: AgentClientAcknowledgement;
+        try {
+          acknowledgement = structuredClone(await clientRunner.run(invocation, cancellation.signal));
+          JSON.stringify(acknowledgement);
+        } catch {
+          acknowledgement = { client: invocation.client!, approvalDigest: invocation.approvalDigest, outcome: "uncertain", summary: "The owning module returned an unsupported observation after dispatch; application cannot be confirmed." };
+        }
+        const confirmation = { invocation, acknowledgement, generation: deliveryGeneration };
+        clientConfirmationsRef.current.set(proposal.id, confirmation);
+        if (mountedRef.current) updateProposal(proposal.id, { confirmationPending: true });
+        // Admit an observed receipt even after Stop; only the original active generation may resume.
+        await confirmClientResult(proposal.id, confirmation);
+        return;
       } catch (error) {
         updateProposal(proposal.id, { status: "uncertain", error: "The dispatched change could not be confirmed. It will not be replayed." });
         if (deliveryGeneration === turnGenerationRef.current) { publishTurnResult("failed", "", requestId); finishTurn(); }
@@ -498,21 +547,23 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       } finally { clientControllersRef.current.delete(cancellation); }
     } else if (response.toolResult) {
       const session = proposal.preparedInvocation?.sessionId ?? sessionIdRef.current;
-      if (session) resumeFromOutcome(session);
+      if (session && deliveryGeneration === turnGenerationRef.current) resumeFromOutcome(session);
     }
     updateProposal(proposal.id, { status: response.approvalStatus, toolResult: response.toolResult, result: response.toolResult?.payload, resultType: response.toolResult?.payload?.typeId });
-  }), [agentClient, clientRunner, executeApprovedProposal, publishTurnResult, resumeFromOutcome, updateProposal, withProposalDecision]);
+  }), [clientRunner, confirmClientResult, runReviewedDecision, publishTurnResult, resumeFromOutcome, updateProposal, withProposalDecision]);
 
   function maybeAutoApplyProposal(proposalId: string, payload?: AgentActionProposalPayload) {
     const prepared = payload?.preparedInvocation;
     if (autoApplyModeRef.current !== "full-auto" || !prepared || prepared.requiresApproval || prepared.executionLocation === "clientWorkingState") return;
     const revision = payload?.revision ?? payload?.baseRevision;
     void withProposalDecision(proposalId, async () => {
-      await agentClient.approveProposal(proposalId, { revision });
-      const response = await executeApprovedProposal(proposalId, revision, prepared);
+      const generation = turnGenerationRef.current;
+      const approved = await runReviewedDecision("approveProposal", proposalId, revision, prepared);
+      if (!approved || generation !== turnGenerationRef.current) return;
+      const response = await runReviewedDecision("executeProposal", proposalId, revision, prepared);
       if (!response) return;
       updateProposal(proposalId, { status: response.approvalStatus, toolResult: response.toolResult, result: response.toolResult?.payload, resultType: response.toolResult?.payload?.typeId });
-      if (response.toolResult) resumeFromOutcome(prepared.sessionId);
+      if (response.toolResult && generation === turnGenerationRef.current) resumeFromOutcome(prepared.sessionId);
     });
   }
 
@@ -547,6 +598,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     approveProposal,
     denyProposal,
     executeProposal,
+    retryConfirmation,
     submitFeedback,
     setAutoApplyMode: selectAutoApplyMode
   };
