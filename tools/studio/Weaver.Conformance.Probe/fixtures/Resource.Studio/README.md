@@ -2,6 +2,8 @@
 
 This fixture is materialized outside the repository. It imports only React and the actual packaged public Studio SDK. It has no Dashboard/private/source aliases or product ProjectReference. Its RCL consumes prebuilt `wwwroot/studio/modules/acme-home/module.js` and `module.css`; ordinary host restore/build/publish never invokes Node.
 
+The module's JSX build emits `React.createElement` through its existing React import. Its only external runtime imports are the host-provided `react` and `@elsa-workflows/studio-sdk` entries; it does not require an additional `react/jsx-runtime` import-map entry.
+
 Replace these tokens in the copied templates, then remove the `.in` suffixes:
 
 | Token | Required input |
