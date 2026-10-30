@@ -1,5 +1,6 @@
 using Elsa.Studio.Hosting;
 using Elsa.Studio.Hosting.Nuplane;
+using Elsa.Studio.Tests.Administration;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
@@ -15,6 +16,40 @@ namespace Elsa.Studio.Tests.Hosting;
 
 public sealed class HostingConfigurationLifetimeTests
 {
+    [Fact]
+    public async Task A_composition_failure_before_Build_releases_the_fixture_builder_and_its_file_watchers()
+    {
+        ConfigurationManager? configuration = null;
+        PhysicalFileProvider? defaults = null;
+        PhysicalFileProvider? management = null;
+        try
+        {
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => AdministrationHost.StartAsync(
+                beforeStudio: builder =>
+                {
+                    configuration = builder.Configuration;
+                    defaults = Assert.IsType<PhysicalFileProvider>(builder.Environment.ContentRootFileProvider);
+                },
+                configureNuplane: _ =>
+                {
+                    var provider = Assert.Single(((IConfigurationRoot)configuration!).Providers.OfType<JsonConfigurationProvider>());
+                    management = Assert.IsType<PhysicalFileProvider>(provider.Source.FileProvider);
+                    throw new InvalidOperationException("fixture composition failed before Build");
+                }));
+            Assert.Equal("fixture composition failed before Build", error.Message);
+            Assert.NotNull(defaults);
+            Assert.NotNull(management);
+            AssertDisposed(defaults);
+            AssertDisposed(management);
+        }
+        finally
+        {
+            configuration?.Dispose();
+            defaults?.Dispose();
+            management?.Dispose();
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -129,6 +164,7 @@ public sealed class HostingConfigurationLifetimeTests
     private sealed class ConfigurationHost : IAsyncDisposable
     {
         private readonly string _root = Directory.CreateTempSubdirectory("studio-configuration-lifetime-").FullName;
+        private WebApplicationBuilder? _builder;
         public WebApplication App { get; private set; } = null!;
         public ConfigurationManager Configuration { get; private set; } = null!;
         public string ShellsFile { get; private set; } = null!;
@@ -144,7 +180,7 @@ public sealed class HostingConfigurationLifetimeTests
                 host.ShellsFile = shells;
                 var management = Path.Combine(configRoot, "management.json");
                 await File.WriteAllTextAsync(shells, """{"LifetimeProbe":"initial","CShells":{"Shells":{"Default":{"Features":{"StudioApi":{}}}}}}""");
-                var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { ContentRootPath = contentRoot, EnvironmentName = Environments.Production });
+                var builder = host._builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { ContentRootPath = contentRoot, EnvironmentName = Environments.Production });
                 builder.Logging.ClearProviders();
                 builder.WebHost.UseTestServer();
                 builder.Configuration.Sources.Clear();
@@ -174,7 +210,11 @@ public sealed class HostingConfigurationLifetimeTests
         public async ValueTask DisposeAsync()
         {
             if (App is not null) await App.DisposeAsync();
-            else Configuration?.Dispose();
+            else if (_builder is not null)
+            {
+                _builder.Configuration.Dispose();
+                (_builder.Environment.ContentRootFileProvider as IDisposable)?.Dispose();
+            }
             if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
         }
     }
