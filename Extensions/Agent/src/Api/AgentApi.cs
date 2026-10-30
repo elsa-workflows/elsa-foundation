@@ -239,7 +239,16 @@ public static class AgentApi
             }
         }
         var stored = await sessions.ListContextAsync(sessionId, context.RequestAborted);
-        var requestedStored = contextAttachmentIds.Count == 0 ? [] : stored.Where(x => contextAttachmentIds.Contains(x.Id, StringComparer.Ordinal)).ToList();
+        var requestedContextIds = contextAttachmentIds.Distinct(StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
+        var retainedContextIds = stored.Select(attachment => attachment.Id).ToHashSet(StringComparer.Ordinal);
+        if (requestedContextIds.Any(id => !retainedContextIds.Contains(id)))
+        {
+            await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Failure(new("agent.context.required_unavailable",
+                "A requested retained context attachment is unavailable. Refresh the current context before retrying.", 409)),
+                AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse, 409);
+            return;
+        }
+        var requestedStored = requestedContextIds.Count == 0 ? [] : stored.Where(x => requestedContextIds.Contains(x.Id)).ToList();
         var requestContext = requestedStored.Concat(contextAttachments.Select(x => x.ToDomain())).ToList();
         AgentResult<AgentContextContribution> collected;
         try
@@ -407,8 +416,34 @@ public static class AgentApi
             return;
         }
         var result = await proposals.ExecuteAsync(proposalId, actorId, request.Revision, context.RequestAborted);
-        await WriteAsync(context, result.Succeeded ? AgentApiResponse<AgentProposalExecutionResult>.Success(result.Value!) : AgentApiResponse<AgentProposalExecutionResult>.Failure(result.Error!), AgentJsonContext.Default.AgentApiResponseAgentProposalExecutionResult,
+        var failureData = result.Succeeded ? null : await FindTerminalExecutionFailureAsync(proposals, proposalId, context.RequestAborted);
+        var response = result.Succeeded ? AgentApiResponse<AgentProposalExecutionResult>.Success(result.Value!)
+            : new AgentApiResponse<AgentProposalExecutionResult>(failureData, result.Error);
+        await WriteAsync(context, response, AgentJsonContext.Default.AgentApiResponseAgentProposalExecutionResult,
             result.Succeeded ? result.Value!.ClientInvocation is not null ? 202 : 200 : result.Error!.StatusCode);
+    }
+
+    private static async Task<AgentProposalExecutionResult?> FindTerminalExecutionFailureAsync(
+        IAgentProposalService proposals, string proposalId, CancellationToken cancellationToken)
+    {
+        var proposal = await proposals.FindAsync(proposalId, cancellationToken);
+        if (proposal is null || proposal.Status is not (AgentActionProposalStatus.Expired or AgentActionProposalStatus.Failed
+            or AgentActionProposalStatus.Denied or AgentActionProposalStatus.Cancelled))
+            return null;
+        var retained = await proposals.FindResultAsync(proposalId, cancellationToken);
+        var summary = retained?.Content ?? (proposal.Status switch
+        {
+            AgentActionProposalStatus.Expired => "The prepared operation expired before dispatch.",
+            AgentActionProposalStatus.Denied => "The reviewed operation was denied before dispatch.",
+            AgentActionProposalStatus.Cancelled => "The prepared operation was cancelled before dispatch.",
+            _ => "The operation ended with a failed outcome."
+        });
+        return new(proposal.Id, false, proposal.ResourceTarget?.ResourceType ?? proposal.ResourceType ?? "unavailable",
+            proposal.ResourceTarget?.ResourceId ?? proposal.ResourceId ?? string.Empty, summary)
+        {
+            Status = proposal.Status.ToContractString(),
+            ToolResult = retained
+        };
     }
 
     private static async Task HandleClientAcknowledgementAsync(HttpContext context)

@@ -3,12 +3,37 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
 import { createStudioRegistry } from "../../registry";
-import { createEndpointContext, type StudioAgentPreparedInvocation } from "../../../sdk";
-import type { AgentClient } from "../../agent/agentClient";
+import { createEndpointContext, StudioHttpError, type StudioAgentPreparedInvocation } from "../../../sdk";
+import { createAgentClient, type AgentClient } from "../../agent/agentClient";
 import type { AgentStreamEvent } from "../../agent/agentTypes";
 import { WeaverSurface } from "../WeaverSurface";
 
 describe("WeaverSurface", () => {
+  it.each(["expired", "failed"])("drains an authoritative server %s refusal and releases the original caller without replay", async status => {
+    const api = readyApi(); const client = readyClient(); const invocation = preparedInvocation(api); invocation.executionLocation = "server"; invocation.client = null;
+    const results: unknown[] = []; api.agent.onPromptResult(value => results.push(value));
+    const toolResult = status === "failed" ? { toolCallId: "call", toolName: "sample_change", succeeded: false, content: "The owning resource revision changed.", payload: { typeId: "agent.lifecycle.refused", schemaVersion: "1", data: { applied: false } } } : null;
+    const summary = status === "expired" ? "The reviewed invocation expired." : "The owning resource revision changed.";
+    const envelope = { error: { code: `agent.execution.${status}`, message: summary, statusCode: 409 }, data: { proposalId: "proposal", executed: false, status, resourceType: "sample", resourceId: "one", summary, clientInvocation: null, toolResult } };
+    client.executeProposal = createAgentClient({ ...api.backend, http: { ...api.backend.http, postJson: vi.fn(async () => { throw new StudioHttpError(409, summary, null, envelope); }) } }).executeProposal;
+    let streams = 0;
+    const subscribeStream = ((_context, _url, emit) => {
+      if (++streams === 1) {
+        emit({ type: "proposal-created", proposalId: "proposal", messageId: "msg_1", proposal: { title: "Change sample", summary: "Reviewed server effect.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } });
+        emit({ type: "review-requested", messageId: "msg_1" });
+      } else { if (toolResult) emit({ type: "module-result", messageId: "msg_1", result: toolResult }); emit({ type: "message-completed", messageId: "msg_1" }); }
+      return { close() {} };
+    }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "delivery", requestId: "refused-request", message: "Change sample" }} />);
+    await flushPromises(); flushSync(() => buttonByText(container, "Approve")!.click()); await flushPromises();
+    flushSync(() => buttonByText(container, "Apply")!.click()); await flushPromises();
+    expect(container.querySelector(`[data-status="${status}"]`)).toBeTruthy(); expect(container.textContent).toContain(summary);
+    expect(results).toEqual([expect.objectContaining({ requestId: "refused-request", status: "failed" })]); expect(streams).toBe(2); expect(client.sendMessage).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[data-succeeded="true"]')).toBeNull();
+    typeAndSend(container, "Inspect the latest resource"); await flushPromises(); expect(client.sendMessage).toHaveBeenCalledTimes(2);
+    expect(results).toHaveLength(1); unmount();
+  });
+
   it("streams an agentic turn and renders the answer as markdown without an update loop", async () => {
     const api = readyApi();
     const indicatorCalls: number[] = [];

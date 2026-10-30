@@ -31,8 +31,6 @@ export function AgentProposalReview({
         const reviewable = isReviewable(proposal);
         const pending = pendingProposalIds?.has(proposal.id) ?? false;
         const controlsDisabled = disabled || pending || proposal.isLoading || Boolean(proposal.disabledReason);
-        const resultRenderer = findResultRenderer(proposal, resultRenderers);
-        const ResultRenderer = resultRenderer?.component;
         return (
           <article key={proposal.id} className="agent-proposal" data-risk={proposal.risk} data-status={proposal.status}>
             <header>
@@ -52,11 +50,7 @@ export function AgentProposalReview({
               </ul>
             ) : null}
             {proposal.audit ? <AuditDetails proposal={proposal} /> : null}
-            {ResultRenderer ? (
-              <div className="agent-proposal-result" aria-label={resultRenderer.displayName}>
-                <AgentResultBoundary key={`${resultRenderer.id}:${proposal.id}:${proposal.status}`} fallback={<GenericResultFallback proposal={proposal} />}><Suspense fallback={<div><p>Loading module presentation…</p><GenericResultFallback proposal={proposal} /></div>}><ResultRenderer proposal={proposal} resourceTarget={proposal.resourceTarget} result={proposal.result} resultType={proposal.resultType} preparedInvocation={proposal.preparedInvocation} toolResult={proposal.toolResult} /></Suspense></AgentResultBoundary>
-              </div>
-            ) : <GenericResultFallback proposal={proposal} />}
+            <AgentResultBoundary key={`${proposal.id}:${proposal.status}`} fallback={<GenericResultFallback proposal={proposal} />}><ProposalPresentation proposal={proposal} renderers={resultRenderers} /></AgentResultBoundary>
             {proposal.risks && proposal.risks.length > 0 ? (
               <ul aria-label="Proposal risks">
                 {proposal.risks.map((risk, index) => <li key={`${risk}-${index}`}>{risk}</li>)}
@@ -83,6 +77,12 @@ export function AgentProposalReview({
       })}
     </section>
   );
+}
+
+function ProposalPresentation({ proposal, renderers }: { proposal: AgentActionProposal; renderers: StudioAgentResultRendererContribution[] }) {
+  const renderer = findResultRenderer(proposal, renderers);
+  const Component = renderer?.component;
+  return Component ? <div className="agent-proposal-result" aria-label={renderer.displayName}><Suspense fallback={<div><p>Loading module presentation…</p><GenericResultFallback proposal={proposal} /></div>}><Component proposal={proposal} resourceTarget={proposal.resourceTarget} result={proposal.result} resultType={proposal.resultType} preparedInvocation={proposal.preparedInvocation} toolResult={proposal.toolResult} /></Suspense></div> : <GenericResultFallback proposal={proposal} />;
 }
 
 function findResultRenderer(

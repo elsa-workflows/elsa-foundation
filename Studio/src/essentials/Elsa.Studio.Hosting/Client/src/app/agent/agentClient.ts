@@ -1,4 +1,4 @@
-import type { StudioAgentPreparedInvocation, StudioAgentToolResult, StudioEndpointContext } from "../../sdk";
+import { StudioHttpError, type StudioAgentPreparedInvocation, type StudioAgentToolResult, type StudioEndpointContext } from "../../sdk";
 import type {
   AgentClientAcknowledgement,
   AgentActionProposal,
@@ -25,6 +25,14 @@ export interface AgentClient {
   acknowledgeClient(sessionId: string, invocationId: string, request: AgentClientAcknowledgement): Promise<AgentProposalDecisionResponse>;
   submitFeedback(sessionId: string, messageId: string, request: AgentFeedbackRequest): Promise<void>;
   cancelTurn(sessionId: string, turnId: string): Promise<void>;
+}
+
+/** An HTTP refusal with the authenticated server's authoritative terminal execution outcome. */
+export class AgentExecutionError extends StudioHttpError {
+  constructor(status: number, message: string, public readonly code: string, public readonly terminalOutcome: AgentProposalDecisionResponse, payload: unknown) {
+    super(status, message, null, payload);
+    this.name = "AgentExecutionError";
+  }
 }
 
 export function createAgentClient(context: StudioEndpointContext): AgentClient {
@@ -91,12 +99,18 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
       })));
     },
     async executeProposal(proposalId, request) {
-      const result = unwrap(await context.http.postJson<AgentApiResponse<BackendAgentProposalExecutionResult>>(`/_elsa/agent/proposals/${encodeURIComponent(proposalId)}/execute`, {
-        actorId: "studio",
-        revision: request.revision,
-        comment: request.comment
-      }));
-      return mapExecution(result, proposalId);
+      let envelope: AgentApiResponse<BackendAgentProposalExecutionResult>;
+      try {
+        envelope = await context.http.postJson<AgentApiResponse<BackendAgentProposalExecutionResult>>(`/_elsa/agent/proposals/${encodeURIComponent(proposalId)}/execute`, {
+          actorId: "studio", revision: request.revision, comment: request.comment
+        });
+      } catch (error) {
+        if (error instanceof StudioHttpError) throw terminalExecutionError(error.payload, proposalId, error.status) ?? error;
+        throw error;
+      }
+      const terminal = terminalExecutionError(envelope, proposalId);
+      if (terminal) throw terminal;
+      return mapExecution(unwrap(envelope), proposalId);
     },
     async acknowledgeClient(sessionId, invocationId, request) {
       const result = unwrap(await context.http.postJson<AgentApiResponse<BackendAgentProposalExecutionResult>>(
@@ -116,6 +130,17 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
       unwrap(await context.http.postJson<AgentApiResponse<unknown>>(`/_elsa/agent/sessions/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(turnId)}/cancel`, {}));
     }
   };
+}
+
+function terminalExecutionError(envelope: unknown, proposalId: string, status?: number): AgentExecutionError | null {
+  const error = readRecord(envelope, "error"); const data = readRecord(envelope, "data");
+  if (!error || !data || readString(data, "proposalId") !== proposalId || readBoolean(data, "executed") !== false) return null;
+  const outcome = normalizeEnum(readField(data, "status"));
+  if (!["expired", "failed", "denied", "cancelled"].includes(outcome)) return null;
+  const errorStatus = readField(error, "statusCode");
+  return new AgentExecutionError(status ?? (typeof errorStatus === "number" ? errorStatus : 409),
+    readString(error, "message") ?? "The server refused the reviewed execution.", readString(error, "code") ?? "agent.execution.refused",
+    mapExecution(data as BackendAgentProposalExecutionResult, proposalId), envelope);
 }
 
 interface AgentApiResponse<T> {
@@ -377,7 +402,7 @@ function mapProposalDecision(proposal: BackendAgentActionProposal): AgentProposa
 
 function getExecutionStatus(result: BackendAgentProposalExecutionResult): AgentActionProposal["status"] {
   const status = normalizeEnum(readField(result, "status") ?? readField(result, "approvalStatus"));
-  if (status === "awaiting-client" || status === "uncertain" || status === "cancelled" || status === "expired") return status;
+  if (status === "awaiting-client" || status === "uncertain" || status === "cancelled" || status === "expired" || status === "failed" || status === "denied") return status;
   const executed = readBoolean(result, "executed");
   if (executed !== undefined) return executed ? "executed" : "failed";
   return mapProposalStatus(status);

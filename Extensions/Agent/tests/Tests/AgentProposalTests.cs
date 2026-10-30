@@ -198,6 +198,93 @@ public sealed class AgentProposalTests
         Assert.Equal(1, fixture.Client.CompleteCalls);
     }
 
+    [Theory]
+    [InlineData("permission")]
+    [InlineData("removed")]
+    [InlineData("owner")]
+    [InlineData("version")]
+    [InlineData("location")]
+    [InlineData("completion")]
+    [InlineData("policy")]
+    public async Task A_pending_client_retry_rechecks_current_authority_and_contract_before_reissuing_an_executable_request(string change)
+    {
+        var tool = new ProposalClientTool();
+        var registry = new MutableProposalToolRegistry(tool);
+        var denied = new List<string>();
+        using var fixture = await ProposalFixture.CreateAsync(tool, AgentPolicy.Default with { DeniedCapabilityIds = denied },
+            services => services.Replace(ServiceDescriptor.Scoped<IAgentToolRegistry>(_ => registry)));
+        var proposal = await fixture.ProposeAsync();
+        await fixture.ApproveAsync(proposal);
+        var first = await fixture.ExecuteAsync(proposal);
+        Assert.Equal("awaiting-client", first.Value?.Status);
+        Assert.NotNull(first.Value!.ClientInvocation);
+        switch (change)
+        {
+            case "permission": fixture.Authority.Allowed = false; break;
+            case "removed": registry.Current = null; break;
+            case "owner": tool.Descriptor = tool.Descriptor with { ModuleId = "another.module" }; break;
+            case "version": tool.Descriptor = tool.Descriptor with { ContractVersion = "2" }; break;
+            case "location": tool.Descriptor = tool.Descriptor with { ExecutionLocation = AgentExecutionLocation.Server }; break;
+            case "completion": registry.Current = new ProposalClientToolWithoutCompletion(tool); break;
+            case "policy": denied.Add(tool.Descriptor.Name); break;
+        }
+
+        var retry = await fixture.ExecuteAsync(proposal);
+
+        Assert.Equal("uncertain", retry.Value?.Status);
+        Assert.False(retry.Value!.Executed);
+        Assert.Null(retry.Value.ClientInvocation);
+        Assert.Equal(AgentActionProposalStatus.Uncertain, (await fixture.Proposals.FindAsync(proposal.Id))?.Status);
+        Assert.Same(retry.Value, (await fixture.ExecuteAsync(proposal)).Value);
+        Assert.Equal(0, tool.ExecuteCalls);
+        Assert.Equal(0, tool.CompleteCalls);
+    }
+
+    [Fact]
+    public async Task An_authorized_pending_retry_reuses_the_envelope_without_calling_a_replacement_executor_again()
+    {
+        TemporarilyUnavailableCompletionExecutor? replacement = null;
+        using var fixture = await ProposalFixture.CreateAsync(new ProposalClientTool(), configure: services =>
+        {
+            services.AddScoped<DefaultAgentActionProposalExecutor>();
+            services.Replace(ServiceDescriptor.Scoped<IAgentActionProposalExecutor>(provider =>
+                replacement = new(provider.GetRequiredService<DefaultAgentActionProposalExecutor>())));
+        });
+        var proposal = await fixture.ProposeAsync();
+        await fixture.ApproveAsync(proposal);
+        var first = await fixture.ExecuteAsync(proposal);
+
+        var duplicate = await fixture.ExecuteAsync(proposal);
+
+        Assert.Same(first.Value, duplicate.Value);
+        Assert.NotNull(duplicate.Value!.ClientInvocation);
+        Assert.Equal(1, replacement!.ExecuteCalls);
+        Assert.Equal(0, fixture.Client!.ExecuteCalls);
+    }
+
+    [Fact]
+    public async Task A_completed_receipt_duplicate_remains_coalesced_after_permission_or_module_changes()
+    {
+        var tool = new ProposalClientTool();
+        var registry = new MutableProposalToolRegistry(tool);
+        using var fixture = await ProposalFixture.CreateAsync(tool, configure: services =>
+            services.Replace(ServiceDescriptor.Scoped<IAgentToolRegistry>(_ => registry)));
+        var proposal = await fixture.ProposeAsync();
+        await fixture.ApproveAsync(proposal);
+        await fixture.ExecuteAsync(proposal);
+        var applied = await fixture.AcknowledgeAsync(proposal);
+        fixture.Authority.Allowed = false;
+        registry.Current = null;
+
+        var duplicate = await fixture.ExecuteAsync(proposal);
+
+        Assert.Same(applied.Value, duplicate.Value);
+        Assert.True(duplicate.Value!.Executed);
+        Assert.Null(duplicate.Value.ClientInvocation);
+        Assert.Equal(1, tool.CompleteCalls);
+        Assert.Equal(0, tool.ExecuteCalls);
+    }
+
     [Fact]
     public async Task Duplicate_acknowledgement_is_idempotent_but_a_conflict_cannot_replace_its_receipt()
     {
@@ -417,6 +504,7 @@ internal sealed class ProposalFixture : IDisposable
     public const string Actor = "actor-1";
     private readonly ServiceProvider _root;
     private readonly IServiceScope _scope;
+    public IServiceProvider Services => _scope.ServiceProvider;
     public AgentSession Session { get; private set; } = null!;
     public ProposalTestAuthorizer Authority { get; } = new();
     public ProposalTestClock Clock { get; } = new();
@@ -495,11 +583,11 @@ internal sealed class ProposalTestClock : TimeProvider
 
 internal sealed class MutableProposalToolRegistry(IAgentTool tool) : IAgentToolRegistry
 {
-    public IAgentTool Current { get; set; } = tool;
+    public IAgentTool? Current { get; set; } = tool;
     public Task<IReadOnlyCollection<IAgentTool>> ListAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult<IReadOnlyCollection<IAgentTool>>([Current]);
+        => Task.FromResult<IReadOnlyCollection<IAgentTool>>(Current is null ? [] : [Current]);
     public Task<IAgentTool?> FindAsync(string toolName, CancellationToken cancellationToken = default)
-        => Task.FromResult<IAgentTool?>(string.Equals(Current.Descriptor.Name, toolName, StringComparison.OrdinalIgnoreCase) ? Current : null);
+        => Task.FromResult(string.Equals(Current?.Descriptor.Name, toolName, StringComparison.OrdinalIgnoreCase) ? Current : null);
 }
 
 internal sealed class ProposalClientToolWithoutCompletion(ProposalClientTool tool) : IAgentTool
@@ -522,8 +610,12 @@ internal sealed class ProposalClientToolWithoutCompletion(ProposalClientTool too
 internal sealed class TemporarilyUnavailableCompletionExecutor(DefaultAgentActionProposalExecutor inner) : IAgentActionProposalExecutor
 {
     public bool Unavailable { get; set; } = true;
+    public int ExecuteCalls { get; private set; }
     public Task<AgentResult<AgentProposalExecutionResult>> ExecuteAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default)
-        => inner.ExecuteAsync(proposal, cancellationToken);
+    {
+        ExecuteCalls++;
+        return inner.ExecuteAsync(proposal, cancellationToken);
+    }
     public Task<AgentResult<AgentProposalExecutionResult>> CompleteClientAsync(AgentActionProposal proposal,
         AgentClientAcknowledgement acknowledgement, CancellationToken cancellationToken = default)
         => Unavailable
@@ -579,7 +671,7 @@ internal sealed class ProposalClientTool : IAgentTool, IAgentClientTool
     public int ExecuteCalls { get; private set; }
     public int CompleteCalls { get; private set; }
     public bool UseSnapshotBinding { get; set; }
-    public AgentToolDescriptor Descriptor { get; } = new("test_client_change", "Change local resource", "Changes an originating local resource.", AgentToolMutability.Mutating,
+    public AgentToolDescriptor Descriptor { get; set; } = new("test_client_change", "Change local resource", "Changes an originating local resource.", AgentToolMutability.Mutating,
         AgentRisk.ReviewRequired, "{}", [], []) { ModuleId = "test.module", ExecutionLocation = AgentExecutionLocation.ClientWorkingState };
     public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
         => Task.FromResult(AgentResult<AgentToolPreparation>.Success(new(new("test.module", "test.editor", "editor-1", "revision-1"),

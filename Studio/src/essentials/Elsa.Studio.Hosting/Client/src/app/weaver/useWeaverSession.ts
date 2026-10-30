@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioAgentContextAttachment, StudioAgentContributionDiagnostic, StudioAgentMode, StudioAgentPromptRequest, StudioAgentSurface, StudioAgentToolResult } from "../../sdk";
-import { createAgentClient, type AgentClient } from "../agent/agentClient";
+import { AgentExecutionError, createAgentClient, type AgentClient } from "../agent/agentClient";
 import { collectAgentContext } from "../agent/agentContext";
 import { getActiveAgentCapabilities, getActivePromptStarters } from "../agent/agentContributions";
 import { getAgentErrorMessage } from "../agent/agentErrors";
@@ -453,8 +453,31 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     else finishTurn();
   }), [agentClient, publishTurnResult, resumeFromOutcome, updateProposal, withProposalDecision]);
 
+  const executeApprovedProposal = useCallback(async (proposalId: string, revision: string | undefined, prepared?: AgentActionProposal["preparedInvocation"]) => {
+    const generation = turnGenerationRef.current;
+    const requestId = turnRequestIdRef.current;
+    try {
+      return await agentClient.executeProposal(proposalId, { revision });
+    } catch (error) {
+      if (!(error instanceof AgentExecutionError)) throw error;
+      const outcome = error.terminalOutcome;
+      updateProposal(proposalId, { status: outcome.approvalStatus, toolResult: outcome.toolResult, result: outcome.toolResult?.payload, resultType: outcome.toolResult?.payload?.typeId, error: error.message });
+      if (generation === turnGenerationRef.current) {
+        setError(error.message);
+        publishTurnResult("failed", "", requestId);
+        const session = prepared?.sessionId ?? sessionIdRef.current;
+        // Drain the retained failure through its ordinary outcome continuation, with no new prompt
+        // and no effect replay. A refusal is never turned into an applied result.
+        if (session) resumeFromOutcome(session);
+        else finishTurn();
+      }
+      return null;
+    }
+  }, [agentClient, publishTurnResult, resumeFromOutcome, updateProposal]);
+
   const executeProposal = useCallback((proposal: AgentActionProposal) => void withProposalDecision(proposal.id, async () => {
-    let response = await agentClient.executeProposal(proposal.id, { revision: proposal.revision });
+    let response = await executeApprovedProposal(proposal.id, proposal.revision, proposal.preparedInvocation);
+    if (!response) return;
     updateProposal(proposal.id, { status: response.approvalStatus });
     if (response.clientInvocation) {
       const invocation = response.clientInvocation;
@@ -478,7 +501,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       if (session) resumeFromOutcome(session);
     }
     updateProposal(proposal.id, { status: response.approvalStatus, toolResult: response.toolResult, result: response.toolResult?.payload, resultType: response.toolResult?.payload?.typeId });
-  }), [agentClient, clientRunner, publishTurnResult, resumeFromOutcome, updateProposal, withProposalDecision]);
+  }), [agentClient, clientRunner, executeApprovedProposal, publishTurnResult, resumeFromOutcome, updateProposal, withProposalDecision]);
 
   function maybeAutoApplyProposal(proposalId: string, payload?: AgentActionProposalPayload) {
     const prepared = payload?.preparedInvocation;
@@ -486,7 +509,8 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     const revision = payload?.revision ?? payload?.baseRevision;
     void withProposalDecision(proposalId, async () => {
       await agentClient.approveProposal(proposalId, { revision });
-      const response = await agentClient.executeProposal(proposalId, { revision });
+      const response = await executeApprovedProposal(proposalId, revision, prepared);
+      if (!response) return;
       updateProposal(proposalId, { status: response.approvalStatus, toolResult: response.toolResult, result: response.toolResult?.payload, resultType: response.toolResult?.payload?.typeId });
       if (response.toolResult) resumeFromOutcome(prepared.sessionId);
     });

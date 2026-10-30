@@ -46,6 +46,10 @@ Run affected build/lint/package checks required by changed projects and compare 
 | Transaction committed then acknowledgement lost | Available receipt or explicit uncertainty; no false cancellation/zero-effect result or silent replay |
 | Duplicate request/receipt, conflicting payload or late acknowledgement | Identical delivery coalesces; conflict diagnosed; accepted effect cannot execute again or reopen |
 | Changed permissions between review/application | Current backend policy denies before effects |
+| Older in-flight/queued/stale save completes after a reviewed edit | New hold and whole-change undo survive; no background write of the reviewed state; only a successful covering explicit save releases the hold |
+| Covering save fails during Publish | Real publication caller stops before preflight/promotion/publication, preserving the held draft and undo |
+| Renderer predicate or component throws | Owning structured preview/receipt and shared review controls remain usable |
+| Authoritative expired/stale execute refusal | Terminal proposal/error is shown; original caller fails once; retained outcome drains with no prompt/tool replay and the next prompt is accepted |
 | Duplicate identity, unsupported version, absent renderer/counterpart | Explicit admission/availability diagnostic and safe rendering or refused execution |
 | Instruction-shaped resource data or secret content | Data cannot grant authority; permitted/redacted/excluded context is explicit |
 

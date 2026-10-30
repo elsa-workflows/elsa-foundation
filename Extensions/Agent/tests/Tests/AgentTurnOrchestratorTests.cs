@@ -92,6 +92,44 @@ public sealed class AgentTurnOrchestratorTests
     }
 
     [Fact]
+    public async Task Pre_dispatch_expiry_drains_the_pause_as_a_refusal_without_inventing_a_receipt()
+    {
+        var clock = new TurnTestClock();
+        var tool = new ApplyChangeTool();
+        using var root = AgentTestServices.Create(services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<TimeProvider>(clock));
+            services.AddSingleton<IAgentProvider, DeterministicAgentProvider>();
+            services.AddSingleton<IAgentTool>(tool);
+        });
+        using var scope = root.CreateScope();
+        var sessions = scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
+        var streaming = scope.ServiceProvider.GetRequiredService<IAgentStreamingService>();
+        var proposals = scope.ServiceProvider.GetRequiredService<IAgentProposalService>();
+        var states = scope.ServiceProvider.GetRequiredService<IAgentTurnStateStore>();
+        var session = await CreateSessionAsync(sessions, DeterministicAgentProvider.Id);
+        await PostAsync(sessions, session.Id, "mutate the resource");
+        var first = await Collect(streaming.StreamAsync(session.Id));
+        var proposal = Assert.IsType<AgentActionProposal>(Assert.Single(first, x => x.Kind == AgentStreamEventKind.ProposalCreated).Payload);
+        Assert.True((await proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
+        clock.Advance(TimeSpan.FromMinutes(6));
+
+        var refused = await proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision);
+
+        Assert.Equal("agent.proposal.expired", refused.Error?.Code);
+        Assert.Equal(409, refused.Error?.StatusCode);
+        Assert.Equal(AgentActionProposalStatus.Expired, (await proposals.FindAsync(proposal.Id))!.Status);
+        Assert.Null(await proposals.FindResultAsync(proposal.Id));
+        var resumed = await Collect(streaming.StreamAsync(session.Id));
+        Assert.Contains(resumed, x => x.Kind == AgentStreamEventKind.MessageDelta && x.Content!.Contains("Expired", StringComparison.Ordinal));
+        Assert.DoesNotContain(resumed, x => x.Kind == AgentStreamEventKind.ToolCallRequested);
+        Assert.Equal(AgentStreamEventKind.Completed, resumed[^1].Kind);
+        Assert.Null(states.Find(session.Id));
+        Assert.Equal(0, tool.Invocations);
+        await PostAsync(sessions, session.Id, "a new explicit request");
+    }
+
+    [Fact]
     public async Task Reconnect_after_an_expired_client_dispatch_reports_uncertainty_and_releases_the_pause()
     {
         var clock = new TurnTestClock();

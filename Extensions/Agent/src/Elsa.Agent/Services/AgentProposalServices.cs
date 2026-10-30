@@ -24,6 +24,7 @@ internal sealed class InMemoryAgentProposalStore
 internal sealed class InMemoryAgentProposalService(
     InMemoryAgentProposalStore store,
     IAgentActionProposalExecutor executor,
+    AgentPreparedInvocationResolver preparedResolver,
     IAgentSessionService sessions,
     IAgentAuditSink auditSink,
     TimeProvider clock,
@@ -141,9 +142,15 @@ internal sealed class InMemoryAgentProposalService(
                 return AgentResult<AgentProposalExecutionResult>.Failure("agent.proposal.revision_conflict", "Execution does not match the prepared revision.", 409);
             if (store.Executions.TryGetValue(proposalId, out var retained))
             {
-                if (retained.Value?.Status == "awaiting-client" && proposal.PreparedInvocation!.ExpiresAt <= clock.GetUtcNow())
-                    return StoreOutcome(proposal, AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(proposal,
-                        "The client request expired without an admitted receipt. Its effect is uncertain and will not be replayed.")));
+                if (retained.Value?.Status == "awaiting-client")
+                {
+                    // Returning this envelope can cause the originating view to apply it for the
+                    // first time. Recheck current authority without rerunning a custom executor.
+                    var current = await preparedResolver.ResolveAsync(proposal, cancellationToken);
+                    if (current.Error is not null)
+                        return StoreOutcome(proposal, AgentResult<AgentProposalExecutionResult>.Success(DefaultAgentActionProposalExecutor.Uncertain(proposal,
+                            "The pending client operation no longer has its reviewed contract, authority or lifetime. Its effect is uncertain and the request will not be reissued.")));
+                }
                 return retained;
             }
             if (IsTerminal(proposal.Status))

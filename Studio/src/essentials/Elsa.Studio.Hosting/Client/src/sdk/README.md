@@ -235,7 +235,10 @@ loss yields uncertainty rather than replay. Backend acknowledgement validates th
 Modules own live bindings, revision interpretation, validation, presentation and native undo.
 Resource targets now require `moduleId` and nullable `resourceId`/`revision`; mutations enforce the
 exact applicable identity and revision. Typed `{typeId,schemaVersion,data}` results pass through
-providers opaquely. Renderers run inside common review controls, with a structured fallback for
-unsupported versions. Workflow snapshots/window events are no longer a host/SDK transport contract.
+providers opaquely. Renderer selection predicates and components run inside presentation boundaries;
+structured evidence and common review controls remain usable after a contribution fails or its version
+is unsupported. Workflow snapshots/window events are no longer a host/SDK transport contract.
 Local working-state receipts do not mean save/publish; the native module holds automatic persistence
-until the reviewed changes are explicitly saved, published or undone.
+until the reviewed changes are explicitly saved, published or undone. An older or queued save cannot
+release a newer hold: the successful explicit save must cover the current held snapshot and generation.
+A failed covering save preserves the hold/undo and stops publication before preflight or mutations.

@@ -1,8 +1,22 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAgentClient } from "../agentClient";
-import type { StudioEndpointContext } from "../../../sdk";
+import { StudioHttpError, type StudioEndpointContext } from "../../../sdk";
 
 describe("agent client", () => {
+  it.each(["http", "wrapped"])("preserves authoritative terminal execution data on %s refusal", async transport => {
+    const context = stubContext();
+    const envelope = { error: { code: "agent.proposal.expired", message: "The reviewed invocation expired.", statusCode: 409 }, data: { proposalId: "proposal", executed: false, status: "expired", resourceType: "sample", resourceId: "one", summary: "Nothing was applied.", clientInvocation: null, toolResult: null } };
+    context.http.postJson = async <T>() => { if (transport === "http") throw new StudioHttpError(409, envelope.error.message, null, envelope); return envelope as T; };
+    await expect(createAgentClient(context).executeProposal("proposal", { revision: "r1" })).rejects.toMatchObject({ status: 409, code: "agent.proposal.expired", message: envelope.error.message, terminalOutcome: { proposalId: "proposal", approvalStatus: "expired", executed: false, toolResult: null } });
+  });
+
+  it.each([{ status: "approved", proposalId: "proposal" }, { status: "expired", proposalId: "another-proposal" }])("does not treat nonterminal or unrelated data as a terminal outcome: %j", async data => {
+    const context = stubContext(); const error = new StudioHttpError(409, "Refresh the review before retrying.", null, { error: { code: "agent.conflict", message: "Refresh the review before retrying." }, data: { ...data, executed: false } });
+    context.http.postJson = vi.fn(async () => { throw error; });
+    await expect(createAgentClient(context).executeProposal("proposal", { revision: "r1" })).rejects.toBe(error);
+    expect(error).not.toHaveProperty("terminalOutcome");
+  });
+
   it("uses provider-agnostic backend endpoints", async () => {
     const context = stubContext();
     const client = createAgentClient(context);

@@ -17,8 +17,8 @@ export function useWorkflowGraphOperationBatch({ draft, details, catalog, docume
 }) {
   const undoPoints = useRef(new Map<string, UndoPoint>());
   const pending = useRef<Pending | null>(null);
-  const latest = useRef({ draft, details, catalog, document, canEdit });
-  latest.current = { draft, details, catalog, document, canEdit };
+  const latest = useRef({ draft, details, catalog, document, canEdit, reviewHeld });
+  latest.current = { draft, details, catalog, document, canEdit, reviewHeld };
 
   useEffect(() => {
     const item = pending.current;
@@ -76,7 +76,7 @@ export function useWorkflowGraphOperationBatch({ draft, details, catalog, docume
     const undo = async (token: string) => {
       const current = latest.current;
       const point = undoPoints.current.get(token);
-      if (!point || !current.draft || !current.details || current.canEdit?.() === false || pending.current
+      if (!point || !current.reviewHeld || !current.draft || !current.details || current.canEdit?.() === false || pending.current
         || controller.snapshot?.client?.generationId !== point.generationId || getDraftRevision(current.draft) !== point.afterRevision) throw new Error("The whole-change undo point is stale; no state was replaced.");
       const id = `undo-${token}`;
       const completion = observe(id, getDraftRevision(point.before), { outcome: "applied", summary: "Restored the working draft before the whole Weaver change." }, new Date(Date.now() + 15000).toISOString(), true);
