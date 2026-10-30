@@ -11,6 +11,7 @@ import { WorkflowPublishChoiceFixture } from "./workflowPublishChoiceFixture";
 import { DialogHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/dialog/DialogHost";
 import { dialogs } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/dialogs";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/workspaceAppearance.css";
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/settings.css";
 import "./workspaceAppearanceFixture.css";
 
 const navigation = getStudioNavigation([

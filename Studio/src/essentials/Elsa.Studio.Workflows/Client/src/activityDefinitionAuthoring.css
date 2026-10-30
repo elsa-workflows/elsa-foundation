@@ -30,6 +30,7 @@
 .ad-draft-context .ad-save-chip.is-published { color: var(--studio-text-muted); }
 
 .ad-authoring-toolbar-actions {
+  /* Columns mirror publication, Test Run, Save now and Advanced; update them when adding actions. */
   display: grid;
   grid-template-columns: minmax(0, 16rem) repeat(3, max-content);
   flex: 0 0 auto;

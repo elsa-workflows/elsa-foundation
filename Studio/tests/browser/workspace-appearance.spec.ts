@@ -250,11 +250,17 @@ for (const style of styles) for (const mode of ["light", "dark"]) {
 }
 
 for (const style of styles) for (const mode of ["dark", "dim"]) {
-  test(`${style} keeps Meridian active navigation text readable in ${mode}`, async ({ page }) => {
+  test(`${style} keeps Meridian active navigation text readable in ${mode}`, async ({ page }, testInfo) => {
     await open(page, style, "meridian", mode, "appearance");
     if (style === "focus") await page.getByRole("button", { name: "Expand navigation", exact: true }).click();
     const active = page.locator(".nav-section a.active").first();
     await expect(active).toBeVisible();
+    await expect(active).toHaveAttribute("aria-current", "page");
+    const hovered = page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Home", exact: true });
+    await hovered.hover();
+    const background = (element: Element) => getComputedStyle(element).backgroundColor;
+    expect(await active.evaluate(background)).not.toBe(await hovered.evaluate(background));
+    await page.screenshot({ path: testInfo.outputPath("active-and-hover-navigation.png") });
     await page.addScriptTag({ content: axe.source });
     const violations = await active.evaluate(async element => {
       await document.fonts.ready;
