@@ -23,7 +23,11 @@ BACKEND_PACKAGES = [
     "Elsa.Workflows.Design.Validations", "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
     "Elsa.Activities.Design.Api", "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
     "Elsa.Activities.Design.Reconciliation", "Elsa.Activities.Design.Reconciliation.Clr",
-    "Elsa.Activities.Flowchart", "Elsa.Activities.Primitives", "Elsa.Agent", "Elsa.Agent.Api",
+    "Elsa.Activities.Flowchart", "Elsa.Activities.Primitives", "Elsa.Activities.Runtime",
+    "Elsa.Workflows.Publishing", "Elsa.Workflows.Publishing.Api",
+    "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore", "Elsa.Workflows.Runtime.Api",
+    "Elsa.Workflows.Runtime.Resumption", "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+    "Elsa.Agent", "Elsa.Agent.Api",
     "Elsa.Agent.Workflows", "Elsa.Agent.GitHubCopilot", "Elsa.Agent.Anthropic",
     "Elsa.Modularity.Api", "Elsa.Modularity.Nuplane", "Elsa.Cluster.Readability",
 ]

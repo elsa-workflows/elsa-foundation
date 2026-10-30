@@ -9,7 +9,7 @@ import unittest
 import xml.etree.ElementTree as ET
 import zipfile
 
-from consumers import select_native_archives, stage_native_archives
+from consumers import backend_features, configure_runtime, select_native_archives, stage_native_archives
 
 DI = "Microsoft.Extensions.DependencyInjection.Abstractions"
 
@@ -53,6 +53,32 @@ class RuntimeClosureTests(unittest.TestCase):
 
     def select(self):
         return select_native_archives(self.run, "backend", [self.root_archive], self.author)
+
+    def test_runtime_configuration_keeps_the_private_artifact_key_stable_and_enrolls_only_studio(self):
+        backend, studio = self.root / "backend", self.root / "studio"
+        for directory in (backend, studio):
+            directory.mkdir()
+            (directory / "appsettings.json").write_text(json.dumps({"Qualification": {}, "Studio": {}}))
+        (backend / "shells.json").write_text(json.dumps({"CShells": {"Shells": {"Authoring": {"Features": backend_features(backend)}}}}))
+        (studio / "shells.json").write_text("{}")
+        run = SimpleNamespace(profiles={
+            "backend": {"published": backend, "commandFile": backend / "command.json",
+                        "traceFiles": {"copilot": backend / "copilot.jsonl", "anthropic": backend / "anthropic.jsonl"}},
+            "studio": {"published": studio}})
+        options = dict(backend_url="http://127.0.0.1:18001", studio_url="http://127.0.0.1:18002",
+                       admin_username="private-fixture", admin_password="unit-fixture-only", enroll=True)
+        configure_runtime(run, **options)
+        def signing_key():
+            return json.loads((backend / "shells.json").read_text())["CShells"]["Shells"]["Authoring"]["Features"]["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence"]["RecoveryContinuationSigningKey"]
+        first = signing_key()
+        self.assertTrue(len(first.encode()) >= 32)
+        configure_runtime(run, **options, provider="anthropic")
+        self.assertTrue(first == signing_key())  # Never put private key material in an assertion message.
+        self.assertNotIn("EnrollOwnedStore", json.loads((backend / "appsettings.json").read_text())["Qualification"])
+        self.assertIs(True, json.loads((studio / "appsettings.json").read_text())["Qualification"]["EnrollOwnedStore"])
+        for directory in (backend, studio):
+            for name in ("appsettings.json", "shells.json"):
+                self.assertEqual(0, (directory / name).stat().st_mode & 0o077)
 
     def test_framework_assembly_sharing_does_not_satisfy_the_nuget_dependency(self):
         before = copy.deepcopy(self.author)

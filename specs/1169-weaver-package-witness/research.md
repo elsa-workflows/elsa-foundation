@@ -14,6 +14,12 @@ The single mixed-artifact verification passed that startup and health, then the 
 
 Source review corrected an overprescribed host recipe: Foundation.Host/Workbench use ordinary Nuplane loading, and the backend's existing `PackageManifestFeatureCatalogContributor` reads positively unenrolled installed content. Its required package-list/reconcile/load operations support that profile. Studio's protected content reader requires coordinated admission, as stated in custom-hosting guidance. Use a fresh ordinary backend store and keep Studio coordinated. This changes no user acceptance criterion or resource authority/CAS rule, performs no enrolled-store cutover and promises no general runtime coordination repair. Both actual host journeys and every package transition still require fresh final qualification.
 
+## Source-owned activity catalog provisioning
+
+The first ordinary-store activation passed native startup/health and showed no root-lock refusal, then failed before Identity while CLR activity reconciliation used its catalog-only EF fallback. The source creates global activity definitions with null tenant identity; the generic atomic writer inherits the default selected scope and rejects the staged global rows. No tenant guard or whole-host global override is justified by this finding.
+
+The normal Workbench composes `IActivitySourceVersionPublisher` through Workflows Publishing API. That module-owned bridge uses its dedicated source-publication commit path. The recipe therefore includes Publishing/API/EF, its declared runtime API/triggers, the artifact-only EF lane and Resumption, plus ActivitiesRuntime's CLR type registration. This is not a fix for the failing catalog-only fallback. The selected runtime artifact feature requires a private persistent signing key. Native startup catalog publication is distinct from a user workflow save/publish/dispatch, which remains explicit. Genuine archive closure, composition validation and another bounded baseline observation remain required before any journey acceptance.
+
 ## Owning resource
 
 **Decision**: A separately authored widget's visibility in the explicit personal Home layout.

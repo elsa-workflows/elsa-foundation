@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import secrets
 import shutil
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
@@ -172,7 +173,9 @@ def backend_features(published):
         "Expressions", "ExpressionsApi", "ApiCapabilities", "FoundationIdentityAbstractions", "FoundationIdentityApi",
         "StudioPreferences", "StudioPreferencesApi", "WorkflowsDesignApi", "WorkflowDesignValidations",
         "ActivitiesDesignApi", "ActivitiesDesignReconciliation", "ClrActivityReconciliation",
-        "ActivitiesFlowchart", "ActivitiesPrimitives", "FoundationAgentAbstractions", "FoundationAgentApi",
+        "ActivitiesFlowchart", "ActivitiesPrimitives", "ActivitiesRuntime",
+        "WorkflowsPublishing", "WorkflowsPublishingApi", "WorkflowsRuntimeApi", "WorkflowsRuntimeTriggers",
+        "WorkflowsRuntimeResumption", "FoundationAgentAbstractions", "FoundationAgentApi",
         "FoundationWorkflowsAgent", "ModularityApi",
     )}
     for feature, database in (
@@ -180,12 +183,15 @@ def backend_features(published):
         ("StudioPreferencesEntityFrameworkCore", "preferences.db"),
         ("ActivitiesDesignEntityFrameworkCore", "activities.db"),
         ("WorkflowsDesignEntityFrameworkCore", "workflow-design.db"),
+        ("WorkflowsPublishingEntityFrameworkCore", "publishing.db"),
+        ("WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence", "runtime-artifacts.db"),
     ):
         features[feature] = {"Provider": "Sqlite", "ConnectionString": "Data Source=" + str(published / "state" / database)}
     features["FoundationIdentityAspNetCoreIdentityEntityFrameworkCore"].update(
         IsDevelopmentOrDemo=True, SeedAdminUserName="", SeedAdminPassword="", SeedAdminEmail="", SeedAdminRoleName="administrator")
     features["FoundationIdentityAspNetCoreIdentity"] = {"IsDefault": True, "AllowedReturnUrlOrigins": []}
     features["FoundationIdentityOpenIddict"] = {"IsDevelopmentOrDemo": True, "AutoMigrate": False}
+    features["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence"]["RecoveryContinuationSigningKey"] = ""
     return features
 
 
@@ -235,6 +241,11 @@ def configure_runtime(run, *, backend_url, studio_url, admin_username, admin_pas
     features["FoundationIdentityAspNetCoreIdentityEntityFrameworkCore"].update(
         SeedAdminUserName=admin_username, SeedAdminPassword=admin_password, SeedAdminEmail="owner@weaver.invalid")
     features["FoundationIdentityOpenIddict"]["Issuer"] = backend_url.rstrip("/") + "/"
+    artifacts = features["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence"]
+    if not artifacts.get("RecoveryContinuationSigningKey"):
+        artifacts["RecoveryContinuationSigningKey"] = secrets.token_urlsafe(48)
+    check(len(artifacts["RecoveryContinuationSigningKey"].encode()) >= 32,
+          "Owned runtime artifact paging needs its private persistent signing key")
     write_json(backend / "shells.json", document)
     settings = json.loads((studio / "appsettings.json").read_text())
     settings["Studio"].update(BackendBaseUrl=backend_url.rstrip("/"), BackendServerBaseUrl=backend_url.rstrip("/"))
