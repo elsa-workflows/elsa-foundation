@@ -17,6 +17,8 @@
     <ProjectReference Include="../../../../../../tools/bpmn/NativeWorkDispatch/NativeWorkDispatch.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/events/model-broadcast/empty-cohort/retained-runtime.sqlite.gz;../../../../../../specs/1017-direct-bpmn-hosting/evidence/events/model-broadcast/empty-cohort/retained-design.sqlite.gz;../../../../../../specs/1017-direct-bpmn-hosting/evidence/events/model-broadcast/empty-cohort/late-before-crash.json"
+          Link="Fixtures/signal-cancellation-input/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json"
           Link="Fixtures/legacy-baseline-manifest.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/baseline/native-parents/api.json"
