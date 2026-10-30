@@ -1,5 +1,63 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
+for (const theme of ["light", "dark"]) {
+  for (const viewport of [
+    { width: 1440, long: false, description: true },
+    { width: 1440, long: false, description: false },
+    { width: 360, long: true, description: true }
+  ]) {
+    test(`Activity Definition header stays compact and aligned (${theme}, ${viewport.width}, description=${viewport.description})`, async ({ page }, testInfo) => {
+      await mockActivityDefinitions(page);
+      const detail = definition();
+      if (viewport.long) detail.definition.displayName = "Invoice processing rules for international accounts and regional policy groups";
+      if (!viewport.description) detail.definition.description = "";
+      await page.route("**/design/activities/definitions/definition-1", route => route.fulfill({ json: detail }));
+      await page.route(/\/design\/activities\/definitions\/definition-1\/drafts\?.*/, route => route.fulfill({
+        json: pageOf([{ ...draft(), actions: [{ action: "edit-draft", allowed: true }] }])
+      }));
+      await page.setViewportSize({ width: viewport.width, height: 900 });
+      await page.goto(`/?mode=activity-definitions&definition=definition-1&section=overview&theme=${theme}`);
+      const header = page.locator(".ad-definition-header");
+      await expect(header.getByRole("heading", { name: detail.definition.displayName })).toBeVisible();
+      await expect(header.getByRole("button", { name: "Edit draft", exact: true })).toBeEnabled();
+      await expect(header.locator(".ad-kicker")).toHaveCount(0);
+      const geometry = await page.evaluate(() => {
+        const bounds = (selector: string) => document.querySelector(selector)!.getBoundingClientRect();
+        const header = bounds(".ad-definition-header"), heading = bounds("#activity-definition-title"),
+          actions = bounds(".ad-definition-header .ad-header-actions"), tabs = bounds(".ad-tabs");
+        return { height: header.height, gap: tabs.top - header.bottom, titleCenter: heading.top + heading.height / 2,
+          actionCenter: actions.top + actions.height / 2, actionsTop: actions.top, headingBottom: heading.bottom,
+          overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+      });
+      expect(geometry.overflow).toBeLessThanOrEqual(0);
+      expect(geometry.gap).toBeGreaterThanOrEqual(0);
+      expect(geometry.gap).toBeLessThanOrEqual(8);
+      if (viewport.width > 760) {
+        expect(geometry.height).toBeLessThan(120);
+        expect(Math.abs(geometry.titleCenter - geometry.actionCenter)).toBeLessThanOrEqual(6);
+      } else {
+        expect(geometry.actionsTop).toBeGreaterThan(geometry.headingBottom);
+      }
+      await page.screenshot({ path: testInfo.outputPath(`header-${theme}-${viewport.width}.png`) });
+      await page.getByText("Advanced", { exact: true }).click();
+      await expect(page.getByText("Finance", { exact: true })).toBeVisible();
+      const back = header.getByRole("button", { name: "Activity Definitions", exact: true });
+      await back.focus();
+      await back.press("Enter");
+      await expect(page.getByRole("heading", { name: "Activity Definitions", exact: true })).toBeVisible();
+    });
+  }
+
+  test(`Activity Definition header preserves source-owned read-only controls (${theme})`, async ({ page }) => {
+    await mockActivityDraftManagement(page, { sourceOwned: true });
+    await page.goto(`/?mode=activity-definitions&definition=definition-1&section=overview&theme=${theme}`);
+    const header = page.locator(".ad-definition-header");
+    await expect(header.getByRole("button", { name: "Refresh", exact: true })).toBeEnabled();
+    await expect(header.locator(".ad-primary-action")).toHaveCount(0);
+    await expect(page.getByText("Provided by an installed module. Read-only in Studio.")).toBeVisible();
+  });
+}
+
 test("Activity Definitions supports keyboard collection-to-workbench navigation and exact draft URLs", async ({ page }) => {
   await mockActivityDefinitions(page);
   await page.goto("/?mode=activity-definitions");
