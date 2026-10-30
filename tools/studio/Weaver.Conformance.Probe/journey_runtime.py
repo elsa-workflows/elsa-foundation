@@ -40,6 +40,20 @@ def same(left, right):
     return json.dumps(left, sort_keys=True, separators=(",", ":"), allow_nan=False) == json.dumps(right, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
+def browser_inputs(config):
+    """Export only allowlisted public journey inputs; the original auth config stays private."""
+    summary = {key: config[key] for key in ("journey", "provider", "studioOrigin", "backendOrigin")}
+    summary["driverSha256"] = sha(TOOL / "browser.mjs")
+    if "workflow" in config:
+        fields = ("definitionId", "activityId", "draftId", "definitionPath", "draftPath", "validationPath")
+        summary["workflow"] = {key: config["workflow"][key] for key in fields}
+        check(all(isinstance(value, str) and value for value in summary["workflow"].values()), "Browser summary requires actual native workflow identities and paths")
+        check(all(summary["workflow"][key].startswith("/") and not summary["workflow"][key].startswith("//")
+                  and "?" not in summary["workflow"][key] and "#" not in summary["workflow"][key]
+                  for key in ("definitionPath", "draftPath", "validationPath")), "Browser summary paths must be local native paths without auth/query metadata")
+    return summary
+
+
 def expect_error(response, status, code, *, message=None):
     response.require_status(status)
     value = response.json()
@@ -238,7 +252,7 @@ class JourneyRuntime:
                      env={key: value for key, value in os.environ.items() if key in RUNTIME_ENVIRONMENT})
         observed = json.loads((output / "observation.json").read_text())
         check(not observed.get("failure"), "Browser control stopped with an unexpected cause: " + name)
-        observed["evidence"].append(retained(root / "config-private.json"))
+        observed["evidence"].append(self.save(root, "browser-inputs", browser_inputs(config)))
         if workflow: observed["evidence"].extend(config["workflow"]["evidence"])
         if name not in ("malformed-result", "lost-confirmation", "deny-before-effect", "client-binding-removed"):
             correlation = correlate_browser_protocol(t, output, provider, offset=offset)

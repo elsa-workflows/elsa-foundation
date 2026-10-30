@@ -60,6 +60,28 @@ def _unchanged(before, after):
     return {"ownerObserved": True, "noFalseSuccess": True, "noReplay": True}
 
 
+def _semantic_refusal(turn, sdk_result, tool_name):
+    """SDK transport returned; require its real, correlated native semantic failure too."""
+    check(turn.stream is not None, "A preparation refusal needs the actual native stream")
+    events = [frame.value for frame in turn.stream.frames]
+    contributions = [event["payload"] for event in events if event["kind"] == "contributedResult"
+                     and isinstance(event.get("payload"), dict) and event["payload"].get("toolName") == tool_name]
+    check(len(contributions) == 1, "Actual refusal did not emit one semantic contributed result")
+    result = contributions[0]
+    call_id = result.get("toolCallId")
+    check(isinstance(call_id, str) and bool(call_id) and result.get("succeeded") is False
+          and result.get("payload") is None and result.get("receipt") is None
+          and result.get("content") == sdk_result["error"]["message"], "Contributed result did not preserve the actual typed refusal")
+    started = [event["payload"] for event in events if event["kind"] == "toolCallStarted"
+               and isinstance(event.get("payload"), dict) and event["payload"].get("toolCallId") == call_id]
+    completed = [event["payload"] for event in events if event["kind"] == "toolCallCompleted"
+                 and isinstance(event.get("payload"), dict) and event["payload"].get("toolCallId") == call_id]
+    check(len(started) == len(completed) == 1 and started[0].get("toolName") == tool_name
+          and completed[0].get("toolName") == tool_name and completed[0].get("succeeded") is False
+          and completed[0].get("summary") == result["content"] and same(completed[0].get("result"), result),
+          "Actual semantic completion was missing, successful, or correlated to another SDK/native invocation")
+
+
 def _seed_principals(run):
     """Configure only real private password identities and concrete, predeclared IAM profiles."""
     primary = "witness-owner-" + secrets.token_hex(8)
@@ -189,6 +211,7 @@ def _context_controls(runtime, records):
         # The SDK return preserves the actual semantic error code; SSE transport alone does not.
         check(value.get("error", {}).get("code") == expected,
               "Actual SDK return did not identify the expected module preparation cause: " + expected)
+        _semantic_refusal(turn, value, runtime.witness["writeTool"])
         after, aref, aread = runtime.snapshot(name + "-owner-after")
         runtime.record(records, name, bref, aref, [bread, aread, *turn.evidence], _unchanged(before, after),
             actual={"stage": "tool-preparation", "diagnostic": expected})

@@ -7,11 +7,39 @@ import unittest
 from unittest.mock import patch
 
 from agent_transport import Response, AgentTransportError
-from journey_runtime import expect_error, same, BASE_GRANTS
-from journeys import _unchanged, _seed_principals, qualify_distributions
+from journey_runtime import expect_error, same, BASE_GRANTS, browser_inputs
+from journeys import _unchanged, _seed_principals, qualify_distributions, _semantic_refusal
 
 
 class JourneyBoundariesTests(unittest.TestCase):
+    def test_browser_export_summary_cannot_copy_private_auth_or_config_paths(self):
+        config = {"journey": "workflow", "provider": "copilot", "studioOrigin": "http://127.0.0.1:51001", "backendOrigin": "http://127.0.0.1:51002",
+                  "storageState": "/private/auth-state.json", "bearer": "PRIVATE_CREDENTIAL", "commandFile": "/private/command.json",
+                  "traceFile": "/private/trace.jsonl", "workflow": {"definitionId": "definition", "activityId": "activity", "draftId": "draft",
+                  "definitionPath": "/design/workflows/definitions/definition", "draftPath": "/design/workflows/drafts/draft",
+                  "validationPath": "/design/workflows/drafts/draft/validations", "privateAuth": "/private/nested-auth.json", "evidence": []}}
+        summary = browser_inputs(config)
+        self.assertEqual({"journey", "provider", "studioOrigin", "backendOrigin", "driverSha256", "workflow"}, set(summary))
+        self.assertEqual({"definitionId", "activityId", "draftId", "definitionPath", "draftPath", "validationPath"}, set(summary["workflow"]))
+        self.assertNotIn("/private/", json.dumps(summary)); self.assertNotIn("PRIVATE_CREDENTIAL", json.dumps(summary))
+        config["workflow"]["draftPath"] += "?accessToken=PRIVATE_CREDENTIAL"
+        with self.assertRaises(RuntimeError): browser_inputs(config)
+
+    def test_semantic_refusal_requires_native_failure_and_correlated_completion(self):
+        result = {"toolCallId": "native-call", "toolName": "declared_tool", "succeeded": False,
+                  "content": "The actual declared operation was refused.", "payload": None, "receipt": None}
+        events = [{"kind": "toolCallStarted", "payload": {"toolCallId": "native-call", "toolName": "declared_tool"}},
+                  {"kind": "toolCallCompleted", "payload": {"toolCallId": "native-call", "toolName": "declared_tool", "succeeded": False,
+                   "summary": result["content"], "result": result}}, {"kind": "contributedResult", "payload": result}]
+        turn = lambda rows: SimpleNamespace(stream=SimpleNamespace(frames=[SimpleNamespace(value=row) for row in rows]))
+        sdk = {"error": {"code": "declared.refused", "message": result["content"]}}
+        _semantic_refusal(turn(events), sdk, "declared_tool")
+        for invalid in ([], events[:2], events[1:], [events[0], events[2]]):
+            with self.subTest(events=invalid), self.assertRaises(RuntimeError): _semantic_refusal(turn(invalid), sdk, "declared_tool")
+        for key, value in (("toolCallId", "unrelated-sdk-call"), ("succeeded", True), ("summary", "SDK transport completed.")):
+            changed = json.loads(json.dumps(events)); changed[1]["payload"][key] = value
+            with self.subTest(field=key), self.assertRaises(RuntimeError): _semantic_refusal(turn(changed), sdk, "declared_tool")
+
     def test_owner_comparison_does_not_coerce_json_boolean_to_integer(self):
         with self.assertRaises(RuntimeError):
             _unchanged({"value": {"visible": True}}, {"value": {"visible": 1}})
