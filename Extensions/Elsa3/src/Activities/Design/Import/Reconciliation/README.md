@@ -59,7 +59,7 @@ start ends with one information line per persistence scope:
 Elsa 3 import 'elsa3' in persistence scope 'default': 4 reusable activities and 5 workflows in place; 5 workflows published by this start; 0 skipped.
 ```
 
-"In place" counts what this start imported (or found imported) and what has been published at least once, by this
+"In place" counts, of what this start imported (or found imported), what has been published at least once, by this
 start or an earlier one; it does not say which version a slot serves now. A restart with unchanged input reports
 `0 workflows published by this start`.
 
