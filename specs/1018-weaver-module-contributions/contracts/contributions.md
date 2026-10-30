@@ -8,6 +8,24 @@ Core exposes contracts, models, named events and thin bridges. New `Elsa.Agent` 
 
 All 16 Agent Core implementation-shape exceptions are removed when their implementations move. Remove Core feature registration/manifest-generator dependencies when no longer used, preserving only genuinely thin AI bridges. Default implementation types are internal except genuine consumer feature/extension APIs; tests use domain-owned visibility. Record public API and SemVer delta, update affected catalogs/EXTENSION_POINTS and verify package closure.
 
+### Preview migration
+
+The #3437 candidate changes preview APIs; rebuild existing integrations against matching backend and Studio SDK artifacts. It does not provide binary compatibility for the removed types or freeze the #3438 contract.
+
+| Previous surface | Current integration |
+|---|---|
+| `Elsa.Agent.Core` supplied defaults and `AddFoundationAgentAbstractions` | Hosts reference `Elsa.Agent` and import `Elsa.Agent.Extensions`. Contract-only module authors continue referencing `Elsa.Agent.Core`; interfaces/models remain under `Elsa.Agent.Core.Contracts` and `.Models`. |
+| `Elsa.Agent.Core.FoundationAgentAbstractionsFeature` | `Elsa.Agent.FoundationAgentAbstractionsFeature`, in package `Elsa.Agent`. The configured feature name stays `FoundationAgentAbstractions`. Discover ordinary `Events` infrastructure in the host. |
+| Subclasses/imports of `Elsa.Agent.Core.Services` defaults | Defaults now belong to `Elsa.Agent.Services` and are internal. Register an implementation of the public Core contract rather than depending on a default's concrete type. |
+| SDK `StudioAiContextAttachment` / `StudioAiContextProviderContribution` | `StudioAgentContextAttachment` / `StudioAgentContextProviderContribution` through `api.agent.contextProviders`; a collector can return `StudioAgentContextCollection` with explicit diagnostics. |
+| SDK `StudioAiSurfaceContribution` / `StudioAiToolContribution` | Use the generic `StudioAgentSurface` request context and the applicable `api.agent` capability, action, tool-slot or tool-contract contribution. Installed backend tools still own authority and execution. This is not a mechanical type rename. |
+| SDK `StudioAiProposalRendererContribution`, `StudioAiProposalRendererProps`, `StudioAiProposalSummary` | `StudioAgentResultRendererContribution` / `StudioAgentResultRendererProps`, with versioned module payloads and the generic prepared invocation/result/receipt. Shared controls own approval and execution status. |
+| SDK `StudioWorkflowContextActivity`, `StudioWorkflowContextDiagnostic`, `StudioWorkflowContextSnapshot` | Keep workflow document shapes in the workflow module. Contribute generic attachments with that module's target, revision, client binding and schema; the host SDK no longer defines a workflow snapshot. |
+
+`StudioAiPromptRequest`, `StudioAiPromptResult` and `StudioAiPromptActionContribution` remain aliases for their `StudioAgent*` counterparts. `api.ai` retains prompt dispatch compatibility; it is not a second context/tool registry. Other retained `StudioAi*` names and `StudioWorkflowContextConnection` are not removed by this migration. The [SDK barrel](../../../Studio/src/essentials/Elsa.Studio.Hosting/Client/src/sdk/index.ts) is the export authority.
+
+Build an external module against the actual `@elsa-workflows/studio-sdk` archive and mark the SDK external in its browser bundle, so runtime imports use the host's shared SDK instance. Declare `StudioModule.RequiredSdkVersion` for the host's SDK API version. Current manifest admission accepts `*`, an exact version, or a `^` value with the same major; it does not establish source compatibility between preview artifacts. Keep this admission separate from the module's tool/context/payload schema versions. The [independent witness](../../../tools/studio/Weaver.Conformance.Probe/README.md) must verify an incompatible module and restored original artifacts before contract acceptance.
+
 ## Backend contribution fan-in
 
 | Named Core event | Existing contributor family | One default aggregator |

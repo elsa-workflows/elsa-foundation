@@ -2,6 +2,12 @@
 
 Reviewed current source at c986f9dd. Independent read-only investigations covered owning-resource authority and existing package/native/provider infrastructure. No new common public API is justified before execution.
 
+## Observed startup correction
+
+The [two bounded 30 October diagnostics](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6522243290) identified same-process exclusive native lock contention. Early `MapShells` registry construction starts readability's detached publication loop; its real package-catalog read acquires `root.lock` before initial reconciliation. Managed/native thread correlation establishes the owning call, beyond the earlier before/after snapshots. A diagnostic pre-start gate only hid this ordering and is not a correction.
+
+The scoped correction queues background publication until the public host `ApplicationStarted` boundary, preserving installed subscriptions, conservative pins, direct schema reads and standalone service-provider behavior. It changes neither native lock policy nor the owning resource. Causal regression and normal ungated package-consumer verification precede the final distribution run. It does not promise serialization of later native operations; add/remove/restore and the remaining witness controls still test those boundaries.
+
 ## Owning resource
 
 **Decision**: A separately authored widget's visibility in the explicit personal Home layout.

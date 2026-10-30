@@ -81,6 +81,8 @@ Known provider implementations:
 
 The unrelated-resource examples above are the private [owned journey backend fixture](../../../../tools/studio/Composition.Probe/fixtures/WeaverJourney.Backend.cs.in), not a shipped resource module or completed independent-consumer qualification.
 
+The separately authored [Acme Home fixture](../../../../tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Backend/) adds `WidgetContextSource` (`IAgentContextProvider`), `WidgetCapabilities` (`IAgentCapabilityProvider`), and `ReadWidgetTool` / `SetWidgetVisibilityTool` (`IAgentTool`) through `AcmeHomeWidgetFeature` *(cross-domain — qualification package)*. Its [Studio companion](../../../../tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Studio/) contributes public SDK context, prompt actions and result rendering. These are implementation examples; #3438's actual consumer journeys, removal controls and resulting-main verification still gate independent-package acceptance. The [preview migration](../../../../specs/1018-weaver-module-contributions/contracts/contributions.md#preview-migration) identifies removed exports and package/namespace changes.
+
 ## Events
 
 All three [Core events](../Core/AgentContributionsCollecting.cs) implement `IEvent`. Delivery is **Sequential** through `IInlineEventPublisher`: the publisher awaits contributions and unexpected exceptions/cancellation propagate. Expected source limitations use `AgentContributionDiagnostic`; a required diagnostic blocks context admission. Each output collection is initialized and get-only, with direct mutable collection access for its one aggregator.

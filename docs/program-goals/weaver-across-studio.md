@@ -33,6 +33,11 @@ verification across M0–M5. It supersedes the establishment-only session bounda
 milestone transitions proceed autonomously; escalate consequential decisions outside scope, missing
 authority or genuine external blockers while continuing independent useful work.
 
+The [30 October scoped exception](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6521994194)
+authorizes bounded diagnosis and concrete-fix verification after #3438 reached the organization’s
+three-failure startup stop. It preserves the full delivery scope and normal acceptance, review and
+merge gates. The issue records the fresh claim, diagnostic limits and observed results.
+
 The [M0 baseline](../reports/weaver-baseline.md) records authenticated `missing-auth` diagnostics,
 the actual loaded-module inventory, source wiring findings and the initial finite coverage matrix.
 It does not establish a successful provider turn or applied effect.

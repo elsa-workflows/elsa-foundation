@@ -14,6 +14,8 @@ The module contributes to [Agent foundation](../Elsa.Agent/EXTENSION_POINTS.md) 
 
 The named context/capability/tool fan-in and generic review lifecycle are owned by Agent foundation. This module registers contributions, not additional aggregating handlers or provider loops.
 
+This subset is the #3437 candidate verified by the owning issue's composed-host evidence. The separate [package witness](../../../../tools/studio/Weaver.Conformance.Probe/README.md) remains in progress under #3438. Graph batches, activity creation, expression authoring and troubleshooting remain [#3442](https://github.com/elsa-workflows/elsa-foundation/issues/3442); a position-change receipt does not establish those journeys. Preview package/API migration is documented in the [canonical contribution contract](../../../../specs/1018-weaver-module-contributions/contracts/contributions.md#preview-migration).
+
 ## Legacy domain seams
 
 `IWorkflowAgentContextProvider` retains the minimized workflow-specific context view. `IWorkflowActivityCatalogProvider` currently returns no invented catalog entries. `IWorkflowRevisionProvider` has no authoritative unsaved-editor revision source; exact layout preparation uses the admitted client snapshot and the owning editor rechecks its live revision before application.
