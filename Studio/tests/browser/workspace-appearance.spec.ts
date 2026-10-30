@@ -248,3 +248,19 @@ for (const style of styles) for (const mode of ["light", "dark"]) {
     expect(borders.actual).toBe(borders.expected);
   });
 }
+
+for (const style of styles) for (const mode of ["dark", "dim"]) {
+  test(`${style} keeps Meridian active navigation text readable in ${mode}`, async ({ page }) => {
+    await open(page, style, "meridian", mode, "appearance");
+    if (style === "focus") await page.getByRole("button", { name: "Expand navigation", exact: true }).click();
+    const active = page.locator(".nav-section a.active").first();
+    await expect(active).toBeVisible();
+    await page.addScriptTag({ content: axe.source });
+    const violations = await active.evaluate(async element => {
+      await document.fonts.ready;
+      const result = await (window as Window & { axe: { run: (root: Element, options: object) => Promise<{ violations: Array<{ id: string; nodes: Array<{ failureSummary?: string }> }> }> } }).axe.run(element, { runOnly: ["color-contrast"] });
+      return result.violations.map(violation => ({ id: violation.id, failures: violation.nodes.map(node => node.failureSummary) }));
+    });
+    expect(violations).toEqual([]);
+  });
+}

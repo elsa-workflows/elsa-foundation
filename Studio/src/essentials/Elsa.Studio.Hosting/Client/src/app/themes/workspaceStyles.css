@@ -76,7 +76,7 @@ html[data-workspace-style] :is(.nav-section a, .nav-disclosure) {
 
 html[data-workspace-style] .nav-section a.active {
   background: var(--studio-accent-soft);
-  color: var(--studio-accent);
+  color: var(--studio-text);
   box-shadow: none;
 }
 
