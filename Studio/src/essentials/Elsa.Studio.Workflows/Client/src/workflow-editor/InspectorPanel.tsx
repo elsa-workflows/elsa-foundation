@@ -78,6 +78,7 @@ interface InspectorPanelProps {
   catalog: ActivityCatalogItem[];
   choicesForSlot?(owner: ActivityNode, slot: ChildSlot): ActivityCatalogItem[];
   placementNotice?: string;
+  bpmnRoutingPanel?: ReactNode;
   catalogByVersion?: Map<string, ActivityCatalogItem>;
   selectedSupportsScopedVariables: boolean;
   variablesPanel?: ReactNode;
@@ -132,6 +133,7 @@ export function InspectorPanel({
   catalog,
   choicesForSlot,
   placementNotice,
+  bpmnRoutingPanel,
   catalogByVersion,
   selectedSupportsScopedVariables,
   variablesPanel,
@@ -336,6 +338,7 @@ export function InspectorPanel({
             />
           ) : null}
           {propertiesPanel}
+          {bpmnRoutingPanel}
         </StudioTabPanel>
         <StudioTabPanel {...tabPanelProps("outputs")}>
           <ActivityOutputsPanel

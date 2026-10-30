@@ -36,9 +36,10 @@ import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting
 import { activityGraphLayoutFromDesign } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphDocumentAdapter";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+const bpmnDecisionFixture = new URLSearchParams(window.location.search).get("bpmn-decision");
 const adaptivePorts = new URLSearchParams(window.location.search).get("adaptive-ports");
 const collectionSlotsFixture = new URLSearchParams(window.location.search).get("collection-slots");
-const persistFixture = Boolean(adaptivePorts || collectionSlotsFixture);
+const persistFixture = Boolean(adaptivePorts || collectionSlotsFixture || bpmnDecisionFixture);
 const adaptiveStorageKey = `adaptive-ports:${window.location.search}`;
 
 const writeLineCatalog: ActivityCatalogItem = {
@@ -133,11 +134,27 @@ function editorDraft(): WorkflowDraft {
       root.structure!.payload.sequenceFlows = [];
     }
   }
+  if (bpmnDecisionFixture) root.structure!.payload = {
+    activities: bpmnDecisionFixture === "unbound" ? [] : [{ nodeId: "decision", activityVersionId: "decision-v1", inputs: [], outputs: [], structure: null }],
+    elements: [
+      { elementId: "decision-element", elementType: bpmnDecisionFixture.startsWith("legacy") ? "task" : "exclusiveGateway",
+        ...(bpmnDecisionFixture !== "unbound" ? { childNodeId: "decision" } : {}),
+        ...(bpmnDecisionFixture === "legacy-loop" ? { loopCharacteristics: { kind: "standard" } } : {}) },
+      { elementId: "high-end", elementType: "endEvent", name: "High" },
+      { elementId: "low-end", elementType: "endEvent", name: "Low" }
+    ],
+    sequenceFlows: [
+      { flowId: "high-flow", sourceRef: "decision-element", targetRef: "high-end" },
+      { flowId: "low-flow", sourceRef: "decision-element", targetRef: "low-end" }
+    ]
+  };
   return {
     id: "draft-1",
     definitionId: "definition-1",
     state: { variables: [], rootActivity: root, inputs: [], outputs: [] },
-    layout: adaptivePorts ? [
+    layout: bpmnDecisionFixture ? [
+      { nodeId: "decision-element", x: 220, y: 200 }, { nodeId: "high-end", x: 480, y: 80 }, { nodeId: "low-end", x: 480, y: 320 }
+    ] : adaptivePorts ? [
       { nodeId: "write-one", x: 200, y: 80 },
       { nodeId: "write-two", x: adaptivePorts === "offset" ? 305 : 200, y: adaptivePorts === "offset" ? 430 : adaptivePorts === "dense" ? 1100 : 320 },
       { nodeId: "write-three", x: 600, y: 80 }
@@ -262,10 +279,13 @@ export function createEditorContext(live?: { status: string; disconnected: boole
   const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");
   const paletteFixtures: ActivityCatalogItem[] = new URLSearchParams(window.location.search).has("palette-context") ? [
     bpmnActivity,
-    { ...writeLineCatalog, activityVersionId: "decision-v1", activityTypeKey: "Elsa.BpmnDecision", displayName: "BPMN Decision", category: "BPMN", paletteHints: { containerModes: ["bpmn"], description: "BPMN Decision is intended for a gateway in a BPMN Process." } },
+    { ...writeLineCatalog, activityVersionId: "decision-v1", activityTypeKey: "Elsa.Activities.Bpmn.Activities.BpmnDecision", displayName: "BPMN Decision", category: "BPMN", inputs: [{
+      referenceKey: "Outcome", name: "Outcome", typeName: "System.String", displayName: "Outcome", order: 0,
+      isBrowsable: true, isWrapped: true, defaultSyntax: "Literal"
+    }], paletteHints: { containerModes: ["bpmn"], description: "BPMN Decision is intended for a gateway in a BPMN Process." } },
     { ...writeLineCatalog, activityVersionId: "complete-v1", activityTypeKey: "Elsa.Complete", displayName: "Complete", paletteHints: { resourceKinds: ["activity-definition-graph"] } }
   ] : [];
-  const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity, ...(slotAssignment ? [whileActivity] : []), ...(rootSlots ? [ifActivity] : []), ...paletteFixtures, ...(adaptivePorts || collectionSlotsFixture ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : []), ...(collectionSlotsFixture ? [collectionActivity(collectionSlotsFixture === "parallel" ? "parallel" : "switch")] : [])];
+  const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity, ...(slotAssignment ? [whileActivity] : []), ...(rootSlots ? [ifActivity] : []), ...paletteFixtures, ...((adaptivePorts || collectionSlotsFixture) && !bpmnDecisionFixture ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : []), ...(collectionSlotsFixture ? [collectionActivity(collectionSlotsFixture === "parallel" ? "parallel" : "switch")] : [])];
   const compiled = (node: ActivityNode): object => ({
     executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
     activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown",

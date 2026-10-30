@@ -104,7 +104,8 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
         IReadOnlyDictionary<string, ExecutableNode> placedActivities,
         IReadOnlyCollection<VariableDefinition> workflowVariables,
-        IReadOnlyCollection<InputDefinition> workflowInputs)
+        IReadOnlyCollection<InputDefinition> workflowInputs,
+        ActivityChildOutcomeProjection? outcomeProjection = null)
     {
         if (!Enum.IsDefined(activity.ExecutionPlacement))
             throw BackgroundExecutionNotEligible(activity, $"execution placement '{activity.ExecutionPlacement}' is not defined");
@@ -146,7 +147,7 @@ public sealed class ExecutableNodeCompiler(
         var structure = CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity));
         var activityContract = clrActivityType is null
             ? null
-            : BuildActivityContract(activity, activityVersion, inputDefinitions, clrActivityType, activityType, structure, inputBindings: inputBindings);
+            : BuildActivityContract(activity, activityVersion, inputDefinitions, clrActivityType, activityType, structure, inputBindings: inputBindings, outcomeProjection: outcomeProjection);
 
         if (activity.ExecutionPlacement == ActivityExecutionPlacement.Background)
             ValidateBackgroundExecution(activity, clrActivityType, childSlots, structure, activityContract);
@@ -476,7 +477,8 @@ public sealed class ExecutableNodeCompiler(
         string activityTypeKey,
         ExecutableActivityStructure? structure,
         string? contractVersion = null,
-        IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null)
+        IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null,
+        ActivityChildOutcomeProjection? outcomeProjection = null)
     {
         var resultType = FindTypedActivityResult(activityType);
         if (resultType is null)
@@ -521,7 +523,16 @@ public sealed class ExecutableNodeCompiler(
             })
             .ToArray();
         var resultReference = TypeReferenceFactory.FromClrType(resultType, TypeAliasConvention.CanonicalAlias);
-        var outcomes = ResolveOutcomes(activityType, structure, inputBindings);
+        var outcomes = ResolveOutcomes(activityType, structure, inputBindings).ToHashSet(StringComparer.Ordinal);
+        if (outcomeProjection is not null && StringComparer.Ordinal.Equals(outcomeProjection.ActivityTypeKey, activityTypeKey))
+        {
+            outcomes.UnionWith(outcomeProjection.OutcomeNames);
+            // A structure can also declare a fixed literal outcome that intentionally selects its default path.
+            if (outcomeProjection.LiteralOutcomeInputKey is { } inputKey &&
+                inputBindings?.GetValueOrDefault(inputKey)?.LiteralValue is { ValueKind: JsonValueKind.String } literal &&
+                !string.IsNullOrWhiteSpace(literal.GetString()))
+                outcomes.Add(literal.GetString()!.Trim());
+        }
         var resultPolicy = projections.Aggregate(
             ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result },
             (policy, projection) => ValuePolicyCombiner.Combine(
@@ -671,7 +682,8 @@ public sealed class ExecutableNodeCompiler(
         return childSlots
             .Select(slot =>
             {
-                var children = slot.Activities.Select(activity => CompileNode(activity, projection, activityRows, placedActivities, workflowVariables, workflowInputs)).ToArray();
+                var children = slot.Activities.Select(activity => CompileNode(activity, projection, activityRows, placedActivities, workflowVariables, workflowInputs,
+                    slot.OutcomeProjections.SingleOrDefault(outcomes => StringComparer.Ordinal.Equals(outcomes.NodeId, activity.NodeId)))).ToArray();
                 var context = new OperatorActivitySchedulingCapabilityCompilationContext(
                     parentActivityType,
                     parentExecutableNodeId,

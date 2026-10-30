@@ -64,7 +64,7 @@ function renderBpmnShape(nodeData: BpmnNodeData) {
         <span className="wf-bpmn-gateway" aria-hidden="true">
           <span className="wf-bpmn-gateway-marker">{marker}</span>
         </span>
-        <small className="wf-bpmn-caption">{element.name?.trim() || bpmnElementTypeLabel(element)}</small>
+        <small className="wf-bpmn-caption">{element.name?.trim() || nodeData.boundActivity?.label || bpmnElementTypeLabel(element)}</small>
       </span>
     );
   }
