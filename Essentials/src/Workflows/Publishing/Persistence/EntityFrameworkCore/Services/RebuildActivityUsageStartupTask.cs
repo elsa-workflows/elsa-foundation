@@ -14,24 +14,24 @@ namespace Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Services;
 [Order(6)]
 internal sealed class RebuildActivityUsageStartupTask(
     IServiceScopeFactory scopeFactory,
-    IDistributedLockProvider locks,
-    ShellSettings settings,
     ILogger<RebuildActivityUsageStartupTask> logger) : IStartupTask
 {
     public async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         try
         {
+            // Hosts may enumerate startup contributors without composing the task runner or
+            // locking. Resolve optional maintenance collaborators only inside its failure boundary.
+            await using var scope = scopeFactory.CreateAsyncScope();
+            scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
+                PersistenceAccessContext.PrivilegedAcrossScopes(new("activity-usage-startup-rebuild")));
+            var locks = scope.ServiceProvider.GetRequiredService<IDistributedLockProvider>();
+            var settings = scope.ServiceProvider.GetRequiredService<ShellSettings>();
             // Optional maintenance owns its lock failure policy; the generic SingleNodeTask
             // wrapper would fail shell activation before this error boundary could run.
             await using var handle = await locks.AcquireLockAsync(
                 $"elsa:activity-usage-rebuild:{settings.Id.Name}", cancellationToken: cancellationToken);
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, handle.HandleLostToken);
-            // The projection holds every tenant's facts. Isolate maintenance authority from the
-            // startup scope and bind it before resolving any of the rebuild's scoped stores.
-            await using var scope = scopeFactory.CreateAsyncScope();
-            scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
-                PersistenceAccessContext.PrivilegedAcrossScopes(new("activity-usage-startup-rebuild")));
             await scope.ServiceProvider.GetRequiredService<IActivityDependencyProjectionRebuildCoordinator>()
                 .RebuildAsync(linked.Token);
         }

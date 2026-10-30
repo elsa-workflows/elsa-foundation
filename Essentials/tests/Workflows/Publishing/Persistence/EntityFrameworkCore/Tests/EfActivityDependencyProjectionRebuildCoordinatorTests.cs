@@ -21,6 +21,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 using static Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests.ActivityUpgradeFixtures;
 
@@ -238,6 +239,21 @@ public sealed class EfActivityDependencyProjectionRebuildCoordinatorTests : IAsy
             scope.Design.ReadAsync(new(OldVersionId,
                 new(Elsa.Activities.Design.Core.Models.ActivityDependencyDirection.Inbound, false, new HashSet<string> { "Versions", "Drafts" }),
                 Tenant, null, 0, 100)));
+    }
+
+    [Fact]
+    public async Task Composing_startup_contributors_does_not_require_optional_usage_maintenance_services()
+    {
+        var services = StartupServices(database);
+        services.RemoveAll<IDistributedLockProvider>();
+        services.RemoveAll<CShells.ShellSettings>();
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var scope = provider.CreateAsyncScope();
+
+        var task = Assert.Single(scope.ServiceProvider.GetServices<IStartupTask>().OfType<RebuildActivityUsageStartupTask>());
+        await task.ExecuteAsync(default);
+
+        Assert.Equal("seed", (await ReadProjectionAsync()).RebuildId);
     }
 
     [Theory]
