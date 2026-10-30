@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="91a6b8c6-f962-411b-baf3-88c119a197ea" name="@Sipkes-Mac-Mini 2026-10-30 15:12:53" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-30T15:12:53.5152230+01:00" queuing="2026-10-30T15:12:53.5152230+01:00" start="2026-10-30T15:12:47.1171850+01:00" finish="2026-10-30T15:13:04.5350500+01:00" />
+  <TestSettings name="default" id="c87a4ba7-51a5-4e34-b790-c5341dd5dcda">
+    <Deployment runDeploymentRoot="_Sipkes-Mac-Mini_2026-10-30_15_12_53" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="90578a33-d16a-4969-9891-32b84d8ccd6f" testId="1311aa48-e221-cc1a-e3ad-cd0276d59769" testName="Elsa.Activities.Bpmn.Hosting.Tests.LegacyPartialForkUpgradeTests.Actual_legacy_partial_forks_upgrade_and_finish_through_production_commands" computerName="Sipkes-Mac-Mini" duration="00:00:06.1248785" startTime="2026-10-30T15:12:47.3706590+01:00" endTime="2026-10-30T15:12:53.4983580+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="90578a33-d16a-4969-9891-32b84d8ccd6f" />
+    <UnitTestResult executionId="d50a7a13-b62d-48be-bb60-76b4250c0403" testId="c6d56d2a-18c2-8241-e933-de997dcbd3fa" testName="Elsa.Activities.Bpmn.Hosting.Tests.TemplateDesignUpgradeTests.Actual_cumulative_template_writer_store_retains_template_and_recovers_published_wait" computerName="Sipkes-Mac-Mini" duration="00:00:11.0110270" startTime="2026-10-30T15:12:53.5056730+01:00" endTime="2026-10-30T15:13:04.5112460+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d50a7a13-b62d-48be-bb60-76b4250c0403" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Elsa.Activities.Bpmn.Hosting.Tests.LegacyPartialForkUpgradeTests.Actual_legacy_partial_forks_upgrade_and_finish_through_production_commands" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/activities/bpmn/hosting/tests/bin/release/net10.0/elsa.activities.bpmn.hosting.tests.dll" id="1311aa48-e221-cc1a-e3ad-cd0276d59769">
+      <Execution id="90578a33-d16a-4969-9891-32b84d8ccd6f" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.Hosting.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Activities.Bpmn.Hosting.Tests.LegacyPartialForkUpgradeTests" name="Actual_legacy_partial_forks_upgrade_and_finish_through_production_commands" />
+    </UnitTest>
+    <UnitTest name="Elsa.Activities.Bpmn.Hosting.Tests.TemplateDesignUpgradeTests.Actual_cumulative_template_writer_store_retains_template_and_recovers_published_wait" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/activities/bpmn/hosting/tests/bin/release/net10.0/elsa.activities.bpmn.hosting.tests.dll" id="c6d56d2a-18c2-8241-e933-de997dcbd3fa">
+      <Execution id="d50a7a13-b62d-48be-bb60-76b4250c0403" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.Hosting.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Activities.Bpmn.Hosting.Tests.TemplateDesignUpgradeTests" name="Actual_cumulative_template_writer_store_retains_template_and_recovers_published_wait" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="1311aa48-e221-cc1a-e3ad-cd0276d59769" executionId="90578a33-d16a-4969-9891-32b84d8ccd6f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c6d56d2a-18c2-8241-e933-de997dcbd3fa" executionId="d50a7a13-b62d-48be-bb60-76b4250c0403" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="2" executed="2" passed="2" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.03]   Discovering: Elsa.Activities.Bpmn.Hosting.Tests
+[xUnit.net 00:00:00.05]   Discovered:  Elsa.Activities.Bpmn.Hosting.Tests
+[xUnit.net 00:00:00.06]   Starting:    Elsa.Activities.Bpmn.Hosting.Tests
+[xUnit.net 00:00:17.20]   Finished:    Elsa.Activities.Bpmn.Hosting.Tests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

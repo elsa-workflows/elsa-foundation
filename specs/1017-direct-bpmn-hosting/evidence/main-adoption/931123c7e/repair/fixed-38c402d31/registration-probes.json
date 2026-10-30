@@ -1,0 +1,41 @@
+[
+  {
+    "name": "existing-migration-tests",
+    "command": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-build",
+      "--filter",
+      "FullyQualifiedName!~WorkflowsDesignRetainedMigrationTests",
+      "--logger",
+      "trx;LogFileName=existing-migration-tests.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-design-template-upgrade/fixed-38c402d31"
+    ],
+    "sourceRevision": "38c402d3143cafc135a1b900d1a5902dcf16c517",
+    "exitCode": 1,
+    "seconds": 86.56331324577332
+  },
+  {
+    "name": "pooled-registration-red",
+    "command": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.csproj",
+      "-c",
+      "Release",
+      "--filter",
+      "FullyQualifiedName~Ef_registration_adds_the_schema_version_check_once_pooled_or_not",
+      "--logger",
+      "trx;LogFileName=pooled-registration-red.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-design-template-upgrade/fixed-38c402d31"
+    ],
+    "sourceRevision": "38c402d3143cafc135a1b900d1a5902dcf16c517",
+    "exitCode": 1,
+    "seconds": 5.0011022090911865
+  }
+]

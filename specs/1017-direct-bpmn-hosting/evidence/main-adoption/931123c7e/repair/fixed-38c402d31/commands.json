@@ -1,0 +1,37 @@
+[
+  {
+    "name": "hosting",
+    "command": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+      "-c",
+      "Release",
+      "-p:ElsaBpmnRecoveryProbe=false",
+      "--logger",
+      "trx;LogFileName=hosting.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-design-template-upgrade/fixed-38c402d31"
+    ],
+    "sourceRevision": "38c402d3143cafc135a1b900d1a5902dcf16c517",
+    "exitCode": 0,
+    "seconds": 705.8121340274811
+  },
+  {
+    "name": "migrations",
+    "command": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj",
+      "-c",
+      "Release",
+      "--logger",
+      "trx;LogFileName=migrations.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-design-template-upgrade/fixed-38c402d31"
+    ],
+    "sourceRevision": "38c402d3143cafc135a1b900d1a5902dcf16c517",
+    "exitCode": 1,
+    "seconds": 91.33744192123413
+  }
+]

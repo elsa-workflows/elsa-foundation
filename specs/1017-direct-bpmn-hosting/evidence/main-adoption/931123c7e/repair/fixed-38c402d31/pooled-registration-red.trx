@@ -1,0 +1,71 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="2fe2fbb5-5458-45cd-87fe-e86d9ae17847" name="@Sipkes-Mac-Mini 2026-10-30 15:01:31" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-30T15:01:31.6985710+01:00" queuing="2026-10-30T15:01:31.6985710+01:00" start="2026-10-30T15:01:31.1080010+01:00" finish="2026-10-30T15:01:31.7004140+01:00" />
+  <TestSettings name="default" id="8f8aa27e-350b-4bff-b2f5-95792dbb4270">
+    <Deployment runDeploymentRoot="_Sipkes-Mac-Mini_2026-10-30_15_01_31" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="19869487-0017-4fc8-831d-345a8f3549c8" testId="41bd7428-37e2-17e9-a078-94db643126b2" testName="Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.EfWorkflowDesignPersistenceTests.Ef_registration_adds_the_schema_version_check_once_pooled_or_not(pooling: False)" computerName="Sipkes-Mac-Mini" duration="00:00:00.2220746" startTime="2026-10-30T15:01:31.4451600+01:00" endTime="2026-10-30T15:01:31.6626740+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="19869487-0017-4fc8-831d-345a8f3549c8" />
+    <UnitTestResult executionId="749d50ec-76dc-4763-a77a-911865e59253" testId="d7d0831a-082f-6f71-31ed-83b44f8342b6" testName="Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.EfWorkflowDesignPersistenceTests.Ef_registration_adds_the_schema_version_check_once_pooled_or_not(pooling: True)" computerName="Sipkes-Mac-Mini" duration="00:00:00.0582576" startTime="2026-10-30T15:01:31.3786390+01:00" endTime="2026-10-30T15:01:31.4404530+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="749d50ec-76dc-4763-a77a-911865e59253">
+      <Output>
+        <ErrorInfo>
+          <Message>System.InvalidOperationException : 'OnConfiguring' cannot be used to modify DbContextOptions when DbContext pooling is enabled.</Message>
+          <StackTrace>   at Microsoft.EntityFrameworkCore.DbContext.get_ContextServices()
+   at Microsoft.EntityFrameworkCore.DbContext.get_InternalServiceProvider()
+   at Microsoft.EntityFrameworkCore.DbContext.Microsoft.EntityFrameworkCore.Infrastructure.IInfrastructure&lt;System.IServiceProvider&gt;.get_Instance()
+   at Microsoft.EntityFrameworkCore.Infrastructure.Internal.InfrastructureExtensions.GetService(IInfrastructure`1 accessor, Type serviceType)
+   at Microsoft.EntityFrameworkCore.Infrastructure.Internal.InfrastructureExtensions.GetService[TService](IInfrastructure`1 accessor)
+   at Microsoft.EntityFrameworkCore.Infrastructure.AccessorExtensions.GetService[TService](IInfrastructure`1 accessor)
+   at Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.EfWorkflowDesignPersistenceTests.Ef_registration_adds_the_schema_version_check_once_pooled_or_not(Boolean pooling) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Design/Persistence/EntityFrameworkCore/Tests/EfWorkflowDesignPersistenceTests.cs:line 214
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.EfWorkflowDesignPersistenceTests.Ef_registration_adds_the_schema_version_check_once_pooled_or_not(pooling: True)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/design/persistence/entityframeworkcore/tests/bin/release/net10.0/elsa.workflows.design.persistence.entityframeworkcore.tests.dll" id="d7d0831a-082f-6f71-31ed-83b44f8342b6">
+      <Execution id="749d50ec-76dc-4763-a77a-911865e59253" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Design/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.EfWorkflowDesignPersistenceTests" name="Ef_registration_adds_the_schema_version_check_once_pooled_or_not" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.EfWorkflowDesignPersistenceTests.Ef_registration_adds_the_schema_version_check_once_pooled_or_not(pooling: False)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/design/persistence/entityframeworkcore/tests/bin/release/net10.0/elsa.workflows.design.persistence.entityframeworkcore.tests.dll" id="41bd7428-37e2-17e9-a078-94db643126b2">
+      <Execution id="19869487-0017-4fc8-831d-345a8f3549c8" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Design/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.EfWorkflowDesignPersistenceTests" name="Ef_registration_adds_the_schema_version_check_once_pooled_or_not" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="41bd7428-37e2-17e9-a078-94db643126b2" executionId="19869487-0017-4fc8-831d-345a8f3549c8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d7d0831a-082f-6f71-31ed-83b44f8342b6" executionId="749d50ec-76dc-4763-a77a-911865e59253" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="2" executed="2" passed="1" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.04]   Discovering: Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests
+[xUnit.net 00:00:00.07]   Discovered:  Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests
+[xUnit.net 00:00:00.08]   Starting:    Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests
+[xUnit.net 00:00:00.15]       System.InvalidOperationException : 'OnConfiguring' cannot be used to modify DbContextOptions when DbContext pooling is enabled.
+[xUnit.net 00:00:00.15]       Stack Trace:
+[xUnit.net 00:00:00.15]            at Microsoft.EntityFrameworkCore.DbContext.get_ContextServices()
+[xUnit.net 00:00:00.15]            at Microsoft.EntityFrameworkCore.DbContext.get_InternalServiceProvider()
+[xUnit.net 00:00:00.15]            at Microsoft.EntityFrameworkCore.DbContext.Microsoft.EntityFrameworkCore.Infrastructure.IInfrastructure&lt;System.IServiceProvider&gt;.get_Instance()
+[xUnit.net 00:00:00.15]            at Microsoft.EntityFrameworkCore.Infrastructure.Internal.InfrastructureExtensions.GetService(IInfrastructure`1 accessor, Type serviceType)
+[xUnit.net 00:00:00.15]            at Microsoft.EntityFrameworkCore.Infrastructure.Internal.InfrastructureExtensions.GetService[TService](IInfrastructure`1 accessor)
+[xUnit.net 00:00:00.15]            at Microsoft.EntityFrameworkCore.Infrastructure.AccessorExtensions.GetService[TService](IInfrastructure`1 accessor)
+[xUnit.net 00:00:00.15]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Design/Persistence/EntityFrameworkCore/Tests/EfWorkflowDesignPersistenceTests.cs(214,0): at Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.EfWorkflowDesignPersistenceTests.Ef_registration_adds_the_schema_version_check_once_pooled_or_not(Boolean pooling)
+[xUnit.net 00:00:00.15]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+[xUnit.net 00:00:00.15]            at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+[xUnit.net 00:00:00.37]   Finished:    Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="Sipkes-Mac-Mini" outcome="Error" timestamp="2026-10-30T15:01:31.4416840+01:00">
+        <Text>[xUnit.net 00:00:00.15]     Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.EfWorkflowDesignPersistenceTests.Ef_registration_adds_the_schema_version_check_once_pooled_or_not(pooling: True) [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

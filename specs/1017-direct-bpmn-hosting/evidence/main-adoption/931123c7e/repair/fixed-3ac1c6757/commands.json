@@ -1,0 +1,56 @@
+[
+  {
+    "name": "hosting",
+    "command": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+      "-c",
+      "Release",
+      "-p:ElsaBpmnRecoveryProbe=false",
+      "--filter",
+      "FullyQualifiedName~LegacyPartialForkUpgradeTests|FullyQualifiedName~TemplateDesignUpgradeTests",
+      "--logger",
+      "trx;LogFileName=hosting.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-design-template-upgrade/fixed-3ac1c6757"
+    ],
+    "sourceRevision": "3ac1c675729c14b1c2ad7249f43c47d33d13e37e",
+    "exitCode": 0,
+    "seconds": 44.3775749206543
+  },
+  {
+    "name": "migrations",
+    "command": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj",
+      "-c",
+      "Release",
+      "--logger",
+      "trx;LogFileName=migrations.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-design-template-upgrade/fixed-3ac1c6757"
+    ],
+    "sourceRevision": "3ac1c675729c14b1c2ad7249f43c47d33d13e37e",
+    "exitCode": 0,
+    "seconds": 91.96131777763367
+  },
+  {
+    "name": "design",
+    "command": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.csproj",
+      "-c",
+      "Release",
+      "--logger",
+      "trx;LogFileName=design.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-design-template-upgrade/fixed-3ac1c6757"
+    ],
+    "sourceRevision": "3ac1c675729c14b1c2ad7249f43c47d33d13e37e",
+    "exitCode": 0,
+    "seconds": 6.930961847305298
+  }
+]
