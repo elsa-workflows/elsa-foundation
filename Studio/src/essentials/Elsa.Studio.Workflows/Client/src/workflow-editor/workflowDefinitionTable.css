@@ -250,44 +250,6 @@
   white-space: nowrap;
 }
 
-.wf-definition-identifiers-popover {
-  box-sizing: border-box;
-  width: 360px;
-  max-width: calc(100vw - 16px);
-  overflow: auto;
-  border: 1px solid var(--studio-border);
-  border-radius: var(--studio-radius);
-  padding: 12px;
-  background: var(--studio-surface);
-  color: var(--studio-text);
-  box-shadow: var(--studio-shadow-sm);
-  font-size: var(--studio-label-size);
-}
-
-.wf-definition-identifiers-popover header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.wf-definition-extra-details {
-  margin-top: 12px;
-  border-top: 1px solid var(--studio-border);
-  padding-top: 8px;
-  color: var(--studio-text-muted);
-  overflow-wrap: anywhere;
-}
-
-.wf-definition-extra-details p {
-  margin: 4px 0;
-}
-
-.wf-definition-extra-details:empty {
-  display: none;
-}
-
 .wf-definitions-list .wf-definition-grid > .wf-grid-row > .wf-definition-version {
   display: flex;
   min-width: 0;

@@ -148,10 +148,10 @@ describe("Activity Definitions experience", () => {
       expect(primaryRow.querySelector(".studio-copyable-identifier__value")?.getAttribute("aria-label")).toBe(`Definition ID: ${exactId}`);
       expect(duplicateRow.querySelector(".studio-copyable-identifier__value")?.getAttribute("aria-label")).toBe("Definition ID: activity-definition-duplicate-name");
 
-      const disclosure = primaryRow.querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!;
+      const disclosure = primaryRow.querySelector<HTMLButtonElement>("button[aria-haspopup=dialog]")!;
       const copyButton = primaryRow.querySelector<HTMLButtonElement>('button[aria-label="Copy Definition ID"]')!;
       expect(disclosure.getAttribute("aria-expanded")).toBe("false");
-      expect(primaryRow.querySelector(".studio-disclosure-fold-body")?.hasAttribute("hidden")).toBe(true);
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
       for (const key of ["Enter", " "]) {
         flushSync(() => disclosure.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
         flushSync(() => copyButton.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
@@ -166,10 +166,10 @@ describe("Activity Definitions experience", () => {
 
       click(disclosure);
       expect(disclosure.getAttribute("aria-expanded")).toBe("true");
-      expect(primaryRow.querySelector(".studio-disclosure-fold-body")?.hasAttribute("hidden")).toBe(false);
-      expect(primaryRow.textContent).toContain(exactTypeKey);
-      expect(primaryRow.textContent).toContain("activity-version-head-exact");
-      expect(primaryRow.textContent).toContain("activity-version-recommended-exact");
+      expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+      expect(document.body.textContent).toContain(exactTypeKey);
+      expect(document.body.textContent).toContain("activity-version-head-exact");
+      expect(document.body.textContent).toContain("activity-version-recommended-exact");
       click(copyButton);
       await waitFor(() => expect(writeText).toHaveBeenCalledWith(exactId));
       expect(rendered.container.textContent).not.toContain("Build your activity");

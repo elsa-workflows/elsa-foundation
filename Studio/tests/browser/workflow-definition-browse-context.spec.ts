@@ -230,19 +230,19 @@ test("Workflow Definitions groups its create and refresh actions above the colle
   await expect(page.getByRole("dialog", { name: "Create workflow" })).toBeVisible();
 });
 
-test("Activity and Workflow definition pages use the same desktop and narrow content inset", async ({ page }) => {
-  await page.route("**/capabilities", route => route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify(activityCapabilities())
-  }));
-  await page.route(/\/design\/activities\/definitions\?.*/, route => route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify(emptyActivityCollection("inset-fixture"))
-  }));
+for (const { width, expectedInset } of [{ width: 1280, expectedInset: 18 }, { width: 390, expectedInset: 12 }]) {
+  test(`Activity and Workflow definition pages use the same content inset (${width}px)`, async ({ page }) => {
+    await page.route("**/capabilities", route => route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(activityCapabilities())
+    }));
+    await page.route(/\/design\/activities\/definitions\?.*/, route => route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(emptyActivityCollection("inset-fixture"))
+    }));
 
-  for (const { width, expectedInset } of [{ width: 1280, expectedInset: 18 }, { width: 390, expectedInset: 12 }]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/?mode=activity-definitions&theme=light");
     const activityInset = await page.getByRole("heading", { name: "Activity Definitions" }).evaluate(heading => {
@@ -260,8 +260,8 @@ test("Activity and Workflow definition pages use the same desktop and narrow con
     expect(activityInset).toBe(expectedInset);
     expect(workflowInset).toBe(expectedInset);
     expect(workflowInset).toBe(activityInset);
-  }
-});
+  });
+}
 
 test("definition header actions use the shared button recipe in the custom material fixture and remain actionable", async ({ page }) => {
   let activityReads = 0;
