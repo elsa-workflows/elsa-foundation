@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-event-worker-sibling-cancellation",
+  "fixedSource": "c40881fd0209dd1f2e8765358c3afd3f007247ab",
+  "redSource": "8d5ed3e03b228d866b26606a81e063839af183f6",
+  "inputSource": "791dc17016a6b6022a0413820fe61eb202c52afc",
+  "baselineManifestSha256": "c2e5d9c8c2a001ff5141c2ca8eaaed097ec7c81d78d0180b6c7a4ecf5bed4153",
+  "assets": [
+    {
+      "path": "fixed/after.json",
+      "sha256": "6cffdb7d7a2f504ab7b3c5cbea0183ee549ed5550b9100dc1ca60031c062b755"
+    },
+    {
+      "path": "fixed/before.json",
+      "sha256": "f87aa457b749a6c51a8bfdd0e7c578d798d8965c2af1f4b7962779e7e1c07bca"
+    },
+    {
+      "path": "fixed/finished-design.sqlite.gz",
+      "sha256": "0fefa23782e36597e681295ac5b4bbadd532ae52ef202b37794a2e44838f354b"
+    },
+    {
+      "path": "fixed/finished-runtime.sqlite.gz",
+      "sha256": "57fa05d1deec44624751796da0c0636da7ee8fb32de1f6c8bf3dcf1ce216ccd3"
+    },
+    {
+      "path": "fixed/process.json",
+      "sha256": "8fea138a25aa573ec295c24467b14197da7fdd7080a05f604da4961f35188f9a"
+    },
+    {
+      "path": "fixed/retained-design.sqlite.gz",
+      "sha256": "0fefa23782e36597e681295ac5b4bbadd532ae52ef202b37794a2e44838f354b"
+    },
+    {
+      "path": "fixed/retained-runtime.sqlite.gz",
+      "sha256": "76dc2d099764262626f279e5d7a1ce13764afed3ce75938c9ea6fd7fe5261756"
+    },
+    {
+      "path": "fixed/retained.json",
+      "sha256": "6fb56e39ec59ab0f7212c6fedfcb5155136c2aec8096c9e503fe11bafaaf69fe"
+    },
+    {
+      "path": "fixed/waiting-design.sqlite.gz",
+      "sha256": "0fefa23782e36597e681295ac5b4bbadd532ae52ef202b37794a2e44838f354b"
+    },
+    {
+      "path": "fixed/waiting-runtime.sqlite.gz",
+      "sha256": "5bd1c9d73e172589ae7cb5deb05dfff9889f0dd25b468addebeff261f9e1b5b4"
+    },
+    {
+      "path": "red/after.json",
+      "sha256": "5cdfb97c5a4f444165944c53e25f3365ad63f0310a72c4ea930eba57e0508570"
+    },
+    {
+      "path": "red/before.json",
+      "sha256": "f87aa457b749a6c51a8bfdd0e7c578d798d8965c2af1f4b7962779e7e1c07bca"
+    },
+    {
+      "path": "red/failure.json",
+      "sha256": "33a16209e08848ba8d629578c69b536f269930642f7788871d5b2a9758417aaf"
+    },
+    {
+      "path": "red/finished-design.sqlite.gz",
+      "sha256": "0fefa23782e36597e681295ac5b4bbadd532ae52ef202b37794a2e44838f354b"
+    },
+    {
+      "path": "red/finished-runtime.sqlite.gz",
+      "sha256": "fad8abac2399ac4b11af1133c5f165e84e84764cae566b9f4bdf700598dcee48"
+    },
+    {
+      "path": "red/waiting-design.sqlite.gz",
+      "sha256": "0fefa23782e36597e681295ac5b4bbadd532ae52ef202b37794a2e44838f354b"
+    },
+    {
+      "path": "red/waiting-runtime.sqlite.gz",
+      "sha256": "5bd1c9d73e172589ae7cb5deb05dfff9889f0dd25b468addebeff261f9e1b5b4"
+    }
+  ]
+}
