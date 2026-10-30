@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Elsa.Tasks.Core;
 using Elsa.Tasks.Schedules;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -51,6 +52,17 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
     private readonly TimeProvider _timeProvider;
     private readonly ConcurrentDictionary<TimerKey, TimerBackoff> _timerBackoff = new();
     private readonly string _claimOwnerId = $"durable-timer-pump:{Guid.NewGuid():N}";
+    private readonly DurableTimerWakeup _wakeup = new();
+    private volatile bool _healthy = true;
+
+    internal DurableTimerPumpTask(IPersistenceScopeRunner scopeRunner, IOptions<DurableTimerPumpOptions> options,
+        TimeProvider timeProvider, ILogger<DurableTimerPumpTask> logger, DurableTimerWakeup wakeup)
+        : this(scopeRunner, options, timeProvider, logger) => _wakeup = wakeup;
+
+    internal DurableTimerPumpTask(IDurableTimerStore timerStore, IBookmarkResumeDispatcher dispatcher,
+        IOptions<DurableTimerPumpOptions> options, TimeProvider timeProvider,
+        ILogger<DurableTimerPumpTask> logger, DurableTimerWakeup wakeup)
+        : this(timerStore, dispatcher, options, timeProvider, logger) => _wakeup = wakeup;
 
     [ActivatorUtilitiesConstructor]
     public DurableTimerPumpTask(
@@ -99,16 +111,22 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
 
     protected override TimeSpan MaxBackoffInterval => _options.Value.MaxBackoffInterval;
 
+    public override ITaskSchedule GetSchedule() => new DurableTimerDeadlineSchedule(
+        _wakeup, () => CurrentSweepInterval, () => _healthy, _timeProvider, Logger);
+
     protected override async Task SweepAsync(CancellationToken cancellationToken)
     {
         var options = _options.Value;
         var now = _timeProvider.GetUtcNow();
+        var version = _wakeup.Snapshot.Version;
+        DateTimeOffset? nextDeadline = null;
 
         PruneBackoff(options, now);
 
         if (_scopeRunner is null)
         {
             await SweepAsync(DirectConstructionScope, _timerStore!, _dispatcher!, options, now, cancellationToken);
+            nextDeadline = await NextDeadlineAsync(_timerStore!, cancellationToken);
         }
         else
         {
@@ -121,16 +139,30 @@ public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
                     options,
                     now,
                     operationCancellationToken);
+                var next = await NextDeadlineAsync(operationScope.ServiceProvider.GetRequiredService<IDurableTimerStore>(),
+                    operationCancellationToken);
+                if (next is not null && (nextDeadline is null || next < nextDeadline))
+                    nextDeadline = next;
             }, cancellationToken);
         }
+        _wakeup.Reconcile(version, nextDeadline);
+        _healthy = true;
     }
 
-    protected override void OnSweepFailed(Exception exception, int consecutiveFailures, TimeSpan backoffInterval) =>
+    // Legacy providers keep retry eligibility in this pump's private backoff map, so their raw deadline
+    // query cannot safely accelerate sweeps. Only provider-owned visibility can authorize that shortcut.
+    private static ValueTask<DateTimeOffset?> NextDeadlineAsync(IDurableTimerStore store, CancellationToken cancellationToken) =>
+        store.SupportsClaimTransitions ? store.GetNextDueTimeAsync(cancellationToken) : ValueTask.FromResult<DateTimeOffset?>(null);
+
+    protected override void OnSweepFailed(Exception exception, int consecutiveFailures, TimeSpan backoffInterval)
+    {
+        _healthy = false;
         Logger.LogError(
             exception,
             "Durable timer sweep failed ({ConsecutiveFailures} consecutive); backing off to {Interval}",
             consecutiveFailures,
             backoffInterval);
+    }
 
     private async Task SweepAsync(
         PersistenceScope persistenceScope,

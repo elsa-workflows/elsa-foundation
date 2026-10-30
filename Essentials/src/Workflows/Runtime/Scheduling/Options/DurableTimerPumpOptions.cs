@@ -7,7 +7,7 @@ namespace Elsa.Workflows.Runtime.Scheduling.Options;
 /// </summary>
 public sealed class DurableTimerPumpOptions
 {
-    /// <summary>Baseline interval between sweeps while the host is healthy.</summary>
+    /// <summary>Recovery interval for missed/remote notifications; known eligible deadlines wake sooner while healthy.</summary>
     public TimeSpan SweepInterval { get; set; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
