@@ -32,12 +32,12 @@
 ## Notes
 
 1. Deliberate deviation, following this repository's spec practice: the readers are architects and the feature is
-   a framework extension, so the spec names the existing contracts it builds on (reconciliation sources, stable
-   ids, publishing feature) and the decisions taken in the 2026-10-13 interview (shared package, core staging,
-   `N.R.0`). It does not prescribe class layout, project names beyond the feature name, or code.
-2. Decisions taken in the interview: converter completeness is out of scope (prerequisite specs); unconvertible
-   input is skipped with a diagnostic and a strict opt-in; `N.R.0` with one global R starting at 1; the collection
-   import is guarded against (composition) and import-owned definitions are skipped; removal does nothing; always
-   publish and depend on `WorkflowsPublishing`; `SourceKind "Elsa3Json"`, required `SourceId`, ambient tenant;
-   shared planner package; wrapper direct-start fix in the shared builder; structured logs and a summary; files
-   hold one definition or an array; staged activity reconciliation in core.
+   a framework extension, so the spec names the existing contracts it builds on (the collection import, the
+   publishers, the startup order). It does not prescribe class layout, project names beyond the feature name, or code.
+2. Decisions kept from the 2026-10-13 interview: converter completeness is out of scope; unconvertible input is
+   skipped with a diagnostic and a strict opt-in; removal does nothing; always publish; required `SourceId`, ambient
+   tenant; structured logs and a summary; files hold one definition or an array.
+3. Revision 2026-10-30 (Joey Barten): the import engine runs at start instead of two reconciliation sources, so the
+   shared planner package, the staged activity pass in core, the wrapper direct-start fix and the coexistence guard
+   are dropped; `N.R.0` and its golden test are deferred. Re-validated against origin/main 4df0c5e9d: all items above
+   still hold.
