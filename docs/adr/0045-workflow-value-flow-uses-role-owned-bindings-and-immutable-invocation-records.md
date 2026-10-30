@@ -195,9 +195,10 @@ rule is withdrawn. The withdrawn design for such a capability (ADR 0088 draft, P
 same value twice. What a user relies on is the execution contract (D-2): a recorded step never runs again, recovery
 runs forward from the last recorded point, and a re-run is a new execution with new values, whether it starts at the
 beginning or from a point midway (an activity rescheduled or scheduled through a runtime alteration,
-[ADR 0049](0049-runtime-alterations-use-snapshotted-atomic-jobs.md)). History is never rewritten. That a midway re-run
-reads fresh inputs is decision 8 of ADR 0092 ([#3411](https://github.com/elsa-workflows/elsa-foundation/pull/3411));
-today's code still copies the old input snapshot, which spec S-10 changes. Idempotency of external effects belongs to
+[ADR 0049](0049-runtime-alterations-use-snapshotted-atomic-jobs.md)). History is never rewritten. A midway re-run is
+a re-execution: a new invocation that reads fresh inputs, while retrying the same invocation keeps its inputs
+(ADR 0092 decision 8, [#3411](https://github.com/elsa-workflows/elsa-foundation/pull/3411)). Today's code still copies
+the old input snapshot on a reschedule, which spec S-10 changes. Idempotency of external effects belongs to
 the workflow designer; the engine supplies stable invocation identities to build idempotency keys from. Around an
 external effect the engine commits right before and right after it, so the effect lies between two recorded points.
 This sentence states the guarantee only: how the engine provides it is the D-2 details amendment of §3, ADR 0032 and
@@ -220,8 +221,10 @@ so a value an expression produced, once committed, does not change.
 - **D-5: functions implemented in .NET.** A host may install functions into an expression engine whose
   implementation is .NET code, as `getVariable` already is. By default only JSON values cross the boundary between
   the script and such a function. Whether live .NET objects may also cross it is settled by analysis A-1 on epic
-  #3052: off by default, opt-in through a separate script profile, registered objects only. The ADR 0046 amendment
-  ([#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422), V10) states the rule.
+  #3052: off by default. A host may opt in through a separate script profile for objects it registers, and through a
+  further, separately named profile for general .NET access in script activities only. Input-binding expressions never
+  get live objects. The ADR 0046 amendment ([#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422), V10)
+  states the rule.
   - **Names.** Installed functions follow one naming rule, modelled on the type alias registry (ADR 0035):
     - reserved: the read roots (`variables`, `input`, `activities`, `workflow`, `args`) and Elsa's built-in functions;
     - module and host functions use a namespace prefix, and a duplicate registration fails at startup instead of
@@ -230,9 +233,10 @@ so a value an expression produced, once committed, does not change.
 - **D-6: idempotency belongs to the designer.** An effect outside Elsa's own state, such as an HTTP call or a .NET
   service call, cannot be rolled back by Elsa. The engine supplies stable invocation identities; the workflow designer
   owns idempotency (D-2). A call is never refused or skipped because of what it does.
-  - Functions carry no effect profile. A profile would change nothing about execution: a recorded step is not run
-    again at all, and an unrecorded one runs again completely, so no call is ever partly skipped. Diagnostics for
-    effects during input evaluation, if wanted, belong with the D-2 follow-up.
+  - No function profile is required. If the D-2 details amendment (see *Follow-ups*) needs a classification for the
+    durability boundary of input evaluation, it defines one there, as a durability hint, never a prohibition. Without
+    one, that boundary treats every registered .NET function as possibly effectful. A classification never changes
+    whether a call runs: a recorded step is not run again at all, and an unrecorded one runs again completely.
 
 *Unchanged by this amendment:*
 - the canonical serialized definition;
