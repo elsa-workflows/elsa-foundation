@@ -130,7 +130,6 @@ describe("planSlotNavigation", () => {
   });
 });
 
-
 describe("root child slots", () => {
   const activities = [...catalog, ifActivity];
   const slots = (root: ActivityNode) => getChildSlots(root, activities);

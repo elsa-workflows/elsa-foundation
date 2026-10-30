@@ -36,7 +36,6 @@ test("root If slots preserve siblings, nested edits, breadcrumbs and history", a
   await expect(designer.locator(".wf-sequence-step")).toHaveCount(1);
 });
 
-
 for (const theme of ["light", "dark"]) {
   test(`Workflow root secondary slot opens its container and retains sibling ownership (${theme})`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1600, height: 1000 });

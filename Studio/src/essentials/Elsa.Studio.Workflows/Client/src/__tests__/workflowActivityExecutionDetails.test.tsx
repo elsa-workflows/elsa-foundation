@@ -1,5 +1,3 @@
-import { ifActivity, ifNode } from "./fixtures";
-import { findNodeScopePath } from "../workflowAdapter";
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -17,7 +15,7 @@ import {
   getIncidentStackTrace,
   loadActiveIncidentActivitySummaries
 } from "../workflow-editor/WorkflowInstances";
-import type { ScopeFrame } from "../workflowAdapter";
+import { findNodeScopePath, type ScopeFrame } from "../workflowAdapter";
 import type {
   ActivityCatalogItem,
   ActivityNode,
@@ -31,7 +29,7 @@ import type {
 } from "../workflowTypes";
 import { bpmnStructureKind } from "../bpmn/bpmnTypes";
 import { buildExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
-import { bpmnActivity, flowchartActivity, flowchartNode, forEachActivity, forEachNode, leafNode, writeLine } from "./fixtures";
+import { ifActivity, ifNode, bpmnActivity, flowchartActivity, flowchartNode, forEachActivity, forEachNode, leafNode, writeLine } from "./fixtures";
 
 vi.mock("../api/runtime", async importOriginal => ({
   ...(await importOriginal<typeof import("../api/runtime")>()),

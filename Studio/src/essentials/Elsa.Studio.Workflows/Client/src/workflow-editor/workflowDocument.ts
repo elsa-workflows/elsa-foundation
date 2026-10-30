@@ -56,7 +56,7 @@ export const initialWorkflowDocumentState: WorkflowDocumentState = {
 export type WorkflowDraftRecipe = (state: WorkflowDocumentState) => WorkflowDraft | null;
 
 export type WorkflowDocumentAction =
-  // Wholesale draft load: initial load, post-promote reload, JSON apply, and undo/redo restore. Resets
+  // Wholesale draft load: initial load, post-promote reload and JSON apply. Resets
   // scope + selection but leaves testRun/publishedArtifact (they self-invalidate against the new draft).
   | { type: "draftLoaded"; draft: WorkflowDraft | null }
   // Weaver batch apply/undo replaces the whole design, so scope, selection, the pending test run and the
@@ -133,7 +133,7 @@ export function useWorkflowDocument() {
   const [state, dispatch] = useReducer(workflowDocumentReducer, initialWorkflowDocumentState);
 
   const actions = useMemo(() => ({
-    // Load a freshly fetched / applied draft (or clear it). Used by load(), JSON apply, and undo/redo.
+    // Load a freshly fetched / applied draft (or clear it). Used by load() and JSON apply.
     loadDraft(draft: WorkflowDraft | null) {
       dispatch({ type: "draftLoaded", draft });
     },
