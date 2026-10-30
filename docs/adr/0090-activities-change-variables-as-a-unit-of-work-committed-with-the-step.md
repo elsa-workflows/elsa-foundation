@@ -275,9 +275,11 @@ change detection on top. It is needed for one feature only: changing a read obje
 **The amendment.** The goal stays: a step is a unit of work, its changes commit with the step, and a fault or cancel
 saves nothing (decisions 1, 6 and 9, and D-3). Conflict policy per node stays (decision 7). What changes:
 
-- **C1. Reads are not tracked.** A read returns a value: in a script, ADR 0046's JSON-backed view; in C#, a copy.
-  Reading a variable again in the same step returns the step's current value, so read-your-writes stays. This replaces
-  "A read returns a tracked instance", and every read becomes what decision 2 calls a read-only read.
+- **C1. A read creates no write.** There is no automatic change tracking: a read returns a value, in a script ADR
+  0046's JSON-backed view, in C# a copy. Actual reads are still recorded in ADR 0092's read set, for protection and
+  conflict checking; only change tracking goes. Reading a variable again in the same step returns the step's current
+  value, so read-your-writes stays. This replaces "A read returns a tracked instance", and every read becomes what
+  decision 2 calls a read-only read.
 - **C2. A write is explicit.** A step changes a variable by assigning it: `variables.x = v`, `setVariable('x', v)`,
   `context.Variables.Set(target, value)`. In a script, changing a read value (`variables.order.total = 1`,
   `getVariable('o').x = 1`) is also an explicit write: the JSON-backed view records the change, so the variable gets
@@ -292,12 +294,33 @@ saves nothing (decisions 1, 6 and 9, and D-3). Conflict policy per node stays (d
   [ADR 0092](https://github.com/elsa-workflows/elsa-foundation/pull/3411) records in the read set, instead of comparing
   serialized values. Its digest, for the 0 → 1 → 0 case, compares meaning, not text.
 
+**A-3: writes are a general capability** (analysis A-3, led by @sfmskywalker; his position of 2026-10-29 on epic
+#3052, agreed in direction by @j03y-nxxbz on 2026-10-30, to be approved here by every architect).
+- **Pure input expressions are the recommended path,** and input-binding expressions never write (decision 1).
+- **Transactional writes from script and C# activity bodies are a general capability,** for native and imported
+  workflows alike. They are not an Elsa 3 compatibility mode.
+- **What a step may change** is engine-owned state: variables, workflow outputs, correlation ID, instance name and
+  outcome selection. The changes commit atomically with the successful evaluation; a fault or cancellation discards
+  them. External effects are outside this rollback (D-2).
+- **Each evaluation is its own transaction:** an invoke, a resume, or a structural child notification. A later fault
+  does not discard earlier committed evaluations or child work.
+- **Order within one commit:** step writes first, output captures last, so a capture wins on overlap. Diagnostics and
+  inspection show the overlap.
+- **Correlation:** changing a workflow's correlation never silently rebinds existing bookmarks. Existing waits keep the
+  correlation they captured; later waits use their own.
+
+This answers A-3's question on the board: writing from scripts is a general capability, not compatibility only. D-3
+on the board then reads "an output capture wins over a step write".
+
 **What it changes in this ADR.**
 - Decision 2: C1 and C2 replace "A read returns a tracked instance" and the mutation rule. The comparison of serialized
   forms in its *Why* goes.
 - Decision 4: `Get<T>` returns a copy and `Set` is the write; `GetReadOnly<T>` is no longer a separate read.
 - Decision 6: intents come from explicit writes (C2), assembled by C3; C4 replaces "compared with its base".
 - Decision 7: C5.
+- Decision 8: host-interop mode is the separately named, host-selected profile for script activities of the ADR 0046
+  amendment (V10, [#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422)); input-binding expressions
+  never get it.
 - *Alternatives considered*: "Values: variables are immutable values, changed only by assigning" was rejected because
   C# authors expect to mutate what they read. This amendment adopts it for C# unless question 1 says otherwise, and
   keeps mutation in scripts through the view.
