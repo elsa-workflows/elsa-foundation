@@ -1,6 +1,6 @@
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
-using Elsa.Expressions.Models;
+using Elsa.Expressions.Testing;
 using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
@@ -14,7 +14,7 @@ namespace Elsa.Activities.Runtime.Tests;
 public sealed class VisibleScopeNameAccessTests
 {
     private static IReadOnlyDictionary<string, IVariable> Vars(params (string Key, string Name, object? Value)[] variables) =>
-        variables.ToDictionary(v => v.Key, v => (IVariable)new Variable(v.Name, v.Value), StringComparer.Ordinal);
+        variables.ToDictionary(v => v.Key, v => ExpressionServices.Variable(v.Name, v.Value), StringComparer.Ordinal);
 
     private static VariableScope Chain()
     {

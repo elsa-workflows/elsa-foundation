@@ -18,7 +18,7 @@ namespace Elsa.Expressions.JavaScript.Rendering;
       DisplayName = "JavaScript rendering endpoints",
       Description = "Exposes JavaScript rendering endpoints for design-time declaration document generation."
    )]
-public sealed class JavaScriptRenderingEndpointsFeature : IWebShellFeature
+public class JavaScriptRenderingEndpointsFeature : IWebShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {

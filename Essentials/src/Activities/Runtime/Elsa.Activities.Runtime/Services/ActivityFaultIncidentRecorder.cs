@@ -112,7 +112,7 @@ public sealed class ActivityFaultIncidentRecorder
             PostCommitIntents: activationFailure is null ? NewPostCommitIntents(request, occurredAt) : [],
             Metadata: metadata);
 
-        await request.CheckpointCommitter.CommitAsync(commit, cancellationToken);
+        await request.CheckpointCommitter.CommitAsync(request.ChildControlContribution?.Apply(commit) ?? commit, cancellationToken);
     }
 
     /// <summary>
@@ -348,6 +348,8 @@ public sealed record ActivityFaultIncidentRecordRequest(
     IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot>? ValueSnapshots = null,
     IReadOnlyCollection<RuntimeSchedulerWorkItem>? PostCommitSchedulerWorkItemsOrNull = null)
 {
+    internal StructuralChildControlContribution? ChildControlContribution { get; init; }
+
     /// <summary>Scheduler work items to enqueue as post-commit intents on the incident checkpoint (never null).</summary>
     public IReadOnlyCollection<RuntimeSchedulerWorkItem> PostCommitSchedulerWorkItems => PostCommitSchedulerWorkItemsOrNull ?? [];
 }

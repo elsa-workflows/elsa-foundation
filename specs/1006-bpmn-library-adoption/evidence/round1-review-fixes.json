@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "reviewedSourceParentCommit": "59ee30c1558a16fc411547760eb28f936c9dfb58",
+  "fullPrRoundsCompleted": 1,
+  "fullPrRoundBound": 6,
+  "reviewFindingsAddressed": 2,
+  "newExactHeadReviewStillRequired": true,
+  "actualCorrectedSourceHostAndStudioProofPending": true,
+  "filesSha256": {
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnPersistedStateShape.cs": "8899d283a4dfe689d5502e7877b0ad3aeb199db12fb9cb1767ae6e0fb8bd9eed",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnStateCodec.cs": "805dd3ae23b5917a24628ef084a7f6b004fa2067c713c02c1c089fd6e8630e9b",
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/README.md": "244a06c1817cea748909833677628bb1d2ba23fae7c8c36ffb62ee611beb0eec",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs": "cf37c5d2d967dc2cdf4b3118a11fb93b823eb2830bdf687d0c5c5e476bf2fc74",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/PublicAPI.Unshipped.txt": "128ec27082f07c3850533d728ac34902298f6f6d7ba299a7d971b16e0b1d80a9",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/WorkflowStartDispatcher.cs": "ae3a8769f1c91db45ae4323e772cebd57071f31bea3a7ca561cea509957c0e13",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Triggers/StimulusDeliveryRequestProjector.cs": "3b0960bf5c6f6232819039c5e0d82e69f13b63735e0ae913bb490c7aa277e1b7",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Triggers/StimulusDeliveryServices.cs": "c36e6df5d969a56092ee962fc3fabb2f6a6e9c7a6098c36e7993904d8bce3814",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnStateCodecTests.PersistedShape.cs": "1ec4dc7c48ecfcb7116dd41dd53fa0f43d7f3e1adef52b2869698c20503aff3a",
+    "Essentials/tests/Activities/Bpmn/Tests/BpmnStateCodecTests.cs": "7b351108ded5ba117bfe0dc9499175deb80a6ab207a4e0994802d56e61148440",
+    "Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj": "56486f3b8314524eb5c3e9c91f95a6c2b1770044f656cb1a66ecb4795da5692d",
+    "Essentials/tests/Activities/Bpmn/Tests/Fixtures/LegacyCompensationState.json": "1128fbe30c5b5be4f7726dc94864305b8fb2053dfa4342006ea190c71e98fa8a",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/StimulusDeliveryStartDispatchTests.cs": "d95c5cf870264429e4c629a5742f18f41b81d40efb4e9c60d8d6eceb28b6a4f2",
+    "specs/1006-bpmn-library-adoption/contracts/broadcast-recipient-snapshot.md": "13b70e5ea942018cd876b69038e2645c22d997edb2390746dc3adf8dbb7dd316",
+    "specs/1006-bpmn-library-adoption/contracts/compatibility.md": "1c16018ef4304b19368263017f3f6ad860c9dc2f49b36253e3d3014d4f5f7217",
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/verify_codec_fixture.py": "beb93a02ffb84eb7d20c1d0a653833f4ab69b3c1285ffb3e74b280a0994322ae",
+    "specs/1006-bpmn-library-adoption/evidence/round1-review-fixes.md": "c4d3b0c25a98741dcff148709fefb453247b3f33e8dafcc9860a85a2a4058ec7",
+    "specs/1006-bpmn-library-adoption/tasks.md": "2a97810b67cfb0127303b758efd02c92dd007c37cae11f56ca94924a5347022c"
+  },
+  "portableArtifacts": {
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/242-method-reconciliation.json": {
+      "sha256": "f758bf0ff525f1614ce3e44c6c54e93a7cb8a60b9402694ef3b95d5fc146c1b2",
+      "bytes": 143801
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/architecture-discovery.log": {
+      "sha256": "50ab8f7d92d8668e0fb360c0e6d00db0cd76a285afb2e0e9f04dd454507abd72",
+      "bytes": 176509
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/architecture.log.gz": {
+      "sha256": "beb767ea6a1ba41caef5a0d252ce0ab39b9f32932025f082d113a369107607a3",
+      "bytes": 4214
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/architecture.trx.gz": {
+      "sha256": "11d5bf05126f8370c7bd57ab539940113d3dc597508b3495f8df7a25da79deb4",
+      "bytes": 154904
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/bpmn-discovery.log": {
+      "sha256": "a761559f2d9ab525109557d4cb4d441a8a6aecce6485996cfa9f66de3c35272b",
+      "bytes": 56055
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/bpmn-whole.log.gz": {
+      "sha256": "3eb451f1eaac9ead1747af6168bfc5373d1cc21e29cbf045d42aadffdfa53fcd",
+      "bytes": 298
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/bpmn-whole.trx.gz": {
+      "sha256": "9eed8172bf1705c79c330dc714eac571005b8ae586b2c94f2a83b851d023714d",
+      "bytes": 88593
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/codec-red.log.gz": {
+      "sha256": "356d3a9f36c6cdd71e587963e5b22d5a08d5163ce1ff8659f0f7196fc52f6a1d",
+      "bytes": 5546
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/codec-red.trx.gz": {
+      "sha256": "73f03775c5598355fb5aa2b741cfe42d95fab19210da373d6c0f168dff0e1fd3",
+      "bytes": 13130
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/codec-shadow-red.log.gz": {
+      "sha256": "155dd062b825f4c648dc7066c7a3edc7a13ff145c03ee4e059edd4c0e0311ad7",
+      "bytes": 1600
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/codec-shadow-red.trx.gz": {
+      "sha256": "843a1642c2d0f59f35ad6725bd57c3e3ab69f2c219c943bc464e4f16ef93f9ac",
+      "bytes": 2173
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/ef-discovery.log": {
+      "sha256": "81420a953a489fd29b255d27989978bef47795620ad70c5ea74855e2827dc46b",
+      "bytes": 349288
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/ef-whole.log.gz": {
+      "sha256": "fad3521fda3e1c680754fa21dc842fcd4c86e42921ae1f03c36c73994ace7f2f",
+      "bytes": 327
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/ef-whole.trx.gz": {
+      "sha256": "6c74b8ab5adbd887232a119c90f4c8e3bebc538dc43c04a75dfac39ad5ce4414",
+      "bytes": 466612
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/excluded-api-compilation.log.gz": {
+      "sha256": "04c25114c63f5b4689576ebd6e86be4ef20d41f5c2c023080fa42c4bd6691b09",
+      "bytes": 3189
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/initial-regressions.json": {
+      "sha256": "0355ee6431e14899d2e846b9608a3d7c0412855bfb341a336db9c4937b24fba1",
+      "bytes": 12187
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/interchange-discovery.log": {
+      "sha256": "f00128632ed3f92e04b8ff8d4cfee3c45b8e18aa7c5b2173f052c3cc35a1eaa0",
+      "bytes": 22195
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/interchange-whole.log.gz": {
+      "sha256": "ef2d8f8916a6eebb145157dc90f48960a88f43f5ffb35ffa8347314baab19e28",
+      "bytes": 311
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/interchange-whole.trx.gz": {
+      "sha256": "246f163f38db4e95c0dffdf61df719f5702ab5c7389bb7798a083db40e10cb4e",
+      "bytes": 29743
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/intermediate-ef-registration-failure.log.gz": {
+      "sha256": "14cc2e57c52600699bf5a1bcd8c1820dec6171b82884fb84a24351b6365c2247",
+      "bytes": 2725
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/intermediate-ef-registration-failure.trx.gz": {
+      "sha256": "40062122f63d776d5f98f7618ad7ed2654b6764363902becdcaabbed968ba1f2",
+      "bytes": 473812
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/locked-restore.log.gz": {
+      "sha256": "7072aa74e7433ddf6670fae546afcba78ed49ac2c46ef032d067259a6f1944a8",
+      "bytes": 2133
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/maps.log.gz": {
+      "sha256": "331099547a70ba6594d7004b2f491da5fa852cfb2cebba8b98e78c4d02acfc47",
+      "bytes": 76
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/qualification.json": {
+      "sha256": "8e914ffeca8e12969e8bf81198c4bb7d12aa758cd59c68edcd5cbdef57b0a2dc",
+      "bytes": 4060
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/runtime-discovery.log": {
+      "sha256": "fdff6076c6e91698e9d379b7324801e6c517c24d83b7059636dacd6a1f40cf8d",
+      "bytes": 442353
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/runtime-whole.log.gz": {
+      "sha256": "016f9e58d60d9e5b547a798e70a0f0c3acdece2f6a96d3c17f27cee79f1fd2a9",
+      "bytes": 302
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/runtime-whole.trx.gz": {
+      "sha256": "9c132d5563ff0c3eba11ead5490dc464fece4133ec2d07fbf8599b5c899002fc",
+      "bytes": 826185
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/saved-identity-red.log.gz": {
+      "sha256": "70e321894cd5ad0f70a19364be4922bebd4ad0669eeb48b9ff57757b581d6676",
+      "bytes": 2142
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/saved-identity-red.trx.gz": {
+      "sha256": "6399e22e3989c17b4d9da62ca4b755b5b15ddcd15f051adf4da02d071746496d",
+      "bytes": 1834
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/saved-input-red.log.gz": {
+      "sha256": "fc190396cace557002e934a95abe6f8f8c6ff3d42694f9f04cf02ac0619cee49",
+      "bytes": 2908
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/saved-input-red.trx.gz": {
+      "sha256": "4d8dc7db0d9ee81133fd2206e0b6e402f3531452dad7b7d64859d65476106a0f",
+      "bytes": 2854
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/saved-start-subset.trx.gz": {
+      "sha256": "f9b41a686c26315824ac8cb63d201e0a31bdd3c403957d26251a2d08a848ce8d",
+      "bytes": 82482
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/source-composition.trx.gz": {
+      "sha256": "a1fe1395e4971e683415fb49dc6461e8aa173be295c61d410a76f46cc80adc1e",
+      "bytes": 2038
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round1-fixes/verify_codec_fixture.py": {
+      "sha256": "beb93a02ffb84eb7d20c1d0a653833f4ab69b3c1285ffb3e74b280a0994322ae",
+      "bytes": 2135
+    }
+  },
+  "frozenAuthoringSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "wholePassedCases": 5855,
+  "baselineMethodCount": 242,
+  "baselinePassedCases": 251,
+  "additionalBpmnMethods": 37,
+  "additionalBpmnCases": 121,
+  "sourceInputRegressions": 10,
+  "recordCaseShadowRegressions": 4,
+  "sourceConstructorAdditionsTracked": 1,
+  "remaining": [
+    "Corrected exact-code standard host/recovery/saved-start/broadcast/Studio",
+    "FullPRround2+requiredexactheadchecks/protectedmerge/resultingmain",
+    "SeparateADR0063;independent2898/2907/programproductionacceptance"
+  ]
+}

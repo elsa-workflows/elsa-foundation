@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+
   <!--
     Contracts-only seam for the compile-and-publish domain (DS-1). It carries the compiler contract,
     the compile request/source/exception model, and the artifact/test-run store contracts so a CLI,

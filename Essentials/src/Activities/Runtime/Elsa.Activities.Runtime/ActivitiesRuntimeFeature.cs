@@ -34,6 +34,11 @@ public class ActivitiesRuntimeFeature : IShellFeature
         // activation. The runtime registers the mask's default; the activator and the work handlers consume it.
         RuntimeSecretResolverCompositionValidator.Register(services);
         RuntimeSecretMaskCompositionValidator.Register(services);
+        services.AddOptions<BackgroundActivityWorkerOptions>();
+        services.TryAddScoped<BackgroundActivityCompletionCodec>();
+        services.TryAddScoped<BackgroundActivityCoordinator>();
+        services.TryAddScoped<BackgroundActivityResultApplication>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, BackgroundActivityCheckpointEnricher>());
         services.TryAddScoped<IActivityActivator, ActivityActivator>();
         services.TryAddScoped<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
         services.TryAddSingleton<ActivityCompletionProjector>();
@@ -43,6 +48,8 @@ public class ActivitiesRuntimeFeature : IShellFeature
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowInvokeActivitySchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowParentActivityCompletionSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowNotifyParentActivitySchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowChildControlSchedulerWorkHandler>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowInterventionDecisionSchedulerWorkHandler>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IWorkflowSchedulerWorkHandler, WorkflowResumeBookmarkSchedulerWorkHandler>());
 
         // Startup pass: register the activity CLR types — the activity types

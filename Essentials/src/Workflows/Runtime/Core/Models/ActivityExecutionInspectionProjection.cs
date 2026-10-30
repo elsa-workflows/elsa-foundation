@@ -30,6 +30,9 @@ public sealed record ActivityExecutionInspectionProjection(
     string? SupersededByActivityExecutionId = null,
     DateTimeOffset? SupersededAt = null)
 {
+    /// <summary>The hierarchy scope containing this projection when its own execution scope is nested.</summary>
+    public string? EnclosingExecutionScopeId { get; init; }
+
     public static ActivityExecutionInspectionProjection FromState(
         ActivityExecutionState state,
         string checkpointId,
@@ -72,7 +75,10 @@ public sealed record ActivityExecutionInspectionProjection(
             Bookmarks: bookmarks ?? [],
             Incidents: incidents ?? [],
             ValueSnapshots: MergeValueSnapshots(state.Execution.ActivityExecutionId, [], valueSnapshots),
-            Metadata: RuntimeModelMetadata.Snapshot(mergedMetadata));
+            Metadata: RuntimeModelMetadata.Snapshot(mergedMetadata))
+        {
+            EnclosingExecutionScopeId = state.EnclosingExecutionScopeId
+        };
     }
 
     public ActivityExecutionInspectionProjection Merge(
@@ -106,6 +112,7 @@ public sealed record ActivityExecutionInspectionProjection(
             Attempt = state.Attempt ?? state.Provenance.Attempt,
             SupersededByActivityExecutionId = state.SupersededByActivityExecutionId,
             SupersededAt = state.SupersededAt,
+            EnclosingExecutionScopeId = state.EnclosingExecutionScopeId,
             OutcomeNames = outcomeNames ?? OutcomeNames,
             Bookmarks = MergeBy(Bookmarks, bookmarks, item => item.Identity.BookmarkId),
             Incidents = MergeBy(Incidents, incidents, item => item.IncidentId),

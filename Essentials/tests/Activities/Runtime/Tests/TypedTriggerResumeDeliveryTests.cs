@@ -369,6 +369,27 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_ThrowingControlResultGetter_faults_the_resume_and_disposes_activation()
+    {
+        var executable = NewTypedExecutable(currentLiteral: "original", resultType: Descriptor<ThrowingControlResult>());
+        var contract = executable.RootActivity.ActivityContract!;
+        var triggerType = Descriptor<ApprovalTrigger>();
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(NewTypedTriggerState(contract, triggerType));
+        await SaveBookmarkAsync();
+        var activator = new ThrowingControlResultActivator();
+        await using var provider = NewProvider(activator);
+
+        await NewHandler(provider).HandleAsync(NewResumeWorkItem(
+            input: JsonSerializer.SerializeToElement(new ApprovalTrigger(true)),
+            triggerDelivery: Delivery(triggerType, "dedupe-42")));
+
+        Assert.True(activator.Activity.Result.GetterRead);
+        Assert.True(activator.Activity.Disposed);
+        await AssertConsumedResumeFaultAsync("ActivityResumeFaulted");
+    }
+
+    [Fact]
     public async Task HandleAsync_UnsolicitedOperationCancellation_FaultsConsumedClaimWithoutReactivation()
     {
         var executable = NewTypedExecutable(currentLiteral: "original");
@@ -691,6 +712,33 @@ public sealed partial class WorkflowResumeBookmarkSchedulerWorkHandlerTests
             ActivityActivationRequest request,
             CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new ActivityActivationLease(new ThrowingApprovalActivity()));
+    }
+
+    private sealed class ThrowingControlResultActivator : IActivityActivator
+    {
+        public ThrowingControlResultActivity Activity { get; } = new();
+        public ValueTask<ActivityActivationLease> ActivateAsync(ActivityActivationRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ActivityActivationLease(Activity));
+    }
+
+    private sealed class ThrowingControlResult : IRuntimeChildControlCompletion
+    {
+        public bool GetterRead { get; private set; }
+        RuntimeChildControlTransport? IRuntimeChildControlCompletion.ChildControl
+        {
+            get { GetterRead = true; throw new IOException("Control result getter failed."); }
+        }
+    }
+
+    private sealed class ThrowingControlResultActivity : StatefulActivity<ThrowingControlResult, ApprovalState, ApprovalTrigger>, IDisposable
+    {
+        public ThrowingControlResult Result { get; } = new();
+        public bool Disposed { get; private set; }
+        protected override ValueTask<ActivityTransition<ThrowingControlResult, ApprovalState>> ExecuteAsync(ActivityExecutionContext context) =>
+            throw new NotSupportedException();
+        protected override ValueTask<ActivityTransition<ThrowingControlResult, ApprovalState>> ResumeAsync(ActivityResumeContext<ApprovalState, ApprovalTrigger> context) =>
+            ValueTask.FromResult(Complete(Result));
+        public void Dispose() => Disposed = true;
     }
 
     private sealed class UnsolicitedCancellationResumeActivator : IActivityActivator

@@ -79,8 +79,8 @@ public sealed class ActivityDesignEndpointSecurityTests
 
         Assert.Equal(
             [
-                ActivityDesignPermissions.AuthorProvider,
                 ActivityDesignPermissions.ReadProviderPayload,
+                ActivityDesignPermissions.AuthorProvider,
                 ActivityDesignPermissions.Manage,
                 ActivityDesignPermissions.Read
             ],

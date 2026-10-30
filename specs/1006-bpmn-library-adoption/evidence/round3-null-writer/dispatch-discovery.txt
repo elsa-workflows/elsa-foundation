@@ -1,0 +1,437 @@
+  Determining projects to restore...
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/Elsa.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Http will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/Elsa.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Logging.Abstractions will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/Elsa.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Options will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj]
+  All projects are up-to-date for restore.
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/Elsa.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Http will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/Elsa.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Logging.Abstractions will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/Elsa.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Options will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+  Elsa.Architecture.Analyzers -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/build/Analyzers/bin/Release/netstandard2.0/Elsa.Architecture.Analyzers.dll
+  Elsa.Pipelines.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Pipelines/Core/bin/Release/net10.0/Elsa.Pipelines.Core.dll
+  Elsa.Primitives -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Primitives/Primitives/bin/Release/net10.0/Elsa.Primitives.dll
+  Elsa.Events.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Events/Core/bin/Release/net10.0/Elsa.Events.Core.dll
+  Elsa.Attention.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Attention/Core/bin/Release/net10.0/Elsa.Attention.Core.dll
+  Elsa.Api.AspNetCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Api/AspNetCore/bin/Release/net10.0/Elsa.Api.AspNetCore.dll
+  Elsa.Tasks.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Tasks/Core/bin/Release/net10.0/Elsa.Tasks.Core.dll
+  Elsa.Caching.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Caching/Core/bin/Release/net10.0/Elsa.Caching.Core.dll
+  Elsa.Serialization.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Serialization/Core/bin/Release/net10.0/Elsa.Serialization.Core.dll
+  Elsa.Expressions.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/Core/bin/Release/net10.0/Elsa.Expressions.Core.dll
+  Elsa.Tasks.Schedules -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Tasks/Schedules/bin/Release/net10.0/Elsa.Tasks.Schedules.dll
+  Elsa.Activities.Runtime.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Runtime/Core/bin/Release/net10.0/Elsa.Activities.Runtime.Core.dll
+  Elsa.Events.Strategies -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Events/Strategies/bin/Release/net10.0/Elsa.Events.Strategies.dll
+  Elsa.Activities.Design.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Core/bin/Release/net10.0/Elsa.Activities.Design.Core.dll
+  Elsa.Events -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Events/Elsa.Events/bin/Release/net10.0/Elsa.Events.dll
+  Elsa.Mediator.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Mediator/Core/bin/Release/net10.0/Elsa.Mediator.Core.dll
+  Elsa.Foundation.Identity.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/Core/bin/Release/net10.0/Elsa.Foundation.Identity.Core.dll
+  Elsa.Cluster.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/Core/bin/Release/net10.0/Elsa.Cluster.Core.dll
+  Elsa.Workflows.Runtime.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Core/bin/Release/net10.0/Elsa.Workflows.Runtime.Core.dll
+  Elsa.Http.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Core/bin/Release/net10.0/Elsa.Http.Core.dll
+  Elsa.Locking.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Locking/Core/bin/Release/net10.0/Elsa.Locking.Core.dll
+  Elsa.Workflows.Design.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Core/bin/Release/net10.0/Elsa.Workflows.Design.Core.dll
+  Elsa.Activities.Design.Reconciliation.Clr -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Reconciliation/Clr/bin/Release/net10.0/Elsa.Activities.Design.Reconciliation.Clr.dll
+  Elsa.Workflows.Runtime -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/bin/Release/net10.0/Elsa.Workflows.Runtime.dll
+  Elsa.Cluster.InProcess -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/InProcess/bin/Release/net10.0/Elsa.Cluster.InProcess.dll
+  Elsa.Foundation.Identity -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/bin/Release/net10.0/Elsa.Foundation.Identity.dll
+  Elsa.Testing -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Testing/bin/Release/net10.0/Elsa.Testing.dll
+  Elsa.Http -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/bin/Release/net10.0/Elsa.Http.dll
+  Elsa.Activities.Runtime -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/bin/Release/net10.0/Elsa.Activities.Runtime.dll
+  Elsa.Activities.Primitives -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Primitives/bin/Release/net10.0/Elsa.Activities.Primitives.dll
+  Elsa.Serialization.SystemText -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Serialization/SystemText/bin/Release/net10.0/Elsa.Serialization.SystemText.dll
+  Elsa.Api.Capabilities -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Api/Capabilities/bin/Release/net10.0/Elsa.Api.Capabilities.dll
+  Elsa.Workflows.Design.Validations.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Validations/Core/bin/Release/net10.0/Elsa.Workflows.Design.Validations.Core.dll
+  Elsa.Workflows.Design.Persistence.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Persistence/Core/bin/Release/net10.0/Elsa.Workflows.Design.Persistence.Core.dll
+  Elsa.Workflows.Runtime.Resumption -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Resumption/bin/Release/net10.0/Elsa.Workflows.Runtime.Resumption.dll
+  Elsa.Activities.Design.Persistence.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/Core/bin/Release/net10.0/Elsa.Activities.Design.Persistence.Core.dll
+  Elsa.Activities.DispatchWorkflow.Runtime -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/DispatchWorkflow/Runtime/bin/Release/net10.0/Elsa.Activities.DispatchWorkflow.Runtime.dll
+  Elsa.Workflows.Design.Validations -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/bin/Release/net10.0/Elsa.Workflows.Design.Validations.dll
+  Elsa.Expressions -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/Elsa.Expressions/bin/Release/net10.0/Elsa.Expressions.dll
+  Elsa.Workflows.Publishing.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Core/bin/Release/net10.0/Elsa.Workflows.Publishing.Core.dll
+  Elsa.Activities.DispatchWorkflow.Design -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/DispatchWorkflow/Design/bin/Release/net10.0/Elsa.Activities.DispatchWorkflow.Design.dll
+  Elsa.Serialization.Testing -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Serialization/Testing/bin/Release/net10.0/Elsa.Serialization.Testing.dll
+  Elsa.Workflows.Runtime.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Api/bin/Release/net10.0/Elsa.Workflows.Runtime.Api.dll
+  Elsa.Activities.Testing -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Testing/bin/Release/net10.0/Elsa.Activities.Testing.dll
+  Elsa.Workflows.Publishing -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/bin/Release/net10.0/Elsa.Workflows.Publishing.dll
+  Elsa.Workflows.Publishing.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Api/bin/Release/net10.0/Elsa.Workflows.Publishing.Api.dll
+  Elsa.Activities.DispatchWorkflow.Tests -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/DispatchWorkflow/Tests/bin/Release/net10.0/Elsa.Activities.DispatchWorkflow.Tests.dll
+Test run for /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/DispatchWorkflow/Tests/bin/Release/net10.0/Elsa.Activities.DispatchWorkflow.Tests.dll (.NETCoreApp,Version=v10.0)
+The following Tests are available:
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Terminal_control_round_trips_without_reclassifying_safe_diagnostics
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Existing_constructor_and_legacy_payload_keep_control_absent
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Empty_terminal_barrier_is_distinct_from_an_empty_nonterminal_emission
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Unsupported_batch_versions_refuse_deserialization(version: 0)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Unsupported_batch_versions_refuse_deserialization(version: 2)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.A_present_batch_cannot_default_truncated_stream_identity(field: "ordinal")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.A_present_batch_cannot_default_truncated_stream_identity(field: "isTerminal")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Carried_pin_fields_are_nonblank_and_bounded_on_the_wire(field: "artifactId")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Carried_pin_fields_are_nonblank_and_bounded_on_the_wire(field: "definitionId")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Carried_pin_fields_are_nonblank_and_bounded_on_the_wire(field: "definitionVersionId")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Carried_pin_fields_are_nonblank_and_bounded_on_the_wire(field: "artifactVersion")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Carried_pin_fields_are_nonblank_and_bounded_on_the_wire(field: "artifactHash")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Payload_is_independent_of_disposed_json_and_mutated_input_list
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Notification_count_and_utf8_content_are_bounded
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Classification_is_terminal_and_result_child_identity_is_exact
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Source_and_dispatch_identity_cannot_be_substituted
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Control_and_private_state_compose_in_either_order_without_changing_fault
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Legacy_activity_state_omits_new_control_fields_and_reads_them_as_absent
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Invalid_identity_version_and_ordinal_refuse_before_becoming_wire_data
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Generic_nonterminal_delivery_cannot_readdress_or_terminalize_its_exact_source(scenario: "terminal")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Generic_nonterminal_delivery_cannot_readdress_or_terminalize_its_exact_source(scenario: "sibling")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Generic_nonterminal_delivery_cannot_readdress_or_terminalize_its_exact_source(scenario: "foreign-pin")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Generic_nonterminal_delivery_wire_retains_its_whole_exact_source_and_address
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.The_registered_payload_serializer_round_trips_complete_control_with_its_actual_null_policy(scenario: "empty-terminal")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.The_registered_payload_serializer_round_trips_complete_control_with_its_actual_null_policy(scenario: "terminal-notice")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.The_registered_payload_serializer_round_trips_complete_control_with_its_actual_null_policy(scenario: "running-notice")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.The_registered_payload_serializer_round_trips_complete_control_with_its_actual_null_policy(scenario: "nullable-classification")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.The_registered_payload_serializer_round_trips_complete_control_with_its_actual_null_policy(scenario: "populated-control")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Required_null_control_members_survive_omission_and_naming_policies(naming: "default", ignore: WhenWritingNull, scenario: "empty-terminal")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Required_null_control_members_survive_omission_and_naming_policies(naming: "default", ignore: WhenWritingNull, scenario: "terminal-notice")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Required_null_control_members_survive_omission_and_naming_policies(naming: "default", ignore: WhenWritingDefault, scenario: "empty-terminal")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Required_null_control_members_survive_omission_and_naming_policies(naming: "default", ignore: WhenWritingDefault, scenario: "terminal-notice")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Required_null_control_members_survive_omission_and_naming_policies(naming: "web", ignore: WhenWritingNull, scenario: "empty-terminal")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Required_null_control_members_survive_omission_and_naming_policies(naming: "web", ignore: WhenWritingNull, scenario: "terminal-notice")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Required_null_control_members_survive_omission_and_naming_policies(naming: "web", ignore: WhenWritingDefault, scenario: "empty-terminal")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Required_null_control_members_survive_omission_and_naming_policies(naming: "web", ignore: WhenWritingDefault, scenario: "terminal-notice")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Required_null_control_members_survive_omission_and_naming_policies(naming: "snake", ignore: WhenWritingNull, scenario: "empty-terminal")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Required_null_control_members_survive_omission_and_naming_policies(naming: "snake", ignore: WhenWritingNull, scenario: "terminal-notice")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Required_null_control_members_survive_omission_and_naming_policies(naming: "snake", ignore: WhenWritingDefault, scenario: "empty-terminal")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Required_null_control_members_survive_omission_and_naming_policies(naming: "snake", ignore: WhenWritingDefault, scenario: "terminal-notice")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: "missing-notifications", web: False)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: "missing-notifications", web: True)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: "null-notifications", web: False)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: "null-notifications", web: True)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: "missing-failure", web: False)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: "missing-failure", web: True)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: "missing-payload", web: False)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: "missing-payload", web: True)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: "duplicate-notifications", web: False)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: "duplicate-notifications", web: True)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: "duplicate-failure", web: False)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: "duplicate-failure", web: True)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: "duplicate-payload", web: False)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Persisted_terminal_control_cannot_default_or_shadow_its_authored_content(mutation: "duplicate-payload", web: True)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Web_record_member_case_shadows_cannot_erase_authored_control(member: "AuthoredFailureCode")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Web_record_member_case_shadows_cannot_erase_authored_control(member: "Notifications")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Web_record_member_case_shadows_cannot_erase_authored_control(member: "Payload")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Explicit_nullable_control_and_opaque_payload_members_round_trip(policy: "default")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Explicit_nullable_control_and_opaque_payload_members_round_trip(policy: "web")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildControlContractTests.Explicit_nullable_control_and_opaque_payload_members_round_trip(policy: "snake")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.MaterializedStart_AdvancesPendingDispatchToStarted(status: Accepted)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.MaterializedStart_AdvancesPendingDispatchToStarted(status: AcceptedButFaulted)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.Test_scoped_start_preserves_scope_and_exact_run_kind
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.SynchronousTerminalCheckpoint_SupersedesLaterStartedObservation
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.RejectedStart_RemainsAnOutboxFailure_InsteadOfBeingAcknowledged
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.RejectedStart_IsClassifiedAsSafePermanentDeliveryFailure
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.DurablyForwardedDeferredStart_AcknowledgesTheOutboxItem
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.RetainedChildStart_UsesTypedParentEdgeAuthorityWithoutHistoricalChildSource
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.Delivery_reuses_stored_depth_without_incrementing_on_redelivery
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.Over_limit_stored_depth_is_rejected_before_start_dispatch
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.Executor_rejects_invalid_host_maximum
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.DeferredStartWithoutCompleteDurableEvidence_RemainsAnOutboxFailure(owningNode: null, transportItemId: null)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.DeferredStartWithoutCompleteDurableEvidence_RemainsAnOutboxFailure(owningNode: "node-b", transportItemId: null)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.DeferredStartWithoutCompleteDurableEvidence_RemainsAnOutboxFailure(owningNode: null, transportItemId: "transport-child-start")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.DeferredStartWithoutCompleteDurableEvidence_RemainsAnOutboxFailure(owningNode: " ", transportItemId: "transport-child-start")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.DeferredStartWithoutCompleteDurableEvidence_RemainsAnOutboxFailure(owningNode: "node-b", transportItemId: " ")
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.DeferredStartWithoutDurableEvidence_IsClassifiedAsSafeTransientDeliveryFailure
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.DispatcherInfrastructureException_IsClassifiedWithoutLeakingDetails
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.StartFailure_IsPermanentOnlyWhenACheckpointRuleWasViolated(failureShape: "checkpoint rule violation", expectedKind: Permanent)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.StartFailure_IsPermanentOnlyWhenACheckpointRuleWasViolated(failureShape: "violation aggregated by the drain", expectedKind: Permanent)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.StartFailure_IsPermanentOnlyWhenACheckpointRuleWasViolated(failureShape: "violation wrapped as an inner exception", expectedKind: Permanent)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.StartFailure_IsPermanentOnlyWhenACheckpointRuleWasViolated(failureShape: "infrastructure failure", expectedKind: Transient)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.StartFailure_IsPermanentOnlyWhenACheckpointRuleWasViolated(failureShape: "aggregated infrastructure failures", expectedKind: Transient)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.RuleRefusedStartWithoutAChildOutcome_FailsPermanently
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.RuleRefusedStartWhoseChildReachedAnOutcome_IsDelivered
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.DuplicateStartWhoseChildIsAlive_IsDelivered
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.DuplicateStartWhoseChildReachedAnOutcome_IsDelivered
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.DuplicateStartWithNoChildToShow_FailsTransiently(childExecutionStoreThrows: False, withoutExecutionStateStore: False)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.DuplicateStartWithNoChildToShow_FailsTransiently(childExecutionStoreThrows: True, withoutExecutionStateStore: False)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.DuplicateStartWithNoChildToShow_FailsTransiently(childExecutionStoreThrows: False, withoutExecutionStateStore: True)
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.AdmissionStoreException_IsClassifiedWithoutLeakingDetails
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.DispatcherSuppliedDeliveryClassification_IsWrappedWithFixedChildStartClassification
+    Elsa.Activities.DispatchWorkflow.Tests.ChildStartExecutorTests.TamperedStartContext_IsRejectedBeforeAdmissionOrExternalDispatch
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowCheckpointTests.Test_run_stages_scope_and_exact_run_kind_in_record_and_start_payload
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowCheckpointTests.Wait_mode_atomically_commits_suspension_bookmark_dispatch_and_start_responsibility
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowCheckpointTests.Wait_checkpoint_replay_is_equivalent_and_conflicting_replay_fails_closed
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowCheckpointTests.Wait_activity_reexecution_uses_durable_invoke_time_after_wall_clock_advances
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowCheckpointTests.FireAndForget_reexecution_retains_wall_clock_timestamp_semantics
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowCheckpointTests.Failed_wait_checkpoint_exposes_no_dispatch_bookmark_or_child
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowCheckpointTests.Activity_completion_atomically_commits_dispatch_responsibility_before_global_delivery
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowCheckpointTests.Equivalent_checkpoint_replay_converges_on_one_dispatch_child_and_start_intent
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowCheckpointTests.Distinct_activity_executions_receive_distinct_dispatch_and_child_identities
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.Feature_types_remain_inheritable_with_virtual_configuration
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.Runtime_feature_exposes_default_and_custom_positive_maximum_nesting_depth
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.Runtime_feature_rejects_nonpositive_maximum_nesting_depth(maximum: 0)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.Runtime_feature_rejects_nonpositive_maximum_nesting_depth(maximum: -1)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.Runtime_feature_registers_resolvable_handlers_enricher_and_retry_policy
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.Runtime_feature_snapshots_validated_host_child_start_delivery_policy
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.Runtime_processor_rejects_competing_failure_projectors_in_either_registration_order(competitorFirst: True)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.Runtime_processor_rejects_competing_failure_projectors_in_either_registration_order(competitorFirst: False)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.Activity_exposes_stable_schema_defaults_editor_and_outcomes
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.Clr_catalog_discovers_one_dispatch_workflow_contract
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.Wait_mode_uses_stable_nonexpiring_bookmark_contract
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.Realized_dynamic_inputs_are_rejected_before_dispatch_without_exposing_raw_values
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.Attempted_depth_33_is_rejected_before_dispatch_staging_or_child_materialization
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.Result_snapshots_json_safe_terminal_output_contract
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.NonSuccessResult_RejectsOutputsAndCallerSuppliedDiagnostics(status: Faulted)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.NonSuccessResult_RejectsOutputsAndCallerSuppliedDiagnostics(status: Cancelled)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.ParentResumePayload_AcceptsExactlySupportedChildTerminalStatuses(status: Completed)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.ParentResumePayload_AcceptsExactlySupportedChildTerminalStatuses(status: Faulted)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.ParentResumePayload_AcceptsExactlySupportedChildTerminalStatuses(status: Cancelled)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.ParentResumePayload_AcceptsExactlySupportedChildTerminalStatuses(status: DispatchFailed)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowContractTests.DispatchFailedResult_RejectsOutputsAndNoncanonicalOrRawDiagnostics
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignFeatureTests.ConfigureServices_registers_options_and_compilation_sources_once
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.Options_include_only_visible_definitions_with_one_live_published_source
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.Pin_contribution_carries_exact_executable_and_source_identity
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.Registered_source_enriches_dispatch_node_through_named_event_and_real_workflow_executable_compiler
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.Pin_contribution_fails_closed_for_ambiguous_live_sources
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.Pin_contribution_refuses_a_secret_read_target_with_the_fixed_publish_code
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.Pin_contribution_refuses_secret_read_inputs_instead_of_marking_the_pin_incomplete
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.DispatchWorkflow_declares_the_inputs_it_pins_or_persists_as_refusing_secret_bindings(inputKey: "WorkflowDefinitionId", reason: FixedAtPublish)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.DispatchWorkflow_declares_the_inputs_it_pins_or_persists_as_refusing_secret_bindings(inputKey: "Inputs", reason: PersistedByActivity)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.DispatchWorkflow_declares_the_inputs_it_pins_or_persists_as_refusing_secret_bindings(inputKey: "CorrelationId", reason: PersistedByActivity)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.Pin_contribution_rejects_missing_stale_and_unpublished_targets
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.Test_run_parent_pins_the_live_published_child_and_ignores_test_run_child_source
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.Pin_contribution_rejects_missing_and_inconsistent_executables
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.Pin_contribution_allows_multiple_live_references_to_the_same_exact_artifact
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.Resolution_then_replacement_keeps_the_first_exact_pin_and_resolves_the_new_artifact_next_time
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.Pin_contribution_rejects_cross_tenant_and_legacy_targets
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.Pin_contribution_rejects_literal_unknown_input_without_exposing_its_value
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.Pin_contribution_rejects_blank_duplicate_missing_required_and_incompatible_literal_inputs
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.Pin_contribution_rejects_unknown_aliases_for_literal_and_dynamic_inputs
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.Declared_runtime_like_names_remain_ordinary_inputs_during_tenant_scoped_publication
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.Generic_enricher_rejects_two_owners_for_one_node_metadata_key
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowDesignTests.Generic_enricher_treats_equal_duplicate_contributions_as_idempotent
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Detached_test_child_survives_parent_completion_until_scope_teardown
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Waited_test_child_preserves_production_success_and_is_not_direct_scope_cleanup_target
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Expiry_sweep_fences_scope_before_stopping_prepared_test_target
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Dispatch_PersistsEffectiveCancelPolicy(waitForCompletion: True, authoredPolicy: null, expectedPolicy: True)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Dispatch_PersistsEffectiveCancelPolicy(waitForCompletion: True, authoredPolicy: True, expectedPolicy: True)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Dispatch_PersistsEffectiveCancelPolicy(waitForCompletion: True, authoredPolicy: False, expectedPolicy: False)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Dispatch_PersistsEffectiveCancelPolicy(waitForCompletion: False, authoredPolicy: null, expectedPolicy: False)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Dispatch_PersistsEffectiveCancelPolicy(waitForCompletion: False, authoredPolicy: True, expectedPolicy: False)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Dispatch_PersistsEffectiveCancelPolicy(waitForCompletion: False, authoredPolicy: False, expectedPolicy: False)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.NonSuccessChild_CompletesParentActivityWithOrdinarySafeOutcome(childStatus: Faulted, dispatchStatus: Faulted, expectedOutcome: "Faulted", runKind: TestRun)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.NonSuccessChild_CompletesParentActivityWithOrdinarySafeOutcome(childStatus: Faulted, dispatchStatus: Faulted, expectedOutcome: "Faulted", runKind: PublishedRun)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.NonSuccessChild_CompletesParentActivityWithOrdinarySafeOutcome(childStatus: Cancelled, dispatchStatus: Cancelled, expectedOutcome: "Cancelled", runKind: TestRun)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.NonSuccessChild_CompletesParentActivityWithOrdinarySafeOutcome(childStatus: Cancelled, dispatchStatus: Cancelled, expectedOutcome: "Cancelled", runKind: PublishedRun)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Wait_mode_starts_child_then_resumes_parent_once_with_completed_result(runKind: TestRun)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Wait_mode_starts_child_then_resumes_parent_once_with_completed_result(runKind: PublishedRun)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.In_memory_wait_converges_in_process_but_process_recreation_has_no_durable_state
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Threefold_wait_start_terminal_and_resume_replays_converge_once
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Global_sweep_executes_the_exact_pinned_child_with_inputs_and_parent_lineage(correlationOverride: null, expectedCorrelation: "correlation-parent")
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Global_sweep_executes_the_exact_pinned_child_with_inputs_and_parent_lineage(correlationOverride: "correlation-override", expectedCorrelation: "correlation-override")
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Equivalent_activity_replay_and_repeated_sweeps_converge_on_one_logical_child
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Default_limit_accepts_depths_1_through_32_and_rejects_attempted_33
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Custom_limit_uses_the_same_inclusive_boundary
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Three_transient_start_failures_then_success_preserve_every_logical_identity
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Detached_exhaustion_redrive_and_success_reuse_the_original_child_without_reopening_parent
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Wait_exhaustion_resumes_parent_once_as_safe_dispatch_failed_and_is_never_redrivable(runKind: TestRun, control: False)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Wait_exhaustion_resumes_parent_once_as_safe_dispatch_failed_and_is_never_redrivable(runKind: TestRun, control: True)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Wait_exhaustion_resumes_parent_once_as_safe_dispatch_failed_and_is_never_redrivable(runKind: PublishedRun, control: False)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Wait_exhaustion_resumes_parent_once_as_safe_dispatch_failed_and_is_never_redrivable(runKind: PublishedRun, control: True)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Wait_start_refused_by_a_checkpoint_rule_fails_final_on_its_first_attempt_and_resumes_parent_as_dispatch_failed
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Same_definition_different_artifact_version_skew_is_bounded_but_allowed
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Retained_parent_executes_original_child_after_unpublication_or_replacement(replace: False)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Retained_parent_executes_original_child_after_unpublication_or_replacement(replace: True)
+    Elsa.Activities.DispatchWorkflow.Tests.DispatchWorkflowEndToEndTests.Retired_parent_publication_rejects_a_new_root_start_without_materializing_state
+    Elsa.Activities.DispatchWorkflow.Tests.EphemeralDispatchTests.A_waited_child_that_was_never_committed_is_still_recorded_and_its_parent_resumes
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.PresentBookmark_RemainsRetryable_AfterDispatcherOutcome(dispatchStatus: Deferred)
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.PresentBookmark_RemainsRetryable_AfterDispatcherOutcome(dispatchStatus: Rejected)
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.PresentBookmark_RemainsRetryable_AfterDispatcherOutcome(dispatchStatus: Duplicate)
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.PresentBookmark_RemainsRetryable_AfterDispatcherOutcome(dispatchStatus: NotFound)
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.MissingBookmarkWithCompletedActivity_IsIdempotentSuccess
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.DispatchFailedPayload_UsesOrdinaryDeterministicBookmarkRoute
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.ConsumedDispatchFailedResume_LogsStableSafeEvent
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.MissingBookmarkWithSuspendedActivity_RemainsRetryable
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.DispatcherOutcome_IsAcknowledgedOnlyAfterAuthoritativeRecheck(dispatchStatus: Deferred)
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.DispatcherOutcome_IsAcknowledgedOnlyAfterAuthoritativeRecheck(dispatchStatus: Rejected)
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.DispatcherOutcome_IsAcknowledgedOnlyAfterAuthoritativeRecheck(dispatchStatus: Duplicate)
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.DispatcherOutcome_IsAcknowledgedOnlyAfterAuthoritativeRecheck(dispatchStatus: NotFound)
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.CompletedParent_IsIdempotentSuccess_EvenWhenBookmarkRemains
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.RemovedParent_IsIdempotentSuccess
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.NonterminalParentWithMissingBookmarkAndActivity_RemainsRetryable(workflowStatus: Running)
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.NonterminalParentWithMissingBookmarkAndActivity_RemainsRetryable(workflowStatus: Suspended)
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.MismatchedResolvedBookmark_IsRejectedBeforeAuthoritativeRecheck
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.MismatchedStoredBookmark_IsRejectedDuringAuthoritativeRecheck
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.WrongKind_IsRejectedBeforeDispatch
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.MissingOrInvalidPayload_IsRejectedBeforeDispatch
+    Elsa.Activities.DispatchWorkflow.Tests.ParentResumeExecutorTests.MismatchedDeterministicIntentIdentity_IsRejectedBeforeDispatch
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Actual_waited_dispatch_admits_capability_and_carries_the_hint_into_the_child_checkpoint
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Ordinary_child_root_observes_no_capability_during_actual_execution
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Store_failure_is_wrapped_with_context_and_original_cause
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Cancellation_passes_through_without_wrapping
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Explicit_scoped_override_is_preserved_and_default_is_scoped
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Startup_rejects_missing_or_duplicate_providers(duplicate: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Startup_rejects_missing_or_duplicate_providers(duplicate: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Startup_rejects_missing_exact_source_resume_event_handler
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Actual_dispatch_refuses_unadmitted_control_without_starting_a_child(wait: False, requestedVersion: 1)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Actual_dispatch_refuses_unadmitted_control_without_starting_a_child(wait: True, requestedVersion: 2)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Exact_admitted_boundary_resolves_without_using_delivery_status_as_authority(scenario: "valid")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Exact_admitted_boundary_resolves_without_using_delivery_status_as_authority(scenario: "cancelled-after-admission")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.No_capability_hint_keeps_legacy_and_ordinary_root_behavior(scenario: "legacy")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.No_capability_hint_keeps_legacy_and_ordinary_root_behavior(scenario: "parent-id-only")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "pending")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "foreign-root-scheduler")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "foreign-root-scheduling-workflow")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "not-a-root")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "wrong-consumer-version")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "missing-caller-capability")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "wrong-provenance-parent")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "wrong-depth")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "foreign-test-scope")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "foreign-authority")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "foreign-partition")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "foreign-tenant")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "foreign-child-pin")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "foreign-workflow-parent")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "foreign-dispatch-hint")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "missing-record-capability")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "fire-and-forget")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "cancelled-before-admission")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "foreign-root-provenance-scheduler")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.Conflicting_retained_boundary_refuses_control(scenario: "duplicate-root")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlBoundaryTests.A_different_root_invocation_cannot_reuse_the_same_workflow_hint
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlEnrichmentAvailabilityTests.Unavailable_control_enrichment_keeps_its_uncommitted_source_and_retries_without_faulting(order: 75)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlEnrichmentAvailabilityTests.Unavailable_control_enrichment_keeps_its_uncommitted_source_and_retries_without_faulting(order: 90)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlEnrichmentAvailabilityTests.Unavailable_control_enrichment_keeps_its_uncommitted_source_and_retries_without_faulting(order: 100)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlEnrichmentAvailabilityTests.Unavailable_control_enrichment_keeps_its_uncommitted_source_and_retries_without_faulting(order: 101)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlInboxTests.Nonterminal_delivery_commits_acceptance_with_deferred_consumer_and_retry_cannot_repeat_it
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlInboxTests.Terminal_barrier_delivered_first_buffers_without_callback_then_releases_one_ordered_prefix(ordinaryFault: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlInboxTests.Terminal_barrier_delivered_first_buffers_without_callback_then_releases_one_ordered_prefix(ordinaryFault: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlInboxTests.Returned_consumer_decision_commits_the_cursor_private_state_and_owed_work_together(response: "defer", status: Running)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlInboxTests.Returned_consumer_decision_commits_the_cursor_private_state_and_owed_work_together(response: "fault", status: Faulted)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlInboxTests.Returned_consumer_decision_commits_the_cursor_private_state_and_owed_work_together(response: "cancel", status: Cancelled)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlInboxTests.Consuming_a_nonterminal_batch_can_cancel_the_same_call_without_overwriting_its_cancellation
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlInboxTests.Retired_caller_tombstone_settles_late_source_retry_without_recreating_work
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlInboxTests.A_valid_terminal_source_read_outage_keeps_the_bookmark_and_barrier_owed_until_retry
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlInboxTests.Lost_reply_after_buffered_or_consumed_acceptance_retries_without_repeating_the_consumer(terminalFirst: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlInboxTests.Lost_reply_after_buffered_or_consumed_acceptance_retries_without_repeating_the_consumer(terminalFirst: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlProducerTests.Ordinary_terminal_without_authored_control_gets_a_fresh_empty_barrier(status: Completed)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlProducerTests.Ordinary_terminal_without_authored_control_gets_a_fresh_empty_barrier(status: Faulted)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlProducerTests.Ordinary_terminal_without_authored_control_gets_a_fresh_empty_barrier(status: Cancelled)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlProducerTests.Terminal_after_a_nonterminal_emission_uses_the_next_ordinal(status: Completed)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlProducerTests.Terminal_after_a_nonterminal_emission_uses_the_next_ordinal(status: Faulted)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlProducerTests.A_previously_staged_terminal_batch_is_retained_as_one_whole_payload
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlProducerTests.Current_checkpoint_root_projection_overlays_the_retained_store
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlProducerTests.Re_enrichment_of_a_committed_root_less_terminal_checkpoint_is_identical
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlProducerTests.Legacy_dispatch_without_capability_keeps_ordinary_terminal_projection
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlProducerTests.Actual_host_commits_the_empty_terminal_barrier_with_its_workflow_terminal_checkpoint
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlProducerTests.Actual_root_authored_fault_is_preserved_when_workflow_cancellation_wins_before_fault_observation
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlProducerTests.A_real_committed_root_control_cannot_lose_content_before_its_workflow_terminal_source(mutation: "missing-notifications")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlProducerTests.A_real_committed_root_control_cannot_lose_content_before_its_workflow_terminal_source(mutation: "null-notifications")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlProducerTests.A_real_committed_root_control_cannot_lose_content_before_its_workflow_terminal_source(mutation: "missing-failure")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlProducerTests.A_real_committed_root_control_cannot_lose_content_before_its_workflow_terminal_source(mutation: "missing-payload")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Actual_terminal_checkpoint_carries_one_resume_with_exact_source_and_authority(authoredFault: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Actual_terminal_checkpoint_carries_one_resume_with_exact_source_and_authority(authoredFault: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Actual_running_root_commits_one_whole_nonterminal_intent_and_its_source_anchor
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Actual_leaf_refuses_an_omitted_or_forged_terminal_result_before_completing(scenario: "omitted")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Actual_leaf_refuses_an_omitted_or_forged_terminal_result_before_completing(scenario: "outputs")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Actual_leaf_refuses_an_omitted_or_forged_terminal_result_before_completing(scenario: "batch")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Actual_leaf_refuses_an_omitted_or_forged_terminal_result_before_completing(scenario: "dispatch-failed")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Pre_resume_source_read_preserves_failure_classification_and_original_cause(failureKind: "io")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Pre_resume_source_read_preserves_failure_classification_and_original_cause(failureKind: "json")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Pre_resume_source_read_preserves_failure_classification_and_original_cause(failureKind: "cancel")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Nonterminal_notification_is_one_deterministic_intent_with_whole_ordered_batch
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Re_enrichment_before_provider_commit_keeps_the_equivalent_staged_intent(afterPriorBatch: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Re_enrichment_before_provider_commit_keeps_the_equivalent_staged_intent(afterPriorBatch: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.A_new_projection_cannot_claim_an_uncommitted_foreign_source_anchor
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Retained_nonterminal_projection_does_not_emit_again_in_a_later_commit(sameWork: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Retained_nonterminal_projection_does_not_emit_again_in_a_later_commit(sameWork: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.An_anchored_source_cannot_be_reconstructed_when_its_outbox_authority_is_missing
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.An_old_anchored_checkpoint_cannot_reconstruct_missing_authority_after_root_advancement
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.A_new_batch_with_a_foreign_source_work_is_refused_before_intent_staging
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Terminal_root_batch_never_emits_a_separate_notification
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Source_authority_refuses_missing_or_forged_control(scenario: "missing")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Source_authority_refuses_missing_or_forged_control(scenario: "batch")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Source_authority_refuses_missing_or_forged_control(scenario: "ordinal")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Source_authority_refuses_missing_or_forged_control(scenario: "consumer")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Source_authority_refuses_missing_or_forged_control(scenario: "pin")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Source_authority_refuses_missing_or_forged_control(scenario: "intent-kind")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Source_authority_refuses_missing_or_forged_control(scenario: "outbox-id")
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Replay_refuses_a_conflicting_committed_notification
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Source_store_failure_keeps_context_and_cancellation_passes_through
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Scoped_authorizer_override_is_preserved_and_default_is_single_per_scope
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Startup_refuses_missing_or_duplicate_authorizers(duplicate: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowControlTransportTests.Startup_refuses_missing_or_duplicate_authorizers(duplicate: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.CancellationCheckpoint_StagesDeterministicWork(status: Pending)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.CancellationCheckpoint_StagesDeterministicWork(status: Started)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.ActivityCancellationCheckpoint_StagesDeterministicWork(status: Pending, cancelWholeParent: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.ActivityCancellationCheckpoint_StagesDeterministicWork(status: Pending, cancelWholeParent: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.ActivityCancellationCheckpoint_StagesDeterministicWork(status: Started, cancelWholeParent: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.ActivityCancellationCheckpoint_StagesDeterministicWork(status: Started, cancelWholeParent: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.CancellationCheckpoint_ReplaysAfterProviderResolutionAndTerminalProjection(admitBeforeCancellation: False, cancelWholeParent: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.CancellationCheckpoint_ReplaysAfterProviderResolutionAndTerminalProjection(admitBeforeCancellation: False, cancelWholeParent: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.CancellationCheckpoint_ReplaysAfterProviderResolutionAndTerminalProjection(admitBeforeCancellation: True, cancelWholeParent: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.CancellationCheckpoint_ReplaysAfterProviderResolutionAndTerminalProjection(admitBeforeCancellation: True, cancelWholeParent: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.CancellationCheckpoint_ReplaysCommittedOutboxWhenTerminalWinsAfterEnrichment(cancelWholeParent: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.CancellationCheckpoint_ReplaysCommittedOutboxWhenTerminalWinsAfterEnrichment(cancelWholeParent: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.TerminalDispatch_DoesNotCreateCancelWork(status: Completed, cancelWholeParent: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.TerminalDispatch_DoesNotCreateCancelWork(status: Completed, cancelWholeParent: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.TerminalDispatch_DoesNotCreateCancelWork(status: Faulted, cancelWholeParent: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.TerminalDispatch_DoesNotCreateCancelWork(status: Faulted, cancelWholeParent: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.TerminalDispatch_DoesNotCreateCancelWork(status: Cancelled, cancelWholeParent: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.TerminalDispatch_DoesNotCreateCancelWork(status: Cancelled, cancelWholeParent: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.TerminalDispatch_DoesNotCreateCancelWork(status: DispatchFailed, cancelWholeParent: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.TerminalDispatch_DoesNotCreateCancelWork(status: DispatchFailed, cancelWholeParent: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.ActivityCancellationCheckpoint_DoesNotCancelSiblingDispatch
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.NonCancellationActivityChange_DoesNotCreateCancelWork(status: Running, operation: Upsert)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.NonCancellationActivityChange_DoesNotCreateCancelWork(status: Cancelled, operation: Delete)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.ActivityCancellationCheckpoint_FindsMatchingDispatchOnLaterPage
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.CancellationCheckpoint_RejectsANonAdvancingProviderCursor
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.IndependentDispatch_DoesNotCreateCancelWork(mode: WaitForCompletion, authoredPolicy: False, cancelWholeParent: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.IndependentDispatch_DoesNotCreateCancelWork(mode: WaitForCompletion, authoredPolicy: False, cancelWholeParent: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.IndependentDispatch_DoesNotCreateCancelWork(mode: FireAndForget, authoredPolicy: False, cancelWholeParent: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.IndependentDispatch_DoesNotCreateCancelWork(mode: FireAndForget, authoredPolicy: False, cancelWholeParent: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.IndependentDispatch_DoesNotCreateCancelWork(mode: FireAndForget, authoredPolicy: True, cancelWholeParent: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.IndependentDispatch_DoesNotCreateCancelWork(mode: FireAndForget, authoredPolicy: True, cancelWholeParent: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.CancelledBeforeAdmission_SuppressesActorDelivery
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.TerminalChild_SuppressesActorDelivery(status: Completed)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.TerminalChild_SuppressesActorDelivery(status: Faulted)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.TerminalChild_SuppressesActorDelivery(status: Cancelled)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.ActiveChild_ReceivesDeterministicCancelOnce
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.NonterminalAfterDelivery_RemainsRetryable(status: Accepted)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.NonterminalAfterDelivery_RemainsRetryable(status: AcceptedButFaulted)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.NonterminalAfterDelivery_RemainsRetryable(status: Duplicate)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.NonterminalAfterDelivery_RemainsRetryable(status: Rejected)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.NonterminalAfterDelivery_RemainsRetryable(status: Deferred)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.MissingAdmittedChild_RemainsRetryableWithoutActivation
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.VisibleChildWithoutDurableAdmission_RemainsRetryableWithoutActivation
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.CancelledAdmission_SuppressesChildStart
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCancellationTests.AdmittedStart_ReplaysThroughStableIdentity
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCompletionEnricherTests.CompletedWait_AppendsOneSafeDeterministicResumeIntent
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCompletionEnricherTests.Replay_ReusesExactCommittedIntentWithoutRecapturingOutputs
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCompletionEnricherTests.NonSuccessWait_AppendsSafeDeterministicResumeIntentWithoutReadingOutputs(childStatus: Faulted, dispatchStatus: Faulted)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCompletionEnricherTests.NonSuccessWait_AppendsSafeDeterministicResumeIntentWithoutReadingOutputs(childStatus: Cancelled, dispatchStatus: Cancelled)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCompletionEnricherTests.FaultResult_DeduplicatesSortsAndTruncatesIncidentIdsWithInvariantMetadata
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCompletionEnricherTests.FaultReplay_ReusesExactCommittedIntentWithoutRecapturingIncidentsOrOutputs
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCompletionEnricherTests.UncommittedSameIdIntentWithForeignOutput_IsRejectedBeforePersistence
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCompletionEnricherTests.MismatchedTerminalProjection_DoesNotAppendParentResumeIntent
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCompletionEnricherTests.CompletedChildWithoutLinkedDispatch_AppendsNoIntentOrReadsOutputs
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCompletionEnricherTests.CompletionEnrichment_DeclaresASeparatePostLifecyclePhase
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCompletionEnricherTests.EquivalentUncommittedIntent_WithReorderedMetadata_IsAccepted
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCompletionEnricherTests.ConflictingCommittedAndUncommittedIntents_AreRejected
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCompletionEnricherTests.InvalidCommittedIntent_IsRejectedByStableFieldValidation
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchCompletionEnricherTests.CommittedIntentWithMismatchedTerminalStatus_IsRejected
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchDeliveryFailureProjectorTests.ExhaustionProjectsOnlySafeDeadLetterEvidenceAndWaitOnlyFollowUp(mode: WaitForCompletion, expectsFollowUp: True)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchDeliveryFailureProjectorTests.ExhaustionProjectsOnlySafeDeadLetterEvidenceAndWaitOnlyFollowUp(mode: FireAndForget, expectsFollowUp: False)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchDeliveryFailureProjectorTests.InMemoryCompletionAtomicallyPersistsDeadLetterDispatchAndWaitFollowUp
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchDeliveryFailureProjectorTests.InMemoryClaimedFailure_AcknowledgesVisibleChildInsteadOfProjectingDispatchFailed
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchDeliveryFailureProjectorTests.Processor_emits_safe_attempt_final_incident_resume_queued_and_consumed_events
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchDeliveryFailureProjectorTests.Three_exhaustion_replays_per_mode_preserve_one_stable_projection_and_incident(mode: WaitForCompletion)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchDeliveryFailureProjectorTests.Three_exhaustion_replays_per_mode_preserve_one_stable_projection_and_incident(mode: FireAndForget)
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchDeliveryFailureProjectorTests.Projector_ignores_nonfinal_or_wrong_kind_and_rejects_missing_or_conflicting_identity
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchDeliveryFailureProjectorTests.Projector_validates_guards_and_rejects_a_conflicting_existing_failure
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchReadinessInitializerTests.InitializeAsync_AcceptsStoreWithAtomicDispatchCapabilities
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchReadinessInitializerTests.InitializeAsync_AcceptsAndLogsDistributedReadyAsInformation
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchReadinessInitializerTests.InitializeAsync_RejectsStoreWithoutAtomicDispatchCapabilities
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchReadinessInitializerTests.InitializeAsync_RejectsProviderWithoutAtomicDeliveryRecoveryCapabilities
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchStateTests.Identity_IsStableForReplayAndDistinctPerActivityExecution
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchStateTests.Record_CanonicalizesSafeInputDescriptorsWithoutRawValues
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchStateTests.StateChangeSet_RejectsMismatchedDispatchIdentity
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchStateTests.CheckpointRequest_RejectsIntentOutsideDeterministicDispatchIdentity
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchStateTests.CheckpointRequest_PreservesFireAndForgetConstructorAndValidatesWaitBookmark
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchStateTests.CheckpointRequest_FailsClosedOnConflictingOrExpiringWaitBookmark
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchStateTests.Dispatch_staging_crosses_activity_child_scope_and_is_consumed_by_exact_invocation
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchStateTests.Dispatch_staging_rejects_competing_request_for_the_same_invocation_until_reset
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchStateTests.InMemoryCheckpoint_ProjectsDispatchAndConvergesEquivalentReplay
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchStateTests.InMemoryCheckpoint_RejectsConflictingRecordBeforeReplacingProjection
+    Elsa.Activities.DispatchWorkflow.Tests.WorkflowDispatchStateTests.InMemoryCheckpoint_AllowsMonotonicLifecycleTransitionWithoutChangingIdentity

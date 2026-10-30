@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Data;
 using System.Data.Common;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -19,8 +21,122 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
-public sealed class EfActivityExecutionStoresTests
+public sealed partial class EfActivityExecutionStoresTests
 {
+    [Fact]
+    public async Task Browsing_keeps_nested_parallel_and_reusable_parent_contexts_separate()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        var store = fixture.Inspection;
+        long sequence = 0;
+        async Task Save(string id, string node, string? parent, string? iteration = null, string? branch = null)
+        {
+            sequence++;
+            var value = Projection("wf", id, sequence, "scope");
+            await store.SaveAsync(value with { ExecutableNodeId = node, ScheduledAt = DateTimeOffset.UnixEpoch.AddSeconds(sequence),
+                Provenance = value.Provenance with { ParentActivityExecutionId = parent, IterationId = iteration, BranchId = branch } });
+        }
+        await Save("owner", "owner-node", null);
+        await Save("pass-a", "body", "owner", "outer-a");
+        await Save("pass-b", "body", "owner", "outer-b");
+        await Save("inner-a", "inner-loop", "pass-a");
+        await Save("inner-b", "inner-loop", "pass-b");
+        await Save("branch-a", "branch", "inner-a", "same-local-iteration");
+        await Save("branch-b", "branch", "inner-b", "same-local-iteration");
+        await Save("left", "leaf", "branch-a", branch: "left");
+        await Save("right", "leaf", "branch-a", branch: "right");
+        await Save("other", "leaf", "branch-b");
+        await Save("call-a", "reusable", "pass-a");
+        await Save("call-b", "reusable", "pass-b");
+        await Save("internal-a", "template-leaf", "call-a");
+        await Save("internal-b", "template-leaf", "call-b");
+        var parallel = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", executableNodeId: "leaf", ancestorActivityExecutionId: "pass-a"));
+        Assert.Equal(new[] { "left", "right" }, parallel.Items.Select(x => x.Execution.ActivityExecutionId));
+        var other = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", executableNodeId: "leaf", parentActivityExecutionId: "branch-b"));
+        Assert.Equal("other", Assert.Single(other.Items).Execution.ActivityExecutionId);
+        Assert.Empty((await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", parentActivityExecutionId: "branch-a", ancestorActivityExecutionId: "pass-b"))).Items);
+        var reusable = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", executableNodeId: "template-leaf", ancestorActivityExecutionId: "call-a"));
+        Assert.Equal("internal-a", Assert.Single(reusable.Items).Execution.ActivityExecutionId);
+        var iterations = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", executableNodeId: "branch"));
+        Assert.Equal(new long?[] { 1, 1 }, iterations.Items.Select(x => x.IterationPosition));
+    }
+
+    [Fact]
+    public async Task Browsing_iteration_order_uses_the_actual_first_attempt_tuple()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        var store = fixture.Inspection;
+        async Task Save(string id, long sequence, int time, string iteration)
+        {
+            var value = Projection("wf", id, sequence, "scope");
+            await store.SaveAsync(value with { ExecutableNodeId = "body", ScheduledAt = DateTimeOffset.UnixEpoch.AddSeconds(time),
+                Provenance = value.Provenance with { IterationId = iteration, ParentActivityExecutionId = "loop" } });
+        }
+        await Save("z", 100, 100, "a");
+        await Save("m", 50, 100, "b");
+        await Save("a", 1, 200, "a");
+        var result = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", executableNodeId: "body"));
+        Assert.Equal(new[] { "m", "z", "a" }, result.Items.Select(x => x.Execution.ActivityExecutionId));
+        Assert.Equal(new long?[] { 1, 2, 2 }, result.Items.Select(x => x.IterationPosition));
+    }
+
+    [Fact]
+    public async Task Browsing_uses_scheduling_chronology_and_counts_distinct_iterations_across_retries()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        var store = fixture.Inspection;
+        async Task Save(string id, long sequence, int time, string iteration)
+        {
+            var value = Projection("wf", id, sequence, "scope");
+            await store.SaveAsync(value with { ExecutableNodeId = "body", ScheduledAt = DateTimeOffset.UnixEpoch.AddSeconds(time),
+                Provenance = value.Provenance with { IterationId = iteration, ParentActivityExecutionId = "loop" } });
+        }
+        await Save("first", 900, 1, "iteration-a");
+        await Save("retry", 100, 2, "iteration-a");
+        await Save("second", 200, 3, "iteration-b");
+        var result = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", executableNodeId: "body"));
+        Assert.Equal(new[] { "first", "retry", "second" }, result.Items.Select(x => x.Execution.ActivityExecutionId));
+        Assert.Equal(new long?[] { 1, 1, 2 }, result.Items.Select(x => x.IterationPosition));
+        Assert.Equal(new long[] { 1, 2, 3 }, result.Items.Select(x => x.Position));
+        Assert.Equal("second", Assert.Single((await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", 1, executableNodeId: "body"))).Items).Execution.ActivityExecutionId);
+    }
+
+    [Fact]
+    public async Task Browsing_filters_before_paging_and_preserves_exact_parent_occurrences()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        var store = fixture.Inspection;
+        async Task Save(string id, long sequence, string node, string? parent = null)
+        {
+            var value = Projection("wf", id, sequence, "scope");
+            await store.SaveAsync(value with { ExecutableNodeId = node,
+                Provenance = value.Provenance with { ParentActivityExecutionId = parent } });
+        }
+        await Save("loop", 1, "loop-node");
+        for (var i = 1; i <= 12; i++)
+        {
+            await Save($"body-{i:D2}", 2 * i, "body", "loop");
+            await Save($"write-{i:D2}", 2 * i + 1, "write", $"body-{i:D2}");
+        }
+        var latest = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", 3, executableNodeId: "write", ancestorActivityExecutionId: "loop"));
+        Assert.Equal(12, latest.TotalCount);
+        Assert.Equal(new long[] { 10, 11, 12 }, latest.Items.Select(x => x.Position));
+        Assert.Equal("write-09", latest.Items[0].PreviousActivityExecutionId);
+        Assert.Null(latest.Items[^1].NextActivityExecutionId);
+        var anchored = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", 3, executableNodeId: "write", ancestorActivityExecutionId: "loop", anchorActivityExecutionId: "write-04"));
+        Assert.Equal("write-04", anchored.Items[0].Execution.ActivityExecutionId);
+        Assert.Equal(4, anchored.Items[0].Position);
+        var scoped = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", executableNodeId: "write", ancestorActivityExecutionId: "body-04"));
+        Assert.Equal("write-04", Assert.Single(scoped.Items).Execution.ActivityExecutionId);
+        Assert.Equal(1, scoped.TotalCount);
+        var children = await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", parentActivityExecutionId: "loop"));
+        Assert.Equal(12, children.TotalCount);
+        Assert.All(children.Items, x => Assert.Equal("body", x.Execution.ExecutableNodeId));
+        Assert.Empty((await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", ancestorActivityExecutionId: "missing"))).Items);
+        Assert.Empty((await store.BrowseAsync(new ActivityExecutionBrowseQuery("wf", executableNodeId: "write", anchorActivityExecutionId: "loop"))).Items);
+        Assert.Empty((await store.BrowseAsync(new ActivityExecutionBrowseQuery("other"))).Items);
+    }
+
     [Fact]
     public async Task State_store_round_trips_scoped_rows_and_provider_count_with_bounded_pages()
     {
@@ -59,6 +175,193 @@ public sealed class EfActivityExecutionStoresTests
         var second = await fixture.Inspection.ListSummariesPageAsync(new ActivityExecutionInspectionSummaryPageQuery("wf", 1, first.NextContinuationToken));
         Assert.Equal("b", second.Items[0].ActivityExecutionId);
         Assert.NotNull(await fixture.Inspection.FindAsync("wf", "a"));
+    }
+
+    [Fact]
+    public async Task Inspection_summary_page_scopes_count_items_and_cursor_to_one_workflow()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        await fixture.Inspection.SaveAsync(Projection("wf", "a", 1, "a"));
+        await fixture.Inspection.SaveAsync(Projection("wf", "b", 1, "b"));
+        await fixture.Inspection.SaveAsync(Projection("other-wf", "a", 1, "a"));
+        var foreignScope = new EfActivityExecutionInspectionStore(fixture.Context, new Accessor("tenant-b"), fixture.RecoveryContinuationCodec);
+        await foreignScope.SaveAsync(Projection("wf", "a", 1, "a"));
+
+        var first = await fixture.Inspection.ListSummariesPageAsync(new ActivityExecutionInspectionSummaryPageQuery("wf", 1));
+        Assert.Equal(2, first.TotalCount);
+        Assert.Equal(["a"], ActivityIds(first));
+        var cursor = Assert.IsType<string>(first.NextContinuationToken);
+        var second = await fixture.Inspection.ListSummariesPageAsync(new ActivityExecutionInspectionSummaryPageQuery("wf", 1, cursor));
+        Assert.Equal(2, second.TotalCount);
+        Assert.Equal(["b"], ActivityIds(second));
+        Assert.Null(second.NextContinuationToken);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Inspection.ListSummariesPageAsync(
+            new ActivityExecutionInspectionSummaryPageQuery("other-wf", 1, cursor)).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => foreignScope.ListSummariesPageAsync(
+            new ActivityExecutionInspectionSummaryPageQuery("wf", 1, cursor)).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Inspection.ListSummariesPageAsync(
+            new ActivityExecutionInspectionSummaryPageQuery("wf", 1, cursor + "tampered")).AsTask());
+    }
+
+    [Fact]
+    public async Task Inspection_summary_page_keeps_empty_view_consistent_when_a_row_is_inserted()
+    {
+        await using var fixture = await InspectionPageRaceFixture.CreateAsync("tenant-inspection-page-empty", "wf-inspection-page-empty");
+
+        var interleaved = await fixture.ReadPageWithMutationAsync(10, null,
+            cancellationToken => fixture.InsertAsync("final", 1, cancellationToken));
+        AssertMutationWasApplied(interleaved.Mutation);
+
+        Assert.Null(interleaved.Page.NextContinuationToken);
+        if (interleaved.Page.TotalCount == 0)
+            Assert.Empty(interleaved.Page.Items);
+        else
+        {
+            Assert.Equal(1, interleaved.Page.TotalCount);
+            Assert.Equal(["final"], ActivityIds(interleaved.Page));
+        }
+
+        var current = await fixture.ReadPageAsync(10);
+        Assert.Equal(1, current.TotalCount);
+        Assert.Equal(["final"], ActivityIds(current));
+        Assert.Null(current.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task Inspection_summary_page_keeps_nonempty_insert_and_continuation_consistent()
+    {
+        await using var fixture = await InspectionPageRaceFixture.CreateAsync("tenant-inspection-page-insert", "wf-inspection-page-insert");
+        await fixture.InsertAsync("existing", 1);
+
+        var interleaved = await fixture.ReadPageWithMutationAsync(1, null,
+            cancellationToken => fixture.InsertAsync("final", 2, cancellationToken));
+        AssertMutationWasApplied(interleaved.Mutation);
+
+        Assert.Equal(["existing"], ActivityIds(interleaved.Page));
+        if (interleaved.Page.NextContinuationToken is null)
+            Assert.Equal(1, interleaved.Page.TotalCount);
+        else
+        {
+            Assert.Equal(2, interleaved.Page.TotalCount);
+            var continuation = await fixture.ReadPageAsync(1, interleaved.Page.NextContinuationToken);
+            Assert.Equal(2, continuation.TotalCount);
+            Assert.Equal(["final"], ActivityIds(continuation));
+            Assert.Null(continuation.NextContinuationToken);
+        }
+
+        var current = await fixture.ReadPageAsync(1);
+        Assert.Equal(2, current.TotalCount);
+        Assert.Equal(["existing"], ActivityIds(current));
+        Assert.NotNull(current.NextContinuationToken);
+        var currentContinuation = await fixture.ReadPageAsync(1, current.NextContinuationToken);
+        Assert.Equal(2, currentContinuation.TotalCount);
+        Assert.Equal(["final"], ActivityIds(currentContinuation));
+        Assert.Null(currentContinuation.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task Inspection_summary_page_keeps_first_page_consistent_when_its_first_row_is_deleted()
+    {
+        await using var fixture = await InspectionPageRaceFixture.CreateAsync("tenant-inspection-page-delete-first", "wf-inspection-page-delete-first");
+        await fixture.InsertAsync("first", 1);
+        await fixture.InsertAsync("second", 2);
+
+        var interleaved = await fixture.ReadPageWithMutationAsync(1, null,
+            cancellationToken => fixture.DeleteAsync("first", cancellationToken));
+        AssertMutationWasApplied(interleaved.Mutation);
+
+        var ids = ActivityIds(interleaved.Page);
+        if (ids.Length == 1 && ids[0] == "first")
+        {
+            Assert.Equal(2, interleaved.Page.TotalCount);
+            Assert.NotNull(interleaved.Page.NextContinuationToken);
+            var continuation = await fixture.ReadPageAsync(1, interleaved.Page.NextContinuationToken);
+            Assert.Equal(1, continuation.TotalCount);
+            Assert.Equal(["second"], ActivityIds(continuation));
+            Assert.Null(continuation.NextContinuationToken);
+        }
+        else
+        {
+            Assert.Equal(["second"], ids);
+            Assert.Equal(1, interleaved.Page.TotalCount);
+            Assert.Null(interleaved.Page.NextContinuationToken);
+        }
+
+        var current = await fixture.ReadPageAsync(1);
+        Assert.Equal(1, current.TotalCount);
+        Assert.Equal(["second"], ActivityIds(current));
+        Assert.Null(current.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task Inspection_summary_page_keeps_continuation_consistent_when_its_row_is_deleted()
+    {
+        await using var fixture = await InspectionPageRaceFixture.CreateAsync("tenant-inspection-page-delete-continuation", "wf-inspection-page-delete-continuation");
+        await fixture.InsertAsync("first", 1);
+        await fixture.InsertAsync("second", 2);
+        var first = await fixture.ReadPageAsync(1);
+        Assert.Equal(2, first.TotalCount);
+        Assert.Equal(["first"], ActivityIds(first));
+        var cursor = Assert.IsType<string>(first.NextContinuationToken);
+
+        var interleaved = await fixture.ReadPageWithMutationAsync(1, cursor,
+            cancellationToken => fixture.DeleteAsync("second", cancellationToken));
+        AssertMutationWasApplied(interleaved.Mutation);
+
+        var ids = ActivityIds(interleaved.Page);
+        if (ids.Length == 0)
+        {
+            Assert.Equal(1, interleaved.Page.TotalCount);
+            Assert.Null(interleaved.Page.NextContinuationToken);
+        }
+        else
+        {
+            Assert.Equal(["second"], ids);
+            Assert.Equal(2, interleaved.Page.TotalCount);
+            Assert.Null(interleaved.Page.NextContinuationToken);
+        }
+
+        var emptiedContinuation = await fixture.ReadPageAsync(1, cursor);
+        Assert.Equal(1, emptiedContinuation.TotalCount);
+        Assert.Empty(emptiedContinuation.Items);
+        Assert.Null(emptiedContinuation.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task Inspection_summary_page_does_not_commit_or_dispose_a_caller_serializable_transaction()
+    {
+        await using var fixture = await InspectionPageRaceFixture.CreateAsync("tenant-inspection-page-caller-transaction", "wf-inspection-page-caller-transaction");
+        await fixture.InsertAsync("existing", 1);
+        await using var context = fixture.OpenContext();
+        var store = fixture.CreateStore(context);
+        await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
+        var page = await store.ListSummariesPageAsync(new ActivityExecutionInspectionSummaryPageQuery(fixture.WorkflowExecutionId));
+        Assert.Equal(["existing"], ActivityIds(page));
+        Assert.Same(transaction, context.Database.CurrentTransaction);
+
+        await store.SaveAsync(Projection(fixture.WorkflowExecutionId, "rolled-back", 2, fixture.Scope));
+        Assert.Same(transaction, context.Database.CurrentTransaction);
+        await transaction.RollbackAsync();
+
+        var afterRollback = await fixture.ReadPageAsync(10);
+        Assert.Equal(1, afterRollback.TotalCount);
+        Assert.Equal(["existing"], ActivityIds(afterRollback));
+        Assert.Null(afterRollback.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task Inspection_summary_page_rejects_an_ambient_transaction()
+    {
+        await using var fixture = await InspectionPageRaceFixture.CreateAsync("tenant-inspection-page-ambient", "wf-inspection-page-ambient");
+        await using var context = fixture.OpenContext();
+        var store = fixture.CreateStore(context);
+        using var transaction = new System.Transactions.TransactionScope(System.Transactions.TransactionScopeAsyncFlowOption.Enabled);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => store.ListSummariesPageAsync(
+            new ActivityExecutionInspectionSummaryPageQuery(fixture.WorkflowExecutionId)).AsTask());
+        Assert.Contains("ambient or externally enlisted", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -764,6 +1067,171 @@ public sealed class EfActivityExecutionStoresTests
         }
     }
 
+    private sealed class InspectionPageRaceFixture : IAsyncDisposable
+    {
+        private readonly TemporarySqliteDatabase database;
+        private readonly string connectionString;
+
+        public string Scope { get; }
+        public string WorkflowExecutionId { get; }
+
+        private InspectionPageRaceFixture(TemporarySqliteDatabase database, string scope, string workflowExecutionId)
+        {
+            this.database = database;
+            Scope = scope;
+            WorkflowExecutionId = workflowExecutionId;
+            connectionString = new SqliteConnectionStringBuilder
+            {
+                DataSource = database.Path,
+                DefaultTimeout = 1,
+                Pooling = false
+            }.ToString();
+        }
+
+        public static async Task<InspectionPageRaceFixture> CreateAsync(string scope, string workflowExecutionId)
+        {
+            var database = new TemporarySqliteDatabase("runtime-inspection-page-race");
+            var fixture = new InspectionPageRaceFixture(database, scope, workflowExecutionId);
+            await using var context = fixture.OpenContext();
+            await context.Database.EnsureCreatedAsync();
+            return fixture;
+        }
+
+        public RuntimeSqliteDbContext OpenContext(DbCommandInterceptor? interceptor = null)
+        {
+            var options = new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connectionString);
+            if (interceptor is not null)
+                options.AddInterceptors(interceptor);
+            return new RuntimeSqliteDbContext(options.Options);
+        }
+
+        public EfActivityExecutionInspectionStore CreateStore(RuntimeDbContext context) =>
+            new(context, new Accessor(Scope), RecoveryCodec());
+
+        public async Task InsertAsync(string activityExecutionId, long sequence, CancellationToken cancellationToken = default)
+        {
+            await using var context = OpenContext();
+            await CreateStore(context).SaveAsync(Projection(WorkflowExecutionId, activityExecutionId, sequence, Scope), cancellationToken);
+        }
+
+        public async Task DeleteAsync(string activityExecutionId, CancellationToken cancellationToken = default)
+        {
+            await using var context = OpenContext();
+            var row = await context.ActivityExecutionInspections.SingleAsync(candidate =>
+                candidate.ScopeKey == EfRelationalIdentity.Encode(Scope) &&
+                candidate.WorkflowExecutionId == EfRelationalIdentity.Encode(WorkflowExecutionId) &&
+                candidate.ActivityExecutionId == EfRelationalIdentity.Encode(activityExecutionId), cancellationToken);
+            context.ActivityExecutionInspections.Remove(row);
+            await context.SaveChangesAsync(cancellationToken);
+        }
+
+        public async Task<ActivityExecutionInspectionSummaryPage> ReadPageAsync(int limit, string? continuationToken = null)
+        {
+            await using var context = OpenContext();
+            return await CreateStore(context).ListSummariesPageAsync(
+                new ActivityExecutionInspectionSummaryPageQuery(WorkflowExecutionId, limit, continuationToken));
+        }
+
+        public async Task<InterleavedInspectionPage> ReadPageWithMutationAsync(
+            int limit,
+            string? continuationToken,
+            Func<CancellationToken, Task> mutation)
+        {
+            var interleaver = new InspectionPageMutationInterceptor(mutation);
+            ActivityExecutionInspectionSummaryPage page;
+            await using (var context = OpenContext(interleaver))
+                page = await CreateStore(context).ListSummariesPageAsync(
+                    new ActivityExecutionInspectionSummaryPageQuery(WorkflowExecutionId, limit, continuationToken));
+
+            if (interleaver.Mutation.WasBlocked)
+            {
+                await mutation(CancellationToken.None);
+                interleaver.Mutation.DeferredMutationCommitted = true;
+            }
+
+            return new InterleavedInspectionPage(page, interleaver.Mutation);
+        }
+
+        public ValueTask DisposeAsync() => database.DisposeAsync();
+    }
+
+    private sealed class InspectionPageMutationInterceptor(Func<CancellationToken, Task> mutation) : DbCommandInterceptor
+    {
+        private int attempted;
+        public MutationAttempt Mutation { get; } = new();
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains("elsa_runtime_activity_execution_inspection", StringComparison.OrdinalIgnoreCase) &&
+                command.CommandText.Contains("ORDER BY", StringComparison.OrdinalIgnoreCase) &&
+                Interlocked.Exchange(ref attempted, 1) == 0)
+            {
+                Mutation.Attempted = true;
+                try
+                {
+                    await mutation(cancellationToken);
+                    Mutation.InitialMutationCommitted = true;
+                }
+                catch (Exception exception) when (FindSqliteLockFailure(exception) is { } sqliteException)
+                {
+                    Mutation.SqliteErrorCode = sqliteException.SqliteErrorCode;
+                    Mutation.SqliteExtendedErrorCode = sqliteException.SqliteExtendedErrorCode;
+                    Mutation.LockFailureMessage = sqliteException.Message;
+                    Mutation.WasBlocked = true;
+                }
+            }
+
+            return result;
+        }
+
+        private static SqliteException? FindSqliteLockFailure(Exception exception)
+        {
+            for (var candidate = exception; candidate is not null; candidate = candidate.InnerException!)
+            {
+                if (candidate is SqliteException sqliteException && sqliteException.SqliteErrorCode is 5 or 6)
+                    return sqliteException;
+            }
+            return null;
+        }
+    }
+
+    private sealed record InterleavedInspectionPage(ActivityExecutionInspectionSummaryPage Page, MutationAttempt Mutation);
+
+    private sealed class MutationAttempt
+    {
+        public bool Attempted { get; set; }
+        public bool InitialMutationCommitted { get; set; }
+        public bool WasBlocked { get; set; }
+        public bool DeferredMutationCommitted { get; set; }
+        public int? SqliteErrorCode { get; set; }
+        public int? SqliteExtendedErrorCode { get; set; }
+        public string? LockFailureMessage { get; set; }
+    }
+
+    private static string[] ActivityIds(ActivityExecutionInspectionSummaryPage page) =>
+        page.Items.Select(item => item.ActivityExecutionId).ToArray();
+
+    private static void AssertMutationWasApplied(MutationAttempt mutation)
+    {
+        Assert.True(mutation.Attempted);
+        Assert.True(mutation.InitialMutationCommitted || mutation.WasBlocked);
+        if (mutation.WasBlocked)
+        {
+            Assert.Contains(mutation.SqliteErrorCode, new int?[] { 5, 6 });
+            Assert.False(string.IsNullOrWhiteSpace(mutation.LockFailureMessage));
+            Assert.True(mutation.DeferredMutationCommitted);
+        }
+        else
+        {
+            Assert.Null(mutation.SqliteErrorCode);
+            Assert.False(mutation.DeferredMutationCommitted);
+        }
+    }
+
     private sealed class ThrowingReaderInterceptor : DbCommandInterceptor
     {
         public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
@@ -793,14 +1261,16 @@ public sealed class EfActivityExecutionStoresTests
         public EfActivityExecutionHierarchyStore Hierarchy { get; }
         public RuntimeDbContext Context => context;
         public IActivityExecutionHierarchyCursorCodec HierarchyCursorCodec { get; }
+        public IRuntimeRecoveryContinuationCodec RecoveryContinuationCodec { get; }
 
         private Fixture(SqliteConnection connection, RuntimeDbContext context, Accessor accessor)
         {
             this.connection = connection;
             this.context = context;
             this.accessor = accessor;
-            State = new EfActivityExecutionStateStore(context, accessor, new HmacRuntimeRecoveryContinuationCodec(Microsoft.Extensions.Options.Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "ef-r07-r09-test-signing-key-32-bytes" })));
-            Inspection = new EfActivityExecutionInspectionStore(context, accessor, new HmacRuntimeRecoveryContinuationCodec(Microsoft.Extensions.Options.Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "ef-r07-r09-test-signing-key-32-bytes" })));
+            RecoveryContinuationCodec = new HmacRuntimeRecoveryContinuationCodec(Microsoft.Extensions.Options.Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "ef-r07-r09-test-signing-key-32-bytes" }));
+            State = new EfActivityExecutionStateStore(context, accessor, RecoveryContinuationCodec);
+            Inspection = new EfActivityExecutionInspectionStore(context, accessor, RecoveryContinuationCodec);
             HierarchyCursorCodec = new Elsa.Workflows.Runtime.Services.ActivityExecutions.HmacActivityExecutionHierarchyCursorCodec(Microsoft.Extensions.Options.Options.Create(new Elsa.Workflows.Runtime.Services.ActivityExecutions.ActivityExecutionHierarchyCursorOptions { SigningKey = "ef-r07-r09-test-hierarchy-signing-key-32-bytes" }));
             Hierarchy = new EfActivityExecutionHierarchyStore(context, accessor, HierarchyCursorCodec);
         }

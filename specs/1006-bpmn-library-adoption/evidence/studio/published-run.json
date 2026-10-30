@@ -1,0 +1,26 @@
+{
+  "workflowExecutionId": "14eFVUdk0rQ",
+  "incidents": [],
+  "activities": [
+    {
+      "executableNodeId": "node-wait",
+      "status": "Completed",
+      "outcomeNames": [
+        "Done"
+      ]
+    },
+    {
+      "executableNodeId": "bpmnprocess-ad3add71",
+      "status": "Completed",
+      "outcomeNames": [
+        "Done"
+      ]
+    }
+  ],
+  "artifactId": "artifact-3e510474765a",
+  "studioSourceRevision": "90feccfedfa5d4c32a25bf2fc00da0ab6666d9b7",
+  "runKind": "PublishedRun",
+  "backendSourceRevision": "b2fc515ffc213e7ba96f4040769269f43b4c00d8",
+  "workflowDefinitionId": "14eFKWvetLV",
+  "status": "Completed"
+}

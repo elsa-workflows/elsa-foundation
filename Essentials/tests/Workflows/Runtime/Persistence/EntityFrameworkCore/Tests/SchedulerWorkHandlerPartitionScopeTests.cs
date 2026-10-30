@@ -12,7 +12,6 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -76,7 +75,7 @@ public sealed class SchedulerWorkHandlerPartitionScopeTests : IDisposable
                     workflowExecutionId: ExecutionId,
                     stimulusType: bookmark.StimulusType,
                     stimulusHash: bookmark.StimulusHash,
-                    input: JsonSerializer.SerializeToElement(new EventReceived(RuntimeEntityFrameworkCoreEndToEndTests.EventName))));
+                    input: JsonSerializer.SerializeToElement(new { eventName = RuntimeEntityFrameworkCoreEndToEndTests.EventName })));
             Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, resumed.Status);
         }
 
@@ -110,7 +109,6 @@ public sealed class SchedulerWorkHandlerPartitionScopeTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
         foreach (var file in new[] { _databasePath, $"{_databasePath}-wal", $"{_databasePath}-shm" })
             File.Delete(file);
     }

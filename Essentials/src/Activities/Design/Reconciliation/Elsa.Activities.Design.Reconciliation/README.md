@@ -10,7 +10,7 @@ Reconciliation lifecycle for the activity catalog (Sipke item 6 — idempotent r
 
 ## Cross-domain contributions
 
-- **`IStartupTask`** *(Core — `Elsa.Tasks.Core`)* — `ActivityVersionReconcilerStartupTask` runs the reconciliation pass at startup on every node, without a lock: its inputs are node-local, and concurrent passes converge (#2189, #2192). Catalog: [`Elsa.Tasks/EXTENSION_POINTS.md`](../Elsa.Tasks/EXTENSION_POINTS.md)
+- **`IStartupTask`** *(Core — `Elsa.Tasks.Core`)* — `ActivityVersionReconcilerStartupTask` runs the reconciliation pass at startup on every node, without a lock: its inputs are node-local, and concurrent passes converge (#2189, #2192). Catalog: [`Elsa.Tasks/EXTENSION_POINTS.md`](../../../../Tasks/Elsa.Tasks/EXTENSION_POINTS.md)
 
 ## Events published
 

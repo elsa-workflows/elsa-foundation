@@ -16,6 +16,7 @@ afterEach(() => {
     active.container.remove();
     active = null;
   }
+  window.history.replaceState({}, "", "/");
 });
 
 function render(ui: React.ReactElement) {
@@ -171,8 +172,15 @@ describe("InspectorPanel slot actions", () => {
     expect(container.textContent).toContain("Active");
     expect(container.textContent).toContain("Recommended v3.0.0 available");
     expect(container.textContent).toContain("pinned and read-only");
-    expect(container.querySelector<HTMLAnchorElement>("a[href='/workflows/activity-definitions?definition=invoice-definition&section=versions&version=invoice-version-2']")).toBeTruthy();
-    expect(container.querySelector<HTMLAnchorElement>("a[href='/workflows/activity-definitions?definition=invoice-definition&section=versions&version=invoice-version-2&createDraftFrom=invoice-version-2']")).toBeTruthy();
+    const sourceLink = container.querySelector<HTMLAnchorElement>("a[href='/workflows/activity-definitions?definition=invoice-definition&section=versions&version=invoice-version-2']")!;
+    const draftLink = container.querySelector<HTMLAnchorElement>("a[href='/workflows/activity-definitions?definition=invoice-definition&section=versions&version=invoice-version-2&createDraftFrom=invoice-version-2']")!;
+    expect(sourceLink).toBeTruthy();
+    expect(draftLink).toBeTruthy();
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    flushSync(() => sourceLink.dispatchEvent(event));
+    expect(event.defaultPrevented).toBe(true);
+    expect(window.location.pathname + window.location.search).toBe("/workflows/activity-definitions?definition=invoice-definition&section=versions&version=invoice-version-2");
+    window.history.replaceState({}, "", "/");
   });
 
   it("enters the slot (with the full slot descriptor) when the slot row is clicked", () => {

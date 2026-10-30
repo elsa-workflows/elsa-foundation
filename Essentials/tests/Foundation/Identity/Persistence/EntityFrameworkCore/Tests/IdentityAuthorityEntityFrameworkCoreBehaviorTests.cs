@@ -36,12 +36,12 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
             {
                 DisplayName = "Ada 😀\udc00",
                 RoleIds = Set("role-\ud800", "role-2"),
-                DirectPermissions = Set("identity.users.read", "permission\udc00")
+                DirectPermissions = Set("identity/users:read", "permission\udc00")
             };
             var role = Role("tenant-a", "role-\udc00", "Reviewers\ud800") with
             {
                 Description = "Reviewers 😀\udc00",
-                Permissions = Set("identity.users.read", "permission\ud800")
+                Permissions = Set("identity/users:read", "permission\ud800")
             };
 
             await using (var scope = await EfIdentityScope.OpenAsync(databasePath, user.TenantId))
@@ -782,7 +782,7 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                     Status = (int)UserStatus.Locked,
                     Ownership = (int)ResourceOwnership.External,
                     RoleIdsJson = "[\"role-a\"]",
-                    DirectPermissionsJson = "[\"identity.users.read\"]",
+                    DirectPermissionsJson = "[\"identity/users:read\"]",
                     ClaimIdsJson = "[\"claim-a\"]",
                     LoginIdsJson = "[\"login-a\"]",
                     RoleLinkIdsJson = "[\"link-a\"]",
@@ -811,7 +811,7 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                     NormalizedName = "OPERATORS\ud800",
                     NormalizedNameKey = "tenant-a\u001fOPERATORS\ud800",
                     Description = "Operators 😀\udc00",
-                    PermissionsJson = "[\"identity.users.read\"]",
+                    PermissionsJson = "[\"identity/users:read\"]",
                     System = false,
                     ClaimIdsJson = "[\"role-claim-a\"]",
                     UserLinkIdsJson = "[\"link-a\"]",
@@ -840,7 +840,7 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                     RoleId = "role-a\udc00",
                     RoleLookupKey = "tenant-a\u001frole-a\udc00",
                     ClaimType = "permission\ud800",
-                    ClaimValue = "identity.users.read\udc00",
+                    ClaimValue = "identity/users:read\udc00",
                     Revision = 1,
                     SchemaVersion = IdentityIamEfModule.SchemaVersion
                 });
@@ -878,7 +878,7 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                     UserLookupKey = "tenant-a\u001fuser-a\udc00",
                     Status = (int)TenantMembershipStatus.Suspended,
                     RoleIdsJson = "[\"role-a\"]",
-                    DirectPermissionsJson = "[\"identity.users.read\"]",
+                    DirectPermissionsJson = "[\"identity/users:read\"]",
                     Revision = 1,
                     SchemaVersion = IdentityIamEfModule.SchemaVersion
                 });
@@ -969,7 +969,7 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
             Assert.Equal("recovery\ud800😀\udc00", (await reopened.UserTokens.AsNoTracking().SingleAsync()).Value);
             Assert.Equal(TenantMembershipStatus.Suspended, (TenantMembershipStatus)(await reopened.TenantMemberships.AsNoTracking().SingleAsync()).Status);
             Assert.Equal("ada\udc00", (await reopened.UserClaims.AsNoTracking().SingleAsync()).ClaimValue);
-            Assert.Equal("identity.users.read\udc00", (await reopened.RoleClaims.AsNoTracking().SingleAsync()).ClaimValue);
+            Assert.Equal("identity/users:read\udc00", (await reopened.RoleClaims.AsNoTracking().SingleAsync()).ClaimValue);
             Assert.Equal("google\ud800", (await reopened.ExternalIdentities.AsNoTracking().SingleAsync()).Provider);
             var receipt = await reopened.MutationReceipts.AsNoTracking().SingleAsync();
             Assert.Equal("receipt-a\ud800", receipt.MutationReceiptId);
@@ -2102,7 +2102,7 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                     TenantId = "caller",
                     RoleId = "caller",
                     ClaimType = "permission",
-                    ClaimValue = "identity.users.read"
+                    ClaimValue = "identity/users:read"
                 });
             Assert.Equal(EfIdentityWriteStatus.Updated, added.Status);
 
@@ -2111,7 +2111,7 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
                 role.Id,
                 expectedRoleVersion: 2,
                 oldClaimType: "permission",
-                oldClaimValue: "identity.users.read",
+                oldClaimValue: "identity/users:read",
                 replacement: new RoleClaimEntity
                 {
                     TenantId = "caller",
@@ -2390,14 +2390,14 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         UserStatus.Active,
         ResourceOwnership.Foundation,
         Set("role-1"),
-        Set("identity.users.read"));
+        Set("identity/users:read"));
 
     private static RoleRecord Role(string tenantId, string id, string name) => new(
         id,
         tenantId,
         name,
         "Full access",
-        Set("identity.users.read"),
+        Set("identity/users:read"),
         System: false);
 
     private static ClaimMappingRule ClaimMapping(string tenantId, string provider, string id, int order) => new(
@@ -2407,7 +2407,7 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         "groups",
         "admins",
         Set("role-1"),
-        Set("identity.users.read"),
+        Set("identity/users:read"),
         order,
         StopOnMatch: true);
 
@@ -2416,7 +2416,7 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         userId,
         TenantMembershipStatus.Active,
         Set(roleId),
-        Set("identity.users.read"));
+        Set("identity/users:read"));
 
     private static ExternalIdentityRecord ExternalIdentity(string tenantId, string userId, string provider, string subject) => new(
         tenantId,
@@ -2485,7 +2485,7 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
     private static IdentityIamSqliteDbContext CreateContext(string databasePath, params IInterceptor[] interceptors)
     {
         var builder = new DbContextOptionsBuilder<IdentityIamSqliteDbContext>()
-            .UseSqlite($"Data Source={databasePath};Default Timeout=5");
+            .UseSqlite(ConnectionTo(databasePath));
         if (interceptors.Length > 0)
             builder.AddInterceptors(interceptors);
         return new IdentityIamSqliteDbContext(builder.Options);
@@ -2579,7 +2579,9 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         SchemaVersion = IdentityIamEfModule.SchemaVersion
     };
 
-    private static void DeleteDatabaseFiles(string databasePath) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(databasePath);
+    private static string ConnectionTo(string databasePath) => $"Data Source={databasePath};Default Timeout=5";
+
+    private static void DeleteDatabaseFiles(string databasePath) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(ConnectionTo(databasePath));
 
     private sealed class EfIdentityScope : IAsyncDisposable
     {
@@ -2624,7 +2626,7 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
             services.AddIdentityIamEntityFrameworkCore(new()
             {
                 Provider = "Sqlite",
-                ConnectionString = $"Data Source={databasePath};Default Timeout=5"
+                ConnectionString = ConnectionTo(databasePath)
             });
             var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             var scope = provider.CreateAsyncScope();

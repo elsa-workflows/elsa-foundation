@@ -1,0 +1,39 @@
+.wf-execution-browser { padding: 0.75rem 1rem; border-bottom: 1px solid var(--studio-border); }
+.wf-execution-navigator { display: flex; gap: 0.25rem; align-items: center; }
+.wf-execution-navigator > button { display: inline-flex; gap: 0.5rem; align-items: center; justify-content: center; min-height: 2rem; padding: 0.4rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-surface); color: var(--studio-text); }
+.wf-execution-navigator > button:nth-child(2) { flex: 1; min-width: 0; }
+.wf-execution-browser button:focus-visible, .wf-execution-children button:focus-visible, .wf-execution-scope button:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
+.wf-execution-browser button:disabled { opacity: 0.45; }
+.wf-execution-list { padding: 0; margin: 0; list-style: none; max-height: 19rem; overflow: auto; }
+.wf-execution-list-container { margin-top: 0.75rem; }
+.wf-execution-row { border-bottom: 1px solid var(--studio-border); }
+.wf-execution-row > button:first-child { display: grid; gap: 0.4rem; width: 100%; padding: 0.65rem; text-align: left; border: 0; color: var(--studio-text); background: transparent; border-radius: var(--studio-radius); }
+.wf-execution-row[data-selected] > button:first-child { background: var(--studio-accent-soft); }
+.wf-execution-row > button:first-child:hover { background: var(--studio-accent-soft); }
+.wf-execution-row-title, .wf-execution-row-meta { display: flex; gap: 0.5rem; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+.wf-execution-row-meta, .wf-execution-note, .wf-execution-feedback { color: var(--studio-text-muted); font-size: var(--studio-label-size); }
+.wf-execution-feedback { padding: 0.5rem 0; }
+.wf-execution-feedback button { margin-left: 0.5rem; }
+.wf-execution-paging { display: flex; gap: 0.5rem; align-items: center; justify-content: space-between; flex-wrap: wrap; padding-top: 0.5rem; }
+.wf-execution-paging button { display: inline-flex; align-items: center; }
+.wf-execution-children { padding: 1rem; border-bottom: 1px solid var(--studio-border); }
+.wf-execution-children > button { display: flex; gap: 0.5rem; align-items: center; width: 100%; text-align: left; }
+.wf-execution-child-group h5 { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; font-size: var(--studio-label-size); }
+.wf-execution-child-group h5 span { color: var(--studio-text-muted); font-weight: normal; }
+.wf-execution-incident { margin: 0 0.5rem 0.5rem; color: var(--studio-text); }
+.wf-execution-scope { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; padding: 0.6rem 1rem; border-bottom: 1px solid var(--studio-border); color: var(--studio-text); }
+.wf-execution-scope > button { display: inline-flex; align-items: center; gap: 0.4rem; }
+.wf-execution-paging button, .wf-execution-children > button, .wf-execution-scope button, .wf-execution-feedback button { font: inherit; background: transparent; color: var(--studio-text); border: 1px solid var(--studio-border); border-radius: var(--studio-radius); padding: 0.4rem 0.6rem; cursor: pointer; }
+.wf-execution-scope > button { border: 0; color: var(--studio-text-muted); }
+.wf-execution-scope > button:last-of-type { color: var(--studio-text); background: var(--studio-accent-soft); }
+.wf-execution-scope > button:hover, .wf-execution-children > button:hover, .wf-execution-paging button:not(:disabled):hover { background: var(--studio-accent-soft); }
+.wf-execution-paging button:disabled { cursor: default; opacity: 0.45; }
+.wf-execution-scope-occurrence { margin-left: auto; min-width: 13rem; max-width: 100%; }
+.wf-execution-scope-occurrence .wf-execution-browser { padding: 0; border: 0; }
+.wf-execution-scope-occurrence .wf-execution-navigator button { border: 1px solid var(--studio-border); }
+@media (max-width: 600px) { .wf-execution-scope-occurrence { margin-left: 0; width: 100%; } }
+.wf-execution-scope-occurrence { position: relative; }
+.wf-execution-scope-occurrence .wf-execution-list-container { position: absolute; inset-block-start: calc(100% + 0.4rem); inset-inline-end: 0; z-index: 10; width: 22rem; max-width: calc(100vw - 2rem); padding: 0.5rem; background: var(--studio-surface); border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); box-shadow: var(--studio-shadow-sm); }
+
+.wf-execution-scope-occurrence .wf-execution-list-container { overflow: auto; box-sizing: border-box; margin-top: 0; }
+.wf-execution-scope-occurrence .wf-execution-list { max-height: none; overflow: visible; }

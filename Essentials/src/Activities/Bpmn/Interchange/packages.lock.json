@@ -4,35 +4,35 @@
     "net10.0": {
       "Bpmn.Interchange": {
         "type": "Direct",
-        "requested": "[0.1.1-preview.19, )",
-        "resolved": "0.1.1-preview.19",
-        "contentHash": "wY7iGwfKBDKZ4YxZ7lA4HZgogRGobHnXgtzk8fGFHV3H3Syfjb1Yh2J55tOVqjM/kZVZ8QBJrrBdxf7u0kqFaw==",
+        "requested": "[0.5.0, )",
+        "resolved": "0.5.0",
+        "contentHash": "Gmx/OdUQ0aiqVJIpaSk6GhPkloFGRB/bSl5rEuhkglUe1FEKb3WS7q50wlltVfvUGpI6vI8JHHNvyqxENnd4kA==",
         "dependencies": {
-          "Bpmn.Model": "0.1.1-preview.19"
+          "Bpmn.Model": "0.5.0"
         }
       },
       "Bpmn.Model": {
         "type": "Direct",
-        "requested": "[0.1.1-preview.19, )",
-        "resolved": "0.1.1-preview.19",
-        "contentHash": "ci5fWsH3V2vvFf9p/zTrKZ3dw1ZtSy0YT3hUnDULuP8q0vWe6NOCQj3y4GFgoQKktWbom4MUAGcWSfZXenT+5w=="
+        "requested": "[0.5.0, )",
+        "resolved": "0.5.0",
+        "contentHash": "cNb+hULTLIwso23a5rW9zP8Zh10YjtuRwjG++u+guXEx/gFiJSI4XE5u6NUYS32i5emP0OL1O2UlqBEPh5Au4A=="
       },
       "CShells.Abstractions": {
         "type": "Direct",
-        "requested": "[0.0.30, )",
-        "resolved": "0.0.30",
-        "contentHash": "Kf3tyvnuRMIZui951/iZA95SCnb3zPjnK02x/JXJE1xNhqlYqbMKtIhqlUAj54dC33g3n5rWpXYSKK5cGe3RKw==",
+        "requested": "[0.0.31, )",
+        "resolved": "0.0.31",
+        "contentHash": "se7fS2KnM3mFQjIDvB+KfvZNGdKbc68ITzlSde5V16ZGEeVZdHkRgkTlnJnFalXqkipiIr1oUQdXmqtEV6AE0g==",
         "dependencies": {
           "JetBrains.Annotations": "2025.2.4"
         }
       },
       "CShells.AspNetCore.Abstractions": {
         "type": "Direct",
-        "requested": "[0.0.30, )",
-        "resolved": "0.0.30",
-        "contentHash": "/RIj39NcSccZ+fFHYrf3ahXnh+jKq73O4OVWFGRKq82RIxFY8KT+ByL8Iy0TkCmXJCZP5SpOk4HyNeybJhoYOw==",
+        "requested": "[0.0.31, )",
+        "resolved": "0.0.31",
+        "contentHash": "XrBPCiHjM4EN97okF96qcS1AQ1xyrvY5Idf+swF4Gw9OXNpd2VQvLjd9w4r03zyKUQ6NK2LrmZPJbsdRHGCM6Q==",
         "dependencies": {
-          "CShells.Abstractions": "0.0.30",
+          "CShells.Abstractions": "0.0.31",
           "JetBrains.Annotations": "2025.2.4"
         }
       },
@@ -56,7 +56,9 @@
       "elsa.activities.bpmn": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30, )",
+          "Bpmn.Model": "[0.5.0, )",
+          "Bpmn.Semantics": "[0.5.0, )",
+          "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime": "[4.0.0-dev, )",
@@ -103,8 +105,8 @@
       "elsa.foundation.identity": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30, )",
-          "CShells.AspNetCore.Abstractions": "[0.0.30, )",
+          "CShells.Abstractions": "[0.0.31, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
           "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
           "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )"
         }
@@ -148,7 +150,7 @@
       "elsa.workflows.runtime": {
         "type": "Project",
         "dependencies": {
-          "CShells.Abstractions": "[0.0.30, )",
+          "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Attention.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
@@ -163,6 +165,15 @@
           "Elsa.Expressions.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )"
+        }
+      },
+      "Bpmn.Semantics": {
+        "type": "CentralTransitive",
+        "requested": "[0.5.0, )",
+        "resolved": "0.5.0",
+        "contentHash": "t38QPPliLGS3TokIdJIfJO016DYMit4UEGAHtqv+WNA3BWRAPpbKAb8qtIo8T0ZU76PQlfGVXECJXRHk111v2w==",
+        "dependencies": {
+          "Bpmn.Model": "0.5.0"
         }
       },
       "Cronos": {

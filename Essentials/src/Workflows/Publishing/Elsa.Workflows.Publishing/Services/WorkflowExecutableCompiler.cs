@@ -195,7 +195,7 @@ public sealed class WorkflowExecutableCompiler(
                 }
             }
 
-            var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows, placedActivities, state.Variables);
+            var compiledRoot = executableNodeCompiler.CompileRoot(rootActivity, projection, activityRows, placedActivities, state.Variables, state.Inputs);
             IReadOnlyCollection<ExecutableDependencyClaim> dependencyClaims = [];
             if (metadataEnricher is not null)
             {
@@ -294,7 +294,7 @@ public sealed class WorkflowExecutableCompiler(
                 throw new ArgumentException($"Activity node '{activity.NodeId}' input '{input.ReferenceKey}' does not match the published activity contract.");
 
         var authoredByKey = authored.ToDictionary(x => x.ReferenceKey, StringComparer.Ordinal);
-        var inputStates = new List<(Elsa.Activities.Design.Core.Models.ActivityInputContract Input, ArgumentState State)>();
+        var inputStates = new List<(Elsa.Activities.Design.Core.Models.ActivityInputContract Input, ArgumentState? State)>();
         foreach (var input in contract.Inputs.OrderBy(x => x.ReferenceKey, StringComparer.Ordinal))
         {
             ArgumentState? inputState = authoredByKey.TryGetValue(input.ReferenceKey, out var state)
@@ -306,7 +306,6 @@ public sealed class WorkflowExecutableCompiler(
             {
                 if (input.IsRequired)
                     throw new ArgumentException($"Activity node '{activity.NodeId}' is missing required input '{input.ReferenceKey}'.");
-                continue;
             }
 
             inputStates.Add((input, inputState));
@@ -315,27 +314,15 @@ public sealed class WorkflowExecutableCompiler(
         // A reusable boundary is activated by its template root, which for a graph template captures its inputs
         // outside CLR activation; the check covers contract defaults as well as authored inputs, and runs once for the
         // whole node before any input is compiled.
-        compiler.EnsureSecretBindingsAdmissible(activity.NodeId, boundaryDescriptor, inputStates.Select(x => x.State));
+        compiler.EnsureSecretBindingsAdmissible(
+            activity.NodeId,
+            boundaryDescriptor,
+            inputStates.Where(x => x.State is not null).Select(x => x.State!));
         var result = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
         foreach (var (input, inputState) in inputStates)
-        {
-            var definition = new InputDefinition(
-                input.ReferenceKey,
-                input.Name,
-                input.Type,
-                input.StorageDriverKey,
-                input.DisplayName ?? input.Name,
-                input.Category,
-                input.IsNullable,
-                Description: input.Description,
-                Order: input.Order,
-                UiHint: input.UiHint,
-                UISpecifications: input.UiSpecifications,
-                IsRequired: input.IsRequired,
-                DefaultValue: input.Default?.Value,
-                DefaultSyntax: input.Default?.Syntax);
-            result[input.ReferenceKey] = compiler.Compile(activity.NodeId, definition, inputState);
-        }
+            result[input.ReferenceKey] = inputState is null
+                ? compiler.CompileUnboundPublishedBoundaryInput(activity.NodeId, input)
+                : compiler.CompilePublishedBoundaryInput(activity.NodeId, input, inputState);
         return result;
     }
 

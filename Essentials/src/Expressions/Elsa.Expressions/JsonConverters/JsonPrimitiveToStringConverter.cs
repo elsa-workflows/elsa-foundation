@@ -7,7 +7,7 @@ namespace Elsa.Expressions.JsonConverters;
 /// <summary>
 /// Converts primitives to and from JSON strings.
 /// </summary>
-public sealed class JsonPrimitiveToStringConverter : JsonConverter<string>
+internal sealed class JsonPrimitiveToStringConverter : JsonConverter<string>
 {
     /// <inheritdoc />
     public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)

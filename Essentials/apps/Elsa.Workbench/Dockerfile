@@ -57,7 +57,9 @@ ARG TARGETARCH
 # NuGet.config is the repo-root config. Its packageSourceMapping maps every
 # package the solution uses to an explicit source, so restore is fully
 # self-contained here and needs no user-level NuGet config fallback.
-COPY *.props *.targets NuGet.config Elsa.Server.slnx ./
+# .editorconfig carries the naming analyzer's per-domain retired terms, so the image compiles under the same
+# naming rules as CI.
+COPY *.props *.targets .editorconfig NuGet.config Elsa.Server.slnx ./
 
 # Copy only restore inputs while preserving their source-tree paths. Ordinary source
 # changes no longer invalidate the expensive RID-specific restore layer. The recursive

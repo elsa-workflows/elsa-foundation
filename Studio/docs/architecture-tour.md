@@ -23,18 +23,23 @@ flowchart LR
 
 ## Host and shell
 
-[`Elsa.Studio.Web`](../src/apps/Elsa.Studio.Web/Program.cs) is the composition root. It:
+[`Elsa.Studio.Web`](../src/apps/Elsa.Studio.Web/Program.cs) is the distribution composition root. It selects
+modules and optional capabilities using the public APIs in [`Elsa.Studio.Hosting`](../src/essentials/Elsa.Studio.Hosting).
+Reusable Hosting code:
 
 - builds the ASP.NET Core host;
-- loads the active-shell definition from [`shells.json`](../src/apps/Elsa.Studio.Web/shells.json);
-- registers CShells feature assemblies and Nuplane package loading;
+- loads the selected shell from application-owned configuration, such as Web's [`shells.json`](../src/apps/Elsa.Studio.Web/shells.json);
+- registers CShells and discovers selected feature assemblies;
 - exposes browser runtime configuration at `/studio-runtime.js`;
-- maps Studio-owned APIs, active-shell APIs, CShell endpoints, static assets, and package assets; and
+- maps core Studio APIs, active-shell APIs, CShell endpoints and static assets; and
 - falls back to `studio/index.html` for SPA deep links.
 
-The React entry point is [`main.tsx`](../src/apps/Elsa.Studio.Web/Client/src/main.tsx). [`App.tsx`](../src/apps/Elsa.Studio.Web/Client/src/app/App.tsx) owns shell boot, authentication gating, manifest loading, client-side route selection, the host frame, and host-owned pages.
+Hosting also owns the prebuilt standard browser payload under `/studio`, its Client source tree and shared
+StudioSdk/StudioUi facades. Web carries no second shell source or payload. The React entry point is
+[`main.tsx`](../src/essentials/Elsa.Studio.Hosting/Client/src/main.tsx). [`App.tsx`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/App.tsx) owns shell boot, authentication gating, manifest loading, client-side route selection, the host frame, and host-owned pages.
 
-CShells controls which backend features are active for a shell. Nuplane can load additional packaged feature assemblies and refresh the runtime catalog. Enabling a feature makes its services, endpoints, and manifest contributors available; it does not automatically require that feature to contribute every kind of UI.
+CShells controls which backend features are active for a shell. Web additionally composes Nuplane package
+loading and package-asset endpoints; base Hosting has no Nuplane dependency. Nuplane can load additional packaged feature assemblies and refresh the runtime catalog. Enabling a feature makes its services, endpoints, and manifest contributors available; it does not automatically require that feature to contribute every kind of UI.
 
 ## Modules, manifests, and Contributions
 
@@ -43,9 +48,9 @@ A Studio module crosses two related boundaries:
 1. A backend CShells feature registers services and endpoints and may contribute a [`StudioModuleManifest`](../src/essentials/Elsa.Studio.Core/Models/StudioModuleManifest.cs) through [`OnStudioModuleManifestsCollecting`](../src/essentials/Elsa.Studio.Core/Events/OnStudioModuleManifestsCollecting.cs).
 2. The manifest points to frontend CSS and an ESM entry whose exported `register(api)` function adds Contributions to Studio SDK registries.
 
-[`StudioModuleManifestProvider`](../src/essentials/Elsa.Studio.Api/Services/StudioModuleManifestProvider.cs) collects manifests from the active shell, sorts them deterministically, filters host-disabled modules and modules whose owning feature is inactive, and reports diagnostics. [`ActiveShellStudioApiEndpoint`](../src/apps/Elsa.Studio.Web/ActiveShellStudioApiEndpoint.cs) exposes the boot manifest at `GET /_elsa/studio/modules` and the inspection-oriented registry at `GET /_elsa/studio/module-registry`.
+[`StudioModuleManifestProvider`](../src/essentials/Elsa.Studio.Api/Services/StudioModuleManifestProvider.cs) collects manifests from the active shell, sorts them deterministically, filters host-disabled modules and modules whose owning feature is inactive, and reports diagnostics. [`ActiveShellStudioApiEndpoint`](../src/essentials/Elsa.Studio.Hosting/ActiveShellStudioApiEndpoint.cs) exposes the boot manifest at `GET /_elsa/studio/modules` and the inspection-oriented registry at `GET /_elsa/studio/module-registry`.
 
-In the browser, [`loader.ts`](../src/apps/Elsa.Studio.Web/Client/src/app/loader.ts) checks host and SDK version compatibility, loads versioned styles, imports each ESM entry, and invokes `register(api)`. [`registry.ts`](../src/apps/Elsa.Studio.Web/Client/src/app/registry.ts) creates the host and backend endpoint contexts plus the Slot registries defined by the [`ElsaStudioModuleApi`](../src/apps/Elsa.Studio.Web/Client/src/sdk/index.ts).
+In the browser, [`loader.ts`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/loader.ts) checks host and SDK version compatibility, loads versioned styles, imports each ESM entry, and invokes `register(api)`. [`registry.ts`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/registry.ts) creates the host and backend endpoint contexts plus the Slot registries defined by the [`ElsaStudioModuleApi`](../src/essentials/Elsa.Studio.Hosting/Client/src/sdk/index.ts).
 
 Slots define accepted Contribution shapes, ownership, ordering, and local admission rules. Module Policy and Host Policy can further restrict availability. A representative full-stack path is the [Weather Forecast feature](../../Extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/WeatherForecastStudioFeature.cs) (whose `[StudioModule]` attribute declares the module manifest declaratively) and its frontend [`register` function](../../Extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/Client/src/module.tsx).
 
@@ -53,7 +58,7 @@ The domain vocabulary and governance model are maintained in [`CONTEXT.md`](../C
 
 ## Routing and navigation
 
-Studio routing is client-side and registry-driven. ASP.NET Core serves the SPA fallback for browser deep links, while [`App.tsx`](../src/apps/Elsa.Studio.Web/Client/src/app/App.tsx) tracks `window.location`, uses the History API, and selects a route Contribution for the current path.
+Studio routing is client-side and registry-driven. ASP.NET Core serves the SPA fallback for browser deep links, while [`App.tsx`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/App.tsx) tracks `window.location`, uses the History API, and selects a route Contribution for the current path.
 
 The host owns a small set of shell-level pages such as Dashboard, module management, package feeds, theme management, and diagnostics. Modules add their routed UI through `api.routes` and add discoverability independently through `api.navigation`. A route therefore does not appear in navigation unless a navigation Contribution points to it. Feature-area Contributions can group owned routes and navigation without changing route ownership.
 
@@ -64,9 +69,9 @@ Route order and navigation order are deterministic. Contribution order and stabl
 The module API exposes two endpoint contexts:
 
 - `api.host` targets the Studio origin. It is used for Studio-owned surfaces such as module discovery, module and feature management, theme management, Studio diagnostics, and server-side bridge endpoints.
-- `api.backend` targets the browser-facing `Studio:BackendBaseUrl`, surfaced without secrets through [`StudioRuntimeScript`](../src/apps/Elsa.Studio.Web/StudioRuntimeScript.cs) and read by [`runtime.ts`](../src/apps/Elsa.Studio.Web/Client/src/app/runtime.ts). When no backend URL is configured, it resolves to the Studio origin. Server-side authentication and privileged relays use `Studio:BackendServerBaseUrl`, falling back to `Studio:BackendBaseUrl` for single-URL deployments.
+- `api.backend` targets the browser-facing `Studio:BackendBaseUrl`, surfaced without secrets through [`StudioRuntimeScript`](../src/essentials/Elsa.Studio.Hosting/StudioRuntimeScript.cs) and read by [`runtime.ts`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/runtime.ts). When no backend URL is configured, it resolves to the Studio origin. Server-side authentication and privileged relays use `Studio:BackendServerBaseUrl`, falling back to `Studio:BackendBaseUrl` for single-URL deployments.
 
-Workflow, Secrets, and other Elsa-domain modules normally call their backend APIs through `api.backend`. Studio administration calls Studio-owned endpoints through `api.host`. Privileged backend host-control operations go through [`StudioBackendManagementBridge`](../src/apps/Elsa.Studio.Web/StudioBackendManagementBridge.cs) or its related relays: the browser sends only the user credential, and Studio attaches the server-side management key on the Studio-to-backend call. The management key is never emitted in `/studio-runtime.js`.
+Workflow, Secrets, and other Elsa-domain modules normally call their backend APIs through `api.backend`. Studio administration calls Studio-owned endpoints through `api.host`. Privileged backend host-control operations go through [`StudioBackendManagementBridge`](../src/essentials/Elsa.Studio.Hosting/StudioBackendManagementBridge.cs) or its related relays: the browser sends only the user credential, and Studio attaches the server-side management key on the Studio-to-backend call. The management key is never emitted in `/studio-runtime.js`.
 
 A module can relay its own backend surface under the same bridge: the shared pieces — `StudioBackendManagementOptions`, the bridge route group, the fail-closed `StudioBackendReadClient` probe and the `RequireStudioBridgePermission` authorization seam — are public in [`Elsa.Studio.Api`](../src/essentials/Elsa.Studio.Api), and the optional [Extension Builder module](../../Extensions/ExtensionBuilder/studio/Elsa.Studio.ExtensionBuilder/StudioExtensionBuilderBridge.cs) is the reference: its shell feature maps the relay under `/_elsa/studio/backend-management/extension-builder`, so a Studio without the feature has none of those routes.
 
@@ -78,10 +83,10 @@ Authentication is opt-in through `Studio:Auth:Enabled`.
 
 When authentication is enabled:
 
-1. [`studioAuth.tsx`](../src/apps/Elsa.Studio.Web/Client/src/app/auth/studioAuth.tsx) creates one provider manager against the configured backend and gates the whole shell with `RequireAuth`.
-2. [`backend.ts`](../src/apps/Elsa.Studio.Web/Client/src/auth/backend.ts) negotiates the backend identity bootstrap and capabilities endpoints and drives the redirect/session/token flow.
-3. Host and backend HTTP clients attach the user bearer and perform one refresh-and-retry on a `401`; SignalR connections use the same user token through an access-token factory. The transport is implemented in [`http.ts`](../src/apps/Elsa.Studio.Web/Client/src/auth/transport/http.ts).
-4. [`StudioBridgeAuth`](../src/apps/Elsa.Studio.Web/StudioBridgeAuth.cs) validates browser bearers against the backend session endpoint and applies named read/manage permission policies to Studio host-control APIs. A missing or invalid session yields `401`; an authenticated user without a required permission yields `403`.
+1. [`studioAuth.tsx`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/auth/studioAuth.tsx) creates one provider manager against the configured backend and gates the whole shell with `RequireAuth`.
+2. [`backend.ts`](../src/essentials/Elsa.Studio.Hosting/Client/src/auth/backend.ts) negotiates the backend identity bootstrap and capabilities endpoints and drives the redirect/session/token flow.
+3. Host and backend HTTP clients attach the user bearer and perform one refresh-and-retry on a `401`; SignalR connections use the same user token through an access-token factory. The transport is implemented in [`http.ts`](../src/essentials/Elsa.Studio.Hosting/Client/src/auth/transport/http.ts).
+4. [`StudioBridgeAuth`](../src/essentials/Elsa.Studio.Hosting/StudioBridgeAuth.cs) validates browser bearers against the backend session endpoint and applies named read/manage permission policies to Studio host-control APIs. A missing or invalid session yields `401`; an authenticated user without a required permission yields `403`.
 
 When authentication is disabled, the development/demo shell boots anonymously and Studio bridge policies intentionally allow anonymous access.
 
@@ -107,7 +112,7 @@ See [ADR 0004](adr/0004-keep-dashboard-and-diagnostics-as-separate-slots.md) for
 
 ## Where to go next
 
-- To build or extend a module, start with the [SDK contract](../src/apps/Elsa.Studio.Web/Client/src/sdk/index.ts) and a representative module close to the required shape.
-- To change shell composition or package loading, start with [`Program.cs`](../src/apps/Elsa.Studio.Web/Program.cs), [`shells.json`](../src/apps/Elsa.Studio.Web/shells.json), and [`loader.ts`](../src/apps/Elsa.Studio.Web/Client/src/app/loader.ts).
-- To change navigation or routes, start with [`registry.ts`](../src/apps/Elsa.Studio.Web/Client/src/app/registry.ts) and [`App.tsx`](../src/apps/Elsa.Studio.Web/Client/src/app/App.tsx).
-- To change API transport or authentication, start with [`runtime.ts`](../src/apps/Elsa.Studio.Web/Client/src/app/runtime.ts), [`studioAuth.tsx`](../src/apps/Elsa.Studio.Web/Client/src/app/auth/studioAuth.tsx), and [`StudioBridgeAuth.cs`](../src/apps/Elsa.Studio.Web/StudioBridgeAuth.cs).
+- To build or extend a module, start with the [SDK contract](../src/essentials/Elsa.Studio.Hosting/Client/src/sdk/index.ts) and a representative module close to the required shape.
+- To change shell composition or package loading, start with [`Program.cs`](../src/apps/Elsa.Studio.Web/Program.cs), [`shells.json`](../src/apps/Elsa.Studio.Web/shells.json), and [`loader.ts`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/loader.ts).
+- To change navigation or routes, start with [`registry.ts`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/registry.ts) and [`App.tsx`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/App.tsx).
+- To change API transport or authentication, start with [`runtime.ts`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/runtime.ts), [`studioAuth.tsx`](../src/essentials/Elsa.Studio.Hosting/Client/src/app/auth/studioAuth.tsx), and [`StudioBridgeAuth.cs`](../src/essentials/Elsa.Studio.Hosting/StudioBridgeAuth.cs).

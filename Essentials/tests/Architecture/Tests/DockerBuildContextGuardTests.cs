@@ -58,6 +58,9 @@ public sealed class DockerBuildContextGuardTests
         Assert.Contains("Directory.Build.props", Required.Files);
         Assert.Contains("Directory.Packages.props", Required.Files);
         Assert.Contains("VersionLines.props", Required.Files);
+        Assert.Contains("Essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj", Required.Files);
+        Assert.Contains("Essentials/build/Analyzers/packages.lock.json", Required.Files);
+        Assert.Contains(".editorconfig", Required.Files);
     }
 
     [Fact]
@@ -362,7 +365,17 @@ public sealed class DockerBuildContextGuardTests
         if (File.Exists(Path.Join(repoRoot, "Directory.Build.targets")))
             start.Add("Directory.Build.targets");
 
-        return ResolveTransitiveImports(repoRoot, start);
+        var (files, unresolvable) = ResolveTransitiveImports(repoRoot, start);
+
+        // The projects Directory.Build.props references from every production project restore with them, so their
+        // project files and lock files are restore inputs exactly as an import is.
+        var buildWide = ProjectGraph.BuildWideProjectReferences(repoRoot)
+            .Select(project => Path.GetRelativePath(repoRoot, project).Replace('\\', '/'))
+            .SelectMany(project => new[] { project, $"{DirectoryOf(project)}/packages.lock.json" });
+
+        // The root .editorconfig activates the naming analyzer's retired terms per domain; an image built without it
+        // compiles with the analyzer but enforces nothing.
+        return ([.. files.Concat(buildWide).Append(".editorconfig")], unresolvable);
     }
 
     /// <summary>

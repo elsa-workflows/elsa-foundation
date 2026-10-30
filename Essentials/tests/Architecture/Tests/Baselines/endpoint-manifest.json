@@ -31,7 +31,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:a:Kg.RElBR05PU1RJQ1M6U1RSVUNUVVJFRExPR1M"
+        "value": "Elsa.Permission:v1:a:Kg.RElBR05PU1RJQ1MvU1RSVUNUVVJFRC1MT0dTOlJFQUQ"
       },
       "sourceIdentity": "ElsaDiagnosticsStructuredLogsEndpointsRecent"
     },
@@ -70,7 +70,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:a:Kg.RElBR05PU1RJQ1M6U1RSVUNUVVJFRExPR1M"
+        "value": "Elsa.Permission:v1:a:Kg.RElBR05PU1RJQ1MvU1RSVUNUVVJFRC1MT0dTOlJFQUQ"
       },
       "sourceIdentity": "ElsaDiagnosticsStructuredLogsEndpointsSources"
     },
@@ -105,7 +105,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:a:Kg.RElBR05PU1RJQ1M6U1RSVUNUVVJFRExPR1M"
+        "value": "Elsa.Permission:v1:a:Kg.RElBR05PU1RJQ1MvU1RSVUNUVVJFRC1MT0dTOlJFQUQ"
       },
       "sourceIdentity": "ElsaDiagnosticsStructuredLogsEndpointsStream"
     },
@@ -144,7 +144,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:a:Kg.U1RVRElPLlBSRUZFUkVOQ0VTLlJFQUQ"
+        "value": "Elsa.Permission:v1:a:Kg.U1RVRElPL1BSRUZFUkVOQ0VTOlJFQUQ"
       },
       "sourceIdentity": "ElsaStudioPreferencesApiEndpointsGet"
     },
@@ -183,7 +183,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:a:Kg.U1RVRElPLlBSRUZFUkVOQ0VTLldSSVRF"
+        "value": "Elsa.Permission:v1:a:Kg.U1RVRElPL1BSRUZFUkVOQ0VTOldSSVRF"
       },
       "sourceIdentity": "ElsaStudioPreferencesApiEndpointsPut"
     },
@@ -222,7 +222,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QVBJLUNBUEFCSUxJVElFUy5SRUFE"
+        "value": "Elsa.Permission:v1:s:QVBJLUNBUEFCSUxJVElFUzpSRUFE"
       },
       "sourceIdentity": "ElsaApiCapabilitiesEndpointsGetCapabilities"
     },
@@ -261,7 +261,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046UkVBRA"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsAuthoringCapabilitiesGet"
     },
@@ -300,7 +300,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046UkVBRA"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsAvailabilityListDiagnostics"
     },
@@ -340,7 +340,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046UkVBRA"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsAvailabilityGetSettings"
     },
@@ -379,7 +379,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsAvailabilitySaveSettings"
     },
@@ -419,7 +419,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046UkVBRA"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsCatalogList"
     },
@@ -459,7 +459,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046UkVBRA"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsList"
     },
@@ -498,7 +498,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsAdd"
     },
@@ -538,7 +538,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046UkVBRA"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsPicker"
     },
@@ -578,7 +578,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046UkVBRA"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsGet"
     },
@@ -617,7 +617,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsUpdate"
     },
@@ -657,7 +657,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046UkVBRA"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsListDrafts"
     },
@@ -696,7 +696,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsAddDraft"
     },
@@ -735,7 +735,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsPreviewFork"
     },
@@ -774,7 +774,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsRecommendation"
     },
@@ -814,7 +814,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046UkVBRA"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDefinitionsListVersions"
     },
@@ -852,7 +852,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsDiscard"
     },
@@ -892,7 +892,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046UkVBRA"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsGet"
     },
@@ -931,7 +931,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsReplace"
     },
@@ -970,7 +970,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsConflictCopy"
     },
@@ -1009,7 +1009,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsProposeContract"
     },
@@ -1048,7 +1048,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsApplyContractProposal"
     },
@@ -1087,7 +1087,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046UkVBRA"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsDiff"
     },
@@ -1126,7 +1126,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsMigrateProvider"
     },
@@ -1165,7 +1165,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsUpdatePresentation"
     },
@@ -1204,7 +1204,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsPreflightActivityDraftPublicationEndpoint"
     },
@@ -1243,7 +1243,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsPublishActivityDraftEndpoint"
     },
@@ -1282,7 +1282,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsDraftsValidate"
     },
@@ -1321,7 +1321,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsForksApply"
     },
@@ -1361,7 +1361,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046UkVBRA"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsForksGetStatus"
     },
@@ -1400,7 +1400,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsGetActivityPublicationReceiptEndpoint"
     },
@@ -1439,7 +1439,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsUpgradePlansCreate"
     },
@@ -1479,7 +1479,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046UkVBRA"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsUpgradePlansGet"
     },
@@ -1518,7 +1518,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsUpgradePlansApply"
     },
@@ -1558,7 +1558,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046UkVBRA"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsUpgradePlansGetReceipt"
     },
@@ -1597,7 +1597,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsUpgradePlansRefresh"
     },
@@ -1637,7 +1637,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046UkVBRA"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsVersionsGet"
     },
@@ -1677,7 +1677,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046UkVBRA"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsVersionsDependencies"
     },
@@ -1717,7 +1717,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046UkVBRA"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsVersionsDiff"
     },
@@ -1756,7 +1756,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsVersionsRestore"
     },
@@ -1795,7 +1795,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsVersionsRetire"
     },
@@ -1834,7 +1834,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:QUNUSVZJVFktREVTSUdOLk1BTkFHRQ"
+        "value": "Elsa.Permission:v1:s:QUNUSVZJVElFUy9ERVNJR046TUFOQUdF"
       },
       "sourceIdentity": "ElsaActivitiesDesignApiEndpointsVersionsRevoke"
     },
@@ -1874,7 +1874,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctREVTSUdOLlJFQUQ"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL0RFU0lHTjpSRUFE"
       },
       "sourceIdentity": "ElsaWorkflowsDesignApiEndpointsDefinitionsList"
     },
@@ -1913,7 +1913,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:RVhQUkVTU0lPTlMuUkVBRA"
+        "value": "Elsa.Permission:v1:s:RVhQUkVTU0lPTlM6UkVBRA"
       },
       "sourceIdentity": "ElsaExpressionsApiEndpointsListExpressionDescriptors"
     },
@@ -1952,7 +1952,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:RVhQUkVTU0lPTlMuUkVBRA"
+        "value": "Elsa.Permission:v1:s:RVhQUkVTU0lPTlM6UkVBRA"
       },
       "sourceIdentity": "ElsaExpressionsApiEndpointsListVariableTypeDescriptors"
     },
@@ -1992,7 +1992,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsList"
     },
@@ -2032,7 +2032,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsConstruct"
     },
@@ -2071,7 +2071,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsActivityDraftTestRunEndpoint"
     },
@@ -2110,7 +2110,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsGetActivityDraftTestRunByIdempotencyKeyEndpoint"
     },
@@ -2149,7 +2149,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsGetActivityDraftTestRunEndpoint"
     },
@@ -2188,7 +2188,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsCancelActivityDraftTestRunEndpoint"
     },
@@ -2227,7 +2227,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsListIncidentStrategies"
     },
@@ -2266,7 +2266,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsRuntimeRequirementPreflightEndpoint"
     },
@@ -2306,7 +2306,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsGetPublicationRecordEndpoint"
     },
@@ -2345,9 +2345,204 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsListValueConversionProfiles"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /publishing/workflow-test-runs/{testRunId}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.WorkflowTestRunView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflow-test-runs/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsGetWorkflowTestRun"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /publishing/workflow-test-runs/{testRunId}/events",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.TestRunEventView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflow-test-runs/{param}/events"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsTestRunDeliverEvent"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /publishing/workflow-test-runs/{testRunId}/stop",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.WorkflowTestRunView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflow-test-runs/{param}/stop"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsStopWorkflowTestRun"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /publishing/workflow-test-runs/{testRunId}/waits",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.TestRunWaitsView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflow-test-runs/{param}/waits"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsTestRunWaits"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /publishing/workflows/drafts/test-run-options",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.DraftTestRunOptionsView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflows/drafts/test-run-options"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsTestRunsDraftOptions"
     },
     {
       "authoringModel": "Minimal API",
@@ -2384,7 +2579,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsTestRunsStartDraft"
     },
@@ -2423,7 +2618,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsPreflightWorkflowPublicationSnapshotEndpoint"
     },
@@ -2462,7 +2657,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsExportWorkflowExecutableClosureEndpoint"
     },
@@ -2501,7 +2696,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsPreflightWorkflowPublicationEndpoint"
     },
@@ -2540,7 +2735,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsPublishWorkflowEndpoint"
     },
@@ -2579,7 +2774,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsTestRunsStart"
     },
@@ -2619,7 +2814,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsGetWorkflowPublicationPolicyEndpoint"
     },
@@ -2658,7 +2853,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsSetWorkflowPublicationPolicyEndpoint"
     },
@@ -2698,7 +2893,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsUnpublishPublicationSlotEndpoint"
     },
@@ -2737,7 +2932,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5NQU5BR0U"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
       },
       "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsRestorePublicationSlotEndpoint"
     },
@@ -2776,7 +2971,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsListWorkflowActivationSlots"
     },
@@ -2815,7 +3010,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetWorkflowActivationSlot"
     },
@@ -2854,7 +3049,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5NQU5BR0U"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6TUFOQUdF"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsSubmitAlteration"
     },
@@ -2893,7 +3088,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetAlteration"
     },
@@ -2932,7 +3127,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5NQU5BR0U"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6TUFOQUdF"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsCancelAlteration"
     },
@@ -2971,7 +3166,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsPageAlterationJobs"
     },
@@ -3010,7 +3205,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetAlterationJob"
     },
@@ -3049,7 +3244,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetDiagnostics"
     },
@@ -3088,7 +3283,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5NQU5BR0U"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6TUFOQUdF"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsSaveDiagnostics"
     },
@@ -3127,7 +3322,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsListDispatches"
     },
@@ -3166,7 +3361,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetDispatch"
     },
@@ -3205,7 +3400,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5NQU5BR0U"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6TUFOQUdF"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsRedriveDispatch"
     },
@@ -3244,7 +3439,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsListExecutables"
     },
@@ -3283,7 +3478,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetExecutable"
     },
@@ -3322,7 +3517,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5FWEVDVVRF"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6RVhFQ1VURQ"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsExecute"
     },
@@ -3361,7 +3556,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetExecutableProvenance"
     },
@@ -3400,7 +3595,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUFVCTElTSElORy5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetExecutableInputSources"
     },
@@ -3439,7 +3634,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsListInstances"
     },
@@ -3478,9 +3673,48 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsListInstancesPage"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: DELETE runtime/workflows/instances/{workflowExecutionId}",
+      "methods": [
+        "DELETE"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.WorkflowInstanceDeletionView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/instances/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6TUFOQUdF"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsDeleteInstance"
     },
     {
       "authoringModel": "Minimal API",
@@ -3517,9 +3751,48 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetInstance"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/instances/{workflowExecutionId}/activity-executions",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.ActivityExecutionBrowsePageView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/instances/{param}/activity-executions"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsBrowseActivityExecutions"
     },
     {
       "authoringModel": "Minimal API",
@@ -3556,7 +3829,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetActivityExecution"
     },
@@ -3595,7 +3868,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetActivityDescendants"
     },
@@ -3634,9 +3907,48 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetActivityLayout"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/state-view",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.ActivityStateView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/instances/{param}/activity-executions/{param}/state-view"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetActivityStateView"
     },
     {
       "authoringModel": "Minimal API",
@@ -3673,7 +3985,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetActivityValuePayload"
     },
@@ -3712,7 +4024,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5SRUFE"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsListIncidents"
     },
@@ -3751,7 +4063,7 @@
       },
       "securityDisposition": {
         "kind": "Permission",
-        "value": "Elsa.Permission:v1:s:V09SS0ZMT1ctUlVOVElNRS5FWEVDVVRF"
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6RVhFQ1VURQ"
       },
       "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsDispatchStimulus"
     }

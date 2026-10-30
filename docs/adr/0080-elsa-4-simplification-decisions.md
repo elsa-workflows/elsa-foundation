@@ -61,6 +61,122 @@ admits isolated source moves, imports and consolidation validation against captu
 Fresh source capture and live cutover require delta reconciliation and renewed coordination. No global
 freeze, cleanup or publisher activation is enacted by this amendment.
 
+**Owner amendment, 14 October 2026:** the [BPMN Engine](../program-goals/bpmn-engine.md) program is reactivated
+now instead of on 21 November. It is a named exception to D0's parking and the two-program cap, like the
+11 October exceptions. Its first units are moving Elsa 4's BPMN runtime onto the `Bpmn.Semantics` package
+([#2735](https://github.com/elsa-workflows/elsa-foundation/issues/2735), finishing ADR 0063) and refusing BPMN
+models whose meaning changed on import ([#2736](https://github.com/elsa-workflows/elsa-foundation/issues/2736)).
+The remaining decisions in this ADR apply to that work as to any other, including D3's public-surface rules
+and D7's human merge for runtime and persistence PRs.
+
+**Owner amendment, 15 October 2026:** the [Elsa 3.8/3.9 Parity](../program-goals/elsa3-parity.md) program
+(#2771) is created as a named exception to D0's parking and the two-program cap, like the 11 and 14 October
+exceptions, by [owner decision on valence-works/strategy#8](https://github.com/valence-works/strategy/issues/8#issuecomment-6183509892)
+(maintainers only). Its decisions are recorded in [ADR 0085](0085-elsa-3-parity-identity-administration-and-scope.md);
+its first units are Phase 1, users and roles. The remaining decisions in this ADR apply to that work as to any other.
+
+**Owner amendment, 18 October 2026:** [Unified Execution #2892](../program-goals/unified-execution.md)
+is authorized for end-to-end implementation as a named exception to D0's parking and two-program cap.
+The [approved continuation](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6249319967)
+and [BPMN authority amendment](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6249325156)
+record the scope: native/BPMN lifecycle integration, extensible hosting, ETL, agent collaboration and shared tooling,
+including necessary BPMN-library changes and releases. Reuse the existing #2892 hierarchy and #2735 adoption work;
+keep one active implementation leaf and do not reactivate unrelated parked objectives. The remaining decisions
+in this ADR continue to apply within the current owner-authorized scope.
+
+**Owner amendment, 19 October 2026:** [Native Compensation and Saga Recovery #3035](../program-goals/native-compensation.md)
+is authorized for program establishment and planning as a named exception to D0's parking and two-program cap.
+The owner approved the proposed program with "This sounds great. Let's proceed and create a program."
+Its [PRD #3036](https://github.com/elsa-workflows/elsa-foundation/issues/3036) includes native compensation and
+integrated Elsa Studio visual authoring and recovery inspection from the first durable slice. BPMN is semantic
+inspiration only, with no implementation reuse, shared compensation abstraction or dependency. Elsa 3
+implementation follows separately. This amendment authorizes the program records and prepared design work;
+the establishment task does not authorize production implementation, releases, deployment or reactivation of
+other parked programs. The remaining decisions in this ADR continue to apply.
+
+**Owner amendment, 19 October 2026 (later that day): the two-program cap is replaced.** Five named exceptions
+in nine days show that the cap no longer describes how programs are approved. The owner retired it instead of
+adding another exception. From this amendment on:
+
+- The active programs are exactly the rows of the Active table in the
+  [program-goal registry](../program-goals/README.md#registry). There is no numeric cap.
+- A program becomes active only through an owner amendment to this section that names it and states its
+  sequencing against the active programs: what it waits on, what it displaces, or why it can run beside them.
+- Parking of every unlisted program and the 2026-11-21 parked-work review remain. The cap of 20
+  `ready-for-agent` issues remains.
+
+The same amendment widens #3035 from establishment to **end-to-end delivery of its M0–M5 milestones** ("Yes
+clean it up, then deliver the program end to end"). Sequencing: it runs beside #2892 and consumes existing
+runtime contracts instead of waiting on #2892; see
+[its relationship to other programs](../program-goals/native-compensation.md#relationship-to-other-programs).
+Releases and deployment are not included. Merging follows D7 as amended on 15 October: the Code Review app
+merges once a review round leaves nothing actionable and CI is green, runtime and persistence PRs included.
+The separate Elsa 3 compensation program (elsa-workflows/elsa-core#8884) is paused until the Elsa 4 design
+packet #3043 is reviewed.
+
+**Owner amendment, 23 October 2026:** [Studio Expression Developer Experience #2310](../program-goals/studio-expression-developer-experience.md)
+is active again, by the owner's decision of 23 October to salvage its plan and start the program. Sequencing: the
+first two units are the program records (#2367) and the expression-tooling permission-hash fix ported from #2373,
+which runs as its own small PR on `main`. Milestones 2 and 3 (#2378 and #2380) are rebuilt only after the
+[#3204](https://github.com/elsa-workflows/elsa-foundation/issues/3204) ADR settles how scripts read variables
+(declared parameters or ambient variables, and the future of `get<Name>()`). That decision is now
+[ADR 0089](0089-scripts-read-variables-by-name-and-publish-pins-them-as-declared-parameters.md), so the rebuild waits
+for ADR 0089 to be accepted. The program runs beside the
+other active programs, displaces none of them, and reactivates no other parked work. Releases and deployment
+are not included. The remaining decisions in this ADR apply to this work as to any other.
+
+**Owner amendment, 25 October 2026:** [Studio Hosting and Package Reuse #3340](../program-goals/studio-hosting-package-reuse.md)
+is authorized as an active program. The owner instructed: "Run it alongside the other active programs. Go ahead
+and create the Program, issue hierarchy and dedicated Kanban Project board on GitHub." Sequencing: run beside
+the active programs, displace none, and coordinate changes to shared Studio paths with their current owners.
+The program consolidates reusable Studio hosting into NuGet-consumable capabilities, reuses qualified existing
+CShells/Nuplane and Elsa contracts, and proves independent package consumption. It does not reactivate the parked
+Runtime Composition & Configuration or Modular Hosting Upstream Delivery backlogs. Establishment creates the
+planning records and board; package implementation proceeds through scoped, claimed and triaged issues, with one
+implementation leaf at a time. Later in the same session the owner set the goal to "deliver this board end to end",
+authorizing implementation and integrated qualification of this named program's M0–M3 outcomes, including reviewed
+PR delivery and verification on resulting main and candidate packages. This supersedes the establishment-only
+session boundary; the sequencing and parked-work boundaries above remain. Releases, deployments and publisher
+activation are not included. The remaining decisions in this ADR apply.
+
+**Owner amendment, 27 October 2026:** [Unified Workflow Authoring and Execution #3392](../program-goals/unified-workflow-workspace.md)
+is authorized as an active program. The owner approved the investigated single-workspace concept,
+instructed planning and implementation, and requested a durable program with epics, features and tasks
+where useful, without unnecessary overhead or SpecKit unless needed. Sequencing: attach existing draft
+Test Runs to the editor, share exact activity inspection, integrate following and existing wait/stop
+commands, then add evidence-supported motion and qualify the complete experience. Run beside the active
+programs, displace none, coordinate shared Studio paths and reactivate no parked backlog. Feature issues
+own acceptance criteria and task checklists; this program uses that lightweight plan instead of a
+SpecKit artifact tree. Consequential new runtime observation contracts still require an explicit design
+decision. Execution ownership, persistence policy, model semantics, capture policy and authorization are
+preserved. Releases, deployments and publisher activation are not included. The remaining decisions apply.
+
+**Owner amendment, 29 October 2026:** [Weaver across Studio #3428](../program-goals/weaver-across-studio.md)
+is authorized as an active program. After source analysis and the M0–M5 proposal, the owner instructed:
+"Approved. Additionally, create a Project with a Kanban board view to track WIP." The program establishes
+module-owned context, tools, guidance, review UI and supported effects across current Studio contexts,
+with an independent future-module extension requiring no changes to Weaver core, the Studio host or
+provider adapters. Sequencing: M0 baseline and activation, M1 candidate contract plus independent module
+witness before contract freeze, M2 shared lifecycle, M3 workflow and M4 current-module journeys, then
+M5 integrated qualification. Run beside the active programs, displace none, coordinate shared Studio
+paths with their owners and reactivate no parked backlog. Runtime agent composition remains under
+#2892; reuse the delivered Hosting #3340 and Unified Workspace #3392 seams. The native issue hierarchy
+and [Project #65](https://github.com/orgs/elsa-workflows/projects/65/views/1) track the approved roadmap,
+with one implementation leaf at a time. Establishment does not constitute product delivery; scoped
+issues retain normal triage, contract decisions and review gates. Releases, deployments, provider
+purchases and publisher activation are not included. The remaining decisions apply.
+
+**Owner continuation, 29 October 2026:** the owner authorizes autonomous end-to-end delivery of
+Weaver across Studio's full M0–M5 roadmap, including implementation, tests, documentation, scoped PRs,
+review, merges through the authorized repository process and verification on resulting main. The
+[delivery authorization on #3428](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6509190533)
+supersedes the establishment-only session boundary. Within this Program, the agent may triage,
+refine and promote sufficiently clear issues, respecting dependencies, existing claims and the
+repository readiness cap. Keep one implementation leaf active with one integration/review lane;
+independent subagents may support investigation and review. Routine decisions and milestone
+transitions proceed without renewed permission. The module ownership, independent-package witness
+before contract freeze, sequencing and existing scope/credential/release boundaries remain.
+
 ### D1 — Risk-based testing
 
 - Test observable behaviour at the cheapest level that proves it; unit-test logic that carries real risk.
@@ -110,15 +226,33 @@ activities are ReplaySafe, it dispatches no child, and it is not cancelled, alte
 
 ### D3 — Internal by default
 
-- Implementations are `internal sealed`. Tests reach them through `InternalsVisibleTo` to their own test
-  assembly. Framework §2.23.3 is amended.
+- Implementations are `internal sealed`. Tests reach them through `InternalsVisibleTo` to their own domain's
+  test assemblies. Framework §2.23.3 is amended.
 - Public types are: contracts users implement or call, models crossing a package boundary, activities, feature
   classes, options and entry points.
+- Whether a type is public depends on what it means to someone building on Elsa: a host author, an activity author, a
+  module author or a persistence-provider author. The categories above are the
+  parts of a package those people work with. Two arguments do not count: "another project in the solution uses it,
+  so it stays public", and "nothing outside its project uses it, so it goes internal".
+- When a sibling Elsa production project needs a type, the sibling test decides: would a third party writing the
+  same kind of package need it too? If yes, the type is an extension point and is public. If no, it stays internal
+  and the owning project grants `InternalsVisibleTo` to that sibling, within the same domain only (a domain is the path key
+  framework §2.23.3 defines, not a #2591 delivery batch). A need from a project in another domain means the type is an extension point or is in the wrong place; it never gets a
+  cross-domain grant.
 - An interface exists only where more than one implementation is meaningful or where it is a documented extension
   point. Framework §2.5 is amended: a collaborator becomes a contract when it becomes an extension point, not
   before.
 - PublicApiAnalyzers runs on every packable project; a change to the public surface is a reviewed diff.
-- Target: fewer than 1,500 public types.
+
+**Owner amendment, 14 October 2026:** decisions taken while delivering D3
+([#2591](https://github.com/elsa-workflows/elsa-foundation/issues/2591#issuecomment-6163682967)). There is no numeric
+target. The original "fewer than 1,500 public types" is withdrawn: the public-type count stays a reported metric
+(`tools/quality-metrics`), never a goal. The rule above on what makes a type public, and the sibling test, were added
+by the same decision. Framework §2.23.3 is amended again (constitution 6.1.0): a production project may now grant
+`InternalsVisibleTo` to a production project of its own domain, which 6.0.1 refused, and never to one in another
+domain. #2591 tracks auditing domains 1 and 2, already realigned, again under this rule. The same change brought two older
+lines up to date: D3's first bullet now names the domain's test assemblies, as framework 6.0.1 decided on 13 October,
+and the Consequences no longer say Elsa 3 users lose "stimulus", which the owner kept the same day.
 
 ### D4 — Pre-GA cleanup
 
@@ -132,12 +266,12 @@ activities are ReplaySafe, it dispatches no child, and it is not cancelled, alte
 ### D5 — Plain language, renamed now
 
 Jargon in public and internal type names is renamed before GA, one term per batch in a freeze window, paired
-with each domain's D3 internalisation so no type is renamed twice. Old names are banned by an analyzer. The suffix rules in framework §2.6.1 and Elsa §E6 R4 follow the rename:
+with each domain's D3 internalization so no type is renamed twice. Old names are banned by an analyzer. The suffix rules in framework §2.6.1 and Elsa §E6 R4 follow the rename:
 `…Extension` replaces `…Contributor`, domain by domain; both suffixes are accepted until the rename completes.
 
 | Today | Becomes |
 |---|---|
-| Stimulus | Signal |
+| Stimulus | Stimulus (kept; see the owner amendment below) |
 | Contributor (`I*Contributor`) | Extension (`I*Extension`) |
 | Attention | Alert |
 | Pump | Worker |
@@ -151,6 +285,27 @@ with each domain's D3 internalisation so no type is renamed twice. Old names are
 
 The glossary splits into a user glossary of about 40 terms and a contributor glossary. Process vocabulary (work
 unit, ratification, phase-owned) does not appear in product docs or type names.
+
+**Owner amendment, 13 October 2026:** decisions taken while delivering D3 and D5
+([#2591](https://github.com/elsa-workflows/elsa-foundation/issues/2591)). The old names are banned by a real Roslyn
+analyzer, not an architecture test. Every production project references it, and the lock-file churn that brings is
+accepted. A term is banned domain by domain, as each domain is realigned, not across the repository at once. Not a
+decision, but a description of the result: the analyzer is `Elsa.Architecture.Analyzers`, kept in `Essentials/build/`
+outside the module roots because it is build tooling, not a domain. It reports a retired term in a type name, public or
+internal (`ELSANAME001`), and in a namespace (`ELSANAME002`), naming the replacement, and a term list it cannot parse
+is itself an error (`ELSANAME003`). A domain activates its terms with a section for its folder in the root
+`.editorconfig` (key `elsa_naming.retired_terms`, for example `Pump|Pumps=Worker`). The analyzer reference is
+analyzer-only, which NuGet leaves out of the consumers' restore graphs, so no existing lock file changed.
+
+**Owner amendment, 13 October 2026 (later the same day):** two adjustments from a BPMN review
+([#2591](https://github.com/elsa-workflows/elsa-foundation/issues/2591#issuecomment-6147212044)).
+
+- Stimulus is not renamed. Signal collides with BPMN's Signal, the broadcast throw and catch event, which Elsa's BPMN
+  engine exposes in the API and in Studio next to the runtime concept. Trigger is taken too: Elsa uses it for start
+  triggers. "Stimulus" stays and is not a retired term.
+- `Essentials/src/Activities/Bpmn` is left out of the Activities domain's D3 and D5 work. ADR 0063 is being finished:
+  Elsa 4's BPMN token engine is replaced by the `Bpmn.Semantics` package, which Elsa 3 already ships on (3.9.0).
+  The BPMN program is parked until 21 November 2026, and whatever survives the switch is made internal and renamed then.
 
 ### D6 — Meta diet
 
@@ -184,15 +339,34 @@ unit, ratification, phase-owned) does not appear in product docs or type names.
   `needs-triage` and `auto-product` and never `ready-for-agent`. Deciding what gets built stays a maintainer
   decision. Each run records its candidates and near misses on the `product-scout-ledger` issue.
 - Program metrics (public types, projects, test LOC, EF commands per reference workflow, glossary size,
-  `[Obsolete]` count, code citations) are reported weekly. If fewer than half of the filed issues are promoted
-  after four weeks, or the metrics do not move, the routines are paused and their prompts revised.
+  `[Obsolete]` count, code citations) are reported weekly. The public-type count is reported, not targeted (D3), so it does not count toward the pause trigger below.
+  If fewer than half of the filed issues are promoted after four weeks, or the metrics do not move, the routines are
+  paused and their prompts revised.
+
+**Owner amendment, 15 October 2026:** merging under D7 follows the review loop of the org-wide
+[Issue Bus Lite][org-agents-review] protocol, by
+[owner decision quoted on #2766](https://github.com/elsa-workflows/elsa-foundation/pull/2766#issuecomment-6183395119)
+and recorded for the org in [elsa-workflows/.github#6](https://github.com/elsa-workflows/.github/pull/6). The Code
+Review app (`elsa-workflows-review-bot[bot]`) merges every PR, including the runtime, persistence and public-rename
+PRs and the UX QA fix PRs that D7 sent to a human merge, once a review round leaves nothing actionable and CI is
+green on the exact head commit. Actionable findings are fixed in new commits and reviewed again, for at most 6
+rounds; if blocking findings remain after the sixth, the PR is escalated to the maintainer with
+`blocked: review loop exhausted` and `needs:decision`. D7's human-merge cases are dropped, and so is the 14 October
+note's reference to D7's human merge. D7's pause after a reverted auto-merge is kept for now, pending owner confirmation (see
+[this comment](https://github.com/elsa-workflows/elsa-foundation/pull/2766#issuecomment-6199163408)): while #2559
+carries `auto-merge-paused`, routine PRs request no Code Review. The fixer routine never merges
+its own PRs and no longer merges through `elsa-auto-review-merge`; it requests review and stops. Routine PRs carry
+the `auto-fix` label, which replaces the `claude/auto-fix-*` branch prefix as the way the routine finds its own PRs
+and their reverts.
+D7's routines, caps and labels are otherwise unchanged.
 
 ## Consequences
 
 - Framework constitution 4.0.1 → 5.0.0 (MAJOR: §2.5, §2.21.1 and §2.23 rules removed or redefined). Elsa
   constitution 4.2.0 → 5.0.0 (MAJOR: §E5's two-line gate suspended until GA, §E6 R4 suffix follows D5, §2.21.1
   summary updated).
-- Breaking changes (renames, internalisation, migration squash, mode names) are accepted because nothing has
+- Breaking changes (renames, internalization, migration squash, mode names) are accepted because nothing has
   shipped. They become far more expensive after GA, so they come first.
 - Existing tests that assert on documentation or source text are deleted, not migrated.
-- Elsa 3 users lose the familiar term "stimulus"; the migration guide maps it.
+
+[org-agents-review]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#review-and-merge-rules

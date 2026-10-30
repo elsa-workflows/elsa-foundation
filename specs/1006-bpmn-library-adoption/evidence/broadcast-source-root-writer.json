@@ -1,0 +1,419 @@
+{
+  "schemaVersion": 1,
+  "task": "T049 dormant native/EF fenced executable source-root writer; caller handoff and default qualification remain open",
+  "sourceParentCommit": "718528bdc9d1548ad5479a3f1e3c44fb7a43ec82",
+  "filesSha256": {
+    "Essentials/src/Workflows/Runtime/Core/Contracts/ReusableActivityRuntimeStores.cs": "a3c88d982e5e014f18ab3d963dac38305707bd16bc16be7a94a467ead506cb8c",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "d1bdefd722d4fafdecb264b79acaeb19bddb5a2ad989278862282022017fd98e",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "62ff980a6d55fd3288987088518b1c9621f57f3d5fcdd5acbc81773394374599",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryRuntimeArtifactStores.cs": "f3658065e8d6cd983bbc850bcf6deda0548f3e26b2ff0338d47c3a6957273f67",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryWorkflowExecutableSourceReferenceStore.cs": "f4cf919af6978722da86e774bcd4172531db8dd4441afa0a9aaa34ddbc15dbf9",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableSourceReferenceStore.cs": "d52cfebc2cdcc64e5dca6272ae85b01d9bf228dcdd72ad96c8b7f727c6720bb8",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs": "039a0f9f329b82602aa192f679543aaaaba00c6b94e9635a0985af6196954fe0",
+    "specs/1006-bpmn-library-adoption/tasks.md": "bdbc8e025d316ab9f5d0ee361a4db131bd2055fc3b2f466256e21685000599c6",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryWorkflowExecutableSourceReferenceStore.RootWrites.cs": "6b6293cd8a0983a730c101731be856e962f38cb1512c5270b3884a7275c98980",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableSourceReferenceStore.RootWrites.cs": "d8458479a7675cbe4f99fb6f53d4569d7e592212b4910c658bd4c5adccd46b6f",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfRuntimeArtifactScopeTests.SourceRootWrites.cs": "7a85378d3722433ee43018dc349f55c54394b1f174426c4a7c08bf0ff6144b76",
+    "Essentials/tests/Workflows/Runtime/Tests/WorkflowExecutableSourceRootWriteTests.cs": "c83aa0471157d094803c17fed2660bfeaa795b1b6c5b9fec2107e84c74e67a8d",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Configuration/RuntimeArtifactEntityConfigurations.cs": "27c2cc257c257afd4303f725296a9f2a5ef8b166e81a03a3e38737a08b2dc716",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryWorkflowExecutableStore.cs": "b81f1175d5c18955b89c07cf0cf6df2f0ce10b9e478294935e95664ddeae069e",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableRootWriteLeaseManager.cs": "a6cc012ef3ffdb10cd48ff8a9b1c0a2c12370031c403a1f67137d10601fbb520",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableReferenceGarbageCollector.cs": "8c58da46ff1e9911c88566cae3b81b8fe76c30cfdc09715f15706c681cbc9a9b",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Exceptions/RuntimeArtifactEfPersistenceBoundary.cs": "f605f1613d39d52d6abc6a8b91cbbd2d90afd701d78533d46c57eedef5f58782"
+  },
+  "checks": [
+    {
+      "project": "Runtime",
+      "passed": 2971,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 31
+    },
+    {
+      "project": "Runtime EF",
+      "passed": 1505,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 51
+    },
+    {
+      "project": "Publishing EF",
+      "passed": 171,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 0
+    },
+    {
+      "project": "Publishing API",
+      "passed": 875,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 0
+    },
+    {
+      "project": "Publishing",
+      "passed": 61,
+      "failed": 0,
+      "skipped": 0,
+      "newCases": 0
+    }
+  ],
+  "focused": {
+    "native": {
+      "passed": 31,
+      "failed": 0,
+      "skipped": 0
+    },
+    "ef": {
+      "passed": 51,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "discovery": {
+    "runtime": {
+      "listed": 2960,
+      "uniqueDisplayNames": 2956,
+      "executed": 2971,
+      "deferredTheories": {
+        "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident": 2,
+        "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running": 4,
+        "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches": 8
+      },
+      "unmapped": []
+    },
+    "ef": {
+      "listed": 1505,
+      "uniqueDisplayNames": 1503,
+      "executed": 1505,
+      "deferredTheories": {},
+      "unmapped": []
+    },
+    "publishing-ef": {
+      "listed": 171,
+      "uniqueDisplayNames": 169,
+      "executed": 171,
+      "deferredTheories": {},
+      "unmapped": []
+    },
+    "publishing-api": {
+      "listed": 855,
+      "uniqueDisplayNames": 855,
+      "executed": 875,
+      "deferredTheories": {
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_ValidPublicationIndexesEveryCompleteBinding": 4,
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_InvalidPublicationPreservesSeededRegistration": 4,
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.LegacyActionCatalogRow_RepublishProjectsTriggerAndPreservesPriorRegistrationOnFailure": 4,
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code": 10,
+        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.A_literal_or_expression_on_a_credential_input_is_refused_by_the_credential_literal_rule_ahead_of_VF_ACT_011": 3
+      },
+      "unmapped": []
+    },
+    "publishing": {
+      "listed": 61,
+      "uniqueDisplayNames": 61,
+      "executed": 61,
+      "deferredTheories": {},
+      "unmapped": []
+    }
+  },
+  "mutations": [
+    {
+      "mutation": "native-actual-grant-fence-removed",
+      "project": "Native",
+      "exitCode": 1,
+      "failed": 7,
+      "passed": 24,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "native-grants-validated-before-source-gate-wait",
+      "project": "Native",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 30,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "native-material-pin-reduced-to-hash",
+      "project": "Native",
+      "exitCode": 1,
+      "failed": 3,
+      "passed": 28,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "native-reference-artifact-binding-removed",
+      "project": "Native",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 30,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "native-exact-closure-grant-set-removed",
+      "project": "Native",
+      "exitCode": 1,
+      "failed": 2,
+      "passed": 29,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "native-source-attribution-joined-to-producer",
+      "project": "Native",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 30,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ef-material-pin-reduced-to-hash",
+      "project": "EF",
+      "exitCode": 1,
+      "failed": 3,
+      "passed": 48,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ef-reference-artifact-binding-removed",
+      "project": "EF",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 50,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ef-exact-closure-grant-set-removed",
+      "project": "EF",
+      "exitCode": 1,
+      "failed": 2,
+      "passed": 49,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ef-source-attribution-joined-to-producer",
+      "project": "EF",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 50,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "native-winner-source-identity-ignored",
+      "project": "Native",
+      "exitCode": 1,
+      "failed": 4,
+      "passed": 27,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "native-winner-liveness-ignored",
+      "project": "Native",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 30,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "native-proposal-liveness-ignored",
+      "project": "Native",
+      "exitCode": 1,
+      "failed": 2,
+      "passed": 29,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "native-proposal-returned-instead-of-winner",
+      "project": "Native",
+      "exitCode": 1,
+      "failed": 2,
+      "passed": 29,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "native-selected-clock-ignored",
+      "project": "Native",
+      "exitCode": 1,
+      "failed": 20,
+      "passed": 11,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ef-actual-grant-fence-removed",
+      "project": "EF",
+      "exitCode": 1,
+      "failed": 11,
+      "passed": 40,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ef-pre-save-liveness-removed",
+      "project": "EF",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 50,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ef-pre-commit-liveness-removed",
+      "project": "EF",
+      "exitCode": 1,
+      "failed": 4,
+      "passed": 47,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ef-fenced-deadlines-not-rechecked",
+      "project": "EF",
+      "exitCode": 1,
+      "failed": 2,
+      "passed": 49,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ef-adopted-source-cas-removed",
+      "project": "EF",
+      "exitCode": 1,
+      "failed": 3,
+      "passed": 48,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ef-proposal-returned-instead-of-winner",
+      "project": "EF",
+      "exitCode": 1,
+      "failed": 3,
+      "passed": 48,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ef-operation-scope-not-captured",
+      "project": "EF",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 50,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ef-caller-state-boundary-removed",
+      "project": "EF",
+      "exitCode": 1,
+      "failed": 3,
+      "passed": 48,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ef-source-physical-key-filtered-as-absence",
+      "project": "EF",
+      "exitCode": 1,
+      "failed": 3,
+      "passed": 48,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ef-selected-clock-ignored",
+      "project": "EF",
+      "exitCode": 1,
+      "failed": 6,
+      "passed": 45,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "legacy-default-port-falls-back-to-unfenced-save",
+      "project": "Native",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 30,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    }
+  ],
+  "coreApiAdditions": 2,
+  "coreApiRemovals": 0,
+  "schemaChanges": false,
+  "generatedMapsCheck": "passed",
+  "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "unchanged": true,
+  "reviewFixes": [
+    "Validate grants after the actual native source-gate wait, under artifact then source gates.",
+    "Separate selected publication attribution from physical executable producer metadata. Join via ArtifactId; independently validate the complete material pin and exact closure/grants. Publication B can retain material first produced by A.",
+    "Preserve original native zero/one-argument and EF three-argument CLR constructors; additive provider clocks remain selected.",
+    "Use zero-grace eligibility in actual native GC race controls so material is eligible rather than merely retained by grace."
+  ],
+  "reviews": {
+    "correctness": "final restored source and portable receipt clean; 17 bindings and all checks reconciled",
+    "standards": "final source/catalog and portable receipt clean; API/ABI/schema/frozen claims verified",
+    "acceptance": "final expanded provider controls and portable receipt clean; caller/default/host limits preserved",
+    "fullPrRounds": 0
+  },
+  "limits": [
+    "Additive default-refusal contract; no caller activation, new ledger or schema. Test Run wrapper/source handoff remains unfenced until integrated with this port.",
+    "Native tests exercise actual native root/GC gates, complete grant checks and a real source-gate wait with clock expiry; no durable process recovery is claimed.",
+    "EF controls use SQLite, actual native coordination/source CAS, owned transaction rollback, four peer contexts after discovery before owned transaction, post-SQL expiry/failure and transaction-committed acknowledgement loss followed by fresh-context retry. These establish provider operations, not service/host recovery or other relational providers.",
+    "Source payload adoption excludes retry CreatedAt/PublishedAt only; expiry, sidecars and complete selected source attribution remain immutable. Physical producer metadata is independently full-pin validated.",
+    "Dirty/local/enlisted/ambient caller state is refused before clearing; requested cancellation propagates; provider/IO and unrequested cancellation retain contextual causes.",
+    "Actual winning Test Run wrapper provenance, service-level fresh-provider recovery, old-writer/quiescence exclusion and qualified default cohort GC remain T049 work. Saved broadcast publication stays disabled.",
+    "T050/T051, other stories, actual current upgraded-host/Studio, duplicate-semantics deletion/guards, full-PR reviews/exact-head gates/resulting-main and ADR0063 remain open. #2898/#2907/program production acceptance remains open; Orleans/task-runner deferred."
+  ],
+  "remoteParentChecks": {
+    "head": "718528bdc9d1548ad5479a3f1e3c44fb7a43ec82",
+    "run": 40406302850,
+    "buildAndTest": "success",
+    "architecture": "success",
+    "generatedMaps": "success",
+    "fullTier": "draft skip is not qualification",
+    "gitGuardianIncident": "38996611 older public source-digest finding remains unresolved; no bypass",
+    "boundary": "Parent checks only; new head needs exact-head checks."
+  }
+}

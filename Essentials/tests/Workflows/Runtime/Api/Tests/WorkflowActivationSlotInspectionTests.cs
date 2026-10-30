@@ -4,7 +4,10 @@ using Elsa.Workflows.Runtime.Api.Handlers;
 using Elsa.Workflows.Runtime.Api.Models;
 using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Options;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Microsoft.Extensions.Options;
+using System.Text.Json;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Api.Tests;
@@ -12,6 +15,67 @@ namespace Elsa.Workflows.Runtime.Api.Tests;
 public sealed class WorkflowActivationSlotInspectionTests
 {
     private static readonly DateTimeOffset Now = new(2026, 8, 17, 12, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public async Task Empty_listing_advertises_the_default_channel_creation_policy()
+    {
+        var inspection = new WorkflowActivationSlotInspectionService(new InMemoryWorkflowActivationAuthority());
+
+        var listed = await inspection.ListAsync(new ListWorkflowActivationSlots("new-definition"), CancellationToken.None);
+        var json = JsonSerializer.SerializeToElement(listed, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.True(json.GetProperty("allowAdHocChannels").GetBoolean());
+        Assert.Empty(json.GetProperty("channels").EnumerateArray());
+        Assert.Empty(json.GetProperty("items").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Declared_channels_are_global_and_slots_keep_definition_scoped_authority()
+    {
+        var authority = new InMemoryWorkflowActivationAuthority();
+        await authority.TryActivateAsync(new("definition-1", "default", "publication-1", WorkflowActivationSource.Publishing, 0, Now));
+        var inspection = new WorkflowActivationSlotInspectionService(authority, Options.Create(new ActivationChannelOptions
+        {
+            AllowAdHocChannels = false,
+            Channels =
+            [
+                new() { Name = "default", DisplayName = "Production", Description = "Normal traffic" },
+                new() { Name = "canary", DisplayName = "Canary", Description = "Separate routes required" }
+            ]
+        }));
+
+        var listed = await inspection.ListAsync(new("definition-1"), CancellationToken.None);
+        var empty = await inspection.ListAsync(new("definition-2"), CancellationToken.None);
+        var slot = await inspection.GetAsync(new("definition-1", "default"), CancellationToken.None);
+
+        Assert.False(listed.AllowAdHocChannels);
+        Assert.Equal(["canary", "default"], listed.Channels.Select(channel => channel.Name));
+        Assert.Equal(listed.Channels, empty.Channels);
+        Assert.Empty(empty.Items);
+        Assert.Equal("definition-1", Assert.Single(listed.Items).DefinitionId);
+        Assert.Equal(new ActivationChannelView("default", "Production", "Normal traffic"), slot.Channel);
+        Assert.Equal(slot.Channel, Assert.Single(listed.Items).Channel);
+        Assert.Equal("publication-1", slot.ActiveActivationId);
+    }
+
+    [Fact]
+    public async Task Existing_undeclared_slots_remain_readable_with_no_invented_channel_metadata()
+    {
+        var authority = new InMemoryWorkflowActivationAuthority();
+        await authority.TryActivateAsync(new("definition-1", "legacy", "publication-1", WorkflowActivationSource.Publishing, 0, Now));
+        var inspection = new WorkflowActivationSlotInspectionService(authority, Options.Create(new ActivationChannelOptions
+        {
+            AllowAdHocChannels = false,
+            Channels = [new() { Name = "default" }]
+        }));
+
+        var listed = await inspection.ListAsync(new("definition-1"), CancellationToken.None);
+
+        Assert.Null(Assert.Single(listed.Items).Channel);
+        Assert.Equal("legacy", Assert.Single(listed.Items).SlotName);
+        Assert.Equal("default", Assert.Single(listed.Channels).DisplayName);
+        Assert.False(listed.AllowAdHocChannels);
+    }
 
     [Theory]
     [InlineData("runtime/workflows/activation-slots/{definitionId}", typeof(ListWorkflowActivationSlots), typeof(WorkflowActivationSlotListView))]

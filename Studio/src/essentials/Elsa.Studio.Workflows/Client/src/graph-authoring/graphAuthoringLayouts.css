@@ -11,7 +11,7 @@
  * columns to the canvas. Structural, not theme-keyed: any host may omit the palette.
  */
 .wf-editor-body.palette-absent {
-  grid-template-columns: 0 0 minmax(360px, 1fr) 10px var(--wf-inspector-width, 320px);
+  grid-template-columns: 0 0 minmax(0, 1fr) 10px var(--wf-inspector-width, 320px);
 }
 
 /* A stale "palette maximized" preference must not hide the canvas when there is no palette. */

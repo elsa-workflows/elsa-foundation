@@ -14,7 +14,7 @@ namespace Elsa.Serialization.SystemText.Services;
 /// <see cref="JsonPayloadConvertersInitializing"/> domain event (the
 /// Registry + StartUp Task sub-pattern).
 /// </summary>
-public sealed class JsonPayloadSerializer(JsonPayloadConverterRegistry converterRegistry) : IPayloadSerializer
+internal sealed class JsonPayloadSerializer(JsonPayloadConverterRegistry converterRegistry) : IPayloadSerializer
 {
     // System.Text.Json caches reflected JsonTypeInfo/converter metadata per JsonSerializerOptions
     // instance. Rebuilding options on every Serialize/Deserialize call (this is a hot path —

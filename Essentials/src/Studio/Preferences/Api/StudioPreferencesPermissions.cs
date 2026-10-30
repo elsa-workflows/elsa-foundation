@@ -6,8 +6,9 @@ public static class StudioPreferencesPermissions
 {
     public const string OwnerId = "elsa.studio.preferences";
 
-    public const string Read = "studio.preferences.read";
-    public const string Write = "studio.preferences.write";
+    public const string Read = "studio/preferences:read";
+    public const string Write = "studio/preferences:write";
+    public const string ManageDefaults = "studio/preferences/defaults:manage";
 }
 
 public sealed class StudioPreferencesPermissionContributor : IPermissionContributor
@@ -21,7 +22,11 @@ public sealed class StudioPreferencesPermissionContributor : IPermissionContribu
             StudioPreferencesPermissions.Write,
             "Write Studio preferences",
             "Studio",
-            "Create and update personal Studio preference documents.",
-            new HashSet<string> { StudioPreferencesPermissions.Read })
+            "Create and update personal Studio preference documents."),
+        new(
+            StudioPreferencesPermissions.ManageDefaults,
+            "Manage Studio preference defaults",
+            "Studio",
+            "Read and write the admin default Home layout for a tenant and host.")
     ];
 }

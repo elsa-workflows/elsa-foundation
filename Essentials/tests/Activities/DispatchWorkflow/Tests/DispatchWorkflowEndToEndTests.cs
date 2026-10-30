@@ -80,6 +80,58 @@ public sealed class DispatchWorkflowEndToEndTests
         Assert.Equal(WorkflowDispatchStatus.Completed, Assert.Single(await fixture.ListDispatchesAsync(run.Start.WorkflowExecutionId)).Status);
     }
 
+    [Fact]
+    public async Task Expiry_sweep_fences_scope_before_stopping_prepared_test_target()
+    {
+        await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
+        var scopeStore = fixture.Services.GetRequiredService<IWorkflowTestScopeStore>();
+        var targetStore = fixture.Services.GetRequiredService<ITestRunTargetStore>();
+        var expiresAt = DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(1);
+        var testScope = new WorkflowTestScope(
+            "scope-expired-target",
+            expiresAt,
+            null,
+            new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue));
+        await scopeStore.CreateAsync(testScope, DispatchWorkflowRuntimeTestFixture.Now);
+
+        var executable = new WorkflowExecutableIdentity("artifact-test-target", "definition-test-target", "draft:expired", "draft", "sha256:expired");
+        var binding = new WorkflowTriggerBinding(
+            "binding-expired-target", executable.ArtifactId, executable.DefinitionId, executable.ArtifactVersion,
+            executable.ArtifactHash, "node-trigger", "test.trigger", "sha256:trigger", null,
+            new Dictionary<string, string>(), DispatchWorkflowRuntimeTestFixture.Now);
+        await targetStore.SaveAsync(new TestRunTarget(
+            testScope.ScopeId,
+            "test-driver",
+            "test.provider",
+            "fire-now",
+            executable,
+            "reference-expired-target",
+            binding,
+            testScope,
+            "workflow-designer-test-run",
+            "execution-expired-target",
+            "command-expired-target",
+            new Dictionary<string, JsonElement>(),
+            new Dictionary<string, object?>(),
+            driverState: null,
+            createdAt: DispatchWorkflowRuntimeTestFixture.Now));
+
+        var targetCleaner = new ScopeInspectingTargetCleaner(scopeStore, targetStore);
+        var cleaner = new WorkflowTestScopeCleaner(
+            scopeStore,
+            fixture.Services.GetRequiredService<IWorkflowTestScopeCleanupStore>(),
+            fixture.Services.GetRequiredService<IWorkflowDispatchQueryStore>(),
+            targetCleaner);
+        fixture.AdvanceTime(TimeSpan.FromMinutes(2));
+
+        var swept = await cleaner.SweepAsync(DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(2));
+
+        Assert.Equal(1, swept);
+        Assert.True(targetCleaner.ObservedClosingScope);
+        Assert.Null(await targetStore.FindAsync(testScope.ScopeId));
+        Assert.Equal(WorkflowTestScopeState.Closed, (await scopeStore.FindAsync(testScope.ScopeId))?.State);
+    }
+
     [Theory]
     [InlineData(true, null, true)]
     [InlineData(true, true, true)]
@@ -712,20 +764,23 @@ public sealed class DispatchWorkflowEndToEndTests
     }
 
     [Theory]
-    [InlineData(WorkflowRunKind.TestRun)]
-    [InlineData(WorkflowRunKind.PublishedRun)]
+    [InlineData(WorkflowRunKind.TestRun, false)]
+    [InlineData(WorkflowRunKind.TestRun, true)]
+    [InlineData(WorkflowRunKind.PublishedRun, false)]
+    [InlineData(WorkflowRunKind.PublishedRun, true)]
     public async Task Wait_exhaustion_resumes_parent_once_as_safe_dispatch_failed_and_is_never_redrivable(
-        WorkflowRunKind runKind)
+        WorkflowRunKind runKind, bool control)
     {
         await using var fixture = await DispatchWorkflowRuntimeTestFixture.CreateAsync();
-        var caseSuffix = runKind.ToString().ToLowerInvariant();
+        var caseSuffix = runKind.ToString().ToLowerInvariant() + (control ? "-control" : "");
         var run = await fixture.StartParentAsync(
             caseId: $"wait-delivery-exhaustion-{caseSuffix}",
             parentWorkflowExecutionId: $"parent-wait-delivery-exhaustion-{caseSuffix}",
             parentCorrelationId: "correlation-parent",
             waitForCompletion: true,
             runKind: runKind,
-            testScope: runKind == WorkflowRunKind.TestRun ? NewTestScope($"scope-wait-delivery-exhaustion-{caseSuffix}") : null);
+            testScope: runKind == WorkflowRunKind.TestRun ? NewTestScope($"scope-wait-delivery-exhaustion-{caseSuffix}") : null,
+            controlConsumerVersion: control ? 1 : null);
         await using var scope = fixture.Services.CreateAsyncScope();
         scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextBinder>().Bind(
             PersistenceAccessContext.Scoped(new PersistenceScope(run.Dispatch.TenantId!)));
@@ -769,7 +824,10 @@ public sealed class DispatchWorkflowEndToEndTests
         Assert.Equal(1, sweep.OutboxDeliveredCount);
         Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.FindWorkflowAsync(run.Start.WorkflowExecutionId))?.Status);
         Assert.Null(await fixture.FindWorkflowAsync(run.Identity.ChildWorkflowExecutionId));
-        var activity = Assert.Single(await fixture.ListActivitiesAsync(run.Start.WorkflowExecutionId));
+        var activity = Assert.Single(await fixture.ListActivitiesAsync(run.Start.WorkflowExecutionId),
+            item => item.InvocationId == run.Dispatch.ParentActivityExecutionId);
+        Assert.Null(activity.ChildControl);
+        Assert.Null(activity.ChildControlInbox);
         Assert.Equal(ActivityExecutionStatus.Completed, activity.Status);
         Assert.Equal(
             new[] { DispatchWorkflowOutcomes.DispatchFailed },
@@ -789,7 +847,7 @@ public sealed class DispatchWorkflowEndToEndTests
         await parentResume.HandleAsync(resumeItem.Intent);
         await parentResume.HandleAsync(resumeItem.Intent);
         Assert.Equal(WorkflowExecutionStatus.Completed, (await fixture.FindWorkflowAsync(run.Start.WorkflowExecutionId))?.Status);
-        Assert.Single(await fixture.ListActivitiesAsync(run.Start.WorkflowExecutionId));
+        Assert.Equal(control ? 2 : 1, (await fixture.ListActivitiesAsync(run.Start.WorkflowExecutionId)).Count);
         var afterResumeRedrive = await scope.ServiceProvider.GetRequiredService<IWorkflowDispatchRedriveStore>().RedriveAsync(
             new WorkflowDispatchRedriveRequest(run.Dispatch.DispatchId, "wait-redrive-after", timeProvider.GetUtcNow()));
         Assert.Equal(WorkflowDispatchRedriveDisposition.NotEligible, afterResumeRedrive.Disposition);
@@ -946,6 +1004,20 @@ public sealed class DispatchWorkflowEndToEndTests
             DispatchWorkflowRuntimeTestFixture.Now.AddMinutes(30),
             "tenant-42",
             new WorkflowExecutionPartition("partition-eu"));
+
+    private sealed class ScopeInspectingTargetCleaner(
+        IWorkflowTestScopeStore scopes,
+        ITestRunTargetStore targets) : ITestRunTargetCleaner
+    {
+        public bool ObservedClosingScope { get; private set; }
+
+        public async ValueTask StopAsync(string testRunId, CancellationToken cancellationToken = default)
+        {
+            ObservedClosingScope = (await scopes.FindAsync(testRunId, cancellationToken))?.State == WorkflowTestScopeState.Closing;
+            await targets.MarkStoppedAsync(testRunId, cancellationToken);
+            await targets.RemoveAsync(testRunId, cancellationToken);
+        }
+    }
 
     private static DispatchWorkflowActivityResult ReadActivityResult(ActivityExecutionState activity)
     {

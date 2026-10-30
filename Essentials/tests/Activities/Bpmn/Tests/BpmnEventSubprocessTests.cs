@@ -11,6 +11,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 
+using BpmnExecutionState = global::Bpmn.Model.State.BpmnExecutionState;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
@@ -175,7 +177,7 @@ public sealed class BpmnEventSubprocessTests
 
         // Resuming the trigger raises the escalation; the parent scope's interrupting event subprocess caught it via
         // seam C, tore the nested subprocess (and its committed-live keeper) down via seam A, ran the body, and completed.
-        var resumed = await fixture.ResumeAsync(triggerBookmark, JsonSerializer.SerializeToElement(new EventReceived("trigger")));
+        var resumed = await fixture.ResumeAsync(triggerBookmark, JsonSerializer.SerializeToElement(new { eventName = "trigger" }));
 
         resumed.AssertWorkflowCompleted();
         Assert.Single(resumed.States("node-es-probe"));
@@ -312,7 +314,7 @@ public sealed class BpmnEventSubprocessTests
         Assert.Equal("AbsorbFault", incident.ResolutionOutcome!.ActionKind);
         Assert.NotNull(incident.ResolvedAt);
         Assert.Equal("actexec-bpmn", incident.Metadata[RuntimeMetadataKeys.FaultAbsorbedBy]);
-        Assert.Equal(BpmnExecutionEngine.EventSubprocessErrorAbsorptionReason, incident.Metadata[RuntimeMetadataKeys.FaultAbsorptionReason]);
+        Assert.Equal("bpmn.event-subprocess.error-absorbed", incident.Metadata[RuntimeMetadataKeys.FaultAbsorptionReason]);
     }
 
     [Fact]

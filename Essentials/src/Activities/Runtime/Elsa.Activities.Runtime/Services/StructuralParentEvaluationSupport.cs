@@ -307,7 +307,8 @@ internal static class StructuralParentEvaluationSupport
     /// Commits a structural parent that stays running after evaluating a child: persists the parent (and any
     /// <paramref name="processedChildStates"/> the evaluation marked), captures its inspection projection, and
     /// enqueues the newly scheduled children followed by <paramref name="followUpWorkItems"/> after the commit
-    /// lands, all in one checkpoint alongside the staged subtree cancellations.
+    /// lands, all in one checkpoint alongside the staged subtree cancellations and <paramref name="incidentChanges"/>
+    /// (a structural intervention's incident outcome).
     /// </summary>
     public static async ValueTask CommitDeferredParentActivityAsync(
         RuntimeCheckpointCommitter checkpointCommitter,
@@ -321,7 +322,9 @@ internal static class StructuralParentEvaluationSupport
         IReadOnlyCollection<RuntimeSchedulerWorkItem> followUpWorkItems,
         IReadOnlyCollection<ActivitySubtreeCancellationPlan> subtreeCancellations,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<IncidentState>? incidentChanges = null,
+        StructuralChildControlContribution? childControlContribution = null)
     {
         var occurredAt = timeProvider.GetUtcNow();
         var (workItem, activityExecutionId, metadata) = (source.WorkItem, source.Payload.ActivityExecutionId, source.Metadata);
@@ -338,7 +341,14 @@ internal static class StructuralParentEvaluationSupport
                     Metadata: metadata)
             ];
         var childWorkItems = SchedulerWorkItems.NewChildActivityScheduleWorkItems(
-            timeProvider, idGenerator, workItem, source.Payload.PinnedExecutable, activityExecutionId, scheduleRequests, source.DerivedCommandMetadata).ToArray();
+            timeProvider,
+            idGenerator,
+            workItem,
+            source.Payload.PinnedExecutable,
+            activityExecutionId,
+            scheduleRequests,
+            source.DerivedCommandMetadata,
+            SchedulerWorkItems.ResolveChildExecutionScopeId(parentState)).ToArray();
         var cancellationChanges = await BuildSubtreeCancellationChangesAsync(
             inspectionAccumulator, subtreeCancellations, checkpointId, occurredAt, metadata, cancellationToken);
         var commit = new RuntimeCheckpointCommit(
@@ -374,7 +384,15 @@ internal static class StructuralParentEvaluationSupport
                 ],
                 bookmarks: [],
                 durableValues: [],
-                incidents: cancellationChanges.Incidents,
+                incidents:
+                [
+                    .. cancellationChanges.Incidents,
+                    .. (incidentChanges ?? []).Select(incident => new RuntimeStateChange<IncidentState>(
+                        incident.IncidentId,
+                        RuntimeStateChangeOperation.Upsert,
+                        incident,
+                        metadata))
+                ],
                 operational: [],
                 activityExecutionInspections: [.. inspectionChanges, .. cancellationChanges.Inspections],
                 activityScopeCleanups: cancellationChanges.Cleanups),
@@ -384,7 +402,7 @@ internal static class StructuralParentEvaluationSupport
                 .ToArray(),
             Metadata: metadata);
 
-        await checkpointCommitter.CommitAsync(commit, cancellationToken);
+        await checkpointCommitter.CommitAsync(childControlContribution?.Apply(commit) ?? commit, cancellationToken);
     }
 
     /// <summary>
@@ -418,7 +436,8 @@ internal static class StructuralParentEvaluationSupport
     /// Commits a structural parent that completed after evaluating a child: persists the completed parent with its
     /// inspection projection, durable-value changes and workflow-variable write-back, and enqueues its upward
     /// completion work item followed by <paramref name="parentNotifications"/> after the commit lands, all in one
-    /// checkpoint alongside the staged subtree cancellations.
+    /// checkpoint alongside the staged subtree cancellations. <paramref name="ancestorNotifications"/> are enqueued
+    /// ahead of the completion work item, so the addressed ancestor evaluates them first.
     /// </summary>
     public static async ValueTask CommitCompletedParentActivityAsync(
         RuntimeCheckpointCommitter checkpointCommitter,
@@ -432,7 +451,10 @@ internal static class StructuralParentEvaluationSupport
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
         RuntimeStateChange<WorkflowExecutionState>? workflowVariableWriteBack,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>>? additionalActivityExecutions = null,
+        IReadOnlyCollection<RuntimeSchedulerWorkItem>? ancestorNotifications = null,
+        StructuralChildControlContribution? childControlContribution = null)
     {
         var occurredAt = timeProvider.GetUtcNow();
         var (workItem, activityExecutionId, metadata) = (source.WorkItem, source.Payload.ActivityExecutionId, source.Metadata);
@@ -452,7 +474,12 @@ internal static class StructuralParentEvaluationSupport
                 Name: RuntimeCheckpointNames.ActivityCompleted,
                 WorkflowExecutionId: workItem.WorkflowExecutionId,
                 OccurredAt: occurredAt,
-                ActivityExecutionIds: [activityExecutionId, .. cancellationChanges.CancelledActivityExecutionIds],
+                ActivityExecutionIds:
+                [
+                    activityExecutionId,
+                    .. (additionalActivityExecutions ?? []).Select(change => change.StateId),
+                    .. cancellationChanges.CancelledActivityExecutionIds
+                ],
                 Metadata: metadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: workflowVariableWriteBack,
@@ -464,6 +491,7 @@ internal static class StructuralParentEvaluationSupport
                         Operation: RuntimeStateChangeOperation.Upsert,
                         State: completedParentState,
                         Metadata: metadata),
+                    .. (additionalActivityExecutions ?? []),
                     .. cancellationChanges.ActivityExecutions
                 ],
                 bookmarks: [],
@@ -482,13 +510,14 @@ internal static class StructuralParentEvaluationSupport
                         .. cancellationChanges.Inspections
                     ],
                 activityScopeCleanups: cancellationChanges.Cleanups),
-            PostCommitIntents: new[] { completionWorkItem }
+            PostCommitIntents: (ancestorNotifications ?? [])
+                .Append(completionWorkItem)
                 .Concat(parentNotifications)
                 .Select(item => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(workItem, activityExecutionId, item, occurredAt))
                 .ToArray(),
             Metadata: metadata);
 
-        await checkpointCommitter.CommitAsync(commit, cancellationToken);
+        await checkpointCommitter.CommitAsync(childControlContribution?.Apply(commit) ?? commit, cancellationToken);
     }
 
     internal sealed record SubtreeCancellationCommitChanges(

@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 
 namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 
@@ -26,14 +27,33 @@ public static class RuntimePostCommitOutboxItems
         RuntimeCheckpointCommit commit,
         RuntimePostCommitIntent intent,
         IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions) =>
-        new(
-            outboxItemId: OutboxItemId(commit.CommitId, intent),
-            intent: intent,
-            status: RuntimePostCommitOutboxStatus.Pending,
-            recordedAt: intent.RecordedAt,
-            availableAt: commit.Checkpoint.OccurredAt,
-            retryPolicy: ResolveRetryPolicy(intent.Kind, contributions),
-            metadata: commit.Metadata);
+        CreatePending(commit, intent, contributions, null);
+
+    /// <summary>Records actual commit-time scope for an explicitly required-source handler, without choosing recipients.</summary>
+    public static RuntimePostCommitOutboxItem CreatePending(RuntimeCheckpointCommit commit, RuntimePostCommitIntent intent,
+        IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions, PersistenceScope? sourceScope)
+    {
+        ArgumentNullException.ThrowIfNull(commit);
+        ArgumentNullException.ThrowIfNull(intent);
+        ArgumentNullException.ThrowIfNull(contributions);
+        var materialized = contributions.ToArray();
+        ValidateContributions(materialized);
+        var contribution = materialized.FirstOrDefault(item => item.IntentKind == intent.Kind);
+        var required = contribution?.RequiresDurableSource == true;
+        if (required && sourceScope is null)
+            throw new RuntimePostCommitSourceBoundaryException(null, intent.Kind,
+                new InvalidOperationException("A required-source write needs authoritative persistence scope."), false);
+        return new(OutboxItemId(commit.CommitId, intent), intent, RuntimePostCommitOutboxStatus.Pending,
+            intent.RecordedAt, AvailableAt(commit, intent), ResolveRetryPolicy(intent.Kind, materialized),
+            0, null, null, null, null, commit.Metadata, 0, null, contribution?.StimulusDeliveryProtocolVersion, required ? sourceScope : null, null);
+    }
+
+    /// <summary>
+    /// When the intent's item becomes deliverable: at the commit, or at the intent's due time when that is later (R-7,
+    /// spec 261). Every store and the coalescing overlay already refuse to deliver a pending item before this time.
+    /// </summary>
+    public static DateTimeOffset AvailableAt(RuntimeCheckpointCommit commit, RuntimePostCommitIntent intent) =>
+        intent.IsDelayedPast(commit.Checkpoint.OccurredAt) ? intent.NotBefore!.Value : commit.Checkpoint.OccurredAt;
 
     /// <summary>Builds the pending outbox change-set entries for all of a commit's post-commit intents.</summary>
     public static IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> CreatePendingChanges(RuntimeCheckpointCommit commit) =>
@@ -41,7 +61,12 @@ public static class RuntimePostCommitOutboxItems
 
     public static IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> CreatePendingChanges(
         RuntimeCheckpointCommit commit,
-        IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions)
+        IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions) =>
+        CreatePendingChanges(commit, contributions, null);
+
+    public static IReadOnlyCollection<RuntimeStateChange<RuntimePostCommitOutboxItem>> CreatePendingChanges(
+        RuntimeCheckpointCommit commit, IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions,
+        PersistenceScope? sourceScope)
     {
         ArgumentNullException.ThrowIfNull(commit);
         ArgumentNullException.ThrowIfNull(contributions);
@@ -51,7 +76,7 @@ public static class RuntimePostCommitOutboxItems
         commit.PostCommitIntents
             .Select(intent =>
             {
-                var item = CreatePending(commit, intent, materialized);
+                var item = CreatePending(commit, intent, materialized, sourceScope);
                 return new RuntimeStateChange<RuntimePostCommitOutboxItem>(
                     item.OutboxItemId,
                     RuntimeStateChangeOperation.Upsert,
@@ -59,6 +84,14 @@ public static class RuntimePostCommitOutboxItems
                     commit.Metadata);
             })
             .ToArray();
+    }
+
+    internal static HashSet<string> RequiredSourceKinds(IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions)
+    {
+        ArgumentNullException.ThrowIfNull(contributions);
+        var materialized = contributions.ToArray();
+        ValidateContributions(materialized);
+        return materialized.Where(item => item.RequiresDurableSource).Select(item => item.IntentKind).ToHashSet(StringComparer.Ordinal);
     }
 
     private static RuntimePostCommitRetryPolicy ResolveRetryPolicy(
@@ -74,7 +107,9 @@ public static class RuntimePostCommitOutboxItems
             var first = group.First();
             if (group.Any(contribution =>
                     contribution.HandlerType != first.HandlerType ||
-                    !contribution.RetryPolicy.IsEquivalentTo(first.RetryPolicy)))
+                    !contribution.RetryPolicy.IsEquivalentTo(first.RetryPolicy) ||
+                    contribution.RequiresDurableSource != first.RequiresDurableSource ||
+                    contribution.StimulusDeliveryProtocolVersion != first.StimulusDeliveryProtocolVersion))
             {
                 throw new InvalidOperationException(
                     $"Runtime post-commit intent kind '{group.Key}' has conflicting handler or retry-policy contributions.");

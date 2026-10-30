@@ -1,3 +1,6 @@
+import { getIntrinsicActivityDisplay } from "./runtimeActivityDisplay";
+import { readIntrinsicDescriptor } from "./intrinsicActivities";
+import { compensationScopeStructureKind, compensationStepsFromExecutableSlots } from "./compensationScope";
 import { bpmnStructureKind, flowchartStructureKind, readStructureDesignFacet, type StructureDesignSlotDescriptor } from "./workflowAdapter";
 import type {
   ActivityCatalogItem,
@@ -59,6 +62,12 @@ export function buildExecutableActivityGraph(
   const catalogByType = new Map<string, ActivityCatalogItem[]>();
   for (const item of catalog) {
     catalogByType.set(item.activityTypeKey, [...(catalogByType.get(item.activityTypeKey) ?? []), item]);
+    // Compiled intrinsics use engine identities, while the catalog uses friendly activity type keys.
+    const intrinsic = readIntrinsicDescriptor(item);
+    if (intrinsic) {
+      const runtimeType = `elsa.intrinsic.${intrinsic.kind.toLowerCase()}`;
+      catalogByType.set(runtimeType, [...(catalogByType.get(runtimeType) ?? []), item]);
+    }
   }
 
   const factsByNodeId = new Map<string, ExecutableGraphNodeFacts>();
@@ -83,12 +92,12 @@ export function buildExecutableActivityGraph(
     // distinct instead of overwriting one another.
     const nodeId = nodeIdsByExecutableId.get(node.executableNodeId) ?? node.executableNodeId;
     const presentation = presentationByExecutableNodeId.get(node.executableNodeId);
-    const adaptedNodePresentation = presentation
-      ? {
-          nodeId,
-          displayName: presentation.displayName,
-          description: presentation.description
-        }
+    // View-only defaults also reach bound BPMN task labels; authored names retain precedence.
+    const displayName = presentation?.displayName?.trim()
+      ? presentation.displayName
+      : !catalogItem ? getIntrinsicActivityDisplay(node.activityType) : undefined;
+    const adaptedNodePresentation = presentation || displayName
+      ? { nodeId, displayName, description: presentation?.description }
       : undefined;
     factsByNodeId.set(nodeId, {
       executableNodeId: node.executableNodeId,
@@ -192,9 +201,9 @@ export function isGhostFact(fact: ExecutableGraphNodeFacts | undefined): boolean
 }
 
 // Bare presentational name for a ghost node: the short activity type name, since no catalog display
-// name exists in this environment.
+// name exists in this environment. Engine-owned intrinsics retain their known display names.
 export function ghostNodeLabel(activityType: string): string {
-  return activityType.split(".").filter(Boolean).at(-1) ?? activityType;
+  return getIntrinsicActivityDisplay(activityType) ?? activityType.split(".").filter(Boolean).at(-1) ?? activityType;
 }
 
 // Prefers the exact (type, version) catalog row; falls back to any version of the same type — the
@@ -221,6 +230,14 @@ function synthesizeStructure(
 ): ActivityNodeStructure | null {
   const slots = node.childSlots ?? [];
   if (slots.length === 0 && !(node.structureKind === bpmnStructureKind && node.bpmnStructure)) return null;
+
+  if (node.structureKind === compensationScopeStructureKind) {
+    return {
+      kind: compensationScopeStructureKind,
+      schemaVersion: "1.0.0",
+      payload: { steps: compensationStepsFromExecutableSlots(slots, adapt) }
+    };
+  }
 
   const facet = readStructureDesignFacet(catalogItem);
   const facetMatch = facet && (!node.structureKind || facet.kind === node.structureKind)

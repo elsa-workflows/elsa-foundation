@@ -29,6 +29,11 @@ public sealed record AgentHarnessTurnRequest(
     AgentPolicy Policy)
 {
     public AgentTurnMessage? LatestUserMessage => History.LastOrDefault(x => x.Role == AgentRole.User);
+    public string TurnId { get; init; } = string.Empty;
+    public string TenantId { get; init; } = string.Empty;
+    public AgentClientBinding? Client { get; init; }
+    public IReadOnlyList<AgentToolResult> PendingToolResults { get; init; } = [];
+    public bool IsReceiptContinuation { get; init; }
 }
 
 /// <summary>

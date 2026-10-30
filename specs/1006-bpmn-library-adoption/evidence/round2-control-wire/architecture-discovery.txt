@@ -1,0 +1,856 @@
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj : warning NU1510: PackageReference Microsoft.Extensions.DependencyInjection will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj : warning NU1902: Package 'System.Security.Cryptography.Pkcs' 9.0.13 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-2fmv-rv2c-59x7
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj : warning NU1903: Package 'System.Security.Cryptography.Pkcs' 9.0.13 has a known high severity vulnerability, https://github.com/advisories/GHSA-846f-f764-76mx
+  Elsa.Architecture.Analyzers -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/build/Analyzers/bin/Release/netstandard2.0/Elsa.Architecture.Analyzers.dll
+  Elsa.Cli.Worker -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cli/Worker/bin/Release/net10.0/Elsa.Cli.Worker.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj : warning NU1902: Package 'System.Security.Cryptography.Pkcs' 9.0.13 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-2fmv-rv2c-59x7
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj : warning NU1903: Package 'System.Security.Cryptography.Pkcs' 9.0.13 has a known high severity vulnerability, https://github.com/advisories/GHSA-846f-f764-76mx
+  Elsa.Modularity.Planning -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Modularity/Planning/bin/Release/net10.0/Elsa.Modularity.Planning.dll
+  Elsa.Primitives -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Primitives/Primitives/bin/Release/net10.0/Elsa.Primitives.dll
+  Elsa.Expressions.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/Core/bin/Release/net10.0/Elsa.Expressions.Core.dll
+  Elsa.Integrations.Templates -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Integrations/src/Templates/bin/Release/net10.0/Elsa.Integrations.Templates.dll
+  Elsa.Agent.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Agent/src/Core/bin/Release/net10.0/Elsa.Agent.Core.dll
+  Elsa.Api.AspNetCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Api/AspNetCore/bin/Release/net10.0/Elsa.Api.AspNetCore.dll
+  Elsa.Attention.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Attention/Core/bin/Release/net10.0/Elsa.Attention.Core.dll
+  Elsa.Rules.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Core/bin/Release/net10.0/Elsa.Rules.Core.dll
+  Elsa.Foundation.Identity.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/Core/bin/Release/net10.0/Elsa.Foundation.Identity.Core.dll
+  Elsa.Pipelines.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Pipelines/Core/bin/Release/net10.0/Elsa.Pipelines.Core.dll
+  Elsa.Locking.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Locking/Core/bin/Release/net10.0/Elsa.Locking.Core.dll
+  Elsa.Tasks.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Tasks/Core/bin/Release/net10.0/Elsa.Tasks.Core.dll
+  Elsa.Mediator.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Mediator/Core/bin/Release/net10.0/Elsa.Mediator.Core.dll
+  Elsa.Modularity.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Modularity/Core/bin/Release/net10.0/Elsa.Modularity.Core.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Http/Elsa.Activities.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Http will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Http/Elsa.Activities.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Options will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+  Elsa.Etl.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Etl/src/Core/bin/Release/net10.0/Elsa.Etl.Core.dll
+  Elsa.Http.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Core/bin/Release/net10.0/Elsa.Http.Core.dll
+  Elsa.Events.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Events/Core/bin/Release/net10.0/Elsa.Events.Core.dll
+  Elsa.Serialization.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Serialization/Core/bin/Release/net10.0/Elsa.Serialization.Core.dll
+  Elsa.Diagnostics.StructuredLogs.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/StructuredLogs/Core/bin/Release/net10.0/Elsa.Diagnostics.StructuredLogs.Core.dll
+  Elsa.Activities.Runtime.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Runtime/Core/bin/Release/net10.0/Elsa.Activities.Runtime.Core.dll
+  Elsa.Activities.Design.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Core/bin/Release/net10.0/Elsa.Activities.Design.Core.dll
+  Elsa.Persistence.Schema -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/Schema/bin/Release/net10.0/Elsa.Persistence.Schema.dll
+  Elsa.Expressions.JavaScript.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/JavaScript/Core/bin/Release/net10.0/Elsa.Expressions.JavaScript.Core.dll
+  Elsa.Expressions.JavaScript.Rendering.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/JavaScript/Rendering/Core/bin/Release/net10.0/Elsa.Expressions.JavaScript.Rendering.Core.dll
+  Elsa.Expressions.JavaScript.Jint -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/JavaScript/Jint/bin/Release/net10.0/Elsa.Expressions.JavaScript.Jint.dll
+  Elsa.Persistence.EntityFramework -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/bin/Release/net10.0/Elsa.Persistence.EntityFramework.dll
+  Elsa.Etl.Design -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Etl/src/Design/Elsa.Etl.Design/bin/Release/net10.0/Elsa.Etl.Design.dll
+  Elsa.Workflows.Runtime.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Core/bin/Release/net10.0/Elsa.Workflows.Runtime.Core.dll
+  Elsa.Activities.Scheduling -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Scheduling/bin/Release/net10.0/Elsa.Activities.Scheduling.dll
+  Elsa.Http.JavaScript -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/JavaScript/bin/Release/net10.0/Elsa.Http.JavaScript.dll
+  Elsa.Workflows.Design.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Core/bin/Release/net10.0/Elsa.Workflows.Design.Core.dll
+  Elsa.Activities.Sequence -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Sequence/bin/Release/net10.0/Elsa.Activities.Sequence.dll
+  Elsa.Connections.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Connections/Core/bin/Release/net10.0/Elsa.Connections.Core.dll
+  Elsa.Foundation.Identity -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/bin/Release/net10.0/Elsa.Foundation.Identity.dll
+  Elsa.Etl.Workflows.Runtime -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Etl/src/Workflows/Runtime/bin/Release/net10.0/Elsa.Etl.Workflows.Runtime.dll
+  Elsa.Diagnostics.OpenTelemetry.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/OpenTelemetry/Core/bin/Release/net10.0/Elsa.Diagnostics.OpenTelemetry.Core.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Attention/Api/AttentionJsonContext.cs(9,24): warning SYSLIB1034: The member 'Elsa.Attention.Core.AttentionContributorStatus' has been annotated with 'JsonStringEnumConverter' which is not supported in native AOT. Consider using the generic 'JsonStringEnumConverter<TEnum>' instead. (https://learn.microsoft.com/dotnet/fundamentals/syslib-diagnostics/syslib1034) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Attention/Api/Elsa.Attention.Api.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Attention/Api/AttentionJsonContext.cs(9,24): warning SYSLIB1034: The member 'Elsa.Attention.Core.AttentionSeverity' has been annotated with 'JsonStringEnumConverter' which is not supported in native AOT. Consider using the generic 'JsonStringEnumConverter<TEnum>' instead. (https://learn.microsoft.com/dotnet/fundamentals/syslib-diagnostics/syslib1034) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Attention/Api/Elsa.Attention.Api.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Attention/Api/AttentionJsonContext.cs(9,24): warning SYSLIB1034: The member 'Elsa.Attention.Core.AttentionSensitivity' has been annotated with 'JsonStringEnumConverter' which is not supported in native AOT. Consider using the generic 'JsonStringEnumConverter<TEnum>' instead. (https://learn.microsoft.com/dotnet/fundamentals/syslib-diagnostics/syslib1034) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Attention/Api/Elsa.Attention.Api.csproj]
+  Elsa.Attention.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Attention/Api/bin/Release/net10.0/Elsa.Attention.Api.dll
+  Elsa.Foundation.Identity.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/Api/bin/Release/net10.0/Elsa.Foundation.Identity.Api.dll
+  Elsa.Agent.Workflows -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Agent/src/Workflows/bin/Release/net10.0/Elsa.Agent.Workflows.dll
+  Elsa.Foundation.Identity.Oidc -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/Oidc/bin/Release/net10.0/Elsa.Foundation.Identity.Oidc.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Agent/src/Api/AgentJsonContext.cs(13,2): warning SYSLIB1034: The member 'Elsa.Agent.Api.AgentJsonContext' has been annotated with 'JsonStringEnumConverter' which is not supported in native AOT. Consider using the generic 'JsonStringEnumConverter<TEnum>' instead. (https://learn.microsoft.com/dotnet/fundamentals/syslib-diagnostics/syslib1034) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Agent/src/Api/Elsa.Agent.Api.csproj]
+  Elsa.Agent.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Agent/src/Api/bin/Release/net10.0/Elsa.Agent.Api.dll
+  Elsa.Cluster.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/Core/bin/Release/net10.0/Elsa.Cluster.Core.dll
+  Elsa.Expressions.JavaScript.Rendering -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering/bin/Release/net10.0/Elsa.Expressions.JavaScript.Rendering.dll
+  Elsa.Git -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Git/bin/Release/net10.0/Elsa.Git.dll
+  Elsa.Activities.DispatchWorkflow.Runtime -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/DispatchWorkflow/Runtime/bin/Release/net10.0/Elsa.Activities.DispatchWorkflow.Runtime.dll
+  Elsa.Etl.Runtime -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/bin/Release/net10.0/Elsa.Etl.Runtime.dll
+  Elsa.Cluster.InProcess -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/InProcess/bin/Release/net10.0/Elsa.Cluster.InProcess.dll
+  Elsa.Api.Capabilities -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Api/Capabilities/bin/Release/net10.0/Elsa.Api.Capabilities.dll
+  Elsa.Activities.Graph.Runtime -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Graph/Runtime/bin/Release/net10.0/Elsa.Activities.Graph.Runtime.dll
+  Elsa.Etl.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Etl/src/Api/bin/Release/net10.0/Elsa.Etl.Api.dll
+  Elsa.Expressions.JavaScript -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/bin/Release/net10.0/Elsa.Expressions.JavaScript.dll
+  Elsa.Activities.Http -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Http/bin/Release/net10.0/Elsa.Activities.Http.dll
+  Elsa.Expressions.Liquid -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/Liquid/bin/Release/net10.0/Elsa.Expressions.Liquid.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/Elsa.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Http will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/Elsa.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Logging.Abstractions will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/Elsa.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Options will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+  Elsa.Caching.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Caching/Core/bin/Release/net10.0/Elsa.Caching.Core.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Etl/src/Design/Api/EtlDesignJsonContext.cs(11,2): warning SYSLIB1034: The member 'Elsa.Etl.Design.Api.EtlDesignJsonContext' has been annotated with 'JsonStringEnumConverter' which is not supported in native AOT. Consider using the generic 'JsonStringEnumConverter<TEnum>' instead. (https://learn.microsoft.com/dotnet/fundamentals/syslib-diagnostics/syslib1034) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Etl/src/Design/Api/Elsa.Etl.Design.Api.csproj]
+  Elsa.Etl.Design.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Etl/src/Design/Api/bin/Release/net10.0/Elsa.Etl.Design.Api.dll
+  Elsa.Foundation.Identity.AspNetCoreIdentity -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity/bin/Release/net10.0/Elsa.Foundation.Identity.AspNetCoreIdentity.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/EntityFrameworkCore/Migrations/ClusterMembership/MySql/20260928095918_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/EntityFrameworkCore/Migrations/ClusterMembership/Sqlite/20260928095922_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/EntityFrameworkCore/Migrations/ClusterMembership/PostgreSql/20260928095920_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/EntityFrameworkCore/Migrations/ClusterMembership/SqlServer/20260928095921_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj]
+  Elsa.Cluster.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/EntityFrameworkCore/bin/Release/net10.0/Elsa.Cluster.EntityFrameworkCore.dll
+  Elsa.Agent.GitHubCopilot -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Agent/src/GitHubCopilot/bin/Release/net10.0/Elsa.Agent.GitHubCopilot.dll
+  Elsa.Foundation.Identity.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Etl/src/Persistence/EntityFrameworkCore/Stores/EfEtlConnectorRuntimeInspector.cs(80,13): warning IDE0019: Use pattern matching (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0019) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj]
+  Elsa.Diagnostics.OpenTelemetry -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry/bin/Release/net10.0/Elsa.Diagnostics.OpenTelemetry.dll
+  Elsa.Expressions -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/Elsa.Expressions/bin/Release/net10.0/Elsa.Expressions.dll
+  Elsa.Etl.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Etl/src/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Etl.Persistence.EntityFrameworkCore.dll
+  Elsa.Locking.FileSystem -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Locking/FileSystem/bin/Release/net10.0/Elsa.Locking.FileSystem.dll
+  Elsa.Mediator -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Mediator/Elsa.Mediator/bin/Release/net10.0/Elsa.Mediator.dll
+  Elsa.Diagnostics.StructuredLogs -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs/bin/Release/net10.0/Elsa.Diagnostics.StructuredLogs.dll
+  Elsa.Serialization.Newtonsoft -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Serialization/Newtonsoft/bin/Release/net10.0/Elsa.Serialization.Newtonsoft.dll
+  Elsa.Diagnostics.Persistence -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/Persistence/bin/Release/net10.0/Elsa.Diagnostics.Persistence.dll
+  Elsa.Etl.Runtime.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Etl/src/Runtime/Api/bin/Release/net10.0/Elsa.Etl.Runtime.Api.dll
+  Elsa.Serialization.SystemText -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Serialization/SystemText/bin/Release/net10.0/Elsa.Serialization.SystemText.dll
+  Elsa.Cluster.Readability -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/Readability/bin/Release/net10.0/Elsa.Cluster.Readability.dll
+  Elsa.Studio.Preferences.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Studio/Preferences/Core/bin/Release/net10.0/Elsa.Studio.Preferences.Core.dll
+  Elsa.Expressions.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/Api/bin/Release/net10.0/Elsa.Expressions.Api.dll
+  Elsa.Workflows.Publishing.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Core/bin/Release/net10.0/Elsa.Workflows.Publishing.Core.dll
+  Elsa.Http -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/bin/Release/net10.0/Elsa.Http.dll
+  Elsa.Workflows.Design.Validations.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Validations/Core/bin/Release/net10.0/Elsa.Workflows.Design.Validations.Core.dll
+  Elsa.Activities.Design.Reconciliation.Clr -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Reconciliation/Clr/bin/Release/net10.0/Elsa.Activities.Design.Reconciliation.Clr.dll
+  Elsa.Tasks.Schedules -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Tasks/Schedules/bin/Release/net10.0/Elsa.Tasks.Schedules.dll
+  Elsa.Cli -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cli/Elsa.Cli/bin/Release/net10.0/Elsa.Cli.dll
+  Elsa.Rules.Persistence.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Persistence/Core/bin/Release/net10.0/Elsa.Rules.Persistence.Core.dll
+  Elsa.Secrets.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Core/bin/Release/net10.0/Elsa.Secrets.Core.dll
+  Elsa.Workflows.Design.Validations -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/bin/Release/net10.0/Elsa.Workflows.Design.Validations.dll
+  Elsa.Activities.Compensation -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Compensation/bin/Release/net10.0/Elsa.Activities.Compensation.dll
+  Elsa.Activities.ControlFlow -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/ControlFlow/bin/Release/net10.0/Elsa.Activities.ControlFlow.dll
+  Elsa.Workflows.Design.Persistence.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Persistence/Core/bin/Release/net10.0/Elsa.Workflows.Design.Persistence.Core.dll
+  Elsa.Secrets -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Elsa.Secrets/bin/Release/net10.0/Elsa.Secrets.dll
+  Elsa.Activities.Design.Persistence.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/Core/bin/Release/net10.0/Elsa.Activities.Design.Persistence.Core.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Migrations/WorkflowsDesign/MySql/20260928040709_Initial.cs(6,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Migrations/WorkflowsDesign/PostgreSql/20260928040711_Initial.cs(6,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Migrations/WorkflowsDesign/Sqlite/20260928040714_Initial.cs(6,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Migrations/WorkflowsDesign/SqlServer/20260928040712_Initial.cs(6,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj]
+  Elsa.Workflows.Design.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Graph/Design/Services/GraphBodyReferenceValidator.cs(132,13): warning CS8602: Dereference of a possibly null reference. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj]
+  Elsa.Activities.Graph.Design -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Graph/Design/bin/Release/net10.0/Elsa.Activities.Graph.Design.dll
+  Elsa.Workflows.Design.Reconciliation -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Reconciliation/Elsa.Workflows.Design.Reconciliation/bin/Release/net10.0/Elsa.Workflows.Design.Reconciliation.dll
+  Elsa.Activities.DispatchWorkflow.Design -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/DispatchWorkflow/Design/bin/Release/net10.0/Elsa.Activities.DispatchWorkflow.Design.dll
+  Elsa.Connections -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Connections/Elsa.Connections/bin/Release/net10.0/Elsa.Connections.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Connections/Design/Elsa.Connections.Design.csproj : warning NU1510: PackageReference Microsoft.Extensions.DependencyInjection will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+  Elsa.Workflows.Design.Reconciliation.Json -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Reconciliation/Json/bin/Release/net10.0/Elsa.Workflows.Design.Reconciliation.Json.dll
+  Elsa.Connections.Design -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Connections/Design/bin/Release/net10.0/Elsa.Connections.Design.dll
+  Elsa.Foundation.Identity.OpenIddict.Behavior -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/OpenIddict/Behavior/bin/Release/net10.0/Elsa.Foundation.Identity.OpenIddict.Behavior.dll
+  Elsa.Rules.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Rules.Persistence.EntityFrameworkCore.dll
+  Elsa.Workflows.Runtime -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/bin/Release/net10.0/Elsa.Workflows.Runtime.dll
+  Elsa.Foundation.Identity.OpenIddict -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/OpenIddict/Elsa.Foundation.Identity.OpenIddict/bin/Release/net10.0/Elsa.Foundation.Identity.OpenIddict.dll
+  Elsa.Etl.Workflows.Design -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Etl/src/Workflows/Design/bin/Release/net10.0/Elsa.Etl.Workflows.Design.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20260915205200_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20260928002150_SchemaVersionStamp.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20260928040738_SchemaFinalization.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20261020202445_FreeNameOnDelete.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260928002110_SchemaVersionStamp.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260928002001_SchemaVersionStamp.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260928040734_SchemaFinalization.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20261020202251_FreeNameOnDelete.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260928040726_SchemaFinalization.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20261020201900_FreeNameOnDelete.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260928002031_SchemaVersionStamp.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260928040730_SchemaFinalization.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20261020202043_FreeNameOnDelete.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/Elsa.Secrets.Persistence.EntityFrameworkCore.csproj]
+  Elsa.Workflows.Design.JavaScript -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/JavaScript/bin/Release/net10.0/Elsa.Workflows.Design.JavaScript.dll
+  Elsa.Caching.Memory -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Caching/Memory/bin/Release/net10.0/Elsa.Caching.Memory.dll
+  Elsa.Diagnostics.ConsoleLogStreaming -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/ConsoleLogStreaming/bin/Release/net10.0/Elsa.Diagnostics.ConsoleLogStreaming.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Locking/Database/Elsa.Locking.Database.csproj : warning NU1902: Package 'System.Security.Cryptography.Pkcs' 9.0.13 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-2fmv-rv2c-59x7
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Locking/Database/Elsa.Locking.Database.csproj : warning NU1903: Package 'System.Security.Cryptography.Pkcs' 9.0.13 has a known high severity vulnerability, https://github.com/advisories/GHSA-846f-f764-76mx
+  Elsa.Activities.Design.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Api/bin/Release/net10.0/Elsa.Activities.Design.Api.dll
+  Elsa.Locking.Database -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Locking/Database/bin/Release/net10.0/Elsa.Locking.Database.dll
+  Elsa.Activities.Design.Reconciliation -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/bin/Release/net10.0/Elsa.Activities.Design.Reconciliation.dll
+  Elsa.Primitives.Hosting -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Primitives/Hosting/bin/Release/net10.0/Elsa.Primitives.Hosting.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Migrations/ActivitiesDesign/PostgreSql/20260928040640_Initial.cs(6,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Migrations/ActivitiesDesign/MySql/20260928040639_Initial.cs(6,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Migrations/ActivitiesDesign/Sqlite/20260928040643_Initial.cs(6,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Migrations/ActivitiesDesign/SqlServer/20260928040642_Initial.cs(6,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj]
+  Elsa.Activities.Design.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Activities.Design.Persistence.EntityFrameworkCore.dll
+  Elsa.Rules.Runtime -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Runtime/bin/Release/net10.0/Elsa.Rules.Runtime.dll
+  Elsa.Tasks -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Tasks/Elsa.Tasks/bin/Release/net10.0/Elsa.Tasks.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/DataProtection/EntityFrameworkCore/Migrations/DataProtectionKeys/Sqlite/20261001032723_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/DataProtection/EntityFrameworkCore/Migrations/DataProtectionKeys/SqlServer/20261001032721_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/DataProtection/EntityFrameworkCore/Migrations/DataProtectionKeys/MySql/20261001032718_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/DataProtection/EntityFrameworkCore/Migrations/DataProtectionKeys/PostgreSql/20261001032720_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/DataProtection/EntityFrameworkCore/Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj]
+  Elsa.Foundation.DataProtection.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/DataProtection/EntityFrameworkCore/bin/Release/net10.0/Elsa.Foundation.DataProtection.EntityFrameworkCore.dll
+  Elsa.Workflows.Runtime.JavaScript -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/JavaScript/bin/Release/net10.0/Elsa.Workflows.Runtime.JavaScript.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj : warning NU1902: Package 'System.Security.Cryptography.Pkcs' 9.0.13 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-2fmv-rv2c-59x7
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj : warning NU1903: Package 'System.Security.Cryptography.Pkcs' 9.0.13 has a known high severity vulnerability, https://github.com/advisories/GHSA-846f-f764-76mx
+  Elsa.Workflows.Design.CodeGeneration -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/CodeGeneration/bin/Release/netstandard2.0/Elsa.Workflows.Design.CodeGeneration.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Tooling/Elsa.Rules.Tooling.csproj : warning NU1902: Package 'System.Security.Cryptography.Pkcs' 9.0.13 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-2fmv-rv2c-59x7
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Tooling/Elsa.Rules.Tooling.csproj : warning NU1903: Package 'System.Security.Cryptography.Pkcs' 9.0.13 has a known high severity vulnerability, https://github.com/advisories/GHSA-846f-f764-76mx
+  Elsa.ExtensionBuilder.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/ExtensionBuilder/src/Api/bin/Release/net10.0/Elsa.ExtensionBuilder.Api.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Migrations/StructuredLogs/MySql/20260928035805_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Migrations/StructuredLogs/PostgreSql/20260928035807_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Migrations/StructuredLogs/Sqlite/20260928035811_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Migrations/StructuredLogs/SqlServer/20260928035809_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj]
+  Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.dll
+  Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll
+  Elsa.Activities.Runtime -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/bin/Release/net10.0/Elsa.Activities.Runtime.dll
+  Elsa.Activities.Flowchart -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Flowchart/bin/Release/net10.0/Elsa.Activities.Flowchart.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/WorkflowPortfolioContracts.cs(38,2): warning SYSLIB1034: The member 'Elsa.Workflows.Dashboard.WorkflowPortfolioStatus' has been annotated with 'JsonStringEnumConverter' which is not supported in native AOT. Consider using the generic 'JsonStringEnumConverter<TEnum>' instead. (https://learn.microsoft.com/dotnet/fundamentals/syslib-diagnostics/syslib1034) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/Elsa.Workflows.Dashboard.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/WorkflowRunHealthContracts.cs(55,2): warning SYSLIB1034: The member 'Elsa.Workflows.Dashboard.WorkflowRunHealthStatus' has been annotated with 'JsonStringEnumConverter' which is not supported in native AOT. Consider using the generic 'JsonStringEnumConverter<TEnum>' instead. (https://learn.microsoft.com/dotnet/fundamentals/syslib-diagnostics/syslib1034) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/Elsa.Workflows.Dashboard.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/WorkflowRunHealthContracts.cs(48,2): warning SYSLIB1034: The member 'Elsa.Workflows.Dashboard.WorkflowRunHealthBucketSize' has been annotated with 'JsonStringEnumConverter' which is not supported in native AOT. Consider using the generic 'JsonStringEnumConverter<TEnum>' instead. (https://learn.microsoft.com/dotnet/fundamentals/syslib-diagnostics/syslib1034) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/Elsa.Workflows.Dashboard.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Migrations/PublishingSnapshotReview/MySql/20260928040703_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Migrations/PublishingSnapshotReview/PostgreSql/20260928040705_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Migrations/PublishingSnapshotReview/Sqlite/20260928040708_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Migrations/PublishingSnapshotReview/SqlServer/20260928040706_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj]
+  Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.dll
+  Elsa.Workflows.Runtime.Distributed -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/bin/Release/net10.0/Elsa.Workflows.Runtime.Distributed.dll
+  Elsa.Workflows.Runtime.Reconciliation.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Reconciliation/Core/bin/Release/net10.0/Elsa.Workflows.Runtime.Reconciliation.Core.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Workflows/Runtime/RulesWorkflowsRuntimeFeature.cs(17,2): warning CS0436: The type 'ManifestRuntimeKindAttribute' in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ManifestRuntimeKindAttribute.cs' conflicts with the imported type 'ManifestRuntimeKindAttribute' in 'Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ManifestRuntimeKindAttribute.cs'. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Workflows/Runtime/RulesWorkflowsRuntimeFeature.cs(18,2): warning CS0436: The type 'ManifestFeatureCategoryAttribute' in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ManifestFeatureCategoryAttribute.cs' conflicts with the imported type 'ManifestFeatureCategoryAttribute' in 'Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ManifestFeatureCategoryAttribute.cs'. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Workflows/Runtime/RulesWorkflowsRuntimeFeature.cs(19,2): warning CS0436: The type 'ManifestFeatureCategoryAttribute' in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ManifestFeatureCategoryAttribute.cs' conflicts with the imported type 'ManifestFeatureCategoryAttribute' in 'Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ManifestFeatureCategoryAttribute.cs'. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Workflows/Runtime/RulesWorkflowsRuntimeFeature.cs(17,22): warning CS0436: The type 'ElsaRuntimeKinds' in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ElsaRuntimeKinds.cs' conflicts with the imported type 'ElsaRuntimeKinds' in 'Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ElsaRuntimeKinds.cs'. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Workflows/Runtime/RulesWorkflowsRuntimeFeature.cs(26,6): warning CS0436: The type 'ManifestSettingAttribute' in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ManifestSettingAttribute.cs' conflicts with the imported type 'ManifestSettingAttribute' in 'Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ManifestSettingAttribute.cs'. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Workflows/Runtime/RulesWorkflowsRuntimeFeature.cs(30,6): warning CS0436: The type 'ManifestSettingAttribute' in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ManifestSettingAttribute.cs' conflicts with the imported type 'ManifestSettingAttribute' in 'Elsa.Rules.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ManifestSettingAttribute.cs'. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Workflows/Runtime/Elsa.Rules.Workflows.Runtime.csproj]
+  Elsa.Rules.Workflows.Runtime -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Workflows/Runtime/bin/Release/net10.0/Elsa.Rules.Workflows.Runtime.dll
+  Elsa.Events.Strategies -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Events/Strategies/bin/Release/net10.0/Elsa.Events.Strategies.dll
+  Elsa.Secrets.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Secrets.Persistence.EntityFrameworkCore.dll
+  Elsa.Secrets.Workflows -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Workflows/bin/Release/net10.0/Elsa.Secrets.Workflows.dll
+  Elsa.Connections.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Connections/Api/bin/Release/net10.0/Elsa.Connections.Api.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Connections/Workflows/Features/ConnectionsWorkflowsFeature.cs(8,2): warning CS0436: The type 'ManifestRuntimeKindAttribute' in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ManifestRuntimeKindAttribute.cs' conflicts with the imported type 'ManifestRuntimeKindAttribute' in 'Elsa.Connections, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ManifestRuntimeKindAttribute.cs'. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Connections/Workflows/Elsa.Connections.Workflows.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Connections/Workflows/Features/ConnectionsWorkflowsFeature.cs(9,2): warning CS0436: The type 'ManifestFeatureCategoryAttribute' in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ManifestFeatureCategoryAttribute.cs' conflicts with the imported type 'ManifestFeatureCategoryAttribute' in 'Elsa.Connections, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ManifestFeatureCategoryAttribute.cs'. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Connections/Workflows/Elsa.Connections.Workflows.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Connections/Workflows/Features/ConnectionsWorkflowsFeature.cs(10,2): warning CS0436: The type 'ManifestFeatureCategoryAttribute' in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ManifestFeatureCategoryAttribute.cs' conflicts with the imported type 'ManifestFeatureCategoryAttribute' in 'Elsa.Connections, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ManifestFeatureCategoryAttribute.cs'. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Connections/Workflows/Elsa.Connections.Workflows.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Connections/Workflows/Features/ConnectionsWorkflowsFeature.cs(8,22): warning CS0436: The type 'ElsaRuntimeKinds' in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ElsaRuntimeKinds.cs' conflicts with the imported type 'ElsaRuntimeKinds' in 'Elsa.Connections, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null'. Using the type defined in '/Users/sipke/.nuget/packages/elsa.specifications.packagemanifest.generator/0.0.1-preview.8/contentFiles/cs/any/Elsa.Specifications.PackageManifest.Generator.Hints/ElsaRuntimeKinds.cs'. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Connections/Workflows/Elsa.Connections.Workflows.csproj]
+  Elsa.Activities.Bpmn -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/bin/Release/net10.0/Elsa.Activities.Bpmn.dll
+  Elsa.Workflows.Dashboard -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/bin/Release/net10.0/Elsa.Workflows.Dashboard.dll
+  Elsa.Workflows.Design.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Api/bin/Release/net10.0/Elsa.Workflows.Design.Api.dll
+  Elsa.Workflows.Runtime.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Api/bin/Release/net10.0/Elsa.Workflows.Runtime.Api.dll
+  Elsa.Connections.Workflows -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Connections/Workflows/bin/Release/net10.0/Elsa.Connections.Workflows.dll
+  Elsa.Workflows.Runtime.Http -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Http/bin/Release/net10.0/Elsa.Workflows.Runtime.Http.dll
+  Elsa.Workflows.Runtime.ReferenceGarbageCollection -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/ReferenceGarbageCollection/bin/Release/net10.0/Elsa.Workflows.Runtime.ReferenceGarbageCollection.dll
+  Elsa.Workflows.Runtime.Scheduling -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Scheduling/bin/Release/net10.0/Elsa.Workflows.Runtime.Scheduling.dll
+  Elsa.Rules.Workflows.Design -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Workflows/Design/bin/Release/net10.0/Elsa.Rules.Workflows.Design.dll
+  Elsa.Rules.Tooling -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Rules/src/Tooling/bin/Release/net10.0/Elsa.Rules.Tooling.dll
+  Elsa.Activities.Primitives -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Primitives/bin/Release/net10.0/Elsa.Activities.Primitives.dll
+  Elsa.Workflows.Runtime.Resumption -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Resumption/bin/Release/net10.0/Elsa.Workflows.Runtime.Resumption.dll
+  Elsa.Workflows.ExecutionEvidence -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/ExecutionEvidence/bin/Release/net10.0/Elsa.Workflows.ExecutionEvidence.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Api/SecretsJsonContext.cs(18,24): warning SYSLIB1034: The member 'Elsa.Secrets.Core.Models.SecretStatus' has been annotated with 'JsonStringEnumConverter' which is not supported in native AOT. Consider using the generic 'JsonStringEnumConverter<TEnum>' instead. (https://learn.microsoft.com/dotnet/fundamentals/syslib-diagnostics/syslib1034) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Api/Elsa.Secrets.Api.csproj]
+  Elsa.Workflows.Runtime.Reconciliation -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Reconciliation/Elsa.Workflows.Runtime.Reconciliation/bin/Release/net10.0/Elsa.Workflows.Runtime.Reconciliation.dll
+  Elsa.Secrets.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Api/bin/Release/net10.0/Elsa.Secrets.Api.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Studio/Preferences/Persistence/EntityFrameworkCore/Migrations/StudioPreferences/PostgreSql/20260928035815_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Studio/Preferences/Persistence/EntityFrameworkCore/Migrations/StudioPreferences/MySql/20260928035813_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Studio/Preferences/Persistence/EntityFrameworkCore/Migrations/StudioPreferences/Sqlite/20260928035818_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Studio/Preferences/Persistence/EntityFrameworkCore/Migrations/StudioPreferences/SqlServer/20260928035817_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj]
+  Elsa.Studio.Preferences.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Studio/Preferences/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.dll
+  Elsa.Studio.Preferences.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Studio/Preferences/Api/bin/Release/net10.0/Elsa.Studio.Preferences.Api.dll
+  Elsa.Modularity.EntityFramework -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Modularity/EntityFramework/bin/Release/net10.0/Elsa.Modularity.EntityFramework.dll
+  Elsa.Modularity.Nuplane -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Modularity/Nuplane/bin/Release/net10.0/Elsa.Modularity.Nuplane.dll
+  Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/bin/Release/net10.0/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.dll
+  Elsa.Events -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Events/Elsa.Events/bin/Release/net10.0/Elsa.Events.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Migrations/OpenTelemetry/MySql/20260928035737_Initial.cs(6,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Migrations/OpenTelemetry/PostgreSql/20260928035740_Initial.cs(6,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Migrations/OpenTelemetry/Sqlite/20260928035746_Initial.cs(6,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Migrations/OpenTelemetry/SqlServer/20260928035743_Initial.cs(6,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj]
+  Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.dll
+  Elsa.Workflows.Publishing -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/bin/Release/net10.0/Elsa.Workflows.Publishing.dll
+  Elsa.Modularity.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Modularity/Api/bin/Release/net10.0/Elsa.Modularity.Api.dll
+  Elsa.Workflows.Publishing.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Api/bin/Release/net10.0/Elsa.Workflows.Publishing.Api.dll
+  Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Dashboard/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Migrations/ExecutionPlacement/SqlServer/20260928035700_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Migrations/ExecutionPlacement/MySql/20260928035656_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Migrations/ExecutionCommandTransport/SqlServer/20260928035653_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Migrations/ExecutionCommandTransport/Sqlite/20260928035655_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Migrations/ExecutionCommandTransport/MySql/20260928035650_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Migrations/ExecutionPlacement/PostgreSql/20260928035658_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Migrations/ExecutionPlacement/Sqlite/20260928035702_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Migrations/ExecutionCommandTransport/PostgreSql/20260928035652_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj]
+  Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.dll
+  Elsa.Activities.Bpmn.Interchange -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Interchange/bin/Release/net10.0/Elsa.Activities.Bpmn.Interchange.dll
+  Elsa.Foundation.Host -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Foundation.Host/bin/Release/net10.0/Elsa.Foundation.Host.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/ElsaModuleManagementApi.cs(689,9): warning IDE0019: Use pattern matching (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0019) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj]
+  Elsa.Workbench -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll
+  Elsa3.Models -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Models/bin/Release/net10.0/Elsa3.Models.dll
+  Elsa.Activities.Scripting -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Scripting/bin/Release/net10.0/Elsa.Activities.Scripting.dll
+  Elsa.Api.Compatibility.Testing -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Api/Compatibility/Testing/bin/Release/net10.0/Elsa.Api.Compatibility.Testing.dll
+  Elsa.Agent.Anthropic -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Agent/src/Anthropic/bin/Release/net10.0/Elsa.Agent.Anthropic.dll
+  Elsa.Activities.Design.Reconciliation.Json -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Reconciliation/Json/bin/Release/net10.0/Elsa.Activities.Design.Reconciliation.Json.dll
+  Elsa.Maps.Projects -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/maps/Elsa.Maps.Projects/bin/Release/net10.0/Elsa.Maps.Projects.dll
+  Elsa.Secrets.Nuplane -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Nuplane/bin/Release/net10.0/Elsa.Secrets.Nuplane.dll
+  Elsa.Integrations.Sdk -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Integrations/src/Sdk/bin/Release/net10.0/Elsa.Integrations.Sdk.dll
+  Elsa3.Activities.Design.Import -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/bin/Release/net10.0/Elsa3.Activities.Design.Import.dll
+  Elsa.Integrations.Connectors.OAuth2 -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Integrations/src/Connectors/OAuth2/bin/Release/net10.0/Elsa.Integrations.Connectors.OAuth2.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Mapping/Services/Elsa3ReusableActivityImportMaterializer.cs(238,49): warning CS8604: Possible null reference argument for parameter 'item' in 'void List<ActivityNode>.Add(ActivityNode item)'. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Mapping/Elsa3.Mapping.csproj]
+  Elsa3.Mapping -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Mapping/bin/Release/net10.0/Elsa3.Mapping.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Migrations/Elsa3Import/MySql/20260928040645_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Migrations/Elsa3Import/Sqlite/20260928040649_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Migrations/Elsa3Import/PostgreSql/20260928040646_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Migrations/Elsa3Import/SqlServer/20260928040648_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj]
+  Elsa.Workflows.Design.Reconciliation.Git -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Reconciliation/Git/bin/Release/net10.0/Elsa.Workflows.Design.Reconciliation.Git.dll
+  Elsa3.Activities.Design.Import.Publishing -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Publishing/bin/Release/net10.0/Elsa3.Activities.Design.Import.Publishing.dll
+  Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.dll
+  Elsa.Integrations.Connectors.Microsoft365 -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Integrations/src/Connectors/Microsoft365/bin/Release/net10.0/Elsa.Integrations.Connectors.Microsoft365.dll
+  Elsa.Maps.Generator -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/maps/Elsa.Maps.Generator/bin/Release/net10.0/Elsa.Maps.Generator.dll
+  Elsa.Integrations.Connectors.Slack -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Integrations/src/Connectors/Slack/bin/Release/net10.0/Elsa.Integrations.Connectors.Slack.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Architecture/Tests/DomainApiCapabilityRegistrationTests.cs(108,23): warning xUnit2031: Do not use a Where clause to filter before calling Assert.Single. Use the overload of Assert.Single that accepts a filtering function. (https://xunit.net/xunit.analyzers/rules/xUnit2031) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Architecture/Tests/PermissionAuthorizationBoundaryTests.cs(90,9): warning xUnit2029: Do not use Assert.Empty to check if a value does not exist in a collection. Use Assert.DoesNotContain instead. (https://xunit.net/xunit.analyzers/rules/xUnit2029) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj]
+  Elsa.Architecture.Tests -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Architecture/Tests/bin/Release/net10.0/Elsa.Architecture.Tests.dll
+Test run for /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Architecture/Tests/bin/Release/net10.0/Elsa.Architecture.Tests.dll (.NETCoreApp,Version=v10.0)
+The following Tests are available:
+    Elsa.Architecture.Tests.ActivationChannelConfigurationTests.Shell_feature_binds_a_list_of_channel_declarations_and_configures_runtime_options
+    Elsa.Architecture.Tests.ActivationChannelConfigurationTests.Feature_registration_validates_malformed_and_duplicated_channel_declarations
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Cluster_membership_contract_takes_no_provider_dependency
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Non_clustered_hosting_takes_no_hard_dependency_on_a_membership_provider
+    Elsa.Architecture.Tests.ArchitectureGuardTests.The_shared_schema_seam_takes_no_provider_and_only_abstractions
+    Elsa.Architecture.Tests.ArchitectureGuardTests.The_readability_source_a_host_composes_takes_no_ef_dependency
+    Elsa.Architecture.Tests.ArchitectureGuardTests.The_readability_source_takes_only_the_package_runtimes_abstractions
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Membership_provider_packages_are_recognized(package: "Microsoft.EntityFrameworkCore", isProvider: True)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Membership_provider_packages_are_recognized(package: "Pomelo.EntityFrameworkCore.MySql", isProvider: True)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Membership_provider_packages_are_recognized(package: "Npgsql", isProvider: True)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Membership_provider_packages_are_recognized(package: "Microsoft.Data.SqlClient", isProvider: True)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Membership_provider_packages_are_recognized(package: "Microsoft.Data.Sqlite", isProvider: True)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Membership_provider_packages_are_recognized(package: "MySqlConnector", isProvider: True)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Membership_provider_packages_are_recognized(package: "Microsoft.Orleans.Server", isProvider: True)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Membership_provider_packages_are_recognized(package: "Proto.Cluster", isProvider: True)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Membership_provider_packages_are_recognized(package: "Akka.Cluster", isProvider: True)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Membership_provider_packages_are_recognized(package: "Microsoft.Extensions.Options", isProvider: False)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Membership_provider_packages_are_recognized(package: "Microsoft.Extensions.DependencyInjection.Abstracti"···, isProvider: False)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Membership_provider_projects_are_recognized(name: "Elsa.Cluster.EntityFrameworkCore", path: "Essentials/src/Cluster/EntityFrameworkCore/Elsa.Cl"···, isProvider: True)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Membership_provider_projects_are_recognized(name: "Elsa.Cluster.Orleans", path: "Extensions/Orleans/src/Cluster/Elsa.Cluster.Orlean"···, isProvider: True)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Membership_provider_projects_are_recognized(name: "Elsa.Workflows.Runtime.Persistence.EntityFramework"···, path: "Essentials/src/Workflows/Runtime/Persistence/Entit"···, isProvider: True)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Membership_provider_projects_are_recognized(name: "Elsa.Cluster.Readability", path: "Essentials/src/Cluster/Readability/Elsa.Cluster.Re"···, isProvider: True)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Membership_provider_projects_are_recognized(name: "Elsa.Cluster.InProcess", path: "Essentials/src/Cluster/InProcess/Elsa.Cluster.InPr"···, isProvider: False)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Membership_provider_projects_are_recognized(name: "Elsa.Primitives", path: "Essentials/src/Primitives/Primitives/Elsa.Primitiv"···, isProvider: False)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Connections_core_has_no_azure_or_valence_types
+    Elsa.Architecture.Tests.ArchitectureGuardTests.SendHttpRequest_has_no_Authorization_input
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Authentication_schemes_are_an_open_plugin_contract
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Core_projects_contain_no_implementation_shaped_types
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Every_design_command_contract_is_classified_once
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Every_promotion_requires_the_admitted_drafts_state_hash
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Solution_has_no_global_layer_marker_folders
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Project_enumeration_covers_every_module_root
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Project_paths_match_domain_tree_convention
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Shared_persistence_resolution_does_not_depend_on_feature_assemblies
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Neutral_activation_and_tooling_projects_have_no_entity_framework_dependency(projectPath: "Essentials/src/Modularity/Core/Elsa.Modularity.Cor"···)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Neutral_activation_and_tooling_projects_have_no_entity_framework_dependency(projectPath: "Essentials/src/Modularity/Nuplane/Elsa.Modularity."···)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Neutral_activation_and_tooling_projects_have_no_entity_framework_dependency(projectPath: "Essentials/src/Cli/Worker/Elsa.Cli.Worker.csproj")
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Active_project_and_solution_references_resolve_to_existing_projects
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Solution_folders_collapse_leaf_project_segments
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Core_projects_do_not_reference_implementation_projects
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Core_projects_do_not_reference_heavy_packages
+    Elsa.Architecture.Tests.ArchitectureGuardTests.In_scope_persistence_contract_projects_remain_free_of_concrete_provider_dependencies
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Elsa_primitives_has_no_external_package_references
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Runtime_projects_do_not_add_design_references
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Runtime_projects_do_not_reference_elsa3_compatibility_projects
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Docker_reference_shell_enables_graph_authoring_with_activity_design
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Docker_reference_shell_inlines_the_entity_framework_modules
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Server_Dockerfile_restores_ReadyToRun_packages_before_no_restore_publish
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Docker_reference_shell_enables_the_publish_engine_alongside_its_transport
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Activity_construction_runtime_path_has_no_design_reference
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Dispatch_workflow_modules_preserve_runtime_design_and_transport_boundaries
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Activity_construction_feature_projects_do_not_reference_each_other
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Projects_do_not_declare_duplicate_project_references
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Legacy_activity_factory_and_constructor_registry_are_absent
+    Elsa.Architecture.Tests.ArchitectureGuardTests.InternalsVisibleTo_grants_stay_within_the_granting_domain
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Every_production_project_is_built_before_the_architecture_tests
+    Elsa.Architecture.Tests.ArchitectureGuardTests.The_compiled_grant_sweep_finds_the_repositorys_existing_grants
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_compiled_grant_is_read_whatever_form_its_source_took
+    Elsa.Architecture.Tests.ArchitectureGuardTests.Each_kind_of_grant_is_judged_by_domain
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_grant_the_rule_admits_is_not_reported(grantor: "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj", grantee: "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj")
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_grant_the_rule_admits_is_not_reported(grantor: "Essentials/src/Workflows/Runtime/Http/Elsa.Workflo"···, grantee: "Essentials/src/Workflows/Runtime/Elsa.Workflows.Ru"···)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_grant_the_rule_admits_is_not_reported(grantor: "Extensions/ExtensionBuilder/src/Core/Elsa.Extensio"···, grantee: "Extensions/ExtensionBuilder/src/Api/Elsa.Extension"···)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_grant_the_rule_admits_is_not_reported(grantor: "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj", grantee: "Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.cspr"···)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_grant_the_rule_admits_is_not_reported(grantor: "Essentials/apps/Elsa.Workbench/Elsa.Workbench.cspr"···, grantee: "Essentials/tests/Modularity/Tests/Elsa.Modularity."···)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_grant_the_rule_refuses_is_reported_with_its_reason(grantor: "Essentials/src/Events/Elsa.Events/Elsa.Events.cspr"···, grantee: "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj", reason: "is in domain 'Tasks', not the granting project's d"···)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_grant_the_rule_refuses_is_reported_with_its_reason(grantor: "Essentials/src/Workflows/Design/Core/Elsa.Workflow"···, grantee: "Essentials/src/Workflows/Runtime/Elsa.Workflows.Ru"···, reason: "is in domain 'Workflows.Runtime', not the granting"···)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_grant_the_rule_refuses_is_reported_with_its_reason(grantor: "Extensions/ExtensionBuilder/src/Api/Elsa.Extension"···, grantee: "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj", reason: "is in domain 'Tasks', not the granting project's d"···)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_grant_the_rule_refuses_is_reported_with_its_reason(grantor: "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj", grantee: "Essentials/apps/Elsa.Workbench/Elsa.Workbench.cspr"···, reason: "is in no domain, not the granting project's domain"···)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_grant_the_rule_refuses_is_reported_with_its_reason(grantor: "Essentials/apps/Elsa.Workbench/Elsa.Workbench.cspr"···, grantee: "Essentials/apps/Elsa.Foundation.Host/Elsa.Foundati"···, reason: "belongs to no domain, so it has no own test assemb"···)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_grant_the_rule_refuses_is_reported_with_its_reason(grantor: "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj", grantee: "Essentials/tests/Events/Tests/Elsa.Events.Tests.cs"···, reason: "tests domain 'Events', not the granting project's "···)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_grant_the_rule_refuses_is_reported_with_its_reason(grantor: "Essentials/apps/Elsa.Workbench/Elsa.Workbench.cspr"···, grantee: "Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.cspr"···, reason: "belongs to no domain, so it has no own test assemb"···)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_grant_the_rule_refuses_is_reported_with_its_reason(grantor: "Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.cspr"···, grantee: "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj", reason: "is a production project; a test project never open"···)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_grant_the_rule_refuses_is_reported_with_its_reason(grantor: "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj", grantee: "tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator"···, reason: "names no project of this repository")
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_path_maps_to_its_domain(path: "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj", domain: "Tasks")
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_path_maps_to_its_domain(path: "Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.cspr"···, domain: "Tasks")
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_path_maps_to_its_domain(path: "Essentials/src/Workflows/Runtime/Http/Elsa.Workflo"···, domain: "Workflows.Runtime")
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_path_maps_to_its_domain(path: "Essentials/tests/Workflows/Runtime/Http/Tests/Elsa"···, domain: "Workflows.Runtime")
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_path_maps_to_its_domain(path: "Extensions/ExtensionBuilder/src/Api/Elsa.Extension"···, domain: "Extensions/ExtensionBuilder")
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_path_maps_to_its_domain(path: "Extensions/ExtensionBuilder/tests/Api/Tests/Elsa.E"···, domain: "Extensions/ExtensionBuilder")
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_path_maps_to_its_domain(path: "Essentials/apps/Elsa.Workbench/Elsa.Workbench.cspr"···, domain: null)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_path_maps_to_its_domain(path: "Essentials/build/Analyzers/Elsa.Architecture.Analy"···, domain: null)
+    Elsa.Architecture.Tests.ArchitectureGuardTests.A_path_maps_to_its_domain(path: "tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator"···, domain: null)
+    Elsa.Architecture.Tests.BinderCacheCollectibilityTests.Bound_contract_types_do_not_root_the_collectible_module
+    Elsa.Architecture.Tests.CatalogLinkGuardTests.Every_relative_link_in_a_catalog_or_module_readme_resolves
+    Elsa.Architecture.Tests.CatalogLinkGuardTests.The_root_index_links_every_source_catalog
+    Elsa.Architecture.Tests.CollectibleEndpointTests.Repeated_collectible_endpoint_cycles_produce_weak_reference_evidence
+    Elsa.Architecture.Tests.CommittedCompositionConnectionTests.Every_ef_feature_a_production_compose_stack_composes_resolves_a_connection(composeFile: "docker-compose.yml", shellsJson: "docker/compose/elsa-workbench.shells.json")
+    Elsa.Architecture.Tests.CommittedCompositionConnectionTests.Every_ef_feature_a_production_compose_stack_composes_resolves_a_connection(composeFile: "docker-compose.images.yml", shellsJson: "Essentials/apps/Elsa.Workbench/shells.json")
+    Elsa.Architecture.Tests.CommittedCompositionConnectionTests.Every_ef_feature_a_committed_shell_composition_composes_resolves_a_connection(shellsJson: "Essentials/apps/Elsa.Workbench/shells.json")
+    Elsa.Architecture.Tests.CommittedCompositionConnectionTests.Every_ef_feature_a_committed_shell_composition_composes_resolves_a_connection(shellsJson: "Essentials/apps/Elsa.Workbench/shells.baseline.jso"···)
+    Elsa.Architecture.Tests.CommittedCompositionConnectionTests.Every_ef_feature_a_committed_shell_composition_composes_selects_sqlite(shellsJson: "Essentials/apps/Elsa.Workbench/shells.json")
+    Elsa.Architecture.Tests.CommittedCompositionConnectionTests.Every_ef_feature_a_committed_shell_composition_composes_selects_sqlite(shellsJson: "Essentials/apps/Elsa.Workbench/shells.baseline.jso"···)
+    Elsa.Architecture.Tests.CommittedCompositionConnectionTests.Every_entity_framework_feature_a_committed_composition_composes_is_in_the_catalog
+    Elsa.Architecture.Tests.DependencyMapTests.Every_tracked_file_resolves_to_the_nearest_project_on_disk
+    Elsa.Architecture.Tests.DependencyMapTests.No_project_directory_is_nested_inside_another
+    Elsa.Architecture.Tests.DependencyMapTests.A_path_is_owned_by_the_longest_matching_project_directory(path: "Essentials/src/Workflows/Runtime/Core/Services/Foo"···, expected: "Elsa.Workflows.Runtime.Core")
+    Elsa.Architecture.Tests.DependencyMapTests.A_path_is_owned_by_the_longest_matching_project_directory(path: "Essentials/src/Workflows/Runtime/Elsa.Workflows.Ru"···, expected: "Elsa.Workflows.Runtime")
+    Elsa.Architecture.Tests.DependencyMapTests.A_path_is_owned_by_the_longest_matching_project_directory(path: "Essentials/src/Workflows/Runtime/Elsa.Workflows.Ru"···, expected: null)
+    Elsa.Architecture.Tests.DependencyMapTests.A_path_is_owned_by_the_longest_matching_project_directory(path: "Essentials/src/Workflows/Foo.cs", expected: null)
+    Elsa.Architecture.Tests.DependencyMapTests.A_path_is_owned_by_the_longest_matching_project_directory(path: "Essentials/tests/Directory.Build.props", expected: null)
+    Elsa.Architecture.Tests.DependencyMapTests.Every_packable_node_carries_a_package_id_and_a_version_line
+    Elsa.Architecture.Tests.DependencyMapTests.Line_a_nodes_are_exactly_the_reviewed_list
+    Elsa.Architecture.Tests.DependencyMapTests.Pinned_transitive_edges_carry_the_pin_of_a_package_the_node_does_not_reference
+    Elsa.Architecture.Tests.DispatchWorkflowArchitectureTests.DispatchWorkflow_runtime_does_not_reference_design
+    Elsa.Architecture.Tests.DispatchWorkflowArchitectureTests.DispatchWorkflow_modules_do_not_take_transport_distributed_or_studio_dependencies
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.The_required_set_is_fully_resolved_and_non_vacuous
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.Every_dockerfile_copies_every_required_build_file_before_restore
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.Dockerignore_does_not_exclude_a_required_build_file
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.The_host_publish_restores_with_every_property_it_publishes_with(host: "Elsa.Workbench")
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.The_host_publish_restores_with_every_property_it_publishes_with(host: "Elsa.Foundation.Host")
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.A_publish_whose_restore_lacks_one_of_its_properties_is_flagged(restoreArguments: "-r \"$RID\" -p:PublishReadyToRun=true \"$@\"", lacking: null)
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.A_publish_whose_restore_lacks_one_of_its_properties_is_flagged(restoreArguments: "-r \"$RID\" -p:PublishReadyToRun=true", lacking: "\"$@\"")
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.A_publish_whose_restore_lacks_one_of_its_properties_is_flagged(restoreArguments: "-r \"$RID\" \"$@\"", lacking: "-p:PublishReadyToRun=true")
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.A_dockerfile_restoring_a_project_that_imports_an_uncopied_sibling_targets_file_is_flagged
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.A_dockerfile_copying_root_files_except_one_before_restore_is_flagged_for_the_missing_one
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.A_copy_pattern_either_covers_or_misses_a_required_targets_file(copyInstruction: "COPY *.props NuGet.config ./", expectMissing: True)
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.A_copy_pattern_either_covers_or_misses_a_required_targets_file(copyInstruction: "COPY *.props *.targets NuGet.config ./", expectMissing: False)
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.A_comment_between_continuation_lines_does_not_end_the_copy
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.A_file_copied_only_after_the_restore_run_is_flagged
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.A_dockerfile_whose_restore_names_no_csproj_yields_no_application_projects(restoreInstruction: "RUN dotnet restore Fixture.sln")
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.A_dockerfile_whose_restore_names_no_csproj_yields_no_application_projects(restoreInstruction: "RUN dotnet restore")
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.A_dockerfile_with_no_restore_run_fails_naming_that_instead_of_scanning_nothing
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.A_copy_from_another_build_stage_does_not_count
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.A_root_file_copied_to_a_non_root_destination_is_flagged
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.A_copy_with_parents_is_held_to_the_destination_root_not_a_root_file_directory(destination: "./", expectMissing: False)
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.A_copy_with_parents_is_held_to_the_destination_root_not_a_root_file_directory(destination: "./staging/", expectMissing: True)
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.Dockerignore_pattern_excludes_a_file_and_a_later_negation_reincludes_it
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.Dockerignore_directory_glob_matches_a_nested_file_but_not_a_similarly_named_one
+    Elsa.Architecture.Tests.DockerBuildContextGuardTests.An_import_form_this_guard_cannot_resolve_is_reported_instead_of_skipped
+    Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Canonical_domain_api_depends_on_capability_aggregation_and_registers_one_stable_declaration
+    Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Workflow_design_operational_source_contributes_only_composed_authoring_links
+    Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Workflow_design_operational_source_advertises_expression_tooling_only_when_context_and_provider_are_composed
+    Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Expression_language_features_compose_their_tooling_providers_independently(languages: [])
+    Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Expression_language_features_compose_their_tooling_providers_independently(languages: ["JavaScript"])
+    Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Expression_language_features_compose_their_tooling_providers_independently(languages: ["Liquid"])
+    Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Expression_language_features_compose_their_tooling_providers_independently(languages: ["JavaScript", "Liquid"])
+    Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Workflow_design_capabilities_advertise_optional_promotion_version_operations
+    Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Runtime_operational_source_contributes_diagnostics_only_when_a_store_is_composed
+    Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Runtime_execution_browsing_is_advertised_only_for_a_supporting_provider
+    Elsa.Architecture.Tests.DomainManagementApiCompositionTests.Custom_host_exposes_representative_domain_journeys_without_Elsa_Server
+    Elsa.Architecture.Tests.DomainManagementApiCompositionTests.Representative_host_manifest_is_stable_reviewed_and_permission_owned
+    Elsa.Architecture.Tests.DomainManagementApiCompositionTests.Combined_host_maps_activities_design_and_publishing_exactly_once_alongside_migrated_owners
+    Elsa.Architecture.Tests.DomainManagementApiCompositionTests.Omitted_domain_has_neither_routes_nor_capability_while_installed_domains_remain_available
+    Elsa.Architecture.Tests.DomainManagementApiCompositionTests.Activity_availability_diagnostics_is_retrievable_without_request_input
+    Elsa.Architecture.Tests.DomainManagementApiCompositionTests.Stock_server_shell_advertises_one_graph_design_provider_through_authoring_capabilities
+    Elsa.Architecture.Tests.DynamicHttpRouteCompositionTests.Root_module_endpoint_manifest_is_promoted_into_http_shell_and_rejects_workflow_collision
+    Elsa.Architecture.Tests.DynamicHttpRouteCompositionTests.Root_route_outside_workflow_base_does_not_conflict_with_endpoint_relative_workflow_route
+    Elsa.Architecture.Tests.DynamicHttpRouteCompositionTests.Custom_workflow_base_path_is_composed_into_real_shell_collision_validation
+    Elsa.Architecture.Tests.DynamicHttpRouteCompositionTests.Repeated_http_shell_reload_releases_collectible_route_generation_roots
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Only_admitted_consumers_and_pilot_projects_resolve_ef_core_packages
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.An_admitted_host_resolves_only_its_reviewed_EF_packages(host: "Elsa.Foundation.Host")
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.An_admitted_host_resolves_only_its_reviewed_EF_packages(host: "Elsa.Workbench")
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Every_admitted_Rules_project_resolves_only_its_reviewed_EF_closure
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Every_admitted_ETL_project_resolves_only_its_reviewed_EF_closure
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Every_admitted_Secrets_pilot_project_resolves_only_its_reviewed_EF_closure
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Every_admitted_Studio_Preferences_project_resolves_only_its_reviewed_EF_closure
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Every_admitted_Runtime_placement_project_resolves_only_its_reviewed_EF_closure
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Every_admitted_Activities_Design_project_resolves_only_its_reviewed_EF_closure
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Every_admitted_Runtime_bookmarks_project_resolves_only_its_reviewed_EF_closure
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Every_admitted_Dashboard_run_health_project_resolves_only_its_reviewed_EF_closure
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Every_admitted_Publishing_snapshot_review_project_resolves_only_its_reviewed_EF_closure
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Every_admitted_Structured_Logs_project_resolves_only_its_reviewed_EF_closure
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Every_admitted_OpenTelemetry_project_resolves_only_its_reviewed_EF_closure
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Every_admitted_Identity_EF_project_resolves_only_its_reviewed_closure
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Every_admitted_Workflows_Design_EF_project_resolves_only_its_reviewed_closure
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Every_admitted_Elsa3_import_EF_project_resolves_only_its_reviewed_closure
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Every_admitted_activation_guard_project_resolves_only_its_reviewed_EF_closure
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Every_admitted_readability_project_resolves_only_its_reviewed_EF_closure
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Every_admitted_cluster_membership_project_resolves_only_its_reviewed_EF_closure
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Every_admitted_data_protection_project_resolves_only_its_reviewed_EF_closure
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.The_activation_guard_closure_rejects_a_provider_engine
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Workbench_package_allowlist_rejects_an_unreviewed_transitive_wrapper
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Evaluated_assets_detect_an_imported_provider_only_dependency
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Evaluated_assets_reject_missing_or_non_object_dependency_graphs(assets: "{}")
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Evaluated_assets_reject_missing_or_non_object_dependency_graphs(assets: "{\"libraries\": []}")
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Evaluated_assets_reject_missing_or_non_object_dependency_graphs(assets: "{\"libraries\": {}}")
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Evaluated_assets_reject_missing_or_non_object_dependency_graphs(assets: "{\"libraries\": {}, \"targets\": []}")
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Evaluated_assets_reject_a_target_node_missing_from_libraries
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Evaluated_assets_reject_a_dependency_node_missing_from_libraries
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Evaluated_assets_reject_a_library_without_a_known_node_type
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Evaluated_assets_reject_a_package_library_missing_from_every_target
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Evaluated_assets_reject_a_package_target_with_a_different_version_than_its_library_node
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Evaluated_assets_reject_a_target_type_that_differs_from_its_library_node
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.First_party_dependency_edges_cannot_be_conditionally_hidden_from_the_reviewed_restore_graphs
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Conditional_dependency_declarations_are_detected(xml: "<Project><ItemGroup Condition=\"'$(Configuration)'"···)
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Conditional_dependency_declarations_are_detected(xml: "<Project><Choose><When Condition=\"'$(UseContoso)'"···)
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Conditional_dependency_declarations_are_detected(xml: "<Project><Import Project=\"Contoso.props\" Conditi"···)
+    Elsa.Architecture.Tests.EfCoreDependencyGuardTests.Only_the_declared_analyzer_references_are_admitted_as_conditional_dependencies
+    Elsa.Architecture.Tests.EfSchemaVersionStampGuardTests.Every_table_of_every_EF_module_carries_a_required_schema_version_stamp
+    Elsa.Architecture.Tests.EfSchemaVersionStampGuardTests.Every_stamped_table_indexes_its_stamp_without_making_it_unique
+    Elsa.Architecture.Tests.EfSchemaVersionStampGuardTests.Guard_examines_every_declared_provider_context_and_the_tables_number_2119_stamped_and_indexed
+    Elsa.Architecture.Tests.EfSchemaVersionStampGuardTests.Every_declared_provider_context_creates_both_finalization_tables_stamped_and_indexed
+    Elsa.Architecture.Tests.EfSchemaVersionStampGuardTests.Detector_flags_a_table_without_a_required_stamp(name: "a table with no stamp at all", snapshot: "            modelBuilder.Entity(\"Rows\", b =>\n  "···, table: "rows")
+    Elsa.Architecture.Tests.EfSchemaVersionStampGuardTests.Detector_flags_a_table_without_a_required_stamp(name: "a stamp that may be null", snapshot: "            modelBuilder.Entity(\"Rows\", b =>\n  "···, table: "rows")
+    Elsa.Architecture.Tests.EfSchemaVersionStampGuardTests.Detector_flags_a_table_without_a_required_stamp(name: "a differently named version column", snapshot: "            modelBuilder.Entity(\"Preferences\", b"···, table: "preferences")
+    Elsa.Architecture.Tests.EfSchemaVersionStampGuardTests.Detector_flags_a_table_without_a_required_stamp(name: "the only stamp belongs to another table's entity", snapshot: "            modelBuilder.Entity(\"Stamped\", b =>\"···, table: "unstamped")
+    Elsa.Architecture.Tests.EfSchemaVersionStampGuardTests.Detector_accepts_a_table_with_a_required_stamp(name: "a required stamp", snapshot: "            modelBuilder.Entity(\"Rows\", b =>\n  "···)
+    Elsa.Architecture.Tests.EfSchemaVersionStampGuardTests.Detector_accepts_a_table_with_a_required_stamp(name: "a relationship block that maps no table of its own", snapshot: "            modelBuilder.Entity(\"Rows\", b =>\n  "···)
+    Elsa.Architecture.Tests.EfSchemaVersionStampGuardTests.Detector_flags_a_stamp_without_its_own_non_unique_index(name: "a stamp with no index", snapshot: "            modelBuilder.Entity(\"Rows\", b =>\n  "···, table: "rows")
+    Elsa.Architecture.Tests.EfSchemaVersionStampGuardTests.Detector_flags_a_stamp_without_its_own_non_unique_index(name: "a unique index on the stamp", snapshot: "            modelBuilder.Entity(\"Rows\", b =>\n  "···, table: "rows")
+    Elsa.Architecture.Tests.EfSchemaVersionStampGuardTests.Detector_flags_a_stamp_without_its_own_non_unique_index(name: "the stamp only as the first column of a composite "···, snapshot: "            modelBuilder.Entity(\"Rows\", b =>\n  "···, table: "rows")
+    Elsa.Architecture.Tests.EfSchemaVersionStampGuardTests.Detector_flags_a_stamp_without_its_own_non_unique_index(name: "the only stamp index belongs to another table's en"···, snapshot: "            modelBuilder.Entity(\"Indexed\", b =>\"···, table: "unindexed")
+    Elsa.Architecture.Tests.EfSchemaVersionStampGuardTests.Detector_accepts_a_stamp_with_its_own_non_unique_index(name: "a non-unique index under EF's default name", snapshot: "            modelBuilder.Entity(\"Rows\", b =>\n  "···)
+    Elsa.Architecture.Tests.EfSchemaVersionStampGuardTests.Detector_accepts_a_stamp_with_its_own_non_unique_index(name: "a non-unique index under an explicit name", snapshot: "            modelBuilder.Entity(\"Rows\", b =>\n  "···)
+    Elsa.Architecture.Tests.Elsa3MigrationBoundaryTests.CanonicalElsaProjects_DoNotReferenceElsa3AssembliesOrDtos
+    Elsa.Architecture.Tests.Elsa3MigrationBoundaryTests.Elsa3MappingProject_DependsOnAuthoringAndDesignPersistenceButNotRuntimeOrProviderPersistence
+    Elsa.Architecture.Tests.Elsa3MigrationBoundaryTests.AuthoredWorkflowDefinitionInputs_AreAccepted(inputKind: WorkflowDefinitionExportJson)
+    Elsa.Architecture.Tests.Elsa3MigrationBoundaryTests.AuthoredWorkflowDefinitionInputs_AreAccepted(inputKind: WorkflowDefinitionOriginalSource)
+    Elsa.Architecture.Tests.Elsa3MigrationBoundaryTests.AuthoredWorkflowDefinitionInputs_AreAccepted(inputKind: WorkflowDefinitionStringDataRoot)
+    Elsa.Architecture.Tests.Elsa3MigrationBoundaryTests.WorkflowInstanceState_IsRejectedForLiveResume
+    Elsa.Architecture.Tests.Elsa3MigrationBoundaryTests.DefinitionImportInput_RejectsWorkflowInstanceStateKind
+    Elsa.Architecture.Tests.Elsa3MigrationBoundaryTests.DefinitionImportInput_RejectsReservedDiagnosticMetadataKeys
+    Elsa.Architecture.Tests.Elsa3MigrationBoundaryTests.UnsupportedInputKind_CanBeRejectedWithDiagnostics
+    Elsa.Architecture.Tests.Elsa3MigrationBoundaryTests.MigrationResult_RequiresErrorDiagnosticsForFailure
+    Elsa.Architecture.Tests.Elsa3MigrationBoundaryTests.MigrationResult_FailureRequiresDiagnosticsCollection
+    Elsa.Architecture.Tests.Elsa3MigrationBoundaryTests.MigrationResult_SuccessCannotCarryErrors
+    Elsa.Architecture.Tests.Elsa3MigrationBoundaryTests.MetadataSnapshots_AreReadOnlyAndDetachedFromInput
+    Elsa.Architecture.Tests.Elsa3MigrationBoundaryTests.WorkflowDefinitionImporter_ReturnsDiagnosticsForMalformedDefinitions
+    Elsa.Architecture.Tests.Elsa3MigrationBoundaryTests.WorkflowDefinitionImporter_ReturnsDiagnosticsWhenMalformedDefinitionIdIsMissing
+    Elsa.Architecture.Tests.EndpointSecurityTests.Management_permission_names_are_stable_unique_and_action_scoped
+    Elsa.Architecture.Tests.EndpointSecurityTests.Metadata_gate_rejects_missing_and_ambiguous_security_dispositions
+    Elsa.Architecture.Tests.EndpointSecurityTests.Every_management_permission_has_one_active_feature_owned_catalog_contributor
+    Elsa.Architecture.Tests.EndpointSecurityTests.Activities_design_minimal_api_declares_38_owned_secure_routes_with_one_catalog_action_each
+    Elsa.Architecture.Tests.EndpointSecurityTests.Publishing_minimal_api_declares_28_owned_secure_routes_with_one_catalog_action_each
+    Elsa.Architecture.Tests.EndpointSecurityTests.Connections_minimal_api_lists_under_workflow_design_read_or_connections_manage_and_administers_under_its_own_rights
+    Elsa.Architecture.Tests.EndpointSecurityTests.Capability_endpoint_rejects_unauthenticated_calls_by_default
+    Elsa.Architecture.Tests.FeatureClassShapeGuardTests.Every_feature_class_in_an_activated_domain_is_public_and_not_sealed
+    Elsa.Architecture.Tests.FeatureClassShapeGuardTests.Every_activated_domain_has_feature_classes
+    Elsa.Architecture.Tests.FeatureClassShapeGuardTests.The_sweep_finds_feature_classes_and_maps_them_to_domains
+    Elsa.Architecture.Tests.FeatureClassShapeGuardTests.A_sealed_or_non_public_feature_class_is_flagged_and_an_open_public_one_is_not
+    Elsa.Architecture.Tests.FeatureCompositionTests.Every_packable_runtime_library_is_loaded_so_its_features_are_composed
+    Elsa.Architecture.Tests.FeatureCompositionTests.Every_feature_composes_and_each_service_it_registers_resolves
+    Elsa.Architecture.Tests.FeatureDisableEndpointRemovalTests.Disabling_a_feature_removes_its_routes_and_openapi_operations_without_a_restart
+    Elsa.Architecture.Tests.FeatureDisableEndpointRemovalTests.Re_enabling_a_feature_restores_its_openapi_operations
+    Elsa.Architecture.Tests.HostEndpointMetadataTests.Foundation_host_Dockerfile_includes_its_project_reference_graph
+    Elsa.Architecture.Tests.HostProvidedPackagesGuardTests.Every_shared_assembly_a_source_build_runs_with_is_declared_or_exempted_by_name(host: "Elsa.Foundation.Host", overlay: null)
+    Elsa.Architecture.Tests.HostProvidedPackagesGuardTests.Every_shared_assembly_a_source_build_runs_with_is_declared_or_exempted_by_name(host: "Elsa.Foundation.Host", overlay: "appsettings.Development.json")
+    Elsa.Architecture.Tests.HostProvidedPackagesGuardTests.Every_shared_assembly_a_source_build_runs_with_is_declared_or_exempted_by_name(host: "Elsa.Foundation.Host", overlay: "appsettings.Production.json")
+    Elsa.Architecture.Tests.HostProvidedPackagesGuardTests.Every_shared_assembly_a_source_build_runs_with_is_declared_or_exempted_by_name(host: "Elsa.Workbench", overlay: null)
+    Elsa.Architecture.Tests.HostProvidedPackagesGuardTests.Every_shared_assembly_a_source_build_runs_with_is_declared_or_exempted_by_name(host: "Elsa.Workbench", overlay: "appsettings.Development.json")
+    Elsa.Architecture.Tests.HostProvidedPackagesGuardTests.Every_shared_assembly_a_source_build_runs_with_is_declared_or_exempted_by_name(host: "Elsa.Workbench", overlay: "appsettings.Production.json")
+    Elsa.Architecture.Tests.HostProvidedPackagesGuardTests.Every_shared_assembly_a_computed_build_runs_with_is_declared(host: "Elsa.Foundation.Host", overlay: "ComputedVersions/appsettings.Production.json")
+    Elsa.Architecture.Tests.HostProvidedPackagesGuardTests.Every_shared_assembly_a_computed_build_runs_with_is_declared(host: "Elsa.Workbench", overlay: "ComputedVersions/appsettings.Production.json")
+    Elsa.Architecture.Tests.HostProvidedPackagesGuardTests.Every_host_with_an_exemption_declares_its_shares_in_a_computed_production_configuration
+    Elsa.Architecture.Tests.HostProvidedPackagesGuardTests.A_computed_overlay_is_the_committed_one_plus_the_declaration
+    Elsa.Architecture.Tests.HostProvidedPackagesGuardTests.A_computed_build_ships_its_computed_overlays_and_a_source_build_its_committed_ones
+    Elsa.Architecture.Tests.HostProvidedPackagesGuardTests.Every_host_that_shares_assemblies_is_guarded
+    Elsa.Architecture.Tests.HostProvidedPackagesGuardTests.Every_exemption_names_its_reason
+    Elsa.Architecture.Tests.HostProvidedPackagesGuardTests.A_shared_assembly_whose_package_is_not_declared_is_flagged
+    Elsa.Architecture.Tests.HostProvidedPackagesGuardTests.An_exempted_share_does_not_mask_a_different_undeclared_one
+    Elsa.Architecture.Tests.HostProvidedPackagesGuardTests.An_exemption_for_an_assembly_the_host_no_longer_shares_is_flagged
+    Elsa.Architecture.Tests.HostProvidedPackagesGuardTests.An_exemption_for_a_share_the_source_build_declares_is_flagged
+    Elsa.Architecture.Tests.LineAClosureGuardTests.Line_a_members_reference_only_line_a_members
+    Elsa.Architecture.Tests.LineAClosureGuardTests.Every_line_a_member_names_an_existing_project
+    Elsa.Architecture.Tests.LineAClosureGuardTests.A_line_a_reference_to_a_line_b_project_is_flagged
+    Elsa.Architecture.Tests.ManagementApiContractTests.Contract_contains_the_exact_canonical_path_inventory
+    Elsa.Architecture.Tests.ManagementApiContractTests.Contract_contains_the_exact_canonical_schema_inventory
+    Elsa.Architecture.Tests.ManagementApiContractTests.Contract_excludes_the_legacy_server_management_surface
+    Elsa.Architecture.Tests.ManagementApiOperationInventoryTests.Every_former_facade_operation_has_exactly_one_canonical_owner_or_removal_rationale
+    Elsa.Architecture.Tests.NoLiteralProjectVersionGuardTests.No_project_under_src_declares_a_literal_version_property
+    Elsa.Architecture.Tests.NoLiteralProjectVersionGuardTests.Guard_detects_a_synthetic_literal_version_property(property: "Version")
+    Elsa.Architecture.Tests.NoLiteralProjectVersionGuardTests.Guard_detects_a_synthetic_literal_version_property(property: "VersionPrefix")
+    Elsa.Architecture.Tests.NoLiteralProjectVersionGuardTests.Guard_detects_a_synthetic_literal_version_property(property: "VersionSuffix")
+    Elsa.Architecture.Tests.NoLiteralProjectVersionGuardTests.Guard_detects_a_synthetic_literal_version_property(property: "PackageVersion")
+    Elsa.Architecture.Tests.NoLiteralProjectVersionGuardTests.Guard_detects_a_synthetic_literal_version_property(property: "ElsaVersion")
+    Elsa.Architecture.Tests.NoLiteralProjectVersionGuardTests.Guard_detects_a_synthetic_literal_version_property(property: "ElsaContractsVersion")
+    Elsa.Architecture.Tests.NoLiteralProjectVersionGuardTests.Guard_does_not_flag_a_clean_project
+    Elsa.Architecture.Tests.NoLiteralProjectVersionGuardTests.Guard_does_not_flag_a_central_package_management_item
+    Elsa.Architecture.Tests.NuGetLockFileTests.Every_solution_project_has_a_committed_lock_file_and_every_lock_file_a_solution_project
+    Elsa.Architecture.Tests.NuGetLockFileTests.Every_packable_nodes_pinned_transitive_edges_are_the_packages_restore_lists_for_its_nuspec
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Activities_design_native_openapi_metadata_uses_only_non_collectible_types
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Publishing_native_openapi_metadata_uses_only_non_collectible_types
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Accepted_metadata_gets_one_immutable_value_only_marker
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Serializer_metadata_objects_are_rejected_even_for_a_stable_contract_type
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Marker_and_validator_have_null_guards_and_reject_invalid_marker_values
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Dynamic_api_explorer_refresh_registration_is_idempotent_and_null_guarded
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.RequireStableOpenApi_returns_the_same_builder_and_registers_a_final_convention
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Stable_openapi_convention_removes_compiler_only_handler_metadata_before_validation
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Enforcement_is_on_for_a_host_that_configured_nothing
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Suppressed_enforcement_accepts_a_collectible_contract_and_marks_nothing
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Suppressed_enforcement_still_strips_compiler_only_handler_metadata
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Final_convention_runs_after_metadata_added_by_ordinary_conventions
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Missing_and_duplicate_ownership_are_rejected_before_publication
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.An_endpoint_owned_by_exactly_one_module_passes_ownership_validation
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_collectible_api_explorer_artifact_is_rejected
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Unknown_metadata_getter_fails_closed_without_exposing_the_object
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Nested_collectible_metadata_graph_is_rejected
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Private_collectible_metadata_graph_is_rejected
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Stable_generic_metadata_with_collectible_type_argument_is_rejected
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Stable_delegate_target_with_private_collectible_state_is_rejected
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_multicast_delegate_invocation_is_inspected
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Unbounded_metadata_enumeration_fails_closed
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Enumerable_private_collectible_state_is_rejected_after_yielded_values_are_inspected
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Stable_generic_method_metadata_with_collectible_signature_is_rejected
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Stable_declared_delegate_with_collectible_signature_is_rejected
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Conflicting_existing_lifetime_marker_fails_closed
+    Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Diagnostics_are_group_aware_and_stable_across_repeated_validation
+    Elsa.Architecture.Tests.OpenApiLifetimeCollectibilityTests.Collectible_contract_metadata_is_retained_by_real_openapi_generation
+    Elsa.Architecture.Tests.OpenApiLifetimeCollectibilityTests.Stable_contract_metadata_releases_the_collectible_implementation
+    Elsa.Architecture.Tests.OpenApiLifetimeCollectibilityTests.Rejected_candidate_never_replaces_the_previous_callable_documented_generation
+    Elsa.Architecture.Tests.OpenApiLifetimeCollectibilityTests.Accepted_replacement_documents_one_complete_generation_before_and_after_the_swap
+    Elsa.Architecture.Tests.OpenIddictPersistenceArchitectureTests.Identity_core_and_implementation_projects_are_free_of_concrete_persistence_dependencies
+    Elsa.Architecture.Tests.OpenIddictPersistenceArchitectureTests.OpenIddict_behavior_package_is_free_of_concrete_persistence_dependencies
+    Elsa.Architecture.Tests.OpenIddictPersistenceArchitectureTests.Elsa_OpenIddict_package_has_no_EF_packages_or_wrapper_sources
+    Elsa.Architecture.Tests.OpenIddictPersistenceArchitectureTests.Workbench_owns_the_vendor_package
+    Elsa.Architecture.Tests.PackageRangesBuildCheckTests.An_unbounded_range_on_a_project_reference_fails_while_a_third_partys_passes
+    Elsa.Architecture.Tests.PackageRangesBuildCheckTests.A_bounded_range_on_a_project_reference_and_any_range_on_a_third_party_pass
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.Without_computed_input_a_package_is_its_lines_dev_version
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.A_project_outside_src_keeps_its_own_version
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.Package_version_path_classifier_matches_backend_roots_and_excludes_tests_and_studio(projectRoot: "Essentials/src", versioned: True)
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.Package_version_path_classifier_matches_backend_roots_and_excludes_tests_and_studio(projectRoot: "Essentials/apps", versioned: True)
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.Package_version_path_classifier_matches_backend_roots_and_excludes_tests_and_studio(projectRoot: "Extensions/Agent/src", versioned: True)
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.Package_version_path_classifier_matches_backend_roots_and_excludes_tests_and_studio(projectRoot: "Essentials/tests", versioned: False)
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.Package_version_path_classifier_matches_backend_roots_and_excludes_tests_and_studio(projectRoot: "Extensions/Agent/tests", versioned: False)
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.Package_version_path_classifier_matches_backend_roots_and_excludes_tests_and_studio(projectRoot: "Extensions/Agent/studio", versioned: False)
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.The_dev_version_and_the_assembly_version_come_from_the_projects_own_line(lineA: False, expected: "5.1.0-dev", assemblyVersion: "5.0.0.0")
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.The_dev_version_and_the_assembly_version_come_from_the_projects_own_line(lineA: True, expected: "4.3.0-dev", assemblyVersion: "4.0.0.0")
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.Computed_input_sets_the_versions_and_the_repository_commit
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.Without_computed_input_a_global_version_is_the_package_version
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.An_override_of_the_version_fails(body: "<PropertyGroup><Version>9.9.9</Version></PropertyG"···, globalProperties: [], computed: True, expectedCode: "ELSAPV003")
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.An_override_of_the_version_fails(body: "", globalProperties: ["Version=4.0.0-preview.123"], computed: True, expectedCode: "ELSAPV003")
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.An_override_of_the_version_fails(body: "", globalProperties: ["PackageVersion=1.2.3"], computed: False, expectedCode: "ELSAPV004")
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.An_override_of_the_version_fails(body: "<PropertyGroup><PackageVersion>1.2.3</PackageVersi"···, globalProperties: [], computed: False, expectedCode: "ELSAPV004")
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.An_override_of_the_version_fails(body: "<PropertyGroup><PackageVersion>1.2.3</PackageVersi"···, globalProperties: [], computed: True, expectedCode: "ELSAPV004")
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.An_override_of_the_version_fails(body: "<PropertyGroup><AssemblyVersion>1.0.0.0</AssemblyV"···, globalProperties: [], computed: False, expectedCode: "ELSAPV008")
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.An_override_of_the_version_fails(body: "", globalProperties: ["AssemblyVersion=4.0.8.0"], computed: True, expectedCode: "ELSAPV008")
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.A_computed_version_off_the_projects_line_fails
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.Computed_values_without_their_commit_fail
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.A_packable_project_the_computation_leaves_out_cannot_be_packed(target: "BeforeBuild", fails: False)
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.A_packable_project_the_computation_leaves_out_cannot_be_packed(target: "GenerateNuspec", fails: True)
+    Elsa.Architecture.Tests.PackageVersionBuildCheckTests.A_packable_project_the_computation_leaves_out_cannot_be_packed(target: "_GetProjectVersion", fails: True)
+    Elsa.Architecture.Tests.PackageVersioningPackTests.A_dev_pack_leaves_every_range_unbounded_and_carries_no_fingerprint
+    Elsa.Architecture.Tests.PackageVersioningPackTests.A_pack_with_only_a_global_version_matches_todays_unbounded_ranges_and_carries_no_fingerprint
+    Elsa.Architecture.Tests.PackageVersioningPackTests.A_computed_pack_carries_its_version_fingerprint_and_source_commit
+    Elsa.Architecture.Tests.PackageVersioningPackTests.A_no_build_pack_with_other_version_input_than_its_build_fails
+    Elsa.Architecture.Tests.PackageVersioningPackTests.A_computation_for_another_commit_fails_the_pack
+    Elsa.Architecture.Tests.PackageVersioningPackTests.A_third_partys_range_left_unbounded_by_hand_still_passes_the_pack
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.First_party_runtime_libraries_have_no_permission_bypass
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.The_scan_inspects_every_runtime_library_endpoint_and_authorization_context
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.Every_reviewed_permission_claim_reader_still_reads_permission_claims
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "FastEndpoints Permissions")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "FastEndpoints PermissionsAll")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "FastEndpoints package Permissions")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "FastEndpoints-derived Permissions wrapper")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "FindFirst")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "FindFirstValue")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "FindFirstValue extension")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "IPrincipal extension")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "IIdentity extension")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "FindAll")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "FindAll predicate")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "HasClaim")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "ClaimsIdentity HasClaim")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Claims Any")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Claims Where")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Claims Select Contains")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Claims Select ToArray Contains")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Claims ToList")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Claims AsEnumerable")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Identities SelectMany")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Helper returning Claims")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Predicate helper inside a lambda")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Claim member passed to a comparing helper")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Predicate helper with an alternative")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "String receiver")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Predicate factory")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Predicate factory with a contributed key")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Ref local")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Local alias")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Captured alias")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Static field alias")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Auto-property alias")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Permission returned by a helper")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Provider permission constant")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Contributed key alone")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Table-driven contributed key alone")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Provider permission constant alone")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Helper parameter")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Helper parameter through a closure")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "In parameter")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Iterator helper parameter")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Async helper parameter")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Helper chain in another type")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_planted_permission_bypass_is_reported(caseName: "Async method")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_value_that_only_looks_like_a_permission_is_not_reported(caseName: "Tenant of a permission-named record")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_value_that_only_looks_like_a_permission_is_not_reported(caseName: "Setting of a permission-named service")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_value_that_only_looks_like_a_permission_is_not_reported(caseName: "Permission comparison beside Claims")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_value_that_only_looks_like_a_permission_is_not_reported(caseName: "Permission length into a lookup")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_value_that_only_looks_like_a_permission_is_not_reported(caseName: "Owner id of a permission-named type")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_value_that_only_looks_like_a_permission_is_not_reported(caseName: "Authorization result beside claims")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_value_that_only_looks_like_a_permission_is_not_reported(caseName: "Authorization helper in a claims lambda")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_value_that_only_looks_like_a_permission_is_not_reported(caseName: "Wildcard literal")
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_permission_contributor_the_scan_cannot_construct_fails_the_scan
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.Claim_reads_that_do_not_decide_a_permission_are_not_reported
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.Transport_authorization_contexts_are_not_allowed_to_read_permission_claims_directly
+    Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.A_reviewed_permission_claim_reader_may_not_use_a_fastendpoints_permission_helper
+    Elsa.Architecture.Tests.PermissionNamingTests.Every_first_party_catalog_permission_is_a_lowercase_resource_verb_name
+    Elsa.Architecture.Tests.PermissionNamingTests.The_naming_rule_accepts_only_lowercase_resource_verb_names(key: "identity/users:read", expected: True)
+    Elsa.Architecture.Tests.PermissionNamingTests.The_naming_rule_accepts_only_lowercase_resource_verb_names(key: "workflows/runtime/javascript:execute", expected: True)
+    Elsa.Architecture.Tests.PermissionNamingTests.The_naming_rule_accepts_only_lowercase_resource_verb_names(key: "studio/preferences/defaults:manage", expected: True)
+    Elsa.Architecture.Tests.PermissionNamingTests.The_naming_rule_accepts_only_lowercase_resource_verb_names(key: "workflows/activity-executions:inspect-values", expected: True)
+    Elsa.Architecture.Tests.PermissionNamingTests.The_naming_rule_accepts_only_lowercase_resource_verb_names(key: "identity.users.read", expected: False)
+    Elsa.Architecture.Tests.PermissionNamingTests.The_naming_rule_accepts_only_lowercase_resource_verb_names(key: "identity.users:read", expected: False)
+    Elsa.Architecture.Tests.PermissionNamingTests.The_naming_rule_accepts_only_lowercase_resource_verb_names(key: "Identity/Users:Read", expected: False)
+    Elsa.Architecture.Tests.PermissionNamingTests.The_naming_rule_accepts_only_lowercase_resource_verb_names(key: "identity/users", expected: False)
+    Elsa.Architecture.Tests.PermissionNamingTests.The_naming_rule_accepts_only_lowercase_resource_verb_names(key: "identity/*:read", expected: False)
+    Elsa.Architecture.Tests.PermissionNamingTests.The_naming_rule_accepts_only_lowercase_resource_verb_names(key: "identity//users:read", expected: False)
+    Elsa.Architecture.Tests.PermissionNamingTests.The_naming_rule_accepts_only_lowercase_resource_verb_names(key: "identity/users:read:all", expected: False)
+    Elsa.Architecture.Tests.PinnedTransitivePackTests.Pack_writes_exactly_the_pinned_transitive_packages_restore_lists_and_the_lock_file_adds_only_the_privately_reached
+    Elsa.Architecture.Tests.ProductionPathAgreementTests.The_analyzer_wiring_and_the_guards_agree_on_every_project_in_the_repository
+    Elsa.Architecture.Tests.ProductionPathAgreementTests.Both_definitions_classify_each_kind_of_location_the_same_way(directory: "Essentials/src/Tasks/Elsa.Tasks/", production: True)
+    Elsa.Architecture.Tests.ProductionPathAgreementTests.Both_definitions_classify_each_kind_of_location_the_same_way(directory: "Essentials/apps/Elsa.Workbench/", production: True)
+    Elsa.Architecture.Tests.ProductionPathAgreementTests.Both_definitions_classify_each_kind_of_location_the_same_way(directory: "Extensions/Agent/src/Core/", production: True)
+    Elsa.Architecture.Tests.ProductionPathAgreementTests.Both_definitions_classify_each_kind_of_location_the_same_way(directory: "Essentials/tests/Tasks/Tests/", production: False)
+    Elsa.Architecture.Tests.ProductionPathAgreementTests.Both_definitions_classify_each_kind_of_location_the_same_way(directory: "Extensions/Agent/tests/Tests/", production: False)
+    Elsa.Architecture.Tests.ProductionPathAgreementTests.Both_definitions_classify_each_kind_of_location_the_same_way(directory: "Extensions/Attention/studio/Elsa.Studio.Attention/", production: False)
+    Elsa.Architecture.Tests.ProductionPathAgreementTests.Both_definitions_classify_each_kind_of_location_the_same_way(directory: "Essentials/build/Analyzers/", production: False)
+    Elsa.Architecture.Tests.ProductionPathAgreementTests.Both_definitions_classify_each_kind_of_location_the_same_way(directory: "Essentials/srcs/Elsa.Other/", production: False)
+    Elsa.Architecture.Tests.ProductionPathAgreementTests.Both_definitions_classify_each_kind_of_location_the_same_way(directory: "tools/maps/Elsa.Maps.Generator/", production: False)
+    Elsa.Architecture.Tests.ProductionPathAgreementTests.Both_definitions_classify_each_kind_of_location_the_same_way(directory: "samples/Elsa.Samples.Nuplane.Notes/", production: False)
+    Elsa.Architecture.Tests.PublicApiFilesGuardTests.Every_project_that_tracks_its_public_api_has_both_files_and_the_analyzer
+    Elsa.Architecture.Tests.PublicApiFilesGuardTests.Every_project_with_a_publicapi_file_tracks_its_public_api
+    Elsa.Architecture.Tests.PublicApiFilesGuardTests.Only_packable_production_projects_track_their_public_api
+    Elsa.Architecture.Tests.PublicApiFilesGuardTests.The_sweep_covers_every_module_root_and_sees_the_tracking_projects
+    Elsa.Architecture.Tests.PublicApiFilesGuardTests.Each_inconsistent_state_is_flagged_and_the_consistent_one_is_not
+    Elsa.Architecture.Tests.RepoPathsTests.Is_not_test_file_is_judged_by_the_path_relative_to_the_repository_root(repoRelativePath: "src/Module/Feature.cs", expected: True)
+    Elsa.Architecture.Tests.RepoPathsTests.Is_not_test_file_is_judged_by_the_path_relative_to_the_repository_root(repoRelativePath: "Extensions/Ext/tests/ExtTests.cs", expected: False)
+    Elsa.Architecture.Tests.RepoPathsTests.Is_not_test_file_is_judged_by_the_path_relative_to_the_repository_root(repoRelativePath: "tests/Module/ModuleTests.cs", expected: False)
+    Elsa.Architecture.Tests.RepoPathsTests.Is_build_output_is_judged_by_the_path_relative_to_the_repository_root(repoRelativePath: "src/Module/obj/Generated.cs", expected: True)
+    Elsa.Architecture.Tests.RepoPathsTests.Is_build_output_is_judged_by_the_path_relative_to_the_repository_root(repoRelativePath: "obj/TopLevel.cs", expected: True)
+    Elsa.Architecture.Tests.RepoPathsTests.Is_build_output_is_judged_by_the_path_relative_to_the_repository_root(repoRelativePath: "src/Module/Feature.cs", expected: False)
+    Elsa.Architecture.Tests.RepoPathsTests.Is_build_output_is_judged_by_the_path_relative_to_the_repository_root(repoRelativePath: "src/binary/Thing.cs", expected: False)
+    Elsa.Architecture.Tests.RepoPathsTests.Is_build_output_also_accepts_a_path_already_relative_and_slash_normalized
+    Elsa.Architecture.Tests.RestCompatibilityTests.Equivalent_before_and_after_authoring_uses_the_shared_gate_without_unrelated_registry_entries
+    Elsa.Architecture.Tests.RetiredPersistenceFamilyGuardTests.No_project_package_feed_or_configuration_names_a_retired_persistence_family
+    Elsa.Architecture.Tests.RetiredPersistenceFamilyGuardTests.No_project_or_directory_is_named_after_a_retired_persistence_family
+    Elsa.Architecture.Tests.RetiredPersistenceFamilyGuardTests.No_solution_filter_selects_a_retired_persistence_family
+    Elsa.Architecture.Tests.RetiredPersistenceFamilyGuardTests.Guard_detects_a_synthetic_reference_in_each_scanned_shape
+    Elsa.Architecture.Tests.RetiredPersistenceFamilyGuardTests.Only_the_foundation_historical_path_ledger_is_exempt_from_configuration_content_scanning
+    Elsa.Architecture.Tests.RetiredTermEnforcementGuardTests.Every_production_project_compiles_with_the_analyzer
+    Elsa.Architecture.Tests.RetiredTermEnforcementGuardTests.Only_the_root_build_file_decides_which_projects_get_the_analyzer
+    Elsa.Architecture.Tests.RetiredTermEnforcementGuardTests.No_analyzer_config_lowers_the_retired_term_diagnostics_or_marks_source_as_generated
+    Elsa.Architecture.Tests.RetiredTermEnforcementGuardTests.Every_retired_term_section_matches_production_source
+    Elsa.Architecture.Tests.RetiredTermEnforcementGuardTests.No_source_or_build_file_suppresses_the_retired_term_diagnostics_or_turns_analyzers_off
+    Elsa.Architecture.Tests.RetiredTermEnforcementGuardTests.The_sweeps_read_the_repository_config_its_production_source_and_the_analyzer_rules
+    Elsa.Architecture.Tests.RetiredTermEnforcementGuardTests.Each_way_to_weaken_the_analyzer_is_flagged_and_an_honest_config_is_not
+    Elsa.Architecture.Tests.ReusableActivityArchitectureTests.Elsa4_legacy_workflow_as_activity_projects_and_model_are_absent
+    Elsa.Architecture.Tests.ReusableActivityArchitectureTests.Graph_runtime_references_only_stable_runtime_and_expression_contracts
+    Elsa.Architecture.Tests.ReusableActivityArchitectureTests.Graph_design_may_project_workflow_design_structure_but_does_not_reference_runtime_implementations
+    Elsa.Architecture.Tests.ReusableActivityArchitectureTests.Publishing_entity_framework_bridge_commits_through_the_design_and_runtime_EF_seams_only
+    Elsa.Architecture.Tests.ReusableActivityArchitectureTests.Elsa3_import_ef_bridge_references_design_ef_lanes_and_runtime_core_contracts_only
+    Elsa.Architecture.Tests.RuntimeAlterationApiContractTests.Plan_job_and_outcome_schemas_match_the_serialized_safe_views
+    Elsa.Architecture.Tests.RuntimeAlterationApiContractTests.Every_implemented_safe_server_error_is_declared
+    Elsa.Architecture.Tests.RuntimeAlterationArchitectureTests.Runtime_alteration_assemblies_remain_design_free
+    Elsa.Architecture.Tests.RuntimeAlterationArchitectureTests.Durable_alteration_wire_models_do_not_expose_clr_handler_identities
+    Elsa.Architecture.Tests.RuntimeAlterationArchitectureTests.Runtime_composition_registers_every_builtin_handler_store_and_capability_route
+    Elsa.Architecture.Tests.RuntimeCoreEngineShapeGuardTests.RuntimeCore_ContainsNoEngineShapedTypes
+    Elsa.Architecture.Tests.RuntimeCoreEngineShapeGuardTests.EngineAssembly_ContainsTheEngineShapedTypes
+    Elsa.Architecture.Tests.RuntimeCoreEngineShapeGuardTests.RuntimeRecoveryCursorStore_LivesInTheRuntimeImplementationAssembly
+    Elsa.Architecture.Tests.RuntimeExecutionPlacementPersistenceArchitectureTests.Production_adapter_is_provider_neutral_and_has_no_migrations
+    Elsa.Architecture.Tests.RuntimeExecutionPlacementPersistenceArchitectureTests.D01_surface_contains_one_context_entity_store_registration_and_feature
+    Elsa.Architecture.Tests.RuntimeExecutionPlacementPersistenceArchitectureTests.D02_D03_surface_contains_the_shared_context_entities_mappings_registration_and_feature
+    Elsa.Architecture.Tests.RuntimeExecutionSliceDependencyTests.RuntimeCore_DoesNotReferenceWorkflowDesignOrPublishing
+    Elsa.Architecture.Tests.RuntimeExecutionSliceDependencyTests.RuntimeApi_DoesNotReferenceWorkflowDesignOrPublishing
+    Elsa.Architecture.Tests.RuntimeExecutionSliceDependencyTests.PublishingApi_DoesNotReferenceRuntimeApi
+    Elsa.Architecture.Tests.RuntimeExecutionSliceDependencyTests.PublishingEngine_DoesNotReferenceRuntimeApi
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Every_endpoint_of_an_owner_with_its_own_failure_shapes_answers_a_refusal_with_409_and_its_code(feature: typeof(Elsa.Activities.Bpmn.Interchange.ActivitiesBpmnInterchangeFeature))
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Every_endpoint_of_an_owner_with_its_own_failure_shapes_answers_a_refusal_with_409_and_its_code(feature: typeof(Elsa.Activities.Design.Api.ActivitiesDesignApiFeature))
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Every_endpoint_of_an_owner_with_its_own_failure_shapes_answers_a_refusal_with_409_and_its_code(feature: typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature))
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Every_endpoint_of_an_owner_with_its_own_failure_shapes_answers_a_refusal_with_409_and_its_code(feature: typeof(Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature))
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Every_endpoint_of_an_owner_with_its_own_failure_shapes_answers_a_refusal_with_409_and_its_code(feature: typeof(Elsa.Modularity.Api.ModularityApiFeature))
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Every_endpoint_of_an_owner_with_its_own_failure_shapes_answers_a_refusal_with_409_and_its_code(feature: typeof(Elsa.Workflows.Design.Api.WorkflowsDesignApiFeature))
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Every_endpoint_of_an_owner_with_its_own_failure_shapes_answers_a_refusal_with_409_and_its_code(feature: typeof(Elsa.Workflows.Publishing.Api.WorkflowsPublishingApiFeature))
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Every_endpoint_of_an_owner_with_its_own_failure_shapes_answers_a_refusal_with_409_and_its_code(feature: typeof(Elsa.Workflows.Runtime.Api.WorkflowsRuntimeApiFeature))
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Every_endpoint_of_an_owner_with_its_own_failure_shapes_answers_a_refusal_with_409_and_its_code(feature: typeof(Elsa3.Activities.Design.Import.Elsa3ImportActivitiesFeature))
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Every_endpoint_of_an_owner_with_its_own_failure_shapes_answers_a_dormancy_refusal_with_409_its_code_feature_and_reason(feature: typeof(Elsa.Activities.Bpmn.Interchange.ActivitiesBpmnInterchangeFeature))
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Every_endpoint_of_an_owner_with_its_own_failure_shapes_answers_a_dormancy_refusal_with_409_its_code_feature_and_reason(feature: typeof(Elsa.Activities.Design.Api.ActivitiesDesignApiFeature))
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Every_endpoint_of_an_owner_with_its_own_failure_shapes_answers_a_dormancy_refusal_with_409_its_code_feature_and_reason(feature: typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature))
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Every_endpoint_of_an_owner_with_its_own_failure_shapes_answers_a_dormancy_refusal_with_409_its_code_feature_and_reason(feature: typeof(Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature))
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Every_endpoint_of_an_owner_with_its_own_failure_shapes_answers_a_dormancy_refusal_with_409_its_code_feature_and_reason(feature: typeof(Elsa.Modularity.Api.ModularityApiFeature))
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Every_endpoint_of_an_owner_with_its_own_failure_shapes_answers_a_dormancy_refusal_with_409_its_code_feature_and_reason(feature: typeof(Elsa.Workflows.Design.Api.WorkflowsDesignApiFeature))
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Every_endpoint_of_an_owner_with_its_own_failure_shapes_answers_a_dormancy_refusal_with_409_its_code_feature_and_reason(feature: typeof(Elsa.Workflows.Publishing.Api.WorkflowsPublishingApiFeature))
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Every_endpoint_of_an_owner_with_its_own_failure_shapes_answers_a_dormancy_refusal_with_409_its_code_feature_and_reason(feature: typeof(Elsa.Workflows.Runtime.Api.WorkflowsRuntimeApiFeature))
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Every_endpoint_of_an_owner_with_its_own_failure_shapes_answers_a_dormancy_refusal_with_409_its_code_feature_and_reason(feature: typeof(Elsa3.Activities.Design.Import.Elsa3ImportActivitiesFeature))
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Publishing_puts_the_refusal_code_in_the_error_code_of_every_endpoint
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.Every_owner_that_registers_its_own_failure_services_is_checked_endpoint_by_endpoint
+    Elsa.Architecture.Tests.SchemaWriteRefusalMappingGuardTests.An_owner_without_failure_services_answers_a_refusal_in_and_outside_the_pipeline
+    Elsa.Architecture.Tests.SecretsEfPersistencePilotArchitectureTests.Pilot_paths_and_projects_are_the_reviewed_adr_0072_allowlist
+    Elsa.Architecture.Tests.SecretsEfPersistencePilotArchitectureTests.Policy_and_module_packages_stay_provider_free
+    Elsa.Architecture.Tests.SecretsEfPersistencePilotArchitectureTests.PostgreSql_shell_proof_supplies_exactly_one_relational_provider_package
+    Elsa.Architecture.Tests.SecretsEfPersistencePilotArchitectureTests.MySql_shell_proof_supplies_exactly_one_relational_provider_package
+    Elsa.Architecture.Tests.SecretsEfPersistencePilotArchitectureTests.Package_feed_probe_has_one_provider_and_no_compile_time_secrets_ef_module_reference
+    Elsa.Architecture.Tests.SecretsEfPersistencePilotArchitectureTests.Module_package_declares_host_integrated_nuplane_loading
+    Elsa.Architecture.Tests.SecretsEfPersistencePilotArchitectureTests.Pilot_sources_are_the_exact_reviewed_inventory
+    Elsa.Architecture.Tests.SecretsEfPersistencePilotArchitectureTests.Workbench_enables_the_secrets_ef_module_by_default
+    Elsa.Architecture.Tests.SharedAssemblyClosureGuardTests.Shared_elsa_assemblies_are_closed_under_elsa_project_references(host: "Elsa.Foundation.Host")
+    Elsa.Architecture.Tests.SharedAssemblyClosureGuardTests.Shared_elsa_assemblies_are_closed_under_elsa_project_references(host: "Elsa.Workbench")
+    Elsa.Architecture.Tests.SharedAssemblyClosureGuardTests.The_closure_scan_examines_real_elsa_shares
+    Elsa.Architecture.Tests.SharedAssemblyClosureGuardTests.Every_host_shares_the_contracts_of_the_membership_it_composes(host: "Elsa.Foundation.Host")
+    Elsa.Architecture.Tests.SharedAssemblyClosureGuardTests.Every_host_shares_the_contracts_of_the_membership_it_composes(host: "Elsa.Workbench")
+    Elsa.Architecture.Tests.SharedAssemblyClosureGuardTests.Foundation_host_shares_the_ef_closure_its_membership_provider_carries
+    Elsa.Architecture.Tests.SharedAssemblyClosureGuardTests.The_host_composed_shares_reach_only_line_a
+    Elsa.Architecture.Tests.SharedAssemblyClosureGuardTests.A_shared_assembly_whose_elsa_dependency_is_not_shared_is_flagged
+    Elsa.Architecture.Tests.SharedAssemblyMajorVersionGuardTests.Every_share_takes_the_reference_to_the_assembly_the_host_carries_under_nuplanes_own_matcher(host: "Elsa.Foundation.Host")
+    Elsa.Architecture.Tests.SharedAssemblyMajorVersionGuardTests.Every_share_takes_the_reference_to_the_assembly_the_host_carries_under_nuplanes_own_matcher(host: "Elsa.Workbench")
+    Elsa.Architecture.Tests.SharedAssemblyMajorVersionGuardTests.Every_share_is_an_assembly_the_host_carries(host: "Elsa.Foundation.Host")
+    Elsa.Architecture.Tests.SharedAssemblyMajorVersionGuardTests.Every_share_is_an_assembly_the_host_carries(host: "Elsa.Workbench")
+    Elsa.Architecture.Tests.SharedAssemblyMajorVersionGuardTests.Every_elsa_share_with_a_project_is_evaluated_and_carries_its_lines_major
+    Elsa.Architecture.Tests.SharedAssemblyMajorVersionGuardTests.A_share_nuplanes_matcher_does_not_take_is_flagged
+    Elsa.Architecture.Tests.SharedAssemblyMajorVersionGuardTests.A_share_nuplane_cannot_bind_fails_as_the_host_fails_to_start
+    Elsa.Architecture.Tests.SpecScannerTests.Notes_come_only_from_explicit_metadata(text: "## Out of scope\nDeliberate exclusions belong here"···, expected: "-")
+    Elsa.Architecture.Tests.SpecScannerTests.Notes_come_only_from_explicit_metadata(text: "Retained context, deferred alternatives and supers"···, expected: "-")
+    Elsa.Architecture.Tests.SpecScannerTests.Notes_come_only_from_explicit_metadata(text: "**Notes**: Awaiting owner confirmation.", expected: "Awaiting owner confirmation.")
+    Elsa.Architecture.Tests.SpecScannerTests.Notes_come_only_from_explicit_metadata(text: "**Notes**: Deferred until the provider is ready.\n"···, expected: "Deferred until the provider is ready.")
+    Elsa.Architecture.Tests.SpecScannerTests.Notes_come_only_from_explicit_metadata(text: "**Notes**:No space after the colon.", expected: "No space after the colon.")
+    Elsa.Architecture.Tests.SpecScannerTests.Notes_come_only_from_explicit_metadata(text: "**Notes**:\t  Review the migration.  \r\n", expected: "Review the migration.")
+    Elsa.Architecture.Tests.SpecScannerTests.Notes_come_only_from_explicit_metadata(text: "**Notes**:", expected: "-")
+    Elsa.Architecture.Tests.SpecScannerTests.Notes_come_only_from_explicit_metadata(text: "**Notes**:  \r\n## Out of scope\nDeferred alternat"···, expected: "-")
+    Elsa.Architecture.Tests.SpecScannerTests.Notes_come_only_from_explicit_metadata(text: "**Notes**: First note.\n**Notes**: Second note.", expected: "First note.")
+    Elsa.Architecture.Tests.SpecScannerTests.Title_prefers_Speckit_then_plain_H1_then_folder_id(text: "# Feature Specification: Speckit title\n# 108 — Ot"···, expected: "Speckit title")
+    Elsa.Architecture.Tests.SpecScannerTests.Title_prefers_Speckit_then_plain_H1_then_folder_id(text: "# Plain first heading\n# Feature Specification: Pr"···, expected: "Preferred title")
+    Elsa.Architecture.Tests.SpecScannerTests.Title_prefers_Speckit_then_plain_H1_then_folder_id(text: "# Runtime API Agent Dispatch", expected: "Runtime API Agent Dispatch")
+    Elsa.Architecture.Tests.SpecScannerTests.Title_prefers_Speckit_then_plain_H1_then_folder_id(text: "# 108 — BPMN Container Activity (Phase 1 slice)", expected: "BPMN Container Activity (Phase 1 slice)")
+    Elsa.Architecture.Tests.SpecScannerTests.Title_prefers_Speckit_then_plain_H1_then_folder_id(text: "# 136 - BPMN collaboration import", expected: "BPMN collaboration import")
+    Elsa.Architecture.Tests.SpecScannerTests.Title_prefers_Speckit_then_plain_H1_then_folder_id(text: "# 112\t—\t Child cancellation  \r\n", expected: "Child cancellation")
+    Elsa.Architecture.Tests.SpecScannerTests.Title_prefers_Speckit_then_plain_H1_then_folder_id(text: "## Not a title\n# First title\n# Second title", expected: "First title")
+    Elsa.Architecture.Tests.SpecScannerTests.Title_prefers_Speckit_then_plain_H1_then_folder_id(text: "# Spec 131: Coalesced read memo", expected: "Spec 131: Coalesced read memo")
+    Elsa.Architecture.Tests.SpecScannerTests.Title_prefers_Speckit_then_plain_H1_then_folder_id(text: "# Phase 2 — Catch events", expected: "Phase 2 — Catch events")
+    Elsa.Architecture.Tests.SpecScannerTests.Title_prefers_Speckit_then_plain_H1_then_folder_id(text: "# 2026-10-16 Roadmap", expected: "2026-10-16 Roadmap")
+    Elsa.Architecture.Tests.SpecScannerTests.Title_prefers_Speckit_then_plain_H1_then_folder_id(text: "# 2026 roadmap", expected: "2026 roadmap")
+    Elsa.Architecture.Tests.SpecScannerTests.Title_prefers_Speckit_then_plain_H1_then_folder_id(text: "## No H1 heading", expected: "001-fixture")
+    Elsa.Architecture.Tests.SpecScannerTests.Title_prefers_Speckit_then_plain_H1_then_folder_id(text: "# \r\n", expected: "001-fixture")
+    Elsa.Architecture.Tests.SpecScannerTests.Title_prefers_Speckit_then_plain_H1_then_folder_id(text: "# 001 — ", expected: "001-fixture")
+    Elsa.Architecture.Tests.SpecScannerTests.Explicit_notes_preserve_the_other_spec_facts
+    Elsa.Architecture.Tests.SpecScannerTests.A_folder_without_a_spec_has_no_inferred_notes
+    Elsa.Architecture.Tests.SqlitePoolClearingGuardTests.No_source_clears_every_sqlite_pool_in_the_process
+    Elsa.Architecture.Tests.SqlitePoolClearingGuardTests.The_guard_flags_exactly_a_process_wide_sqlite_clear(line: "        SqliteConnection.ClearAllPools();", flagged: True)
+    Elsa.Architecture.Tests.SqlitePoolClearingGuardTests.The_guard_flags_exactly_a_process_wide_sqlite_clear(line: "        Microsoft.Data.Sqlite.SqliteConnection.Cle"···, flagged: True)
+    Elsa.Architecture.Tests.SqlitePoolClearingGuardTests.The_guard_flags_exactly_a_process_wide_sqlite_clear(line: "SqliteConnection . ClearAllPools ( );", flagged: True)
+    Elsa.Architecture.Tests.SqlitePoolClearingGuardTests.The_guard_flags_exactly_a_process_wide_sqlite_clear(line: "        SqliteConnection.ClearPool(new SqliteConne"···, flagged: False)
+    Elsa.Architecture.Tests.SqlitePoolClearingGuardTests.The_guard_flags_exactly_a_process_wide_sqlite_clear(line: "        NpgsqlConnection.ClearAllPools();", flagged: False)
+    Elsa.Architecture.Tests.SqlitePoolClearingGuardTests.The_guard_flags_exactly_a_process_wide_sqlite_clear(line: "/// clearing every pool (<c>SqliteConnection.Clear"···, flagged: False)
+    Elsa.Architecture.Tests.ValueFlowArchitectureTests.RuntimeProjects_DoNotAddDesignReferencesBeyondMigrationAllowlist
+    Elsa.Architecture.Tests.ValueFlowArchitectureTests.RoslynAndGeneratedAuthoringCarriers_RemainOutsideRuntime
+    Elsa.Architecture.Tests.VersionLineBuildCheckTests.A_clean_line_B_project_builds
+    Elsa.Architecture.Tests.VersionLineBuildCheckTests.A_clean_line_A_project_builds
+    Elsa.Architecture.Tests.VersionLineBuildCheckTests.A_clean_line_B_project_packs
+    Elsa.Architecture.Tests.VersionLineBuildCheckTests.A_pack_only_override_is_caught
+    Elsa.Architecture.Tests.VersionLineBuildCheckTests.A_mismatch_fails_with_the_expected_code(projectName: "Fixture.LineB", body: "<PropertyGroup><ElsaVersionLine>A</ElsaVersionLine"···, globalProperties: [], expectedCode: "ELSAVL001", expectedValue: null)
+    Elsa.Architecture.Tests.VersionLineBuildCheckTests.A_mismatch_fails_with_the_expected_code(projectName: "Fixture.LineB", body: "<PropertyGroup><ElsaVersionLineAMembers>;Fixture.L"···, globalProperties: [], expectedCode: "ELSAVL002", expectedValue: null)
+    Elsa.Architecture.Tests.VersionLineBuildCheckTests.A_mismatch_fails_with_the_expected_code(projectName: "Fixture.LineB", body: "", globalProperties: ["ElsaVersionLine=A"], expectedCode: "ELSAVL001", expectedValue: null)
+    Elsa.Architecture.Tests.VersionLineBuildCheckTests.A_mismatch_fails_with_the_expected_code(projectName: "Elsa.Primitives", body: "", globalProperties: ["ElsaVersionLine=B"], expectedCode: "ELSAVL001", expectedValue: null)
+    Elsa.Architecture.Tests.VersionLineBuildCheckTests.A_mismatch_fails_with_the_expected_code(projectName: "Fixture.LineB", body: "", globalProperties: ["ElsaVersionLineAMembers=%3BFixture.LineB%3B"], expectedCode: "ELSAVL002", expectedValue: ";Fixture.LineB;")
+    Elsa.Architecture.Tests.VersionLineBuildCheckTests.A_mismatch_fails_with_the_expected_code(projectName: "Fixture.LineB", body: "<PropertyGroup><ElsaVersion>4.9</ElsaVersion></Pro"···, globalProperties: [], expectedCode: "ELSAVL004", expectedValue: "'4.9'")
+    Elsa.Architecture.Tests.VersionLineBuildCheckTests.A_mismatch_fails_with_the_expected_code(projectName: "Elsa.Primitives", body: "", globalProperties: ["ElsaContractsVersion=5.0"], expectedCode: "ELSAVL004", expectedValue: "'5.0'")
+    Elsa.Architecture.Tests.VersionLineBuildCheckTests.An_override_seen_only_by_a_referencing_pack_is_caught
+    Elsa.Architecture.Tests.VersionLineBuildCheckTests.Xmlpeek_reading_nothing_fails_with_ELSAVL003
+    Elsa.Architecture.Tests.VersionLineOwnershipGuardTests.No_file_under_backend_roots_sets_a_version_line_property
+    Elsa.Architecture.Tests.VersionLineOwnershipGuardTests.Guard_detects_the_sanctioned_setters(fileName: "Directory.Build.props", property: "ElsaVersionLine")
+    Elsa.Architecture.Tests.VersionLineOwnershipGuardTests.Guard_detects_the_sanctioned_setters(fileName: "VersionLines.props", property: "ElsaVersionLineAMembers")
+    Elsa.Architecture.Tests.VersionLineOwnershipGuardTests.Guard_ignores_build_output_and_catches_a_synthetic_setter_everywhere_else(property: "ElsaVersionLine")
+    Elsa.Architecture.Tests.VersionLineOwnershipGuardTests.Guard_ignores_build_output_and_catches_a_synthetic_setter_everywhere_else(property: "ElsaVersionLineAMembers")
+    Elsa.Architecture.Tests.VersionLineOwnershipGuardTests.Guard_catches_a_lowercase_setter_and_reports_the_canonical_name
+    Elsa.Architecture.Tests.VersionLineOwnershipGuardTests.Guard_does_not_flag_reading_the_property
+    Elsa.Architecture.Tests.WorkbenchConfigurationTests.Pinned_cshells_package_merges_object_map_settings_and_disabled_state
+    Elsa.Architecture.Tests.WorkbenchConfigurationTests.Pinned_cshells_package_scalar_object_overlays_retain_base_scalar_values
+    Elsa.Architecture.Tests.WorkbenchConfigurationTests.Pinned_cshells_package_can_add_and_disable_in_object_map_overlay
+    Elsa.Architecture.Tests.WorkbenchConfigurationTests.Pinned_cshells_package_treats_array_enabled_field_as_setting
+    Elsa.Architecture.Tests.WorkbenchConfigurationTests.Pinned_cshells_package_merges_array_overlays_by_index
+    Elsa.Architecture.Tests.WorkbenchConfigurationTests.Pinned_cshells_package_rejects_cross_shape_overlay
+    Elsa.Architecture.Tests.WorkbenchConfigurationTests.Pinned_cshells_package_rejects_case_equivalent_array_feature_ids
+    Elsa.Architecture.Tests.WorkbenchConfigurationTests.Pinned_cshells_package_collapses_null_and_empty_feature_objects
+    Elsa.Architecture.Tests.WorkbenchConfigurationTests.Production_shell_overlay_clears_a_committed_development_secret(featureSetting: "FoundationIdentityAspNetCoreIdentityEntityFramewor"···)
+    Elsa.Architecture.Tests.WorkbenchConfigurationTests.Production_shell_overlay_clears_a_committed_development_secret(featureSetting: "WorkflowsRuntimeEntityFrameworkCore:RecoveryContin"···)
+    Elsa.Architecture.Tests.WorkbenchConfigurationTests.Production_shell_overlay_clears_a_committed_development_secret(featureSetting: "WorkflowsRuntimeEntityFrameworkCore:HierarchyCurso"···)
+    Elsa.Architecture.Tests.WorkbenchConfigurationTests.Production_shell_overlay_clears_a_committed_development_secret(featureSetting: "Secrets:EncryptionKey")
+    Elsa.Architecture.Tests.WorkbenchConfigurationTests.Production_compose_stacks_supply_the_secrets_the_overlay_requires(composeFile: "docker-compose.yml", shellsJson: "docker/compose/elsa-workbench.shells.json")
+    Elsa.Architecture.Tests.WorkbenchConfigurationTests.Production_compose_stacks_supply_the_secrets_the_overlay_requires(composeFile: "docker-compose.images.yml", shellsJson: "Essentials/apps/Elsa.Workbench/shells.json")
+    Elsa.Architecture.Tests.WorkflowRestoreLockTests.Every_workflow_dotnet_run_build_test_pack_or_publish_is_locked_or_skips_restore
+    Elsa.Architecture.Tests.WorkflowRestoreLockTests.Unlocked_dotnet_build_chained_after_a_locked_restore_is_a_violation
+    Elsa.Architecture.Tests.WorkflowRestoreLockTests.Chained_line_where_every_restoring_command_is_locked_has_no_violations

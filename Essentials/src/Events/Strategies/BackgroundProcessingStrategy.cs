@@ -10,7 +10,7 @@ namespace Elsa.Events.Strategies;
 /// strategy owns its own resilience — the background worker catches and logs handler failures
 /// so a fire-and-forget publish can never break the rest of the app.
 /// </summary>
-public sealed class BackgroundProcessingStrategy : IEventPublishingStrategy
+internal sealed class BackgroundProcessingStrategy : IEventPublishingStrategy
 {
     public async Task PublishAsync(IEventStrategyContext context)
     {

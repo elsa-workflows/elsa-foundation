@@ -11,6 +11,11 @@ public delegate ValueTask<object?> GraphActivityExpressionEvaluator(
     GraphActivityExpression expression,
     CancellationToken cancellationToken);
 
+internal delegate ValueTask<object?> GraphActivityTypedExpressionEvaluator(
+    GraphActivityExpression expression,
+    JsonElement expectedType,
+    CancellationToken cancellationToken);
+
 /// <summary>Read-only descendant access to public inputs captured by the nearest graph boundary.</summary>
 public interface IGraphActivityInputReader
 {
@@ -66,6 +71,24 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
         DateTimeOffset capturedAt,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(evaluateExpression);
+        return await CaptureInputsAsync(
+            descriptors,
+            effectiveInputs,
+            requiredReferenceKeys,
+            (expression, _, token) => evaluateExpression(expression, token),
+            capturedAt,
+            cancellationToken);
+    }
+
+    internal async ValueTask<IReadOnlyCollection<DurableValueState>> CaptureInputsAsync(
+        IReadOnlyList<GraphActivityInputDescriptor> descriptors,
+        IReadOnlyDictionary<string, object?> effectiveInputs,
+        IReadOnlySet<string> requiredReferenceKeys,
+        GraphActivityTypedExpressionEvaluator evaluateExpression,
+        DateTimeOffset capturedAt,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(descriptors);
         ArgumentNullException.ThrowIfNull(effectiveInputs);
         ArgumentNullException.ThrowIfNull(requiredReferenceKeys);
@@ -92,7 +115,7 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
             }
             else if (descriptor.Default is not null)
             {
-                value = await evaluateExpression(descriptor.Default, cancellationToken);
+                value = await evaluateExpression(descriptor.Default, descriptor.Type, cancellationToken);
             }
             else if (requiredReferenceKeys.Contains(descriptor.ReferenceKey))
             {
@@ -127,6 +150,20 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
         DateTimeOffset capturedAt,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(evaluateExpression);
+        return await InitializeVariablesAsync(
+            descriptors,
+            (expression, _, token) => evaluateExpression(expression, token),
+            capturedAt,
+            cancellationToken);
+    }
+
+    internal async ValueTask<IReadOnlyCollection<DurableValueState>> InitializeVariablesAsync(
+        IReadOnlyList<GraphActivityVariableDescriptor> descriptors,
+        GraphActivityTypedExpressionEvaluator evaluateExpression,
+        DateTimeOffset capturedAt,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(descriptors);
         ArgumentNullException.ThrowIfNull(evaluateExpression);
         if (_variables.Count != 0)
@@ -139,7 +176,7 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
             cancellationToken.ThrowIfCancellationRequested();
             var value = descriptor.InitialValue is null
                 ? null
-                : await evaluateExpression(descriptor.InitialValue, cancellationToken);
+                : await evaluateExpression(descriptor.InitialValue, descriptor.Type, cancellationToken);
             staged.Add(
                 descriptor.ReferenceKey,
                 await NewStateAsync(
@@ -150,7 +187,8 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
                     drivers[descriptor.ReferenceKey],
                     value,
                     capturedAt,
-                    cancellationToken));
+                    cancellationToken,
+                    boundaryVariableName: descriptor.Name));
         }
 
         Publish(_variables, staged);
@@ -162,6 +200,24 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
         IReadOnlyList<GraphActivityOutputMappingDescriptor> mappings,
         IReadOnlySet<string> requiredReferenceKeys,
         GraphActivityExpressionEvaluator evaluateExpression,
+        DateTimeOffset capturedAt,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(evaluateExpression);
+        return await CaptureOutputsAsync(
+            descriptors,
+            mappings,
+            requiredReferenceKeys,
+            (expression, _, token) => evaluateExpression(expression, token),
+            capturedAt,
+            cancellationToken);
+    }
+
+    internal async ValueTask<IReadOnlyCollection<DurableValueState>> CaptureOutputsAsync(
+        IReadOnlyList<GraphActivityOutputDescriptor> descriptors,
+        IReadOnlyList<GraphActivityOutputMappingDescriptor> mappings,
+        IReadOnlySet<string> requiredReferenceKeys,
+        GraphActivityTypedExpressionEvaluator evaluateExpression,
         DateTimeOffset capturedAt,
         CancellationToken cancellationToken = default)
     {
@@ -185,7 +241,7 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
                 continue;
             }
 
-            var value = await evaluateExpression(mapping.Source, cancellationToken);
+            var value = await evaluateExpression(mapping.Source, descriptor.Type, cancellationToken);
             staged.Add(
                 descriptor.ReferenceKey,
                 await NewStateAsync(
@@ -245,7 +301,8 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
             driver,
             value,
             capturedAt,
-            cancellationToken);
+            cancellationToken,
+            boundaryVariableName: descriptor.Name);
         _variables[descriptor.ReferenceKey] = state;
         return state;
     }
@@ -265,7 +322,8 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
         object? value,
         DateTimeOffset capturedAt,
         CancellationToken cancellationToken,
-        string? boundaryInputName = null)
+        string? boundaryInputName = null,
+        string? boundaryVariableName = null)
     {
         var durableValueId = role switch
         {
@@ -277,15 +335,14 @@ public sealed class GraphActivityScope : IGraphActivityInputReader
 
         var typeDescriptor = TypeDescriptor(type, storageDriverKey);
         var encoding = await storageDriver.EncodeAsync(value, typeDescriptor, cancellationToken);
-        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            [RuntimeMetadataKeys.BoundaryExecutionScopeId] = ExecutionScope.ExecutionScopeId,
-            [RuntimeMetadataKeys.BoundaryValueRole] = role,
-            [RuntimeMetadataKeys.BoundaryReferenceKey] = referenceKey,
-            ["runtime.storageDriverKey"] = storageDriverKey
-        };
-        if (boundaryInputName is not null)
-            metadata[RuntimeMetadataKeys.BoundaryInputName] = boundaryInputName;
+        // Body nodes read graph variables by name (variables.x), and the runtime has no graph descriptor.
+        var metadata = ActivityExecutionScopeValues.Metadata(
+            ExecutionScope.ExecutionScopeId,
+            role,
+            referenceKey,
+            storageDriverKey,
+            boundaryInputName,
+            boundaryVariableName);
 
         return new DurableValueState(
             durableValueId,

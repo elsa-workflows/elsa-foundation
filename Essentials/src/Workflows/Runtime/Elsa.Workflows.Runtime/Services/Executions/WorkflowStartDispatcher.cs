@@ -4,13 +4,18 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Executables;
+using Elsa.Workflows.Runtime.Services.Triggers;
 
 namespace Elsa.Workflows.Runtime.Services.Executions;
 
 public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
 {
+    bool IWorkflowStartDispatcher.CanDispatchSavedStimulus(IStimulusDeliveryStore sources, IWorkflowExecutableStore material,
+        IWorkflowExecutionStateStore executions) => _stimulusRequests.IsConfigured && ReferenceEquals(sources, _stimulusDeliveryStore) &&
+        ReferenceEquals(material, _executableStore) && ReferenceEquals(executions, _workflowExecutionStateStore);
+
     private readonly IWorkflowExecutableStore _executableStore;
-    private readonly IWorkflowExecutableSourceReferenceStore _sourceReferenceStore;
+    private readonly WorkflowExecutableStartSourceResolver _startSourceResolver;
     private readonly IWorkflowExecutionActorProvider _agentProvider;
     private readonly IRuntimeExecutionIdGenerator _idGenerator;
     private readonly TimeProvider _timeProvider;
@@ -19,6 +24,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private readonly IWorkflowDispatchStore? _workflowDispatchStore;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly IRuntimePersistenceModeResolver? _persistenceModeResolver;
+    private readonly IStimulusDeliveryStore? _stimulusDeliveryStore;
+    private readonly StimulusDeliveryRequestProjector _stimulusRequests;
 
     public WorkflowStartDispatcher(
         IWorkflowExecutableStore executableStore,
@@ -82,6 +89,37 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         IWorkflowDispatchStore? workflowDispatchStore,
         IWorkflowExecutionStateStore? workflowExecutionStateStore,
         IRuntimePersistenceModeResolver? persistenceModeResolver = null)
+        : this(executableStore, sourceReferenceStore, agentProvider, idGenerator, timeProvider, partitionAccessor,
+            startPolicy, workflowDispatchStore, workflowExecutionStateStore, persistenceModeResolver, null) { }
+
+    public WorkflowStartDispatcher(
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IWorkflowExecutionActorProvider agentProvider,
+        IRuntimeExecutionIdGenerator idGenerator,
+        TimeProvider timeProvider,
+        IWorkflowExecutionPartitionAccessor? partitionAccessor,
+        IWorkflowExecutableStartPolicy startPolicy,
+        IWorkflowDispatchStore? workflowDispatchStore,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IRuntimePersistenceModeResolver? persistenceModeResolver,
+        IStimulusDeliveryStore? stimulusDeliveryStore)
+        : this(executableStore, sourceReferenceStore, agentProvider, idGenerator, timeProvider, partitionAccessor,
+            startPolicy, workflowDispatchStore, workflowExecutionStateStore, persistenceModeResolver, stimulusDeliveryStore, []) { }
+
+    public WorkflowStartDispatcher(
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IWorkflowExecutionActorProvider agentProvider,
+        IRuntimeExecutionIdGenerator idGenerator,
+        TimeProvider timeProvider,
+        IWorkflowExecutionPartitionAccessor? partitionAccessor,
+        IWorkflowExecutableStartPolicy startPolicy,
+        IWorkflowDispatchStore? workflowDispatchStore,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IRuntimePersistenceModeResolver? persistenceModeResolver,
+        IStimulusDeliveryStore? stimulusDeliveryStore,
+        IEnumerable<IStimulusDeliveryIntentAdapter> stimulusIntentAdapters)
     {
         ArgumentNullException.ThrowIfNull(executableStore);
         ArgumentNullException.ThrowIfNull(sourceReferenceStore);
@@ -91,7 +129,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         ArgumentNullException.ThrowIfNull(startPolicy);
 
         _executableStore = executableStore;
-        _sourceReferenceStore = sourceReferenceStore;
+        _startSourceResolver = new(sourceReferenceStore, timeProvider);
         _agentProvider = agentProvider;
         _idGenerator = idGenerator;
         _timeProvider = timeProvider;
@@ -100,6 +138,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         _workflowDispatchStore = workflowDispatchStore;
         _workflowExecutionStateStore = workflowExecutionStateStore;
         _persistenceModeResolver = persistenceModeResolver;
+        _stimulusDeliveryStore = stimulusDeliveryStore;
+        _stimulusRequests = new(stimulusIntentAdapters);
     }
 
     public async ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(
@@ -111,17 +151,24 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         ArgumentNullException.ThrowIfNull(request);
         if (request.DispatchNestingDepth < 0)
             throw new ArgumentOutOfRangeException(nameof(request), "Dispatch nesting depth cannot be negative.");
+        var saved = request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery
+            ? await ReadStimulusStartAsync(request, requiredScope, cancellationToken) : null;
 
         // A keyed start that already ran is answered before anything else is resolved: the existing execution is the
         // answer even if the workflow has since been unpublished, so a redelivery converges instead of failing (#2195).
         var keyed = KeyedWorkflowStartIdentity.TryGet(request);
-        if (keyed is not null && await FindKeyedStartAsync(request, keyed, cancellationToken) is { } duplicate)
+        if (keyed is not null && await FindKeyedStartAsync(request, keyed, cancellationToken, saved) is { } duplicate)
+        {
+            if (saved is not null) _ = await ReadStimulusStartAsync(request, requiredScope, cancellationToken);
             return duplicate;
+        }
 
         var executable = await _executableStore.FindAsync(request.ArtifactId, cancellationToken)
             ?? throw new WorkflowExecutableNotFoundException(request.ArtifactId);
 
-        var resolved = request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.RetainedDependency
+        var resolved = saved is not null
+            ? ResolveStimulusExecutable(saved, executable)
+            : request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.RetainedDependency
             ? await ResolveRetainedDependencyAsync(request, executable, cancellationToken)
             : await ResolvePinnedExecutableAsync(request, executable, requiredScope, cancellationToken);
         var partition = request.Partition ?? CurrentPartition();
@@ -141,6 +188,7 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         }
 
         await EnforceStartPolicyAsync(request, resolved.Identity, partition, cancellationToken);
+        if (saved is not null) _ = await ReadStimulusStartAsync(request, requiredScope, cancellationToken);
         return await DispatchCoreAsync(
             request,
             resolved.Identity,
@@ -157,7 +205,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private async ValueTask<WorkflowExecutionStartDispatchResult?> FindKeyedStartAsync(
         WorkflowExecutionStartDispatchRequest request,
         KeyedWorkflowStartIdentity keyed,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        StimulusStartRecipient? saved)
     {
         // Without durable execution state a duplicate cannot be recognized, and re-running a start into an execution id
         // that already exists is worse than the double start keying prevents. Refuse it loudly.
@@ -170,6 +219,15 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         var existing = await _workflowExecutionStateStore.FindAsync(keyed.WorkflowExecutionId, cancellationToken);
         if (existing is null)
             return null;
+        if (request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery &&
+            (saved is null || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(existing.PinnedExecutable, saved.Executable)))
+            throw AuthorityRejected("stimulus-delivery-duplicate-pin-mismatch", "The existing keyed start differs from the complete saved executable pin.");
+        if (request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery &&
+            (existing.TenantId != request.TenantId || existing.Partition != (request.Partition ?? CurrentPartition()) ||
+             existing.RunKind != request.RunKind || !WorkflowTestScope.ContextEquals(existing.TestScope, request.TestScope) ||
+             existing.ParentWorkflowExecutionId is not null || existing.DispatchNestingDepth != 0 || existing.CorrelationId is not null ||
+             !AuthorityEquals(existing.Authority, request.Authority)))
+            throw AuthorityRejected("stimulus-delivery-duplicate-scope-mismatch", "The existing keyed start belongs to a different execution scope.");
         // An occurrence start (#2198) names its occurrence whichever publication of the trigger fires it, so an execution a
         // replaced publication's artifact started for it is the duplicate, not a conflict.
         if (keyed.IsArtifactScoped && !StringComparer.Ordinal.Equals(existing.PinnedExecutable.ArtifactId, request.ArtifactId))
@@ -179,6 +237,57 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
         }
 
         return DuplicateStartResult(existing, keyed.EnvelopeId, existing.PinnedExecutable, existing.PinnedSource);
+    }
+
+    private async ValueTask<StimulusStartRecipient> ReadStimulusStartAsync(WorkflowExecutionStartDispatchRequest request,
+        WorkflowExecutableReferenceScope requiredScope, CancellationToken cancellationToken)
+    {
+        if (_stimulusDeliveryStore is null)
+            throw AuthorityRejected("stimulus-delivery-source-unavailable", "Saved stimulus authority requires verified provider admission.");
+        var authority = request.StartAuthority!.StimulusDelivery!;
+        var source = await _stimulusDeliveryStore.ReadSavedStartSourceAsync(authority, cancellationToken);
+        var snapshot = source.Claim.Item.RecipientSnapshot;
+        if (snapshot is null || snapshot.RetentionAcceptanceVersion != StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion ||
+            !snapshot.MatchesSource(source) || source.SourceOutboxItemId != authority.SourceOutboxItemId ||
+            source.IntentFingerprint != authority.IntentFingerprint || source.Scope != authority.Scope ||
+            source.Claim.OwnerId != authority.OwnerId || source.Claim.FencingToken != authority.FencingToken)
+            throw AuthorityRejected("stimulus-delivery-cohort-unverified", "No verified exact cohort authorizes the saved start.");
+        if (!_stimulusRequests.Owns(source.Intent.Kind))
+            throw AuthorityRejected("stimulus-delivery-source-input-unavailable", "Saved start admission requires the canonical intent's owning decoder.");
+        var canonical = _stimulusRequests.Read(source);
+        StimulusDeliveryServices.ValidateWinner(source, canonical);
+        if (request.RequestedBy != canonical.RequestedBy || !SameStimulusInput(request.StimulusInput, canonical.Input))
+            throw AuthorityRejected("stimulus-delivery-input-mismatch", "The saved start differs from its canonical persisted stimulus input or source identity.");
+        var recipient = snapshot.Starts.SingleOrDefault(entry => entry.Binding.TriggerBindingId == authority.TriggerBindingId);
+        if (recipient is null || !recipient.SourceProvenanceCaptured)
+            throw AuthorityRejected("stimulus-delivery-binding-not-found", "The exact captured start binding is unavailable.");
+        var key = source.Intent.IdempotencyKey is { } originalKey
+            ? KeyedWorkflowStartIdentity.For(originalKey, recipient.Executable.ArtifactId) : null;
+        if (key is null || request.WorkflowExecutionId != key.WorkflowExecutionId || request.IdempotencyKey != key.StartKey ||
+            request.ArtifactId != recipient.Executable.ArtifactId || request.TriggerNodeId != recipient.Binding.ExecutableNodeId ||
+            !WorkflowExecutionAuthoritySnapshot.MetadataEquals(request.TriggerMetadata, recipient.Binding.Metadata))
+            throw AuthorityRejected("stimulus-delivery-entry-mismatch", "The request differs from the exact saved binding or original start identity.");
+        // Ordinary stimulus starts are published roots. A saved publication choice grants no child/test scope,
+        // variables, inputs or authority override; current ordinary start policy still evaluates the root caller.
+        if (requiredScope != WorkflowExecutableReferenceScope.Published || request.RunKind != WorkflowRunKind.PublishedRun ||
+            request.ParentWorkflowExecutionId is not null || request.CorrelationId is not null || request.DispatchNestingDepth != 0 ||
+            request.TestScope is not null || request.TenantId != snapshot.Scope.TenantId || request.Partition != snapshot.Scope.Partition ||
+            request.Variables.Count != 0 || request.Inputs.Count != 0 ||
+            !WorkflowExecutionAuthoritySnapshot.Matches(request.Authority, request.RequestedBy, request.RequestedBy))
+            throw AuthorityRejected("stimulus-delivery-context-mismatch", "The saved start cannot override its ordinary root scope or authority.");
+        return recipient;
+    }
+
+    private static bool SameStimulusInput(JsonElement? supplied, JsonElement? canonical) =>
+        supplied.HasValue == canonical.HasValue && (!supplied.HasValue ||
+            supplied.Value.ValueKind != JsonValueKind.Undefined && canonical!.Value.ValueKind != JsonValueKind.Undefined &&
+            JsonElement.DeepEquals(supplied.Value, canonical.Value));
+
+    private static ResolvedPinnedExecutable ResolveStimulusExecutable(StimulusStartRecipient saved, WorkflowExecutable executable)
+    {
+        if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(executable.Identity, saved.Executable))
+            throw AuthorityRejected("stimulus-delivery-pin-mismatch", "The retained executable differs from the complete saved pin.");
+        return new(saved.Executable, saved.SourceProvenance, null);
     }
 
     private async ValueTask<ResolvedPinnedExecutable> ResolveRetainedDependencyAsync(
@@ -295,80 +404,11 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
     private static WorkflowExecutableStartRejectedException AuthorityRejected(string reasonCode, string message) =>
         new(WorkflowExecutableStartRejectionCategory.Authority, reasonCode, message);
 
-    // Resolves the artifact's Source References and returns content identity plus independently pinned source
-    // attribution. This is deliberately fail-closed: the content artifact's identity can reflect whichever source
-    // first produced deduplicated content, so it is never authoritative activation provenance on its own.
     private async ValueTask<ResolvedPinnedExecutable> ResolvePinnedExecutableAsync(
-        WorkflowExecutionStartDispatchRequest request,
-        WorkflowExecutable executable,
-        WorkflowExecutableReferenceScope requiredScope,
-        CancellationToken cancellationToken)
-    {
-        var references = await _sourceReferenceStore.ListAllByArtifactAsync(request.ArtifactId, cancellationToken);
-        if (references.Count == 0)
-        {
-            if (request.SourceSelection is null &&
-                request.ProvenanceRequirement == WorkflowExecutableProvenanceRequirement.AllowReferenceLessLegacy)
-                return new(executable.Identity, null, null);
-
-            throw new WorkflowExecutableReferenceRejectedException(
-                request.ArtifactId,
-                requiredScope,
-                request.SourceSelection is null
-                    ? WorkflowExecutableReferenceRejectionReason.NoLiveReference
-                    : WorkflowExecutableReferenceRejectionReason.SelectionNotFound);
-        }
-
-        var now = _timeProvider.GetUtcNow();
-        var scopedReferences = references.Where(reference => reference.Scope == requiredScope).ToArray();
-        var selectedReferences = Select(scopedReferences, request.SourceSelection);
-        var liveReferences = selectedReferences
-            .Where(reference => reference.IsLive(now))
-            .OrderBy(reference => reference.SourceReferenceId, StringComparer.Ordinal)
-            .ToArray();
-
-        if (liveReferences.Length == 1)
-            return new(
-                executable.Identity,
-                WorkflowExecutableSourceProvenance.From(liveReferences[0]),
-                null);
-
-        if (liveReferences.Length > 1)
-            throw new WorkflowExecutableReferenceRejectedException(
-                request.ArtifactId,
-                requiredScope,
-                WorkflowExecutableReferenceRejectionReason.Ambiguous);
-
-        if (request.SourceSelection is not null && selectedReferences.Length == 0)
-            throw new WorkflowExecutableReferenceRejectedException(
-                request.ArtifactId,
-                requiredScope,
-                WorkflowExecutableReferenceRejectionReason.SelectionNotFound);
-
-        // No live reference of the required scope. Distinguish the test-run-lapsed case (a non-retired reference
-        // that is present but past its expiry) from the absent/retired/wrong-scope case, so an expired test run is
-        // reported honestly rather than as an unpublished artifact.
-        var expired = selectedReferences.Any(reference => reference.DeletedAt is null && reference.IsExpired(now));
-        throw new WorkflowExecutableReferenceRejectedException(
-            request.ArtifactId,
-            requiredScope,
-            expired ? WorkflowExecutableReferenceRejectionReason.Expired : WorkflowExecutableReferenceRejectionReason.NoLiveReference);
-    }
-
-    private static WorkflowExecutableSourceReference[] Select(
-        WorkflowExecutableSourceReference[] references,
-        WorkflowExecutableSourceSelection? selection)
-    {
-        if (selection is null)
-            return references;
-        if (selection.SourceReferenceId is { } sourceReferenceId)
-            return references.Where(reference => StringComparer.Ordinal.Equals(reference.SourceReferenceId, sourceReferenceId)).ToArray();
-
-        return references
-            .Where(reference => selection.ActivationId is null || StringComparer.Ordinal.Equals(reference.ActivationId, selection.ActivationId))
-            .Where(reference => selection.SlotId is null || StringComparer.Ordinal.Equals(reference.SlotId, selection.SlotId))
-            .ToArray();
-    }
+        WorkflowExecutionStartDispatchRequest request, WorkflowExecutable executable,
+        WorkflowExecutableReferenceScope requiredScope, CancellationToken cancellationToken) =>
+        new(executable.Identity, await _startSourceResolver.ResolveAsync(request.ArtifactId, request.SourceSelection,
+            request.ProvenanceRequirement, requiredScope, cancellationToken), null);
 
     private async ValueTask<WorkflowExecutionStartDispatchResult> DispatchCoreAsync(
         WorkflowExecutionStartDispatchRequest request,
@@ -404,6 +444,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             dispatchNestingDepth: request.DispatchNestingDepth,
             testScope: request.TestScope,
             triggerMetadata: request.TriggerMetadata));
+        if (request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery)
+            ValidateSavedCommandRoundTrip(request, pinnedIdentity, pinnedSource, partition, payload);
 
         // A retained dispatch and a keyed start both name their command and envelope deterministically, so a repeated
         // delivery enqueues the same start work item and the queue keeps the first.
@@ -439,6 +481,8 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             partition: partition);
 
         var agent = await _agentProvider.GetAgentAsync(activationRequest, cancellationToken);
+        if (request.StartAuthority?.Kind == WorkflowExecutableStartAuthorityKind.StimulusDelivery)
+            _ = await ReadStimulusStartAsync(request, requiredScope, cancellationToken);
         var dispatchResult = await agent.EnqueueAsync(envelope, dispatchOptions ?? WorkflowExecutionCommandDispatchOptions.Default, cancellationToken);
 
         return new WorkflowExecutionStartDispatchResult(
@@ -447,6 +491,25 @@ public sealed class WorkflowStartDispatcher : IWorkflowStartDispatcher
             commandDispatch: dispatchResult,
             agent: agent.Descriptor,
             pinnedSource: pinnedSource);
+    }
+
+    private static void ValidateSavedCommandRoundTrip(WorkflowExecutionStartDispatchRequest request,
+        WorkflowExecutableIdentity identity, WorkflowExecutableSourceProvenance? source, WorkflowExecutionPartition partition, JsonElement payload)
+    {
+        // Ordinary command wire is unchanged. Invalid UTF-16 in an internal capture must not silently
+        // become a different binding/provenance when System.Text.Json replaces an unpaired surrogate.
+        var restored = payload.Deserialize<WorkflowExecutionStartCommandPayload>()!;
+        var expected = request.StartAuthority!.StimulusDelivery!;
+        var actual = restored.StartAuthority?.StimulusDelivery;
+        if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(restored.PinnedExecutable, identity) ||
+            restored.PinnedSource != source || restored.TriggerNodeId != request.TriggerNodeId ||
+            !WorkflowExecutionAuthoritySnapshot.MetadataEquals(restored.TriggerMetadata, request.TriggerMetadata) ||
+            restored.TenantId != request.TenantId || restored.Partition != partition ||
+            !AuthorityEquals(restored.Authority, request.Authority) || actual is null ||
+            actual.SourceOutboxItemId != expected.SourceOutboxItemId || actual.IntentFingerprint != expected.IntentFingerprint ||
+            actual.Scope != expected.Scope || actual.OwnerId != expected.OwnerId || actual.FencingToken != expected.FencingToken ||
+            actual.TriggerBindingId != expected.TriggerBindingId)
+            throw AuthorityRejected("stimulus-delivery-command-unrepresentable", "The ordinary start command cannot preserve the exact saved binding and provenance.");
     }
 
     private static IReadOnlyDictionary<string, string> CreateDispatchMetadata(

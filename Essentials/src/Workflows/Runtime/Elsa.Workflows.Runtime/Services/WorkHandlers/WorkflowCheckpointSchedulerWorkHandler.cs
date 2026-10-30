@@ -173,7 +173,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 scheduler: null,
                 activityExecutions: activityStateChanges.ToArray(),
                 bookmarks: [],
-                durableValues: BuildSeedDurableValueChanges(workItem, payload, occurredAt),
+                durableValues: BuildSeedDurableValueChanges(workItem, payload, occurredAt, priorWorkflowState),
                 incidents: [],
                 operational: [],
                 activityExecutionInspections: activityInspectionChanges.ToArray()),
@@ -188,11 +188,18 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     private static IReadOnlyCollection<RuntimeStateChange<DurableValueState>> BuildSeedDurableValueChanges(
         RuntimeSchedulerWorkItem workItem,
         RuntimeCheckpointCommandPayload payload,
-        DateTimeOffset occurredAt)
+        DateTimeOffset occurredAt,
+        WorkflowExecutionState? priorWorkflowState)
     {
+        // Only the start seeds the correlation id; later checkpoints must not overwrite a Correlate assignment.
+        var correlationId = StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowStarted)
+            ? priorWorkflowState?.CorrelationId ?? payload.CorrelationId
+            : null;
+
         // SeedVariables are NOT written to the durable-value channel (#972): caller-supplied variable
         // values overlay the root variable frame in CreateRootVariableFrame, the single runtime truth.
-        if (payload.SeedInputs.Count == 0 && payload.SeedStimulusInput is null && string.IsNullOrWhiteSpace(payload.SeedTriggerNodeId) && payload.SeedTriggerMetadata.Count == 0)
+        if (payload.SeedInputs.Count == 0 && payload.SeedStimulusInput is null && string.IsNullOrWhiteSpace(payload.SeedTriggerNodeId) && payload.SeedTriggerMetadata.Count == 0 &&
+            string.IsNullOrWhiteSpace(correlationId))
             return [];
 
         return RuntimeWorkflowStateSeed.BuildSeedChanges(
@@ -201,7 +208,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             occurredAt,
             stimulusInput: payload.SeedStimulusInput,
             triggerNodeId: payload.SeedTriggerNodeId,
-            triggerMetadata: payload.SeedTriggerMetadata);
+            triggerMetadata: payload.SeedTriggerMetadata,
+            correlationId: correlationId);
     }
 
     private static void ValidateTerminalCheckpointStatus(
@@ -274,10 +282,9 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         return NewWorkflowExecutionStateChange(workItem, payload, state);
     }
 
-    // Carries the workflow instance name (#260) forward across a checkpoint rebuild. The completion/running
-    // builders rebuild SystemMetadata from scratch, so without this a SetName assignment folded into an
-    // activity-completed checkpoint would be wiped by the subsequent workflow-completed checkpoint — mirroring
-    // how the dedicated CorrelationId field is carried forward via priorWorkflowState.
+    // Carries the durable system metadata that must survive a checkpoint rebuild. The completion/running builders
+    // rebuild SystemMetadata from scratch, so without this a SetName assignment, background cancellation marker
+    // or Test Drive delivery receipt could be wiped by the subsequent workflow-completed checkpoint.
     private static Dictionary<string, string> PreserveSystemMetadata(
         Dictionary<string, string> metadata,
         WorkflowExecutionState? priorWorkflowState,
@@ -289,12 +296,32 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             metadata[RuntimeMetadataKeys.SourceReferenceId] = existingReferenceId;
         else if (workItem?.CommandMetadata.TryGetValue(RuntimeMetadataKeys.SourceReferenceId, out var sourceReferenceId) == true)
             metadata[RuntimeMetadataKeys.SourceReferenceId] = sourceReferenceId;
+        // A lookup hint is retained for explicit called-workflow control. It grants no authority:
+        // the boundary provider validates its complete committed dispatch/root/caller context.
+        if (priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.ChildControlDispatchId, out var existingControlDispatchId) == true)
+            metadata[RuntimeMetadataKeys.ChildControlDispatchId] = existingControlDispatchId;
+        else if (workItem?.CommandMetadata.TryGetValue(RuntimeMetadataKeys.ChildControlDispatchId, out var controlDispatchId) == true)
+            metadata[RuntimeMetadataKeys.ChildControlDispatchId] = controlDispatchId;
 
         // Carry the run's recorded persistence mode forward across every state rebuild that does not resolve it itself
         // (e.g. the workflow-completed transition), unless this rebuild is recording a freshly resolved mode.
         if (!metadata.ContainsKey(RuntimeMetadataKeys.PersistenceMode) &&
             priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.PersistenceMode, out var persistenceMode) == true)
             metadata[RuntimeMetadataKeys.PersistenceMode] = persistenceMode;
+
+        if (priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork, out var hasBackgroundActivityWork) == true)
+            metadata[RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork] = hasBackgroundActivityWork;
+
+        // Manual Test Drive receipts are durable retry evidence. Workflow state is rebuilt for the started and
+        // completed checkpoints, so keep those bounded, reserved receipt keys when carrying a TestRun forward.
+        if (priorWorkflowState is { RunKind: WorkflowRunKind.TestRun })
+        {
+            foreach (var (key, value) in priorWorkflowState.SystemMetadata)
+            {
+                if (key.StartsWith(TestRunDeliveryReceipt.ReceiptPrefix, StringComparison.Ordinal))
+                    metadata[key] = value;
+            }
+        }
 
         return metadata;
     }

@@ -6,6 +6,7 @@ using Elsa.Workflows.Runtime.Resolvers;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Xunit;
 using Microsoft.Extensions.Time.Testing;
 
@@ -102,6 +103,39 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
     }
 
     [Fact]
+    public async Task Broadcast_retry_keeps_the_pre_upgrade_mailbox_key_and_distinguishes_exact_bookmarks()
+    {
+        var bookmarks = new InMemoryBookmarkStateStore();
+        var executions = new InMemoryWorkflowExecutionStateStore();
+        var executables = new InMemoryWorkflowExecutableStore();
+        var actors = new RecordingWorkflowExecutionActorProvider();
+        var dispatcher = NewDispatcher(bookmarks, executions, executables, actors);
+        var router = new StimulusRouter(new InMemoryWorkflowTriggerBindingStore(), new GlobalBookmarkStimulusLookup(bookmarks),
+            new NoStarts(), dispatcher, new FakeTimeProvider(_now));
+        await bookmarks.SaveAsync(NewBookmark("bookmark-1"));
+        await executions.SaveAsync(NewWorkflowExecution());
+        await executables.SaveAsync(NewExecutable());
+        await router.RouteAsync(new StimulusDispatchRequest("delivery-status", "sha256:delivery-status:order-123",
+            mode: StimulusRoutingMode.ResumeOnly, idempotencyKey: "publication"));
+        var oldKey = Assert.Single(actors.Agent.Envelopes).IdempotencyKey;
+        // The pre-upgrade command is accepted but still pending. A second exact wait is also present.
+        await bookmarks.SaveAsync(NewBookmark("bookmark-2"));
+        await router.RouteAsync(new StimulusDispatchRequest("delivery-status", "sha256:delivery-status:order-123",
+            mode: StimulusRoutingMode.ResumeOnly, idempotencyKey: "publication") { ResumeAllMatchingBookmarks = true });
+        Assert.Equal(3, actors.Agent.Envelopes.Count);
+        Assert.Equal(oldKey, actors.Agent.Envelopes[1].IdempotencyKey);
+        Assert.NotEqual(oldKey, actors.Agent.Envelopes[2].IdempotencyKey);
+    }
+
+    private sealed class NoStarts : IWorkflowStartDispatcher
+    {
+        public ValueTask<WorkflowExecutionStartDispatchResult> DispatchAsync(WorkflowExecutionStartDispatchRequest request,
+            WorkflowExecutableReferenceScope requiredScope = WorkflowExecutableReferenceScope.Published,
+            WorkflowExecutionCommandDispatchOptions? dispatchOptions = null, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Resume-only routing must never dispatch a start.");
+    }
+
+    [Fact]
     public async Task DispatchAsync_UsesCallerIdempotencyKeyAsDeterministicSuffix()
     {
         var store = new InMemoryBookmarkStateStore();
@@ -176,6 +210,51 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
         Assert.Equal(_now, delivery.ReceivedAt);
         Assert.Equal(envelope.IdempotencyKey, delivery.DeduplicationKey);
         Assert.Equal(WorkflowExecutionActorActivationReason.ResumeBookmark, Assert.Single(agentProvider.Activations).Reason);
+    }
+
+    [Fact]
+    public async Task TestRunDeliveryId_AdmitsOnlyOneResumeAcrossConcurrentWaitAndConfigurationChanges()
+    {
+        var store = new InMemoryBookmarkStateStore();
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var processor = new CountingCommandExecutor();
+        using var agentProvider = new InProcessWorkflowExecutionActorProvider(processor);
+        var dispatcher = NewDispatcher(store, workflowStateStore, executableStore, agentProvider);
+        await store.SaveAsync(NewBookmark("wait-1", stimulusHash: "hash-1"));
+        await store.SaveAsync(NewBookmark("wait-2", stimulusHash: "hash-2"));
+        await workflowStateStore.SaveAsync(NewWorkflowExecution() with
+        {
+            RunKind = WorkflowRunKind.TestRun,
+            TestScope = new("test-run", _now.AddMinutes(30), null, new("default"))
+        });
+        await executableStore.SaveAsync(NewExecutable());
+
+        var deliveryId = Guid.NewGuid().ToString("D");
+        var firstInput = Json("{\"value\":1}");
+        var secondInput = Json("{\"value\":2}");
+        var firstReceipt = new TestRunDeliveryReceipt("test-run", deliveryId, "wait-1",
+            TestRunDeliveryReceipt.Digest(Json("{\"modeId\":\"event\",\"data\":{\"value\":1}}")),
+            TestRunDeliveryReceipt.Digest(firstInput));
+        var secondReceipt = new TestRunDeliveryReceipt("test-run", deliveryId, "wait-2",
+            TestRunDeliveryReceipt.Digest(Json("{\"modeId\":\"event\",\"data\":{\"value\":2}}")),
+            TestRunDeliveryReceipt.Digest(secondInput));
+
+        var results = await Task.WhenAll(
+            dispatcher.DispatchAsync(new BookmarkResumeDispatchRequest(
+                "wfexec-1", "delivery-status", "hash-1", firstInput,
+                idempotencyKey: null, requestedBy: "runtime.bookmark", metadata: null,
+                payloadType: null, providerId: null,
+                bookmarkId: "wait-1", testRunDelivery: firstReceipt)).AsTask(),
+            dispatcher.DispatchAsync(new BookmarkResumeDispatchRequest(
+                "wfexec-1", "delivery-status", "hash-2", secondInput,
+                idempotencyKey: null, requestedBy: "runtime.bookmark", metadata: null,
+                payloadType: null, providerId: null,
+                bookmarkId: "wait-2", testRunDelivery: secondReceipt)).AsTask());
+
+        Assert.Contains(results, result => result.Status == BookmarkResumeDispatchStatus.Dispatched);
+        Assert.Contains(results, result => result.Status == BookmarkResumeDispatchStatus.Duplicate);
+        Assert.Equal(1, processor.ProcessCalls);
     }
 
     [Fact]
@@ -468,5 +547,19 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
         public string NewWorkflowExecutionCommandEnvelopeId() => "envelope-1";
 
         public string NewActivityExecutionId() => "actexec-new";
+    }
+
+    private sealed class CountingCommandExecutor : IWorkflowExecutionCommandExecutor
+    {
+        public int ProcessCalls { get; private set; }
+
+        public ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(
+            WorkflowExecutionCommandEnvelope envelope,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ProcessCalls++;
+            return ValueTask.FromResult(WorkflowExecutionCommandProcessResult.NoDrain);
+        }
     }
 }

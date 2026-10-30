@@ -837,31 +837,25 @@ public sealed class WorkflowArtifactReconciler(
         if (member.InputContract is null)
             return $"artifact '{identity.ArtifactId}' carries no input contract, so its canonical content hash cannot be recomputed.";
 
-        string recomputed;
+        bool matches;
         try
         {
-            recomputed = hasher.ComputeHash(
-                member.RootActivity,
-                member.InputContract,
-                member.Dependencies,
-                member.PersistenceMode,
-                member.WorkflowVariables,
-                member.IncidentStrategy);
+            matches = hasher.MatchesHash(member);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             return $"artifact '{identity.ArtifactId}' could not be hashed: {exception.Message}";
         }
 
-        if (!StringComparer.Ordinal.Equals(recomputed, identity.ArtifactHash))
-            return $"artifact '{identity.ArtifactId}' declares hash '{identity.ArtifactHash}' but its payload hashes to '{recomputed}'.";
+        if (!matches)
+            return $"artifact '{identity.ArtifactId}' declares hash '{identity.ArtifactHash}' but its payload does not match a supported content-hash schema.";
 
         // The id embeds a prefix of the hash. A payload whose hash matches the declared hash but whose id does not
         // match either is an envelope that was rewritten inconsistently, and the id is what the store keys on.
         string expectedId;
         try
         {
-            expectedId = hasher.CreateArtifactId(string.Empty, recomputed);
+            expectedId = hasher.CreateArtifactId(string.Empty, identity.ArtifactHash);
         }
         catch (ArgumentException exception)
         {
@@ -988,6 +982,11 @@ public sealed class WorkflowArtifactReconciler(
     /// trigger-free workflow legitimately has none either, so an empty carried set cannot distinguish "this has no
     /// triggers" from "this member's bindings were not exported". Rejecting on it would fail correct closures.
     /// </para>
+    /// <para>
+    /// The trigger preflight itself still runs for every member, carried bindings or not. Every member is activated
+    /// below, and activation runs the same preflight, so a member it would refuse (for example a start trigger no
+    /// run can start from, spec 238) is refused here, before anything is persisted, rather than after.
+    /// </para>
     /// </remarks>
     private string? TryFindTriggerSurfaceFault(WorkflowExecutable member, WorkflowArtifactClosure closure)
     {
@@ -996,9 +995,6 @@ public sealed class WorkflowArtifactReconciler(
             .Where(binding => StringComparer.Ordinal.Equals(binding.ArtifactId, artifactId))
             .Select(SurfaceKey)
             .ToHashSet(StringComparer.Ordinal);
-
-        if (carried.Count == 0)
-            return null;
 
         HashSet<string> recomputed;
         try
@@ -1010,7 +1006,7 @@ public sealed class WorkflowArtifactReconciler(
             return $"artifact '{artifactId}' declares triggers this runtime cannot materialize: {exception.Message}";
         }
 
-        if (recomputed.SetEquals(carried))
+        if (carried.Count == 0 || recomputed.SetEquals(carried))
             return null;
 
         var missing = carried.Except(recomputed, StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();

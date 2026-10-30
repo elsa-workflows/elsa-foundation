@@ -12,6 +12,18 @@ export const WorkflowEdgeActionsContext = React.createContext<WorkflowEdgeAction
 
 export const WorkflowNodeAvailabilityContext = React.createContext<WorkflowNodeAvailabilityLookup | null>(null);
 
+/** Existing editor operations surfaced on the selected authoring node. Run viewers omit this context. */
+export interface WorkflowNodeActions {
+  selectedNodeCount: number;
+  canAddAfter: boolean;
+  addAfter(nodeId: string, portName: string, anchor: { clientX: number; clientY: number }): void;
+  duplicate(nodeId: string): void;
+  delete(nodeId: string): void;
+  setWorkflowStart?(nodeId: string, enabled: boolean): void;
+}
+
+export const WorkflowNodeActionsContext = React.createContext<WorkflowNodeActions | null>(null);
+
 // Slot-badge navigation for canvas nodes. A single context handler (instead of a per-node closure in
 // node data) keeps node data identity stable across drag re-renders, so container nodes don't
 // re-render on every pointer-move while an unrelated node is dragged. A per-node data.onEnterSlot

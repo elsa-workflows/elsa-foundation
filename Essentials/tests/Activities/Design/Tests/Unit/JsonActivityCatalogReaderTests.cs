@@ -3,7 +3,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Reconciliation.Json.Exceptions;
 using Elsa.Activities.Design.Reconciliation.Json.Services;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -20,7 +20,7 @@ public sealed class JsonActivityCatalogReaderTests : IDisposable
     private readonly List<string> _tempFiles = [];
 
     private JsonActivityCatalogReader CreateReader() =>
-        new(new JsonPayloadSerializer(new JsonPayloadConverterRegistry()), NullLogger<JsonActivityCatalogReader>.Instance);
+        new(SerializationServices.PayloadSerializer(), NullLogger<JsonActivityCatalogReader>.Instance);
 
     [Fact]
     public void Read_DeserializesModels_WithUiMetadataAndDescriptorElement()

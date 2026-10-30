@@ -1,0 +1,40 @@
+Name:        System.Threading.TimerQueueTimer
+MethodTable: 000000011003de00
+Size:        96(0x60) bytes
+Fields:
+              MT    Field   Offset                 Type   VT     Attr            Value Name
+000000011003eba8 04000dc0        8 ...eading.TimerQueue   No instance 000000802a81e0e8 _associatedTimerQueue
+000000011003de00 04000dc1       10 ...g.TimerQueueTimer   No instance 0000000000000000 _next
+000000011003de00 04000dc2       18 ...g.TimerQueueTimer   No instance 0000000000000000 _prev
+000000010a15a098 04000dc3       54       System.Boolean  Yes instance                0 _short
+000000010b2e4460 04000dc4       40         System.Int64  Yes instance                0 _startTicks
+000000010b2e1f00 04000dc5       48        System.UInt32  Yes instance       4294967295 _dueTime
+000000010b2e1f00 04000dc6       4c        System.UInt32  Yes instance       4294967295 _period
+000000011003d950 04000dc7       20 ...ing.TimerCallback   No instance 000000802aaac3e0 _timerCallback
+000000010a150850 04000dc8       28        System.Object   No instance 0000000000000000 _state
+000000010cd7d0a8 04000dc9       30 ....ExecutionContext   No instance 0000007cea815818 _executionContext
+000000010a15e4a0 04000dca       50         System.Int32  Yes instance                0 _callbacksRunning
+000000010a15a098 04000dcb       55       System.Boolean  Yes instance                0 _canceled
+000000010a15a098 04000dcc       56       System.Boolean  Yes instance                1 _everQueued
+000000010a150850 04000dcd       38        System.Object   No instance 0000000000000000 _notifyWhenNoCallbacksRunning
+000000010c4647f0 04000dce        8 ...g.ContextCallback   No   static 0000007ceaa43158 s_callCallbackInContext
+Name:        System.Threading.TimerQueueTimer
+MethodTable: 000000011003de00
+Size:        96(0x60) bytes
+Fields:
+              MT    Field   Offset                 Type   VT     Attr            Value Name
+000000011003eba8 04000dc0        8 ...eading.TimerQueue   No instance 000000802a81e0e8 _associatedTimerQueue
+000000011003de00 04000dc1       10 ...g.TimerQueueTimer   No instance 000000802aaac230 _next
+000000011003de00 04000dc2       18 ...g.TimerQueueTimer   No instance 0000000000000000 _prev
+000000010a15a098 04000dc3       54       System.Boolean  Yes instance                0 _short
+000000010b2e4460 04000dc4       40         System.Int64  Yes instance        268224045 _startTicks
+000000010b2e1f00 04000dc5       48        System.UInt32  Yes instance             5000 _dueTime
+000000010b2e1f00 04000dc6       4c        System.UInt32  Yes instance       4294967295 _period
+000000011003d950 04000dc7       20 ...ing.TimerCallback   No instance 000000802aaac600 _timerCallback
+000000010a150850 04000dc8       28        System.Object   No instance 0000000000000000 _state
+000000010cd7d0a8 04000dc9       30 ....ExecutionContext   No instance 0000007cea815818 _executionContext
+000000010a15e4a0 04000dca       50         System.Int32  Yes instance                0 _callbacksRunning
+000000010a15a098 04000dcb       55       System.Boolean  Yes instance                0 _canceled
+000000010a15a098 04000dcc       56       System.Boolean  Yes instance                1 _everQueued
+000000010a150850 04000dcd       38        System.Object   No instance 0000000000000000 _notifyWhenNoCallbacksRunning
+000000010c4647f0 04000dce        8 ...g.ContextCallback   No   static 0000007ceaa43158 s_callCallbackInContext

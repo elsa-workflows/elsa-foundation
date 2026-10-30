@@ -55,9 +55,15 @@
     <ProjectReference Include="..\..\..\..\..\src\Mediator\Core\Elsa.Mediator.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\Testing\Elsa.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\Serialization\Testing\Elsa.Serialization.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Design\CodeGeneration\Elsa.Workflows.Design.CodeGeneration.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../../../Fixtures/LegacyWorkflowHashFixture.cs" Link="Fixtures/LegacyWorkflowHashFixture.cs" />
+    <EmbeddedResource Include="../../../Fixtures/legacy-set-v1.json" LogicalName="legacy-set-v1.json" />
   </ItemGroup>
 
 </Project>

@@ -1,3 +1,4 @@
+import { resolveRuntimeActivityLabel } from "../runtimeActivityDisplay";
 import { describe, expect, it } from "vitest";
 import {
   activityDescriptionMaxLength,
@@ -52,6 +53,26 @@ describe("activity presentation metadata", () => {
       .toBe("Notify buyer");
     expect(resolveActivityLabel(undefined, catalogItem, catalogItem.activityTypeKey)).toBe("Write Line");
     expect(resolveActivityLabel(undefined, undefined, catalogItem.activityTypeKey)).toBe("WriteLine");
+    expect(resolveActivityLabel(undefined, undefined, "executable-missing:Elsa.HttpEndpoint@1.1.0")).toBe("HttpEndpoint");
+  });
+
+  it.each([
+    ["set", "Set Variable"], ["merge", "Merge"], ["reduce", "Reduce"],
+    ["return", "Return"], ["control", "Control"], ["setoutput", "Set Output"],
+    ["setcorrelationid", "Set Correlation Id"], ["setinstancename", "Set Instance Name"],
+    ["finish", "Finish"], ["set-output@1", "Set Output"],
+    ["set-correlation-id@1", "Set Correlation Id"], ["set-instance-name@1", "Set Instance Name"]
+  ])("uses a friendly historical intrinsic label for %s", (kind, label) => {
+    expect(resolveRuntimeActivityLabel(undefined, undefined, `elsa.intrinsic.${kind}`)).toBe(label);
+    expect(resolveRuntimeActivityLabel(undefined, undefined, `executable-missing:elsa.intrinsic.${kind}`)).toBe(label);
+    expect(resolveRuntimeActivityLabel({ nodeId: "node", displayName: "my custom label" }, undefined, `elsa.intrinsic.${kind}`))
+      .toBe("my custom label");
+  });
+
+  it("keeps unknown intrinsic types and ordinary catalog display names intact", () => {
+    expect(resolveRuntimeActivityLabel(undefined, undefined, "elsa.intrinsic.future")).toBe("future");
+    expect(resolveRuntimeActivityLabel(undefined, { ...catalogItem, displayName: "send notification" }, catalogItem.activityTypeKey))
+      .toBe("send notification");
   });
 
   it("copies metadata on duplication and prunes selected node identities", () => {

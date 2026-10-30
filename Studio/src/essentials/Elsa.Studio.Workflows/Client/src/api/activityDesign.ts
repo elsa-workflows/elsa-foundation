@@ -76,11 +76,21 @@ export function classifyActivityDefinitionReadFailure(error: unknown): ActivityD
   return "failed";
 }
 
-export function useActivityDefinitions(context: StudioEndpointContext, request: ActivityDefinitionCollectionRequest) {
+export function isInvalidActivityDefinitionCursor(error: unknown): boolean {
+  if (!(error instanceof StudioHttpError) || error.status !== 400 || !error.payload || typeof error.payload !== "object") return false;
+  const problem = error.payload as { errorCode?: unknown; recovery?: { instruction?: unknown } | null };
+  return problem.errorCode === "activity.management.cursor-invalid" && problem.recovery?.instruction === "restart-without-cursor";
+}
+
+export function useActivityDefinitions(context: StudioEndpointContext, request: ActivityDefinitionCollectionRequest, authorityScope: string) {
   return useQuery({
-    queryKey: activityDesignKeys.definitionCollection(request),
+    queryKey: [...activityDesignKeys.definitionCollection(request), authorityScope],
     queryFn: ({ signal }) => listActivityDefinitions(context, request, signal),
-    placeholderData: previous => previous,
+    placeholderData: (previous, previousQuery) => {
+      const previousRequest = previousQuery?.queryKey[2] as ActivityDefinitionCollectionRequest | undefined;
+      const previousAuthorityScope = previousQuery?.queryKey[3];
+      return previousAuthorityScope === authorityScope && previousRequest?.authority === request.authority ? previous : undefined;
+    },
     retry: false
   });
 }

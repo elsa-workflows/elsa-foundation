@@ -33,4 +33,12 @@ public interface IActivityDefinitionLookup
     Task<IActivityDefinitionVersion?> FindVersion(string versionId, CancellationToken cancellationToken = default);
 
     Task<IEnumerable<ActivityDefinitionVersionSummary>> ListVersions(string definitionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns the visible definition's active, explicitly recommended version for new bindings.
+    /// Historical versions and publication head do not imply a recommendation. Implementations
+    /// without recommendation support return null rather than selecting a version by ordering.
+    /// </summary>
+    Task<ActivityDefinitionVersionSummary?> FindRecommendedVersion(string definitionId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<ActivityDefinitionVersionSummary?>(null);
 }

@@ -1,6 +1,22 @@
 # Expression Code Intelligence Foundation — Verification
 
-Last reconciled: 2026-07-28
+## Restart note — 2026-10-23
+
+The owner restarted Program #2310 on 2026-10-23. The planning branch was merged with current `main`, where the spec-status map is no longer committed (spec 257 publishes generated maps on the `generated-maps` branch). Source paths now live under `Essentials/` and `Studio/`. The 2026-10-06 snapshot below is historical and does not describe the current head. Review and merge follow the ADR 0080 D7 review protocol (Issue Bus Lite); there is no separate owner-acceptance step.
+
+## Historical integration snapshot — 2026-10-06
+
+The existing Foundation expression stack is being synchronized with main `2a0d1f10fb91bf6928203430d938d99d183c5cda`. The root planning branch changes no production, test, SDK or workflow file relative to that main. Its generated spec-status map retains the reopened expression work (25 completed tasks and 6 open tasks) and the two new draft specs. Root and independent diff review pass; authoritative combined-head Maps and CI remain pending. Historical baseline results below do not establish acceptance of this synchronized stack or a new Studio/Foundation pair.
+
+The owner permits preview NuGet/npm publication only to feedz.io and separately permits Docker images at any endpoint; this delivery keeps the existing Docker Hub workflows. Native Chrome/Safari VoiceOver is **SKIPPED BY OWNER DECISION — NEVER PASSED**. At that time all program PRs remained draft/unmerged pending technical/review gates and explicit final owner acceptance; that acceptance step was dropped on 2026-10-23. Required resulting-main checks and public completion records remain open.
+
+## Retained historical baseline
+
+Last reconciled: 2026-10-23 for the Program #2310 restart; the baseline evidence below dates from 2026-10-02 planning and current-head extension evidence is pending
+
+## Program #2310 status
+
+The passing evidence below is historical baseline evidence. It does not prove the current normal host, effective runtime Liquid metadata, runtime-compatible JavaScript help, or the real persisted producer-consumer lifecycle requested by Program #2310. T026-T031 and the corresponding live Studio journey remain open.
 
 ## Passing evidence
 

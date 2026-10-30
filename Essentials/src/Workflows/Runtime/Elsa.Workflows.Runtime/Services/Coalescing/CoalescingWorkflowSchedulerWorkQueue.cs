@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Scheduler;
 
 namespace Elsa.Workflows.Runtime.Services.Coalescing;
 
@@ -17,12 +18,15 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// </remarks>
 public sealed class CoalescingWorkflowSchedulerWorkQueue(
     CoalescingInner<IWorkflowSchedulerWorkQueue> inner,
-    IRuntimeCoalescingSessionAccessor sessionAccessor) : IWorkflowSchedulerWorkQueue
+    IRuntimeCoalescingSessionAccessor sessionAccessor) : IWorkflowSchedulerWorkQueue, IRuntimeSchedulerWorkDeferralCapability
 {
     private readonly IWorkflowSchedulerWorkQueue _inner = inner.Value;
 
     public bool SupportsClaimTransitions =>
         sessionAccessor.Current is { IsActive: true } || _inner.SupportsClaimTransitions;
+
+    bool IRuntimeSchedulerWorkDeferralCapability.CanDefer(RuntimeSchedulerWorkClaim claim) =>
+        sessionAccessor.Current is not { } session || !session.OwnsOverlayClaim(claim) || session.SupportsDeferredOverlayRelease;
 
     public bool SupportsTargetedDeletion => _inner.SupportsTargetedDeletion;
 
@@ -81,7 +85,23 @@ public sealed class CoalescingWorkflowSchedulerWorkQueue(
         CancellationToken cancellationToken = default)
     {
         if (sessionAccessor.Current is { } session && session.AppliesTo(request.WorkflowExecutionId))
+        {
+            var head = await session.ListOverlayAsync(
+                new RuntimeSchedulerWorkQuery(request.WorkflowExecutionId, limit: 1),
+                cancellationToken);
+            if (!session.SupportsDeferredOverlayRelease &&
+                head.Items.FirstOrDefault()?.CommandKind == WorkflowExecutionCommandKind.ResumeBookmark)
+            {
+                // Legacy queues keep the established bookmark-resume durable boundary. Other work remains
+                // coalescible and propagates unavailable when its overlay cannot persist a delay. Flush the current
+                // coalesced segment before claiming this item so the drainer's later release updates the real durable
+                // queue row rather than only an overlay that disappears at quiescence.
+                session.RequestDurableSchedulerClaimBoundary();
+                return null;
+            }
+
             return await session.ClaimOverlayAsync(request, cancellationToken);
+        }
 
         return await _inner.ClaimAsync(request, cancellationToken);
     }

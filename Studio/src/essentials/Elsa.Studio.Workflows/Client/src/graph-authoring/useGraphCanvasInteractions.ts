@@ -11,10 +11,10 @@ import {
   type NodeChange,
   type OnConnectEnd,
   type OnConnectStart,
+  type OnMove,
   type OnNodeDrag,
   type OnReconnect,
   type ReactFlowInstance,
-  type Viewport,
   type XYPosition
 } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
@@ -25,9 +25,10 @@ import {
   getActivityDisplay,
   getActivitySourcePorts,
   getChildSlots,
-  resolveActivityIcon,
   type WorkflowNodeData
 } from "../workflowAdapter";
+import { resolveActivityIcon, resolveActivityIconTone } from "../activityIcons";
+import { graphFitViewOptions, useGraphViewport } from "./useGraphViewport";
 import { computeAutoLayout } from "../workflowLayout";
 import { activityDragDataType, pointerDragThreshold } from "../workflow-editor/constants";
 import {
@@ -44,6 +45,11 @@ import {
 import type { ConnectMenuState, WorkflowConnectSource, WorkflowEdge } from "../workflow-editor/editorTypes";
 import type { WorkflowEdgeActions } from "../workflow-editor/contexts";
 import { decorateWorkflowCanvasElements } from "../workflow-editor/workflowAccessibility";
+
+import { emptyGraphElements, graphElementDragDataType, type GraphPaletteElement } from "./graphPaletteElements";
+
+type PaletteDragItem = { kind: "activity"; activity: ActivityCatalogItem } | { kind: "element"; element: GraphPaletteElement };
+const paletteDragKey = (item: PaletteDragItem) => item.kind === "activity" ? item.activity.activityVersionId : `element:${item.element.id}`;
 
 /**
  * Shape of the slot currently mirrored on the canvas. `unsupported` is a read-only projection of a
@@ -92,6 +98,8 @@ export interface GraphCanvasInteractionsParams {
    */
   scopeKey: string;
   canAddActivities: boolean;
+  isOfferedActivity?(activity: ActivityCatalogItem): boolean;
+  elements?: readonly GraphPaletteElement[];
   selectedNodeId: string | null;
   catalogByVersion: Map<string, ActivityCatalogItem>;
   select(nodeId: string | null): void;
@@ -124,6 +132,54 @@ export interface GraphCanvasInteractionsParams {
 }
 
 /**
+ * Named so library declaration emit can reference `@xyflow/react` types instead of inferring a
+ * non-portable `@xyflow/system` path (TS2742).
+ */
+export interface GraphCanvasInteractionsResult {
+  accessibleNodes: Node<WorkflowNodeData>[];
+  accessibleEdges: WorkflowEdge[];
+  canvasRef: React.RefObject<HTMLDivElement | null>;
+  reactFlowInstance: ReactFlowInstance<Node<WorkflowNodeData>, WorkflowEdge> | null;
+  setReactFlowInstance: React.Dispatch<React.SetStateAction<ReactFlowInstance<Node<WorkflowNodeData>, WorkflowEdge> | null>>;
+  onMoveEnd: OnMove;
+  canCreateActivityFromPort: boolean;
+  connectMenu: ConnectMenuState | null;
+  setConnectMenu: React.Dispatch<React.SetStateAction<ConnectMenuState | null>>;
+  edgeActions: WorkflowEdgeActions;
+  queueCanvasNodeFocus(nodeId: string): void;
+  stampCanvasNode: GraphCanvasStamp;
+  onNodesChange(changes: NodeChange<Node<WorkflowNodeData>>[]): void;
+  onEdgesChange(changes: EdgeChange<WorkflowEdge>[]): void;
+  onNodesDelete(deletedNodes: Node<WorkflowNodeData>[]): void;
+  onEdgesDelete(deletedEdges: WorkflowEdge[]): void;
+  isValidConnection(connection: Connection | Edge): boolean;
+  onConnect(connection: Connection): void;
+  onConnectStart: OnConnectStart;
+  onConnectEnd: OnConnectEnd;
+  onReconnect: OnReconnect<WorkflowEdge>;
+  commitLayout: OnNodeDrag<Node<WorkflowNodeData>>;
+  canAutoLayout: boolean;
+  autoLayout(): void;
+  onCanvasDragOver(event: React.DragEvent): void;
+  onCanvasDragLeave(event: React.DragEvent): void;
+  onCanvasDrop(event: React.DragEvent): void;
+  openEmptyConnectMenu(anchor?: { clientX: number; clientY: number }): void;
+  openAddStepMenu(anchor: { clientX: number; clientY: number }, source?: { nodeId: string; handleId: string }): void;
+  openSequenceInsertMenu(index: number, anchor: { clientX: number; clientY: number }): void;
+  insertSequenceActivity(activity: ActivityCatalogItem, index: number): void;
+  moveSequenceActivity(nodeId: string, boundary: number): void;
+  onConnectMenuPick(activity: ActivityCatalogItem): void;
+  onElementClick(element: GraphPaletteElement): void;
+  onElementDragStart(event: React.DragEvent<HTMLButtonElement>, element: GraphPaletteElement): void;
+  onElementDragEnd(event: React.DragEvent<HTMLButtonElement>, element: GraphPaletteElement): void;
+  onElementPointerDown(event: React.PointerEvent<HTMLButtonElement>, element: GraphPaletteElement): void;
+  onPaletteClick(activity: ActivityCatalogItem): void;
+  onPaletteDragStart(event: React.DragEvent<HTMLButtonElement>, activity: ActivityCatalogItem): void;
+  onPaletteDragEnd(event: React.DragEvent<HTMLButtonElement>, activity: ActivityCatalogItem): void;
+  onPalettePointerDown(event: React.PointerEvent<HTMLButtonElement>, activity: ActivityCatalogItem): void;
+}
+
+/**
  * Every canvas interaction that is a pure function of (nodes, edges, slot mode) and a commit seam:
  * palette drag/drop routing, edge splicing, the connect menu, connect/reconnect, deletes, auto-layout,
  * viewport persistence, and canvas focus management.
@@ -140,6 +196,8 @@ export function useGraphCanvasInteractions({
   mode,
   scopeKey,
   canAddActivities,
+  isOfferedActivity,
+  elements = emptyGraphElements,
   selectedNodeId,
   catalogByVersion,
   select,
@@ -150,25 +208,23 @@ export function useGraphCanvasInteractions({
   resolveRemovedActivityNodeIds,
   onStatus,
   onActivityPlaced
-}: GraphCanvasInteractionsParams) {
+}: GraphCanvasInteractionsParams): GraphCanvasInteractionsResult {
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance<Node<WorkflowNodeData>, WorkflowEdge> | null>(null);
   const [connectMenu, setConnectMenu] = useState<ConnectMenuState | null>(null);
   const [highlightedEdgeId, setHighlightedEdgeId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const connectSourceRef = useRef<WorkflowConnectSource | null>(null);
-  const viewportSnapshotsRef = useRef(new Map<string, Viewport>());
-  const visitedViewportScopesRef = useRef(new Set<string>());
-  const settledViewportScopeKeyRef = useRef<string | null>(null);
-  const staleScopeNodesRef = useRef<Node<WorkflowNodeData>[] | null>(null);
+  const { onMoveEnd } = useGraphViewport({ nodes, scopeKey, instance: reactFlowInstance });
   const pointerDragRef = useRef<{
-    activity: ActivityCatalogItem;
+    item: PaletteDragItem;
     startX: number;
     startY: number;
     dragging: boolean;
   } | null>(null);
-  const nativePaletteDragRef = useRef<{ activityVersionId: string; handledDrop: boolean } | null>(null);
+  const nativePaletteDragRef = useRef<{ itemKey: string; handledDrop: boolean } | null>(null);
   const suppressPaletteClickRef = useRef(false);
   const pendingFocusNodeIdRef = useRef<string | null>(null);
+  const focusObserverRef = useRef<MutationObserver | null>(null);
 
   const isUnsupported = mode === "unsupported";
   // BPMN shares the free-connection graph editing model with flowcharts; sequence keeps its linear model.
@@ -182,6 +238,7 @@ export function useGraphCanvasInteractions({
   );
 
   const placementFactory = useCallback((activity: ActivityCatalogItem, position: XYPosition): GraphCanvasPlacement | null => {
+    if (isOfferedActivity && !isOfferedActivity(activity)) return null;
     if (createPlacement) return createPlacement(activity, position);
     const activityNode = createActivityNode(activity, createNodeId(activity));
     return {
@@ -198,46 +255,14 @@ export function useGraphCanvasInteractions({
           category: activity.category,
           executionType: activity.executionType,
           icon: resolveActivityIcon(activity),
+          iconTone: resolveActivityIconTone(activity),
           childSlots: getChildSlots(activityNode, activity),
           acceptsInbound: String(activity.executionType ?? "").toLowerCase() !== "trigger",
           sourcePorts: getActivitySourcePorts(activityNode, activity)
         }
       }
     };
-  }, [createPlacement]);
-
-  useEffect(() => () => {
-    if (!reactFlowInstance) return;
-    viewportSnapshotsRef.current.set(scopeKey, reactFlowInstance.getViewport());
-  }, [reactFlowInstance, scopeKey]);
-
-  // Restore (or first-time fit) the viewport once the host has rebuilt `nodes` for the new scope.
-  // The rebuild is asynchronous relative to the scope change — the host sees the new scope, then
-  // pushes a fresh node array on a later commit — so acting on the scope change alone would restore
-  // against the *previous* scope's nodes. Waiting for the node array's identity to change is the one
-  // signal available here that does not require the host to announce its rebuild.
-  useEffect(() => {
-    if (settledViewportScopeKeyRef.current !== scopeKey) {
-      settledViewportScopeKeyRef.current = scopeKey;
-      staleScopeNodesRef.current = nodes;
-      return;
-    }
-    if (staleScopeNodesRef.current === null || staleScopeNodesRef.current === nodes) return;
-    staleScopeNodesRef.current = null;
-
-    if (!reactFlowInstance) return;
-    const savedViewport = viewportSnapshotsRef.current.get(scopeKey);
-    const hasVisitedScope = visitedViewportScopesRef.current.has(scopeKey);
-    visitedViewportScopesRef.current.add(scopeKey);
-
-    window.requestAnimationFrame(() => {
-      if (savedViewport) {
-        reactFlowInstance.setViewport(savedViewport);
-      } else if (!hasVisitedScope && nodes.length > 0) {
-        reactFlowInstance.fitView({ padding: 0.2 });
-      }
-    });
-  }, [nodes, reactFlowInstance, scopeKey]);
+  }, [createPlacement, isOfferedActivity]);
 
   // React Flow's keyboard selection is emitted as a node change, while the inspector is driven by the
   // host's selected node id. Keep both projections aligned so Enter/Space has the same result as a
@@ -256,32 +281,56 @@ export function useGraphCanvasInteractions({
   }, [selectedNodeId, setNodes]);
 
   const focusCanvasNode = useCallback((nodeId: string) => {
-    const element = Array.from(canvasRef.current?.querySelectorAll<HTMLElement>(".react-flow__node") ?? [])
+    const element = Array.from(canvasRef.current?.querySelectorAll<HTMLElement>(".react-flow__node, .wf-sequence-step") ?? [])
       .find(candidate => candidate.dataset.id === nodeId);
     if (!element) return false;
     element.focus({ preventScroll: true });
-    return true;
+    return document.activeElement === element;
   }, []);
 
   const queueCanvasNodeFocus = useCallback((nodeId: string) => {
     pendingFocusNodeIdRef.current = nodeId;
-    window.requestAnimationFrame(() => {
+    focusObserverRef.current?.disconnect();
+    const tryFocus = () => {
       if (pendingFocusNodeIdRef.current !== nodeId || !focusCanvasNode(nodeId)) return;
       pendingFocusNodeIdRef.current = null;
-    });
+      focusObserverRef.current?.disconnect();
+      focusObserverRef.current = null;
+    };
+    // React Flow mounts new nodes hidden until measured. Observe its visibility update rather
+    // than treating a found-but-not-focusable wrapper as successful or guessing a render delay.
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const observer = new MutationObserver(tryFocus);
+      observer.observe(canvas, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "tabindex"] });
+      focusObserverRef.current = observer;
+    }
+    window.requestAnimationFrame(tryFocus);
   }, [focusCanvasNode]);
+
+  useEffect(() => () => {
+    pendingFocusNodeIdRef.current = null;
+    focusObserverRef.current?.disconnect();
+  }, []);
 
   useEffect(() => {
     const nodeId = pendingFocusNodeIdRef.current;
-    if (nodeId) queueCanvasNodeFocus(nodeId);
+    if (!nodeId) return;
+    if (nodes.some(node => node.id === nodeId)) {
+      queueCanvasNodeFocus(nodeId);
+    } else {
+      pendingFocusNodeIdRef.current = null;
+      focusObserverRef.current?.disconnect();
+      focusObserverRef.current = null;
+    }
   }, [nodes, queueCanvasNodeFocus]);
 
   /**
    * Places an already-positioned node on the canvas, clearing the previous selection, selecting and
    * focusing the newcomer, and committing it with whatever edge rewiring the caller decided on.
    * `order` reshuffles the node list (sequence insertion); `wire` derives the next edges from the
-   * resulting node order. `createdActivities` is what the host must thread into its sync call — a pure
-   * BPMN shape is the one placement that carries none, since it binds no activity.
+   * resulting node order. `createdActivities` is what the host must thread into its sync call — a structural
+   * element carries none, since it binds no activity.
    */
   const stampCanvasNode = useCallback<GraphCanvasStamp>((node, plan) => {
     const cleared = nodes.map(candidate => candidate.selected ? { ...candidate, selected: false } : candidate);
@@ -349,8 +398,22 @@ export function useGraphCanvasInteractions({
     onActivityPlaced?.(activity);
   }, [edgeFactory, edges, nodes, onActivityPlaced, placeOnCanvas, placementFactory]);
 
+  const insertSequenceActivity = useCallback((activity: ActivityCatalogItem, index: number) => {
+    if (mode !== "sequence" || !canAddActivities || activity.available === false || !Number.isInteger(index) || index < 0 || index > nodes.length) return;
+    if (nativePaletteDragRef.current?.itemKey === activity.activityVersionId) nativePaletteDragRef.current.handledDrop = true;
+    pointerDragRef.current = null;
+    const placement = placementFactory(activity, { x: 0, y: 0 });
+    if (!placement) return;
+    stampCanvasNode(placement.node, {
+      createdActivities: [placement.activityNode],
+      order: current => [...current.slice(0, index), placement.node, ...current.slice(index)],
+      wire: current => buildSequenceEdges(current) as WorkflowEdge[]
+    });
+    onActivityPlaced?.(activity);
+  }, [canAddActivities, mode, nodes.length, onActivityPlaced, placementFactory, stampCanvasNode]);
+
   const tryAddActivityAtClientPoint = useCallback((activity: ActivityCatalogItem, clientX: number, clientY: number) => {
-    if (!canAddActivities) return false;
+    if (!canAddActivities || activity.available === false || (isOfferedActivity && !isOfferedActivity(activity))) return false;
     if (!canvasRef.current) return false;
 
     const canvasRect = canvasRef.current.getBoundingClientRect();
@@ -361,6 +424,13 @@ export function useGraphCanvasInteractions({
       clientY <= canvasRect.bottom;
 
     if (!isOverCanvas) return false;
+
+    if (mode === "sequence") {
+      const boundary = document.elementFromPoint?.(clientX, clientY)?.closest<HTMLElement>("[data-sequence-insert-index]");
+      if (!boundary || !canvasRef.current.contains(boundary)) return false;
+      insertSequenceActivity(activity, Number(boundary.dataset.sequenceInsertIndex));
+      return true;
+    }
 
     const position = toCanvasPosition(clientX, clientY);
     if (!position) return false;
@@ -376,7 +446,26 @@ export function useGraphCanvasInteractions({
 
     placeActivity(activity, position);
     return true;
-  }, [canAddActivities, edges, findEdgeUnderCursor, isGraphMode, placeActivity, spliceActivityIntoEdge, toCanvasPosition]);
+  }, [canAddActivities, isOfferedActivity, edges, findEdgeUnderCursor, insertSequenceActivity, isGraphMode, mode, placeActivity, spliceActivityIntoEdge, toCanvasPosition]);
+
+  const placeElement = useCallback((element: GraphPaletteElement, position?: XYPosition) => {
+    if (!canAddActivities) return false;
+    // Re-resolve against the live scope: an old drag cannot stamp an element into a different designer.
+    const current = elements.find(candidate => candidate.id === element.id);
+    if (!current) return false;
+    const node = current.createNode(position ?? { x: 120 + nodes.length % 5 * 220, y: 120 + Math.floor(nodes.length / 5) * 140 });
+    // The owner adapter projects its own element payload. No ActivityNode/catalog reference is made.
+    stampCanvasNode({ ...node, selected: true } as Node<WorkflowNodeData>);
+    return true;
+  }, [canAddActivities, elements, nodes.length, stampCanvasNode]);
+
+  const tryAddPaletteItemAtClientPoint = useCallback((item: PaletteDragItem, clientX: number, clientY: number) => {
+    if (item.kind === "activity") return tryAddActivityAtClientPoint(item.activity, clientX, clientY);
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect || clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) return false;
+    const position = toCanvasPosition(clientX, clientY);
+    return position ? placeElement(item.element, position) : false;
+  }, [placeElement, toCanvasPosition, tryAddActivityAtClientPoint]);
 
   // Pointer-based palette drag. Runs alongside the native HTML5 drag so a palette press that never
   // produces a dragstart (touch, or a browser that suppresses it) still lands an activity.
@@ -409,53 +498,62 @@ export function useGraphCanvasInteractions({
         suppressPaletteClickRef.current = false;
       }, 0);
 
-      tryAddActivityAtClientPoint(drag.activity, event.clientX, event.clientY);
+      tryAddPaletteItemAtClientPoint(drag.item, event.clientX, event.clientY);
     };
 
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
-    window.addEventListener("pointercancel", onPointerUp);
+    const onPointerCancel = () => { pointerDragRef.current = null; };
+    window.addEventListener("pointercancel", onPointerCancel);
 
     return () => {
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
-      window.removeEventListener("pointercancel", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerCancel);
     };
-  }, [tryAddActivityAtClientPoint]);
+  }, [tryAddPaletteItemAtClientPoint]);
 
-  const onPaletteDragStart = (event: React.DragEvent<HTMLButtonElement>, activity: ActivityCatalogItem) => {
-    nativePaletteDragRef.current = { activityVersionId: activity.activityVersionId, handledDrop: false };
-    event.dataTransfer.setData(activityDragDataType, activity.activityVersionId);
-    event.dataTransfer.setData("text/plain", activity.activityVersionId);
+  const startPaletteDrag = (event: React.DragEvent<HTMLButtonElement>, item: PaletteDragItem) => {
+    nativePaletteDragRef.current = { itemKey: paletteDragKey(item), handledDrop: false };
+    if (item.kind === "activity") {
+      event.dataTransfer.setData(activityDragDataType, item.activity.activityVersionId);
+      event.dataTransfer.setData("text/plain", item.activity.activityVersionId);
+    } else {
+      event.dataTransfer.setData(graphElementDragDataType, item.element.id);
+    }
     event.dataTransfer.effectAllowed = "copy";
   };
 
-  const onPaletteDragEnd = (event: React.DragEvent<HTMLButtonElement>, activity: ActivityCatalogItem) => {
+  const endPaletteDrag = (event: React.DragEvent<HTMLButtonElement>, item: PaletteDragItem) => {
     const nativeDrag = nativePaletteDragRef.current;
     nativePaletteDragRef.current = null;
+    pointerDragRef.current = null;
     if (nativeDrag?.handledDrop) return;
     if (event.clientX === 0 && event.clientY === 0) return;
-    if (!tryAddActivityAtClientPoint(activity, event.clientX, event.clientY)) return;
+    if (!tryAddPaletteItemAtClientPoint(item, event.clientX, event.clientY)) return;
 
     suppressPaletteClickRef.current = true;
-    window.setTimeout(() => {
-      suppressPaletteClickRef.current = false;
-    }, 0);
+    window.setTimeout(() => { suppressPaletteClickRef.current = false; }, 0);
   };
 
-  const onPalettePointerDown = (event: React.PointerEvent<HTMLButtonElement>, activity: ActivityCatalogItem) => {
+  const startPalettePointer = (event: React.PointerEvent<HTMLButtonElement>, item: PaletteDragItem) => {
     if (event.button !== 0) return;
-    pointerDragRef.current = {
-      activity,
-      startX: event.clientX,
-      startY: event.clientY,
-      dragging: false
-    };
+    pointerDragRef.current = { item, startX: event.clientX, startY: event.clientY, dragging: false };
+  };
+
+  const onPaletteDragStart = (event: React.DragEvent<HTMLButtonElement>, activity: ActivityCatalogItem) => startPaletteDrag(event, { kind: "activity", activity });
+  const onPaletteDragEnd = (event: React.DragEvent<HTMLButtonElement>, activity: ActivityCatalogItem) => endPaletteDrag(event, { kind: "activity", activity });
+  const onPalettePointerDown = (event: React.PointerEvent<HTMLButtonElement>, activity: ActivityCatalogItem) => startPalettePointer(event, { kind: "activity", activity });
+  const onElementDragStart = (event: React.DragEvent<HTMLButtonElement>, element: GraphPaletteElement) => startPaletteDrag(event, { kind: "element", element });
+  const onElementDragEnd = (event: React.DragEvent<HTMLButtonElement>, element: GraphPaletteElement) => endPaletteDrag(event, { kind: "element", element });
+  const onElementPointerDown = (event: React.PointerEvent<HTMLButtonElement>, element: GraphPaletteElement) => startPalettePointer(event, { kind: "element", element });
+  const onElementClick = (element: GraphPaletteElement) => {
+    if (!suppressPaletteClickRef.current) placeElement(element);
   };
 
   const onPaletteClick = (activity: ActivityCatalogItem) => {
     if (suppressPaletteClickRef.current) return;
-    if (!canAddActivities) return;
+    if (!canAddActivities || activity.available === false || (isOfferedActivity && !isOfferedActivity(activity))) return;
     const added = placeActivity(activity);
     if (added) queueCanvasNodeFocus(added.nodeId);
   };
@@ -485,10 +583,19 @@ export function useGraphCanvasInteractions({
     event.preventDefault();
     setHighlightedEdgeId(null);
 
+    const elementId = event.dataTransfer.getData(graphElementDragDataType);
+    if (elementId) {
+      event.stopPropagation();
+      if (nativePaletteDragRef.current?.itemKey === `element:${elementId}`) nativePaletteDragRef.current.handledDrop = true;
+      const element = elements.find(candidate => candidate.id === elementId);
+      if (element) tryAddPaletteItemAtClientPoint({ kind: "element", element }, event.clientX, event.clientY);
+      return;
+    }
+
     const activityVersionId = event.dataTransfer.getData(activityDragDataType) || event.dataTransfer.getData("text/plain");
     if (!activityVersionId) return;
     event.stopPropagation();
-    if (nativePaletteDragRef.current?.activityVersionId === activityVersionId) {
+    if (nativePaletteDragRef.current?.itemKey === activityVersionId) {
       nativePaletteDragRef.current.handledDrop = true;
     }
     if (!canAddActivities) return;
@@ -522,9 +629,10 @@ export function useGraphCanvasInteractions({
 
   // The inline "Add step" affordance (editorial layout): continue from the selected node when there is
   // one — the same commit as dragging a new activity off its default port — otherwise add to the scope.
-  const openAddStepMenu = (anchor: { clientX: number; clientY: number }) => {
-    if (selectedNodeId && canCreateActivityFromPort && nodes.some(node => node.id === selectedNodeId)) {
-      setConnectMenu({ kind: "fromPort", sourceNodeId: selectedNodeId, sourceHandleId: null, ...anchor });
+  const openAddStepMenu = (anchor: { clientX: number; clientY: number }, source?: { nodeId: string; handleId: string }) => {
+    const sourceNodeId = source?.nodeId ?? selectedNodeId;
+    if (sourceNodeId && canCreateActivityFromPort && nodes.some(node => node.id === sourceNodeId)) {
+      setConnectMenu({ kind: "fromPort", sourceNodeId, sourceHandleId: source?.handleId ?? null, ...anchor });
       return;
     }
 
@@ -589,17 +697,17 @@ export function useGraphCanvasInteractions({
     commitCanvas(nextNodes, edges);
   };
 
-  const canAutoLayout = !isUnsupported && nodes.length > 0;
+  const canAutoLayout = !isUnsupported && mode !== "sequence" && nodes.length > 0;
   const autoLayout = useCallback(() => {
-    if (isUnsupported || nodes.length === 0) return;
-    const positions = computeAutoLayout(nodes, edges, mode === "sequence" ? "sequence" : "flowchart");
+    if (isUnsupported || mode === "sequence" || nodes.length === 0) return;
+    const positions = computeAutoLayout(nodes, edges, "flowchart");
     const nextNodes = nodes.map(node => {
       const position = positions.get(node.id);
       return position ? { ...node, position } : node;
     });
     setNodes(nextNodes);
     commitCanvas(nextNodes, edges);
-    window.requestAnimationFrame(() => reactFlowInstance?.fitView({ padding: 0.2 }));
+    window.requestAnimationFrame(() => reactFlowInstance?.fitView(graphFitViewOptions));
     onStatus?.("Rearranged the canvas.");
   }, [commitCanvas, edges, isUnsupported, mode, nodes, onStatus, reactFlowInstance, setNodes]);
 
@@ -651,7 +759,7 @@ export function useGraphCanvasInteractions({
     // by canvas node id, which in a BPMN scope is the element id rather than the resolved activity id.
     const removedNodeIds = new Set([...deletedIds, ...(resolveRemovedActivityNodeIds?.(deletedNodes) ?? [])]);
     const nextNodes = nodes.filter(node => !deletedIds.has(node.id));
-    const nextEdges = edges.filter(edge => !deletedIds.has(edge.source) && !deletedIds.has(edge.target));
+    const nextEdges = mode === "sequence" ? buildSequenceEdges(nextNodes) : edges.filter(edge => !deletedIds.has(edge.source) && !deletedIds.has(edge.target));
     setNodes(nextNodes);
     setEdges(nextEdges);
     if (selectedNodeId && deletedIds.has(selectedNodeId)) {
@@ -694,10 +802,35 @@ export function useGraphCanvasInteractions({
     setConnectMenu({ kind: "spliceEdge", edgeId, clientX, clientY });
   }, [isGraphMode]);
 
+  const openSequenceInsertMenu = (index: number, anchor: { clientX: number; clientY: number }) => {
+    if (mode !== "sequence" || !canAddActivities || !Number.isInteger(index) || index < 0 || index > nodes.length) return;
+    setConnectMenu({ kind: "sequenceInsert", index, scopeKey, ...anchor });
+  };
+
+  const moveSequenceActivity = (nodeId: string, boundary: number) => {
+    if (mode !== "sequence" || !canAddActivities || !Number.isInteger(boundary) || boundary < 0 || boundary > nodes.length) return;
+    const from = nodes.findIndex(node => node.id === nodeId);
+    if (from < 0 || boundary === from || boundary === from + 1) return;
+    const next = [...nodes];
+    const [node] = next.splice(from, 1);
+    next.splice(boundary > from ? boundary - 1 : boundary, 0, node);
+    const nextEdges = buildSequenceEdges(next) as WorkflowEdge[];
+    setNodes(next);
+    setEdges(nextEdges);
+    select(nodeId);
+    commitCanvas(next, nextEdges);
+    queueCanvasNodeFocus(nodeId);
+    onStatus?.(`Moved ${node.data.label} to step ${next.findIndex(item => item.id === nodeId) + 1}.`);
+  };
+
   const onConnectMenuPick = (activity: ActivityCatalogItem) => {
     const menu = connectMenu;
     if (!menu) return;
     setConnectMenu(null);
+    if (menu.kind === "sequenceInsert") {
+      if (menu.scopeKey === scopeKey) insertSequenceActivity(activity, menu.index);
+      return;
+    }
 
     const fallbackPosition = toCanvasPosition(menu.clientX, menu.clientY) ?? { x: 0, y: 0 };
 
@@ -746,6 +879,7 @@ export function useGraphCanvasInteractions({
     canvasRef,
     reactFlowInstance,
     setReactFlowInstance,
+    onMoveEnd,
     canCreateActivityFromPort,
     connectMenu,
     setConnectMenu,
@@ -769,7 +903,14 @@ export function useGraphCanvasInteractions({
     onCanvasDrop,
     openEmptyConnectMenu,
     openAddStepMenu,
+    openSequenceInsertMenu,
+    insertSequenceActivity,
+    moveSequenceActivity,
     onConnectMenuPick,
+    onElementClick,
+    onElementDragStart,
+    onElementDragEnd,
+    onElementPointerDown,
     onPaletteClick,
     onPaletteDragStart,
     onPaletteDragEnd,

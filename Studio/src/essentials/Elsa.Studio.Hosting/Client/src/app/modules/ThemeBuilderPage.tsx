@@ -1,0 +1,597 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Check, Copy, Download, FileUp, ImagePlus, Paintbrush, RefreshCcw, Save, Trash2 } from "lucide-react";
+import { isStudioThemeLayout, studioThemeLayouts, type ElsaStudioModuleApi } from "../../sdk";
+import { SkeletonRows, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
+import {
+  allThemeModes,
+  cloneThemeDefinition,
+  getSupportedThemeModes,
+  getThemeModeDefinition,
+  themeModeKeys,
+  themeModeLabels,
+  themeTokenNames,
+  type StudioThemeDefinition,
+  type ThemeMode,
+  type ThemeShape,
+  type ThemeTypography
+} from "../themes/presets";
+import {
+  createCustomThemeFrom,
+  deleteTheme,
+  deleteThemeAsset,
+  duplicateTheme,
+  fetchThemeStore,
+  getSelectableThemes,
+  importThemePack,
+  saveTheme,
+  setBuiltInThemeEnabled,
+  setDefaultTheme,
+  uploadThemeAsset,
+  validateThemeDefinition,
+  withOptionalMode,
+  withoutOptionalMode,
+  withStyleField,
+  type ThemeStoreResponse,
+  type ThemeValidationIssue
+} from "../themes/themeStoreApi";
+import { useTheme } from "../components/ThemeProvider";
+
+type BuilderTab = "overview" | "tokens" | "assets" | "preview";
+
+const modeTabs = allThemeModes.map(mode => ({ id: mode, label: themeModeLabels[mode] }));
+
+const typographyFields: { key: keyof ThemeTypography; label: string }[] = [
+  { key: "sans", label: "UI font" },
+  { key: "mono", label: "Code font" },
+  { key: "display", label: "Display font" }
+];
+
+const shapeFields: { key: keyof ThemeShape; label: string }[] = [
+  { key: "radiusSm", label: "radiusSm" },
+  { key: "radius", label: "radius" },
+  { key: "radiusMd", label: "radiusMd" },
+  { key: "radiusLg", label: "radiusLg" },
+  { key: "radiusXl", label: "radiusXl" }
+];
+
+const builderTabs = [
+  { id: "overview", label: "Overview" },
+  { id: "tokens", label: "Tokens" },
+  { id: "assets", label: "Assets" },
+  { id: "preview", label: "Preview" }
+];
+
+export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
+  const { previewTheme, refreshThemes } = useTheme();
+  const [store, setStore] = useState<ThemeStoreResponse | null>(null);
+  const [selectedThemeId, setSelectedThemeId] = useState("");
+  const [draft, setDraft] = useState<StudioThemeDefinition | null>(null);
+  const [tab, setTab] = useState<BuilderTab>("overview");
+  const [mode, setMode] = useState<ThemeMode>("light");
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const assetInputRef = useRef<HTMLInputElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    void loadStore();
+  }, []);
+
+  useEffect(() => {
+    if (!store) return;
+    const selected = store.themes.find(theme => theme.id === selectedThemeId) ?? store.themes[0] ?? null;
+    setSelectedThemeId(selected?.id ?? "");
+    setDraft(selected ? cloneThemeDefinition(selected) : null);
+  }, [store, selectedThemeId]);
+
+  const selectedTheme = store?.themes.find(theme => theme.id === selectedThemeId) ?? null;
+  const validation = useMemo(() => draft ? validateThemeDefinition(draft) : { valid: false, issues: [] }, [draft]);
+  const isReadOnly = draft?.source === "built-in";
+  const hasChanges = JSON.stringify(selectedTheme) !== JSON.stringify(draft);
+  const optionalMode = mode === "dim" || mode === "high-contrast" ? mode : null;
+
+  async function loadStore() {
+    await run(async () => {
+      const nextStore = await fetchThemeStore(api.host);
+      setStore(nextStore);
+      setSelectedThemeId(current => current || nextStore.defaultThemeId || nextStore.themes[0]?.id || "");
+    }, "Theme Store refreshed.");
+  }
+
+  async function persistDraft(nextDraft = draft) {
+    if (!nextDraft) return;
+    if (nextDraft.source === "built-in") {
+      setError("Built-in themes are read-only. Duplicate the theme before editing.");
+      return;
+    }
+
+    const result = validateThemeDefinition(nextDraft);
+    if (!result.valid) {
+      setError(result.issues.find(issue => issue.severity === "error")?.message ?? "Theme validation failed.");
+      return;
+    }
+
+    await run(async () => {
+      const nextStore = await saveTheme(api.host, nextDraft);
+      setStore(nextStore);
+      setSelectedThemeId(nextDraft.id);
+      await refreshThemes();
+      window.dispatchEvent(new Event("elsa-studio:theme-store-changed"));
+    }, "Theme saved.");
+  }
+
+  async function duplicateSelected() {
+    if (!draft) return;
+    await run(async () => {
+      const duplicate = draft.source === "built-in"
+        ? await saveBuiltInDuplicate(draft)
+        : await duplicateTheme(api.host, draft.id, `${draft.name} Copy`);
+      const nextStore = await fetchThemeStore(api.host);
+      setStore(nextStore);
+      setSelectedThemeId(duplicate.id);
+      await refreshThemes();
+    }, "Theme duplicated as an editable custom theme.");
+  }
+
+  async function saveBuiltInDuplicate(theme: StudioThemeDefinition) {
+    const nextStore = await fetchThemeStore(api.host);
+    const duplicate = createCustomThemeFrom(theme, uniqueThemeId(slugify(`${theme.name} Copy`), nextStore.themes), `${theme.name} Copy`);
+    await saveTheme(api.host, duplicate);
+    return duplicate;
+  }
+
+  async function removeSelected() {
+    if (!draft || draft.source === "built-in") return;
+    if (!(await api.dialogs.confirm({
+      title: "Delete theme",
+      message: `Delete "${draft.name}" from the Theme Store?`,
+      confirmLabel: "Delete theme",
+      tone: "danger"
+    }))) {
+      return;
+    }
+
+    await run(async () => {
+      const nextStore = await deleteTheme(api.host, draft.id);
+      setStore(nextStore);
+      setSelectedThemeId(nextStore.defaultThemeId || nextStore.themes[0]?.id || "");
+      await refreshThemes();
+      window.dispatchEvent(new Event("elsa-studio:theme-store-changed"));
+    }, "Theme deleted.");
+  }
+
+  // Built-in themes stay read-only seeds, but admins can hide/show them in the theme picker.
+  // The toggle applies immediately (no draft/apply cycle) because it is stored outside the
+  // theme definition itself.
+  async function setBuiltInVisibility(enabled: boolean) {
+    if (!draft || draft.source !== "built-in") return;
+    await run(async () => {
+      const nextStore = await setBuiltInThemeEnabled(api.host, draft.id, enabled);
+      setStore(nextStore);
+      await refreshThemes();
+      window.dispatchEvent(new Event("elsa-studio:theme-store-changed"));
+    }, enabled
+      ? "Theme enabled. It is available in the theme picker again."
+      : "Theme disabled. It is hidden from the theme picker.");
+  }
+
+  async function makeDefault() {
+    if (!draft) return;
+    await run(async () => {
+      const nextStore = await setDefaultTheme(api.host, draft.id);
+      setStore(nextStore);
+      await refreshThemes();
+    }, "Default theme updated.");
+  }
+
+  async function applyPreview() {
+    if (!draft || !validation.valid) return;
+    previewTheme(draft);
+    setStatus("Preview applied.");
+  }
+
+  async function uploadAsset(file: File) {
+    await run(async () => {
+      await uploadThemeAsset(api.host, file);
+      setStore(await fetchThemeStore(api.host));
+    }, "Material texture asset uploaded.");
+  }
+
+  async function removeAsset(assetId: string) {
+    await run(async () => {
+      setStore(await deleteThemeAsset(api.host, assetId));
+    }, "Material texture asset deleted.");
+  }
+
+  async function exportSelected() {
+    if (!draft) return;
+    await run(async () => {
+      const pack = { version: 1, themes: [draft] };
+      const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${draft.id}-theme-pack.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    }, "Theme pack exported.");
+  }
+
+  async function importSelectedFile(file: File) {
+    await run(async () => {
+      const pack = JSON.parse(await file.text());
+      const nextStore = await importThemePack(api.host, pack);
+      setStore(nextStore);
+      await refreshThemes();
+      window.dispatchEvent(new Event("elsa-studio:theme-store-changed"));
+    }, "Theme pack imported.");
+  }
+
+  async function run(operation: () => Promise<void>, success: string) {
+    setError(null);
+    setStatus(null);
+    try {
+      await operation();
+      setStatus(success);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  function patchDraft(patch: Partial<StudioThemeDefinition>) {
+    setDraft(current => current ? { ...current, ...patch } : current);
+  }
+
+  function patchMode(token: string, value: string) {
+    const key = themeModeKeys[mode];
+    setDraft(current => current?.modes[key] ? {
+      ...current,
+      modes: {
+        ...current.modes,
+        [key]: {
+          ...current.modes[key],
+          [token]: value
+        }
+      }
+    } : current);
+  }
+
+  function patchStyle(section: "typography" | "shape", field: string, value: string) {
+    setDraft(current => current ? withStyleField(current, section, field, value) : current);
+  }
+
+  if (!store || !draft) {
+    return (
+      <section className="theme-builder-page">
+        <div className="section-header">
+          <div>
+            <h2>Theme Builder</h2>
+            <p>Loading Theme Store definitions.</p>
+          </div>
+        </div>
+        <SkeletonRows rows={6} label="Loading themes" />
+      </section>
+    );
+  }
+
+  return (
+    <section className="theme-builder-page">
+      <div className="section-header">
+        <div>
+          <h2>Theme Builder</h2>
+          <p>{store.themes.length} definitions, {store.assets.length} material texture assets, default {store.defaultThemeId || "not set"}</p>
+        </div>
+        <StudioToolbar>
+          <StudioToolbarGroup>
+            <button type="button" className="studio-button" onClick={() => void loadStore()}>
+              <RefreshCcw size={15} /> Refresh
+            </button>
+            <button type="button" className="studio-button" onClick={() => importInputRef.current?.click()}>
+              <FileUp size={15} /> Import
+            </button>
+          </StudioToolbarGroup>
+        </StudioToolbar>
+      </div>
+
+      {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
+      {status ? <StudioAlert tone="success">{status}</StudioAlert> : null}
+
+      <div className="theme-builder-workbench">
+        <aside className="theme-builder-list" aria-label="Themes">
+          {store.themes.map(theme => (
+            <button
+              key={theme.id}
+              type="button"
+              className={theme.id === draft.id ? "active" : ""}
+              onClick={() => setSelectedThemeId(theme.id)}
+            >
+              <span className="theme-builder-swatch" aria-hidden="true">
+                {getSupportedThemeModes(theme).map(themeMode => (
+                  <span key={themeMode} style={{ backgroundColor: getThemeModeDefinition(theme, themeMode)?.primary }} />
+                ))}
+              </span>
+              <span>
+                <strong>{theme.name}</strong>
+                <small>{theme.source} · {theme.published ? "published" : "draft"} · {theme.enabled ? "enabled" : "disabled"}</small>
+              </span>
+            </button>
+          ))}
+        </aside>
+
+        <div className="theme-builder-detail">
+          <div className="theme-builder-actions">
+            <div>
+              <h3>{draft.name}</h3>
+              <p>{isReadOnly ? "Built-in themes are read-only seeds. Duplicate to customize." : "Custom theme stored by the Studio host."}</p>
+            </div>
+            <div>
+              <button type="button" className="studio-button" onClick={() => void duplicateSelected()}><Copy size={15} /> Duplicate</button>
+              <button type="button" className="studio-button" onClick={() => void exportSelected()}><Download size={15} /> Export</button>
+              <button type="button" className="studio-button" onClick={() => void makeDefault()} disabled={!getSelectableThemes(store).some(theme => theme.id === draft.id)}><Check size={15} /> Default</button>
+              <button type="button" className="studio-button" onClick={() => void persistDraft()} disabled={isReadOnly || !hasChanges}><Save size={15} /> Save</button>
+              <button type="button" className="studio-button danger" onClick={() => void removeSelected()} disabled={isReadOnly}><Trash2 size={15} /> Delete</button>
+            </div>
+          </div>
+
+          <StudioTabs tabs={builderTabs} activeTab={tab} onSelect={id => setTab(id as BuilderTab)} ariaLabel="Theme Builder views" />
+
+          {tab === "overview" ? (
+            <OverviewEditor
+              draft={draft}
+              readOnly={isReadOnly}
+              isDefaultTheme={draft.id === store.defaultThemeId}
+              validationIssues={validation.issues}
+              onPatch={patchDraft}
+              onToggleBuiltInEnabled={enabled => void setBuiltInVisibility(enabled)}
+            />
+          ) : null}
+
+          {tab === "tokens" ? (
+            <div className="theme-token-editor">
+              <div className="theme-token-grid">
+                <label className="theme-token-field">
+                  <span>Layout</span>
+                  <select
+                    value={draft.layout ?? "classic"}
+                    disabled={isReadOnly}
+                    onChange={event => {
+                      const layout = event.target.value;
+                      patchDraft({ layout: isStudioThemeLayout(layout) && layout !== "classic" ? layout : undefined });
+                    }}
+                  >
+                    {studioThemeLayouts.map(layout => <option key={layout} value={layout}>{layout}</option>)}
+                  </select>
+                </label>
+                {typographyFields.map(field => (
+                  <label key={field.key} className="theme-token-field">
+                    <span>{field.label}</span>
+                    <input value={draft.typography?.[field.key] ?? ""} placeholder="Studio default" disabled={isReadOnly} onChange={event => patchStyle("typography", field.key, event.target.value)} />
+                  </label>
+                ))}
+                {shapeFields.map(field => (
+                  <label key={field.key} className="theme-token-field">
+                    <span>{field.label}</span>
+                    <input value={draft.shape?.[field.key] ?? ""} placeholder="Studio default" disabled={isReadOnly} onChange={event => patchStyle("shape", field.key, event.target.value)} />
+                  </label>
+                ))}
+              </div>
+              <StudioTabs tabs={modeTabs} activeTab={mode} onSelect={id => setMode(id as ThemeMode)} ariaLabel="Theme mode" />
+              {getThemeModeDefinition(draft, mode) ? (
+                <>
+                  {!isReadOnly && optionalMode ? (
+                    <div>
+                      <button type="button" className="studio-button danger" onClick={() => setDraft(current => current ? withoutOptionalMode(current, optionalMode) : current)}>
+                        <Trash2 size={15} /> Remove {themeModeLabels[mode].toLowerCase()} mode
+                      </button>
+                    </div>
+                  ) : null}
+                  <div className="theme-token-grid">
+                    {themeTokenNames.map(token => (
+                      <label key={token} className="theme-token-field">
+                        <span>{token}</span>
+                        <input value={String(getThemeModeDefinition(draft, mode)?.[token] ?? "")} disabled={isReadOnly} onChange={event => patchMode(token, event.target.value)} />
+                      </label>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <StudioAlert tone="info">
+                  {draft.name} has no {themeModeLabels[mode].toLowerCase()} mode, so Studio shows its dark mode instead.{" "}
+                  {isReadOnly || !optionalMode ? null : (
+                    <button type="button" className="studio-button" onClick={() => setDraft(current => current ? withOptionalMode(current, optionalMode) : current)}>
+                      Add {themeModeLabels[mode].toLowerCase()} mode
+                    </button>
+                  )}
+                </StudioAlert>
+              )}
+            </div>
+          ) : null}
+
+          {tab === "assets" ? (
+            <div className="theme-assets-panel">
+              <input
+                ref={assetInputRef}
+                className="modules-hidden-input"
+                type="file"
+                accept="image/png,image/webp,image/jpeg"
+                onChange={event => {
+                  const file = event.currentTarget.files?.[0];
+                  if (file) void uploadAsset(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+              <button type="button" className="theme-upload-dropzone" onClick={() => assetInputRef.current?.click()}>
+                <ImagePlus size={20} /> Upload tiled material texture
+              </button>
+              <div className="theme-assets-grid">
+                {store.assets.map(asset => (
+                  <div className="theme-asset-row" key={asset.id}>
+                    <span>{asset.fileName}</span>
+                    <small>{asset.contentType} · {formatBytes(asset.size)}</small>
+                    <button type="button" className="studio-button danger" onClick={() => void removeAsset(asset.id)}><Trash2 size={14} /> Delete</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {tab === "preview" ? (
+            <ThemePreview theme={draft} mode={mode} onApply={() => void applyPreview()} validationIssues={validation.issues} />
+          ) : null}
+        </div>
+      </div>
+
+      <input
+        ref={importInputRef}
+        className="modules-hidden-input"
+        type="file"
+        accept="application/json"
+        onChange={event => {
+          const file = event.currentTarget.files?.[0];
+          if (file) void importSelectedFile(file);
+          event.currentTarget.value = "";
+        }}
+      />
+    </section>
+  );
+}
+
+function OverviewEditor({
+  draft,
+  readOnly,
+  isDefaultTheme,
+  validationIssues,
+  onPatch,
+  onToggleBuiltInEnabled
+}: {
+  draft: StudioThemeDefinition;
+  readOnly: boolean;
+  isDefaultTheme: boolean;
+  validationIssues: ThemeValidationIssue[];
+  onPatch: (patch: Partial<StudioThemeDefinition>) => void;
+  onToggleBuiltInEnabled: (enabled: boolean) => void;
+}) {
+  // Built-in themes are read-only definitions, but their picker visibility ("Enabled") is an
+  // admin choice that applies immediately. The current default theme must stay enabled.
+  const isBuiltIn = draft.source === "built-in";
+  const enabledToggleDisabled = isBuiltIn ? isDefaultTheme : readOnly;
+  const enabledToggleTitle = isBuiltIn
+    ? (isDefaultTheme
+      ? "The default theme cannot be disabled. Pick another default theme first."
+      : "Controls whether this built-in theme appears in the theme picker.")
+    : undefined;
+
+  return (
+    <div className="theme-overview-editor">
+      <label>
+        <span>Name</span>
+        <input value={draft.name} disabled={readOnly} onChange={event => onPatch({ name: event.target.value })} />
+      </label>
+      <label>
+        <span>Description</span>
+        <textarea value={draft.description ?? ""} disabled={readOnly} onChange={event => onPatch({ description: event.target.value })} />
+      </label>
+      <div className="theme-toggle-row">
+        <label><input type="checkbox" checked={draft.published} disabled={readOnly} onChange={event => onPatch({ published: event.target.checked })} /> Published</label>
+        <label title={enabledToggleTitle}>
+          <input
+            type="checkbox"
+            checked={draft.enabled}
+            disabled={enabledToggleDisabled}
+            aria-label={`${draft.enabled ? "Disable" : "Enable"} ${draft.name}`}
+            onChange={event => isBuiltIn ? onToggleBuiltInEnabled(event.target.checked) : onPatch({ enabled: event.target.checked })}
+          />
+          {" "}Enabled
+        </label>
+      </div>
+      {isBuiltIn ? (
+        <p className="theme-builder-hint">
+          Disabling a built-in theme removes it from the theme picker dropdown; it stays listed here so it can be re-enabled.
+        </p>
+      ) : null}
+      <ValidationList issues={validationIssues} />
+    </div>
+  );
+}
+
+function ThemePreview({
+  theme,
+  mode,
+  validationIssues,
+  onApply
+}: {
+  theme: StudioThemeDefinition;
+  mode: ThemeMode;
+  validationIssues: ThemeValidationIssue[];
+  onApply: () => void;
+}) {
+  const colors = getThemeModeDefinition(theme, mode) ?? theme.modes.dark;
+  const previewStyle = {
+    "--preview-primary": colors.primary,
+    "--preview-background": colors.background,
+    "--preview-foreground": colors.foreground,
+    "--preview-card": colors.card,
+    "--preview-border": colors.border,
+    "--preview-muted": colors.muted
+  } as React.CSSProperties;
+
+  return (
+    <div className="theme-preview-panel">
+      <div className="theme-preview-surface" style={previewStyle}>
+        <nav>
+          <span>Dashboard</span>
+          <span>Workflows</span>
+          <span>Weaver</span>
+        </nav>
+        <section>
+          <div className="theme-preview-card">
+            <strong>Workflow health</strong>
+            <p>12 active workflows · 2 incidents · 98% success</p>
+          </div>
+          <div className="theme-preview-node">HTTP Endpoint</div>
+          <div className="theme-preview-node secondary">Send Email</div>
+          <div className="theme-preview-weaver">Weaver can inspect this draft and suggest safe changes.</div>
+        </section>
+      </div>
+      <ValidationList issues={validationIssues} />
+      <button type="button" className="studio-button" onClick={onApply} disabled={validationIssues.some(issue => issue.severity === "error")}>
+        <Paintbrush size={15} /> Apply preview
+      </button>
+    </div>
+  );
+}
+
+function ValidationList({ issues }: { issues: ThemeValidationIssue[] }) {
+  if (issues.length === 0) {
+    return <StudioAlert tone="success">Validation passed.</StudioAlert>;
+  }
+
+  return (
+    <div className="theme-validation-list">
+      {issues.map((issue, index) => (
+        <StudioAlert key={`${issue.path}-${index}`} tone={issue.severity === "error" ? "danger" : "warning"}>
+          {issue.path}: {issue.message}
+        </StudioAlert>
+      ))}
+    </div>
+  );
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function slugify(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "custom-theme";
+}
+
+function uniqueThemeId(baseId: string, themes: StudioThemeDefinition[]) {
+  let candidate = baseId;
+  let index = 2;
+  while (themes.some(theme => theme.id === candidate)) {
+    candidate = `${baseId}-${index++}`;
+  }
+  return candidate;
+}

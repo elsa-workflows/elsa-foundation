@@ -36,7 +36,38 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
         PersistenceMode? persistenceMode = null,
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables = null,
-        IncidentStrategyReference? incidentStrategy = null)
+        IncidentStrategyReference? incidentStrategy = null) =>
+        ComputeBehavioralHash(rootActivity, inputContract, dependencies, persistenceMode, workflowVariables,
+            incidentStrategy, includeInputContracts: true);
+
+    public bool MatchesHash(WorkflowExecutable executable)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        if (executable.InputContract is not { } contract)
+            return false;
+
+        // V1 artifacts retain their original identities. Only verification may use the historical
+        // rendering; every new publication uses V2 so it cannot deduplicate onto a stale V1 body.
+        // Check V1 first so its verification does not depend on serializing fields it never covered.
+        var historical = ComputeBehavioralHash(executable.RootActivity, contract, executable.Dependencies,
+            executable.PersistenceMode, executable.WorkflowVariables, executable.IncidentStrategy,
+            includeInputContracts: false);
+        if (StringComparer.Ordinal.Equals(historical, executable.Identity.ArtifactHash))
+            return true;
+
+        var current = ComputeHash(executable.RootActivity, contract, executable.Dependencies,
+            executable.PersistenceMode, executable.WorkflowVariables, executable.IncidentStrategy);
+        return StringComparer.Ordinal.Equals(current, executable.Identity.ArtifactHash);
+    }
+
+    private static string ComputeBehavioralHash(
+        ExecutableNode rootActivity,
+        WorkflowExecutableInputContract inputContract,
+        IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
+        PersistenceMode? persistenceMode,
+        IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables,
+        IncidentStrategyReference? incidentStrategy,
+        bool includeInputContracts)
     {
         ArgumentNullException.ThrowIfNull(rootActivity);
         ArgumentNullException.ThrowIfNull(inputContract);
@@ -51,7 +82,8 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
                 dependencies,
                 persistenceMode,
                 workflowVariables,
-                incidentStrategy ?? IncidentStrategyBuiltIns.FaultReference);
+                incidentStrategy ?? IncidentStrategyBuiltIns.FaultReference,
+                includeInputContracts);
 
         return Hash(stream.ToArray());
     }
@@ -201,7 +233,10 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
             .OrderBy(output => output.Key, StringComparer.Ordinal)
             .Select(FormatOutputCapture));
         var outputCapturePayload = outputCaptures.Length == 0 ? string.Empty : $":outputs={outputCaptures}";
-        var legacyShape = $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.Descriptor.ConsumerKey}:{node.Descriptor.SchemaVersion}:{CanonicalJson(node.Descriptor.Payload)}:{structure}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}{outputCapturePayload}";
+        var executionPlacement = node.ExecutionPlacement == ActivityExecutionPlacement.Inline
+            ? string.Empty
+            : $":executionPlacement={node.ExecutionPlacement}";
+        var legacyShape = $"{node.ExecutableNodeId}:{node.ActivityType}:{node.ActivityTypeVersion}:{node.Descriptor.ConsumerKey}:{node.Descriptor.SchemaVersion}:{CanonicalJson(node.Descriptor.Payload)}:{structure}:{string.Join(',', node.InputBindings.OrderBy(input => input.Key, StringComparer.Ordinal).Select(FormatInputBinding))}:{childSlots}{outputCapturePayload}{executionPlacement}";
         var nodeShape = intrinsic.Length == 0 ? legacyShape : $"{legacyShape}:{intrinsic}";
         return node.ActivityContract is null
             ? nodeShape
@@ -215,10 +250,11 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         IReadOnlyCollection<WorkflowExecutableDependency> dependencies,
         PersistenceMode? persistenceMode,
         IReadOnlyCollection<RuntimeVariableDeclaration>? workflowVariables,
-        IncidentStrategyReference incidentStrategy)
+        IncidentStrategyReference incidentStrategy,
+        bool includeInputContracts)
     {
         writer.WriteStartObject();
-        writer.WriteNumber("schemaVersion", 1);
+        writer.WriteNumber("schemaVersion", includeInputContracts ? 2 : 1);
         writer.WriteString("rootNodeId", rootActivity.ExecutableNodeId);
 
         writer.WriteStartObject("incidentStrategy");
@@ -256,7 +292,7 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
 
         writer.WriteStartArray("nodes");
         foreach (var node in FlattenExecutableActivities(rootActivity).OrderBy(node => node.ExecutableNodeId, StringComparer.Ordinal))
-            WriteNode(writer, node);
+            WriteNode(writer, node, includeInputContracts);
         writer.WriteEndArray();
 
         writer.WriteStartObject("inputContract");
@@ -298,12 +334,14 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         writer.WriteEndObject();
     }
 
-    private static void WriteNode(Utf8JsonWriter writer, ExecutableNode node)
+    private static void WriteNode(Utf8JsonWriter writer, ExecutableNode node, bool includeInputContracts)
     {
         writer.WriteStartObject();
         writer.WriteString("nodeId", node.ExecutableNodeId);
         writer.WriteString("activityType", node.ActivityType);
         writer.WriteString("activityTypeVersion", node.ActivityTypeVersion);
+        if (node.ExecutionPlacement != ActivityExecutionPlacement.Inline)
+            writer.WriteString("executionPlacement", node.ExecutionPlacement.ToString());
         if (node.ActivityContract is { } activityContract)
             writer.WriteString("sideEffectProfile", activityContract.SideEffectProfile.ToString());
         writer.WriteStartObject("descriptor");
@@ -331,6 +369,15 @@ public sealed class WorkflowExecutableHasher : IWorkflowExecutableHasher
         {
             writer.WriteStartObject();
             writer.WriteString("name", inputName);
+            if (includeInputContracts)
+            {
+                // Canonical structured JSON covers the complete binding, including destination type,
+                // policy, source reference and portable expression contracts. Explicit metadata keeps
+                // this independent of host serializer options and available without reflection.
+                writer.WritePropertyName("contract");
+                WriteCanonicalJson(writer, JsonSerializer.SerializeToElement(binding,
+                    WorkflowExecutableHashJsonContext.Default.RuntimeInputBinding));
+            }
             writer.WriteString("source", binding.Source.ToString());
             writer.WritePropertyName("payload");
             if (binding.Source == RuntimeInputBindingSource.Expression)

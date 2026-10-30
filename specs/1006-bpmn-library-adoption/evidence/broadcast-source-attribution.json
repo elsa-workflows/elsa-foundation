@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "task": "T049 source-capture model/storage increment; task remains open",
+  "sourceParentCommit": "0303e67b143bb14cc6d5be38474d9b6795dd4118",
+  "filesSha256": {
+    "Essentials/src/Workflows/Runtime/Core/Models/StimulusDeliverySnapshot.cs": "9fcace06a2a4c775337d298b45e5158646fa9366da6636c066cd7725e15990da",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "68f9ebbd96dee29186d94c894a67b35f51587d57926081f63028a7ffa3aaa040",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "d08b6dcae6b7b2b820bb04a2c7270d7863da627190bfc746d3b7aed581c1a9bf",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/StimulusDeliveryStoreTests.cs": "76b760e0df362225a2de5f2e3f0eba3aaf9ea0bfd849c79a109f364f282c3a56",
+    "Essentials/tests/Workflows/Runtime/Tests/StimulusDeliverySnapshotTests.cs": "952f3ef26e5007a9632f5d03271374e47b031d232577eac239a69aaf59b61bec",
+    "specs/1006-bpmn-library-adoption/contracts/broadcast-recipient-snapshot.md": "addb47e26226b09476957202b0b4e4214b2ef7bea3f15fa1d5bbd969fcc8cca3"
+  },
+  "checks": [
+    {
+      "project": "Workflow Runtime",
+      "passed": 2813,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "project": "Runtime EF",
+      "passed": 1100,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "focusedCoreCases": 61,
+      "newCoreCases": 20,
+      "newProviderCases": 7,
+      "failed": 0
+    },
+    {
+      "coreApiAdditions": 3,
+      "coreApiRemovals": 0,
+      "originalTwoArgumentConstructorPreserved": true
+    },
+    {
+      "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+      "unchanged": true
+    }
+  ],
+  "mutations": [
+    {
+      "name": "invent-capture-for-old-constructor",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 25 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "omit-source-capture-on-wire",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 33 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "drop-required-nullable-attribution",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     8, Skipped:     0, Total:     9, Duration: 35 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "ignore-capture-in-equivalence",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 34 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "overwrite-source-with-artifact-producer",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 30 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "accept-unknown-source-capture-version",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 34 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "omit-selected-publication-consistency",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     3, Skipped:     0, Total:     5, Duration: 13 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    }
+  ],
+  "reviews": {
+    "correctness": "clean; final source hashes, mutation logs and whole/focused results verified",
+    "standards": "clean; API/contract/source/receipt verified",
+    "acceptance": "clean for finite model/storage scope; integration remains open",
+    "fullPrRounds": 0
+  },
+  "limits": [
+    "Constructor validates shape and selected non-null activation/slot consistency only; it does not establish authoritative reference selection or reference-less eligibility.",
+    "Provider tests are constructed storage witnesses; no source-reference admission, saved-start authority, root leases/GC/source/dedup retention or actual host recovery is proved.",
+    "SourceCapture refines unpublished family2 while publisher protocol remains disabled. Historical fixtures/receipts remain source-bound and unchanged; supported mixed-writer or rollback compatibility is not claimed.",
+    "T049 remains open; no publisher activation or new recipient execution is enabled.",
+    "T050-T051, T045 and remaining story, deletion/guards, final host/Studio, full-PR review/required checks and resulting-main verification remain open."
+  ]
+}

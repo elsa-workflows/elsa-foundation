@@ -65,6 +65,31 @@ public sealed class FlowchartExecutionEngineTests
     }
 
     [Fact]
+    public async Task PublishedBoundary_ChildrenUseTheBoundaryScopeAndKeepFlowchartLocalScopeMetadata()
+    {
+        await using var fixture = await FlowchartRuntimeFixture.CreateAsync(["actexec-flowchart", "actexec-a"]);
+        var executable = fixture.NewExecutable(
+            children: [fixture.NewProbeNode("node-a")],
+            connections: [],
+            startNodeId: "node-a",
+            opensActivityBoundary: true);
+
+        await fixture.ExecuteAsync(executable);
+
+        var states = await fixture.Provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("wfexec-1");
+        var flowchart = Assert.Single(states, state => state.Execution.ExecutableNodeId == "node-flowchart");
+        var child = Assert.Single(states, state => state.Execution.ExecutableNodeId == "node-a");
+        Assert.Equal(flowchart.Execution.ActivityExecutionId, flowchart.ExecutionScopeId);
+        Assert.Equal(flowchart.Execution.ActivityExecutionId, child.ExecutionScopeId);
+        Assert.Equal(flowchart.Execution.ActivityExecutionId, child.Provenance.ExecutionScopeId);
+        var childScheduleCommit = Assert.Single(fixture.CheckpointCommits, commit => SchedulesChild(commit, "node-a"));
+        var scheduledChild = Assert.Single(childScheduleCommit.PostCommitIntents)
+            .Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        Assert.Equal(flowchart.Execution.ActivityExecutionId, scheduledChild.ExecutionScopeId);
+        Assert.Equal("scope:root", scheduledChild.CommandMetadata[FlowchartExecutionEngine.ExecutionScopeIdMetadataKey]);
+    }
+
+    [Fact]
     public async Task Start_CommitsInitialStateAndChildIntentAtomically_AndReplayDoesNotDuplicateChild()
     {
         await using var fixture = await FlowchartRuntimeFixture.CreateAsync(["actexec-flowchart", "actexec-a"]);

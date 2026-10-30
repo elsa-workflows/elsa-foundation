@@ -5,9 +5,13 @@ import { resolve } from "node:path";
 export default defineConfig({
   root: __dirname,
   plugins: [react()],
+  // A first-use optimizer reload discards in-flight mocked authoring sessions.
+  optimizeDeps: { include: ["lucide-react/dynamicIconImports"] },
   resolve: {
     alias: {
-      "@elsa-workflows/studio-sdk": resolve(__dirname, "../../src/apps/Elsa.Studio.Web/Client/src/sdk/index.ts")
+      "@elsa-workflows/studio-sdk": resolve(__dirname, "../../src/essentials/Elsa.Studio.Hosting/Client/src/sdk/index.ts"),
+      "@elsa-workflows/studio-ui": resolve(__dirname, "../../src/essentials/Elsa.Studio.Hosting/StudioUi/src/index.ts"),
+      "@xyflow/react": resolve(__dirname, "../../src/essentials/Elsa.Studio.Workflows/Client/node_modules/@xyflow/react")
     }
   },
   server: {

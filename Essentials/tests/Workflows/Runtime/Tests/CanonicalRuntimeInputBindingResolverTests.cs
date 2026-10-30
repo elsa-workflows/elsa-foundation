@@ -341,6 +341,41 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
         Assert.Equal("parameter", snapshot.Values["customer-id"].InlineValue!.Value.GetProperty("tags")[0].GetString());
     }
 
+    [Theory]
+    [InlineData(WorkflowInstanceExpressionParameterBinding.Members.CorrelationId, "order-42", "\"order-42\"")]
+    [InlineData(WorkflowInstanceExpressionParameterBinding.Members.CorrelationId, null, "null")]
+    [InlineData(WorkflowInstanceExpressionParameterBinding.Members.InstanceId, "order-42", "\"workflow-1\"")]
+    public async Task Materialization_binds_workflow_instance_metadata_from_the_resolution_context(string member, string? correlationId, string expected)
+    {
+        // Spec 247: instance metadata is a declared parameter, read from the context the materializer builds from
+        // committed state. An instance without a correlation id binds JSON null.
+        var binding = new RuntimeInputBinding(
+            "customer-id",
+            new ValueTypeDescriptor("Elsa.Any"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding(
+                "Test",
+                "instance",
+                parameters: new Dictionary<string, ExpressionParameterBinding>
+                {
+                    ["instance"] = new WorkflowInstanceExpressionParameterBinding(member)
+                }));
+        var materializer = new RuntimeActivityInputMaterializer(
+            _resolver,
+            new TestTypeRegistry(),
+            new WrapParameterPortableExpressionEvaluator("instance"));
+        var context = new RuntimeInputBindingResolutionContext("workflow-1", "consumer", correlationId: correlationId);
+
+        var snapshot = await materializer.MaterializeSnapshotAsync(
+            NewConsumerNode(binding, inputType: new ValueTypeDescriptor("Elsa.Any")),
+            "consumer",
+            context,
+            DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(expected, snapshot.Values["customer-id"].InlineValue!.Value.GetProperty("value").GetRawText());
+    }
+
     [Fact]
     public async Task Materialization_refuses_an_expression_that_reads_a_withheld_ambient_variable()
     {
@@ -821,6 +856,13 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     {
         public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) =>
             ValueTask.FromResult(request.ParameterValues[parameterName].Clone());
+    }
+
+    /// <summary>Returns <c>{ value: parameter }</c>, so a null parameter value is still a present input.</summary>
+    private sealed class WrapParameterPortableExpressionEvaluator(string parameterName) : IPortableExpressionEvaluator
+    {
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) =>
+            ValueTask.FromResult(JsonSerializer.SerializeToElement(new { value = request.ParameterValues[parameterName] }));
     }
 
     private sealed class TestTypeRegistry : IWellKnownTypeRegistry

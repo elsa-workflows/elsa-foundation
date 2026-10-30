@@ -1,0 +1,69 @@
+{
+  "scenario": "parallel-mi",
+  "captureSourceRevision": "d81a4c88a2924708ea8afcc2db20b8a77b84f703",
+  "runtimeBaselineRevision": "fbe694d2f3d126e324c3e46578bc1a560b0217f1",
+  "modelPackage": "0.1.1-preview.19",
+  "interchangePackage": "0.1.1-preview.19",
+  "stateAlias": "Elsa.Bpmn.ExecutionState",
+  "stateVersion": 1,
+  "databaseSha256": "7026c2b7d69e0d8a6ab649d3ff8856076257c8b1c143d7cb972440e40d339734",
+  "compressedSha256": "6aa83b9e172ad0fc08a7c046b611fa74928aabcd5924701529f343388d953170",
+  "oldHostControl": "fresh provider over a separate exact database copy passed",
+  "facts": {
+    "parentId": "legacy-activity-0",
+    "pendingFault": null,
+    "canceledLoser": false,
+    "queuedLoser": false,
+    "queuedBeforeCancellation": false,
+    "loserQueuedObservation": null,
+    "firstCancellationObservation": null,
+    "activeWork": [
+      {
+        "nodeId": "node-work",
+        "elementId": "work",
+        "tokenId": "token:9",
+        "schedulingCause": "multi-instance",
+        "iterationId": "bpmn-mi:token:9"
+      },
+      {
+        "nodeId": "node-work",
+        "elementId": "work",
+        "tokenId": "token:12",
+        "schedulingCause": "multi-instance",
+        "iterationId": "bpmn-mi:token:12"
+      },
+      {
+        "nodeId": "node-work",
+        "elementId": "work",
+        "tokenId": "token:15",
+        "schedulingCause": "multi-instance",
+        "iterationId": "bpmn-mi:token:15"
+      }
+    ],
+    "children": [
+      {
+        "invocationId": "legacy-activity-1",
+        "node": "node-work",
+        "status": 3,
+        "iterationId": "bpmn-mi:token:9",
+        "token": "token:9"
+      },
+      {
+        "invocationId": "legacy-activity-2",
+        "node": "node-work",
+        "status": 3,
+        "iterationId": "bpmn-mi:token:12",
+        "token": "token:12"
+      },
+      {
+        "invocationId": "legacy-activity-3",
+        "node": "node-work",
+        "status": 3,
+        "iterationId": "bpmn-mi:token:15",
+        "token": "token:15"
+      }
+    ],
+    "bookmarkCount": 3,
+    "queuedIds": []
+  }
+}

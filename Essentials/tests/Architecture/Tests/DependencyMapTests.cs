@@ -1,20 +1,22 @@
 using System.Diagnostics;
 using System.Text.Json;
 using System.Xml.Linq;
+using Elsa.Maps.Projects;
 using Xunit;
 using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Holds the committed dependency map (<c>docs/maps/dependency-map.json</c>) to what its consumers rely
-/// on, reading the JSON alone as they do and never the generator that writes it.
+/// Holds the dependency-map dataset to what its consumers rely on, reading the JSON the shared project-graph scan
+/// produces for this checkout (<see cref="DependencyMapJson"/>) as the versioning calculator reads it for a commit.
 /// </summary>
 /// <remarks>
-/// Freshness is the maps check's concern: it byte-compares the committed dataset with a regeneration. This class
-/// pins that the dataset answers correctly: ownership by the longest matching project directory,
-/// a package id and version line on every packable node, and pinned-transitive edges that carry the
-/// pins they name.
+/// The dataset is not committed (spec 259): the calculator derives it from each commit's tree with this same scan, so
+/// there is no copy to keep fresh, and a tree the scan cannot read fails here, on the pull request, rather than at
+/// publish time. This class pins that the dataset answers correctly: ownership by the longest matching project
+/// directory, a package id and version line on every packable node, and pinned-transitive edges that carry the pins
+/// they name. Its oracles walk the filesystem and the project files and never read the scan's internals.
 /// </remarks>
 public sealed class DependencyMapTests
 {
@@ -77,7 +79,7 @@ public sealed class DependencyMapTests
                 .Select(group => $"{group.Key} holds {group.Count()} projects"))
             .ToArray();
 
-        Assert.All((string[])["Essentials/src/", "Essentials/apps/", "Essentials/tests/", "Extensions/", "tools/", "samples/"],
+        Assert.All((string[])["Essentials/src/", "Essentials/apps/", "Essentials/tests/", "Extensions/", "tools/"],
             root => Assert.Contains(directories, directory => directory.StartsWith(root, StringComparison.Ordinal)));
         Assert.True(nested.Length == 0,
             "Move the outer project into a sub-folder named after it instead of excluding the inner one from its globs:" +
@@ -208,15 +210,15 @@ public sealed class DependencyMapTests
         return output.Split('\0', StringSplitOptions.RemoveEmptyEntries);
     }
 
-    /// <summary>Reads the dataset, checking the schema version at read time as every consumer should.</summary>
+    /// <summary>Scans the dataset for this checkout, checking the schema version at read time as every consumer should.</summary>
     private static IReadOnlyList<Node> ReadNodes()
     {
-        var dataset = JsonSerializer.Deserialize<Dataset>(File.ReadAllText(Path.Join(RepoRoot, "docs", "maps", "dependency-map.json")), JsonOptions)
-                      ?? throw new InvalidOperationException("docs/maps/dependency-map.json is empty.");
+        var dataset = JsonSerializer.Deserialize<Dataset>(DependencyMapJson.Serialize(RepoContext.Discover(RepoRoot)), JsonOptions)
+                      ?? throw new InvalidOperationException("The scanned dependency map is empty.");
 
         return dataset.SchemaVersion == 2
             ? dataset.Nodes
-            : throw new InvalidOperationException($"docs/maps/dependency-map.json has schema version {dataset.SchemaVersion}; these tests read version 2.");
+            : throw new InvalidOperationException($"The scanned dependency map has schema version {dataset.SchemaVersion}; these tests read version 2.");
     }
 
     private sealed record Dataset(int SchemaVersion, IReadOnlyList<Node> Nodes);

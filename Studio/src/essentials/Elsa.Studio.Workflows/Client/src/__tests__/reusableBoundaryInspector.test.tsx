@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { getActivityDefinitionVersion } from "../api/activityDesign";
 import {
   getActivityExecutionDescendants,
   getActivityExecutionInspection,
@@ -10,11 +11,13 @@ import {
 } from "../api/runtime";
 import { getActivityExecutionValuePayload } from "../api/activityExecutionValuePayload";
 import { ReusableBoundaryInspector } from "../workflow-editor/ReusableBoundaryInspector";
+import { WorkflowActivityExecutionDetails } from "../workflow-editor/WorkflowInstances";
 import type {
   ActivityExecutionHierarchyItem,
   ActivityExecutionHierarchyPage,
   ActivityExecutionInspection,
-  ActivityExecutionLayout
+  ActivityExecutionLayout,
+  ActivityExecutionStateSummary
 } from "../workflowTypes";
 
 vi.mock("../api/runtime", async importOriginal => ({
@@ -22,6 +25,11 @@ vi.mock("../api/runtime", async importOriginal => ({
   getActivityExecutionInspection: vi.fn(),
   getActivityExecutionDescendants: vi.fn(),
   getActivityExecutionLayout: vi.fn()
+}));
+
+vi.mock("../api/activityDesign", async importOriginal => ({
+  ...(await importOriginal<typeof import("../api/activityDesign")>()),
+  getActivityDefinitionVersion: vi.fn()
 }));
 
 vi.mock("../api/activityExecutionValuePayload", () => ({ getActivityExecutionValuePayload: vi.fn() }));
@@ -39,9 +47,137 @@ afterEach(() => {
   vi.mocked(getActivityExecutionDescendants).mockReset();
   vi.mocked(getActivityExecutionLayout).mockReset();
   vi.mocked(getActivityExecutionValuePayload).mockReset();
+  vi.mocked(getActivityDefinitionVersion).mockReset();
 });
 
 describe("ReusableBoundaryInspector", () => {
+  it("names historical intrinsic steps without needing the live catalog", async () => {
+    vi.mocked(getActivityExecutionLayout).mockResolvedValue(layout("outer", []));
+    vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(2, [
+      hierarchyItem("set", 1, { activityType: "elsa.intrinsic.set" }),
+      hierarchyItem("output", 2, { activityType: "elsa.intrinsic.setoutput" })
+    ]));
+    const container = render(<ReusableBoundaryInspector context={context} inspection={boundaryInspection("outer")} />);
+    await waitFor(() => expect([...container.querySelectorAll('[role="treeitem"]')].map(item => item.textContent).join(" "))
+      .toContain("Set Variable"));
+    expect([...container.querySelectorAll('[role="treeitem"]')].map(item => item.textContent).join(" ")).toContain("Set Output");
+  });
+
+  it("starts on readable Steps and keeps identities and sequence in collapsed Technical details", async () => {
+    vi.mocked(getActivityExecutionLayout).mockResolvedValue(layout("outer", []));
+    vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(7, [hierarchyItem("step-1", 6, {
+      activityType: "Elsa.WriteLine",
+      status: "Completed"
+    })]));
+
+    const container = render(<ReusableBoundaryInspector context={context} inspection={boundaryInspection("outer")} />);
+
+    await waitFor(() => expect(getActivityExecutionDescendants).toHaveBeenCalledTimes(1));
+    const tabs = [...container.querySelectorAll<HTMLElement>("[role=tab]")];
+    expect(container.querySelector('[role="tablist"][aria-label="Activity details"]')).not.toBeNull();
+    expect(tabs.map(tab => [tab.getAttribute("aria-label"), tab.getAttribute("aria-selected")]))
+      .toEqual([["Steps", "true"], ["Definition", "false"]]);
+    await waitFor(() => expect(container.querySelector('[role="treeitem"]')?.textContent).toContain("Write Line"));
+    expect(container.querySelector('[role="treeitem"]')?.textContent).toContain("Completed");
+    expect(container.querySelector(".wf-boundary-evidence-toolbar")?.textContent).toContain("1 recorded step");
+    expect(container.querySelector<HTMLButtonElement>('button[aria-label="Refresh activity steps"]')?.textContent).toContain("Refresh");
+    expect(container.querySelector('nav[aria-label="Activity boundary path"]')).toBeNull();
+
+    const technical = container.querySelector<HTMLDetailsElement>("details.wf-boundary-technical");
+    expect(technical).not.toBeNull();
+    expect(technical!.open).toBe(false);
+    click(technical!.querySelector("summary")!);
+    expect(technical!.open).toBe(true);
+    expect(technical!.textContent).toContain("definition-outer");
+    expect(technical!.textContent).toContain("definition-version-outer");
+    expect(technical!.textContent).toContain("Snapshot through sequence7");
+  });
+
+  it("keeps the selected nested step status readable while the outer activity status stays intact", async () => {
+    const nestedInspection = {
+      ...boundaryInspection("nested"),
+      status: "Faulted",
+      subStatus: "Retryable"
+    };
+    vi.mocked(getActivityExecutionInspection).mockImplementation(async (_context, _run, activityExecutionId) =>
+      activityExecutionId === "nested" ? nestedInspection : boundaryInspection("outer"));
+    vi.mocked(getActivityExecutionLayout).mockImplementation(async (_context, _run, activityExecutionId) =>
+      layout(activityExecutionId, []));
+    vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(1, [hierarchyItem("nested", 1, {
+      activityType: "Example.NestedReusable",
+      status: "Faulted",
+      subStatus: "Retryable",
+      boundary: nestedInspection.boundary
+    })]));
+    vi.mocked(getActivityDefinitionVersion).mockResolvedValue({
+      definition: { definitionId: "definition-outer" },
+      versionId: "definition-version-outer"
+    } as Awaited<ReturnType<typeof getActivityDefinitionVersion>>);
+
+    const rootActivity = activitySummary("outer");
+    const container = render(
+      <WorkflowActivityExecutionDetails context={context} activity={rootActivity} activityCatalog={[]} />
+    );
+    const boundarySummary = () => container.querySelector<HTMLElement>(".wf-activity-boundary-details summary");
+    await waitFor(() => expect(boundarySummary()?.textContent).toContain("Inside this activity"));
+    click(boundarySummary()!);
+    await waitFor(() => expect((boundarySummary()!.parentElement as HTMLDetailsElement).open).toBe(true));
+    await waitFor(() => expect(
+      container.querySelector(".wf-boundary-inspector") || container.textContent?.includes("Loading activity steps...")
+    ).toBeTruthy());
+    await import("../workflow-editor/ReusableBoundaryInspector");
+    rerender(<WorkflowActivityExecutionDetails context={context} activity={rootActivity} activityCatalog={[]} />);
+    await waitFor(() => expect(container.querySelector(".wf-boundary-inspector")).not.toBeNull());
+
+    await waitFor(() => expect(treeItem(container, "Nested Reusable")).toBeDefined());
+    click(treeItem(container, "Nested Reusable"));
+    const selectedStep = () => container.querySelector<HTMLElement>('[aria-label="Selected activity step"]');
+    await waitFor(() => expect(selectedStep()?.textContent).toContain("Faulted"));
+    expect(selectedStep()?.textContent).toContain("Retryable");
+    expect(container.querySelector(".wf-activity-overview")?.textContent).toContain("Completed");
+    expect(boundarySummary()?.textContent).not.toContain("Faulted");
+    const technical = container.querySelector<HTMLDetailsElement>("details.wf-boundary-technical");
+    expect(technical?.open).toBe(false);
+    expect(technical?.textContent).not.toContain("Retryable");
+
+    click(button(container, "View steps"));
+    const path = () => container.querySelector<HTMLElement>('[aria-label="Activity boundary path"]');
+    await waitFor(() => expect(path()?.textContent).toContain("Nested Reusable"));
+    expect(path()?.textContent).toContain("Faulted · Retryable");
+    expect(container.querySelector('[aria-label="Activity boundary path"]')?.textContent).not.toContain("nested");
+  });
+
+  it("links to the exact inspected Activity Definition version only after authorized source resolution", async () => {
+    vi.mocked(getActivityExecutionLayout).mockResolvedValue(layout("outer", []));
+    vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(1, []));
+    vi.mocked(getActivityDefinitionVersion).mockResolvedValue({
+      definition: { definitionId: "definition-outer" },
+      versionId: "definition-version-outer"
+    } as Awaited<ReturnType<typeof getActivityDefinitionVersion>>);
+    const container = render(<ReusableBoundaryInspector context={context} inspection={boundaryInspection("outer")} />);
+
+    await waitFor(() => {
+      const link = [...container.querySelectorAll<HTMLAnchorElement>("a")]
+        .find(candidate => candidate.textContent === "View activity definition");
+      expect(link?.getAttribute("href")).toBe("/workflows/activity-definitions?definition=definition-outer&section=versions&version=definition-version-outer");
+    });
+    expect(getActivityDefinitionVersion).toHaveBeenCalledWith(context, "definition-version-outer", expect.any(AbortSignal));
+  });
+
+  it("does not link when the resolved version belongs to a different definition", async () => {
+    vi.mocked(getActivityExecutionLayout).mockResolvedValue(layout("outer", []));
+    vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(1, []));
+    vi.mocked(getActivityDefinitionVersion).mockResolvedValue({
+      definition: { definitionId: "definition-outer" },
+      versionId: "other-version"
+    } as Awaited<ReturnType<typeof getActivityDefinitionVersion>>);
+    const container = render(<ReusableBoundaryInspector context={context} inspection={boundaryInspection("outer")} />);
+
+    await waitFor(() => expect(container.textContent).toContain("Activity definition link unavailable."));
+    expect([...container.querySelectorAll<HTMLAnchorElement>("a")]
+      .some(candidate => candidate.textContent === "View activity definition")).toBe(false);
+  });
+
   it("loads pinned structure independently, virtualizes descendants, and does not preload a nested boundary", async () => {
     const layoutDeferred = deferred<ActivityExecutionLayout>();
     const descendantsDeferred = deferred<ActivityExecutionHierarchyPage>();
@@ -49,6 +185,8 @@ describe("ReusableBoundaryInspector", () => {
     vi.mocked(getActivityExecutionDescendants).mockReturnValue(descendantsDeferred.promise);
 
     const container = render(<ReusableBoundaryInspector context={context} inspection={boundaryInspection("outer")} />);
+    expect(container.querySelector('[role="tab"][aria-label="Steps"][aria-selected="true"]')).not.toBeNull();
+    click(button(container, "Definition"));
 
     await waitFor(() => {
       expect(getActivityExecutionLayout).toHaveBeenCalledTimes(1);
@@ -63,9 +201,8 @@ describe("ReusableBoundaryInspector", () => {
       hasPinnedGeometry: true
     }]));
 
-    await waitFor(() => expect(container.textContent).toContain("Pinned historical layout"));
-    expect(container.textContent).toContain("historical descriptor unavailable");
-    expect(container.textContent).not.toContain("Committed through sequence");
+    await waitFor(() => expect(container.textContent).toContain("Saved activity layout"));
+    expect(container.textContent).toContain("Historical activity descriptor unavailable");
     expect(getActivityExecutionInspection).not.toHaveBeenCalled();
 
     const nested = hierarchyItem("nested", 2, {
@@ -78,12 +215,12 @@ describe("ReusableBoundaryInspector", () => {
         iterationId: `iteration-${index}`
       }))
     ]));
-    click(button(container, "Runtime Evidence"));
+    click(button(container, "Steps"));
 
-    await waitFor(() => expect(container.textContent).toContain("Committed through sequence 20"));
+    await expectSnapshotSequence(container, 20);
     expect(container.querySelectorAll("[role=treeitem]").length).toBeLessThan(20);
     expect(getActivityExecutionInspection).not.toHaveBeenCalled();
-    expect(button(container, "Open boundary")).not.toBeNull();
+    expect(button(container, "View steps")).not.toBeNull();
   });
 
   it("opens nested boundaries explicitly and restores the parent pane, selection, and loaded snapshot", async () => {
@@ -95,7 +232,7 @@ describe("ReusableBoundaryInspector", () => {
         ? interruptedContinuation.promise
         : activityExecutionId === "outer"
         ? page(10, [
-            hierarchyItem("selected-child", 1),
+            hierarchyItem("selected-child", 1, { activityType: "Example.SelectedChild" }),
             hierarchyItem("nested", 2, {
               activityType: "Example.NestedReusable",
               boundary: boundaryInspection("nested").boundary
@@ -108,32 +245,113 @@ describe("ReusableBoundaryInspector", () => {
         : canonicalInspection(activityExecutionId));
 
     const container = render(<ReusableBoundaryInspector context={context} inspection={boundaryInspection("outer")} />);
-    click(button(container, "Runtime Evidence"));
-    await waitFor(() => expect(container.textContent).toContain("selected-child"));
+    await waitFor(() => expect(treeItem(container, "Selected Child")).toBeDefined());
 
-    click(treeItem(container, "selected-child"));
-    await waitFor(() => expect(container.textContent).toContain("Canonical execution selected-child"));
-    click(button(container, "Load next committed page"));
-    await waitFor(() => expect(container.textContent).toContain("Loading next committed page"));
-    click(button(container, "Open boundary"));
+    click(treeItem(container, "Selected Child"));
+    await waitFor(() => expect(container.querySelector('[aria-label="Selected activity step"]')?.textContent).toContain("Activity"));
+    click(button(container, "Load more steps"));
+    await waitFor(() => expect(container.textContent).toContain("Loading more steps"));
+    click(button(container, "View steps"));
 
-    await waitFor(() => expect(container.textContent).toContain("Execution nested"));
-    click(button(container, "Runtime Evidence"));
-    await waitFor(() => expect(container.textContent).toContain("Committed through sequence 12"));
+    await waitFor(() => expect(container.querySelector('[aria-label="Activity boundary path"]')?.textContent).toContain("Nested Reusable"));
+    expect(container.querySelector('[aria-label="Activity boundary path"]')?.textContent).not.toContain("nested");
+    await expectSnapshotSequence(container, 12);
     expect(getActivityExecutionDescendants).toHaveBeenCalledTimes(3);
     expect(getActivityExecutionLayout).toHaveBeenCalledTimes(2);
 
-    click(button(container, "OuterReusable · attempt 1"));
-    await waitFor(() => expect(container.textContent).toContain("Canonical execution selected-child"));
-    expect(container.textContent).toContain("Committed through sequence 10");
-    expect(container.querySelector("[role=tab][aria-selected=true]")?.textContent).toContain("Runtime Evidence");
-    expect(button(container, "Load next committed page").hasAttribute("disabled")).toBe(false);
+    click(button(container, "Outer Reusable"));
+    await waitFor(() => expect(container.querySelector('[aria-label="Selected activity step"]')?.textContent).toContain("Activity"));
+    await expectSnapshotSequence(container, 10);
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.getAttribute("aria-label")).toBe("Steps");
+    expect(button(container, "Load more steps").hasAttribute("disabled")).toBe(false);
+  });
+
+  it("preserves loaded and selected nested frames when the activity label arrives later", async () => {
+    const outerInspection = boundaryInspection("outer");
+    const nestedInspection = boundaryInspection("nested");
+    vi.mocked(getActivityExecutionLayout).mockImplementation(async (_context, _run, activityExecutionId) =>
+      layout(activityExecutionId, []));
+    vi.mocked(getActivityExecutionDescendants).mockImplementation(async (_context, _run, activityExecutionId) =>
+      activityExecutionId === "outer"
+        ? page(10, [
+            hierarchyItem("selected-child", 1, { activityType: "Example.SelectedChild" }),
+            hierarchyItem("nested", 2, { activityType: "Example.NestedReusable", boundary: nestedInspection.boundary })
+          ])
+        : page(12, [hierarchyItem("nested-child", 3, { activityType: "Example.NestedChild" })]));
+    vi.mocked(getActivityExecutionInspection).mockImplementation(async (_context, _run, id) =>
+      id === "nested" ? nestedInspection : { ...canonicalInspection(id), activityType: "Example.SelectedChild" });
+
+    const container = render(<ReusableBoundaryInspector context={context} inspection={outerInspection} />);
+    await waitFor(() => expect(treeItem(container, "Selected Child")).toBeDefined());
+    click(treeItem(container, "Selected Child"));
+    await waitFor(() => expect(container.querySelector('[aria-label="Selected activity step"]')?.textContent).toContain("Selected Child"));
+    click(button(container, "View steps"));
+    await waitFor(() => expect(container.querySelector('[aria-label="Activity boundary path"]')?.textContent).toContain("Nested Reusable"));
+    await waitFor(() => expect(treeItem(container, "Nested Child")).toBeDefined());
+
+    const requestCounts = {
+      layouts: vi.mocked(getActivityExecutionLayout).mock.calls.length,
+      pages: vi.mocked(getActivityExecutionDescendants).mock.calls.length,
+      inspections: vi.mocked(getActivityExecutionInspection).mock.calls.length
+    };
+    rerender(<ReusableBoundaryInspector context={context} inspection={outerInspection} activityLabel="Published invoice activity" />);
+
+    await waitFor(() => expect(container.querySelector('[aria-label="Activity boundary path"]')?.textContent).toContain("Published invoice activity"));
+    expect(container.querySelector('[aria-label="Activity boundary path"]')?.textContent).toContain("Nested Reusable");
+    expect(treeItem(container, "Nested Child")).toBeDefined();
+    expect(getActivityExecutionLayout).toHaveBeenCalledTimes(requestCounts.layouts);
+    expect(getActivityExecutionDescendants).toHaveBeenCalledTimes(requestCounts.pages);
+    expect(getActivityExecutionInspection).toHaveBeenCalledTimes(requestCounts.inspections);
+
+    click(button(container, "Published invoice activity"));
+    await waitFor(() => expect(container.querySelector('[aria-label="Selected activity step"]')?.textContent).toContain("Selected Child"));
+    expect(treeItem(container, "Selected Child").getAttribute("aria-selected")).toBe("true");
+    expect(getActivityExecutionLayout).toHaveBeenCalledTimes(requestCounts.layouts);
+    expect(getActivityExecutionDescendants).toHaveBeenCalledTimes(requestCounts.pages);
+    expect(getActivityExecutionInspection).toHaveBeenCalledTimes(requestCounts.inspections);
+  });
+
+  it("returns from Definition and Technical details to Steps when following a related execution", async () => {
+    vi.mocked(getActivityExecutionLayout).mockResolvedValue(layout("outer", []));
+    vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(4, [hierarchyItem("attempt-2", 4, {
+      activityType: "Example.RetryAttempt"
+    })]));
+    vi.mocked(getActivityExecutionInspection).mockImplementation(async (_context, _run, id) => id === "attempt-2"
+      ? {
+          ...canonicalInspection(id),
+          activityType: "Example.RetryAttempt",
+          attempt: {
+            attemptNumber: 2,
+            firstAttemptActivityExecutionId: "attempt-1",
+            previousAttemptActivityExecutionId: "attempt-1",
+            totalAttempts: 2
+          }
+        }
+      : { ...canonicalInspection(id), activityType: "Example.PreviousAttempt", status: "Faulted" });
+
+    const container = render(<ReusableBoundaryInspector context={context} inspection={boundaryInspection("outer")} />);
+    await waitFor(() => expect(treeItem(container, "Retry Attempt")).toBeDefined());
+    click(treeItem(container, "Retry Attempt"));
+    await waitFor(() => expect(container.querySelector('[aria-label="Selected activity step"]')?.textContent).toContain("Retry Attempt"));
+
+    click(button(container, "Definition"));
+    await waitFor(() => expect(container.textContent).toContain("Activity structure"));
+    const technical = container.querySelector<HTMLDetailsElement>("details.wf-boundary-technical")!;
+    click(technical.querySelector("summary")!);
+    click(button(technical, "Previous attempt"));
+
+    await waitFor(() => expect(container.querySelector('[role="tab"][aria-label="Steps"]')?.getAttribute("aria-selected")).toBe("true"));
+    await waitFor(() => expect(container.querySelector('[aria-label="Selected activity step"]')?.textContent).toContain("Previous Attempt"));
+    const tabpanel = container.querySelector<HTMLElement>('[role="tabpanel"]');
+    await waitFor(() => expect(document.activeElement).toBe(tabpanel));
+    expect(vi.mocked(getActivityExecutionInspection)).toHaveBeenLastCalledWith(
+      context, "run", "attempt-1", expect.any(AbortSignal));
   });
 
   it("preserves stale evidence on cursor failure and replaces it only after an explicit snapshot restart", async () => {
     vi.mocked(getActivityExecutionLayout).mockResolvedValue(layout("outer", []));
     vi.mocked(getActivityExecutionDescendants)
-      .mockResolvedValueOnce(page(40, [hierarchyItem("old-evidence", 1)], "next-cursor"))
+      .mockResolvedValueOnce(page(40, [hierarchyItem("old-evidence", 1, { activityType: "Example.OldEvidence" })], "next-cursor"))
       .mockRejectedValueOnce({
         message: "The hierarchy cursor no longer matches.",
         payload: {
@@ -141,21 +359,20 @@ describe("ReusableBoundaryInspector", () => {
           detail: "The hierarchy cursor no longer matches the current request."
         }
       })
-      .mockResolvedValueOnce(page(50, [hierarchyItem("new-evidence", 2)]));
+      .mockResolvedValueOnce(page(50, [hierarchyItem("new-evidence", 2, { activityType: "Example.NewEvidence" })]));
 
     const container = render(<ReusableBoundaryInspector context={context} inspection={boundaryInspection("outer")} />);
-    click(button(container, "Runtime Evidence"));
-    await waitFor(() => expect(container.textContent).toContain("old-evidence"));
+    await waitFor(() => expect(treeItem(container, "Old Evidence")).toBeDefined());
 
-    click(button(container, "Load next committed page"));
-    await waitFor(() => expect(container.textContent).toContain("Loaded evidence is stale"));
-    expect(container.textContent).toContain("old-evidence");
-    expect(container.textContent).not.toContain("new-evidence");
+    click(button(container, "Load more steps"));
+    await waitFor(() => expect(container.textContent).toContain("out of date"));
+    expect(treeItem(container, "Old Evidence")).toBeDefined();
+    expect(() => treeItem(container, "New Evidence")).toThrow();
 
-    click(button(container, "Restart from first page"));
-    await waitFor(() => expect(container.textContent).toContain("new-evidence"));
-    expect(container.textContent).not.toContain("old-evidence");
-    expect(container.textContent).toContain("Committed through sequence 50");
+    click(button(container, "Refresh steps"));
+    await waitFor(() => expect(treeItem(container, "New Evidence")).toBeDefined());
+    expect(() => treeItem(container, "Old Evidence")).toThrow();
+    await expectSnapshotSequence(container, 50);
     expect(getActivityExecutionDescendants).toHaveBeenNthCalledWith(
       2,
       context,
@@ -182,6 +399,7 @@ describe("ReusableBoundaryInspector", () => {
     vi.mocked(getActivityExecutionLayout).mockResolvedValue(layout("outer", []));
     vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(4, [
       hierarchyItem("attempt-2", 4, {
+        activityType: "Example.RetryAttempt",
         status: "Cancelling",
         attempt: {
           attemptNumber: 2,
@@ -219,7 +437,7 @@ describe("ReusableBoundaryInspector", () => {
         incidentId: "incident-attempt-2",
         severity: "Error",
         status: "Blocking",
-        resolutionAction: "Retry",
+        resolutionOutcome: { actionKind: "Retry", metadata: {} },
         failureType: "Fault",
         message: "The first fault remains visible.",
         createdAt: "2026-07-19T00:00:02Z",
@@ -245,18 +463,21 @@ describe("ReusableBoundaryInspector", () => {
     });
 
     const container = render(<ReusableBoundaryInspector context={context} inspection={boundaryInspection("outer")} />);
-    click(button(container, "Runtime Evidence"));
-    await waitFor(() => expect(container.textContent).toContain("attempt-2"));
-    click(treeItem(container, "attempt-2"));
+    await waitFor(() => expect(treeItem(container, "Retry Attempt")).toBeDefined());
+    click(treeItem(container, "Retry Attempt"));
 
-    await waitFor(() => expect(container.textContent).toContain("Canonical execution attempt-2"));
-    expect(container.textContent).toContain("ActivityInput · Int32");
+    await waitFor(() => expect(container.querySelector('[aria-label="Selected activity step"]')?.textContent).toContain("Activity"));
+    const technical = container.querySelector<HTMLDetailsElement>("details.wf-boundary-technical")!;
+    expect(technical.open).toBe(false);
+    click(technical.querySelector("summary")!);
+    expect(technical.textContent).toContain("attempt-2");
+    expect(container.textContent).toContain("Input · Int32");
     expect(container.textContent).toContain("bookmark-attempt-2");
     expect(container.textContent).toContain("incident-attempt-2");
-    expect(container.textContent).toContain("The first fault remains visible.");
+    expect(container.querySelector('[aria-label="Selected activity step"]')?.textContent).toContain("The first fault remains visible.");
     expect(container.textContent).toContain("Previous attempt");
     expect(container.textContent).toContain("Parent execution");
-    expect(container.textContent).toContain("Cancelling is nonterminal");
+    expect(container.textContent).toContain("Cancellation is still finishing.");
     expect([...container.querySelectorAll(".wf-boundary-value-card > header > span:last-child")].map(node => node.textContent))
       .toEqual(["Captured", "Redacted", "Not captured", "Capture failed", "Payload reference"]);
     expect(container.textContent).not.toContain("Reveal");
@@ -283,8 +504,8 @@ describe("ReusableBoundaryInspector", () => {
     click(button(container, "Show captured value"));
     await waitFor(() => expect(container.textContent).toContain("PRIVATE_OUTPUT"));
 
-    click(treeItem(container, "second"));
-    await waitFor(() => expect(container.textContent).toContain("Canonical execution second"));
+    click(treeItem(container, "Second Step"));
+    await waitFor(() => expect(container.querySelector('[aria-label="Selected activity step"]')?.textContent).toContain("Activity"));
     expect(container.textContent).not.toContain("PRIVATE_OUTPUT");
     expect(getActivityExecutionValuePayload).toHaveBeenCalledTimes(1);
     click(button(container, "Show captured value"));
@@ -318,7 +539,7 @@ describe("ReusableBoundaryInspector", () => {
     const container = await selectCapturedExecution();
     await waitFor(() => expect(getActivityExecutionValuePayload).toHaveBeenCalledTimes(1));
     const firstSignal = vi.mocked(getActivityExecutionValuePayload).mock.calls[0]![5]!;
-    click(treeItem(container, "second"));
+    click(treeItem(container, "Second Step"));
     await waitFor(() => expect(container.textContent).toContain("CURRENT_OUTPUT"));
     expect(firstSignal.aborted).toBe(true);
     firstPayload.resolve({
@@ -332,29 +553,32 @@ describe("ReusableBoundaryInspector", () => {
   it("supports roving tree focus and opens canonical evidence with the keyboard", async () => {
     vi.mocked(getActivityExecutionLayout).mockResolvedValue(layout("outer", []));
     vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(2, [
-      hierarchyItem("first", 1),
-      hierarchyItem("second", 2)
+      hierarchyItem("first", 1, { activityType: "Example.FirstStep" }),
+      hierarchyItem("second", 2, { activityType: "Example.SecondStep" })
     ]));
     vi.mocked(getActivityExecutionInspection).mockImplementation(async (_context, _run, id) =>
       canonicalInspection(id));
 
     const container = render(<ReusableBoundaryInspector context={context} inspection={boundaryInspection("outer")} />);
-    click(button(container, "Runtime Evidence"));
-    await waitFor(() => expect(container.textContent).toContain("second"));
+    click(button(container, "Steps"));
+    await waitFor(() => expect(treeItem(container, "Second Step")).toBeDefined());
 
-    const first = treeItem(container, "first");
+    const first = treeItem(container, "First Step");
     first.focus();
     first.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
-    await waitFor(() => expect(document.activeElement?.textContent).toContain("second"));
+    await waitFor(() => expect(document.activeElement?.textContent).toContain("Second Step"));
     document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
 
-    await waitFor(() => expect(container.textContent).toContain("Canonical execution second"));
+    await waitFor(() => expect(container.querySelector('[aria-label="Selected activity step"]')?.textContent).toContain("Activity"));
   });
 });
 
 async function selectCapturedExecution(overrides: Partial<ActivityExecutionInspection["valueSnapshots"][number]> = {}) {
   vi.mocked(getActivityExecutionLayout).mockResolvedValue(layout("outer", []));
-  vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(2, [hierarchyItem("first", 1), hierarchyItem("second", 2)]));
+  vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(2, [
+    hierarchyItem("first", 1, { activityType: "Example.FirstStep" }),
+    hierarchyItem("second", 2, { activityType: "Example.SecondStep" })
+  ]));
   vi.mocked(getActivityExecutionInspection).mockImplementation(async (_context, _run, id) => ({
     ...canonicalInspection(id),
     valueSnapshots: [value("Result", {
@@ -364,10 +588,10 @@ async function selectCapturedExecution(overrides: Partial<ActivityExecutionInspe
     })]
   }));
   const container = render(<ReusableBoundaryInspector context={context} inspection={boundaryInspection("outer")} />);
-  click(button(container, "Runtime Evidence"));
-  await waitFor(() => expect(treeItem(container, "first")).toBeDefined());
-  click(treeItem(container, "first"));
-  await waitFor(() => expect(container.textContent).toContain("Canonical execution first"));
+  click(button(container, "Steps"));
+  await waitFor(() => expect(treeItem(container, "First Step")).toBeDefined());
+  click(treeItem(container, "First Step"));
+  await waitFor(() => expect(container.querySelector('[aria-label="Selected activity step"]')?.textContent).toContain("Activity"));
   return container;
 }
 
@@ -378,6 +602,12 @@ function render(ui: React.ReactElement) {
   flushSync(() => root.render(ui));
   active = { root, container };
   return container;
+}
+
+function rerender(ui: React.ReactElement) {
+  if (!active) throw new Error("No active render to update.");
+  flushSync(() => active!.root.render(ui));
+  return active.container;
 }
 
 async function waitFor(assertion: () => void) {
@@ -394,6 +624,16 @@ async function waitFor(assertion: () => void) {
   throw lastError;
 }
 
+async function expectSnapshotSequence(container: HTMLElement, sequence: number) {
+  const technical = container.querySelector<HTMLDetailsElement>("details.wf-boundary-technical");
+  if (!technical) throw new Error("Technical details disclosure was not rendered.");
+  if (!technical.open) click(technical.querySelector("summary")!);
+  await waitFor(() => {
+    const label = [...technical.querySelectorAll("dt")].find(item => item.textContent === "Snapshot through sequence");
+    expect(label?.nextElementSibling?.textContent).toBe(String(sequence));
+  });
+}
+
 function click(element: HTMLElement) {
   flushSync(() => element.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 }
@@ -406,10 +646,10 @@ function button(container: HTMLElement, text: string, index = -1) {
   return match;
 }
 
-function treeItem(container: HTMLElement, executionId: string) {
+function treeItem(container: HTMLElement, activityLabel: string) {
   const match = [...container.querySelectorAll<HTMLElement>("[role=treeitem]")]
-    .find(candidate => candidate.textContent?.includes(executionId));
-  if (!match) throw new Error(`Tree item containing "${executionId}" was not found.`);
+    .find(candidate => candidate.textContent?.includes(activityLabel));
+  if (!match) throw new Error(`Tree item containing "${activityLabel}" was not found.`);
   return match;
 }
 
@@ -443,6 +683,30 @@ function boundaryInspection(activityExecutionId: string): ActivityExecutionInspe
       },
       layoutAvailable: true
     }
+  };
+}
+
+function activitySummary(activityExecutionId: string): ActivityExecutionStateSummary {
+  return {
+    activityExecutionId,
+    workflowExecutionId: "run",
+    executableNodeId: `node-${activityExecutionId}`,
+    authoredActivityId: `authored-${activityExecutionId}`,
+    activityType: "Example.OuterReusable",
+    activityTypeVersion: "2.0.0",
+    status: "Completed",
+    subStatus: null,
+    scheduledAt: "2026-07-19T00:00:00Z",
+    startedAt: "2026-07-19T00:00:01Z",
+    completedAt: "2026-07-19T00:00:02Z",
+    schedulingActivityExecutionId: null,
+    parentActivityExecutionId: null,
+    branchId: null,
+    iterationId: null,
+    callStackDepth: null,
+    bookmarkIds: [],
+    incidentIds: [],
+    metadata: {}
   };
 }
 

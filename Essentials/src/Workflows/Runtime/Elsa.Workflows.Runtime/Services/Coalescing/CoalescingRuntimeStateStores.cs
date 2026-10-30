@@ -20,6 +20,9 @@ public sealed class CoalescingWorkflowExecutionStateStore(
     public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default) =>
         _inner.SaveAsync(state, cancellationToken);
 
+    public ValueTask<bool> IsDeletionTombstonedAsync(string workflowExecutionId, CancellationToken cancellationToken = default) =>
+        _inner.IsDeletionTombstonedAsync(workflowExecutionId, cancellationToken);
+
     public async ValueTask<WorkflowExecutionState?> FindAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         if (sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId) &&
@@ -473,6 +476,11 @@ public sealed class CoalescingActivityExecutionInspectionStore(
     IRuntimeCoalescingSessionAccessor sessionAccessor) : IActivityExecutionInspectionStore
 {
     private readonly IActivityExecutionInspectionStore _inner = inner.Value;
+
+    public bool SupportsExecutionBrowsing => _inner.SupportsExecutionBrowsing;
+
+    public ValueTask<ActivityExecutionBrowsePage> BrowseAsync(ActivityExecutionBrowseQuery query, CancellationToken cancellationToken = default) =>
+        _inner.BrowseAsync(query, cancellationToken);
 
     public async ValueTask<ActivityExecutionInspectionProjection?> FindAsync(string workflowExecutionId, string activityExecutionId, CancellationToken cancellationToken = default)
     {

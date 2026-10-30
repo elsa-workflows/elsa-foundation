@@ -30,6 +30,12 @@ importers:
       '@playwright/test':
         specifier: ^1.61.1
         version: 1.61.1
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
       '@vitejs/plugin-react':
         specifier: ^5.0.0
         version: 5.2.0(vite@7.3.5)
@@ -71,10 +77,44 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+      react:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      jsdom:
+        specifier: ^25.0.1
+        version: 25.0.1
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.7(react@19.2.7)
+      vite:
+        specifier: ^7.1.0
+        version: 7.3.5
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(jsdom@25.0.1)
+
+  ../Extensions/Connections/studio/Elsa.Studio.Connections/Client:
+    dependencies:
+      '@elsa-workflows/studio-sdk':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+      lucide-react:
+        specifier: ^0.468.0
+        version: 0.468.0(react@19.2.7)
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -102,10 +142,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@microsoft/signalr':
         specifier: ^8.0.7
-        version: 8.0.17
+        version: 8.0.29
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -127,7 +167,7 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -135,9 +175,15 @@ importers:
       '@types/react':
         specifier: ^19.2.17
         version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
       jsdom:
         specifier: ^25.0.1
         version: 25.0.1
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.7(react@19.2.7)
       vite:
         specifier: ^7.1.0
         version: 7.3.5
@@ -149,7 +195,44 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      react:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.7
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      jsdom:
+        specifier: ^25.0.1
+        version: 25.0.1
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.7(react@19.2.7)
+      vite:
+        specifier: ^7.1.0
+        version: 7.3.5
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(jsdom@25.0.1)
+
+  ../Extensions/Etl/studio/Elsa.Studio.Etl/Client:
+    dependencies:
+      '@elsa-workflows/studio-sdk':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
+      lossless-json:
+        specifier: 4.3.2
+        version: 4.3.2
+      lucide-react:
+        specifier: ^0.468.0
+        version: 0.468.0(react@19.2.7)
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -180,7 +263,7 @@ importers:
         version: link:../../../../../Studio/src/essentials/Elsa.Studio.CodeEditor/Client
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -205,7 +288,7 @@ importers:
         version: link:../../../../../Studio/src/essentials/Elsa.Studio.CodeEditor/Client
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -230,10 +313,10 @@ importers:
         version: link:../../../../../Studio/src/essentials/Elsa.Studio.CodeEditor/Client
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
@@ -264,10 +347,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
@@ -298,7 +381,7 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -320,7 +403,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
@@ -351,7 +437,7 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-workflows':
         specifier: workspace:*
         version: link:../../../../../Studio/src/essentials/Elsa.Studio.Workflows/Client
@@ -376,10 +462,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioUi
+        version: link:../../../../../Studio/src/essentials/Elsa.Studio.Hosting/StudioUi
       react:
         specifier: ^18.0.0 || ^19.0.0
         version: 19.2.7
@@ -410,10 +496,10 @@ importers:
         version: link:../../src/essentials/Elsa.Studio.CodeEditor/Client
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../src/apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../src/essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../src/apps/Elsa.Studio.Web/StudioUi
+        version: link:../../src/essentials/Elsa.Studio.Hosting/StudioUi
       '@elsa-workflows/studio-workflows':
         specifier: workspace:*
         version: link:../../src/essentials/Elsa.Studio.Workflows/Client
@@ -456,7 +542,7 @@ importers:
         version: link:../../src/essentials/Elsa.Studio.CodeEditor/Client
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../src/apps/Elsa.Studio.Web/StudioUi
+        version: link:../../src/essentials/Elsa.Studio.Hosting/StudioUi
       react:
         specifier: ^19.1.0
         version: 19.2.7
@@ -483,7 +569,7 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(jsdom@25.0.1)
 
-  src/apps/Elsa.Studio.Web/Client:
+  src/essentials/Elsa.Studio.Hosting/Client:
     dependencies:
       '@elsa-workflows/studio-code-editor':
         specifier: workspace:*
@@ -535,7 +621,7 @@ importers:
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.17)
 
-  src/apps/Elsa.Studio.Web/StudioSdk:
+  src/essentials/Elsa.Studio.Hosting/StudioSdk:
     dependencies:
       react:
         specifier: ^18.0.0 || ^19.0.0
@@ -548,7 +634,7 @@ importers:
         specifier: ^4.5.0
         version: 4.5.4(rollup@4.62.0)(typescript@5.9.3)(vite@7.3.5)
 
-  src/apps/Elsa.Studio.Web/StudioUi:
+  src/essentials/Elsa.Studio.Hosting/StudioUi:
     dependencies:
       react:
         specifier: ^18.0.0 || ^19.0.0
@@ -569,12 +655,21 @@ importers:
       '@codemirror/commands':
         specifier: ^6.10.4
         version: 6.10.4
+      '@codemirror/lang-html':
+        specifier: ^6.4.12
+        version: 6.4.12
       '@codemirror/lang-javascript':
         specifier: ^6.2.5
         version: 6.2.5
+      '@codemirror/lang-json':
+        specifier: ^6.0.2
+        version: 6.0.2
       '@codemirror/lang-liquid':
         specifier: ^6.3.2
         version: 6.3.2
+      '@codemirror/lang-xml':
+        specifier: ^6.1.0
+        version: 6.1.0
       '@codemirror/language':
         specifier: ^6.12.4
         version: 6.12.4
@@ -587,6 +682,9 @@ importers:
       '@codemirror/view':
         specifier: 6.43.6
         version: 6.43.6
+      '@lezer/highlight':
+        specifier: ^1.2.5
+        version: 1.2.5
       '@uiw/react-codemirror':
         specifier: ^4.25.10
         version: 4.25.10(@babel/runtime@8.0.0)(@codemirror/autocomplete@6.20.3)(@codemirror/language@6.12.4)(@codemirror/lint@6.9.7)(@codemirror/search@6.7.1)(@codemirror/state@6.7.0)(@codemirror/theme-one-dark@6.1.3)(@codemirror/view@6.43.6)(codemirror@6.0.2)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -608,10 +706,10 @@ importers:
     dependencies:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../apps/Elsa.Studio.Web/StudioUi
+        version: link:../../../essentials/Elsa.Studio.Hosting/StudioUi
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
@@ -636,10 +734,10 @@ importers:
         version: link:../../Elsa.Studio.CodeEditor/Client
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
-        version: link:../../../apps/Elsa.Studio.Web/StudioSdk
+        version: link:../../../essentials/Elsa.Studio.Hosting/StudioSdk
       '@elsa-workflows/studio-ui':
         specifier: workspace:*
-        version: link:../../../apps/Elsa.Studio.Web/StudioUi
+        version: link:../../../essentials/Elsa.Studio.Hosting/StudioUi
       '@tanstack/react-query':
         specifier: ^5.101.0
         version: 5.101.0(react@19.2.7)
@@ -662,6 +760,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.17)
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
       vite-plugin-dts:
         specifier: ^4.5.0
         version: 4.5.4(rollup@4.62.0)(typescript@5.9.3)(vite@7.3.5)
@@ -772,14 +873,20 @@ packages:
   '@codemirror/lang-css@6.3.1':
     resolution: {integrity: sha512-kr5fwBGiGtmz6l0LSJIbno9QrifNMUusivHbnA1H6Dmqy4HZFte3UAICix1VuKo0lMPKQr2rqB+0BkKi/S3Ejg==}
 
-  '@codemirror/lang-html@6.4.11':
-    resolution: {integrity: sha512-9NsXp7Nwp891pQchI7gPdTwBuSuT3K65NGTHWHNJ55HjYcHLllr0rbIZNdOzas9ztc1EUVBlHou85FFZS4BNnw==}
+  '@codemirror/lang-html@6.4.12':
+    resolution: {integrity: sha512-pw2ReWKUqSkbvh76RAT4NYxiogRu+PWkR2ukAwO9uOgrm8uipkzjtKKtNpyeAQwHOqxEeSvAXZ6vr3AfyB9y/w==}
 
   '@codemirror/lang-javascript@6.2.5':
     resolution: {integrity: sha512-zD4e5mS+50htS7F+TYjBPsiIFGanfVqg4HyUz6WNFikgOPf2BgKlx+TQedI1w6n/IqRBVBbBWmGFdLB/7uxO4A==}
 
+  '@codemirror/lang-json@6.0.2':
+    resolution: {integrity: sha512-x2OtO+AvwEHrEwR0FyyPtfDUiloG3rnVTSZV1W8UteaLL8/MajQd8DpvUb2YVzC+/T18aSDv0H9mu+xw0EStoQ==}
+
   '@codemirror/lang-liquid@6.3.2':
     resolution: {integrity: sha512-6PDVU3ZnfeYyz1at1E/ttorErZvZFXXt1OPhtfe1EZJ2V2iDFa0CwPqPgG5F7NXN0yONGoBogKmFAafKTqlwIw==}
+
+  '@codemirror/lang-xml@6.1.0':
+    resolution: {integrity: sha512-3z0blhicHLfwi2UgkZYRPioSgVTo9PV5GP5ducFH6FaHy0IAJRg+ixj5gTR1gnT/glAIC8xv4w2VL1LoZfs+Jg==}
 
   '@codemirror/language@6.12.4':
     resolution: {integrity: sha512-1q4PaT+o6PbgpkJt4Q8Fv5XJxTy4FUZ4MWETtyiDw3J0Pyr9E2vqcKL+k9wcvjNTIsauxvE7OfmWj3FRPHQ76A==}
@@ -1296,8 +1403,8 @@ packages:
   '@lezer/css@1.3.4':
     resolution: {integrity: sha512-N+tn9tej2hPvyKgHEApMOQfHczDJCwxrRFS3SPn9QjYN+uwHvEDnCgKRrb3mxDYxRS8sKMM8fhC3+lc04Abz5Q==}
 
-  '@lezer/highlight@1.2.3':
-    resolution: {integrity: sha512-qXdH7UqTvGfdVBINrgKhDsVTJTxactNNxLk7+UMwZhU13lMHaOBlJe9Vqp907ya56Y3+ed2tlqzys7jDkTmW0g==}
+  '@lezer/highlight@1.2.5':
+    resolution: {integrity: sha512-O1GMVKgtf5YspFaRzpmqkVgMtIk2HG9uMAbH6wdAIdNh3TVzCsch/+cRi+6l2//UGDKe6NB9BW3cvuR5ezMQ0w==}
 
   '@lezer/html@1.3.13':
     resolution: {integrity: sha512-oI7n6NJml729m7pjm9lvLvmXbdoMoi2f+1pwSDJkl9d68zGr7a9Btz8NdHTGQZtW2DA25ybeuv/SyDb9D5tseg==}
@@ -1305,8 +1412,14 @@ packages:
   '@lezer/javascript@1.5.4':
     resolution: {integrity: sha512-vvYx3MhWqeZtGPwDStM2dwgljd5smolYD2lR2UyFcHfxbBQebqx8yjmFmxtJ/E6nN6u1D9srOiVWm3Rb4tmcUA==}
 
+  '@lezer/json@1.0.3':
+    resolution: {integrity: sha512-BP9KzdF9Y35PDpv04r0VeSTKDeox5vVr3efE7eBbx3r4s3oNLfunchejZhjArmeieBH+nVOpgIiBJpEAv8ilqQ==}
+
   '@lezer/lr@1.4.10':
     resolution: {integrity: sha512-rnCpTIBafOx4mRp43xOxDJbFipJm/c0cia/V5TiGlhmMa+wsSdoGmUN3w5Bqrks/09Q/D4tNAmWaT8p6NRi77A==}
+
+  '@lezer/xml@1.0.6':
+    resolution: {integrity: sha512-CdDwirL0OEaStFue/66ZmFSeppuL6Dwjlk8qk153mSQwiSH/Dlri4GNymrNWnUmPl2Um7QfV1FO9KFUyX3Twww==}
 
   '@marijn/find-cluster-break@1.0.2':
     resolution: {integrity: sha512-l0h88YhZFyKdXIFNfSWpyjStDjGHwZ/U7iobcK1cQQD8sejsONdQtTVU+1wVN1PBw40PiiHB1vA5S7VTfQiP9g==}
@@ -1318,8 +1431,8 @@ packages:
     resolution: {integrity: sha512-S2UF4yza5GoxCmf7hJQNxJNZN9ltOVuOQv8Dy+Z21aol5ERoBNMdWcQHm4MJMPPItW4H/4rZD906iaf4mUojJA==}
     hasBin: true
 
-  '@microsoft/signalr@8.0.17':
-    resolution: {integrity: sha512-5pM6xPtKZNJLO0Tq5nQasVyPFwi/WBY3QB5uc/v3dIPTpS1JXQbaXAQAPxFoQ5rTBFE094w8bbqkp17F9ReQvA==}
+  '@microsoft/signalr@8.0.29':
+    resolution: {integrity: sha512-yzszFiTAuRxHm3qxNaSan3YzN8dffLqQcc3ZNJD2tn9eInCBBi7u2xCJ6AVNXjw19RDoBc+NPWfYN43K1HcjdA==}
 
   '@microsoft/tsdoc-config@0.18.1':
     resolution: {integrity: sha512-9brPoVdfN9k9g0dcWkFeA7IH9bbcttzDJlXvkf8b2OBzd5MueR1V2wkKBL0abn0otvmkHJC6aapBOTJDDeMCZg==}
@@ -3268,6 +3381,9 @@ packages:
   longest-streak@3.1.0:
     resolution: {integrity: sha512-9Ri+o0JYgehTaVBBDoMqIl8GXtbWg711O3srftcHhZ0dqnETqLaoIK0x17fUw9rFSlK/0NlsKe0Ahhyl5pXE2g==}
 
+  lossless-json@4.3.2:
+    resolution: {integrity: sha512-TWT1oIGJKaHkme0nDFoW9Tsv0/IZxy6P8rzD03hZpk7de04PWGfl/uMj/WcENrJLNF4P+QGGByPjap6qx++bDQ==}
+
   loupe@3.2.1:
     resolution: {integrity: sha512-CdzqowRJCeLU72bHvWqwRBBlLcMEtIvGrlvef74kMnV2AolS9Y8xUv1I0U/MNAWMhBlKIoyuEgoJ0t/bbwHbLQ==}
 
@@ -3787,8 +3903,8 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
-  set-cookie-parser@2.7.2:
-    resolution: {integrity: sha512-oeM1lpU/UvhTxw+g3cIfxXHyJRc/uidd3yK1P242gzHds0udQBYzs3y8j4gCCW+ZJ7ad0yctld8RYO+bdurlvw==}
+  set-cookie-parser@2.7.3:
+    resolution: {integrity: sha512-irZHtTqurLna57KQG/s+fzOwv/J6XSH4cs8M/vsrY3uCaQ3S6+QJguAH0WdN47SXlk82voMZ4naWMQf8fdEoIg==}
 
   set-function-length@1.2.2:
     resolution: {integrity: sha512-pgRc4hJ4/sNjWCSS9AmnS40x3bNMDTknHgL5UaMBTMyJnU90EgWh1Rz+MC9eFu4BuN/UwZjKQuY/1v3rM7HMfg==}
@@ -4311,8 +4427,8 @@ packages:
     resolution: {integrity: sha512-OTIk8iR8/aCRWBqvxrzxR0hgxWpnYBblY1S5hDWBQfk/VFmJwzmJgQFN3WsoUKHISv2eAwe+PpbUzyL1CKTLXg==}
     engines: {node: ^20.17.0 || >=22.9.0}
 
-  ws@7.5.11:
-    resolution: {integrity: sha512-zS54Oen9bITtp7kp2XM3AydrCIq1D+HwJOuH+c+e4LfpL/lotP5osijd+UoMnxwAam1GN8R4KtLAyIrIcBNpiA==}
+  ws@7.5.13:
+    resolution: {integrity: sha512-rsKI6xDBFVf4r/x8XyChGK04QR/XHroxs/jUcoWvtEZM8TPU/X/uIY9B1CsSzYws9ZJb/6bbBu7dPhFW00CAoA==}
     engines: {node: '>=8.3.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -4525,7 +4641,7 @@ snapshots:
       '@lezer/common': 1.5.2
       '@lezer/css': 1.3.4
 
-  '@codemirror/lang-html@6.4.11':
+  '@codemirror/lang-html@6.4.12':
     dependencies:
       '@codemirror/autocomplete': 6.20.3
       '@codemirror/lang-css': 6.3.1
@@ -4547,23 +4663,37 @@ snapshots:
       '@lezer/common': 1.5.2
       '@lezer/javascript': 1.5.4
 
+  '@codemirror/lang-json@6.0.2':
+    dependencies:
+      '@codemirror/language': 6.12.4
+      '@lezer/json': 1.0.3
+
   '@codemirror/lang-liquid@6.3.2':
     dependencies:
       '@codemirror/autocomplete': 6.20.3
-      '@codemirror/lang-html': 6.4.11
+      '@codemirror/lang-html': 6.4.12
       '@codemirror/language': 6.12.4
       '@codemirror/state': 6.7.0
       '@codemirror/view': 6.43.6
       '@lezer/common': 1.5.2
-      '@lezer/highlight': 1.2.3
+      '@lezer/highlight': 1.2.5
       '@lezer/lr': 1.4.10
+
+  '@codemirror/lang-xml@6.1.0':
+    dependencies:
+      '@codemirror/autocomplete': 6.20.3
+      '@codemirror/language': 6.12.4
+      '@codemirror/state': 6.7.0
+      '@codemirror/view': 6.43.6
+      '@lezer/common': 1.5.2
+      '@lezer/xml': 1.0.6
 
   '@codemirror/language@6.12.4':
     dependencies:
       '@codemirror/state': 6.7.0
       '@codemirror/view': 6.43.6
       '@lezer/common': 1.5.2
-      '@lezer/highlight': 1.2.3
+      '@lezer/highlight': 1.2.5
       '@lezer/lr': 1.4.10
       style-mod: 4.1.3
 
@@ -4588,7 +4718,7 @@ snapshots:
       '@codemirror/language': 6.12.4
       '@codemirror/state': 6.7.0
       '@codemirror/view': 6.43.6
-      '@lezer/highlight': 1.2.3
+      '@lezer/highlight': 1.2.5
 
   '@codemirror/view@6.43.6':
     dependencies:
@@ -4921,28 +5051,40 @@ snapshots:
   '@lezer/css@1.3.4':
     dependencies:
       '@lezer/common': 1.5.2
-      '@lezer/highlight': 1.2.3
+      '@lezer/highlight': 1.2.5
       '@lezer/lr': 1.4.10
 
-  '@lezer/highlight@1.2.3':
+  '@lezer/highlight@1.2.5':
     dependencies:
       '@lezer/common': 1.5.2
 
   '@lezer/html@1.3.13':
     dependencies:
       '@lezer/common': 1.5.2
-      '@lezer/highlight': 1.2.3
+      '@lezer/highlight': 1.2.5
       '@lezer/lr': 1.4.10
 
   '@lezer/javascript@1.5.4':
     dependencies:
       '@lezer/common': 1.5.2
-      '@lezer/highlight': 1.2.3
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.10
+
+  '@lezer/json@1.0.3':
+    dependencies:
+      '@lezer/common': 1.5.2
+      '@lezer/highlight': 1.2.5
       '@lezer/lr': 1.4.10
 
   '@lezer/lr@1.4.10':
     dependencies:
       '@lezer/common': 1.5.2
+
+  '@lezer/xml@1.0.6':
+    dependencies:
+      '@lezer/common': 1.5.2
+      '@lezer/highlight': 1.2.5
+      '@lezer/lr': 1.4.10
 
   '@marijn/find-cluster-break@1.0.2': {}
 
@@ -4972,13 +5114,13 @@ snapshots:
     transitivePeerDependencies:
       - '@types/node'
 
-  '@microsoft/signalr@8.0.17':
+  '@microsoft/signalr@8.0.29':
     dependencies:
       abort-controller: 3.0.0
       eventsource: 2.0.2
       fetch-cookie: 2.2.0
       node-fetch: 2.7.0
-      ws: 7.5.11
+      ws: 7.5.13
     transitivePeerDependencies:
       - bufferutil
       - encoding
@@ -6525,7 +6667,7 @@ snapshots:
 
   fetch-cookie@2.2.0:
     dependencies:
-      set-cookie-parser: 2.7.2
+      set-cookie-parser: 2.7.3
       tough-cookie: 4.1.4
 
   file-entry-cache@11.1.5:
@@ -7021,6 +7163,8 @@ snapshots:
   lodash.truncate@4.4.2: {}
 
   longest-streak@3.1.0: {}
+
+  lossless-json@4.3.2: {}
 
   loupe@3.2.1: {}
 
@@ -7795,7 +7939,7 @@ snapshots:
 
   semver@7.8.5: {}
 
-  set-cookie-parser@2.7.2: {}
+  set-cookie-parser@2.7.3: {}
 
   set-function-length@1.2.2:
     dependencies:
@@ -8395,7 +8539,7 @@ snapshots:
     dependencies:
       signal-exit: 4.1.0
 
-  ws@7.5.11: {}
+  ws@7.5.13: {}
 
   ws@8.21.0: {}
 

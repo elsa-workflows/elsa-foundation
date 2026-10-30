@@ -6,6 +6,7 @@ using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation.Options;
 using Elsa.Workflows.Design.Reconciliation.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Workflows.Design.Reconciliation;
 
@@ -20,6 +21,10 @@ namespace Elsa.Workflows.Design.Reconciliation;
 /// </summary>
 public abstract class WorkflowsDesignReconciliationFeature : IShellFeature
 {
+    /// <summary>
+    /// Shared reconciliation policy. When several source features are composed, the first registration
+    /// supplies this policy; configure the same policy on each feature when order should not matter.
+    /// </summary>
     public WorkflowVersionReconcilerOptions ReconcilerOptions { get; set; } = new();
 
     public virtual IEnumerable<IWorkflowReconciliationSource> Sources { get; set; } = [];
@@ -29,14 +34,14 @@ public abstract class WorkflowsDesignReconciliationFeature : IShellFeature
         foreach (var source in Sources)
             services.AddSingleton(source);
 
-        services.AddSingleton(Microsoft.Extensions.Options.Options.Create(ReconcilerOptions));
+        services.TryAddSingleton(Microsoft.Extensions.Options.Options.Create(ReconcilerOptions));
 
-        services.AddScoped<IWorkflowVersionReconciler, WorkflowsVersionReconciler>();
+        services.TryAddScoped<IWorkflowVersionReconciler, WorkflowsVersionReconciler>();
 
         // Arm the reconcile lifecycle: the startup task IS the trigger for a pass, so it belongs with
         // the reconciler registration. Registering it here (rather than per source-variant feature)
         // means enabling ANY concrete reconciliation feature activates the previously-dormant lifecycle.
-        services.AddScoped<IStartupTask, WorkflowsVersionReconcilerStartupTask>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, WorkflowsVersionReconcilerStartupTask>());
 
         services.AddEventHandlersFrom(typeof(WorkflowsDesignReconciliationFeature).Assembly);
     }

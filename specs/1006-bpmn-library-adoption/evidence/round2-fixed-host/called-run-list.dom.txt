@@ -1,0 +1,693 @@
+- complementary:
+  - link "Elsa Studio Foundation":
+    - /url: /
+    - strong: Elsa Studio
+    - generic: Foundation
+  - button "Collapse navigation" [expanded]:
+  - searchbox "Search modules"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard
+      - generic: Home
+    - link "Workflows":
+      - /url: /workflows/definitions
+      - generic: Workflows
+    - link "Runs":
+      - /url: /workflows/instances
+      - generic: Runs
+  - navigation "More tools":
+    - button "More tools":
+      - generic: More tools
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings
+      - generic: Settings
+  - group "Environment and account":
+    - 'group "Configured backend endpoint: 127.0.0.1:53186"':
+      - strong: Backend API
+      - generic: 127.0.0.1:53186
+    - 'button "Account: Administrator"':
+      - generic: A
+      - generic: Administrator
+- banner:
+  - generic: Studio / Runs
+  - heading "Runs" [level=1]
+  - button "Weaver":
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation-studio
+  - link "Designer source":
+    - /url: https://github.com/elsa-workflows/elsa-foundation-designer
+  - radiogroup "Colour mode":
+    - radio "Light":
+    - radio "Dark" [checked]:
+    - radio "Dim":
+  - button "Select theme":
+- main:
+  - text: Workflow management
+  - heading "Runs" [level=2]
+  - form "Workflow run filters":
+    - button "Refresh"
+    - generic "Primary workflow run filters":
+      - button "Needs attention"
+      - button "Running"
+    - generic: Workflow
+    - combobox "Workflow"
+    - button "Clear filters" [disabled]
+    - button "More filters":
+      - generic: More filters
+  - table "Workflow runs":
+    - row "Select all workflow runs on this page Run Kind Status Health Activity Started Duration Actions":
+      - columnheader "Select all workflow runs on this page Run":
+        - checkbox "Select all workflow runs on this page"
+        - strong: Run
+      - columnheader "Kind"
+      - columnheader "Status"
+      - columnheader "Health"
+      - columnheader "Activity"
+      - columnheader "Started"
+      - columnheader "Duration"
+      - columnheader "Actions"
+    - row "Inspect workflow run 14iE6SpNZyi · BPMN execution model · reviewed host · Completed · No active incidents":
+      - 'cell "Select workflow run 14iE6SpNZyi Inspect workflow run 14iE6SpNZyi · BPMN execution model · reviewed host Execution ID Execution ID: 14iE6SpNZyi Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run 14iE6SpNZyi"
+        - button "Inspect workflow run 14iE6SpNZyi · BPMN execution model · reviewed host":
+          - strong: BPMN execution model · reviewed host
+        - generic: Execution ID
+        - 'generic "Execution ID: 14iE6SpNZyi"': 14iE6SpNZyi
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Completed":
+        - generic: Completed
+      - cell "No active incidents":
+        - generic: No active incidents
+      - cell "2 activities 0 incidents":
+        - strong: 2 activities
+        - generic: 0 incidents
+      - cell "10/28/2026, 3:14:15 AM"
+      - cell "7s"
+      - cell "Delete workflow run 14iE6SpNZyi":
+        - button "Delete workflow run 14iE6SpNZyi": Delete
+    - row "Inspect workflow run 14iDzYWOz4n · CalledControlParent-SignalAndFailure-True-77693f8120fa4e6c8cc6628390dbc8bd · Completed · No active incidents":
+      - 'cell "Select workflow run 14iDzYWOz4n Inspect workflow run 14iDzYWOz4n · CalledControlParent-SignalAndFailure-True-77693f8120fa4e6c8cc6628390dbc8bd Execution ID Execution ID: 14iDzYWOz4n Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run 14iDzYWOz4n"
+        - button "Inspect workflow run 14iDzYWOz4n · CalledControlParent-SignalAndFailure-True-77693f8120fa4e6c8cc6628390dbc8bd":
+          - strong: CalledControlParent-SignalAndFailure-True-77693f8120fa4e6c8cc6628390dbc8bd
+        - generic: Execution ID
+        - 'generic "Execution ID: 14iDzYWOz4n"': 14iDzYWOz4n
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Completed":
+        - generic: Completed
+      - cell "No active incidents":
+        - generic: No active incidents
+      - cell "3 activities 0 incidents":
+        - strong: 3 activities
+        - generic: 0 incidents
+      - cell "10/28/2026, 3:12:41 AM"
+      - cell "1m 22s"
+      - cell "Delete workflow run 14iDzYWOz4n":
+        - button "Delete workflow run 14iDzYWOz4n": Delete
+    - row "Inspect workflow run 14iDzFGnggS · CalledControlParent-TerminalEscalation-True-975a37cfe9a0465b83678cdae5577ac6 · Completed · No active incidents":
+      - 'cell "Select workflow run 14iDzFGnggS Inspect workflow run 14iDzFGnggS · CalledControlParent-TerminalEscalation-True-975a37cfe9a0465b83678cdae5577ac6 Execution ID Execution ID: 14iDzFGnggS Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run 14iDzFGnggS"
+        - button "Inspect workflow run 14iDzFGnggS · CalledControlParent-TerminalEscalation-True-975a37cfe9a0465b83678cdae5577ac6":
+          - strong: CalledControlParent-TerminalEscalation-True-975a37cfe9a0465b83678cdae5577ac6
+        - generic: Execution ID
+        - 'generic "Execution ID: 14iDzFGnggS"': 14iDzFGnggS
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Completed":
+        - generic: Completed
+      - cell "No active incidents":
+        - generic: No active incidents
+      - cell "3 activities 0 incidents":
+        - strong: 3 activities
+        - generic: 0 incidents
+      - cell "10/28/2026, 3:12:37 AM"
+      - cell "1m 25s"
+      - cell "Delete workflow run 14iDzFGnggS":
+        - button "Delete workflow run 14iDzFGnggS": Delete
+    - row "Inspect workflow run 14iDz6muvxb · CalledControlParent-TerminalEscalation-False-3cb1fc3946cb4c5595d2f1d335662cf4 · Completed · No active incidents":
+      - 'cell "Select workflow run 14iDz6muvxb Inspect workflow run 14iDz6muvxb · CalledControlParent-TerminalEscalation-False-3cb1fc3946cb4c5595d2f1d335662cf4 Execution ID Execution ID: 14iDz6muvxb Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run 14iDz6muvxb"
+        - button "Inspect workflow run 14iDz6muvxb · CalledControlParent-TerminalEscalation-False-3cb1fc3946cb4c5595d2f1d335662cf4":
+          - strong: CalledControlParent-TerminalEscalation-False-3cb1fc3946cb4c5595d2f1d335662cf4
+        - generic: Execution ID
+        - 'generic "Execution ID: 14iDz6muvxb"': 14iDz6muvxb
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Completed":
+        - generic: Completed
+      - cell "No active incidents":
+        - generic: No active incidents
+      - cell "4 activities 0 incidents":
+        - strong: 4 activities
+        - generic: 0 incidents
+      - cell "10/28/2026, 3:12:35 AM"
+      - cell "1m 26s"
+      - cell "Delete workflow run 14iDz6muvxb":
+        - button "Delete workflow run 14iDz6muvxb": Delete
+    - row "Inspect workflow run 14iDyq3se7l · CalledControlParent-RunningEscalation-True-17a3838bf7364568af928584581b9f3f · Completed · No active incidents":
+      - 'cell "Select workflow run 14iDyq3se7l Inspect workflow run 14iDyq3se7l · CalledControlParent-RunningEscalation-True-17a3838bf7364568af928584581b9f3f Execution ID Execution ID: 14iDyq3se7l Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run 14iDyq3se7l"
+        - button "Inspect workflow run 14iDyq3se7l · CalledControlParent-RunningEscalation-True-17a3838bf7364568af928584581b9f3f":
+          - strong: CalledControlParent-RunningEscalation-True-17a3838bf7364568af928584581b9f3f
+        - generic: Execution ID
+        - 'generic "Execution ID: 14iDyq3se7l"': 14iDyq3se7l
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Completed":
+        - generic: Completed
+      - cell "No active incidents":
+        - generic: No active incidents
+      - cell "3 activities 0 incidents":
+        - strong: 3 activities
+        - generic: 0 incidents
+      - cell "10/28/2026, 3:12:31 AM"
+      - cell "1m 29s"
+      - cell "Delete workflow run 14iDyq3se7l":
+        - button "Delete workflow run 14iDyq3se7l": Delete
+    - row "Inspect workflow run 14iDyfpLhxf · CalledControlParent-RunningEscalation-False-5b8659d7c8d9431e8eb3907c1dafa8f8 · Completed · No active incidents":
+      - 'cell "Select workflow run 14iDyfpLhxf Inspect workflow run 14iDyfpLhxf · CalledControlParent-RunningEscalation-False-5b8659d7c8d9431e8eb3907c1dafa8f8 Execution ID Execution ID: 14iDyfpLhxf Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run 14iDyfpLhxf"
+        - button "Inspect workflow run 14iDyfpLhxf · CalledControlParent-RunningEscalation-False-5b8659d7c8d9431e8eb3907c1dafa8f8":
+          - strong: CalledControlParent-RunningEscalation-False-5b8659d7c8d9431e8eb3907c1dafa8f8
+        - generic: Execution ID
+        - 'generic "Execution ID: 14iDyfpLhxf"': 14iDyfpLhxf
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Completed":
+        - generic: Completed
+      - cell "No active incidents":
+        - generic: No active incidents
+      - cell "4 activities 0 incidents":
+        - strong: 4 activities
+        - generic: 0 incidents
+      - cell "10/28/2026, 3:12:29 AM"
+      - cell "1m 30s"
+      - cell "Delete workflow run 14iDyfpLhxf":
+        - button "Delete workflow run 14iDyfpLhxf": Delete
+    - row "Inspect workflow run wfexec:dispatch:v1:4766dada1efe102dd842dd1e356f30126deaa09834e72357296d55338158dd6b · CalledControlChild-RunningEscalation-False-5b8659d7c8d9431e8eb3907c1dafa8f8 · Completed · No active incidents":
+      - 'cell "Select workflow run wfexec:dispatch:v1:4766dada1efe102dd842dd1e356f30126deaa09834e72357296d55338158dd6b Inspect workflow run wfexec:dispatch:v1:4766dada1efe102dd842dd1e356f30126deaa09834e72357296d55338158dd6b · CalledControlChild-RunningEscalation-False-5b8659d7c8d9431e8eb3907c1dafa8f8 Execution ID Execution ID: wfexec:dispatch:v1:4766dada1efe102dd842dd1e356f30126deaa09834e72357296d55338158dd6b Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run wfexec:dispatch:v1:4766dada1efe102dd842dd1e356f30126deaa09834e72357296d55338158dd6b"
+        - button "Inspect workflow run wfexec:dispatch:v1:4766dada1efe102dd842dd1e356f30126deaa09834e72357296d55338158dd6b · CalledControlChild-RunningEscalation-False-5b8659d7c8d9431e8eb3907c1dafa8f8":
+          - strong: CalledControlChild-RunningEscalation-False-5b8659d7c8d9431e8eb3907c1dafa8f8
+        - generic: Execution ID
+        - 'generic "Execution ID: wfexec:dispatch:v1:4766dada1efe102dd842dd1e356f30126deaa09834e72357296d55338158dd6b"': wfexec:dis…38158dd6b
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Completed":
+        - generic: Completed
+      - cell "No active incidents":
+        - generic: No active incidents
+      - cell "3 activities 0 incidents":
+        - strong: 3 activities
+        - generic: 0 incidents
+      - cell "10/28/2026, 3:12:29 AM"
+      - cell "1m 29s"
+      - cell "Delete workflow run wfexec:dispatch:v1:4766dada1efe102dd842dd1e356f30126deaa09834e72357296d55338158dd6b":
+        - button "Delete workflow run wfexec:dispatch:v1:4766dada1efe102dd842dd1e356f30126deaa09834e72357296d55338158dd6b": Delete
+    - row "Inspect workflow run wfexec:dispatch:v1:2dabfbe489dd5c2997c4b06648a5deeb74c40bd1b4934d61e1935bc3cf258465 · CalledControlChild-SignalAndFailure-False-a167d386aa914a659d8560ee161c3b99 · Faulted · 1 active · 1 blocking · Needs intervention":
+      - 'cell "Select workflow run wfexec:dispatch:v1:2dabfbe489dd5c2997c4b06648a5deeb74c40bd1b4934d61e1935bc3cf258465 Inspect workflow run wfexec:dispatch:v1:2dabfbe489dd5c2997c4b06648a5deeb74c40bd1b4934d61e1935bc3cf258465 · CalledControlChild-SignalAndFailure-False-a167d386aa914a659d8560ee161c3b99 Execution ID Execution ID: wfexec:dispatch:v1:2dabfbe489dd5c2997c4b06648a5deeb74c40bd1b4934d61e1935bc3cf258465 Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run wfexec:dispatch:v1:2dabfbe489dd5c2997c4b06648a5deeb74c40bd1b4934d61e1935bc3cf258465"
+        - button "Inspect workflow run wfexec:dispatch:v1:2dabfbe489dd5c2997c4b06648a5deeb74c40bd1b4934d61e1935bc3cf258465 · CalledControlChild-SignalAndFailure-False-a167d386aa914a659d8560ee161c3b99":
+          - strong: CalledControlChild-SignalAndFailure-False-a167d386aa914a659d8560ee161c3b99
+        - generic: Execution ID
+        - 'generic "Execution ID: wfexec:dispatch:v1:2dabfbe489dd5c2997c4b06648a5deeb74c40bd1b4934d61e1935bc3cf258465"': wfexec:dis…3cf258465
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Faulted":
+        - generic: Faulted
+      - cell "1 active · 1 blocking · Needs intervention":
+        - generic: 1 active · 1 blocking · Needs intervention
+      - cell "1 activities 1 incidents":
+        - strong: 1 activities
+        - generic: 1 incidents
+      - cell "10/28/2026, 3:12:41 AM"
+      - cell "1s"
+      - cell "Delete workflow run wfexec:dispatch:v1:2dabfbe489dd5c2997c4b06648a5deeb74c40bd1b4934d61e1935bc3cf258465":
+        - button "Delete workflow run wfexec:dispatch:v1:2dabfbe489dd5c2997c4b06648a5deeb74c40bd1b4934d61e1935bc3cf258465": Delete
+    - row "Inspect workflow run 14iDzOj7Osi · CalledControlParent-SignalAndFailure-False-a167d386aa914a659d8560ee161c3b99 · Faulted · 1 active · 1 blocking · Needs intervention":
+      - 'cell "Select workflow run 14iDzOj7Osi Inspect workflow run 14iDzOj7Osi · CalledControlParent-SignalAndFailure-False-a167d386aa914a659d8560ee161c3b99 Execution ID Execution ID: 14iDzOj7Osi Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run 14iDzOj7Osi"
+        - button "Inspect workflow run 14iDzOj7Osi · CalledControlParent-SignalAndFailure-False-a167d386aa914a659d8560ee161c3b99":
+          - strong: CalledControlParent-SignalAndFailure-False-a167d386aa914a659d8560ee161c3b99
+        - generic: Execution ID
+        - 'generic "Execution ID: 14iDzOj7Osi"': 14iDzOj7Osi
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Faulted":
+        - generic: Faulted
+      - cell "1 active · 1 blocking · Needs intervention":
+        - generic: 1 active · 1 blocking · Needs intervention
+      - cell "2 activities 1 incidents":
+        - strong: 2 activities
+        - generic: 1 incidents
+      - cell "10/28/2026, 3:12:39 AM"
+      - cell "2s"
+      - cell "Delete workflow run 14iDzOj7Osi":
+        - button "Delete workflow run 14iDzOj7Osi": Delete
+    - row "Inspect workflow run wfexec:dispatch:v1:19be2c52f4feeabb06ba89090e044563bee02142ce36c93c0824ff1162bcf3f2 · CalledControlChild-SignalAndFailure-False-a167d386aa914a659d8560ee161c3b99 · Faulted · 1 active · 1 blocking · Needs intervention":
+      - 'cell "Select workflow run wfexec:dispatch:v1:19be2c52f4feeabb06ba89090e044563bee02142ce36c93c0824ff1162bcf3f2 Inspect workflow run wfexec:dispatch:v1:19be2c52f4feeabb06ba89090e044563bee02142ce36c93c0824ff1162bcf3f2 · CalledControlChild-SignalAndFailure-False-a167d386aa914a659d8560ee161c3b99 Execution ID Execution ID: wfexec:dispatch:v1:19be2c52f4feeabb06ba89090e044563bee02142ce36c93c0824ff1162bcf3f2 Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run wfexec:dispatch:v1:19be2c52f4feeabb06ba89090e044563bee02142ce36c93c0824ff1162bcf3f2"
+        - button "Inspect workflow run wfexec:dispatch:v1:19be2c52f4feeabb06ba89090e044563bee02142ce36c93c0824ff1162bcf3f2 · CalledControlChild-SignalAndFailure-False-a167d386aa914a659d8560ee161c3b99":
+          - strong: CalledControlChild-SignalAndFailure-False-a167d386aa914a659d8560ee161c3b99
+        - generic: Execution ID
+        - 'generic "Execution ID: wfexec:dispatch:v1:19be2c52f4feeabb06ba89090e044563bee02142ce36c93c0824ff1162bcf3f2"': wfexec:dis…162bcf3f2
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Faulted":
+        - generic: Faulted
+      - cell "1 active · 1 blocking · Needs intervention":
+        - generic: 1 active · 1 blocking · Needs intervention
+      - cell "1 activities 1 incidents":
+        - strong: 1 activities
+        - generic: 1 incidents
+      - cell "10/28/2026, 3:12:39 AM"
+      - cell "1s"
+      - cell "Delete workflow run wfexec:dispatch:v1:19be2c52f4feeabb06ba89090e044563bee02142ce36c93c0824ff1162bcf3f2":
+        - button "Delete workflow run wfexec:dispatch:v1:19be2c52f4feeabb06ba89090e044563bee02142ce36c93c0824ff1162bcf3f2": Delete
+    - row "Inspect workflow run wfexec:dispatch:v1:8e5c8d13e9859aa93f34de93a343186826028a3432fb3c40d490cfc9f7eae80f · CalledControlChild-TerminalEscalation-False-3cb1fc3946cb4c5595d2f1d335662cf4 · Completed · No active incidents":
+      - 'cell "Select workflow run wfexec:dispatch:v1:8e5c8d13e9859aa93f34de93a343186826028a3432fb3c40d490cfc9f7eae80f Inspect workflow run wfexec:dispatch:v1:8e5c8d13e9859aa93f34de93a343186826028a3432fb3c40d490cfc9f7eae80f · CalledControlChild-TerminalEscalation-False-3cb1fc3946cb4c5595d2f1d335662cf4 Execution ID Execution ID: wfexec:dispatch:v1:8e5c8d13e9859aa93f34de93a343186826028a3432fb3c40d490cfc9f7eae80f Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run wfexec:dispatch:v1:8e5c8d13e9859aa93f34de93a343186826028a3432fb3c40d490cfc9f7eae80f"
+        - button "Inspect workflow run wfexec:dispatch:v1:8e5c8d13e9859aa93f34de93a343186826028a3432fb3c40d490cfc9f7eae80f · CalledControlChild-TerminalEscalation-False-3cb1fc3946cb4c5595d2f1d335662cf4":
+          - strong: CalledControlChild-TerminalEscalation-False-3cb1fc3946cb4c5595d2f1d335662cf4
+        - generic: Execution ID
+        - 'generic "Execution ID: wfexec:dispatch:v1:8e5c8d13e9859aa93f34de93a343186826028a3432fb3c40d490cfc9f7eae80f"': wfexec:dis…9f7eae80f
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Completed":
+        - generic: Completed
+      - cell "No active incidents":
+        - generic: No active incidents
+      - cell "1 activities 0 incidents":
+        - strong: 1 activities
+        - generic: 0 incidents
+      - cell "10/28/2026, 3:12:37 AM"
+      - cell "1s"
+      - cell "Delete workflow run wfexec:dispatch:v1:8e5c8d13e9859aa93f34de93a343186826028a3432fb3c40d490cfc9f7eae80f":
+        - button "Delete workflow run wfexec:dispatch:v1:8e5c8d13e9859aa93f34de93a343186826028a3432fb3c40d490cfc9f7eae80f": Delete
+    - row "Inspect workflow run wfexec:dispatch:v1:f1ebad61f3a87f36155708020395869f81319198524aa61dee11a15ce803125f · CalledControlChild-TerminalEscalation-False-3cb1fc3946cb4c5595d2f1d335662cf4 · Completed · No active incidents":
+      - 'cell "Select workflow run wfexec:dispatch:v1:f1ebad61f3a87f36155708020395869f81319198524aa61dee11a15ce803125f Inspect workflow run wfexec:dispatch:v1:f1ebad61f3a87f36155708020395869f81319198524aa61dee11a15ce803125f · CalledControlChild-TerminalEscalation-False-3cb1fc3946cb4c5595d2f1d335662cf4 Execution ID Execution ID: wfexec:dispatch:v1:f1ebad61f3a87f36155708020395869f81319198524aa61dee11a15ce803125f Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run wfexec:dispatch:v1:f1ebad61f3a87f36155708020395869f81319198524aa61dee11a15ce803125f"
+        - button "Inspect workflow run wfexec:dispatch:v1:f1ebad61f3a87f36155708020395869f81319198524aa61dee11a15ce803125f · CalledControlChild-TerminalEscalation-False-3cb1fc3946cb4c5595d2f1d335662cf4":
+          - strong: CalledControlChild-TerminalEscalation-False-3cb1fc3946cb4c5595d2f1d335662cf4
+        - generic: Execution ID
+        - 'generic "Execution ID: wfexec:dispatch:v1:f1ebad61f3a87f36155708020395869f81319198524aa61dee11a15ce803125f"': wfexec:dis…ce803125f
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Completed":
+        - generic: Completed
+      - cell "No active incidents":
+        - generic: No active incidents
+      - cell "1 activities 0 incidents":
+        - strong: 1 activities
+        - generic: 0 incidents
+      - cell "10/28/2026, 3:12:35 AM"
+      - cell "1s"
+      - cell "Delete workflow run wfexec:dispatch:v1:f1ebad61f3a87f36155708020395869f81319198524aa61dee11a15ce803125f":
+        - button "Delete workflow run wfexec:dispatch:v1:f1ebad61f3a87f36155708020395869f81319198524aa61dee11a15ce803125f": Delete
+    - row "Inspect workflow run wfexec:dispatch:v1:830016f5da525ecae136d086b3e691e52b154a6eb80cd748acb71bfc79be5640 · CalledControlChild-RunningEscalation-True-17a3838bf7364568af928584581b9f3f · Cancelled · No active incidents":
+      - 'cell "Select workflow run wfexec:dispatch:v1:830016f5da525ecae136d086b3e691e52b154a6eb80cd748acb71bfc79be5640 Inspect workflow run wfexec:dispatch:v1:830016f5da525ecae136d086b3e691e52b154a6eb80cd748acb71bfc79be5640 · CalledControlChild-RunningEscalation-True-17a3838bf7364568af928584581b9f3f Execution ID Execution ID: wfexec:dispatch:v1:830016f5da525ecae136d086b3e691e52b154a6eb80cd748acb71bfc79be5640 Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run wfexec:dispatch:v1:830016f5da525ecae136d086b3e691e52b154a6eb80cd748acb71bfc79be5640"
+        - button "Inspect workflow run wfexec:dispatch:v1:830016f5da525ecae136d086b3e691e52b154a6eb80cd748acb71bfc79be5640 · CalledControlChild-RunningEscalation-True-17a3838bf7364568af928584581b9f3f":
+          - strong: CalledControlChild-RunningEscalation-True-17a3838bf7364568af928584581b9f3f
+        - generic: Execution ID
+        - 'generic "Execution ID: wfexec:dispatch:v1:830016f5da525ecae136d086b3e691e52b154a6eb80cd748acb71bfc79be5640"': wfexec:dis…c79be5640
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Cancelled":
+        - generic: Cancelled
+      - cell "No active incidents":
+        - generic: No active incidents
+      - cell "3 activities 0 incidents":
+        - strong: 3 activities
+        - generic: 0 incidents
+      - cell "10/28/2026, 3:12:31 AM"
+      - cell "3s"
+      - cell "Delete workflow run wfexec:dispatch:v1:830016f5da525ecae136d086b3e691e52b154a6eb80cd748acb71bfc79be5640":
+        - button "Delete workflow run wfexec:dispatch:v1:830016f5da525ecae136d086b3e691e52b154a6eb80cd748acb71bfc79be5640": Delete
+    - row "Inspect workflow run 14iDwGDnEkX · CalledErrorParent-OTHER-35db188e181741a5a1c8d346ac9836f4 · Faulted · 1 active · 1 blocking · Needs intervention":
+      - 'cell "Select workflow run 14iDwGDnEkX Inspect workflow run 14iDwGDnEkX · CalledErrorParent-OTHER-35db188e181741a5a1c8d346ac9836f4 Execution ID Execution ID: 14iDwGDnEkX Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run 14iDwGDnEkX"
+        - button "Inspect workflow run 14iDwGDnEkX · CalledErrorParent-OTHER-35db188e181741a5a1c8d346ac9836f4":
+          - strong: CalledErrorParent-OTHER-35db188e181741a5a1c8d346ac9836f4
+        - generic: Execution ID
+        - 'generic "Execution ID: 14iDwGDnEkX"': 14iDwGDnEkX
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Faulted":
+        - generic: Faulted
+      - cell "1 active · 1 blocking · Needs intervention":
+        - generic: 1 active · 1 blocking · Needs intervention
+      - cell "2 activities 1 incidents":
+        - strong: 2 activities
+        - generic: 1 incidents
+      - cell "10/28/2026, 3:11:56 AM"
+      - cell "1s"
+      - cell "Delete workflow run 14iDwGDnEkX":
+        - button "Delete workflow run 14iDwGDnEkX": Delete
+    - row "Inspect workflow run wfexec:dispatch:v1:60380b71fcd194bc74572714682486efc40f2c14c513355bfde60517649cdbe5 · CalledErrorChild-OTHER-35db188e181741a5a1c8d346ac9836f4 · Faulted · 1 active · 1 blocking · Needs intervention":
+      - 'cell "Select workflow run wfexec:dispatch:v1:60380b71fcd194bc74572714682486efc40f2c14c513355bfde60517649cdbe5 Inspect workflow run wfexec:dispatch:v1:60380b71fcd194bc74572714682486efc40f2c14c513355bfde60517649cdbe5 · CalledErrorChild-OTHER-35db188e181741a5a1c8d346ac9836f4 Execution ID Execution ID: wfexec:dispatch:v1:60380b71fcd194bc74572714682486efc40f2c14c513355bfde60517649cdbe5 Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run wfexec:dispatch:v1:60380b71fcd194bc74572714682486efc40f2c14c513355bfde60517649cdbe5"
+        - button "Inspect workflow run wfexec:dispatch:v1:60380b71fcd194bc74572714682486efc40f2c14c513355bfde60517649cdbe5 · CalledErrorChild-OTHER-35db188e181741a5a1c8d346ac9836f4":
+          - strong: CalledErrorChild-OTHER-35db188e181741a5a1c8d346ac9836f4
+        - generic: Execution ID
+        - 'generic "Execution ID: wfexec:dispatch:v1:60380b71fcd194bc74572714682486efc40f2c14c513355bfde60517649cdbe5"': wfexec:dis…7649cdbe5
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Faulted":
+        - generic: Faulted
+      - cell "1 active · 1 blocking · Needs intervention":
+        - generic: 1 active · 1 blocking · Needs intervention
+      - cell "1 activities 1 incidents":
+        - strong: 1 activities
+        - generic: 1 incidents
+      - cell "10/28/2026, 3:11:56 AM"
+      - cell "0s"
+      - cell "Delete workflow run wfexec:dispatch:v1:60380b71fcd194bc74572714682486efc40f2c14c513355bfde60517649cdbe5":
+        - button "Delete workflow run wfexec:dispatch:v1:60380b71fcd194bc74572714682486efc40f2c14c513355bfde60517649cdbe5": Delete
+    - row "Inspect workflow run 14iDw3wdd4X · CalledErrorParent-ORDER-ebe8d05069b44fb29d98fd7d1a4fd0e0 · Completed · No active incidents":
+      - 'cell "Select workflow run 14iDw3wdd4X Inspect workflow run 14iDw3wdd4X · CalledErrorParent-ORDER-ebe8d05069b44fb29d98fd7d1a4fd0e0 Execution ID Execution ID: 14iDw3wdd4X Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run 14iDw3wdd4X"
+        - button "Inspect workflow run 14iDw3wdd4X · CalledErrorParent-ORDER-ebe8d05069b44fb29d98fd7d1a4fd0e0":
+          - strong: CalledErrorParent-ORDER-ebe8d05069b44fb29d98fd7d1a4fd0e0
+        - generic: Execution ID
+        - 'generic "Execution ID: 14iDw3wdd4X"': 14iDw3wdd4X
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Completed":
+        - generic: Completed
+      - cell "No active incidents":
+        - generic: No active incidents
+      - cell "3 activities 0 incidents":
+        - strong: 3 activities
+        - generic: 0 incidents
+      - cell "10/28/2026, 3:11:54 AM"
+      - cell "2s"
+      - cell "Delete workflow run 14iDw3wdd4X":
+        - button "Delete workflow run 14iDw3wdd4X": Delete
+    - row "Inspect workflow run wfexec:dispatch:v1:040084bc0b2d0e1914e9eb4d4765776bb609817fcb6bcfffa2115a7eec42bf0c · CalledErrorChild-ORDER-ebe8d05069b44fb29d98fd7d1a4fd0e0 · Faulted · 1 active · 1 blocking · Needs intervention":
+      - 'cell "Select workflow run wfexec:dispatch:v1:040084bc0b2d0e1914e9eb4d4765776bb609817fcb6bcfffa2115a7eec42bf0c Inspect workflow run wfexec:dispatch:v1:040084bc0b2d0e1914e9eb4d4765776bb609817fcb6bcfffa2115a7eec42bf0c · CalledErrorChild-ORDER-ebe8d05069b44fb29d98fd7d1a4fd0e0 Execution ID Execution ID: wfexec:dispatch:v1:040084bc0b2d0e1914e9eb4d4765776bb609817fcb6bcfffa2115a7eec42bf0c Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run wfexec:dispatch:v1:040084bc0b2d0e1914e9eb4d4765776bb609817fcb6bcfffa2115a7eec42bf0c"
+        - button "Inspect workflow run wfexec:dispatch:v1:040084bc0b2d0e1914e9eb4d4765776bb609817fcb6bcfffa2115a7eec42bf0c · CalledErrorChild-ORDER-ebe8d05069b44fb29d98fd7d1a4fd0e0":
+          - strong: CalledErrorChild-ORDER-ebe8d05069b44fb29d98fd7d1a4fd0e0
+        - generic: Execution ID
+        - 'generic "Execution ID: wfexec:dispatch:v1:040084bc0b2d0e1914e9eb4d4765776bb609817fcb6bcfffa2115a7eec42bf0c"': wfexec:dis…eec42bf0c
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Faulted":
+        - generic: Faulted
+      - cell "1 active · 1 blocking · Needs intervention":
+        - generic: 1 active · 1 blocking · Needs intervention
+      - cell "1 activities 1 incidents":
+        - strong: 1 activities
+        - generic: 1 incidents
+      - cell "10/28/2026, 3:11:54 AM"
+      - cell "0s"
+      - cell "Delete workflow run wfexec:dispatch:v1:040084bc0b2d0e1914e9eb4d4765776bb609817fcb6bcfffa2115a7eec42bf0c":
+        - button "Delete workflow run wfexec:dispatch:v1:040084bc0b2d0e1914e9eb4d4765776bb609817fcb6bcfffa2115a7eec42bf0c": Delete
+    - row "Inspect workflow run 14iBw6oMURH · BPMN execution model · reviewed host · Completed · No active incidents":
+      - 'cell "Select workflow run 14iBw6oMURH Inspect workflow run 14iBw6oMURH · BPMN execution model · reviewed host Execution ID Execution ID: 14iBw6oMURH Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run 14iBw6oMURH"
+        - button "Inspect workflow run 14iBw6oMURH · BPMN execution model · reviewed host":
+          - strong: BPMN execution model · reviewed host
+        - generic: Execution ID
+        - 'generic "Execution ID: 14iBw6oMURH"': 14iBw6oMURH
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Completed":
+        - generic: Completed
+      - cell "No active incidents":
+        - generic: No active incidents
+      - cell "2 activities 0 incidents":
+        - strong: 2 activities
+        - generic: 0 incidents
+      - cell "10/28/2026, 2:43:55 AM"
+      - cell "9s"
+      - cell "Delete workflow run 14iBw6oMURH":
+        - button "Delete workflow run 14iBw6oMURH": Delete
+    - row "Inspect workflow run 14iBsOUUz09 · BpmnAdoption-broadcast-e228a06a322148e7b287b4d7eddc2c83 · Completed · No active incidents":
+      - 'cell "Select workflow run 14iBsOUUz09 Inspect workflow run 14iBsOUUz09 · BpmnAdoption-broadcast-e228a06a322148e7b287b4d7eddc2c83 Execution ID Execution ID: 14iBsOUUz09 Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run 14iBsOUUz09"
+        - button "Inspect workflow run 14iBsOUUz09 · BpmnAdoption-broadcast-e228a06a322148e7b287b4d7eddc2c83":
+          - strong: BpmnAdoption-broadcast-e228a06a322148e7b287b4d7eddc2c83
+        - generic: Execution ID
+        - 'generic "Execution ID: 14iBsOUUz09"': 14iBsOUUz09
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Completed":
+        - generic: Completed
+      - cell "No active incidents":
+        - generic: No active incidents
+      - cell "3 activities 0 incidents":
+        - strong: 3 activities
+        - generic: 0 incidents
+      - cell "10/28/2026, 2:43:05 AM"
+      - cell "0s"
+      - cell "Delete workflow run 14iBsOUUz09":
+        - button "Delete workflow run 14iBsOUUz09": Delete
+    - row "Inspect workflow run 14iBsPiwr86 · BpmnAdoption-signal-publisher-e228a06a322148e7b287b4d7eddc2c83 · Completed · No active incidents":
+      - 'cell "Select workflow run 14iBsPiwr86 Inspect workflow run 14iBsPiwr86 · BpmnAdoption-signal-publisher-e228a06a322148e7b287b4d7eddc2c83 Execution ID Execution ID: 14iBsPiwr86 Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run 14iBsPiwr86"
+        - button "Inspect workflow run 14iBsPiwr86 · BpmnAdoption-signal-publisher-e228a06a322148e7b287b4d7eddc2c83":
+          - strong: BpmnAdoption-signal-publisher-e228a06a322148e7b287b4d7eddc2c83
+        - generic: Execution ID
+        - 'generic "Execution ID: 14iBsPiwr86"': 14iBsPiwr86
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Completed":
+        - generic: Completed
+      - cell "No active incidents":
+        - generic: No active incidents
+      - cell "2 activities 0 incidents":
+        - strong: 2 activities
+        - generic: 0 incidents
+      - cell "10/28/2026, 2:43:05 AM"
+      - cell "0s"
+      - cell "Delete workflow run 14iBsPiwr86":
+        - button "Delete workflow run 14iBsPiwr86": Delete
+    - row "Inspect workflow run 14iBrd65EzB · BpmnAdoption-timer-duration-e228a06a322148e7b287b4d7eddc2c83 · Completed · No active incidents":
+      - 'cell "Select workflow run 14iBrd65EzB Inspect workflow run 14iBrd65EzB · BpmnAdoption-timer-duration-e228a06a322148e7b287b4d7eddc2c83 Execution ID Execution ID: 14iBrd65EzB Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run 14iBrd65EzB"
+        - button "Inspect workflow run 14iBrd65EzB · BpmnAdoption-timer-duration-e228a06a322148e7b287b4d7eddc2c83":
+          - strong: BpmnAdoption-timer-duration-e228a06a322148e7b287b4d7eddc2c83
+        - generic: Execution ID
+        - 'generic "Execution ID: 14iBrd65EzB"': 14iBrd65EzB
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Completed":
+        - generic: Completed
+      - cell "No active incidents":
+        - generic: No active incidents
+      - cell "2 activities 0 incidents":
+        - strong: 2 activities
+        - generic: 0 incidents
+      - cell "10/28/2026, 2:42:54 AM"
+      - cell "10s"
+      - cell "Delete workflow run 14iBrd65EzB":
+        - button "Delete workflow run 14iBrd65EzB": Delete
+    - row "Inspect workflow run 14iBraV5etf · BpmnAdoption-none-start-e228a06a322148e7b287b4d7eddc2c83 · Completed · No active incidents":
+      - 'cell "Select workflow run 14iBraV5etf Inspect workflow run 14iBraV5etf · BpmnAdoption-none-start-e228a06a322148e7b287b4d7eddc2c83 Execution ID Execution ID: 14iBraV5etf Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run 14iBraV5etf"
+        - button "Inspect workflow run 14iBraV5etf · BpmnAdoption-none-start-e228a06a322148e7b287b4d7eddc2c83":
+          - strong: BpmnAdoption-none-start-e228a06a322148e7b287b4d7eddc2c83
+        - generic: Execution ID
+        - 'generic "Execution ID: 14iBraV5etf"': 14iBraV5etf
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Completed":
+        - generic: Completed
+      - cell "No active incidents":
+        - generic: No active incidents
+      - cell "1 activities 0 incidents":
+        - strong: 1 activities
+        - generic: 0 incidents
+      - cell "10/28/2026, 2:42:54 AM"
+      - cell "0s"
+      - cell "Delete workflow run 14iBraV5etf":
+        - button "Delete workflow run 14iBraV5etf": Delete
+    - row "Inspect workflow run 14iBrPSsEk8 · BpmnCallFaultParent-1532615906 · Completed · No active incidents":
+      - 'cell "Select workflow run 14iBrPSsEk8 Inspect workflow run 14iBrPSsEk8 · BpmnCallFaultParent-1532615906 Execution ID Execution ID: 14iBrPSsEk8 Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run 14iBrPSsEk8"
+        - button "Inspect workflow run 14iBrPSsEk8 · BpmnCallFaultParent-1532615906":
+          - strong: BpmnCallFaultParent-1532615906
+        - generic: Execution ID
+        - 'generic "Execution ID: 14iBrPSsEk8"': 14iBrPSsEk8
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Completed":
+        - generic: Completed
+      - cell "No active incidents":
+        - generic: No active incidents
+      - cell "3 activities 0 incidents":
+        - strong: 3 activities
+        - generic: 0 incidents
+      - cell "10/28/2026, 2:42:51 AM"
+      - cell "2s"
+      - cell "Delete workflow run 14iBrPSsEk8":
+        - button "Delete workflow run 14iBrPSsEk8": Delete
+    - row "Inspect workflow run wfexec:dispatch:v1:05e06d00b00156aaa763aa75ac14a799bf8ba30e66c23ba0546f90c0e7941e03 · BpmnCallFaultChild-1532615906 · Faulted · 1 active · 1 blocking · Needs intervention":
+      - 'cell "Select workflow run wfexec:dispatch:v1:05e06d00b00156aaa763aa75ac14a799bf8ba30e66c23ba0546f90c0e7941e03 Inspect workflow run wfexec:dispatch:v1:05e06d00b00156aaa763aa75ac14a799bf8ba30e66c23ba0546f90c0e7941e03 · BpmnCallFaultChild-1532615906 Execution ID Execution ID: wfexec:dispatch:v1:05e06d00b00156aaa763aa75ac14a799bf8ba30e66c23ba0546f90c0e7941e03 Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run wfexec:dispatch:v1:05e06d00b00156aaa763aa75ac14a799bf8ba30e66c23ba0546f90c0e7941e03"
+        - button "Inspect workflow run wfexec:dispatch:v1:05e06d00b00156aaa763aa75ac14a799bf8ba30e66c23ba0546f90c0e7941e03 · BpmnCallFaultChild-1532615906":
+          - strong: BpmnCallFaultChild-1532615906
+        - generic: Execution ID
+        - 'generic "Execution ID: wfexec:dispatch:v1:05e06d00b00156aaa763aa75ac14a799bf8ba30e66c23ba0546f90c0e7941e03"': wfexec:dis…0e7941e03
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Faulted":
+        - generic: Faulted
+      - cell "1 active · 1 blocking · Needs intervention":
+        - generic: 1 active · 1 blocking · Needs intervention
+      - cell "1 activities 1 incidents":
+        - strong: 1 activities
+        - generic: 1 incidents
+      - cell "10/28/2026, 2:42:51 AM"
+      - cell "1s"
+      - cell "Delete workflow run wfexec:dispatch:v1:05e06d00b00156aaa763aa75ac14a799bf8ba30e66c23ba0546f90c0e7941e03":
+        - button "Delete workflow run wfexec:dispatch:v1:05e06d00b00156aaa763aa75ac14a799bf8ba30e66c23ba0546f90c0e7941e03": Delete
+    - row "Inspect workflow run 14iBr6NfdvE · BpmnCallParent-1532615906 · Completed · No active incidents":
+      - 'cell "Select workflow run 14iBr6NfdvE Inspect workflow run 14iBr6NfdvE · BpmnCallParent-1532615906 Execution ID Execution ID: 14iBr6NfdvE Copy Execution ID More identifiers ·3 exact IDs"':
+        - checkbox "Select workflow run 14iBr6NfdvE"
+        - button "Inspect workflow run 14iBr6NfdvE · BpmnCallParent-1532615906":
+          - strong: BpmnCallParent-1532615906
+        - generic: Execution ID
+        - 'generic "Execution ID: 14iBr6NfdvE"': 14iBr6NfdvE
+        - button "Copy Execution ID":
+        - status
+        - button "More identifiers ·3 exact IDs":
+          - generic: More identifiers
+          - generic: ·3 exact IDs
+      - cell "Published Run"
+      - cell "Completed":
+        - generic: Completed
+      - cell "No active incidents":
+        - generic: No active incidents
+      - cell "3 activities 0 incidents":
+        - strong: 3 activities
+        - generic: 0 incidents
+      - cell "10/28/2026, 2:42:47 AM"
+      - cell "3s"
+      - cell "Delete workflow run 14iBr6NfdvE":
+        - button "Delete workflow run 14iBr6NfdvE": Delete
+  - generic "Workflow run pagination":
+    - generic: Showing 25 of 36 matching runs
+    - text: Rows
+    - combobox "Workflow run page size":
+      - option "10"
+      - option "25" [selected]
+      - option "50"
+      - option "100"
+    - button "Previous workflow run page" [disabled]:
+      - text: Previous
+    - status: More results
+    - button "Next workflow run page":
+      - text: Next
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - generic "Bottom panel controls":
+    - button "Expand bottom panel":
+    - button "Maximize bottom panel":
+  - option "All sources" [selected]
+  - option "Elsa Studio · Sipkes-Mac-Mini:41059"

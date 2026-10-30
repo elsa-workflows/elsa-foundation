@@ -21,6 +21,13 @@ namespace Elsa.Activities.Design.Core.Models;
 /// null, never <c>false</c>, and is left out of every serialized form while null, so an input that declares nothing
 /// keeps the catalog content and hash it had before the flags existed.
 /// </para>
+/// <para>
+/// <see cref="Tier"/> is the presentation-only disclosure group (<c>essential</c>, <c>optional</c>,
+/// <c>setting</c>). It is left out of every serialized form while null. The catalog hasher includes
+/// it when set, so adding or changing a tier re-reconciles the stored version instead of throwing
+/// <c>ActivityVersionHashMismatchException</c>. JSON catalogs and the descriptor/version API set the
+/// same strings; CLR authors set <c>[ActivityInput(Tier = InputTier.Optional)]</c>.
+/// </para>
 /// </remarks>
 public sealed record InputDefinition(
     string ReferenceKey,
@@ -41,4 +48,6 @@ public sealed record InputDefinition(
     JsonElement? DefaultValue = null,
     string? DefaultSyntax = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? IsSensitive = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? IsCredential = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? IsCredential = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Tier = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ConnectionType = null);

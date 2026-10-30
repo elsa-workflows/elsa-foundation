@@ -4,7 +4,7 @@ namespace Elsa.Attention.Api;
 
 public static class AttentionPermissions
 {
-    public const string Read = "attention.read";
+    public const string Read = "attention:read";
 }
 
 public sealed class AttentionPermissionContributor : IPermissionContributor

@@ -26,7 +26,7 @@ import App from "./App";
  */
 import "./theme.css";
 // External consumers: import "@elsa-workflows/studio-ui/tokens.css";
-import "../../../src/apps/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
+import "../../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/tokens.css";
 import "@xyflow/react/dist/style.css";
 // External consumers: import "@elsa-workflows/studio-workflows/style.css";
 import "../../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";

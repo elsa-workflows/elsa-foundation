@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 
 namespace Elsa.Activities.Testing;
 
@@ -22,7 +22,7 @@ public static class ClrConstruction
     /// <summary>A well-known type registry that resolves each of <paramref name="activityTypes"/> by its canonical alias.</summary>
     public static IWellKnownTypeRegistry RegistryFor(params Type[] activityTypes)
     {
-        var registry = new WellKnownTypeRegistry();
+        var registry = SerializationServices.TypeRegistry();
         foreach (var activityType in activityTypes)
             registry.RegisterType(activityType, TypeAliasConvention.CanonicalAlias(activityType));
         return registry;

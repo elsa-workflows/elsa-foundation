@@ -24,6 +24,12 @@
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <!-- The task executor that runs the startup pass, so [SingleNodeTask] is exercised as a shell runs it (#2192). -->
     <ProjectReference Include="..\..\..\..\..\src\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
+    <ProjectReference Include="..\..\..\..\Tasks\Testing\Elsa.Tasks.Testing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../../../Fixtures/LegacyWorkflowHashFixture.cs" Link="Fixtures/LegacyWorkflowHashFixture.cs" />
+    <EmbeddedResource Include="../../../Fixtures/legacy-set-v1.json" LogicalName="legacy-set-v1.json" />
   </ItemGroup>
 
 </Project>

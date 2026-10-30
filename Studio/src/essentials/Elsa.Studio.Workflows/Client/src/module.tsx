@@ -9,6 +9,13 @@ import { registerInputReferenceContribution } from "./inputReferenceContribution
 import { WorkflowLazyBoundary } from "./WorkflowLazyBoundary";
 import { activityGraphImplementationEditorContribution, activityGraphSchema2ImplementationEditorContribution } from "./activityGraphContribution";
 import { clearActivityDefinitionRecoveryForIdentity } from "./activityDefinitionRecovery";
+import {
+  eventWorkflowTestStimulusEditor,
+  httpWorkflowTestStimulusEditor,
+  schedulingWorkflowTestStimulusEditor
+} from "./workflowTestStimulusEditors";
+import { registerWorkflowAgent } from "./workflowAgent";
+import { compensationTargetPropertyEditor } from "./CompensationTargetEditor";
 
 const WorkflowManagementPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowManagementPage })));
 const WorkflowExecutablesPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowExecutablesPage })));
@@ -37,6 +44,7 @@ function clearActivityDefinitionRecoveryOnAuthSessionEnded() {
 
 // WorkflowDesignerPanelContext is the TContext behind the workflow.designer.panels slot — exported so
 // contributed-panel authors can type their `context` prop instead of hand-copying the shape.
+export type { GraphPaletteElement } from "./graph-authoring/graphPaletteElements";
 export type { WorkflowConnectSource, WorkflowDesignerPanelContext } from "./workflow-editor/editorTypes";
 export type { EnumWorkflowRunInputEditorOptions } from "./workflowRunInputEditorContributions";
 export type { ActivityDefinitionsObservation } from "./activityDefinitionObservability";
@@ -44,6 +52,7 @@ export { capabilityIds, resolveCapabilityLink } from "./api/capabilities";
 
 export function register(api: ElsaStudioModuleApi) {
   setDialogs(api.dialogs);
+  const weaver = registerWorkflowAgent(api.agent);
   const expressionToolingIdentity = {
     backend: api.backend.baseUrl || "same-origin",
     subject: api.runtime.identity?.subject?.trim() || "anonymous",
@@ -52,6 +61,10 @@ export function register(api: ElsaStudioModuleApi) {
   registerVariableReferenceContribution(api.expressionEditors);
   api.expressionEditors.add(createObjectExpressionEditorContribution(() => api.propertyEditors.list()));
   registerInputReferenceContribution(api.expressionEditors);
+  api.propertyEditors.add(compensationTargetPropertyEditor);
+  api.workflowTestStimulusEditors?.add(httpWorkflowTestStimulusEditor);
+  api.workflowTestStimulusEditors?.add(eventWorkflowTestStimulusEditor);
+  api.workflowTestStimulusEditors?.add(schedulingWorkflowTestStimulusEditor);
   api.activityEditors.add(activityGraphImplementationEditorContribution);
   api.activityEditors.add(activityGraphSchema2ImplementationEditorContribution);
   latestModuleApi = api;
@@ -74,13 +87,15 @@ export function register(api: ElsaStudioModuleApi) {
       title: "Workflows",
       path: "/workflows/definitions",
       iconColor: "#0ea5e9",
+      placement: "main",
+      order: 20,
       items: [
-        { id: "workflows-definitions", title: "Workflow Definitions", path: "/workflows/definitions", iconColor: "#0ea5e9" },
-        { id: "workflows-activity-definitions", title: "Activity Definitions", path: "/workflows/activity-definitions", iconColor: "#0ea5e9" },
-        { title: "Executables", path: "/workflows/executables", iconColor: "#0ea5e9" },
-        { title: "Runs", path: "/workflows/instances", iconColor: "#0ea5e9" },
-        { title: "Runtime Diagnostics", path: "/workflows/runtime-diagnostics", iconColor: "#0ea5e9" },
-        { title: "Activity Availability", path: "/workflows/activity-availability", iconColor: "#0ea5e9" }
+        { id: "workflows-definitions", title: "Workflows", path: "/workflows/definitions", iconColor: "#0ea5e9", placement: "main", order: 20 },
+        { id: "workflows-runs", title: "Runs", path: "/workflows/instances", iconColor: "#0ea5e9", placement: "main", order: 30 },
+        { id: "workflows-executables", title: "Executables", path: "/workflows/executables", iconColor: "#d97706", placement: "more", order: 10 },
+        { id: "workflows-activity-definitions", title: "Activity definitions", path: "/workflows/activity-definitions", iconColor: "#8b5cf6", placement: "more", order: 20 },
+        { id: "workflows-runtime-diagnostics", title: "Runtime evidence settings", path: "/workflows/runtime-diagnostics", iconColor: "#0ea5e9", placement: "more", order: 40 },
+        { id: "workflows-activity-availability", title: "Activity availability", path: "/workflows/activity-availability", iconColor: "#0d9488", placement: "more", order: 50 }
       ]
     },
     routes: [
@@ -94,7 +109,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-activity-upgrades",
         path: "/workflows/activity-definitions/upgrades",
         label: "Activity Definition upgrades",
-        component: () => deferred("Activity Definition upgrades", <ActivityUpgradeWorkbenchPage context={api.backend} />)
+        component: ({ navigate }) => deferred("Activity Definition upgrades", <ActivityUpgradeWorkbenchPage context={api.backend} navigateToStudioPath={navigate} />)
       },
       {
         id: "workflows-activity-definitions",
@@ -106,19 +121,19 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-definitions",
         path: "/workflows/definitions",
         label: "Workflow definitions",
-        component: () => deferred("workflow definitions", <WorkflowManagementPage context={api.backend} ai={api.ai} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors?.list() ?? []} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors()} workflowDesignerPanels={api.workflowDesigner.panels.list()} autosaveEnabledByDefault={api.runtime.workflows?.autosaveEnabledByDefault ?? true} />)
+        component: () => deferred("workflow definitions", <WorkflowManagementPage context={api.backend} ai={api.agent} weaver={weaver} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors?.list() ?? []} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors()} testStimulusEditors={api.workflowTestStimulusEditors?.list() ?? []} workflowDesignerPanels={api.workflowDesigner.panels.list()} autosaveEnabledByDefault={api.runtime.workflows?.autosaveEnabledByDefault ?? true} />)
       },
       {
         id: "workflows-executables",
         path: "/workflows/executables",
         label: "Workflow executables",
-        component: () => deferred("workflow executables", <WorkflowExecutablesPage context={api.backend} ai={api.ai} runInputEditors={runInputEditors()} />)
+        component: () => deferred("workflow executables", <WorkflowExecutablesPage context={api.backend} ai={api.agent} runInputEditors={runInputEditors()} />)
       },
       {
         id: "workflows-executable-inspector",
         path: "/workflows/executables/:artifactId",
         label: "Executable Inspector",
-        component: () => deferred("executable inspector", <WorkflowExecutableInspectorPage context={api.backend} ai={api.ai} runInputEditors={runInputEditors()} />)
+        component: () => deferred("executable inspector", <WorkflowExecutableInspectorPage context={api.backend} ai={api.agent} runInputEditors={runInputEditors()} />)
       },
       {
         id: "workflows-instances",
@@ -130,7 +145,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-instance-detail",
         path: "/workflows/instances/:workflowExecutionId",
         label: "Workflow run",
-        component: ({ navigate }) => deferred("workflow run", <WorkflowInstanceDetailsPage context={api.backend} ai={api.ai} expressionEditors={api.expressionEditors.list()} navigate={navigate} />)
+        component: ({ navigate }) => deferred("workflow run", <WorkflowInstanceDetailsPage context={api.backend} ai={api.agent} expressionEditors={api.expressionEditors.list()} navigate={navigate} />)
       },
       {
         id: "workflows-activity-availability",
@@ -141,8 +156,8 @@ export function register(api: ElsaStudioModuleApi) {
       {
         id: "workflows-runtime-diagnostics",
         path: "/workflows/runtime-diagnostics",
-        label: "Runtime diagnostics",
-        component: () => deferred("runtime diagnostics", <RuntimeDiagnosticsSettingsPage context={api.backend} />)
+        label: "Runtime evidence settings",
+        component: () => deferred("Runtime evidence settings", <RuntimeDiagnosticsSettingsPage context={api.backend} />)
       }
     ]
   });

@@ -14,7 +14,7 @@ public sealed class HttpContextActivityExecutionInspectionAuthorizationContextTe
 {
     [Theory]
     [InlineData("exact")]
-    [InlineData("implied")]
+    [InlineData("subtree")]
     [InlineData("wildcard")]
     [InlineData("normalized-external")]
     public async Task Foundation_evaluator_paths_flow_through_the_runtime_context(string grantKind)
@@ -22,13 +22,11 @@ public sealed class HttpContextActivityExecutionInspectionAuthorizationContextTe
         var services = new ServiceCollection();
         services.AddFoundationIdentityAbstractions(options =>
             options.NormalizedAuthenticationTypes = new HashSet<string>(["test"], StringComparer.Ordinal));
-        if (grantKind == "implied")
-            services.ReplacePermissionCatalog<RuntimePermissionCatalog>();
         using var provider = services.BuildServiceProvider();
         var accessor = provider.GetRequiredService<IHttpContextAccessor>();
         var grant = grantKind switch
         {
-            "implied" => "workflows.activity-executions.inspect.bundle",
+            "subtree" => "workflows/*:inspect",
             "wildcard" => "*",
             _ => HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission
         };
@@ -367,18 +365,5 @@ public sealed class HttpContextActivityExecutionInspectionAuthorizationContextTe
 
             return ValueTask.FromResult(PermissionEvaluationResult.Denied());
         }
-    }
-
-    private sealed class RuntimePermissionCatalog : IPermissionCatalog
-    {
-        private static readonly Permission Bundle = new(
-            "workflows.activity-executions.inspect.bundle",
-            "Inspection bundle",
-            "test",
-            "Test implication",
-            new HashSet<string>([HttpContextActivityExecutionInspectionAuthorizationContext.StructurePermission], StringComparer.Ordinal));
-
-        public IReadOnlyCollection<Permission> List() => [Bundle];
-        public Permission? Find(string key) => string.Equals(key, Bundle.Key, StringComparison.Ordinal) ? Bundle : null;
     }
 }

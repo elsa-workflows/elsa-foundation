@@ -1,8 +1,10 @@
+using Elsa.Studio.Api.Authorization;
 using System.Net;
 using System.Text.Json;
 using Elsa.Studio.Api.Extensions;
 using Elsa.Studio.Api.Options;
-using Elsa.Studio.Web;
+using Elsa.Studio.Hosting;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -15,8 +17,8 @@ using Microsoft.Extensions.Time.Testing;
 namespace Elsa.Studio.Tests;
 
 /// <summary>
-/// Exercises the real <see cref="StudioBridgeAuth"/> wiring (backend-bearer introspection scheme + policy) end to end
-/// against a TestServer that maps probe endpoints behind <see cref="StudioBridgeAuth.PolicyName"/>. This is the single
+/// Exercises the real <see cref="StudioHostingExtensions.AddElsaStudio"/> wiring (backend-bearer introspection scheme + policy) end to end
+/// against a TestServer that maps probe endpoints behind <see cref="StudioBridgeAuthorization.PolicyName"/>. This is the single
 /// gate for every browser-facing Studio host-control endpoint after ADR 0037 removed the browser-held management key:
 /// module/feature/theme management, the console-stream hub, and the Studio management bridge all sit behind it.
 ///
@@ -24,7 +26,7 @@ namespace Elsa.Studio.Tests;
 /// these tests route that named client through a stub backend so the assertions are about the gate's HTTP behaviour,
 /// not the network. The browser never carries an Elsa host management key on any of these requests.
 /// </summary>
-public sealed class StudioBridgeAuthTests : IAsyncDisposable
+public sealed class StudioBridgeAuthTests : IAsyncLifetime
 {
     private const string BackendBaseUrl = "https://backend.example/";
     private const string ValidBearer = "valid-user-bearer";
@@ -39,7 +41,7 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
     private const string ToolReadBearer = "user-tool-read";
     private const string ToolManageBearer = "user-tool-manage";
 
-    // A Studio module's own permission family (e.g. the optional Extension Builder module's extension-builder.read/
+    // A Studio module's own permission family (e.g. the optional Extension Builder module's extension-builder:read/
     // .manage), declared inline through RequireStudioBridgePermission rather than as a host-named policy.
     private const string ToolReadPermission = "tool.read";
     private const string ToolManagePermission = "tool.manage";
@@ -58,8 +60,8 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
     {
         [ValidBearer] = [],
         [NoPermissionBearer] = [],
-        [ModuleReadBearer] = [StudioBridgeAuth.ModuleManagementReadPermission],
-        [ModuleManageBearer] = [StudioBridgeAuth.ModuleManagementManagePermission],
+        [ModuleReadBearer] = [StudioBridgeAuthorization.ModuleManagementReadPermission],
+        [ModuleManageBearer] = [StudioBridgeAuthorization.ModuleManagementManagePermission],
         [ToolReadBearer] = [ToolReadPermission],
         [ToolManageBearer] = [ToolManagePermission]
     };
@@ -123,7 +125,7 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
     {
         var client = await StartGatedHostAsync(authEnabled: true);
 
-        var response = await client.PostAsync($"{path}?{StudioBridgeAuth.AccessTokenQueryParameterName}={token}", content: null);
+        var response = await client.PostAsync($"{path}?access_token={token}", content: null);
 
         Assert.Equal(expected, response.StatusCode);
     }
@@ -236,7 +238,7 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
         var client = await StartGatedHostAsync(authEnabled: true, timeProvider: time);
 
         await SendGatedAsync(client, ValidBearer);
-        time.Advance(TimeSpan.FromSeconds(StudioBridgeAuth.DefaultSessionCacheSeconds + 1));
+        time.Advance(TimeSpan.FromSeconds(30 + 1));
         var afterExpiry = await SendGatedAsync(client, ValidBearer);
 
         Assert.Equal(HttpStatusCode.OK, afterExpiry.StatusCode);
@@ -257,7 +259,7 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
         var withinTtl = await SendGatedAsync(client, ValidBearer);
         Assert.Equal(HttpStatusCode.OK, withinTtl.StatusCode);
 
-        time.Advance(TimeSpan.FromSeconds(StudioBridgeAuth.DefaultSessionCacheSeconds + 1));
+        time.Advance(TimeSpan.FromSeconds(30 + 1));
         var afterExpiry = await SendGatedAsync(client, ValidBearer);
         Assert.Equal(HttpStatusCode.Unauthorized, afterExpiry.StatusCode);
     }
@@ -411,24 +413,25 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
         var settings = new Dictionary<string, string?>
         {
             ["Studio:Auth:Enabled"] = authEnabled ? "true" : "false",
+            ["CShells:Shells:Default:Features:StudioApi"] = "true",
             [StudioBackendManagementOptions.BackendBaseUrlConfigurationKey] = backendBaseUrl,
             [StudioBackendManagementOptions.BackendServerBaseUrlConfigurationKey] = backendServerBaseUrl,
-            [StudioBridgeAuth.SessionCacheSecondsConfigurationKey] = sessionCacheSeconds?.ToString(),
-            [StudioBridgeAuth.SessionCacheMaxEntriesConfigurationKey] = sessionCacheMaxEntries?.ToString()
+            ["Studio:Auth:SessionCacheSeconds"] = sessionCacheSeconds?.ToString(),
+            ["Studio:Auth:SessionCacheMaxEntries"] = sessionCacheMaxEntries?.ToString()
         };
 
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production });
         builder.WebHost.UseTestServer();
         builder.Configuration.AddInMemoryCollection(settings);
-        // A fake clock (registered before AddStudioBridgeAuth's TryAdd of TimeProvider.System) lets the cache tests
+        // A fake clock (registered before Hosting's TryAdd of TimeProvider.System) lets the cache tests
         // drive TTL expiry without wall-clock sleeps.
         if (timeProvider is not null)
             builder.Services.AddSingleton(timeProvider);
-        builder.Services.AddStudioBridgeAuth(builder.Configuration, HubPath);
+        builder.AddElsaStudio(options => { options.ShellsFile = null; options.QueryTokenPathPrefixes = [HubPath]; });
         // Models a host that wires the bridge scheme but not the handler deciding StudioBridgePermissionRequirement.
         if (!registerPermissionHandler)
         {
-            foreach (var handler in builder.Services.Where(descriptor => descriptor.ImplementationInstance is StudioBridgePermissionHandler).ToArray())
+            foreach (var handler in builder.Services.Where(descriptor => descriptor.ImplementationInstance is AuthorizationHandler<StudioBridgePermissionRequirement>).ToArray())
                 builder.Services.Remove(handler);
         }
 
@@ -440,25 +443,24 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
         // whichever stub a later-started host wrote last.
         var backendStub = new StubBackendSession(BearerPermissions);
         _backendStub = backendStub;
-        builder.Services.AddHttpClient(StudioBridgeAuthHandler.HttpClientName)
-            .ConfigurePrimaryHttpMessageHandler(() => backendStub);
+        builder.Services.RouteAllBackendClientsThrough(backendStub);
 
         var app = builder.Build();
-        app.UseAuthentication();
-        app.UseAuthorization();
+        app.UseElsaStudio();
+        app.MapElsaStudio();
         // Two probes behind the base session policy: "/gated" is a plain REST endpoint, "/hub" sits under the
         // query-token prefix and stands in for the console-stream hub's WebSocket/SSE handshake.
         app.MapPost("/gated", () => Results.Ok())
-            .RequireAuthorization(StudioBridgeAuth.PolicyName);
+            .RequireAuthorization(StudioBridgeAuthorization.PolicyName);
         app.MapPost(HubPath, () => Results.Ok())
-            .RequireAuthorization(StudioBridgeAuth.PolicyName);
+            .RequireAuthorization(StudioBridgeAuthorization.PolicyName);
         // One probe per permission policy (#249, #535): the read/manage surfaces of the host's named module-management
         // family and of a module's inline RequireStudioBridgePermission family, so a single host exercises the whole
         // permission matrix against the real policies.
         app.MapGet(ReadRoute, () => Results.Ok())
-            .RequireAuthorization(StudioBridgeAuth.ModuleManagementReadPolicyName);
+            .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementReadPolicyName);
         app.MapPost(ManageRoute, () => Results.Ok())
-            .RequireAuthorization(StudioBridgeAuth.ModuleManagementManagePolicyName);
+            .RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName);
         app.MapGet(ToolReadRoute, () => Results.Ok())
             .RequireStudioBridgePermission(ToolReadPermission, ToolManagePermission);
         app.MapPost(ToolManageRoute, () => Results.Ok())
@@ -469,7 +471,9 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
         return app.GetTestClient();
     }
 
-    public async ValueTask DisposeAsync()
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
     {
         if (_app is not null)
             await _app.DisposeAsync();

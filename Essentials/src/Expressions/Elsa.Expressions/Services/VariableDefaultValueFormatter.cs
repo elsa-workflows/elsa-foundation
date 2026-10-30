@@ -6,7 +6,7 @@ using System.Text.Json;
 
 namespace Elsa.Expressions.Services;
 
-public sealed class VariableDefaultValueFormatter : IVariableDefaultValueFormatter
+internal sealed class VariableDefaultValueFormatter : IVariableDefaultValueFormatter
 {
     /// <summary>
     /// Formats the specified value as a string.

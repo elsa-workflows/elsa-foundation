@@ -3,6 +3,7 @@ using Elsa.Workflows.Publishing.Services;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Entities;
@@ -15,11 +16,18 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Primitives.Diagnostics;
+using Elsa.Workflows.Runtime.Core.Configuration;
+using WorkflowExecutableRootWriteLeaseManager = Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableRootWriteLeaseManager;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Workflows.Publishing.Api.Services;
 
 public interface IActivityDraftTestRunService
 {
+    /// <summary>Prepares or resumes the receipt selected by the request's idempotency key.</summary>
+    /// <exception cref="ActivityDraftTestRunStorageException">Wrapper material/source retention failed;
+    /// identifies the Test Run and preserves the infrastructure cause. Retry the same key.</exception>
+    /// <exception cref="OperationCanceledException">Requested cancellation propagates.</exception>
     Task<ActivityDraftTestRunView> StartAsync(StartActivityDraftTestRun request, CancellationToken cancellationToken = default);
     Task<ActivityDraftTestRunView> GetAsync(string testRunId, CancellationToken cancellationToken = default);
     Task<ActivityDraftTestRunView> GetByIdempotencyKeyAsync(string draftId, string idempotencyKey, CancellationToken cancellationToken = default);
@@ -52,13 +60,32 @@ public sealed class ActivityDraftTestRunService(
     IActivityDraftTestRunCancellationPolicy cancellationPolicy,
     IWorkflowExecutionActorProvider actorProvider,
     IRuntimeExecutionIdGenerator runtimeIds,
-    TimeProvider timeProvider) : IActivityDraftTestRunService
+    TimeProvider timeProvider,
+    IWorkflowExecutableRootWriteLeaseManager rootWrites) : IActivityDraftTestRunService
 {
+    // Preserve the original CLR constructor. Direct callers retain the built-in lease defaults;
+    // DI uses the additive constructor and the host's selected coordinator/options.
+    public ActivityDraftTestRunService(IActivityDefinitionStore definitions, IActivityDefinitionDraftStore drafts,
+        IActivityDefinitionLayoutStore layouts, IActivityTemplateCompiler compiler, IActivityPublishingAuthorizationContext authorization,
+        IExecutableActivityTemplateStore activityTemplates, IWorkflowExecutableSourceReferenceStore sourceReferences,
+        ActivityTemplatePlacer placer, WorkflowExecutableHasher hasher, IWorkflowExecutableStore workflowExecutables,
+        IWorkflowStartDispatcher startDispatcher, IWorkflowTestScopeStore testScopeStore,
+        IWorkflowExecutionPartitionAccessor partitionAccessor, IActivityDraftTestRunStore testRuns,
+        IWorkflowExecutionStateStore workflowExecutions, IActivityExecutionStateStore activityExecutions,
+        IActivityDraftTestRunCancellationPolicy cancellationPolicy, IWorkflowExecutionActorProvider actorProvider,
+        IRuntimeExecutionIdGenerator runtimeIds, TimeProvider timeProvider)
+        : this(definitions, drafts, layouts, compiler, authorization, activityTemplates, sourceReferences, placer,
+            hasher, workflowExecutables, startDispatcher, testScopeStore, partitionAccessor, testRuns,
+            workflowExecutions, activityExecutions, cancellationPolicy, actorProvider, runtimeIds, timeProvider,
+            new WorkflowExecutableRootWriteLeaseManager(workflowExecutables,
+                Options.Create(new WorkflowExecutableGarbageCollectionOptions()), timeProvider)) { }
+
     public static readonly TimeSpan DefaultRetention = TimeSpan.FromMinutes(30);
     public static readonly TimeSpan DefaultReceiptRetention = TimeSpan.FromDays(7);
     private static readonly IReadOnlyDictionary<string, RuntimeOutputCapture> NoOutputCaptures =
         new Dictionary<string, RuntimeOutputCapture>(StringComparer.Ordinal);
 
+    /// <inheritdoc />
     public async Task<ActivityDraftTestRunView> StartAsync(
         StartActivityDraftTestRun request,
         CancellationToken cancellationToken = default)
@@ -175,8 +202,17 @@ public sealed class ActivityDraftTestRunService(
                 compilation.Diagnostics,
                 cancellationToken);
 
+        // The port owns its native tuple; the host must qualify the actual selected stores before using it.
+        // A mixed composition must not create hidden references in a different material boundary.
+        if (!activityTemplates.CanMaintainReferences(workflowExecutables, sourceReferences) ||
+            !sourceReferences.CanWriteRootReferences(workflowExecutables))
+            return await RejectValidationAsync(receipt, "activity.test-run.preparation-unavailable",
+                "The activity draft cannot be prepared for a Test Run in this Runtime.", [], cancellationToken);
+
         var expiresAt = receipt.SourceReferenceExpiresAt;
-        var templateReferenceId = $"activity-test-template-ref-{StableHash(compilation.Template.TemplateHash)}";
+        // Material stays content-addressed; each durable Test Run owns its own immutable expiring root.
+        // Reusing a hash-only root would silently borrow another run's expiry, source identity or layout.
+        var templateReferenceId = $"activity-test-template-ref-{StableHash($"{testRunId}\u001f{compilation.Template.TemplateHash}")}";
         var templateReference = CreateTemplateReference(
             templateReferenceId,
             definition,
@@ -197,8 +233,7 @@ public sealed class ActivityDraftTestRunService(
             compilation.Measurements,
             now);
 
-        await activityTemplates.SaveAsync(compilation.Template, cancellationToken);
-        await EnsureTemplateSourceReferenceAsync(templateReferenceId, templateReference, cancellationToken);
+        templateReference = await activityTemplates.SaveWithReferenceAsync(compilation.Template, templateReference, cancellationToken);
 
         var origin = new ActivityInvocationOrigin([
             new(ActivityInvocationOriginSegmentKind.WorkflowRoot, $"activity-test-wrapper:{definition.Id}"),
@@ -219,14 +254,33 @@ public sealed class ActivityDraftTestRunService(
                 exception.Diagnostics,
                 cancellationToken);
         }
-        var placement = await placer.PlaceAsync(new(
-            publication,
-            compilation.Template,
-            templateReference,
-            origin,
-            definition.ActivityTypeKey,
-            suppliedInputs,
-            NoOutputCaptures), cancellationToken);
+        ActivityTemplatePlacement placement;
+        try
+        {
+            placement = await placer.PlaceAsync(new(
+                publication,
+                compilation.Template,
+                templateReference,
+                origin,
+                definition.ActivityTypeKey,
+                suppliedInputs,
+                NoOutputCaptures), cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // Placement runs before any wrapper artifact or Runtime dispatch exists. Persist only a safe summary:
+            // provider/consumer exception details can contain authored values and must not enter the receipt/API.
+            return await RejectValidationAsync(
+                receipt,
+                "activity.test-run.preparation-failed",
+                "The activity draft could not be prepared for a Test Run.",
+                [],
+                cancellationToken);
+        }
 
         var artifactHash = hasher.ComputeHash(placement.Root);
         var artifactId = hasher.CreateArtifactId("artifact-", artifactHash);
@@ -243,8 +297,6 @@ public sealed class ActivityDraftTestRunService(
                 ["activity.templateHash"] = compilation.Template.TemplateHash
             },
             IncidentStrategyBuiltIns.FaultReference);
-        await workflowExecutables.SaveAsync(executable, cancellationToken);
-
         var wrapperReference = new WorkflowExecutableSourceReference(
             $"activity-test-source-ref-{StableHash(testRunId)}",
             artifactId,
@@ -259,10 +311,29 @@ public sealed class ActivityDraftTestRunService(
             WorkflowExecutableReferenceScope.TestRun,
             expiresAt,
             LayoutSidecar: placement.LayoutSidecar);
-        await sourceReferences.SaveAsync(wrapperReference, cancellationToken);
+        try
+        {
+            await workflowExecutables.SaveAsync(executable, cancellationToken);
+            var storedExecutable = await workflowExecutables.FindAsync(artifactId, cancellationToken)
+                ?? throw new InvalidDataException("The saved Test Run wrapper is unavailable.");
+            RequireMatchingWrapper(storedExecutable, executable);
 
-        receipt = await UpdateAsync(
+            // Each concurrent invocation owns a different lease ID. A stable run-wide ID could let one
+            // writer release another writer's live grants. The source ID and expiry remain receipt-stable.
+            await rootWrites.ExecuteFencedAsync([storedExecutable.Identity], $"activity-test-root:{Guid.NewGuid():N}",
+                async (grants, token) => wrapperReference = await sourceReferences.SaveWithRootWriteLeasesAsync(
+                    wrapperReference, storedExecutable.Identity, grants, token), cancellationToken);
+        }
+        catch (Exception exception) when (exception is IOException or JsonException or System.Data.Common.DbException or
+            InvalidOperationException or AggregateException ||
+            exception is OperationCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            throw new ActivityDraftTestRunStorageException(testRunId, exception);
+        }
+
+        receipt = await UpdateConditionallyAsync(
             receipt,
+            IsUndispatchedPreparing,
             x => x with
             {
                 ArtifactId = artifactId,
@@ -270,7 +341,25 @@ public sealed class ActivityDraftTestRunService(
                 Status = ActivityDraftTestRunReceiptStatus.Dispatching
             },
             cancellationToken);
+        if (receipt.Status != ActivityDraftTestRunReceiptStatus.Dispatching)
+            return await ProjectAsync(receipt, cancellationToken);
+
         return await DispatchPersistedAsync(receipt, request, cancellationToken);
+    }
+
+    private static void RequireMatchingWrapper(WorkflowExecutable stored, WorkflowExecutable proposed)
+    {
+        if (stored.Identity.ArtifactId != proposed.Identity.ArtifactId || stored.Identity.ArtifactHash != proposed.Identity.ArtifactHash)
+            throw new InvalidDataException("The saved Test Run wrapper identity conflicts with preparation.");
+        // Hashes exclude node inspection metadata and do not cover every wrapper contract field.
+        // Check the actual winner's complete payload, including template provenance and resume targets.
+        // Only first-writer producer attribution and creation time are independent publication facts.
+        var winner = JsonSerializer.SerializeToNode(stored)!.AsObject();
+        var candidate = JsonSerializer.SerializeToNode(proposed)!.AsObject();
+        winner.Remove(nameof(WorkflowExecutable.Identity)); candidate.Remove(nameof(WorkflowExecutable.Identity));
+        winner.Remove(nameof(WorkflowExecutable.CreatedAt)); candidate.Remove(nameof(WorkflowExecutable.CreatedAt));
+        if (!JsonNode.DeepEquals(winner, candidate))
+            throw new InvalidDataException("The saved Test Run wrapper content or provenance conflicts with preparation.");
     }
 
     private async Task<ActivityDraftTestRunView?> ResumeExistingAsync(
@@ -547,8 +636,9 @@ public sealed class ActivityDraftTestRunService(
         IReadOnlyList<ActivityDiagnostic> diagnostics,
         CancellationToken cancellationToken)
     {
-        receipt = await UpdateAsync(
+        receipt = await UpdateConditionallyAsync(
             receipt,
+            IsUndispatchedPreparing,
             x => x with
             {
                 Status = ActivityDraftTestRunReceiptStatus.ValidationRejected,
@@ -646,6 +736,17 @@ public sealed class ActivityDraftTestRunService(
         ActivityDraftTestRunReceipt receipt,
         Func<ActivityDraftTestRunReceipt, ActivityDraftTestRunReceipt> update,
         CancellationToken cancellationToken)
+        => await UpdateConditionallyAsync(
+            receipt,
+            _ => true,
+            update,
+            cancellationToken);
+
+    private async Task<ActivityDraftTestRunReceipt> UpdateConditionallyAsync(
+        ActivityDraftTestRunReceipt receipt,
+        Func<ActivityDraftTestRunReceipt, bool> canUpdate,
+        Func<ActivityDraftTestRunReceipt, ActivityDraftTestRunReceipt> update,
+        CancellationToken cancellationToken)
     {
         for (var attempt = 0; attempt < 8; attempt++)
         {
@@ -653,6 +754,9 @@ public sealed class ActivityDraftTestRunService(
                 ? receipt
                 : await testRuns.FindAsync(receipt.TestRunId, cancellationToken)
                   ?? throw new InvalidOperationException("The activity Test Run receipt disappeared during an update.");
+            if (!canUpdate(current))
+                return current;
+
             var next = update(current) with
             {
                 Revision = current.Revision + 1,
@@ -662,8 +766,18 @@ public sealed class ActivityDraftTestRunService(
                 return next;
         }
 
+        var latest = await testRuns.FindAsync(receipt.TestRunId, cancellationToken)
+                     ?? throw new InvalidOperationException("The activity Test Run receipt disappeared during an update.");
+        if (!canUpdate(latest))
+            return latest;
         throw new InvalidOperationException("The activity Test Run receipt could not be updated after repeated concurrency conflicts.");
     }
+
+    private static bool IsUndispatchedPreparing(ActivityDraftTestRunReceipt receipt) =>
+        receipt.Status == ActivityDraftTestRunReceiptStatus.Preparing &&
+        receipt.ArtifactId is null &&
+        receipt.SourceReferenceId is null &&
+        receipt.CommandDispatchStatus is null;
 
     private static ActivityDraftTestRunReceiptStatus MapDispatch(WorkflowExecutionCommandDispatchStatus status) =>
         status switch
@@ -734,8 +848,8 @@ public sealed class ActivityDraftTestRunService(
             if (!StringComparer.OrdinalIgnoreCase.Equals(value.State, "Present") || !value.Value.HasValue)
                 throw Reject("activity.test-run.input-state-invalid", $"Activity input '{input.ReferenceKey}' has an invalid state/value combination.");
             var targetType = new ValueTypeDescriptor(input.Type.Alias, input.Type.CollectionKind);
-            var policy = ValuePolicyCombiner.ToProtectionPolicy(
-                ValuePolicyCombiner.FromAuthoredStorage(input.StorageDriverKey));
+            // The contract driver encodes the boundary snapshot; it is not an external payload profile.
+            var policy = ValueProtectionPolicy.InstanceInline;
             var literal = value.Value.Value.ValueKind == JsonValueKind.Null
                 ? ValueEnvelope.Null(targetType, policy)
                 : ValueEnvelope.Inline(targetType, value.Value.Value, policy);
@@ -787,37 +901,6 @@ public sealed class ActivityDraftTestRunService(
         CreatedAt = now,
         LastModifiedAt = now
     };
-
-    /// <summary>
-    /// Makes the content-addressed template source reference exist, and returns once it does — whether this
-    /// request created it, an earlier run created it, or a simultaneous first run won the create.
-    ///
-    /// The id is derived from the template hash, so every test run of an unchanged draft asks for the same
-    /// reference, and source references are create-only. Writing unconditionally therefore failed
-    /// every rerun, and testing-then-writing fails whichever of two simultaneous first runs loses the race.
-    /// Both outcomes reject a request that is perfectly valid, so neither is treated as an error here: the row
-    /// the winner wrote describes the same template this request compiled.
-    ///
-    /// A create that fails while no row exists is a different matter and still propagates.
-    /// </summary>
-    private async ValueTask EnsureTemplateSourceReferenceAsync(
-        string templateReferenceId,
-        WorkflowExecutableSourceReference templateReference,
-        CancellationToken cancellationToken)
-    {
-        if (await sourceReferences.FindAsync(templateReferenceId, cancellationToken) is not null)
-            return;
-
-        try
-        {
-            await sourceReferences.SaveAsync(templateReference, cancellationToken);
-        }
-        catch (InvalidOperationException)
-        {
-            if (await sourceReferences.FindAsync(templateReferenceId, cancellationToken) is null)
-                throw;
-        }
-    }
 
     private static WorkflowExecutableSourceReference CreateTemplateReference(
         string sourceReferenceId,

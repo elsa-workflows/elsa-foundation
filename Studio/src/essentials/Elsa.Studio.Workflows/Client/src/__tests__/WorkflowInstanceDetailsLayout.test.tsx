@@ -2,7 +2,7 @@ import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { WorkflowInstanceDetailsPage, WorkflowInstancesPage } from "../workflow-editor/pages";
 import {
   clampRunDetailInspectorWidth,
@@ -13,8 +13,8 @@ import {
 
 vi.mock("../workflow-editor/WorkflowInstances", () => ({
   WorkflowInstances: () => <div>Runs list</div>,
-  WorkflowInstanceDetailsWorkbench: ({ initialInspectorTab }: { initialInspectorTab?: string }) =>
-    <div data-initial-inspector-tab={initialInspectorTab}>Run workbench</div>
+  WorkflowInstanceDetailsWorkbench: ({ initialInspectorTab, initialActivityExecutionId, initialReturnTo }: { initialInspectorTab?: string; initialActivityExecutionId?: string | null; initialReturnTo?: string | null }) =>
+    <div data-initial-inspector-tab={initialInspectorTab} data-initial-activity-execution-id={initialActivityExecutionId ?? ""} data-initial-return-to={initialReturnTo ?? ""}>Run workbench</div>
 }));
 
 let container: HTMLDivElement;
@@ -105,7 +105,7 @@ describe("Run detail page layout", () => {
     flushSync(() => root.render(
       <WorkflowInstanceDetailsPage
         context={{} as StudioEndpointContext}
-        ai={{} as StudioAiContributionApi}
+        ai={{} as StudioAgentRegistry}
         navigate={() => {}}
       />
     ));
@@ -127,7 +127,7 @@ describe("Run detail page layout", () => {
     flushSync(() => root.render(
       <WorkflowInstanceDetailsPage
         context={{} as StudioEndpointContext}
-        ai={{} as StudioAiContributionApi}
+        ai={{} as StudioAgentRegistry}
         navigate={() => {}}
       />
     ));
@@ -138,11 +138,82 @@ describe("Run detail page layout", () => {
     flushSync(() => root.render(
       <WorkflowInstanceDetailsPage
         context={{} as StudioEndpointContext}
-        ai={{} as StudioAiContributionApi}
+        ai={{} as StudioAgentRegistry}
         navigate={() => {}}
       />
     ));
     await vi.waitFor(() => expect(container.querySelector("[data-initial-inspector-tab]")?.getAttribute("data-initial-inspector-tab")).toBe("timeline"));
+  });
+
+  it("opens the exact Activity tab for a run deep link with an activity execution", async () => {
+    window.history.replaceState({}, "", "/workflows/instances/run-1?activityExecutionId=outer-execution");
+    flushSync(() => root.render(
+      <WorkflowInstanceDetailsPage
+        context={{} as StudioEndpointContext}
+        ai={{} as StudioAgentRegistry}
+        navigate={() => {}}
+      />
+    ));
+
+    await vi.waitFor(() => expect(container.querySelector("[data-initial-inspector-tab]")?.getAttribute("data-initial-inspector-tab")).toBe("activity"));
+    expect(container.querySelector("[data-initial-activity-execution-id]")?.getAttribute("data-initial-activity-execution-id")).toBe("outer-execution");
+  });
+
+  it("preserves return context alongside an initial detail tab and activity selection", async () => {
+    const returnTo = "/workflows/instances?status=Running&pageSize=10&cursor=page-two";
+    window.history.replaceState({}, "", `/workflows/instances/run-1?tab=activity&activityExecutionId=outer-execution&returnTo=${encodeURIComponent(returnTo)}`);
+    flushSync(() => root.render(
+      <WorkflowInstanceDetailsPage
+        context={{} as StudioEndpointContext}
+        ai={{} as StudioAgentRegistry}
+        navigate={() => {}}
+      />
+    ));
+
+    await vi.waitFor(() => expect(container.querySelector("[data-initial-return-to]")?.getAttribute("data-initial-return-to")).toBe(returnTo));
+    expect(container.querySelector("[data-initial-inspector-tab]")?.getAttribute("data-initial-inspector-tab")).toBe("activity");
+    expect(container.querySelector("[data-initial-activity-execution-id]")?.getAttribute("data-initial-activity-execution-id")).toBe("outer-execution");
+  });
+
+  it("keeps the initial activity and return context for one run, then refreshes both for another run", async () => {
+    const firstReturnTo = "/workflows/instances?status=Running&pageSize=10&cursor=page-two";
+    const secondReturnTo = "/workflows/instances?incidentHealth=active&pageSize=25";
+    const renderRunAt = (path: string) => {
+      window.history.replaceState({}, "", path);
+      flushSync(() => root.render(
+        <WorkflowInstanceDetailsPage
+          context={{} as StudioEndpointContext}
+          ai={{} as StudioAgentRegistry}
+          navigate={() => {}}
+        />
+      ));
+    };
+    const readInitial = (attribute: string) => container.querySelector(`[${attribute}]`)?.getAttribute(attribute);
+
+    renderRunAt(`/workflows/instances/run-1?${new URLSearchParams({
+      tab: "activity",
+      activityExecutionId: "outer-execution",
+      returnTo: firstReturnTo
+    })}`);
+    await vi.waitFor(() => {
+      expect(readInitial("data-initial-activity-execution-id")).toBe("outer-execution");
+      expect(readInitial("data-initial-return-to")).toBe(firstReturnTo);
+    });
+
+    renderRunAt(`/workflows/instances/run-1?${new URLSearchParams({
+      tab: "activity",
+      activityExecutionId: "later-selection"
+    })}`);
+    expect(readInitial("data-initial-activity-execution-id")).toBe("outer-execution");
+    expect(readInitial("data-initial-return-to")).toBe(firstReturnTo);
+
+    renderRunAt(`/workflows/instances/run-2?${new URLSearchParams({
+      tab: "activity",
+      activityExecutionId: "next-run-selection",
+      returnTo: secondReturnTo
+    })}`);
+    expect(readInitial("data-initial-activity-execution-id")).toBe("next-run-selection");
+    expect(readInitial("data-initial-return-to")).toBe(secondReturnTo);
   });
 });
 

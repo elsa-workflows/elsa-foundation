@@ -71,3 +71,4 @@ This module also exposes these activity-owned contracts:
 ## Cross-domain contributions
 
 - `FlowchartStructureHandler` implements `IActivityStructureHandler` (`Elsa.Workflows.Design.Core`) with `SupportsScopedVariables = true` and `ProjectScopedVariables` — a `Flowchart` is a container scope that can own container-scoped variables visible to its descendant activities, using the same generic scope semantics as `Sequence` (ADR 0027).
+- `FlowchartStartEntryProvider` implements `IStructuralStartEntryProvider` (`Elsa.Workflows.Runtime.Core`, spec 238). For the trigger binding preflight's start-path rule, it names where a run started by a trigger enters a Flowchart: the trigger itself when it is a direct child with no inbound connection or is the start node; `null` for a direct child with an inbound connection that is not the start node; otherwise the start node.

@@ -1,8 +1,9 @@
 import type React from "react";
 import type { Edge } from "@xyflow/react";
-import type { StudioActivityDescriptor, StudioWorkflowContextConnection } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityDescriptor, StudioWorkflowContextConnection, StudioTestStimulusActionResult, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, ActivityNode, WorkflowDefinitionDetails, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowInstanceDetails, WorkflowTestRunView } from "../workflowTypes";
 import type { getChildSlots, ScopeFrame, WorkflowEdgeData } from "../workflowAdapter";
+import type { WorkflowRunInputDrafts } from "../workflowRunInputs";
 
 export type CreateWorkflowKind = "sequence" | "flowchart" | "bpmn";
 
@@ -10,6 +11,7 @@ export interface CreateWorkflowDraft {
   name: string;
   description: string;
   rootActivityVersionId: string | null;
+  starter?: "http";
 }
 
 export const createWorkflowRootOptions: { value: CreateWorkflowKind; label: string; hint: string }[] = [
@@ -46,7 +48,35 @@ export type WorkflowEditorOperation = "idle" | "saving" | "promoting" | "publica
 
 export interface WorkflowTestRunState {
   draftSignature: string;
+  /** Presentation only: the first recorded batch belongs to a dispatch initiated in this mounted editor. */
+  startedHere?: boolean;
+  /** Exact authoring and presentation snapshot sent for this run; never the later editable draft. */
+  snapshot?: WorkflowDraft;
+  /** In-memory dispatch authority; a matching id on another endpoint is a different run. */
+  endpointContext?: StudioEndpointContext;
   view: WorkflowTestRunView;
+  startLabel?: string;
+  workflowInputNames?: string[];
+  driverActionError?: string;
+  waitDrafts?: Record<string, WorkflowTestRunWaitDraftState>;
+  driverActionResult?: {
+    contributionId: string;
+    value: StudioTestStimulusActionResult;
+  };
+}
+
+export interface WorkflowTestRunWaitDraftState {
+  modeId: string;
+  draft: string;
+  attempt?: { signature: string; deliveryId: string };
+}
+
+export interface WorkflowTestDriveSetupState {
+  snapshot: { draft: WorkflowDraft; signature: string; snapshotId: string };
+  selectedOptionId: string | null; // null until options load; an empty string selects Direct start.
+  selectedModeId: string;
+  inputDrafts: WorkflowRunInputDrafts;
+  stimulusDraft: string;
 }
 
 export interface ExecutableRunState {
@@ -57,6 +87,7 @@ export interface ExecutableRunState {
 export type WorkflowConnectSource = { nodeId: string; handleId: string | null };
 
 export type ConnectMenuState =
+  | { kind: "sequenceInsert"; index: number; scopeKey: string; clientX: number; clientY: number }
   | { kind: "fromPort"; sourceNodeId: string; sourceHandleId: string | null; clientX: number; clientY: number }
   | { kind: "spliceEdge"; edgeId: string; clientX: number; clientY: number }
   | { kind: "fromEmpty"; clientX: number; clientY: number };

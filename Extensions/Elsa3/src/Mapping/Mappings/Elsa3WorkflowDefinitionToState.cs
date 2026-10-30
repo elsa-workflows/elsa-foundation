@@ -1,50 +1,33 @@
-﻿using Elsa.Activities.Design.Core.Models;
-using Elsa.Expressions.Core.Models;
-using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Models;
-using Elsa3.Models;
-using ArgumentValue = Elsa.Expressions.Core.Models.ArgumentValue;
+using Elsa3.Mapping.Conversion;
 
 namespace Elsa3.Mapping.Mappings;
 
-/// <summary>Converts an Elsa-3 workflow definition to an Elsa-4 <see cref="WorkflowDefinitionState"/>.</summary>
+/// <summary>
+/// Maps a normalized and lowered Elsa 3 definition to an Elsa-4 <see cref="WorkflowDefinitionState"/>. Reached through
+/// <see cref="IElsa3DefinitionConverter"/>.
+/// </summary>
 public sealed class Elsa3WorkflowDefinitionToState(
     IWellKnownTypeRegistry wellKnownTypeRegistry,
+    IObjectConverter objectConverter,
     Elsa3ActivityToState activityMapper,
     Elsa3ArgumentDefinitionToInputOutput argumentMapper
 )
 {
-    public ValueTask<WorkflowDefinitionState> Map(Elsa3WorkflowDefinition definition, CancellationToken cancellationToken) =>
-        Map(definition, new Dictionary<string, Elsa3ActivityExactReplacement>(StringComparer.Ordinal), cancellationToken);
-
-    public async ValueTask<WorkflowDefinitionState> Map(
-        Elsa3WorkflowDefinition definition,
-        IReadOnlyDictionary<string, Elsa3ActivityExactReplacement> replacements,
-        CancellationToken cancellationToken)
+    internal WorkflowDefinitionState Map(Elsa3ConversionPlan plan)
     {
-        var variables = definition.Variables.Select(MapVariable);
-        var rootActivity = await activityMapper.Map(definition.Root, replacements, cancellationToken);
+        var definition = plan.Definition;
+        var variables = definition.Variables.Select(variable => Elsa3VariableMapper.Map(wellKnownTypeRegistry, objectConverter, variable)).ToList();
+        var rootActivity = definition.Root is null ? null : activityMapper.Map(plan, definition.Root);
         var inputs = (definition.Inputs ?? []).Select(argumentMapper.MapInput).ToList();
         var outputs = (definition.Outputs ?? []).Select(argumentMapper.MapOutput).ToList();
         return new(
             variables,
-            rootActivity,
+            rootActivity!,
             inputs,
             outputs,
             StrategyOptions: null
         );
     }
-
-    private VariableDefinition MapVariable(Elsa3Variable source)
-    {
-        var varType = TypeReferenceFactory.FromClrType(LegacyClrTypeResolver.Resolve(wellKnownTypeRegistry, source.TypeName), wellKnownTypeRegistry.GetAliasOrDefault);
-
-        var storageDriverType = !string.IsNullOrWhiteSpace(source.StorageDriverTypeName)
-            ? wellKnownTypeRegistry.GetAliasOrDefault(LegacyClrTypeResolver.Resolve(wellKnownTypeRegistry, source.StorageDriverTypeName))
-            : null;
-
-        return new VariableDefinition(source.Id, source.Name, varType, storageDriverType, new ArgumentValue(source.Value));
-    }
-
 }

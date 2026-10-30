@@ -31,11 +31,11 @@ namespace Elsa.Tasks.Services;
 /// that the task ran.
 /// </para>
 /// </remarks>
-public sealed class TaskExecutor(
+internal sealed class TaskExecutor(
     IDistributedLockProvider distributedLockProvider,
     ILogger<TaskExecutor> logger,
     ShellSettings shellSettings,
-    ISchemaDormancyCheck? dormancyCheck = null) : ITaskExecutor, IBackgroundTaskStarter
+    ISchemaDormancyCheck? dormancyCheck = null) : ITaskExecutor
 {
     /// <summary>The start of every <c>[SingleNodeTask]</c> lock key; the shell's name and the task's type name follow it.</summary>
     private const string SingleNodeLockKeyPrefix = "elsa:single-node-task:";
@@ -64,8 +64,8 @@ public sealed class TaskExecutor(
 
     public async Task StopAsync(IBackgroundTask task, CancellationToken cancellationToken)
     {
-        // For callers of IBackgroundTaskStarter: a task that started is stopped even if this node has since gone dormant,
-        // and a task whose start was skipped has nothing to stop. (TaskStateManager stops tasks directly, not through here.)
+        // A task that started is stopped even if this node has since gone dormant, and a task whose start was skipped has
+        // nothing to stop. (TaskStateManager stops tasks directly, not through here.)
         if (_skippedStarts.TryRemove(task, out _))
             return;
 

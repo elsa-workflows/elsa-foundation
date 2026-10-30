@@ -1,7 +1,9 @@
 # Connections and Secrets: conceptual model
 
-**Status:** Proposed. Decisions D1-D10 below were made in review on 2026-09-30; the rest of the document is still a proposal. Nothing is built.
+**Status:** Phase 1 core shipped in `elsa-foundation` (issue #2729): provider-neutral connections, the `http` type (api-key, basic, bearer), `SendHttpRequest.Connection` replacing `Authorization`, publish gate, API, picker, and a Studio Connections page. Persistence is in-memory only in this slice — restarting the host drops connection definitions while owned secrets remain in the encrypted store, and published workflows that reference them fault until the connections are recreated. A durable `ConnectionRepository` on EF Core and a workflow Connections panel are deferred (follow #2854). OAuth as a scheme remains phase 2; the callback route is reserved. Decisions D1–D10 were made in review on 2026-09-30. Phase 0 (Secrets + the interim `SendHttpRequest.Authorization` input) shipped earlier. `Elsa.Integrations.Sdk` v1 (#2726) consumes those types and applies HTTP auth through `IHttpConnectionApplicator`; it does not add a second handler on the named `Elsa.Activities.Http` client.
 **Date:** 2026-09-30
+
+Elsa 4 is unreleased, so stored drafts that still bind `SendHttpRequest.Authorization` lose that input with no shim (D1). Imported Elsa 3 workflows map `Authorization` as removed and warn to create an http connection and bind `Connection`.
 **Scope:** `elsa-foundation` (backend, SDK) and `elsa-foundation-studio` (designer UI)
 **Follow-ups if accepted:** one ADR (next free number is 0072, but 0001/0002/0003/0050/0062 have been reused, so check for collisions), glossary entries in `docs/glossary/elsa.md` and Studio `CONTEXT.md`, then Speckit specs per phase.
 
@@ -23,6 +25,7 @@ These override anything below that reads differently.
 | D8 | **Naming:** keep "Connection" in code and UI, and define it in the glossary as **"Service connection"** to separate it from flowchart edges, database connection strings, and `RuntimeConnectionToken`. |
 | D9 | **Environments:** same name in every environment. The environment decides what stands behind the name, through the connection's own settings and its secret fields' stores. No mapping layer. |
 | D10 | **Enforce `RequiresEncryption` in phase 0** through the sensitive-input guard. Check existing usages when writing the phase 0 spec. Fix spec 079's `ISecretResolver` to the real `ISecretValueResolver` when phase 0 touches it. |
+| D11 | **Added 2026-10-20 (owner decision, #2855).** Connections has no read or use permission. Listing connections (names, types and metadata, never secret values) is implied by `workflows/design:read` or by `connections:manage`, whose holder must see what they manage; binding one in a workflow draft is implied by `workflows/design:manage`, which the Workflow Design routes that write drafts or versions, or promote drafts, already require (promotion, not publishing: publishing a version is governed by `workflows/publishing:manage`, and reusable-activity drafts by `activities/design:manage`; neither path ever checked a connection right). Draft validation never checks the caller, so the validations panel and the dashboard show every viewer the same findings. `connections:manage`, `connections:bind-secret` and `connections:test` stay as the administration rights. `connections:read` and `connections:use` are removed without a compatibility path. |
 
 **Verified since the first draft:** a cross-node lock abstraction exists (`IDistributedLockProvider`, `src/Elsa/Locking/Core/`), but the only shipped implementation is filesystem-based. Single-flight token refresh therefore cannot rely on the lock alone. Section 2.6 now requires the Grant write to be a compare-and-swap on the expected secret version, with the lock as an optimization.
 
@@ -38,7 +41,7 @@ These override anything below that reads differently.
 | Pluggable stores | **Seam exists** (`ISecretStore`, `ISecretStoreRegistry`), **no external store ships.** No KeyVault, AWS, or HashiCorp implementation. | `src/Elsa/Secrets/Core/Contracts/` |
 | `SecretReference(Name, TypeName?, Scope?)` + `ISecretValueResolver` | Implemented. Resolves at point of use, tenant-scoped, safe failure codes. | `Core/Models/SecretModels.cs`, `Services/DefaultSecretValueResolver.cs` |
 | `Secret` expression syntax | **Descriptor only.** `SecretExpressionDescriptor` (`EditingMode.Reference`, UI hint `SecretPicker`). I grepped `src/` outside `Secrets/`: **nothing references `ISecretValueResolver` or `SecretExpressionTypes`.** A workflow cannot actually consume a secret at runtime today. | `src/Elsa/Secrets/Expressions/` |
-| Connections / connectors | **Absent.** No concept, no term in the glossary. | n/a |
+| Connections / connectors | **Phase 1 shipped (#2729).** `Elsa.Connections` owns the catalog, `SensitiveValue`, `[ActivityConnection]`, `ConnectionUnavailable`, and the `http` type. `Elsa.Integrations.Sdk` (#2726) consumes those types via `IHttpConnectionApplicator` on the named `Elsa.Activities.Http` client. | `Essentials/src/Connections/`, `Extensions/Integrations/src/Sdk/` |
 | Outbound OAuth (token acquire, refresh, revoke) | **Absent.** The only OAuth code is Identity, where Elsa is the IdP. | `src/Elsa/Foundation/Identity/` |
 | HTTP activity auth | `SendHttpRequest` has only a free-form `RequestHeaders` dictionary. No auth model. The only way to use an API key is to paste it into a header literal. | `src/Elsa/Activities/Http/Activities/SendHttpRequest.cs:74-134` |
 | AI provider keys (Anthropic, Copilot) | Read from options or environment variables. Not the Secrets module. | `src/Elsa/Agent/*/Options/` |
@@ -257,12 +260,12 @@ Resolution is always **within the workflow instance's tenant.** A reference can 
 
 Proposed scope ladder, in priority order:
 
-1. **Tenant-owned, shared (v1, default).** Created by someone with `connections:manage`, usable by any workflow in the tenant whose *author* holds `connections:use` on it at bind and publish time.
+1. **Tenant-owned, shared (v1, default).** Created by someone with `connections:manage`, usable by any workflow in the tenant. Binding one is part of authoring the workflow, so it needs `workflows/design:manage` (D11).
 2. **Restricted.** The same connection with an allow-list of workflow definitions or tags. Use this instead of copying connections per workflow.
 3. **Per-workflow copies: not a scope.** A "workflow-scoped connection" is just a tenant connection restricted to one workflow. Avoids a second lookup rule.
 4. **User-delegated (v2, needs your input).** "OneDrive as Alice" for workflows triggered by a human. Runs into the unattended-execution problem: whose token when a timer fires at 3 a.m.? Proposal: defer, and when it lands, make it an explicit `runAs: invoker | owner` on the requirement, failing closed if there is no invoker.
 
-Permissions: `connections:read` (metadata), `connections:use` (bind and publish), `connections:manage` (create, rotate, revoke, delete). Runtime execution itself is by the engine, not the end user, so `use` is checked at *authoring and publish time*, not per run.
+Permissions (D11): listing metadata needs `workflows/design:read` or `connections:manage`, binding and promoting a workflow draft need `workflows/design:manage`, and `connections:manage` (create, rotate, revoke, delete), `connections:bind-secret` and `connections:test` guard administration. Runtime execution itself is by the engine, not the end user, so no permission is checked per run.
 
 ### 2.9 Serialization: never leak material
 
@@ -324,7 +327,7 @@ The original eleven questions are resolved as D1-D10 above, with one exception (
 | Phase | Unit | Notes |
 |---|---|---|
 | 0 | Wire `Secret` expression evaluation; add `Sensitive` flag to `[ActivityInput]` and definition guard; add `isSensitive` to Studio SDK descriptor; canary test v1; interim credential input `Authorization` on `SendHttpRequest` (D1, amended 2026-10-01) | No new concepts. Closes today's real leak risk. |
-| 1 | Connections core: types, repository, manager, resolver, `SensitiveValue`, `[ActivityConnection]`, publish gate, permissions; `http` type (api-key, basic, bearer); migrate `SendHttpRequest`, replacing and removing its phase 0 `Authorization` input | Studio: Connections page, picker, workflow Connections panel. |
+| 1 | Connections core: types, in-memory repository, manager, resolver, `SensitiveValue`, `[ActivityConnection]`, publish gate, permissions; `http` type (api-key, basic, bearer); migrate `SendHttpRequest`, replacing and removing its phase 0 `Authorization` input | Studio: Connections page and picker shipped. durable `ConnectionRepository` and workflow Connections panel deferred (follow #2854). |
 | 2 | OAuth: authorization-code with PKCE, client credentials, Grant secret type, single-flight refresh, revocation, Attention integration, `FakeOAuthProvider` | Needs answers to questions 2 and 3. |
 | 3 | External stores: KeyVault first, then AWS SM, Vault; store contract suite | Independent of phase 2. |
 | 4 | First real connectors (Google Drive, OneDrive), migrate Anthropic and Copilot options to connection types | Proves the SDK ergonomics on real providers. |

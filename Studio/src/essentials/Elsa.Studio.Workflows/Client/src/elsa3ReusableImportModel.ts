@@ -1,7 +1,9 @@
 import type {
   Elsa3MigrationDiagnostic,
   Elsa3ReusableImportAnalysisPage,
-  Elsa3ReusableImportItem
+  Elsa3ReusableImportItem,
+  Elsa3ReusableImportPublication,
+  Elsa3ReusableImportReceipt
 } from "./elsa3ReusableImportTypes";
 
 export interface Elsa3ReusableImportAnalysis {
@@ -108,6 +110,109 @@ export function diagnosticPathSegmentKind(kind: string | number) {
 export function importReceiptStatus(status: string | number) {
   if (typeof status === "number") return ["Applied", "AlreadyImported"][status] ?? `Status ${status}`;
   return status;
+}
+
+const publicationStatusNames = [
+  "Published",
+  "AlreadyPublished",
+  "Refused",
+  "NotPublishedDependency",
+  "NotPublished"
+] as const;
+
+const publicationStatusLabels: Record<(typeof publicationStatusNames)[number], string> = {
+  Published: "Published",
+  AlreadyPublished: "Already published",
+  Refused: "Publishing refused",
+  NotPublishedDependency: "Not published: depends on an unpublished version",
+  NotPublished: "Not published"
+};
+
+export function importPublicationStatus(status: string | number) {
+  if (typeof status === "number") return publicationStatusNames[status] ?? `Status${status}`;
+  return status;
+}
+
+export function importPublicationStatusLabel(status: string | number) {
+  const name = importPublicationStatus(status);
+  return isKnownPublicationStatus(name) ? publicationStatusLabels[name] : humanizePublicationStatus(name);
+}
+
+export function isPublishedImportStatus(status: string | number) {
+  const name = importPublicationStatus(status);
+  return name === "Published" || name === "AlreadyPublished";
+}
+
+function isKnownPublicationStatus(name: string): name is (typeof publicationStatusNames)[number] {
+  return publicationStatusNames.includes(name as (typeof publicationStatusNames)[number]);
+}
+
+function humanizePublicationStatus(value: string) {
+  return value
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Za-z])(\d)/g, "$1 $2")
+    .replace(/(\d)([A-Za-z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function publicationForSource(
+  publications: readonly Elsa3ReusableImportPublication[] | null | undefined,
+  sourceVersionId: string
+) {
+  return publications?.find(publication => publication.sourceVersionId === sourceVersionId) ?? null;
+}
+
+export function summarizeImportPublications(
+  publications: readonly Elsa3ReusableImportPublication[] | null | undefined
+) {
+  const items = publications ?? [];
+  const published = items.filter(publication => isPublishedImportStatus(publication.status)).length;
+  const unpublished = items.length - published;
+  const outcome = items.length === 0
+    ? "none" as const
+    : unpublished === 0
+      ? "allPublished" as const
+      : published === 0
+        ? "nonePublished" as const
+        : "partlyPublished" as const;
+  return {
+    total: items.length,
+    published,
+    unpublished,
+    outcome
+  };
+}
+
+export function importReceiptOutcomeLabel(receipt: Elsa3ReusableImportReceipt) {
+  const { outcome } = summarizeImportPublications(receipt.publications);
+  if (outcome === "partlyPublished") return "Partly published";
+  if (outcome === "nonePublished") return "Not published";
+  return importReceiptStatus(receipt.status);
+}
+
+export function importReceiptNeedsResume(receipt: Elsa3ReusableImportReceipt) {
+  return summarizeImportPublications(receipt.publications).unpublished > 0;
+}
+
+export function importReceiptApplyMessage(receipt: Elsa3ReusableImportReceipt) {
+  const alreadyImported = importReceiptStatus(receipt.status) === "AlreadyImported";
+  const { unpublished, published, total } = summarizeImportPublications(receipt.publications);
+  if (alreadyImported && unpublished === 0) {
+    return "Already imported. The durable receipt is identical and no second mutation was made.";
+  }
+  if (unpublished > 0) {
+    const prefix = alreadyImported
+      ? "Already imported. The durable receipt is identical and no second mutation was made. "
+      : "";
+    const count = published === 0
+      ? "None of the imported reusable versions were published."
+      : `${published} of ${total} imported reusable versions are published.`;
+    return `${prefix}The commit is atomic; publishing is per version. ${count} To finish, re-upload the export and apply it under a new idempotency key.`;
+  }
+  return "The commit is atomic. Publishing is per version. Every imported reusable version is listed in the durable receipt.";
 }
 
 export function importResourceDisposition(disposition: string | number | null | undefined) {

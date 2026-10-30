@@ -16,13 +16,13 @@ describe("secrets api", () => {
     await deleteSecret(context, "payments/api");
 
     expect(calls).toEqual([
-      ["get", "/_elsa/secrets?activeOnly=false&pageSize=100&search=api+key"],
-      ["get", "/_elsa/secrets/descriptors"],
-      ["post", "/_elsa/secrets", { name: "payments.api", typeName: "text", storeName: "encrypted", value: "secret" }],
-      ["put", "/_elsa/secrets/payments.api", { displayName: "Payments API", description: "Payment provider token" }],
-      ["post", "/_elsa/secrets/payments%2Fapi/rotate", { value: "new-secret" }],
-      ["post", "/_elsa/secrets/picker", { search: "pay", typeNames: ["text"], storeNames: [], activeOnly: true }],
-      ["delete", "/_elsa/secrets/payments%2Fapi"]
+      ["get", "/secrets?activeOnly=false&pageSize=100&search=api+key"],
+      ["get", "/secrets/descriptors"],
+      ["post", "/secrets", { name: "payments.api", typeName: "text", storeName: "encrypted", value: "secret" }],
+      ["put", "/secrets/payments.api", { displayName: "Payments API", description: "Payment provider token" }],
+      ["post", "/secrets/payments%2Fapi/rotate", { value: "new-secret" }],
+      ["post", "/secrets/picker", { search: "pay", typeNames: ["text"], storeNames: [], activeOnly: true }],
+      ["delete", "/secrets/payments%2Fapi"]
     ]);
   });
 });
@@ -32,22 +32,26 @@ function api(calls: unknown[][]): StudioEndpointContext {
     baseUrl: "https://server.example",
     http: {
       requestJson: vi.fn(),
-      getJson: vi.fn(async (url: string) => {
+      getJson: async <T,>(url: string): Promise<T> => {
         calls.push(["get", url]);
-        return url.includes("descriptors") ? { types: [], stores: [] } : { items: [], totalCount: 0 };
-      }),
-      postJson: vi.fn(async (url: string, body: unknown) => {
+        const response: unknown = url.includes("descriptors") ? { types: [], stores: [] } : { items: [], totalCount: 0 };
+        return response as T;
+      },
+      postJson: async <T,>(url: string, body: unknown): Promise<T> => {
         calls.push(["post", url, body]);
-        return url.includes("picker") ? { items: [], canCreateInline: true } : {};
-      }),
-      putJson: vi.fn(async (url: string, body: unknown) => {
+        const response: unknown = url.includes("picker") ? { items: [], canCreateInline: true } : {};
+        return response as T;
+      },
+      putJson: async <T,>(url: string, body: unknown): Promise<T> => {
         calls.push(["put", url, body]);
-        return {};
-      }),
-      deleteJson: vi.fn(async (url: string) => {
+        const response: unknown = {};
+        return response as T;
+      },
+      deleteJson: async <T,>(url: string): Promise<T> => {
         calls.push(["delete", url]);
-        return {};
-      }),
+        const response: unknown = {};
+        return response as T;
+      },
       postForm: vi.fn()
     }
   };

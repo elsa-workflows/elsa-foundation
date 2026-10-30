@@ -6,7 +6,31 @@ namespace Elsa.Activities.Bpmn.Interchange.Models;
 public sealed record BpmnImportAnalysis(
     IReadOnlyCollection<string> ProcessIds,
     IReadOnlyDictionary<string, int> ElementCounts,
-    IReadOnlyCollection<BpmnImportIssue> Issues);
+    IReadOnlyCollection<BpmnImportIssue> Issues)
+{
+    /// <summary>Foundation binding assessment, distinct from the library's ability to retain the BPMN descriptor.</summary>
+    public IReadOnlyList<BpmnImportCapability> Capabilities { get; init; } = [];
+
+    /// <summary>Whether the binding references were checked against the visible host activity catalog.</summary>
+    public bool HostInventoryVerified { get; init; }
+
+    /// <summary>Verified available bindings without degradation; normal publication validation still applies.</summary>
+    public bool CanExecute => HostInventoryVerified && Capabilities.All(capability => capability.Availability == BpmnImportCapabilityAvailability.Available) &&
+                              Issues.All(issue => issue.Severity == BpmnImportIssueSeverity.Info);
+}
+
+public sealed record BpmnImportCapability(string ElementId, string Capability, BpmnImportCapabilityAvailability Availability, string Reason)
+{
+    public string? BindingRef { get; init; }
+}
+
+public enum BpmnImportCapabilityAvailability
+{
+    Unknown,
+    Available,
+    RequiresBinding,
+    Unsupported
+}
 
 public sealed record BpmnImportIssue(
     BpmnImportIssueSeverity Severity,

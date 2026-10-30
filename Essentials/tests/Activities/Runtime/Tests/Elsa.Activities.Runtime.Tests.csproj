@@ -21,6 +21,7 @@
     <ProjectReference Include="..\..\..\..\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Cluster\InProcess\Elsa.Cluster.InProcess.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Http\Elsa.Activities.Http.csproj" />
@@ -37,6 +38,8 @@
     <ProjectReference Include="..\..\..\..\src\Workflows\Runtime\JavaScript\Elsa.Workflows.Runtime.JavaScript.csproj" />
     <ProjectReference Include="..\..\Testing\Elsa.Activities.Testing.csproj" />
     <ProjectReference Include="..\..\..\Testing\Elsa.Testing.csproj" />
+    <ProjectReference Include="..\..\..\Serialization\Testing\Elsa.Serialization.Testing.csproj" />
+    <ProjectReference Include="..\..\..\Expressions\Testing\Elsa.Expressions.Testing.csproj" />
   </ItemGroup>
 
 </Project>

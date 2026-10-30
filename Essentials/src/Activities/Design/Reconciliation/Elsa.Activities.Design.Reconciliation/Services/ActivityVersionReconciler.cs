@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
@@ -30,9 +31,13 @@ namespace Elsa.Activities.Design.Reconciliation.Services;
 ///    with immutable provenance (including ProvisioningHash).
 /// 4. If <c>(DefinitionId, Version)</c> is already persisted, compute the incoming hash
 ///    and compare to the persisted ProvisioningHash:
-///    - Any hash difference → <see cref="ActivityVersionHashMismatchException"/> (the source
+///    - Hash difference that is only input presentation (<c>Tier</c>, display label or help text)
+///      → refresh the stored version in place so the catalog picks up the new disclosure group or UI wording.
+///      Pre-GA: the first upgrade after those fields enter the hash re-reconciles existing rows
+///      rather than throwing.
+///    - Any other hash difference → <see cref="ActivityVersionHashMismatchException"/> (the source
 ///      is broken — same logical identity, different content).
-///    - Hashes match → skip or throw per the <see cref="DuplicateHandling"/> option.
+///    - Hashes match → honor <see cref="DuplicateHandling"/>; refresh changed palette hints when skipping.
 ///
 /// No per-pass mutating state is carried by any entity in this domain. Source disappearance
 /// is intentionally not tracked. Versions are never deleted.
@@ -54,6 +59,7 @@ public sealed class ActivityVersionReconciler(
     IActivityDefinitionVersionStore versionStore,
     IAddActivityDefinitionCommand addNewDefinitionCommand,
     IAddActivityDefinitionVersionCommand addVersionCommand,
+    IRefreshActivityDefinitionVersionCommand refreshVersionCommand,
     IEnumerable<IActivitySourceVersionPublisher>? sourceVersionPublishers = null
 )
     : IActivityVersionReconciler
@@ -174,6 +180,30 @@ public sealed class ActivityVersionReconciler(
                 return;
             }
 
+            if (IsInputPresentationOnlyChange(definition, existingVersion, incomingVersion))
+            {
+                var expectedOldHash = existingVersion.Hash;
+                var refresh = ActivityDefinitionVersion.From(incomingVersion, definition.Id);
+                refresh.Id = existingVersion.Id;
+                refresh.TenantId = existingVersion.TenantId;
+                refresh.Definition = definition;
+                await refreshVersionCommand.RefreshAsync(
+                    CreateOperationKey("refresh", incomingVersion),
+                    refresh,
+                    expectedOldHash,
+                    cancellationToken);
+                existingVersion.Inputs = incomingVersion.Inputs.ToArray();
+                existingVersion.Hash = incomingHash;
+                existingVersion.LastModifiedAt = refresh.LastModifiedAt;
+                await RefreshPaletteHintsIfChangedAsync(definition, existingVersion, incomingVersion, cancellationToken);
+                if (sourceVersionPublisher is not null)
+                {
+                    existingVersion.Definition ??= definition;
+                    await sourceVersionPublisher.PublishAsync(definition, existingVersion, cancellationToken);
+                }
+                return;
+            }
+
             // Same identity, different content — the source is broken. Throw loudly.
             throw new ActivityVersionHashMismatchException(
                 definitionId: definition.Id,
@@ -187,10 +217,33 @@ public sealed class ActivityVersionReconciler(
 
         // Hash matches → genuine duplicate.
         HandleHashMatchedDuplicate(definition, incomingVersion.Version);
+        await RefreshPaletteHintsIfChangedAsync(definition, existingVersion, incomingVersion, cancellationToken);
         if (sourceVersionPublisher is not null)
         {
             existingVersion.Definition ??= definition;
             await sourceVersionPublisher.PublishAsync(definition, existingVersion, cancellationToken);
+        }
+    }
+
+    private async Task RefreshPaletteHintsIfChangedAsync(
+        ActivityDefinition definition,
+        ActivityDefinitionVersion existingVersion,
+        IActivityDefinitionVersion incomingVersion,
+        CancellationToken cancellationToken)
+    {
+        var incomingPalette = incomingVersion.DesignFacets.Where(facet => facet.Kind == "elsa.activity-palette").ToArray();
+        var existingPalette = existingVersion.DesignFacets.Where(facet => facet.Kind == "elsa.activity-palette").ToArray();
+        if (JsonSerializer.Serialize(incomingPalette) != JsonSerializer.Serialize(existingPalette))
+        {
+            var refresh = ActivityDefinitionVersion.From(existingVersion);
+            refresh.TenantId = existingVersion.TenantId;
+            refresh.Definition = definition;
+            refresh.DesignFacets = existingVersion.DesignFacets.Where(facet => facet.Kind != "elsa.activity-palette").Concat(incomingPalette).ToArray();
+            await refreshVersionCommand.RefreshPaletteHintsAsync(
+                CreateOperationKey("refresh-palette", incomingVersion), refresh, existingVersion.DesignFacetsSource, cancellationToken);
+            existingVersion.DesignFacets = refresh.DesignFacets;
+            existingVersion.DesignFacetsSource = refresh.DesignFacetsSource;
+            existingVersion.LastModifiedAt = refresh.LastModifiedAt;
         }
     }
 
@@ -286,6 +339,40 @@ public sealed class ActivityVersionReconciler(
         var compatibilityHash = hasher.Hash(incomingDefinition, incomingRebasedToPersistedVersion);
         return string.Equals(existingVersion.Hash, compatibilityHash, StringComparison.Ordinal);
     }
+
+    private bool IsInputPresentationOnlyChange(
+        ActivityDefinition definition,
+        IActivityDefinitionVersion existingVersion,
+        IActivityDefinitionVersion incomingVersion)
+    {
+        var existingStripped = WithStrippedInputPresentation(existingVersion, definition);
+        var incomingStripped = WithStrippedInputPresentation(incomingVersion, incomingVersion.Definition);
+        return string.Equals(
+            hasher.Hash(definition, existingStripped),
+            hasher.Hash(incomingVersion.Definition, incomingStripped),
+            StringComparison.Ordinal);
+    }
+
+    private static ActivityDefinitionVersionModel WithStrippedInputPresentation(
+        IActivityDefinitionVersion version,
+        IActivityDefinition definition) =>
+        new(
+            Id: version.Id,
+            Version: version.Version,
+            DefinitionId: version.DefinitionId,
+            ProviderKey: version.ProviderKey,
+            ProviderSchemaVersion: version.ProviderSchemaVersion,
+            ConsumerKey: version.ConsumerKey,
+            ConsumerSchemaVersion: version.ConsumerSchemaVersion,
+            DescriptorPayload: version.DescriptorPayload,
+            SourceKind: version.SourceKind,
+            SourceId: version.SourceId,
+            Definition: definition,
+            Inputs: version.Inputs.Select(input => input with { Tier = null, DisplayName = string.Empty, Description = null }).ToArray(),
+            Outputs: version.Outputs,
+            DesignFacets: version.DesignFacets,
+            ExecutionType: version.ExecutionType,
+            Hash: string.Empty);
 
     private void LogSkipBuildMetadataOnlyDuplicate(
         string definitionId,

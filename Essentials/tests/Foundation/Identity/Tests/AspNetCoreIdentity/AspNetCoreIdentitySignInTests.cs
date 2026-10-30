@@ -1,6 +1,7 @@
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Models;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.Seeding;
@@ -15,7 +16,7 @@ namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
 /// Password sign-in and seeding behaviour over the EF Core-backed substrate. Shared fixture builds the container;
 /// <see cref="CreateUserAsync"/> removes repeated user-creation arrange blocks.
 /// </summary>
-public sealed class AspNetCoreIdentitySignInTests : IAsyncDisposable
+public sealed class AspNetCoreIdentitySignInTests : IAsyncLifetime
 {
     private readonly AspNetCoreIdentityFixture _fixture = new();
 
@@ -64,6 +65,21 @@ public sealed class AspNetCoreIdentitySignInTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task PasswordSignIn_Fails_For_A_Disabled_User_Until_It_Is_Enabled_Again()
+    {
+        var user = await CreateUserAsync("gwen", "S3cret!pass", tenantId: AspNetCoreIdentityDefaults.DefaultTenantId);
+
+        await SetStatusAsync(user, UserStatus.Disabled);
+        var disabled = await PasswordSignInAsync("gwen", "S3cret!pass");
+        await SetStatusAsync(user, UserStatus.Active);
+        var enabled = await PasswordSignInAsync("gwen", "S3cret!pass");
+
+        Assert.False(disabled.Succeeded);
+        Assert.Null(disabled.Session);
+        Assert.True(enabled.Succeeded);
+    }
+
+    [Fact]
     public async Task ReconstructedCookiePrincipal_UsesTrustedRuntimeTypeAndMarker()
     {
         await CreateUserAsync("cookie-user", "S3cret!pass", tenantId: AspNetCoreIdentityDefaults.DefaultTenantId);
@@ -102,10 +118,22 @@ public sealed class AspNetCoreIdentitySignInTests : IAsyncDisposable
 
         Assert.True(outcome.Succeeded);
         // The admin role is granted every catalog permission; a representative one should be projected.
-        Assert.Contains("identity.users.manage", outcome.Session!.Permissions);
+        Assert.Contains("identity/users:manage", outcome.Session!.Permissions);
     }
 
-    private async Task CreateUserAsync(string username, string password, string tenantId)
+    private async Task<SignInOutcome> PasswordSignInAsync(string username, string password)
+    {
+        await using var scope = _fixture.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<IIdentitySignInService>().PasswordSignInAsync(username, password, tenantId: null);
+    }
+
+    private async Task SetStatusAsync(AspNetCoreIdentityUser user, UserStatus status)
+    {
+        await using var scope = _fixture.CreateScope();
+        Assert.True(await scope.ServiceProvider.GetRequiredService<IUserStore>().SetStatusAsync(user.TenantId, user.Id, status));
+    }
+
+    private async Task<AspNetCoreIdentityUser> CreateUserAsync(string username, string password, string tenantId)
     {
         await using var scope = _fixture.CreateScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AspNetCoreIdentityUser>>();
@@ -120,7 +148,11 @@ public sealed class AspNetCoreIdentitySignInTests : IAsyncDisposable
 
         var result = await userManager.CreateAsync(user, password);
         Assert.True(result.Succeeded, string.Join("; ", result.Errors.Select(e => e.Description)));
+        return user;
     }
 
-    public async ValueTask DisposeAsync() => await _fixture.DisposeAsync();
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    // xUnit v2 calls IAsyncLifetime.DisposeAsync on a test class; it never calls IAsyncDisposable.DisposeAsync.
+    public async Task DisposeAsync() => await _fixture.DisposeAsync();
 }

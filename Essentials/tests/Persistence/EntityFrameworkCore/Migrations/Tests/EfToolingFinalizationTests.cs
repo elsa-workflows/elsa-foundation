@@ -37,7 +37,7 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
 
     public Task DisposeAsync()
     {
-        SqliteConnection.ClearAllPools();
+        SqliteConnection.ClearPool(new SqliteConnection(Connection));
         foreach (var file in new[] { _file, _file + "-journal", _file + "-wal", _file + "-shm" })
             File.Delete(file);
         return Task.CompletedTask;
@@ -137,12 +137,15 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
 
         Assert.Equal(EfToolingExitCode.Success, status.ExitCode);
         var families = status.Response.GetProperty("finalization").GetProperty("families").EnumerateArray().ToArray();
-        Assert.Equal(13, families.Length);
+        Assert.Equal(14, families.Length);
         var secrets = families.Single(family => family.GetProperty("family").GetString() == SecretsEfModule.SchemaFamily);
         Assert.Single(secrets.GetProperty("holds").EnumerateArray());
         var runtime = families.Single(family => family.GetProperty("family").GetString() == RuntimeArtifactEfModule.SchemaFamily);
         Assert.Equal(JsonValueKind.Null, runtime.GetProperty("finalizedVersion").ValueKind);
         Assert.Equal([RuntimeArtifactEfModule.SchemaVersion], runtime.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
+        var background = families.Single(family => family.GetProperty("family").GetString() == RuntimeBackgroundActivityWorkEfModule.SchemaFamily);
+        Assert.Equal(JsonValueKind.Null, background.GetProperty("finalizedVersion").ValueKind);
+        Assert.Equal([RuntimeBackgroundActivityWorkEfModule.SchemaVersion], background.GetProperty("readableVersions").EnumerateArray().Select(version => version.GetString()));
     }
 
     /// <summary>
@@ -283,7 +286,6 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
             File.Delete(notADatabase);
         }
     }

@@ -1,11 +1,12 @@
 using CShells.Features;
 using Elsa.Activities.Bpmn.Contracts;
 using Elsa.Activities.Bpmn.Internal;
-using Elsa.Activities.Bpmn.Internal.Behaviors;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using CShells.Lifecycle;
 
 namespace Elsa.Activities.Bpmn;
 
@@ -22,34 +23,10 @@ public class ActivitiesBpmnFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<IActivityStructureHandler, BpmnStructureHandler>();
-        services.AddSingleton<BpmnTokenCoordinator>();
-        services.AddSingleton<BpmnStatePersister>();
-        services.AddSingleton<BpmnExecutionEngine>();
-        services.AddSingleton<IBpmnElementBehavior>(StartEventBehavior.None());
-        services.AddSingleton<IBpmnElementBehavior>(StartEventBehavior.Timer());
-        services.AddSingleton<IBpmnElementBehavior>(StartEventBehavior.Message());
-        services.AddSingleton<IBpmnElementBehavior>(StartEventBehavior.Signal());
-        services.AddSingleton<IBpmnElementBehavior>(StartEventBehavior.Escalation());
-        services.AddSingleton<IBpmnElementBehavior>(StartEventBehavior.Error());
-        services.AddSingleton<IBpmnElementBehavior, NoneEndEventBehavior>();
-        services.AddSingleton<IBpmnElementBehavior, TerminateEndEventBehavior>();
-        services.AddSingleton<IBpmnElementBehavior, CatchEventBehavior>();
-        services.AddSingleton<IBpmnElementBehavior, CompensationThrowEventBehavior>();
-        services.AddSingleton<IBpmnElementBehavior, CompensationEndEventBehavior>();
-        services.AddSingleton<IBpmnElementBehavior, CancelEndEventBehavior>();
-        services.AddSingleton<IBpmnElementBehavior, EscalationThrowEventBehavior>();
-        services.AddSingleton<IBpmnElementBehavior, EscalationEndEventBehavior>();
-        services.AddSingleton<IBpmnElementBehavior, MessageThrowEventBehavior>();
-        services.AddSingleton<IBpmnElementBehavior, MessageEndEventBehavior>();
-        services.AddSingleton<IBpmnElementBehavior, TaskBehavior>();
-        services.AddSingleton<IBpmnElementBehavior, SubProcessBehavior>();
-        services.AddSingleton<IBpmnElementBehavior, ExclusiveGatewayBehavior>();
-        services.AddSingleton<IBpmnElementBehavior, ParallelGatewayBehavior>();
-        services.AddSingleton<IBpmnElementBehavior, InclusiveGatewayBehavior>();
-        services.AddSingleton<IBpmnElementBehavior, EventBasedGatewayBehavior>();
-        services.AddSingleton<IBpmnElementBehavior, BoundaryEventBehavior>();
-        services.AddSingleton<IBpmnBehaviorRegistry, BpmnBehaviorRegistry>();
-
+        services.AddScoped<BpmnStateCodec>();
+        services.AddScoped<BpmnWorkLedger>();
+        services.TryAddScoped<IBpmnProcessRuntime, BpmnProcessRuntime>();
+        services.AddSingleton<IShellInitializer>(new BpmnRuntimeRegistrationInitializer(services));
         // Publish-time start-trigger surface: the process node registers one trigger binding per
         // event-defined start element, and — for timer starts — one recurring schedule per element.
         services.AddSingleton<IActivityTriggerStimulusProvider, BpmnProcessTriggerStimulusProvider>();

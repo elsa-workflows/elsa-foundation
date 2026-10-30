@@ -230,6 +230,7 @@ public sealed class PublishEventDrive : PrimitiveDrive
         await using var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesPrimitivesFeature().ConfigureServices(services))
+            .ConfigureServices(NativeStimulusDeliveryTestServices.Configure)
             .Build("actexec-seq", "actexec-publish");
 
         var leaf = Nodes.Leaf("node-publish", typeof(PublishEvent), new Dictionary<string, object?>
@@ -299,7 +300,7 @@ public sealed class EventDrive : PrimitiveDrive
             resumeTargetId: resumeTargetId,
             stimulusType: EventStimulus.StimulusType,
             stimulusHash: EventStimulus.Hash(eventName),
-            input: JsonSerializer.SerializeToElement(new EventReceived(eventName)));
+            input: JsonSerializer.SerializeToElement(new { eventName = eventName }));
 
         recorder.Record(ActivityType, resumed, executableNodeId);
         Assert.Equal(ActivityExecutionStatus.Completed, resumed.State(executableNodeId).Status);

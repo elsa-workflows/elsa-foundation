@@ -9,7 +9,7 @@ namespace Elsa.Locking.Database;
 /// acquisition timeout when a caller passes none. The same shape as <c>Elsa.Locking.FileSystem</c>'s adaptor, kept
 /// separate rather than shared so neither provider package depends on the other.
 /// </summary>
-public sealed class MedallionDistributedLockProvider(Medallion.Threading.IDistributedLockProvider inner, TimeSpan defaultTimeout) : IDistributedLockProvider
+internal sealed class MedallionDistributedLockProvider(Medallion.Threading.IDistributedLockProvider inner, TimeSpan defaultTimeout) : IDistributedLockProvider
 {
     public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
         Wrap(inner.TryAcquireLock(name, timeout ?? defaultTimeout, cancellationToken));

@@ -1,0 +1,317 @@
+{
+  "schemaVersion": 1,
+  "task": "T049 physical/default cohort GC composition; old-writer/quiescence and activation remain open",
+  "sourceParentCommit": "d39a99298a174711f2c549793bc12649ded36e19",
+  "filesSha256": {
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IStimulusDeliveryStore.cs": "f9569cc3fb71a4c3cec006adfd2cc02eea6b5be1631f5222e9a0a475387d6f40",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IWorkflowExecutableStore.cs": "7d84c58bd1440bb83fe4a763d7f0c2d53be4f48f0163047b6a2f5620cb47f4a5",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/WorkflowExecutableStoreDecorator.cs": "bc1b8551cd931952fb1f106046e6f54b526fa4b5b8131cca587eff84ea288a43",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "0d7c58b01673eed67330e82cbb7fbec857f5059ba78e796fb6dc84d8d1ded1b6",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "c0a94861dee961fcf6fef8b5571f404ef859e1ce1903f515497e16fa3674f15b",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs": "8f8d7d052b752f411bfa95377d5d26228bfb7786f8c2c5382acfd5f2b64e0d60",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Properties/AssemblyInfo.cs": "576e7e6a10dbd640bce94271981391134990abf61f2ec5b5470eafc5920b3e43",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs": "dd8bb1d74d1f4214b2df4a6bf2482f5048eba49c28790403f57bb94c8daa3851",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/CachingWorkflowExecutableStore.cs": "3be6ef12d2e746d01ad949a3afa7f013bd3144c370811186abce5d3ba4681aa7",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryExecutableActivityTemplateStore.cs": "a4d4b66539a73d49e28ca0a24b2b05a9b808ed235efb0f8579a03dacdd0887d7",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryWorkflowExecutableSourceReferenceStore.RootWrites.cs": "65a62c77fb4c6d17d51c97c69a92cf39f6a276db0b8b19f070c149261bab4ccd",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InMemoryWorkflowExecutableSourceReferenceStore.cs": "a4aad84a5235f4b4de24897a223352c942c1a238ed2f1546db6ae39007f74e2d",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InvalidatingWorkflowExecutableStore.cs": "84e725c4f16ce6a8690160caaac3aa874dbb921fc637e15c54b99abcd4c3966b",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableReferenceGarbageCollector.cs": "63fc107cc43ebb85efbfbeb31cbad20ff909b209792f64d471a79f5ef4b18eb2",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfExecutableActivityTemplateStore.Maintenance.cs": "8ab7ff4a08b4ccd30751079e6946f89efd6bba56369a569bb840e23f6320b408",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs": "72a909334f729d79b42830430309a4245d840030ff98715a1695a77d7ba87742",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableSourceReferenceStore.RootWrites.cs": "ac67dc3678991d0ca0b2e3d74447082720b4c1c9bb6af0765444fcf53f4a4001",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutionStateStore.cs": "8871951b099053d008a51c036d651baf3858ba5df4e79a08b493f8c3f6af8819",
+    "Essentials/src/Workflows/Runtime/ReferenceGarbageCollection/README.md": "64017ced1649246cc136700cb08f7e688ced21ce076df598cc9492602ceaaae5",
+    "Essentials/src/Workflows/Runtime/ReferenceGarbageCollection/WorkflowsRuntimeReferenceGarbageCollectionFeature.cs": "83adef35e775a5f05716c59820f03bdf1d2c400cb55a5d7808198ad5fcee715f",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/StimulusDeliveryStoreTests.cs": "5db3d1baa843c6418374f7b70fb7dc7df1897f96bc5799d05997e041fdf6ea10",
+    "Essentials/tests/Workflows/Runtime/Tests/WorkflowExecutableReferenceGarbageCollectorTests.cs": "122179c977a984b1da074d07a982de554c15a4d1b90b257dbef0bfed4b138b03",
+    "specs/1006-bpmn-library-adoption/tasks.md": "fb33093a1113d0d9a55545feb7c69314b96f3a6433ac035c26f6238907df6f8f",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/StimulusDeliveryPhysicalRetentionTests.cs": "7f8210c6e120cbeb6b9e6dc3c3985898215f0f0677d8410ea3916c6a42370c80",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Shipped.txt": "3c3b422dddb1efeb0fc5b228608fd8682452b2a9507d4031894bce3c4dedadbd",
+    "Essentials/src/Workflows/Publishing/Core/PublicAPI.Unshipped.txt": "d713ee3a8f01df4417e5a2b025f9df7795784d0bd9a4a0ec189920dc09976759",
+    "Essentials/src/Workflows/Publishing/Api/PublicAPI.Unshipped.txt": "73879d2fad5907a9c6de29c22d65b58bbe6d7c27f3dd0b76c3f758745b54ed68",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Configuration/RuntimeArtifactEntityConfigurations.cs": "27c2cc257c257afd4303f725296a9f2a5ef8b166e81a03a3e38737a08b2dc716",
+    "docs/reports/evidence/bpmn-extraction-baseline/activity-contract-fingerprint.json": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92"
+  },
+  "checks": [
+    {
+      "project": "runtime",
+      "passed": 2971,
+      "failed": 0,
+      "skipped": 0,
+      "discovery": {
+        "listed": 2960,
+        "uniqueDisplayNames": 2956,
+        "executed": 2971,
+        "deferredTheories": {
+          "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident": 2,
+          "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running": 4,
+          "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches": 8
+        },
+        "unmapped": []
+      },
+      "trxSha256": "3dab5119a47b36c62ee2e428459012c78588cefd5facf09cdb9b971ba7b7b15b"
+    },
+    {
+      "project": "ef",
+      "passed": 1555,
+      "failed": 0,
+      "skipped": 0,
+      "discovery": {
+        "listed": 1555,
+        "uniqueDisplayNames": 1553,
+        "executed": 1555,
+        "deferredTheories": {},
+        "unmapped": []
+      },
+      "trxSha256": "397e7cad8d6f50faeecfc748e6d5fd7588b1eba414f6038d07aec16f9dbbe307"
+    },
+    {
+      "project": "publishing-ef",
+      "passed": 176,
+      "failed": 0,
+      "skipped": 0,
+      "discovery": {
+        "listed": 176,
+        "uniqueDisplayNames": 174,
+        "executed": 176,
+        "deferredTheories": {},
+        "unmapped": []
+      },
+      "trxSha256": "1481795b00ba4703f856b4eeba4d3a1d6b755c155359d22f8326a4f44da9346a"
+    },
+    {
+      "project": "publishing-api",
+      "passed": 891,
+      "failed": 0,
+      "skipped": 0,
+      "discovery": {
+        "listed": 871,
+        "uniqueDisplayNames": 871,
+        "executed": 891,
+        "deferredTheories": {
+          "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_ValidPublicationIndexesEveryCompleteBinding": 4,
+          "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_InvalidPublicationPreservesSeededRegistration": 4,
+          "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.LegacyActionCatalogRow_RepublishProjectsTriggerAndPreservesPriorRegistrationOnFailure": 4,
+          "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code": 10,
+          "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.A_literal_or_expression_on_a_credential_input_is_refused_by_the_credential_literal_rule_ahead_of_VF_ACT_011": 3
+        },
+        "unmapped": []
+      },
+      "trxSha256": "d93bced970877453760b487b8b2d7d6b1b8c76f1012a9618eeab48598175d85f"
+    },
+    {
+      "project": "publishing",
+      "passed": 61,
+      "failed": 0,
+      "skipped": 0,
+      "discovery": {
+        "listed": 61,
+        "uniqueDisplayNames": 61,
+        "executed": 61,
+        "deferredTheories": {},
+        "unmapped": []
+      },
+      "trxSha256": "44e08ccd0e28d6ad45da11ae38ea8bf93b808d6d2f48bc607502346dd295ddeb"
+    }
+  ],
+  "totalPassed": 5654,
+  "focused": {
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "newCases": 50,
+    "existingCases": 6
+  },
+  "architectureGuards": {
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0
+  },
+  "maps": "passed",
+  "lockedRestore": "Runtime Core passed",
+  "apiDelta": {
+    "RuntimeCore": {
+      "added": [
+        "Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryStore.CanRetainExecutables(Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitOutboxStore! outbox, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore! executables, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableSourceReferenceStore! references, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! executions) -> bool",
+        "Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryStore.EnsureOrdinaryCollectionAllowedAsync(Elsa.Workflows.Runtime.Core.Contracts.IRuntimePostCommitOutboxStore! outbox, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore! executables, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableSourceReferenceStore! references, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! executions, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask",
+        "Elsa.Workflows.Runtime.Core.Contracts.IStimulusDeliveryStore.ListPinnedExecutableArtifactIdsAsync(Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore! executables, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableSourceReferenceStore! references, Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutionStateStore! executions, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyCollection<string!>!>",
+        "Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore.GetMaterialStore() -> Elsa.Workflows.Runtime.Core.Contracts.IWorkflowExecutableStore!"
+      ],
+      "removed": []
+    },
+    "PublishingCore": "unchanged",
+    "PublishingApi": "unchanged"
+  },
+  "schema": "unchanged",
+  "mutations": [
+    {
+      "mutation": "native-physical-query-remains-scope-only",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 55,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "collector-uses-old-scoped-query",
+      "exitCode": 1,
+      "failed": 6,
+      "passed": 50,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "EF-corrupt-scope-projection-hidden",
+      "exitCode": 1,
+      "failed": 2,
+      "passed": 54,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "EF-retention-stops-after-first-page",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 55,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "caching-boundary-is-opaque",
+      "exitCode": 1,
+      "failed": 6,
+      "passed": 50,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "invalidating-boundary-is-opaque",
+      "exitCode": 1,
+      "failed": 2,
+      "passed": 54,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "cached-reader-survives-guarded-delete",
+      "exitCode": 1,
+      "failed": 2,
+      "passed": 54,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "invalidating-reader-survives-guarded-delete",
+      "exitCode": 1,
+      "failed": 2,
+      "passed": 54,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "coalescing-outbox-not-normalized",
+      "exitCode": 1,
+      "failed": 6,
+      "passed": 50,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "coalescing-execution-not-normalized",
+      "exitCode": 1,
+      "failed": 6,
+      "passed": 50,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ordinary-proof-never-checked",
+      "exitCode": 1,
+      "failed": 9,
+      "passed": 47,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ordinary-proof-only-initial-reads-not-final",
+      "exitCode": 1,
+      "failed": 6,
+      "passed": 50,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ordinary-native-foreign-boundary-accepted",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 55,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ordinary-EF-foreign-boundary-accepted",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 55,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "ordinary-proof-ignores-preselection-markers",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 55,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    },
+    {
+      "mutation": "legacy-physical-query-returns-empty",
+      "exitCode": 1,
+      "failed": 1,
+      "passed": 55,
+      "skipped": 0,
+      "compileError": false,
+      "restored": true
+    }
+  ],
+  "sourceRestored": {
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs": true,
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs": true,
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableReferenceGarbageCollector.cs": true,
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/CachingWorkflowExecutableStore.cs": true,
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InvalidatingWorkflowExecutableStore.cs": true,
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IStimulusDeliveryStore.cs": true
+  },
+  "reviewFindingsFixed": [
+    "stale ordinary collector after scope recovery",
+    "empty foreign outbox authorizing material with owed cohorts"
+  ],
+  "reviews": {
+    "correctness": "final restored source/catalog/receipt clean; both safety findings closed; structural limits retained",
+    "standards": "final restored source/catalog/API/receipt clean; same-domain factory and API+4/0 verified",
+    "acceptance": "final controls/receipt clean; 5654 TRX results and hashes, 16 behavioral mutants/restoration verified; no rollout or host acceptance"
+  },
+  "fullPrReviewRoundsCompleted": 0,
+  "limits": [
+    "Provider controls use native memory and actual SQLite; no other relational provider claim.",
+    "Structural provider tuple support and per-sweep marked-data absence proof are not legacy ambiguity or mixed old-writer preflight.",
+    "No recipient dispatch activation, upgraded host, process kill, final Studio or production acceptance claim.",
+    "Legacy execution checkpoint writer remains present; publisher switch remains disabled."
+  ]
+}

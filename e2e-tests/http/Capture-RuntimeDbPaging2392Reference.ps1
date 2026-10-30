@@ -100,7 +100,7 @@ $publication = Invoke-Step "publish reference workflow" {
 Write-Host ("[published]  version={0} artifact={1}" -f $definition.version.id, $publication.artifactId)
 
 # Inspect the exact published executable rather than inferring profile/fusion information from the authoring node.
-$export = Invoke-Step "read published executable export (workflow-publishing.read)" {
+$export = Invoke-Step "read published executable export (workflows/publishing:read)" {
     Invoke-RestMethod "$BaseUrl/publishing/workflows/$($definition.version.id)/executable-export" -WebSession $ctx.Session
 }
 function Find-SetIntrinsic($value) {
@@ -188,7 +188,7 @@ if ($executionIds.Count -ne 1) {
 $executionId = $executionIds[0]
 Write-Host ("[instance]   workflowExecutionId={0}" -f $executionId)
 
-$detail = Invoke-Step "read per-run instance detail (workflow-runtime.read)" {
+$detail = Invoke-Step "read per-run instance detail (workflows/runtime:read)" {
     Wait-WorkflowInstance -Ctx $ctx -ExecutionId $executionId -TimeoutSeconds 30
 }
 if ($detail.instance.status -notin @("Completed", "Finished")) {

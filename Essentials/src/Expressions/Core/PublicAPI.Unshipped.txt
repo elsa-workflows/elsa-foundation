@@ -15,12 +15,6 @@ Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.AllowsServiceLo
 Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.Equals(Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities? other) -> bool
 Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.IsBindingPure.get -> bool
 Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.Profile.get -> string!
-Elsa.Expressions.Core.Contracts.IExpression
-Elsa.Expressions.Core.Contracts.IExpression.GetValue<TValue>() -> TValue
-Elsa.Expressions.Core.Contracts.IExpression.Type.get -> string!
-Elsa.Expressions.Core.Contracts.IExpression.Type.set -> void
-Elsa.Expressions.Core.Contracts.IExpression.Value.get -> object?
-Elsa.Expressions.Core.Contracts.IExpression.Value.set -> void
 Elsa.Expressions.Core.Contracts.IExpressionDescriptor
 Elsa.Expressions.Core.Contracts.IExpressionDescriptor.DisplayName.get -> string!
 Elsa.Expressions.Core.Contracts.IExpressionDescriptor.EditingMode.get -> Elsa.Expressions.Core.Models.ExpressionEditingMode
@@ -34,8 +28,6 @@ Elsa.Expressions.Core.Contracts.IExpressionDescriptorRegistry.AddRange(System.Co
 Elsa.Expressions.Core.Contracts.IExpressionDescriptorRegistry.Find(string! type) -> Elsa.Expressions.Core.Contracts.IExpressionDescriptor?
 Elsa.Expressions.Core.Contracts.IExpressionDescriptorRegistry.Find(System.Func<Elsa.Expressions.Core.Contracts.IExpressionDescriptor!, bool>! predicate) -> Elsa.Expressions.Core.Contracts.IExpressionDescriptor?
 Elsa.Expressions.Core.Contracts.IExpressionDescriptorRegistry.ListAll() -> System.Collections.Generic.IEnumerable<Elsa.Expressions.Core.Contracts.IExpressionDescriptor!>!
-Elsa.Expressions.Core.Contracts.IExpressionEvaluatorOptions
-Elsa.Expressions.Core.Contracts.IExpressionEvaluatorOptions.Arguments.get -> System.Collections.Generic.IDictionary<string!, object!>!
 Elsa.Expressions.Core.Contracts.IExpressionToolingProvider
 Elsa.Expressions.Core.Contracts.IExpressionToolingProvider.DeclaredCapabilities.get -> Elsa.Expressions.Core.Models.ExpressionToolingCapabilities!
 Elsa.Expressions.Core.Contracts.IExpressionToolingProvider.ExpressionType.get -> string!
@@ -65,19 +57,13 @@ Elsa.Expressions.Core.Contracts.IVariable<TValue>
 Elsa.Expressions.Core.Contracts.IVariable<TValue>.WithId(string! id) -> Elsa.Expressions.Core.Contracts.IVariable<TValue>!
 Elsa.Expressions.Core.Contracts.IVariable<TValue>.WithName(string! name) -> Elsa.Expressions.Core.Contracts.IVariable<TValue>!
 Elsa.Expressions.Core.Contracts.IVariable<TValue>.WithValue(TValue value) -> Elsa.Expressions.Core.Contracts.IVariable<TValue>!
-Elsa.Expressions.Core.Contracts.IVariableFactory
-Elsa.Expressions.Core.Contracts.IVariableFactory.Create(string! name, object? value = null, string? id = null) -> Elsa.Expressions.Core.Contracts.IVariable!
-Elsa.Expressions.Core.Contracts.IVariableFactory.Create<T>(string! name, T value, string? id = null) -> Elsa.Expressions.Core.Contracts.IVariable<T>!
-Elsa.Expressions.Core.Contracts.IVariableMapper
-Elsa.Expressions.Core.Contracts.IVariableMapper.Map(Elsa.Expressions.Core.Contracts.IVariable! source) -> Elsa.Expressions.Core.Models.VariableDefinition!
-Elsa.Expressions.Core.Contracts.IVariableMapper.Map(Elsa.Expressions.Core.Models.VariableDefinition! source) -> Elsa.Expressions.Core.Contracts.IVariable!
 Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorCatalog
 Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorCatalog.GetDescriptors() -> System.Collections.Generic.IEnumerable<Elsa.Expressions.Core.Models.TypeDescriptor!>!
 Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorCatalog.GetDescriptorsByCategory() -> System.Collections.Generic.IEnumerable<System.Linq.IGrouping<string!, Elsa.Expressions.Core.Models.TypeDescriptor!>!>!
 Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorProvider
 Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorProvider.GetDescriptors() -> System.Collections.Generic.IEnumerable<Elsa.Expressions.Core.Models.TypeDescriptor!>!
-Elsa.Expressions.Core.Extensions.VariableNameValidator
-Elsa.Expressions.Core.Helpers.DynamicValueMaterializer
+Elsa.Expressions.Core.Exceptions.ArgumentDefinitionDeserializationException
+Elsa.Expressions.Core.Exceptions.ArgumentDefinitionDeserializationException.ArgumentDefinitionDeserializationException(string! message, System.Exception! innerException) -> void
 Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding
 Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.ActivityResultExpressionParameterBinding(string! producerNodeId, string! projectionKey, bool isOptional = false) -> void
 Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? other) -> bool
@@ -93,13 +79,6 @@ Elsa.Expressions.Core.Models.ArgumentValue.ExpressionType.get -> string?
 Elsa.Expressions.Core.Models.ArgumentValue.ExpressionType.init -> void
 Elsa.Expressions.Core.Models.ArgumentValue.Value.get -> object?
 Elsa.Expressions.Core.Models.ArgumentValue.Value.init -> void
-Elsa.Expressions.Core.Models.Expression
-Elsa.Expressions.Core.Models.Expression.Expression() -> void
-Elsa.Expressions.Core.Models.Expression.Expression(string! type, object? value) -> void
-Elsa.Expressions.Core.Models.Expression.Type.get -> string!
-Elsa.Expressions.Core.Models.Expression.Type.set -> void
-Elsa.Expressions.Core.Models.Expression.Value.get -> object?
-Elsa.Expressions.Core.Models.Expression.Value.set -> void
 Elsa.Expressions.Core.Models.ExpressionAuthoringContext
 Elsa.Expressions.Core.Models.ExpressionAuthoringContext.<Clone>$() -> Elsa.Expressions.Core.Models.ExpressionAuthoringContext!
 Elsa.Expressions.Core.Models.ExpressionAuthoringContext.Capabilities.get -> Elsa.Expressions.Core.Models.ExpressionToolingCapabilities!
@@ -482,20 +461,6 @@ Elsa.Expressions.Core.Models.VariableDefinition.StorageDriverType.init -> void
 Elsa.Expressions.Core.Models.VariableDefinition.Type.get -> Elsa.Primitives.Models.TypeReference!
 Elsa.Expressions.Core.Models.VariableDefinition.Type.init -> void
 Elsa.Expressions.Core.Models.VariableDefinition.VariableDefinition(string! ReferenceKey, string! Name, Elsa.Primitives.Models.TypeReference! Type, string? StorageDriverType, Elsa.Expressions.Core.Models.ArgumentValue? Default) -> void
-Elsa.Expressions.Core.Models.VariableDescriptor
-Elsa.Expressions.Core.Models.VariableDescriptor.Category.get -> string!
-Elsa.Expressions.Core.Models.VariableDescriptor.Category.init -> void
-Elsa.Expressions.Core.Models.VariableDescriptor.Deconstruct(out System.Type! Type, out string! Category, out string? Description) -> void
-Elsa.Expressions.Core.Models.VariableDescriptor.Description.get -> string?
-Elsa.Expressions.Core.Models.VariableDescriptor.Description.init -> void
-Elsa.Expressions.Core.Models.VariableDescriptor.Type.get -> System.Type!
-Elsa.Expressions.Core.Models.VariableDescriptor.Type.init -> void
-Elsa.Expressions.Core.Models.VariableDescriptor.VariableDescriptor(Elsa.Expressions.Core.Models.VariableDescriptor! original) -> void
-Elsa.Expressions.Core.Models.VariableDescriptor.VariableDescriptor(System.Type! Type, string! Category, string? Description) -> void
-Elsa.Expressions.Core.Models.VariableDescriptor.VariableDescriptorComparer
-Elsa.Expressions.Core.Models.VariableDescriptor.VariableDescriptorComparer.Equals(Elsa.Expressions.Core.Models.VariableDescriptor? x, Elsa.Expressions.Core.Models.VariableDescriptor? y) -> bool
-Elsa.Expressions.Core.Models.VariableDescriptor.VariableDescriptorComparer.GetHashCode(Elsa.Expressions.Core.Models.VariableDescriptor! obj) -> int
-Elsa.Expressions.Core.Models.VariableDescriptor.VariableDescriptorComparer.VariableDescriptorComparer() -> void
 Elsa.Expressions.Core.Models.VariableExpressionParameterBinding
 Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.DeclaringScopeNodeId.get -> string!
 Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.VariableExpressionParameterBinding? other) -> bool
@@ -612,9 +577,6 @@ override Elsa.Expressions.Core.Models.TypeDescriptor.ToString() -> string!
 override Elsa.Expressions.Core.Models.VariableDefinition.Equals(object? obj) -> bool
 override Elsa.Expressions.Core.Models.VariableDefinition.GetHashCode() -> int
 override Elsa.Expressions.Core.Models.VariableDefinition.ToString() -> string!
-override Elsa.Expressions.Core.Models.VariableDescriptor.Equals(object? obj) -> bool
-override Elsa.Expressions.Core.Models.VariableDescriptor.GetHashCode() -> int
-override Elsa.Expressions.Core.Models.VariableDescriptor.ToString() -> string!
 override Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.<Clone>$() -> Elsa.Expressions.Core.Models.VariableExpressionParameterBinding!
 override Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.Equals(object? obj) -> bool
 override Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.GetHashCode() -> int
@@ -633,14 +595,10 @@ override sealed Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterB
 static Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.operator !=(Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities? left, Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities? right) -> bool
 static Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.operator ==(Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities? left, Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities? right) -> bool
 static Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.Resolve(string! profile) -> Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities!
-static Elsa.Expressions.Core.Extensions.VariableNameValidator.FilterInvalidVariableNames(this System.Collections.Generic.IEnumerable<string!>! names) -> System.Collections.Generic.IEnumerable<string!>!
-static Elsa.Expressions.Core.Extensions.VariableNameValidator.IsValidVariableName(this string? name) -> bool
-static Elsa.Expressions.Core.Helpers.DynamicValueMaterializer.Materialize(object? value) -> object?
 static Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.operator !=(Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? left, Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? right) -> bool
 static Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.operator ==(Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? left, Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? right) -> bool
 static Elsa.Expressions.Core.Models.ArgumentValue.operator !=(Elsa.Expressions.Core.Models.ArgumentValue? left, Elsa.Expressions.Core.Models.ArgumentValue? right) -> bool
 static Elsa.Expressions.Core.Models.ArgumentValue.operator ==(Elsa.Expressions.Core.Models.ArgumentValue? left, Elsa.Expressions.Core.Models.ArgumentValue? right) -> bool
-static Elsa.Expressions.Core.Models.Expression.LiteralExpression(object? value) -> Elsa.Expressions.Core.Models.Expression!
 static Elsa.Expressions.Core.Models.ExpressionAuthoringContext.operator !=(Elsa.Expressions.Core.Models.ExpressionAuthoringContext? left, Elsa.Expressions.Core.Models.ExpressionAuthoringContext? right) -> bool
 static Elsa.Expressions.Core.Models.ExpressionAuthoringContext.operator ==(Elsa.Expressions.Core.Models.ExpressionAuthoringContext? left, Elsa.Expressions.Core.Models.ExpressionAuthoringContext? right) -> bool
 static Elsa.Expressions.Core.Models.ExpressionAuthoringDocument.operator !=(Elsa.Expressions.Core.Models.ExpressionAuthoringDocument? left, Elsa.Expressions.Core.Models.ExpressionAuthoringDocument? right) -> bool
@@ -692,8 +650,6 @@ static Elsa.Expressions.Core.Models.TypeDescriptor.operator !=(Elsa.Expressions.
 static Elsa.Expressions.Core.Models.TypeDescriptor.operator ==(Elsa.Expressions.Core.Models.TypeDescriptor? left, Elsa.Expressions.Core.Models.TypeDescriptor? right) -> bool
 static Elsa.Expressions.Core.Models.VariableDefinition.operator !=(Elsa.Expressions.Core.Models.VariableDefinition? left, Elsa.Expressions.Core.Models.VariableDefinition? right) -> bool
 static Elsa.Expressions.Core.Models.VariableDefinition.operator ==(Elsa.Expressions.Core.Models.VariableDefinition? left, Elsa.Expressions.Core.Models.VariableDefinition? right) -> bool
-static Elsa.Expressions.Core.Models.VariableDescriptor.operator !=(Elsa.Expressions.Core.Models.VariableDescriptor? left, Elsa.Expressions.Core.Models.VariableDescriptor? right) -> bool
-static Elsa.Expressions.Core.Models.VariableDescriptor.operator ==(Elsa.Expressions.Core.Models.VariableDescriptor? left, Elsa.Expressions.Core.Models.VariableDescriptor? right) -> bool
 static Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.operator !=(Elsa.Expressions.Core.Models.VariableExpressionParameterBinding? left, Elsa.Expressions.Core.Models.VariableExpressionParameterBinding? right) -> bool
 static Elsa.Expressions.Core.Models.VariableExpressionParameterBinding.operator ==(Elsa.Expressions.Core.Models.VariableExpressionParameterBinding? left, Elsa.Expressions.Core.Models.VariableExpressionParameterBinding? right) -> bool
 static Elsa.Expressions.Core.Models.VariableReference.operator !=(Elsa.Expressions.Core.Models.VariableReference? left, Elsa.Expressions.Core.Models.VariableReference? right) -> bool
@@ -707,12 +663,22 @@ static readonly Elsa.Expressions.Core.Models.ExpressionToolingContractVersion.V1
 virtual Elsa.Expressions.Core.Models.ExpressionParameterBinding.EqualityContract.get -> System.Type!
 virtual Elsa.Expressions.Core.Models.ExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.ExpressionParameterBinding? other) -> bool
 virtual Elsa.Expressions.Core.Models.ExpressionParameterBinding.PrintMembers(System.Text.StringBuilder! builder) -> bool
-virtual Elsa.Expressions.Core.Models.VariableDescriptor.<Clone>$() -> Elsa.Expressions.Core.Models.VariableDescriptor!
-virtual Elsa.Expressions.Core.Models.VariableDescriptor.EqualityContract.get -> System.Type!
-virtual Elsa.Expressions.Core.Models.VariableDescriptor.Equals(Elsa.Expressions.Core.Models.VariableDescriptor? other) -> bool
-virtual Elsa.Expressions.Core.Models.VariableDescriptor.PrintMembers(System.Text.StringBuilder! builder) -> bool
 ~override Elsa.Expressions.Core.Models.ExpressionToolingContractVersion.Equals(object obj) -> bool
 ~override Elsa.Expressions.Core.Models.ExpressionToolingPosition.Equals(object obj) -> bool
 ~override Elsa.Expressions.Core.Models.ExpressionToolingPosition.ToString() -> string
 ~override Elsa.Expressions.Core.Models.ExpressionToolingRange.Equals(object obj) -> bool
 ~override Elsa.Expressions.Core.Models.ExpressionToolingRange.ToString() -> string
+Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding
+Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.WorkflowInstanceExpressionParameterBinding(string! member) -> void
+Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? other) -> bool
+Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.Member.get -> string!
+Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.Members
+const Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.Members.CorrelationId = "correlationId" -> string!
+const Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.Members.InstanceId = "instanceId" -> string!
+override Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.<Clone>$() -> Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding!
+override Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.ToString() -> string!
+override sealed Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.ExpressionParameterBinding? other) -> bool
+static Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.operator !=(Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? left, Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? right) -> bool
+static Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.operator ==(Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? left, Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? right) -> bool

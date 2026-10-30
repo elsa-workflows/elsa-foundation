@@ -17,12 +17,12 @@ alias onto it), never layer 1 directly.
 | Layer | Vocabulary | Who owns it | Where |
 | --- | --- | --- | --- |
 | **1 — primitives** | `--background`, `--primary`, `--radius`, `--ring`, … | the **host** supplies these; `ThemeProvider` rewrites them per theme/mode at runtime | host `app/styles.css` `:root`; a standalone consumer supplies them itself (see `examples/*/src/theme.css`) |
-| **2 — semantic** | `--studio-*` | the shared token layer; each is an alias onto a layer-1 primitive | `src/apps/Elsa.Studio.Web/Client/src/app/ui/tokens.css` |
+| **2 — semantic** | `--studio-*` | the shared token layer; each is an alias onto a layer-1 primitive | `src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/tokens.css` |
 
 Layer 2 is almost entirely aliases (`--studio-bg: var(--background)`), so remapping layer 1
 re-themes every `--studio-*` token at once. The published `@elsa-workflows/studio-ui/tokens.css`
 ships layer 2 plus a light-theme layer-1 snapshot so it resolves standalone
-(`src/apps/Elsa.Studio.Web/StudioUi/scripts/build-tokens.mjs`).
+(`src/essentials/Elsa.Studio.Hosting/StudioUi/scripts/build-tokens.mjs`).
 
 ### What a host must supply (layer 1)
 
@@ -50,8 +50,8 @@ Optionally supply `--font-display` (title face; defaults to `--font-sans`).
 ### Modes and the `<html>` attributes
 
 Studio offers four modes: `light`, `dark`, `dim` and `high-contrast`. Every theme defines Light
-and Dark; Dim and High contrast are optional per theme (the seven signature themes — Meridian,
-Drift, Schematic, Atelier, Elsa Cloud, Signal, Dusk — define all four). ThemeProvider sets two attributes:
+and Dark; Dim and High contrast are optional per theme (the eight signature themes — Classic,
+Meridian, Drift, Schematic, Atelier, Elsa Cloud, Signal, Dusk — define all four). ThemeProvider sets two attributes:
 
 | Attribute | Values | Meaning |
 | --- | --- | --- |
@@ -142,6 +142,12 @@ so titles don't render in faux bold — read it as `var(--studio-title-weight, 7
 `--studio-radius-sm`, `--studio-radius`, `--studio-radius-md`, `--studio-radius-lg`,
 `--studio-shadow-sm`.
 
+### Motion
+
+`--studio-disclosure-duration` (150ms) and `--studio-disclosure-distance` (4px) are the
+shared enter/expand recipe for disclosure primitives. `@media (prefers-reduced-motion: reduce)`
+zeroes both.
+
 ### Compatibility aliases (STABLE, thin)
 
 For modules bundled before the `--studio-*` layer existed: `--surface`, `--text`, `--muted`,
@@ -214,7 +220,7 @@ Texture/grid: `--studio-material-texture`, `--studio-material-texture-size`,
    `[data-theme-appearance="high-contrast"]` for a High-contrast-only adjustment the tokens
    cannot express, and `[data-theme-layout="…"]` for arrangement (see [Modes and the `<html>` attributes](#modes-and-the-html-attributes)).
 4. **Gate every material treatment on `[data-theme-material]`.** Flat themes — every built-in:
-   `meridian`, `drift`, `schematic`, `atelier`, `elsa-cloud`, `signal`, `dusk` — must stay flat. Any rule
+   `classic`, `meridian`, `drift`, `schematic`, `atelier`, `elsa-cloud`, `signal`, `dusk` — must stay flat. Any rule
    consuming a `--studio-material-*` token belongs inside an `html[data-theme-material] …`
    guard.
 5. **A new material token gets a neutral fallback, and recipes stay per theme.** Any new

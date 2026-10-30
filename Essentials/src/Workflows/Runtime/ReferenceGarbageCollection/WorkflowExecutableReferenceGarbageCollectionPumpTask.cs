@@ -10,9 +10,9 @@ namespace Elsa.Workflows.Runtime.ReferenceGarbageCollection;
 
 /// <summary>
 /// Recurring background pump that drives <see cref="IWorkflowExecutableReferenceGarbageCollector"/>. Each
-/// tick runs one sweep; failure backoff comes from <see cref="BackoffSweepPumpTask"/>.
+/// tick runs one sweep; failure backoff comes from <see cref="BackoffSweepWorkerTask"/>.
 /// </summary>
-public sealed class WorkflowExecutableReferenceGarbageCollectionPumpTask : BackoffSweepPumpTask
+public sealed class WorkflowExecutableReferenceGarbageCollectionPumpTask : BackoffSweepWorkerTask
 {
     private readonly IPersistenceScopeRunner? _scopeRunner;
     private readonly IWorkflowExecutableReferenceGarbageCollector? _garbageCollector;

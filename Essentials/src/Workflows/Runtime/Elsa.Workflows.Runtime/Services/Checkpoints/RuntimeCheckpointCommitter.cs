@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Diagnostics;
@@ -11,6 +12,7 @@ namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 public sealed class RuntimeCheckpointCommitter
 {
     private readonly IRuntimeCheckpointPersistencePolicy _persistencePolicy;
+    private readonly IPersistenceAccessContextAccessor? _persistenceAccessContextAccessor;
     private readonly IRuntimeCheckpointCommitStore _checkpointCommitStore;
     private readonly IRuntimeExecutionOwnershipContextAccessor _ownershipContextAccessor;
     private readonly IWorkflowEngineTracer _tracer;
@@ -66,6 +68,18 @@ public sealed class RuntimeCheckpointCommitter
         _inProcessHopFastPathOptions = inProcessHopFastPathOptions ?? new RuntimeInProcessHopFastPathOptions();
     }
 
+    public RuntimeCheckpointCommitter(IRuntimeCheckpointPersistencePolicy persistencePolicy,
+        IRuntimeCheckpointCommitStore checkpointCommitStore, IRuntimeExecutionOwnershipContextAccessor ownershipContextAccessor,
+        IEnumerable<IRuntimeCheckpointCommitEnricher> enrichers, IEnumerable<RuntimePostCommitIntentHandlerContribution> intentHandlerContributions,
+        IWorkflowEngineTracer? tracer, IRuntimeConsumedSchedulerWorkClaimAccessor? consumedWorkClaimAccessor,
+        IRuntimeCoalescingSessionAccessor? coalescingSessionAccessor, IRuntimeLiveDrainDeliveryAccessor? liveDrainDeliveryAccessor,
+        RuntimeInProcessHopFastPathOptions? inProcessHopFastPathOptions, IPersistenceAccessContextAccessor? persistenceAccessContextAccessor)
+        : this(persistencePolicy, checkpointCommitStore, ownershipContextAccessor, enrichers, intentHandlerContributions, tracer,
+            consumedWorkClaimAccessor, coalescingSessionAccessor, liveDrainDeliveryAccessor, inProcessHopFastPathOptions)
+    {
+        _persistenceAccessContextAccessor = persistenceAccessContextAccessor;
+    }
+
     public async ValueTask<RuntimeCheckpointCommitResult> CommitAsync(
         RuntimeCheckpointCommit commit,
         CancellationToken cancellationToken = default)
@@ -74,6 +88,9 @@ public sealed class RuntimeCheckpointCommitter
 
         foreach (var enricher in _enrichers)
             commit = await enricher.EnrichAsync(commit, cancellationToken);
+
+        foreach (var enricher in _enrichers)
+            await enricher.ValidateFinalAsync(commit, cancellationToken);
 
         // The checkpoint-commit span wraps the fenced commit path. StartCheckpointCommit returns null when tracing
         // is inactive, so no allocation and no semantic change; when active it only introduces Activity.Current (trace
@@ -85,22 +102,37 @@ public sealed class RuntimeCheckpointCommitter
         // then validate this fence inside the same atomic decision as state, outbox, and the commit marker.
         commit = AttachExpectedFence(commit);
 
+        if (commit.ExpectedBookmarkResume is not null && !_checkpointCommitStore.SupportsExactBookmarkResume)
+            throw new NotSupportedException("The selected checkpoint store cannot enforce exact bookmark resume admission.");
         var decision = await _persistencePolicy.DecideAsync(commit.Checkpoint, cancellationToken);
+        if (commit.ExpectedBookmarkResume is not null)
+            decision = new RuntimeCheckpointPersistenceDecision(RuntimeCheckpointPersistenceMode.Immediate,
+                "Exact bookmark admission requires an atomic physical checkpoint.");
+        else if (!commit.StateChanges.BackgroundActivityWork.IsEmpty)
+            decision = new RuntimeCheckpointPersistenceDecision(
+                RuntimeCheckpointPersistenceMode.Immediate,
+                "Background activity work participants require an atomic checkpoint flush.");
+        else if (HasDelayedIntent(commit))
+            // R-7 (spec 261): a delayed child schedule is written durably at once in every persistence mode. Folded into
+            // a coalesced segment it would live only in the drain's memory until the end-of-drain flush.
+            decision = new RuntimeCheckpointPersistenceDecision(
+                RuntimeCheckpointPersistenceMode.Immediate,
+                "A delayed post-commit intent requires a durable checkpoint.");
 
         if (activity is not null)
         {
             activity.SetTag(WorkflowEngineTelemetry.CheckpointPersistenceDecisionTag, decision.Mode.ToString());
-            activity.SetTag(WorkflowEngineTelemetry.CheckpointMandatoryTag, IsMandatoryCheckpoint(commit.Checkpoint));
+            activity.SetTag(WorkflowEngineTelemetry.CheckpointMandatoryTag, IsMandatoryCheckpoint(commit));
             activity.SetTag(WorkflowEngineTelemetry.CheckpointPostCommitIntentsTag, commit.PostCommitIntents.Count);
         }
 
         if (decision.Mode == RuntimeCheckpointPersistenceMode.Skip)
         {
-            if (IsMandatoryCheckpoint(commit.Checkpoint))
+            if (IsMandatoryCheckpoint(commit))
                 throw new InvalidOperationException(
                     $"Mandatory runtime checkpoint '{commit.Checkpoint.CheckpointId}' cannot be skipped by the persistence policy.");
 
-            if (commit.PostCommitIntents.Count > 0)
+            if (commit.PostCommitIntents.Count > 0 || commit.StateChanges.PostCommitOutbox.Count > 0)
                 return RuntimeCheckpointCommitResult.Failure(
                     commit,
                     decision,
@@ -112,7 +144,7 @@ public sealed class RuntimeCheckpointCommitter
 
         // Fold post-commit intents into the applied change set so the provider persists them atomically with
         // the rest of the checkpoint through its uniform apply path, then verify the provider acknowledged them.
-        var postCommitOutbox = RuntimePostCommitOutboxItems.CreatePendingChanges(commit, _intentHandlerContributions);
+        var postCommitOutbox = RuntimePostCommitOutboxItems.CreatePendingChanges(commit, _intentHandlerContributions, RequiredSourceScope(commit));
 
         // Fold the claimed scheduler work item's fence-checked delete into this same commit so the
         // drainer can skip its separate acknowledgement. Suppressed while a coalescing session owns the execution — the
@@ -121,7 +153,7 @@ public sealed class RuntimeCheckpointCommitter
 
         var stateChanges = commit.StateChanges;
         if (postCommitOutbox.Count > 0)
-            stateChanges = stateChanges.WithPostCommitOutbox(postCommitOutbox);
+            stateChanges = stateChanges.WithPostCommitOutbox(stateChanges.PostCommitOutbox.Concat(postCommitOutbox).ToArray());
         if (consumedWorkItems.Count > 0)
             stateChanges = stateChanges.WithConsumedSchedulerWorkItems(consumedWorkItems);
         var commitToPersist = ReferenceEquals(stateChanges, commit.StateChanges)
@@ -131,6 +163,11 @@ public sealed class RuntimeCheckpointCommitter
         // The structural checkpoint rules are applied here, to the exact commit the store receives, rather than inside
         // any store: every store is handed an already-validated commit, so the rules cannot differ between providers.
         RuntimeCheckpointCommitValidator.Validate(commitToPersist);
+
+        // Validate materialized and declared responsibilities together before canonical folding. Extra or conflicting
+        // materialized work must refuse rather than disappear; equivalent representations retain the ordinary one-row form.
+        if (postCommitOutbox.Count > 0 && commit.StateChanges.PostCommitOutbox.Count > 0)
+            commitToPersist = commitToPersist with { StateChanges = commitToPersist.StateChanges.WithPostCommitOutbox(postCommitOutbox) };
 
         // #1254: the store deletes the claimed item inside this call, but MarkConsumedDurably can only run once it
         // returns. A claim renewal firing in between finds nothing and would read that as a successor having stolen the
@@ -143,11 +180,11 @@ public sealed class RuntimeCheckpointCommitter
         {
             storeResult = await _checkpointCommitStore.CommitAsync(commitToPersist, decision, cancellationToken);
 
-            if (storeResult.PendingPostCommitWorkIds.Count != postCommitOutbox.Count)
+            if (storeResult.PendingPostCommitWorkIds.Count != commitToPersist.StateChanges.PostCommitOutbox.Count)
                 throw new InvalidOperationException(
                     $"Checkpoint commit store persisted {storeResult.PendingPostCommitWorkIds.Count} post-commit outbox item(s) " +
                     $"for commit '{commit.CommitId}' (workflow execution '{commit.WorkflowExecutionId}') but the checkpoint carried " +
-                    $"{postCommitOutbox.Count}. The continuation work would be silently dropped; the store must durably record every " +
+                    $"{commitToPersist.StateChanges.PostCommitOutbox.Count}. The continuation work would be silently dropped; the store must durably record every " +
                     "post-commit outbox item it is handed.");
 
             if (storeResult.ConsumedSchedulerWorkItemIds.Count != consumedWorkItems.Count)
@@ -189,8 +226,10 @@ public sealed class RuntimeCheckpointCommitter
 
         foreach (var intent in commit.PostCommitIntents)
         {
+            // A delayed intent (R-7) is delivered by the outbox sweep once it is due, never by this drain.
             if (intent.MaterializedSchedulerWorkItem is { } workItem &&
-                StringComparer.Ordinal.Equals(intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork))
+                StringComparer.Ordinal.Equals(intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork) &&
+                !intent.IsDelayedPast(commit.Checkpoint.OccurredAt))
                 scope.PublishHopWorkItem(intent.IntentId, workItem);
         }
     }
@@ -201,12 +240,36 @@ public sealed class RuntimeCheckpointCommitter
             ? accessor.BeginConsumeAttempt(consumed.WorkItemId)
             : null;
 
-    private static bool IsMandatoryCheckpoint(RuntimeCheckpoint checkpoint) =>
-        checkpoint.Metadata.TryGetValue(RuntimeMetadataKeys.CheckpointRequirement, out var requirement) &&
+    private PersistenceScope? RequiredSourceScope(RuntimeCheckpointCommit commit)
+    {
+        var required = commit.PostCommitIntents.FirstOrDefault(intent => _intentHandlerContributions.Any(contribution =>
+            contribution.RequiresDurableSource && contribution.IntentKind == intent.Kind));
+        if (required is null) return null;
+        try
+        {
+            return (_persistenceAccessContextAccessor?.Current ??
+                throw new InvalidOperationException("A required-source checkpoint needs explicit persistence access.")).RequireScope();
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
+        {
+            throw new RuntimePostCommitSourceBoundaryException(null, required.Kind, exception, false);
+        }
+    }
+
+    private static bool HasDelayedIntent(RuntimeCheckpointCommit commit) =>
+        commit.PostCommitIntents.Any(intent => intent.IsDelayedPast(commit.Checkpoint.OccurredAt));
+
+    private static bool IsMandatoryCheckpoint(RuntimeCheckpointCommit commit) =>
+        !commit.StateChanges.BackgroundActivityWork.IsEmpty ||
+        HasDelayedIntent(commit) ||
+        commit.Checkpoint.Metadata.TryGetValue(RuntimeMetadataKeys.CheckpointRequirement, out var requirement) &&
         StringComparer.Ordinal.Equals(requirement, RuntimeMetadataKeys.CheckpointRequirementMandatory);
 
     private IReadOnlyCollection<ConsumedSchedulerWorkItem> ResolveConsumedWorkItems(RuntimeCheckpointCommit commit)
     {
+        if (commit.RetainSchedulerWork)
+            return [];
+
         if (_consumedWorkClaimAccessor is not { PendingConsume: { } pending, WasConsumedDurably: false })
             return [];
 

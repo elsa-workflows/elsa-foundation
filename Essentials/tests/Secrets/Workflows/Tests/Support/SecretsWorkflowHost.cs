@@ -390,7 +390,6 @@ public sealed class SecretsWorkflowHost : IAsyncDisposable
         if (_databasePath is null)
             return;
 
-        SqliteConnection.ClearAllPools();
         foreach (var path in new[] { _databasePath, $"{_databasePath}-wal", $"{_databasePath}-shm" })
             File.Delete(path);
     }

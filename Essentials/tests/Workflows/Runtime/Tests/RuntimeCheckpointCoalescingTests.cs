@@ -88,8 +88,10 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             Assert.NotSame(first, second);
     }
 
-    [Fact]
-    public async Task AdvanceInnerQueue_RemovesConsumedSeededItemsByIdentity_WhenListOrderDiffersFromDequeueOrder()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AdvanceInnerQueue_RemovesConsumedSeededItemsByIdentity_WhenListOrderDiffersFromDequeueOrder(bool visibilitySnapshots)
     {
         const string workflowExecutionId = "wfexec-list-dequeue-order";
         var inner = new InMemoryWorkflowSchedulerWorkQueue();
@@ -107,20 +109,20 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
 
         var session = new RuntimeCoalescingSession(
             workflowExecutionId,
-            inner,
+            visibilitySnapshots ? inner : new QueueWithoutVisibility(inner),
             new PersistenceModeOptions());
         await session.EnsureQueueSeededAsync(CancellationToken.None);
 
-        Assert.Equal("work-5", (await session.DequeueOverlayAsync(CancellationToken.None))!.WorkItemId);
-        Assert.Equal("work-20", (await session.DequeueOverlayAsync(CancellationToken.None))!.WorkItemId);
+        Assert.Equal(visibilitySnapshots ? "work-30" : "work-5", (await session.DequeueOverlayAsync(CancellationToken.None))!.WorkItemId);
+        Assert.Equal(visibilitySnapshots ? "work-5" : "work-20", (await session.DequeueOverlayAsync(CancellationToken.None))!.WorkItemId);
 
         await session.AdvanceInnerQueueAsync(consumeInFlightClaims: false, CancellationToken.None);
 
         Assert.Equal(
-            ["work-30"],
+            [visibilitySnapshots ? "work-20" : "work-30"],
             (await inner.ListAllAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId))).Select(item => item.WorkItemId));
         Assert.Equal(
-            ["work-30"],
+            [visibilitySnapshots ? "work-20" : "work-30"],
             (await session.ListOverlayAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId), CancellationToken.None))
                 .Items.Select(item => item.WorkItemId));
     }
@@ -294,11 +296,16 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             var overlayClaim = await queue.ClaimAsync(NewClaimRequest(workflowExecutionId));
             Assert.NotNull(overlayClaim);
 
+            await inner.EnqueueAsync(new RuntimeSchedulerWorkItem(
+                "work-sibling", workflowExecutionId, "command-sibling", WorkflowExecutionCommandKind.Start,
+                "envelope-sibling", "idempotency-sibling", Now, Now));
             session.Deactivate();
             Assert.True((await queue.CompleteClaimAsync(overlayClaim!)).Succeeded);
 
+            Assert.Equal("work-sibling", Assert.Single(await inner.ListAllAsync(new RuntimeSchedulerWorkQuery(workflowExecutionId))).WorkItemId);
             var durableClaim = await queue.ClaimAsync(NewClaimRequest(workflowExecutionId));
             Assert.NotNull(durableClaim);
+            Assert.Equal("work-sibling", durableClaim.Item.WorkItemId);
             Assert.True((await queue.CompleteClaimAsync(durableClaim!)).Succeeded);
         }
 
@@ -1520,6 +1527,41 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.Equal(failedAt + retryDelay, persisted.AvailableAt);
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Retryable_pending_fold_preserves_declared_source_scope_and_complete_or_empty_cohort(bool empty)
+    {
+        const string workflowExecutionId = "wfexec-cap";
+        var innerStore = new InMemoryRuntimeCheckpointCommitStore(persistenceAccessContextAccessor: new RecipientSourceAccess());
+        var session = new RuntimeCoalescingSession(workflowExecutionId, new InMemoryWorkflowSchedulerWorkQueue(),
+            new PersistenceModeOptions(), innerOutboxStore: innerStore);
+        var store = new CoalescingRuntimeCheckpointCommitStore(new CoalescingInner<IRuntimeCheckpointCommitStore>(innerStore),
+            new FixedCoalescingSessionAccessor(session));
+        var original = NewContinuationIntentCommit(workflowExecutionId, 1, new RuntimePostCommitRetryPolicy(4, TimeSpan.FromSeconds(1)));
+        var change = Assert.Single(original.StateChanges.PostCommitOutbox);
+        var item = change.State;
+        var scope = new PersistenceScope("tenant");
+        var cohort = new StimulusDeliverySnapshot(1, item.OutboxItemId, RuntimeCheckpointCommitFingerprint.ComputeIntent(item.Intent),
+            new(scope, null, null, WorkflowRunKind.Unknown, null), Now, "event", "named", [], empty ? [] :
+                [new("waiter", "bookmark", "activity", "node", "resume", "event", "named", Now, null)]);
+        var declared = new RuntimePostCommitOutboxItem(item.OutboxItemId, item.Intent, item.Status, item.RecordedAt,
+            item.AvailableAt, item.RetryPolicy, item.DeliveryAttemptCount, null, null, null, item.LastFailureMessage,
+            item.Metadata, item.DeliveryFencingToken, null, 1, scope, cohort);
+        var commit = original with { StateChanges = new(null, null, [], [], [], [], [],
+            postCommitOutbox: [change with { State = declared }]) };
+        await store.CommitAsync(commit, new(RuntimeCheckpointPersistenceMode.Deferred));
+        session.RecordOutboxDelivery(new RuntimePostCommitOutboxDeliveryResult(item.OutboxItemId,
+            RuntimePostCommitOutboxStatus.FailedRetryable, Now.AddSeconds(5), "retry"));
+        await store.CommitAsync(NewEmptyCommit(workflowExecutionId, 2, RuntimeCheckpointNames.WorkflowCompleted),
+            new(RuntimeCheckpointPersistenceMode.Immediate));
+        var persisted = (await innerStore.FindAsync(item.OutboxItemId))!;
+        Assert.Equal(RuntimePostCommitOutboxStatus.Pending, persisted.Status);
+        Assert.Equal(1, persisted.DeliveryAttemptCount);
+        Assert.Equal(1, persisted.StimulusDeliveryProtocolVersion);
+        Assert.Equal(scope, persisted.StimulusDeliverySourceScope);
+        Assert.True(cohort.IsEquivalentTo(persisted.RecipientSnapshot));
+    }
+
     // The same fold after a cap flush already persisted the item: its durable Pending row is the backstop, and saving the
     // changed overlay state over it would be a conflicting duplicate, so the fold leaves it as it is.
     [Fact]
@@ -2044,6 +2086,9 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("Injected crash before quiescence flush.");
     }
+
+    private sealed class RecipientSourceAccess : IPersistenceAccessContextAccessor
+    { public PersistenceAccessContext Current => PersistenceAccessContext.Scoped(new("tenant")); }
 
     private sealed class FixedCoalescingSessionAccessor(RuntimeCoalescingSession session) : IRuntimeCoalescingSessionAccessor
     {

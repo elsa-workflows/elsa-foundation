@@ -12,6 +12,7 @@ using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -33,6 +34,22 @@ namespace Elsa.Workflows.Runtime.Tests;
 /// </summary>
 public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
 {
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public void Default_runtime_qualifies_its_actual_exact_bookmark_boundary_with_or_without_coalescing(bool coalescing)
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        if (coalescing) services.AddPersistenceModes();
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope(); var sp = scope.ServiceProvider;
+        var checkpoints = sp.GetRequiredService<IRuntimeCheckpointCommitStore>();
+        var executions = coalescing ? sp.GetRequiredService<CoalescingInner<IWorkflowExecutionStateStore>>().Value : sp.GetRequiredService<IWorkflowExecutionStateStore>();
+        var activities = coalescing ? sp.GetRequiredService<CoalescingInner<IActivityExecutionStateStore>>().Value : sp.GetRequiredService<IActivityExecutionStateStore>();
+        Assert.True(checkpoints.SupportsExactBookmarkResume);
+        Assert.True(checkpoints.CanCommitExactBookmarkResume(sp.GetRequiredService<IBookmarkStateStore>(), executions, activities));
+        Assert.False(checkpoints.CanCommitExactBookmarkResume(new InMemoryBookmarkStateStore(), executions, activities));
+    }
+
     private static readonly Type[] ScopedOperationServices =
     [
         typeof(IRuntimeActivityExecutionInspectionAccumulator),
@@ -84,6 +101,24 @@ public sealed class RuntimeCoreCompositionRootTests : RuntimePipelineTestSupport
             handler => handler is WorkflowStartActivitySchedulerWorkHandler);
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<IRuntimeActivityInputMaterializer>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<WorkflowIntrinsicExecutor>());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AddWorkflowRuntime_requires_child_execution_evidence_for_checkpoint_composition(bool registerNullStore)
+    {
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.RemoveAll<IWorkflowExecutionStateStore>();
+        if (registerNullStore)
+            services.AddSingleton<IWorkflowExecutionStateStore>(_ => null!);
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxClaimCompletionStore>());
+
+        Assert.Contains(nameof(IWorkflowExecutionStateStore), exception.Message);
     }
 
     [Fact]

@@ -1,0 +1,218 @@
+import type {
+  StudioAgentCapabilityContribution,
+  StudioAgentContextAttachment,
+  StudioAgentMode,
+  StudioAgentRisk,
+  StudioAgentSurface,
+  StudioAgentClientAcknowledgement,
+  StudioAgentPreparedInvocation,
+  StudioAgentResourceTarget,
+  StudioAgentToolResult,
+  StudioAgentPromptRequest,
+  StudioAgentToolInvocationMode
+} from "../../sdk";
+
+export type AgentProviderStatus = "available" | "unavailable" | "disabled" | "degraded";
+export type AgentAutonomyMode = "manual" | "auto-read-only" | "full-auto";
+export type AgentProviderKind = "provider-sdk-binding" | "agent-harness-provider" | string;
+export type AgentProviderOperation = "chat" | "streaming" | "tool-approval" | "run-status" | "artifacts" | "skills" | "memory" | "file-upload" | string;
+export type AgentProviderRiskProfile = "read-only" | "review-required" | "sandboxed-execution" | "privileged-execution" | string;
+export type AgentSessionStatus = "active" | "completed" | "cancelled" | "failed" | "expired";
+export type AgentMessageRole = "user" | "assistant" | "system" | "tool" | "progress" | "error";
+export type AgentMessageStatus = "pending" | "streaming" | "completed" | "failed" | "cancelled";
+export type AgentProposalStatus = "draft" | "awaiting-approval" | "approved" | "denied" | "edited" | "expired" | "executed" | "failed" | "cancelled" | "awaiting-client" | "uncertain" | "executing";
+export type AgentStreamEventType = "turn-started" | "message-started" | "message-delta" | "context-used" | "clarification-requested" | "proposal-created" | "review-requested" | "progress" | "step-started" | "step-completed" | "tool-call-requested" | "tool-call-started" | "tool-call-completed" | "plan-updated" | "message-completed" | "turn-cancelled" | "error";
+
+export interface AgentPlanStep {
+  id: string;
+  title: string;
+  status: string;
+}
+
+export interface AgentBootstrapResponse {
+  enabled: boolean;
+  providerStatus: AgentProviderStatus;
+  modes: StudioAgentMode[];
+  capabilities: StudioAgentCapabilityContribution[];
+  provider?: AgentProviderDiagnostics;
+  policy: {
+    contextVisibility: boolean;
+    /** The autonomy mode the deployment defaults a new session to. */
+    defaultAutonomyMode: AgentAutonomyMode;
+    /** The autonomy ceiling: a session may request any mode up to (and including) this one. */
+    maxAutonomyMode: AgentAutonomyMode;
+    /** The modes the client may offer, derived from the ceiling (most restrictive first). */
+    allowedAutonomyModes: AgentAutonomyMode[];
+    retentionLabel?: string;
+    actorId?: string;
+    permissions?: string[];
+    allowedToolIds?: string[];
+    deniedToolIds?: string[];
+    allowDirectToolInvocations?: boolean;
+    allowPrivilegedToolInvocations?: boolean;
+  };
+}
+
+export interface AgentProviderDiagnostics {
+  providerId: string;
+  isAvailable: boolean;
+  status: string;
+  providerKind: AgentProviderKind;
+  supportedOperations: AgentProviderOperation[];
+  riskProfile: AgentProviderRiskProfile;
+  metadata: Record<string, string>;
+}
+
+export interface AgentCreateSessionRequest {
+  mode: StudioAgentMode;
+  /** The autonomy mode to request; the server clamps it to the deployment ceiling. Omit to take the default. */
+  autonomyMode?: AgentAutonomyMode;
+  activeSurface: StudioAgentSurface;
+  clientContext: {
+    studioVersion: string;
+    sdkVersion: string;
+    moduleIds: string[];
+  };
+}
+
+export interface AgentCreateSessionResponse {
+  sessionId: string;
+  status: AgentSessionStatus;
+  title?: string;
+  contextAttachments: StudioAgentContextAttachment[];
+}
+
+export interface AgentMessageRequest {
+  requestId?: string;
+  source?: StudioAgentPromptRequest["source"];
+  promptMode?: StudioAgentPromptRequest["mode"];
+  message: string;
+  mode: StudioAgentMode;
+  contextAttachments: StudioAgentContextAttachment[];
+  capabilityId?: string;
+}
+
+export interface AgentMessageResponse {
+  messageId: string;
+  status: AgentMessageStatus;
+  streamUrl: string;
+  warnings?: { code: string; message: string; target?: string }[];
+}
+
+export interface AgentMessageViewModel {
+  id: string;
+  role: AgentMessageRole;
+  content: string;
+  status: AgentMessageStatus;
+}
+
+export interface AgentActionProposal {
+  id: string;
+  title: string;
+  summary: string;
+  risk: Exclude<StudioAgentRisk, "read-only">;
+  status: AgentProposalStatus;
+  revision?: string;
+  reviewReady?: boolean;
+  toolId?: string;
+  moduleId?: string;
+  invocationMode?: StudioAgentToolInvocationMode;
+  requiredPermissions?: string[];
+  policy?: AgentToolInvocationPolicy;
+  resourceTarget?: AgentResourceTarget;
+  disabledReason?: string;
+  isLoading?: boolean;
+  error?: string;
+  confirmationPending?: boolean;
+  audit?: AgentProposalAuditState;
+  preparedInvocation?: StudioAgentPreparedInvocation;
+  toolResult?: StudioAgentToolResult;
+  resultRendererId?: string;
+  resultType?: string;
+  result?: unknown;
+  operations?: AgentProposalOperation[];
+  risks?: string[];
+  rollback?: string;
+}
+
+export type AgentResourceTarget = StudioAgentResourceTarget;
+
+export interface AgentProposalAuditState {
+  state: string;
+  outcome?: string;
+  actor?: string;
+  sessionId?: string;
+  toolId?: string;
+  target?: AgentResourceTarget;
+  risk?: StudioAgentRisk;
+  invocationMode?: StudioAgentToolInvocationMode;
+  policyResult?: AgentToolPolicyResult;
+  recordedAt?: string;
+}
+
+export type AgentToolPolicyResult = "allowed" | "denied" | "requires-proposal" | "proposal-required";
+export type AgentToolInvocationOutcome = "allowed" | "denied" | "failed" | "proposal-created" | "executed";
+
+export interface AgentToolInvocationPolicy {
+  allowedToolIds?: string[];
+  deniedToolIds?: string[];
+  allowedInvocationModes?: StudioAgentToolInvocationMode[];
+  deniedInvocationModes?: StudioAgentToolInvocationMode[];
+}
+export interface AgentProposalOperation {
+  op: string;
+  [key: string]: unknown;
+}
+
+export type AgentActionProposalPayload = Partial<AgentActionProposal> & {
+  baseRevision?: string;
+};
+
+export interface AgentClarificationRequest {
+  id: string;
+  prompt: string;
+  choices?: string[];
+  metadata?: Record<string, unknown>;
+}
+
+export type AgentStreamEvent =
+  | { type: "review-requested"; messageId: string }
+  | { type: "module-result"; messageId: string; result: StudioAgentToolResult }
+  | { type: "turn-started"; turnId: string; maxSteps: number }
+  | { type: "message-started"; messageId: string; role: AgentMessageRole }
+  | { type: "message-delta"; messageId: string; content: string }
+  | { type: "context-used"; messageId: string; attachmentIds: string[] }
+  | { type: "clarification-requested"; messageId: string; clarification: AgentClarificationRequest }
+  | { type: "proposal-created"; proposalId: string; messageId: string; proposal?: AgentActionProposalPayload }
+  | { type: "progress"; label: string; percent?: number }
+  | { type: "step-started"; stepIndex: number; maxSteps: number }
+  | { type: "step-completed"; stepIndex: number; maxSteps: number }
+  | { type: "tool-call-requested"; toolCallId: string; toolName: string; arguments: string; requiresApproval: boolean }
+  | { type: "tool-call-started"; toolCallId: string; toolName: string }
+  | { type: "tool-call-completed"; toolCallId: string; toolName: string; succeeded: boolean; summary: string }
+  | { type: "plan-updated"; steps: AgentPlanStep[] }
+  | { type: "message-completed"; messageId: string }
+  | { type: "turn-cancelled"; turnId: string }
+  | { type: "error"; message: string };
+
+export interface AgentFeedbackRequest {
+  rating: "positive" | "negative";
+  comment?: string;
+}
+
+export interface AgentProposalDecisionRequest {
+  revision?: string;
+  comment?: string;
+}
+
+export interface AgentProposalDecisionResponse {
+  proposalId: string;
+  approvalStatus: AgentProposalStatus;
+  approvedAt?: string;
+  executed?: boolean;
+  clientInvocation?: StudioAgentPreparedInvocation;
+  toolResult?: StudioAgentToolResult;
+  result?: { resourceType: string; resourceId: string; summary: string };
+}
+
+export type AgentClientAcknowledgement = StudioAgentClientAcknowledgement;

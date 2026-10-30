@@ -11,7 +11,7 @@ namespace Elsa.Expressions.Services;
 /// <see cref="TypeDescriptor.Alias"/> are a configuration error and fail fast with
 /// <see cref="DuplicateTypeAliasException"/>, consistent with the runtime registry's fail-fast policy.
 /// </remarks>
-public sealed class VariableTypeDescriptorCatalog : IVariableTypeDescriptorCatalog
+internal sealed class VariableTypeDescriptorCatalog : IVariableTypeDescriptorCatalog
 {
     private readonly IDictionary<string, TypeDescriptor> _descriptors = new Dictionary<string, TypeDescriptor>();
 

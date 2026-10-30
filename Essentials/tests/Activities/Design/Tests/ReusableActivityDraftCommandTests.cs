@@ -641,6 +641,22 @@ public sealed class ReusableActivityDraftCommandTests
     }
 
     [Fact]
+    public async Task Clone_rejects_an_explicit_empty_layout_as_extra_request_state()
+    {
+        var harness = new Harness();
+        var source = await harness.SeedDefinitionAsync(ActivityContentAuthorityKind.Design);
+        harness.SeedVersion(source.DefinitionId, "version-1", Harness.Manifest("{\"source\":true}"), Harness.Contract("source"));
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Service.CreateDraftAsync(
+            new(source.DefinitionId, "version-1", Layout: []),
+            default));
+
+        Assert.Equal(400, exception.StatusCode);
+        Assert.Equal("activity.request.invalid", exception.ErrorCode);
+        Assert.Single(await ((IActivityDefinitionDraftStore)harness.Stores).ListByDefinitionAsync(source.DefinitionId));
+    }
+
+    [Fact]
     public async Task Source_owned_fork_is_previewed_then_applied_with_exact_reserved_identity_and_replay_receipt()
     {
         var harness = new Harness();
@@ -946,6 +962,54 @@ public sealed class ReusableActivityDraftCommandTests
     }
 
     [Fact]
+    public async Task Undeclared_migrations_are_rejected_before_a_permissive_provider_runs()
+    {
+        var targetProvider = new MigratingProvider("target.provider", []);
+        var harness = new Harness(targetProvider: targetProvider);
+        var design = await harness.SeedDefinitionAsync(ActivityContentAuthorityKind.Design);
+        harness.SeedVersion(design.DefinitionId, "design-version", Harness.Manifest("{}"), Harness.Contract());
+        var draft = await harness.Service.CreateDraftAsync(new(design.DefinitionId, "design-version"), default);
+        var source = await harness.SeedDefinitionAsync(ActivityContentAuthorityKind.ProviderSource);
+        harness.SeedVersion(source.DefinitionId, "source-version", Harness.Manifest("{}"), Harness.Contract());
+
+        var draftMigration = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Service.MigrateDraftAsync(
+            new(draft.DraftId, draft.Revision, "target.provider", "1"), default));
+        var forkPreview = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Forks.PreviewAsync(
+            new(source.DefinitionId, "undeclared-fork", "source-version", "Custom", "Forked", null, "target.provider", "1"), default));
+
+        Assert.Equal("activity.provider.migration-unsupported", draftMigration.ErrorCode);
+        Assert.Equal("activity.provider.migration-unsupported", forkPreview.ErrorCode);
+        Assert.Equal(0, targetProvider.MigrationCalls);
+    }
+
+    [Fact]
+    public async Task Explicit_cross_provider_migration_works_and_apply_rechecks_the_declaration()
+    {
+        var targetProvider = new MigratingProvider("target.provider", [new("elsa.activity-graph", "1")]);
+        var harness = new Harness(targetProvider: targetProvider);
+        var design = await harness.SeedDefinitionAsync(ActivityContentAuthorityKind.Design);
+        harness.SeedVersion(design.DefinitionId, "design-version", Harness.Manifest("{}"), Harness.Contract());
+        var draft = await harness.Service.CreateDraftAsync(new(design.DefinitionId, "design-version"), default);
+        var migrated = await harness.Service.MigrateDraftAsync(new(draft.DraftId, draft.Revision, "target.provider", "1"), default);
+        var source = await harness.SeedDefinitionAsync(ActivityContentAuthorityKind.ProviderSource);
+        harness.SeedVersion(source.DefinitionId, "source-version", Harness.Manifest("{}"), Harness.Contract());
+        var preview = await harness.Forks.PreviewAsync(
+            new(source.DefinitionId, "declared-fork", "source-version", "Custom", "Forked", null, "target.provider", "1"), default);
+        var callsAfterPreview = targetProvider.MigrationCalls;
+        targetProvider.MigratableFrom.Clear();
+
+        var apply = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Forks.ApplyAsync(
+            new(preview.CandidateId, preview.RequestFingerprint, "declaration-removed"), default));
+
+        Assert.Equal("target.provider", migrated.Provider.ProviderKey);
+        Assert.Equal("target.provider", preview.Target.ProviderKey);
+        Assert.Equal(2, callsAfterPreview);
+        Assert.Equal(callsAfterPreview, targetProvider.MigrationCalls);
+        Assert.Equal("activity.provider.migration-unsupported", apply.ErrorCode);
+        Assert.DoesNotContain(harness.Stores.Definitions, definition => definition.Id == preview.Target.DefinitionId);
+    }
+
+    [Fact]
     public async Task Validation_findings_are_the_result_and_are_stored_for_the_exact_revision()
     {
         var harness = new Harness(invalidValidation: true);
@@ -1014,12 +1078,16 @@ public sealed class ReusableActivityDraftCommandTests
             string actorId = "actor-a",
             string? authorizationProfile = null,
             Func<ISaveActivityForkCandidateCommand, ISaveActivityForkCandidateCommand>? decorateSaveCommand = null,
-            Func<IApplyActivityForkCandidateCommand, IApplyActivityForkCandidateCommand>? decorateApplyCommand = null)
+            Func<IApplyActivityForkCandidateCommand, IApplyActivityForkCandidateCommand>? decorateApplyCommand = null,
+            IActivityProvider? targetProvider = null)
         {
             _ids = new(tenantId ?? "global");
             _context = new(tenantId, canReadProviderPayload, canAuthorProvider, actorId, authorizationProfile);
             Stores = stores ?? new();
-            var registry = new ActivityProviderRegistry([provider ?? new MigratingProvider("elsa.activity-graph"), new MigratingProvider("target.provider")]);
+            var registry = new ActivityProviderRegistry([
+                provider ?? new MigratingProvider("elsa.activity-graph"),
+                targetProvider ?? new MigratingProvider("target.provider", [new("elsa.activity-graph", "1")])
+            ]);
             var contractCapabilities = capabilityCatalog ?? new EmptyCapabilityCatalog();
             Service = new(
                 Stores,
@@ -1364,13 +1432,21 @@ public sealed class ReusableActivityDraftCommandTests
         }
     }
 
-    private sealed class MigratingProvider(string key) : IActivityProvider
+    private sealed class MigratingProvider : IActivityProvider
     {
-        public string ProviderKey => key;
+        public MigratingProvider(string key, IEnumerable<ActivityProviderManifestSource>? migratableFrom = null)
+        {
+            ProviderKey = key;
+            MigratableFrom = (migratableFrom ?? []).ToHashSet();
+        }
+
+        public string ProviderKey { get; }
         public IReadOnlySet<string> SupportedManifestSchemas { get; } = new HashSet<string> { "1" };
-        public ActivityProviderAuthoringCapabilities AuthoringCapabilities { get; } = new(
-            key,
-            [new("1", true, new HashSet<string> { "1" })],
+        public HashSet<ActivityProviderManifestSource> MigratableFrom { get; }
+        public int MigrationCalls { get; private set; }
+        public ActivityProviderAuthoringCapabilities AuthoringCapabilities => new(
+            ProviderKey,
+            [new("1", true, new HashSet<string> { "1" }) { MigratableFrom = MigratableFrom }],
             new([]));
 
         public ValueTask<ActivityContractProposal> ProposeContractAsync(ActivityProviderContractProposalRequest request, CancellationToken cancellationToken = default) =>
@@ -1379,8 +1455,11 @@ public sealed class ReusableActivityDraftCommandTests
         public ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateAsync(ActivityProviderManifest manifest, ActivityContract contract, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<IReadOnlyList<ActivityDiagnostic>>([]);
 
-        public ValueTask<ActivityManifestMigration> MigrateAsync(ActivityManifestMigrationRequest request, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new ActivityManifestMigration(new(ProviderKey, request.TargetSchemaVersion, request.Source.Payload.Clone()), []));
+        public ValueTask<ActivityManifestMigration> MigrateAsync(ActivityManifestMigrationRequest request, CancellationToken cancellationToken = default)
+        {
+            MigrationCalls++;
+            return ValueTask.FromResult(new ActivityManifestMigration(new(ProviderKey, request.TargetSchemaVersion, request.Source.Payload.Clone()), []));
+        }
     }
 
     private sealed class ProposalProvider(Func<ActivityProviderContractProposalRequest, ActivityContractProposal> propose) : IActivityProvider

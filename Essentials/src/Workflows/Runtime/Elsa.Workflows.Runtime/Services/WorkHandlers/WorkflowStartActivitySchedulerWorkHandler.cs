@@ -182,7 +182,8 @@ public sealed class WorkflowStartActivitySchedulerWorkHandler : IWorkflowSchedul
 
         // Both fused shapes require a fresh Scheduled execution; a redelivery or an already-advanced state falls back so
         // the discrete chain's own no-op/re-enqueue handling runs unchanged.
-        if (state.Status != ActivityExecutionStatus.Scheduled)
+        if (state.Status != ActivityExecutionStatus.Scheduled ||
+            executableNode.ExecutionPlacement != Elsa.Primitives.Models.ActivityExecutionPlacement.Inline)
             return FusedStartResult.Fallback;
 
         if (executableNode.IntrinsicKind is { } intrinsicKind)

@@ -1,6 +1,7 @@
+import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Boxes, Code2, Download, ListTree, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
-import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, type StudioActivityPropertyEditorContribution, type StudioAiContributionApi, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, type StudioActivityPropertyEditorContribution, type StudioAgentRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
   collectActivityNodeIds,
@@ -14,6 +15,8 @@ import {
   normalizeActivityStructures,
   planSlotNavigation,
   replaceSlotActivities,
+  resolveScope,
+  resolveScopeFrames,
   slotCrumbLabel,
   updateActivity,
   type ChildSlot
@@ -25,30 +28,53 @@ import {
 } from "../activityPresentation";
 import { buildDraftFromJson } from "../workflowSerialization";
 import { WorkflowCodeView } from "../WorkflowCodeView";
+import { withWorkflowStartEnabled } from "../workflowStartEditing";
+import { getWorkflowStartEnabled } from "../workflowStart";
 import { WorkflowPropertiesView } from "../WorkflowPropertiesView";
+import { loadActivityIconRegistry } from "../activityIconView";
 import { weaverUnavailableTitle } from "./constants";
-import type { CanvasView, WorkflowDesignerPanelContext, WorkflowEditorError, WorkflowEditorOperation, WorkflowEditorPanelTab, WorkflowErrorInput } from "./editorTypes";
-import type { WorkflowSlotNavigation } from "./contexts";
+
+const AttachedRunActivityInspector = React.lazy(async () => ({ default: (await import("./AttachedRunActivityInspector")).AttachedRunActivityInspector }));
+
+void loadActivityIconRegistry().catch(() => undefined);
+import type { CanvasView, WorkflowDesignerPanelContext, WorkflowEditorError, WorkflowEditorOperation, WorkflowEditorPanelTab, WorkflowErrorInput, WorkflowTestDriveSetupState } from "./editorTypes";
+import type { WorkflowNodeActions, WorkflowSlotNavigation } from "./contexts";
 import {
   createNodeId,
   dispatchAiAction,
+  describeWorkflowError,
   findAiAction,
   getDraftSignature,
   groupActivityPalette,
-  isWorkflowEditorKeyboardTarget,
   normalizeWorkflowError
 } from "./editorHelpers";
+import {
+  hasNonCollapsedTextSelection,
+  isActivityClipboardShortcutBlocked,
+  isWorkflowEditorKeyboardTarget
+} from "./activityClipboardShortcuts";
+import { ActivityCanvasContextMenu } from "./ActivityCanvasContextMenu";
+import { matchActivityClipboardShortcut } from "./duplicateActivities";
+import { useActivityClipboard } from "./useActivityClipboard";
 import { WorkflowAlert } from "./WorkflowAlert";
 import { WorkflowEditorToolbar } from "./WorkflowEditorToolbar";
 import { ConnectMenu } from "./graph";
 import { PanelTabList, compareWorkflowPanelTabs } from "./PanelTabList";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
-import { ValidationPanel, TestRunStatus, WorkflowRuntimePanel } from "./editorPanels";
+import { ValidationPanel, WorkflowRuntimePanel } from "./editorPanels";
+import { AttachedTestRunStatus } from "./AttachedTestRunStatus";
+import { useTestRunObservation } from "./useTestRunObservation";
+import { useTestRunRestoration } from "./useTestRunRestoration";
+import { usePinnedEditorDocument } from "./usePinnedEditorDocument";
+import { useEditorRunCanvas } from "./useEditorRunCanvas";
+import { useAttachedExecutionSelection } from "./useAttachedExecutionSelection";
+import { activateWorkflowCanvasNode } from "./workflowAccessibility";
 import { useDraftValidations } from "./useDraftValidations";
 import { useExecutableArtifactExport } from "./useExecutableArtifactExport";
 import { combineValidationErrors, detectStructuralValidationErrors } from "../draftValidation";
+import { createValidationActivityLabels, humanizeValidationErrors } from "../validationActivityLabels";
 import { WorkflowArtifactsPanel } from "./WorkflowExecutables";
-import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
+import { LazyWorkflowTestDrivePanel } from "./lazyTestDriveUi";
 import { useSidePanelLayout } from "./useSidePanelLayout";
 import { useDraftHistory } from "./useDraftHistory";
 import { forgetRemovedNodes, useWorkflowDocument } from "./workflowDocument";
@@ -62,6 +88,17 @@ import { useDraftEquivalence } from "./useDraftEquivalence";
 import { useWorkflowScope } from "./useWorkflowScope";
 import { useWorkflowContextBridge } from "./useWorkflowContextBridge";
 import { ActivityPalettePanel } from "./ActivityPalettePanel";
+import { SequenceDesigner } from "../graph-authoring/SequenceDesigner";
+import { CompensationScopeDesigner, type CompensationActivityTarget } from "../graph-authoring/CompensationScopeDesigner";
+import {
+  addCompensationStep,
+  compensationStepsSlotId,
+  compensationValidationTarget,
+  readCompensationSteps,
+  updateCompensationStep,
+  withCompensationSteps,
+  type CompensationStep
+} from "../compensationScope";
 import { GraphAuthoringCanvas } from "../graph-authoring/GraphAuthoringCanvas";
 import { GraphAuthoringWorkbench } from "../graph-authoring/GraphAuthoringWorkbench";
 import { AddStepButton, authorsInline } from "../graph-authoring/AddStepButton";
@@ -72,7 +109,8 @@ import {
   type ActivityInspectorTabId
 } from "./InspectorPanel";
 import { BpmnElementInspector } from "../bpmn/BpmnElementInspector";
-import { BpmnShapePalette } from "../bpmn/BpmnShapePalette";
+import { bpmnPaletteElements } from "../bpmn/bpmnPaletteElements";
+import { emptyGraphElements } from "../graph-authoring/graphPaletteElements";
 import { collectOwnedNodeIds, findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
 import { bpmnElementTypeLabel, bpmnStructureKind, type BpmnElement, type BpmnSequenceFlow } from "../bpmn/bpmnTypes";
 import { exportBpmnDocument, importBpmnDocument, layoutFromBpmnDiagram, summarizeBpmnImportIssues, withDiagramFromLayout } from "../api/bpmnInterchange";
@@ -81,6 +119,7 @@ import { PublicationReviewDialog } from "./PublicationReviewDialog";
 import { useAiProviderAvailability } from "./useAiProviderAvailability";
 import { useFullActivityDefinitionVersion } from "../api/activityDesign";
 import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
+import { isHttpEndpointType } from "./httpTestRequest";
 import type { ActivityVersionChangeApplyRequest } from "./ActivityVersionChangeDialog";
 import {
   applyActivityVersionChange,
@@ -92,30 +131,38 @@ import type { ExpressionToolingCacheIdentity } from "../expression-tooling/expre
 
 const ActivityVersionChangeDialog = React.lazy(() =>
   import("./ActivityVersionChangeDialog").then(module => ({ default: module.ActivityVersionChangeDialog })));
+const HttpTestRequestDialog = React.lazy(() =>
+  import("./HttpTestRequestDialog").then(module => ({ default: module.HttpTestRequestDialog })));
 
 export { PublicationReviewDialog } from "./PublicationReviewDialog";
+
+import type { WorkflowAgentController } from "../workflowAgent";
 
 export function WorkflowEditor({
   context,
   definitionId,
   ai,
+  weaver,
   propertyEditors,
   expressionEditors,
   expressionTooling,
   expressionToolingIdentity,
   runInputEditors,
+  testStimulusEditors,
   workflowDesignerPanels,
   autosaveEnabledByDefault,
   onBack
 }: {
   context: StudioEndpointContext;
   definitionId: string;
-  ai: StudioAiContributionApi;
+  ai: StudioAgentRegistry;
+  weaver?: WorkflowAgentController;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   expressionTooling?: StudioExpressionToolingClient;
   expressionToolingIdentity?: ExpressionToolingCacheIdentity;
   runInputEditors: StudioWorkflowRunInputEditorContribution[];
+  testStimulusEditors: StudioTestStimulusEditorContribution[];
   workflowDesignerPanels: StudioWorkflowDesignerPanelContribution[];
   autosaveEnabledByDefault?: boolean;
   onBack(): void;
@@ -148,20 +195,10 @@ export function WorkflowEditor({
 
   // The interdependent draft/scope/selection/test-run/artifact cluster now lives in an explicit reducer,
   // so each mutation (below) declares the transition it makes instead of cascading loose setState calls.
-  const editorDoc = useWorkflowDocument();
-  const { draft, frames, selectedNodeId, testRun, publishedArtifactId } = editorDoc.state;
-  const {
-    loadDraft,
-    replaceDraftByBatch,
-    editDraft,
-    editDraftAndSelect,
-    select,
-    navigateToScope,
-    resetToRoot,
-    startTestRun,
-    clearTestRun,
-    setPublishedArtifact
-  } = editorDoc;
+  const editableDoc = useWorkflowDocument();
+  const { draft: editableDraft, testRun, publishedArtifactId } = editableDoc.state;
+  const observation = useTestRunObservation({ context, testRun, onRunViewUpdated: editableDoc.updateTestRunView });
+  const restoration = useTestRunRestoration({ context, definitionId, draft: editableDraft, testRun, onRestore: editableDoc.startTestRun });
   const [error, setErrorState] = useState<WorkflowEditorError | null>(null);
   const setError = useCallback((value: WorkflowErrorInput) => setErrorState(normalizeWorkflowError(value)), []);
   const [status, setStatus] = useState("");
@@ -171,57 +208,38 @@ export function WorkflowEditor({
   const [activeLeftPanelId, setActiveLeftPanelId] = useState("activities");
   const themeLayout = useStudioThemeLayout();
   const [activeRightPanelId, setActiveRightPanelId] = useState("inspector");
+  const [testDriveSetup, setTestDriveSetup] = useState<WorkflowTestDriveSetupState | null>(null);
+  const [inspectorView, setInspectorView] = useState<"configuration" | "run-data">("configuration");
   const [activeInspectorTabId, setActiveInspectorTabId] = useState<ActivityInspectorTabId>("inputs");
   const [canvasView, setCanvasView] = useState<CanvasView>("designer");
+  const [httpTestRequestActivityId, setHttpTestRequestActivityId] = useState<string | null>(null);
   const [versionChange, setVersionChange] = useState<{
     occurrence: ActivityNode;
     current: ActivityDefinitionVersionView;
     recommendation?: RecommendedActivityDefinition | null;
   } | null>(null);
 
-  const {
-    paletteWidth,
-    inspectorWidth,
-    paletteCollapsed,
-    inspectorCollapsed,
-    maximizedSidePanel,
-    setInspectorCollapsed,
-    paletteExpanded,
-    inspectorExpanded,
-    editorBodyClassName,
-    editorBodyStyle,
-    toggleSidePanelCollapsed,
-    toggleSidePanelMaximized,
-    startSidePanelResize,
-    handleSidePanelResizeKeyDown
-  } = useSidePanelLayout();
-  const sidePanelLayout = {
-    paletteWidth,
-    inspectorWidth,
-    paletteCollapsed,
-    inspectorCollapsed,
-    maximizedSidePanel,
-    setInspectorCollapsed,
-    paletteExpanded,
-    inspectorExpanded,
-    editorBodyClassName,
-    editorBodyStyle,
-    toggleSidePanelCollapsed,
-    toggleSidePanelMaximized,
-    startSidePanelResize,
-    handleSidePanelResizeKeyDown
-  };
-
-  const { resetHistory, undo, redo, canUndoNow, canRedoNow } = useDraftHistory({ draft, restoreDraft: loadDraft });
+  const historyCatalog = useRef<ActivityCatalogItem[]>([]);
+  const restoreHistoryDraft = useCallback((snapshot: WorkflowDraft) => {
+    const root = snapshot.state.rootActivity;
+    let path = resolveScopeFrames(root, editableDoc.state.frames, historyCatalog.current);
+    const scope = resolveScope(root, path, historyCatalog.current);
+    if (scope?.slot.cardinality === "single") {
+      path = planSlotNavigation(path, scope.owner, scope.owner.nodeId, scope.slot, slotCrumbLabel(scope.owner.nodeId, scope.slot), historyCatalog.current)?.frames ?? path;
+    }
+    editableDoc.editDraft(() => snapshot);
+    editableDoc.navigateToScope(path);
+  }, [editableDoc]);
+  const { resetHistory, undo, redo, canUndoNow, canRedoNow } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft });
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
   // in dedicated hooks; `markSaved`/`reload` let the loader seed the save baseline and reload after promote.
-  const { saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, setAutosavePaused, markSaved } = useWorkflowPersistence({ context, draft, autosaveEnabledByDefault, editDraft, setStatus, setError });
+  const { holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, setAutosavePaused, markSaved } = useWorkflowPersistence({ context, draft: editableDraft, autosaveEnabledByDefault, editDraft: editableDoc.editDraft, setStatus, setError });
   const {
     details,
     setDetails,
     catalog,
-    paletteCatalog,
+    paletteCatalog: availablePaletteCatalog,
     recommendedDefinitions,
     activityDescriptors,
     availabilityDiagnostics,
@@ -230,9 +248,17 @@ export function WorkflowEditor({
     descriptorStatus,
     reload,
     reloadExpressionDescriptors
-  } = useWorkflowEditorData({ context, definitionId, resetHistory, loadDraft, markSaved, setError });
-  // Debounced name/description save; edits are optimistic and flushed on unmount.
-  const { updateDefinitionMeta } = useDefinitionMetadata({ context, details, setDetails, setStatus });
+  } = useWorkflowEditorData({ context, definitionId, resetHistory, loadDraft: editableDoc.loadDraft, markSaved, setError });
+  historyCatalog.current = catalog;
+  const retryLoad = useCallback(() => {
+    void reload().catch(e => setError(describeWorkflowError(e, "Could not load the workflow editor.")));
+  }, [reload, setError]);
+  const editorDoc = usePinnedEditorDocument({ document: editableDoc, context, definitionId, catalog });
+  const { draft, frames, selectedNodeId } = editorDoc.state;
+  const { loadDraft, editDraft, editDraftAndSelect, select, navigateToScope, resetToRoot, startTestRun, setPublishedArtifact } = editorDoc;
+  // Debounced metadata saves still belong to the editable definition.
+  const { updateDefinitionMeta: updateEditableDefinitionMeta } = useDefinitionMetadata({ context, details, setDetails, setStatus });
+  const updateDefinitionMeta: typeof updateEditableDefinitionMeta = (...args) => { if (editorDoc.canEdit()) updateEditableDefinitionMeta(...args); };
 
   // Resolve the current scope + selection (designer mode, selected activity, descriptor/availability,
   // scoped-variable analysis) from the raw draft/frames/selection and the loaded catalog + descriptors.
@@ -255,13 +281,23 @@ export function WorkflowEditor({
     isFlowchartDesigner,
     isBpmnDesigner,
     selectedBpmnElement,
-    canAddActivitiesToCanvas
+    canAddActivitiesToCanvas: scopeAllowsAuthoring
   } = useWorkflowScope({ context, draft, frames, selectedNodeId, catalog, activityDescriptors, availabilityDiagnostics });
+  const canAddActivitiesToCanvas = scopeAllowsAuthoring && !editorDoc.pinned;
+  const elements = isBpmnDesigner ? bpmnPaletteElements : emptyGraphElements;
+  const inlineSteps = authorsInline(themeLayout, isBpmnDesigner);
+  const availableDesignerPanels = filterGraphAuthoringContributions(workflowDesignerPanels, "workflow-definition");
+  const sidePanelLayout = useSidePanelLayout(undefined, {
+    palettePresent: !inlineSteps || availableDesignerPanels.some(panel => panel.side === "left")
+  });
+  const { setInspectorCollapsed } = sidePanelLayout;
   useEffect(() => {
     setActiveInspectorTabId(current =>
       resolveActivityInspectorTabId(current, inspectedSupportsScopedVariables, inspectedSlots.length > 0));
   }, [inspectedSlots.length, inspectedSupportsScopedVariables]);
   const inspectedCatalogItem = inspectedNode ? catalogByVersion.get(inspectedNode.activityVersionId) : null;
+  const inspectedIsHttpEndpoint = !!inspectedNode && isHttpEndpointType(
+    inspectedDescriptor?.typeName ?? inspectedCatalogItem?.activityTypeKey);
   const inspectedReusableDefinitionId = inspectedCatalogItem?.activityDefinitionId ?? null;
   const inspectedReusableVersion = useFullActivityDefinitionVersion(
     context,
@@ -274,6 +310,13 @@ export function WorkflowEditor({
     ? recommendedDefinitions.find(item => item.definitionId === inspectedRecommendationDefinitionId) ?? null
     : null;
 
+  const paletteContext = useMemo(() => getActivityPaletteContext(
+    "workflow-definition", draft?.state.rootActivity, scope?.owner.nodeId, scope?.slot, catalogByVersion
+  ), [draft?.state.rootActivity, scope, catalogByVersion]);
+  const isOfferedActivity = useCallback((activity: ActivityCatalogItem) => isActivityOfferedInContext(activity, paletteContext), [paletteContext]);
+  const paletteCatalog = useMemo(() => availablePaletteCatalog.filter(isOfferedActivity), [availablePaletteCatalog, isOfferedActivity]);
+  const choicesForSlot = (owner: ActivityNode, slot: ChildSlot) => availablePaletteCatalog.filter(activity => isActivityOfferedInContext(activity,
+    getActivityPaletteContext("workflow-definition", draft?.state.rootActivity, owner.nodeId, slot, catalogByVersion)));
   const paletteGroups = useMemo(() => groupActivityPalette(paletteCatalog), [paletteCatalog]);
   const filteredPaletteGroups = useMemo(() => {
     const term = paletteSearch.trim().toLowerCase();
@@ -285,7 +328,7 @@ export function WorkflowEditor({
       (activity.description ?? "").toLowerCase().includes(term));
     return groupActivityPalette(matches);
   }, [paletteCatalog, paletteSearch, paletteGroups]);
-  const busy = operation !== "idle";
+  const busy = operation !== "idle" || editorDoc.pinned;
   const canRunTest = !!draft?.state.rootActivity && !busy;
 
   // Draft validation surface (#453): fetch server-derived validations after the draft settles (when the
@@ -298,16 +341,25 @@ export function WorkflowEditor({
   // simply renders no button.
   const executableArtifactExport = useExecutableArtifactExport({ context, definitionId, publishedArtifactId });
   const publishedExecutable = executableArtifactExport.target;
+  // Live HTTP requests need only the published runtime artifact; they do not depend on export support.
+  const publishedRuntimeExecutable = executableArtifactExport.publishedTarget;
+  const activityLabels = useMemo(
+    () => createValidationActivityLabels({
+      root: draft?.state.rootActivity,
+      presentation: draft?.activityPresentation,
+      catalogByVersion
+    }),
+    [catalogByVersion, draft?.activityPresentation, draft?.state.rootActivity]);
   const structuralValidationErrors = useMemo(
-    () => detectStructuralValidationErrors(draft?.state),
-    [draft?.state]);
+    () => detectStructuralValidationErrors(draft?.state, activityLabels),
+    [activityLabels, draft?.state]);
   const combinedValidationErrors = useMemo(
-    () => combineValidationErrors({
+    () => humanizeValidationErrors(combineValidationErrors({
       draftErrors: draft?.validationErrors,
       serverErrors: draftValidations.available ? draftValidations.errors : null,
       structuralErrors: structuralValidationErrors
-    }),
-    [draft?.validationErrors, draftValidations.available, draftValidations.errors, structuralValidationErrors]);
+    }), activityLabels),
+    [activityLabels, draft?.validationErrors, draftValidations.available, draftValidations.errors, structuralValidationErrors]);
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
   const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
   const aiProviderAvailable = useAiProviderAvailability(ai);
@@ -323,7 +375,11 @@ export function WorkflowEditor({
     catalogByVersion,
     isUnsupportedDesigner,
     isBpmnDesigner,
-    canAddActivitiesToCanvas,
+    isOfferedActivity,
+    elements,
+    // A compensation scope's steps change only through its step list, never by a palette drop on the canvas.
+    canAddActivitiesToCanvas: canAddActivitiesToCanvas && scope?.slot.id !== compensationStepsSlotId,
+    readOnly: editorDoc.pinned,
     selectedNodeId,
     editDraft,
     editDraftAndSelect,
@@ -333,10 +389,12 @@ export function WorkflowEditor({
     setError
   });
   const {
-    nodes,
-    edges,
+    nodes: authoringNodes,
+    edges: authoringEdges,
     canvasRef,
     setReactFlowInstance,
+    queueCanvasNodeFocus,
+    onMoveEnd,
     canCreateActivityFromPort,
     connectMenu,
     setConnectMenu,
@@ -358,14 +416,125 @@ export function WorkflowEditor({
     onCanvasDrop,
     openEmptyConnectMenu,
     openAddStepMenu,
+    openSequenceInsertMenu,
+    insertSequenceActivity,
+    moveSequenceActivity,
     onConnectMenuPick,
     addActivity,
-    addBpmnShape,
+    onElementClick,
+    onElementDragStart,
+    onElementDragEnd,
+    onElementPointerDown,
     onPaletteClick,
     onPaletteDragStart,
     onPaletteDragEnd,
     onPalettePointerDown
   } = canvas;
+  const runSelection = useAttachedExecutionSelection({ context, attachmentId: JSON.stringify([testRun?.view.testRunId, testRun?.view.artifactId, testRun?.draftSignature]),
+    workflowExecutionId: testRun?.view.workflowExecutionId ?? "", nodeId: inspectedNode?.nodeId ?? null,
+    enabled: Boolean(testRun?.snapshot && testRun.endpointContext === context && draft && testRun.draftSignature === getDraftSignature(draft)
+      && testRun.view.definitionId === definitionId && testRun.snapshot.definitionId === definitionId) });
+  const runScope = [...runSelection.scopes].reverse().find(item => item.execution.authoredActivityId === scopeOwner?.nodeId)?.execution;
+  const runCanvas: ReturnType<typeof useEditorRunCanvas> = useEditorRunCanvas({ context, definitionId, testRun, observation, snapshotView: editorDoc.pinned, draftSignature: editableDraft ? getDraftSignature(editableDraft) : "", catalog, nodes: authoringNodes, edges: authoringEdges, mode: scope?.slot.mode, selectedNodeId,
+    ancestorId: runScope?.activityExecutionId, selectedExecution: runSelection.execution,
+    onOpenIncident: (incidentId, targetNodeId) => {
+      const incident = runCanvas.details?.incidents?.find(item => item.incidentId === incidentId);
+      const execution = runCanvas.activities.find(item => item.activityExecutionId === incident?.activityExecutionId);
+      const nodeId = targetNodeId ?? (execution ? authoringNodes.find(node => (node.data.runtimeNodeId ?? node.id) === execution.authoredActivityId)?.id : null);
+      if (execution && nodeId && runCanvas.graph) {
+        runSelection.queue(execution, runCanvas.graph, value => {
+          const item = catalog.find(candidate => candidate.activityTypeKey === value.activityType);
+          return item ? getActivityDisplay(item) : value.activityType;
+        }, execution.authoredActivityId);
+        select(nodeId);
+      } else {
+        select(nodeId ?? null);
+        runSelection.unavailable();
+      }
+      setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false);
+    } });
+  const nodes = useMemo(() => {
+    const activities = new Map((scope?.slot.activities ?? (scopeOwner ? [scopeOwner] : [])).map(activity => [activity.nodeId, activity]));
+    return runCanvas.nodes.map(node => {
+      const activity = activities.get(node.id);
+      return activity ? { ...node, data: { ...node.data,
+        workflowStartEnabled: getWorkflowStartEnabled(activity, catalogByVersion.get(activity.activityVersionId))
+      } } : node;
+    });
+  }, [catalogByVersion, runCanvas.nodes, scope?.slot.activities, scopeOwner]);
+  const edges = runCanvas.edges;
+  const selectEditorNode = (nodeId: string | null) => {
+    select(nodeId);
+    if (runCanvas.attached) { setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false); }
+  };
+  const selectedCanvasNodeIds = useMemo(() => {
+    const selected = nodes.filter(node => node.selected).map(node => node.id);
+    return selected.length > 0 ? selected : (selectedNodeId ? [selectedNodeId] : []);
+  }, [nodes, selectedNodeId]);
+  const {
+    copy: copySelectedActivities,
+    paste: pasteCopiedActivities,
+    duplicate: duplicateSelectedActivities,
+    contextMenu: activityContextMenu,
+    openContextMenu: openActivityContextMenu,
+    closeContextMenu: closeActivityContextMenu
+  } = useActivityClipboard({
+    draft,
+    frames,
+    catalogByVersion,
+    selectedNodeIds: selectedCanvasNodeIds,
+    // The compensation scope's Steps view is not a slot to paste into: an activity belongs to a step, so it is added
+    // through the scope designer.
+    disabled: isUnsupportedDesigner || !canAddActivitiesToCanvas || scope?.slot.id === compensationStepsSlotId,
+    definitionId,
+    editDraft,
+    select: nodeId => {
+      select(nodeId);
+      if (nodeId) queueCanvasNodeFocus(nodeId);
+    },
+    setStatus
+  });
+
+  const deleteCanvasNode = useCallback((nodeId: string) => {
+    const node = nodes.find(candidate => candidate.id === nodeId);
+    if (!node) return;
+    onNodesDelete([node]);
+    if (nodes.length === 1) canvasRef.current?.focus({ preventScroll: true });
+  }, [nodes, onNodesDelete, canvasRef]);
+
+  const setWorkflowStart = useCallback((nodeId: string, enabled: boolean) => {
+    if (!canAddActivitiesToCanvas) return;
+    editDraft(({ draft: current }) => current?.state.rootActivity ? {
+      ...current,
+      state: { ...current.state, rootActivity: updateActivity(current.state.rootActivity, nodeId,
+        activity => withWorkflowStartEnabled(activity, catalogByVersion.get(activity.activityVersionId), enabled), catalogByVersion) }
+    } : null);
+  }, [canAddActivitiesToCanvas, catalogByVersion, editDraft]);
+
+  const nodeActions = useMemo<WorkflowNodeActions | null>(() => {
+    if (isUnsupportedDesigner || isBpmnDesigner || !canAddActivitiesToCanvas) return null;
+    return {
+      selectedNodeCount: selectedCanvasNodeIds.length,
+      canAddAfter: canCreateActivityFromPort,
+      addAfter: (nodeId, portName, anchor) => {
+        if (selectedCanvasNodeIds.length !== 1 || selectedCanvasNodeIds[0] !== nodeId) return;
+        openAddStepMenu(anchor, { nodeId, handleId: portName });
+      },
+      duplicate: nodeId => { duplicateSelectedActivities([nodeId]); },
+      delete: deleteCanvasNode,
+      setWorkflowStart
+    };
+  }, [
+    canAddActivitiesToCanvas,
+    canCreateActivityFromPort,
+    deleteCanvasNode,
+    duplicateSelectedActivities,
+    isBpmnDesigner,
+    isUnsupportedDesigner,
+    openAddStepMenu,
+    selectedCanvasNodeIds,
+    setWorkflowStart
+  ]);
 
   // Inside a slot (breadcrumb non-empty) whose resolved slot is empty, show a guided picker instead of a
   // blank grid. Root-level empty canvas keeps its own affordances (the flowchart "Add activity" button or
@@ -392,9 +561,8 @@ export function WorkflowEditor({
     if (plan && plan.frames.length > frames.length) navigateToScope(plan.frames, plan.selectedNodeId);
   }, [addActivity, catalogByVersion, frames, navigateToScope, scope, scopeOwner]);
 
-  // Weaver's graph-operation batch apply/undo, dispatched via window events, funnels through the document
-  // reducer's batch transition.
-  useWorkflowGraphOperationBatch({ draft, details, catalog, replaceDraftByBatch, setStatus, setError });
+  // Module-owned reviewed edits use the native document comparison/transaction seam.
+  useWorkflowGraphOperationBatch({ draft: editableDraft, details, catalog, document: editorDoc, controller: weaver, holdForReview, reviewHeld, canEdit: editorDoc.canEdit, setStatus, setError });
 
   useEffect(() => {
     if (!draft?.state.rootActivity || catalog.length === 0) return;
@@ -420,7 +588,7 @@ export function WorkflowEditor({
   }, [catalog.length, catalogByVersion, draft?.state.rootActivity, editDraft]);
 
   // Mirror the live design onto window for Weaver's out-of-band tooling.
-  useWorkflowContextBridge({ details, draft, selectedNode, selectedNodeId, selectedDescriptor, inspectedNode, inspectedDescriptor, inspectedIsScopeOwner, catalogByVersion });
+  useWorkflowContextBridge({ controller: weaver, clientId: ai.clientId, details, draft, selectedNode, selectedNodeId, selectedDescriptor, inspectedNode, inspectedDescriptor, inspectedIsScopeOwner, catalogByVersion });
 
   // Memoized so contributed panels get a stable context identity and can bail out of re-renders
   // (React.memo / effect deps) while the editor re-renders for unrelated reasons.
@@ -469,16 +637,15 @@ export function WorkflowEditor({
     confirmPublication,
     cancelPublication,
     openPublishedExecutable,
-    runInputPrompt,
-    confirmRunInputs,
-    cancelRunInputs,
     expressionValidationWarning,
     confirmUnavailableExpressionValidation,
     cancelUnavailableExpressionValidation,
-    run
+    run,
+    runTestDrive,
+    updateTestDriveResult
   } = useWorkflowOperations({
     context,
-    draft,
+    draft: editableDraft,
     details,
     catalog,
     busy,
@@ -487,7 +654,7 @@ export function WorkflowEditor({
     flushPendingSave,
     reload,
     startTestRun,
-    clearTestRun,
+    updateTestRunResult: editorDoc.updateTestRunResult,
     setPublishedArtifact,
     setOperation,
     setStatus,
@@ -512,12 +679,30 @@ export function WorkflowEditor({
     return null;
   }, [draft, loadDraft]);
 
+  const editorRootRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (canvasView !== "designer") return;
+      if (canvasView !== "designer" || editorDoc.pinned) return;
       if (!(event.metaKey || event.ctrlKey)) return;
-      const target = event.target as HTMLElement | null;
-      if (isWorkflowEditorKeyboardTarget(target)) return;
+      const clipboardShortcut = matchActivityClipboardShortcut(event);
+      if (clipboardShortcut === "copy") {
+        if (isActivityClipboardShortcutBlocked(event, editorRootRef.current)) return;
+        if (hasNonCollapsedTextSelection()) return;
+        if (copySelectedActivities()) event.preventDefault();
+        return;
+      }
+      if (clipboardShortcut === "paste") {
+        if (isActivityClipboardShortcutBlocked(event, editorRootRef.current)) return;
+        if (pasteCopiedActivities()) event.preventDefault();
+        return;
+      }
+      if (clipboardShortcut === "duplicate") {
+        if (isActivityClipboardShortcutBlocked(event, editorRootRef.current)) return;
+        if (duplicateSelectedActivities()) event.preventDefault();
+        return;
+      }
+      if (isWorkflowEditorKeyboardTarget(event)) return;
       const key = event.key.toLowerCase();
       if (key === "z" && !event.shiftKey) {
         event.preventDefault();
@@ -528,14 +713,14 @@ export function WorkflowEditor({
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [canvasView, undo, redo]);
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [canvasView, copySelectedActivities, duplicateSelectedActivities, editorDoc.pinned, pasteCopiedActivities, undo, redo]);
 
   // Enter a slot from the inspector list or a canvas slot badge, along the planned frame path: a slot
   // holding a single canvas container is descended THROUGH (the canvas shows the container's contents),
   // a slot holding a single leaf lands with the leaf selected, and slots of the current scope owner
-  // retarget the last frame. A null plan (non-primary slot of the root owner) is not navigable.
+  // retarget the last frame. A null plan means the root slot is no longer declared.
   const enterSlotScope = useCallback((ownerNodeId: string, slot: ChildSlot, label: string) => {
     const plan = planSlotNavigation(frames, scopeOwner, ownerNodeId, slot, label, catalogByVersion);
     if (plan) navigateToScope(plan.frames, plan.selectedNodeId);
@@ -621,6 +806,60 @@ export function WorkflowEditor({
       };
     });
   }, [catalogByVersion, editDraft, scopeOwner?.nodeId]);
+
+  // A compensation scope's designer edits the owner's steps directly, as the BPMN canvas edits its payload.
+  const isCompensationScopeCanvas = scope?.slot.id === compensationStepsSlotId;
+  const [compensationPick, setCompensationPick] = useState<{ target: CompensationActivityTarget; clientX: number; clientY: number } | null>(null);
+  const updateCompensationSteps = useCallback((edit: (steps: CompensationStep[]) => CompensationStep[], nextStatus: string, selectNodeId?: string) => {
+    const ownerNodeId = scopeOwner?.nodeId;
+    if (!ownerNodeId) return;
+    const recipe = ({ draft: current }: { draft: WorkflowDraft | null }) => {
+      const rootActivity = current?.state.rootActivity;
+      if (!current || !rootActivity) return null;
+      // The edit runs against the scope as it is in this draft, not as it was when the designer rendered.
+      const owner = findActivityNode(rootActivity, ownerNodeId, catalogByVersion);
+      if (!owner) return null;
+      const nextOwner = withCompensationSteps(owner, edit(readCompensationSteps(owner)));
+      // Deleting a step, removing a compensation or replacing an activity drops nodes: forget their layout and
+      // presentation records, as replacing a slot activity does.
+      const kept = collectOwnedNodeIds(nextOwner, catalogByVersion, new Set<string>());
+      const removed = new Set([...collectOwnedNodeIds(owner, catalogByVersion, new Set<string>())].filter(nodeId => !kept.has(nodeId)));
+      return {
+        ...current,
+        ...forgetRemovedNodes(current, removed),
+        state: {
+          ...current.state,
+          rootActivity: updateActivity(rootActivity, ownerNodeId, () => nextOwner, catalogByVersion)
+        }
+      };
+    };
+    if (selectNodeId) editDraftAndSelect(recipe, selectNodeId);
+    else editDraft(recipe);
+    setStatus(nextStatus);
+  }, [catalogByVersion, editDraft, editDraftAndSelect, scopeOwner?.nodeId]);
+  const pickCompensationActivity = useCallback((activity: ActivityCatalogItem) => {
+    const pick = compensationPick;
+    setCompensationPick(null);
+    if (!pick || !scopeOwner) return;
+    const node = createActivityNode(activity, createNodeId(activity));
+    const label = getActivityDisplay(activity);
+    const { target } = pick;
+    if (target.kind === "new-step") {
+      updateCompensationSteps(steps => addCompensationStep(steps, target.index, node), `Added step ${label}`, node.nodeId);
+    } else if (target.kind === "step-activity") {
+      updateCompensationSteps(steps => updateCompensationStep(steps, target.index, { activity: node }), `Set ${label} as the step's activity`, node.nodeId);
+    } else {
+      const stepName = readCompensationSteps(scopeOwner)[target.index]?.name || `step ${target.index + 1}`;
+      updateCompensationSteps(steps => updateCompensationStep(steps, target.index, { compensation: node }), `${label} now undoes ${stepName}`, node.nodeId);
+    }
+  }, [compensationPick, scopeOwner, updateCompensationSteps]);
+  // On the compensation scope's canvas, a palette click adds a new last step with that activity.
+  const addCompensationStepFromPalette = useCallback((activity: ActivityCatalogItem) => {
+    if (!canAddActivitiesToCanvas || isUnsupportedDesigner) return;
+    const node = createActivityNode(activity, createNodeId(activity));
+    setCompensationPick(null);
+    updateCompensationSteps(steps => addCompensationStep(steps, steps.length, node), `Added step ${getActivityDisplay(activity)}`, node.nodeId);
+  }, [canAddActivitiesToCanvas, isUnsupportedDesigner, updateCompensationSteps]);
 
   // A start node is a Flowchart concept; a Sequence runs in authored order and has none.
   const isFlowchartScope = scope?.slot.mode === "flowchart";
@@ -779,6 +1018,13 @@ export function WorkflowEditor({
     setInspectorCollapsed(false);
   }, [draft?.state.rootActivity, catalogByVersion, setInspectorCollapsed, navigateToScope]);
 
+  // "Go to" for a validation error: a compensation scope row's path selects that row's activity inside the scope.
+  const goToValidationNode = useCallback((nodeId: string, path?: string) => {
+    const currentRoot = draft?.state.rootActivity;
+    const scope = currentRoot ? findActivityNode(currentRoot, nodeId, catalogByVersion) : null;
+    repairVariableReference(compensationValidationTarget(scope, path) ?? nodeId);
+  }, [draft?.state.rootActivity, catalogByVersion, repairVariableReference]);
+
   const togglePaletteCategory = (category: string) => {
     setExpandedPaletteCategories(current => {
       const next = new Set(current);
@@ -791,25 +1037,60 @@ export function WorkflowEditor({
     });
   };
 
-  const renderedTestRun = draft && testRun?.draftSignature === getDraftSignature(draft)
-    ? testRun.view
-    : null;
+  const currentTestRun = draft && testRun?.draftSignature === getDraftSignature(draft) ? testRun.view : null;
+  const renderedTestRun = testRun?.view ?? null;
   // ADR 0040's equivalence signal: a test run resolving to a published artifact id proves the current
   // draft is behaviorally identical to that published version. Above the loading return — hooks must
   // run on every render.
-  const publishedEquivalent = useDraftEquivalence(context, definitionId, renderedTestRun);
+  const publishedEquivalent = useDraftEquivalence(context, definitionId, currentTestRun);
 
-  if (!details || !draft) {
-    return <div className="wf-empty">{error?.message || "Loading workflow editor..."}</div>;
+  if (!details) {
+    return (
+      <div className="wf-empty wf-editor-empty" role={error ? "alert" : "status"}>
+        {error?.message ? <>
+          <p>{error.message}</p>
+          <p>Selected workflow definition: <code>{definitionId}</code></p>
+        </> : <p>Loading workflow editor…</p>}
+        {error ? <div className="wf-actions wf-empty-actions">
+          <button type="button" onClick={retryLoad}>Retry loading this workflow</button>
+          <button type="button" onClick={onBack}>Browse workflows</button>
+        </div> : null}
+      </div>
+    );
+  }
+
+  if (!draft) {
+    return (
+      <div className="wf-empty wf-editor-empty" role={error ? "alert" : "status"}>
+        <p>This workflow definition has no current draft.</p>
+        <p>Selected workflow definition: <code>{definitionId}</code></p>
+        {error?.message ? <p>{error.message}</p> : null}
+        <div className="wf-actions wf-empty-actions">
+          <button type="button" onClick={retryLoad}>Reload this workflow</button>
+          <button type="button" onClick={onBack}>Browse workflows</button>
+        </div>
+      </div>
+    );
   }
 
   // The inspected node is either a canvas node (labelled by its node data) or the scope owner, which
   // has no node on its own canvas — fall back to its catalog display name.
   const presentationByNodeId = indexActivityPresentation(draft.activityPresentation);
-  const visibleFrames = frames.map(frame => {
-    const owner = findActivityNode(draft.state.rootActivity, frame.ownerNodeId, catalogByVersion);
+  const visibleFrames = frames.map((frame, index) => {
+    if (!frame.label) return frame;
+    // A hidden selector and its following primary container frame represent one slot entry. Keep
+    // that crumb named after the entered slot while resolving live presentation labels.
+    const frameOwner = findActivityNode(draft.state.rootActivity, frame.ownerNodeId, catalogByVersion);
+    const viewedPrimary = frameOwner && getChildSlots(frameOwner, catalogByVersion)[0]?.id === frame.slotId;
+    const previous = frames[index - 1];
+    const rootPrimary = draft.state.rootActivity ? getChildSlots(draft.state.rootActivity, catalogByVersion)[0] : undefined;
+    const labelFrame = viewedPrimary && previous?.label === "" ? previous
+      : viewedPrimary && index === 0 && rootPrimary?.cardinality === "single" && rootPrimary.activities[0]?.nodeId === frame.ownerNodeId
+        ? { ownerNodeId: draft.state.rootActivity!.nodeId, slotId: rootPrimary.id }
+        : frame;
+    const owner = findActivityNode(draft.state.rootActivity, labelFrame.ownerNodeId, catalogByVersion);
     const slot = owner
-      ? getChildSlots(owner, catalogByVersion).find(candidate => candidate.id === frame.slotId)
+      ? getChildSlots(owner, catalogByVersion).find(candidate => candidate.id === labelFrame.slotId)
       : undefined;
     const catalogItem = owner ? catalogByVersion.get(owner.activityVersionId) : undefined;
     return owner && slot
@@ -841,8 +1122,7 @@ export function WorkflowEditor({
     window.history.pushState({}, "", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}${tabQuery}`);
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
-  const inlineSteps = authorsInline(themeLayout, isBpmnDesigner);
-  const contributedPanelTabs = filterGraphAuthoringContributions(workflowDesignerPanels, "workflow-definition")
+  const contributedPanelTabs = availableDesignerPanels
     .map(panel => {
       const ContributedPanel = panel.component;
       return {
@@ -857,19 +1137,24 @@ export function WorkflowEditor({
   const leftPanelTabs: WorkflowEditorPanelTab[] = [
     ...(inlineSteps ? [] : [{
       id: "activities",
-      title: "Activities",
+      title: elements.length ? "Elements" : "Activities",
       order: 0,
       icon: <Boxes size={15} />,
       render: () => (
         <>
-          {isBpmnDesigner ? <BpmnShapePalette onAddShape={addBpmnShape} /> : null}
           <ActivityPalettePanel
             paletteSearch={paletteSearch}
             onSearchChange={setPaletteSearch}
             groups={filteredPaletteGroups}
+            elements={elements}
+            disabled={!canAddActivitiesToCanvas}
+            onElementClick={onElementClick}
+            onElementDragStart={onElementDragStart}
+            onElementDragEnd={onElementDragEnd}
+            onElementPointerDown={onElementPointerDown}
             expandedCategories={expandedPaletteCategories}
             onToggleCategory={togglePaletteCategory}
-            onActivityClick={onPaletteClick}
+            onActivityClick={isCompensationScopeCanvas ? addCompensationStepFromPalette : onPaletteClick}
             onActivityDragStart={onPaletteDragStart}
             onActivityDragEnd={onPaletteDragEnd}
             onActivityPointerDown={onPalettePointerDown}
@@ -885,7 +1170,19 @@ export function WorkflowEditor({
       title: "Inspector",
       order: 0,
       icon: <ListTree size={15} />,
-      render: () => selectedBpmnElement && !selectedNode ? (
+      render: () => <>
+        {runCanvas.eligible ? <div className="wf-attached-inspector-views"><PanelTabList label="Activity view" activeTabId={inspectorView} onSelect={value => setInspectorView(value as "configuration" | "run-data")}
+          tabs={[{ id: "configuration", title: "Configuration", order: 0, icon: null, render: () => null }, { id: "run-data", title: "Run data", order: 1, icon: null, render: () => null }]} /></div> : null}
+        {inspectorView === "run-data" && runCanvas.eligible ? <React.Suspense fallback={<p role="status">Loading activity inspection…</p>}>
+          <AttachedRunActivityInspector context={context} canvas={runCanvas} selection={runSelection} activityId={inspectedNode?.nodeId ?? null}
+            ownerId={scopeOwner?.nodeId ?? null} catalog={catalog} expressionEditors={expressionEditors} onEnter={execution => {
+              const root = draft.state.rootActivity;
+              const node = root ? findActivityNode(root, execution.authoredActivityId, catalogByVersion) : null;
+              const firstChild = node ? getChildSlots(node, catalogByVersion)[0]?.activities[0] : null;
+              const path = root ? findNodeScopePath(root, firstChild?.nodeId ?? execution.authoredActivityId, activity => { const item = catalogByVersion.get(activity.activityVersionId); return item ? getActivityDisplay(item) : activity.nodeId; }, catalogByVersion) : null;
+              if (path) navigateToScope(path, firstChild?.nodeId ?? execution.authoredActivityId);
+            }} />
+        </React.Suspense> : selectedBpmnElement && !selectedNode ? (
         <BpmnElementInspector
           element={selectedBpmnElement}
           outboundFlows={selectedBpmnElementFlows}
@@ -898,6 +1195,7 @@ export function WorkflowEditor({
         <InspectorPanel
           key={inspectedNode?.nodeId ?? "no-activity"}
           context={context}
+          readOnly={editorDoc.pinned}
           draftId={draft.id}
           expressionTooling={resolvedExpressionTooling}
           expressionEditorSessionScope={expressionEditorSessionScope}
@@ -921,7 +1219,9 @@ export function WorkflowEditor({
           selectedRecommendedVersion={inspectedRecommendation}
           selectedSlots={inspectedSlots}
           inspectingScopeOwner={inspectedIsScopeOwner}
-          catalog={paletteCatalog}
+          catalog={availablePaletteCatalog}
+          choicesForSlot={choicesForSlot}
+          placementNotice={selectedNode ? activityPaletteNotice(inspectedCatalogItem, paletteContext) : undefined}
           catalogByVersion={catalogByVersion}
           selectedSupportsScopedVariables={inspectedSupportsScopedVariables}
           propertyEditors={propertyEditors}
@@ -940,15 +1240,39 @@ export function WorkflowEditor({
           onReplaceSlotActivity={replaceSlotActivity}
           isStartNode={isFlowchartScope && inspectedNode ? inspectedNode.nodeId === flowchartStartNodeId : undefined}
           onSetAsStartNode={isFlowchartScope ? setStartNode : undefined}
+          httpTestRequest={inspectedIsHttpEndpoint ? {
+            available: !!publishedRuntimeExecutable?.artifactId,
+            onOpen: () => { if (inspectedNode) setHttpTestRequestActivityId(inspectedNode.nodeId); }
+          } : undefined}
         />
-      )
+      )}
+      </>
     },
     {
       id: "runtime",
       title: "Runtime",
       order: 5,
       icon: <Play size={15} />,
-      render: () => <WorkflowRuntimePanel testRun={renderedTestRun} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} />
+      render: () => <WorkflowRuntimePanel testRun={testRun} context={context} observation={observation} currentDraftSignature={draft ? getDraftSignature(draft) : ""} stimulusEditors={testStimulusEditors} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} activityLabels={activityLabels} onRunViewUpdated={editorDoc.updateTestRunView} onWaitDraftUpdated={editorDoc.updateTestRunWaitDraft} />
+    },
+    {
+      id: "test-drive",
+      title: "Test Run",
+      order: 6,
+      icon: <Play size={15} />,
+      render: () => (
+        <LazyWorkflowTestDrivePanel
+          context={context}
+          draft={draft}
+          runInputEditors={runInputEditors}
+          stimulusEditors={testStimulusEditors}
+          setupState={testDriveSetup}
+          onSetupStateChange={setTestDriveSetup}
+          busy={busy}
+          onStart={runTestDrive}
+          onUpdateRun={updateTestDriveResult}
+        />
+      )
     },
     {
       id: "artifacts",
@@ -976,7 +1300,7 @@ export function WorkflowEditor({
   ];
 
   return (
-    <section className="wf-editor">
+    <section ref={editorRootRef} className="wf-editor" data-studio-workflow-editor="">
       <WorkflowEditorToolbar
         name={details.definition.name}
         status={visibleStatus}
@@ -984,27 +1308,37 @@ export function WorkflowEditor({
         busy={busy}
         autosaveEnabled={autosaveEnabled}
         onAutosaveChange={setAutosaveEnabled}
-        canUndo={canUndoNow}
-        canRedo={canRedoNow}
-        canAutoLayout={canAutoLayout}
-        onUndo={undo}
-        onRedo={redo}
+        canUndo={canUndoNow && !editorDoc.pinned}
+        canRedo={canRedoNow && !editorDoc.pinned}
+        canAutoLayout={canAutoLayout && !editorDoc.pinned}
+        onUndo={() => { if (!editorDoc.pinned) undo(); }}
+        onRedo={() => { if (!editorDoc.pinned) redo(); }}
         onAutoLayout={autoLayout}
         onBack={onBack}
         onSave={() => void save()}
-        onPublish={() => void preparePublication()}
+        onPublish={mode => void preparePublication(mode)}
         onRun={() => void run()}
         canRun={canRunTest}
         runTitle={draft.state.rootActivity ? "Run a transient test of the current design" : "Add a root activity before running"}
         runStatus={renderedTestRun ? (
-          <TestRunStatus
-            testRun={renderedTestRun}
+          <AttachedTestRunStatus
+            view={renderedTestRun}
+            canvas={{ ...runCanvas,
+              attach: () => { if (!runCanvas.stale || editorDoc.showSnapshot()) { runCanvas.attach(); setInspectorView("run-data"); setActiveRightPanelId("inspector"); setInspectorCollapsed(false); } },
+              detach: () => { editorDoc.returnToEditing(); runCanvas.detach(); } }}
+            onOpenRun={() => { if (renderedTestRun.workflowExecutionId) openWorkflowRun(renderedTestRun.workflowExecutionId); }}
             onOpenDetails={() => {
               setActiveRightPanelId("runtime");
               setInspectorCollapsed(false);
             }}
           />
-        ) : null}
+        ) : restoration.receipt ? <div className="wf-attached-test-run" role="group" aria-label="Previous Test Run">
+          <span>Restore the previous Test Run after verifying the saved design and current access.</span>
+          <button type="button" disabled={restoration.pending} onClick={() => void restoration.restore()}>{restoration.pending ? "Verifying Test Run…" : "Restore Test Run"}</button>
+          {restoration.receipt.workflowExecutionId ? <button type="button" onClick={() => openWorkflowRun(restoration.receipt!.workflowExecutionId!)}>Open run</button> : null}
+          <button type="button" onClick={restoration.dismiss}>Dismiss</button>
+          {restoration.message ? <span role="status">{restoration.message}</span> : null}
+        </div> : null}
         moreActions={[
           {
             label: "Weaver",
@@ -1012,14 +1346,14 @@ export function WorkflowEditor({
               ...(findRisksAction ? [{
                 label: "Review risks",
                 icon: <Sparkles size={15} />,
-                disabled: !aiProviderAvailable,
+                disabled: busy || !aiProviderAvailable,
                 title: aiProviderAvailable ? "Ask Weaver to review this draft for risks" : weaverUnavailableTitle,
                 onSelect: () => dispatchAiAction(ai, findRisksAction, { definition: details.definition, draft })
               }] : []),
               ...(proposeUpdateAction ? [{
                 label: "Propose update",
                 icon: <Sparkles size={15} />,
-                disabled: !aiProviderAvailable,
+                disabled: busy || !aiProviderAvailable,
                 title: aiProviderAvailable ? "Ask Weaver to propose a reviewed update" : weaverUnavailableTitle,
                 onSelect: () => dispatchAiAction(ai, proposeUpdateAction, { definition: details.definition, draft })
               }] : [])
@@ -1106,13 +1440,16 @@ export function WorkflowEditor({
         />
       ) : null}
 
-      {runInputPrompt ? (
-        <WorkflowRunInputDialog
-          inputs={runInputPrompt.inputs}
-          editors={runInputEditors}
-          onSubmit={values => { void confirmRunInputs(values); }}
-          onCancel={cancelRunInputs}
-        />
+      {httpTestRequestActivityId ? (
+        <React.Suspense fallback={<p role="status">Loading HTTP request tool…</p>}>
+          <HttpTestRequestDialog
+            context={context}
+            open
+            artifactId={publishedRuntimeExecutable?.artifactId ?? null}
+            authoredActivityId={httpTestRequestActivityId}
+            onClose={() => setHttpTestRequestActivityId(null)}
+          />
+        </React.Suspense>
       ) : null}
 
       {expressionValidationWarning ? (
@@ -1143,8 +1480,8 @@ export function WorkflowEditor({
         resourceKind="workflow-definition"
         layout={sidePanelLayout}
         palette={activeLeftPanel ? {
-          ariaLabel: "Activities panel",
-          tabLabel: "Activities panel tabs",
+          ariaLabel: elements.length ? "Elements panel" : "Activities panel",
+          tabLabel: elements.length ? "Elements panel tabs" : "Activities panel tabs",
           tabs: leftPanelTabs,
           activeTabId: activeLeftPanel.id,
           onSelect: setActiveLeftPanelId
@@ -1159,18 +1496,72 @@ export function WorkflowEditor({
             />
           </div>
           {canvasView === "code" ? (
-            <WorkflowCodeView draft={draft} onApply={applyEditedJson} />
+            <WorkflowCodeView draft={editableDraft ?? draft} inspectionSnapshot={editorDoc.pinned ? draft : undefined} onApply={applyEditedJson} />
           ) : canvasView === "properties" ? (
-            <WorkflowPropertiesView details={details} draft={draft} context={context} onStateChange={updateDraftState} onDefinitionMetaChange={updateDefinitionMeta} />
+            <fieldset className="wf-snapshot-properties" disabled={editorDoc.pinned}><WorkflowPropertiesView details={details} draft={draft} context={context} onStateChange={updateDraftState} onDefinitionMetaChange={updateDefinitionMeta} /></fieldset>
           ) : (
           <>
           <ScopeBreadcrumb frames={visibleFrames} onNavigate={next => navigateToScope(next, null)} />
-          <GraphAuthoringCanvas
+          {isCompensationScopeCanvas && scopeOwner && !isUnsupportedDesigner ? (
+            <CompensationScopeDesigner
+              owner={scopeOwner}
+              nodes={nodes}
+              selectedNodeId={selectedNodeId}
+              readOnly={!canAddActivitiesToCanvas}
+              canvasRef={canvasRef}
+              onSelect={selectEditorNode}
+              onChangeSteps={(edit, nextStatus) => {
+                // An open picker targets a row by index; once rows change, that index may name another step.
+                setCompensationPick(null);
+                updateCompensationSteps(edit, nextStatus);
+              }}
+              onRequestActivity={(target, anchor) => setCompensationPick({ target, ...anchor })}
+              onOpenSlot={(ownerId, label, slot) => enterSlotScope(ownerId, slot, slotCrumbLabel(label, slot))}
+            >
+              {compensationPick ? (
+                <ConnectMenu
+                  clientX={compensationPick.clientX}
+                  clientY={compensationPick.clientY}
+                  activities={paletteCatalog}
+                  onPick={pickCompensationActivity}
+                  onClose={() => setCompensationPick(null)}
+                />
+              ) : null}
+            </CompensationScopeDesigner>
+          ) : scope?.slot.mode === "sequence" && scope.slot.cardinality === "many" && !isUnsupportedDesigner ? (
+            <SequenceDesigner
+              nodes={nodes}
+              selectedNodeId={selectedNodeId}
+              readOnly={!canAddActivitiesToCanvas}
+              canvasRef={canvasRef}
+              availabilityLookup={availabilityLookup}
+              onSelect={selectEditorNode}
+              onInsert={openSequenceInsertMenu}
+              onDropActivity={(versionId, index) => {
+                const activity = paletteCatalog.find(item => item.activityVersionId === versionId);
+                if (activity) insertSequenceActivity(activity, index);
+              }}
+              onMove={moveSequenceActivity}
+              onDelete={deleteCanvasNode}
+              onDuplicate={nodeId => duplicateSelectedActivities([nodeId])}
+              onSetWorkflowStart={setWorkflowStart}
+              onOpenSlot={(ownerId, label, slot) => enterSlotScope(ownerId, slot, slotCrumbLabel(label, slot))}
+            >
+              {connectMenu ? <ConnectMenu clientX={connectMenu.clientX} clientY={connectMenu.clientY} activities={paletteCatalog} onPick={onConnectMenuPick} onClose={() => setConnectMenu(null)} /> : null}
+            </SequenceDesigner>
+          ) : <GraphAuthoringCanvas
             canvasRef={canvasRef}
+            nodeActions={nodeActions}
             canvasProps={{
+              tabIndex: -1,
+              "aria-label": "Workflow canvas",
               onDragOver: onCanvasDragOver,
               onDragLeave: onCanvasDragLeave,
-              onDrop: onCanvasDrop
+              onDrop: onCanvasDrop,
+              onKeyDownCapture: event => activateWorkflowCanvasNode(event, nodeId => {
+                closeActivityContextMenu();
+                selectEditorNode(nodeId);
+              })
             }}
             edgeActions={edgeActions}
             availabilityLookup={availabilityLookup}
@@ -1179,6 +1570,7 @@ export function WorkflowEditor({
               nodes,
               edges,
               onInit: setReactFlowInstance,
+              onMoveEnd,
               onNodesChange,
               onEdgesChange,
               onNodesDelete,
@@ -1191,12 +1583,29 @@ export function WorkflowEditor({
               onDragOver: onCanvasDragOver,
               onDragLeave: onCanvasDragLeave,
               onDrop: onCanvasDrop,
-              onPaneClick: () => select(null),
-              onNodeClick: (_, node) => select(node.id),
-              onNodeDragStop: isUnsupportedDesigner ? undefined : commitLayout,
+              onPaneClick: () => {
+                closeActivityContextMenu();
+                select(null);
+              },
+              onPaneContextMenu: event => {
+                event.preventDefault();
+                closeActivityContextMenu();
+              },
+              onNodeClick: (_, node) => {
+                closeActivityContextMenu();
+                selectEditorNode(node.id);
+              },
+              onNodeContextMenu: isUnsupportedDesigner || editorDoc.pinned ? undefined : (event, node) => {
+                event.preventDefault();
+                const selectedIds = nodes.filter(candidate => candidate.selected).map(candidate => candidate.id);
+                const nodeIds = selectedIds.includes(node.id) ? selectedIds : [node.id];
+                if (!selectedIds.includes(node.id)) select(node.id);
+                openActivityContextMenu(event.clientX, event.clientY, nodeIds);
+              },
+              onNodeDragStop: isUnsupportedDesigner || editorDoc.pinned ? undefined : commitLayout,
               nodesConnectable: canCreateActivityFromPort,
-              nodesDraggable: !isUnsupportedDesigner,
-              deleteKeyCode: isUnsupportedDesigner ? null : ["Backspace", "Delete"]
+              nodesDraggable: !isUnsupportedDesigner && !editorDoc.pinned,
+              deleteKeyCode: isUnsupportedDesigner || editorDoc.pinned ? null : ["Backspace", "Delete"]
             }}
             overlays={<>
             {insideEmptySlot ? (
@@ -1222,13 +1631,21 @@ export function WorkflowEditor({
                 onClose={() => setConnectMenu(null)}
               />
             ) : null}
+            {activityContextMenu ? (
+              <ActivityCanvasContextMenu
+                x={activityContextMenu.x}
+                y={activityContextMenu.y}
+                onDuplicate={() => duplicateSelectedActivities(activityContextMenu.nodeIds)}
+                onClose={closeActivityContextMenu}
+              />
+            ) : null}
             </>}
-          />
+          />}
           <ValidationPanel
             draft={draft}
             errors={combinedValidationErrors}
             onRepair={repairVariableReference}
-            onSelectNode={repairVariableReference}
+            onSelectNode={goToValidationNode}
             onSetAsStartNode={isFlowchartScope ? setStartNode : undefined}
             unavailable={draftValidations.available === false}
           />

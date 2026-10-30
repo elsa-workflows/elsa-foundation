@@ -9,20 +9,24 @@ from pathlib import Path
 
 
 EXPECTED_ASSETS = (
-    "Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/index.html",
-    "Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/vendor/react.js",
-    "Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/vendor/react-dom.js",
-    "Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/vendor/react-dom-client.js",
-    "Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/vendor/react-query.js",
-    "Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/vendor/lucide-react.js",
-    "Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/vendor/studio-ui.js",
-    "Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/sdk/index.js",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/index.html",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/assets/index.js",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/assets/index.css",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/react.js",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/react-dom.js",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/react-dom-client.js",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/react-query.js",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/lucide-react.js",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/vendor/studio-ui.js",
+    "Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/sdk/index.js",
     "Studio/src/essentials/Elsa.Studio.Dashboard/wwwroot/studio/modules/dashboard/module.js",
     "Studio/src/essentials/Elsa.Studio.Workflows/wwwroot/studio/modules/workflows/module.js",
     "Extensions/Attention/studio/Elsa.Studio.Attention/wwwroot/studio/modules/attention/module.js",
     "Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/wwwroot/studio/modules/console-stream/module.js",
+    "Extensions/Connections/studio/Elsa.Studio.Connections/wwwroot/studio/modules/connections/module.js",
     "Extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/wwwroot/studio/modules/open-telemetry/module.js",
     "Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/wwwroot/studio/modules/structured-logs/module.js",
+    "Extensions/Etl/studio/Elsa.Studio.Etl/wwwroot/studio/modules/etl/module.js",
     "Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/wwwroot/studio/modules/expression-editors/javascript/module.js",
     "Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/wwwroot/studio/modules/expression-editors/liquid/module.js",
     "Extensions/ExtensionBuilder/studio/Elsa.Studio.ExtensionBuilder/wwwroot/studio/modules/extension-builder/module.js",
@@ -47,10 +51,12 @@ def self_test() -> None:
             asset.touch()
         if missing_assets(root):
             raise AssertionError("Complete fixture was reported as missing assets.")
-        removed = root / EXPECTED_ASSETS[-1]
-        removed.unlink()
-        if missing_assets(root) != [EXPECTED_ASSETS[-1]]:
-            raise AssertionError("Missing RCL asset was not reported precisely.")
+        for path in EXPECTED_ASSETS:
+            removed = root / path
+            removed.unlink()
+            if missing_assets(root) != [path]:
+                raise AssertionError(f"Missing asset was not reported precisely: {path}")
+            removed.touch()
 
 
 def main() -> None:

@@ -9,7 +9,7 @@ namespace Elsa.Expressions.Services;
 /// (the reserved framework namespace). These are both the selectable picker entries (design-time) and,
 /// via the seeding startup task, the resolvable alias↔CLR-type set (runtime).
 /// </summary>
-public sealed class DefaultVariableTypeDescriptorProvider : IVariableTypeDescriptorProvider
+internal sealed class DefaultVariableTypeDescriptorProvider : IVariableTypeDescriptorProvider
 {
     private const string Category = "Primitives";
     private static readonly IReadOnlySet<CollectionKind> CollectionKinds = new HashSet<CollectionKind>(Enum.GetValues<CollectionKind>());

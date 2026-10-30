@@ -1,0 +1,6 @@
+.acme-composition-proof {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--studio-border);
+}

@@ -1,6 +1,6 @@
-﻿using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
-using Elsa.Expressions.JavaScript.Rendering.Core.Events;
-using Elsa.Expressions.JavaScript.Rendering.Core.Models;
+﻿using Elsa.Expressions.JavaScript.Rendering.Contracts;
+using Elsa.Expressions.JavaScript.Rendering.Events;
+using Elsa.Expressions.JavaScript.Rendering.Models;
 using Elsa.Events.Core.Contracts;
 
 namespace Elsa.Expressions.JavaScript.Rendering.Services;

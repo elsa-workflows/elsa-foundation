@@ -12,6 +12,8 @@ using Xunit;
 using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 using F = Elsa.Activities.Bpmn.Tests.BpmnRuntimeFixture;
 
+using BpmnExecutionState = global::Bpmn.Model.State.BpmnExecutionState;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
@@ -53,7 +55,7 @@ public sealed class BpmnEventSubprocessTier2Tests
         // Ending the real work completes the scope: the still-armed durable listener child is cancelled and its
         // bookmark is gone (the teardown-then-complete pin).
         var hold = Assert.Single(bookmarks, b => b.ExecutableNodeId == "node-hold");
-        var resumed = await fixture.ResumeAsync(hold, JsonSerializer.SerializeToElement(new EventReceived("hold")));
+        var resumed = await fixture.ResumeAsync(hold, JsonSerializer.SerializeToElement(new { eventName = "hold" }));
 
         resumed.AssertWorkflowCompleted();
         Assert.Empty(resumed.States("node-es-probe"));
@@ -127,18 +129,18 @@ public sealed class BpmnEventSubprocessTier2Tests
 
         // First stimulus: the listener fires, the body runs, and a fresh listener re-arms.
         var firstListener = Assert.Single(await fixture.BookmarksAsync(), b => b.ExecutableNodeId == "node-es-listener");
-        var afterFirst = await fixture.ResumeAsync(firstListener, JsonSerializer.SerializeToElement(new EventReceived("esmsg")));
+        var afterFirst = await fixture.ResumeAsync(firstListener, JsonSerializer.SerializeToElement(new { eventName = "esmsg" }));
         Assert.Equal(WorkflowExecutionStatus.Running, afterFirst.WorkflowState?.Status);
         Assert.Single(afterFirst.States("node-es-probe"));
 
         // Second stimulus: the re-armed listener fires again — the body runs a SECOND time (repetition via re-arm).
         var secondListener = Assert.Single(await fixture.BookmarksAsync(), b => b.ExecutableNodeId == "node-es-listener");
-        var afterSecond = await fixture.ResumeAsync(secondListener, JsonSerializer.SerializeToElement(new EventReceived("esmsg")));
+        var afterSecond = await fixture.ResumeAsync(secondListener, JsonSerializer.SerializeToElement(new { eventName = "esmsg" }));
         Assert.Equal(2, afterSecond.States("node-es-probe").Count);
 
         // Ending the real work tears the (re-armed) listener down and completes the scope.
         var hold = Assert.Single(await fixture.BookmarksAsync(), b => b.ExecutableNodeId == "node-hold");
-        var completed = await fixture.ResumeAsync(hold, JsonSerializer.SerializeToElement(new EventReceived("hold")));
+        var completed = await fixture.ResumeAsync(hold, JsonSerializer.SerializeToElement(new { eventName = "hold" }));
         completed.AssertWorkflowCompleted();
     }
 
@@ -184,7 +186,7 @@ public sealed class BpmnEventSubprocessTier2Tests
         // The interrupting message listener fires: the "hold" real work AND the sibling signal listener are drained;
         // the body runs; the scope completes without needing the hold to resume.
         var listener = Assert.Single(await fixture.BookmarksAsync(), b => b.ExecutableNodeId == "node-es-listener");
-        var resumed = await fixture.ResumeAsync(listener, JsonSerializer.SerializeToElement(new EventReceived("esmsg")));
+        var resumed = await fixture.ResumeAsync(listener, JsonSerializer.SerializeToElement(new { eventName = "esmsg" }));
 
         resumed.AssertWorkflowCompleted();
         Assert.Single(resumed.States("node-es-probe"));
@@ -362,7 +364,7 @@ public sealed class BpmnEventSubprocessTier2Tests
         Assert.Equal(WorkflowExecutionStatus.Running, run.WorkflowState?.Status);
 
         var go = Assert.Single(await fixture.BookmarksAsync(), b => b.ExecutableNodeId == "node-go");
-        var terminated = await fixture.ResumeAsync(go, JsonSerializer.SerializeToElement(new EventReceived("go")));
+        var terminated = await fixture.ResumeAsync(go, JsonSerializer.SerializeToElement(new { eventName = "go" }));
 
         // The terminate ended the process; the listener token was drained by the unfiltered CancelLiveWork, so the
         // listener never fired (the body did not run). A suspended child's bookmark lingers exactly as for any
@@ -393,7 +395,7 @@ public sealed class BpmnEventSubprocessTier2Tests
         var executable = TeardownExecutable(fixture, interrupting: false);
         await fixture.RunAsync(executable);
         var listener = Assert.Single(await fixture.BookmarksAsync(), b => b.ExecutableNodeId == "node-es-listener");
-        await fixture.ResumeAsync(listener, JsonSerializer.SerializeToElement(new EventReceived("esmsg")));
+        await fixture.ResumeAsync(listener, JsonSerializer.SerializeToElement(new { eventName = "esmsg" }));
         return await fixture.GetBpmnStateAsync();
     }
 }

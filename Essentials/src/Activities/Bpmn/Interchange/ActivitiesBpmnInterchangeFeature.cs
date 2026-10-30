@@ -1,5 +1,6 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
+using CShells.Lifecycle;
 using Elsa.Activities.Bpmn.Interchange.Authorization;
 using Elsa.Api.AspNetCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -28,8 +29,10 @@ public class ActivitiesBpmnInterchangeFeature : IWebShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddElsaEndpoints();
-        services.AddSingleton<IBpmnDocumentImporter, BpmnDocumentImporter>();
-        services.AddSingleton<IBpmnDocumentExporter, BpmnDocumentExporter>();
+        services.TryAddScoped<IBpmnWorkBinder, BpmnWorkBinder>();
+        services.TryAddScoped<IBpmnDocumentImporter, BpmnDocumentImporter>();
+        services.TryAddScoped<IBpmnDocumentExporter, BpmnDocumentExporter>();
+        services.AddSingleton<IShellInitializer>(new BpmnInterchangeRegistrationInitializer(services));
         services.AddDynamicEndpointApiExplorerRefresh();
         // The owner's failure services are keyed so hosts composing several modules keep each
         // module's own error shapes; the endpoint pipeline falls back to unkeyed registrations.

@@ -13,6 +13,7 @@ using Elsa.Studio.Api.Options;
 using Elsa.Studio.Core.Models;
 using Elsa.Studio.ExtensionBuilder;
 using Elsa.Studio.Web;
+using Elsa.Studio.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -30,7 +31,7 @@ namespace Elsa.Studio.Tests.ExtensionBuilder;
 /// module manifest, no feature key in <c>shells.json</c> — and enabling the <c>ExtensionBuilderStudio</c> feature is
 /// what brings the module and its bridge back, with the host's authorization gate intact on the shell-mapped routes.
 /// </summary>
-public sealed class ExtensionBuilderOptionalityTests : IAsyncDisposable
+public sealed class ExtensionBuilderOptionalityTests : IAsyncLifetime
 {
     private const string FeatureName = "ExtensionBuilderStudio";
     private const string ModuleId = "Elsa.Studio.ExtensionBuilder";
@@ -133,7 +134,7 @@ public sealed class ExtensionBuilderOptionalityTests : IAsyncDisposable
     public async Task ComposedShellKeepsTheHostAuthorizationGateOnTheFirstAndEveryRequest(string? bearer, HttpStatusCode expected)
     {
         // The very first request to the shell-mapped bridge — the shell is still cold — must be gated exactly like every
-        // later one: 401 unauthenticated, 403 without extension-builder.read, relayed otherwise. A backend management
+        // later one: 401 unauthenticated, 403 without extension-builder:read, relayed otherwise. A backend management
         // call is issued only for the allowed caller.
         var backend = RespondingWith(WithSessionEndpoint(BearerPermissions, _ => JsonOk("""[ ]""")));
         var client = await StartComposedHostAsync(backend, featureEnabled: true, authEnabled: true);
@@ -188,13 +189,11 @@ public sealed class ExtensionBuilderOptionalityTests : IAsyncDisposable
     {
         var backend = RespondingWith(_ => JsonOk("""{ "modules": [] }"""));
         var builder = BridgeTestHost.CreateBuilder();
-        builder.Services.AddHttpClient(nameof(StudioBackendManagementClient)).ConfigurePrimaryHttpMessageHandler(() => backend);
+        builder.Services.RouteAllBackendClientsThrough(backend);
 
         var app = builder.Build();
-        app.UseAuthentication();
-        app.UseAuthorization();
-        app.MapStudioBackendManagementBridge();
-        MapFallbacks(app);
+        app.UseElsaStudio();
+        app.MapElsaStudio();
 
         return await StartAsync(app);
     }
@@ -206,42 +205,25 @@ public sealed class ExtensionBuilderOptionalityTests : IAsyncDisposable
     {
         var shellSettings = new Dictionary<string, string?>
         {
-            ["CShells:Shells:Default:Configuration:WebRouting:Path"] = ""
+            ["CShells:Shells:Default:Configuration:WebRouting:Path"] = "",
+            ["CShells:Shells:Default:Features:StudioApi"] = "true"
         };
         if (featureEnabled)
             shellSettings[$"CShells:Shells:Default:Features:{FeatureName}"] = "true";
         if (withFailingFeature)
             shellSettings[$"CShells:Shells:Default:Features:{FailingShellFeature.Name}"] = "true";
 
-        var builder = BridgeTestHost.CreateBuilder(authEnabled: authEnabled, extraSettings: shellSettings);
+        var builder = BridgeTestHost.CreateBuilder(authEnabled: authEnabled, extraSettings: shellSettings,
+            configureStudio: studio => studio.ConfigureShells(shells => shells.WithAssemblies(typeof(ExtensionBuilderStudioFeature).Assembly, typeof(FailingShellFeature).Assembly)));
         builder.Services.RouteBackendClientsThrough(backend);
-        builder.Services.AddCShellsAspNetCore(shells =>
-        {
-            shells
-                .WithAssemblies(typeof(ExtensionBuilderStudioFeature).Assembly, typeof(FailingShellFeature).Assembly)
-                .WithConfigurationProvider(builder.Configuration)
-                .WithWebRouting(options => options.EnablePathRouting = true);
-        });
 
         var app = builder.Build();
-        app.UseStudioDefaultShellActivation();
-        app.UseRouting();
-        app.UseAuthentication();
-        app.UseAuthorization();
-        // Program.cs's UseStudioStaticFiles sits here, ahead of the shell middleware MapShells adds.
+        // Preserve this independent root branch before the Studio middleware, as in the original harness.
         app.Map(StaticAssetRoute, asset => asset.Run(context => context.Response.WriteAsync(StaticAssetContent)));
-        app.MapStudioBackendManagementBridge();
-        app.MapShells();
-        MapFallbacks(app);
+        app.UseElsaStudio();
+        app.MapElsaStudio();
 
         return await StartAsync(app);
-    }
-
-    // Program.cs's fallbacks: unknown API routes stay real 404s instead of being swallowed by the SPA fallback.
-    private static void MapFallbacks(WebApplication app)
-    {
-        app.MapFallback("/_elsa/{**path}", () => Results.NotFound());
-        app.MapFallback(() => Results.Text("<html>studio</html>", "text/html"));
     }
 
     private async Task<HttpClient> StartAsync(WebApplication app)
@@ -251,7 +233,9 @@ public sealed class ExtensionBuilderOptionalityTests : IAsyncDisposable
         return app.GetTestClient();
     }
 
-    public async ValueTask DisposeAsync()
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
     {
         if (_app is not null)
             await _app.DisposeAsync();

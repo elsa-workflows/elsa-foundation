@@ -12,8 +12,15 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 - **Kind:** Design mapping strategy.
 - **Purpose:** converts a reviewed collection plan into Activity/Workflow Design mutations.
 - **Default implementation:** `Elsa3ReusableActivityImportMaterializer` from `Elsa3.Mapping`.
-- **Invariant:** exact planned reference rewrites only; recursive composition is never replaced by separate-workflow execution. A replacement must also build each reusable activity version's `DescriptorPayload` from the `Body` it returns beside it, because the importer judges the credential-literal rule on `Body` (see Mapped bodies).
-- **Mapped bodies:** each `ImportedReusableActivity` carries its mapped workflow state as `Body`, so the importer can admit it before the commit. The importer judges `Body`, not the version's `DescriptorPayload` (the graph manifest format belongs to the graph activity module, which the import does not reference), so an implementation must build the descriptor payload from that `Body` and put no activity input into it that the body does not hold; a payload built otherwise is stored unjudged. The default implementation builds the payload's `rootActivity` from the body's root in the same call (`ReusableActivityCollectionCredentialLiteralTests` pins it).
+- **Invariant:** exact planned reference rewrites only; recursive composition is never replaced by separate-workflow execution. A replacement must also build each reusable activity version's `GraphManifest` from the `Body` it returns beside it, because the importer judges the credential-literal rule on `Body` (see Mapped bodies). It returns the reusable versions in publish order: every version after the versions it uses, the versions of one definition ascending.
+- **Mapped bodies:** each `ImportedReusableActivity` carries its mapped workflow state as `Body`, so the importer can admit it before the commit. The importer judges `Body`, not the version's `GraphManifest` (the graph manifest format belongs to the graph activity module, which the import does not reference), so an implementation must build the manifest from that `Body` and put no activity input into it that the body does not hold; a manifest built otherwise is published unjudged. The default implementation builds the payload's `rootActivity` from the body's root in the same call (`ReusableActivityCollectionCredentialLiteralTests` pins it).
+
+### `IReusableActivityTriggerClassifier`
+
+- **Kind:** optional classification port.
+- **Purpose:** tells the analyzer whether an Elsa 3 activity type is a trigger, so a reusable workflow is refused (`ELS3-REUSABLE-UNSUPPORTED-START-TRIGGER`) only for a real start trigger; 'Can start workflow' on a non-trigger only picks the flowchart's start node (spec 246 D-6, spec 248).
+- **Default implementation:** `Elsa3ReusableActivityTriggerClassifier` from `Elsa3.Mapping`, over the activity map.
+- **Invariant:** `null` for a type it does not know; the analyzer treats that, and every flagged activity when no classifier is registered, as a trigger.
 
 ### `IReusableActivityImportCommand`
 
@@ -24,7 +31,7 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
   It enlists the import ledger, Activities Design, and Workflows Design contexts in one `EfSharedTransaction`
   and writes through those lanes' own commands and atomic writers, so all three must name the same database;
   a split target is refused before any write.
-- **Invariant:** all candidate documents and the durable receipt are preflighted before one cross-kind commit; identical reapply is an `AlreadyImported` no-op.
+- **Invariant:** all candidate documents and the durable receipt are preflighted before one cross-kind commit; identical reapply is an `AlreadyImported` no-op. It writes no catalog version for an imported reusable activity: a new definition gets its authoring state with no head and the draft of its first selected version, and the publish phase publishes the versions (spec 246).
 - **Ownership boundary:** imported Activity/Workflow Definitions, immutable versions, and their
   provenance bindings are tenant-owned Design resources. User identity never participates in a
   provenance binding, so another user in the same tenant reuses exact imported resources.
@@ -50,11 +57,31 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 - **Idempotency boundary:** the key namespace is the exact tenant-plus-user operation scope. The same
   textual key is independent for two users in one tenant, while each user can reconcile only their own receipt.
 
+### `IReusableActivityImportPublisher`
+
+- **Kind:** replacement contract (exactly one per shell), **no default** (spec 246 R-1).
+- **Purpose:** publishes one imported reusable activity version from its draft through the host's regular publish
+  path (preflight, then reviewed publish), under the plan's version id.
+- **Implementation:** `PublisherReusableActivityImportPublisher`, registered by `Elsa3ImportActivitiesPublishingFeature`
+  (`Elsa3.Activities.Design.Import.Publishing`), which also registers `ReusableActivityImportPublishPhase`.
+- **Invariant:** a refusal is an outcome, never an exception; infrastructure failures propagate and the phase records
+  them as `activity.publication.failed` for that version only. The publisher must resolve the import's tenant.
+- **Absence:** without an implementation, an apply that selects a reusable workflow is refused before anything is
+  written with `ELS3-REUSABLE-PUBLISHING-UNAVAILABLE`.
+- **Publish phase:** after the commit, `ReusableActivityImportPublishPhase` publishes the mutation's reusable versions
+  in its order (dependencies first, ascending per definition), from deterministic drafts and with deterministic
+  idempotency keys, and reports one `ReusableActivityPublicationState` per version on the receipt's `Publications`.
+  `Publications` is never stored: a replay and a status read report it live from the publication store.
+- **Reading a receipt:** a source's `activityVersionDisposition` describes the commit (`Created` = not yet published
+  when the commit ran), not publication. Read `publications` to know whether a version is published; a version that is
+  not carries a code and diagnostics whose remediation says what to change.
+
 ### `IReusableActivityCollectionAnalyzer`
 
 - **Kind:** replaceable pure analysis strategy.
 - **Default implementation:** `ReusableActivityCollectionAnalyzer`.
 - **Output:** deterministic identities, exact rewrites, direct-start wrapper facts, missing/unsupported diagnostics, and complete cycle paths.
+- **Uses:** `IReusableActivityTriggerClassifier` when registered.
 
 ## Authorized HTTP contract
 
@@ -64,7 +91,8 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 - `GET .../collections/{collectionHandle}/analysis` — deterministic, side-effect-free, offset-paged analysis.
 - `POST .../collections/{collectionHandle}/selection` — authoritative dependency-closure expansion and readiness.
 - `POST .../collections/{collectionHandle}/apply` — exact Plan ID, selection, tenant-plus-user
-  operation scope, and user-scoped idempotency binding; resulting Design resources remain tenant-owned.
+  operation scope, and user-scoped idempotency binding; resulting Design resources remain tenant-owned. It needs
+  `elsa3-import:manage` and `workflows/publishing:manage`, because it publishes the imported reusable activities.
 - `GET .../imports/{idempotencyKey}` — durable lost-response reconciliation.
 
 Uploads default to 16 MiB, 20,000 source versions, a 24-hour lifetime, and analysis pages of at
@@ -117,20 +145,21 @@ The rule bounds that time; it does not encrypt the column, and it does not reach
 through the credential-literal rule, `ICredentialLiteralValidator`, registered by `WorkflowDesignValidations`, on which
 `Elsa3ImportJsonActivities` depends: the nodes of each imported workflow version's state and of each reusable
 activity's `Body` (from which the materializer builds that activity version's descriptor payload), the root and every
-node nested under it, up to `Elsa3ImportedActivityStructure.MaxNestingDepth` (14) containers below the root. The mapping
-refuses deeper nesting with 400 naming the limit: the structure payload, the stored workflow state and a reusable
-activity's descriptor payload keep the default JSON nesting limit of 64. A binding value that is itself deeply nested
-can still exceed that limit within 14 containers, and the apply then fails with a 500 before anything is committed. The mapping nests child activities under `elsa3.imported-activity.structure`, which
-no structure handler projects, so the rule's own tree walk sees only each root. `Elsa3ImportedActivityStructure`
-(`Models`) is the one definition of that shape: the mapping writes it through `Create`, and the importer reads every
-nested node back through `Nodes` and judges each as the root of its own state. The apply is all or nothing, so a
+node nested under it. The conversion refuses nesting deeper than the stored state can hold (`ELS3-ACTIVITY-NESTING-TOO-DEEP`,
+422 `elsa3.import.validation-failed`): the stored workflow state and a reusable activity's descriptor payload keep the default JSON nesting limit of 64,
+and each container adds the levels its native payload needs (14 Sequence containers, fewer Parallel or Switch ones). A
+binding value that is itself deeply nested can still exceed that limit, and the apply then fails with a 500 before
+anything is committed. The mapping nests children in the native structure of each container's Elsa 4 activity;
+`Elsa3ImportedActivityNodes.Walk` (`Models`) reads every nested node back from any native payload without a structure
+handler, and the importer judges each node on its own, its structure detached, so a host that registers the native
+handlers does not judge a nested node twice. The apply is all or nothing, so a
 literal, object, value read, expression or malformed secret reference on an input the installed activity declares a
 credential refuses the whole apply and no workflow or activity is committed: one `CredentialLiteralRefusedException`,
 answered 400 (`elsa3.import.request-invalid`) with the messages of every refused binding in `detail`. Each message names
 the rule, the node, the input and the Elsa 3 workflow it was found in (`CredentialLiteralFinding.Located`), never the
 value. The mapping stores each input binding under the declared input's reference key, whatever casing the Elsa 3
 property name has, which is the key the rule matches; two properties that bind one input, or a property that matches
-several declared inputs only ignoring case, refuse the apply with 400. A property that names no declared input or
+several declared inputs only ignoring case, refuse the apply with 422 (`elsa3.import.validation-failed`). A property that names no declared input or
 output is not mapped. As at every entry point, a node whose activity the catalog does not hold is not judged;
 publication refuses a version holding one. The rule does not apply to the upload itself; a refused apply deletes it,
 and until the apply is decided it rests in the ledger. A delete that fails leaves it longer, as Upload retention above
@@ -151,6 +180,6 @@ states (spec 188 credential-literal contract, Known gaps).
 
 ## Cross-references
 
-- Activity catalog reconciliation that consumes the imported data: [`Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](../../../../Elsa/Activities/Design/Reconciliation/EXTENSION_POINTS.md).
-- Repo-wide index: [`EXTENSION_POINTS.md`](../../../../../EXTENSION_POINTS.md).
+- Activity catalog reconciliation that consumes the imported data: [`Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](../../../../../../../Essentials/src/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md).
+- Repo-wide index: [`EXTENSION_POINTS.md`](../../../../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.22.1.

@@ -1,0 +1,83 @@
+{
+  "artifact": "4b464e1637483e89a11f632f2c99c5779cb4e0de",
+  "date": "2026-10-19T16:58:03.646Z",
+  "checks": [
+    {
+      "name": "Cold direct-file load in offline reduced-motion context",
+      "detail": {
+        "url": "file://<report-bundle>/presentation/index.html",
+        "online": false,
+        "reducedMotion": true
+      }
+    },
+    {
+      "name": "Five model lenses and all nine responsibility drill-downs",
+      "detail": "Correct model heading, nested composition, selected state and detail content"
+    },
+    {
+      "name": "Zoom and bounds",
+      "detail": "CSS zoom agrees; 75%/175% limits disable controls; reset returns 100%"
+    },
+    {
+      "name": "Keyboard entry and view activation",
+      "detail": "Tab follows skip link, program, Architecture, Recovery; Enter selects Recovery"
+    },
+    {
+      "name": "All five scenario paths",
+      "detail": "Every transition, final disabled state, previous and restart verified offline"
+    },
+    {
+      "name": "Evidence boundaries",
+      "detail": "Simulation label, non-production caveat and 17 October baseline remain visible"
+    },
+    {
+      "name": "Responsive width 320",
+      "detail": {
+        "viewport": 320,
+        "body": 320,
+        "diagramClient": 244,
+        "diagramScroll": 662
+      }
+    },
+    {
+      "name": "Responsive width 768",
+      "detail": {
+        "viewport": 768,
+        "body": 768,
+        "diagramClient": 692,
+        "diagramScroll": 692
+      }
+    },
+    {
+      "name": "Responsive width 1024",
+      "detail": {
+        "viewport": 1024,
+        "body": 1024,
+        "diagramClient": 591,
+        "diagramScroll": 662
+      }
+    },
+    {
+      "name": "Responsive width 1440",
+      "detail": {
+        "viewport": 1440,
+        "body": 1440,
+        "diagramClient": 868,
+        "diagramScroll": 868
+      }
+    },
+    {
+      "name": "Emulated reduced-motion behavior",
+      "detail": "All computed animation, transition and smooth scroll states disabled"
+    }
+  ],
+  "console": [],
+  "requests": [
+    "file://<report-bundle>/presentation/index.html",
+    "file://<report-bundle>/presentation/index.html"
+  ],
+  "screenshots": [],
+  "browser": "155.0.8059.82",
+  "status": "failed",
+  "error": "AssertionError [ERR_ASSERTION]: The scroll container must expose a named region\n\n0 !== 1\n\n    at <report-bundle>/browser-qa-region-red.cjs:78:100"
+}

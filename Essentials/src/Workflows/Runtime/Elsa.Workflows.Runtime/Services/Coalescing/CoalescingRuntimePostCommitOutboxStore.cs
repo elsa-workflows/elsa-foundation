@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 
 namespace Elsa.Workflows.Runtime.Services.Coalescing;
 
@@ -10,15 +11,37 @@ namespace Elsa.Workflows.Runtime.Services.Coalescing;
 /// recorded there, so intra-segment continuation is delivered from the working set and not durably persisted until the
 /// flush. When no session is active it is a byte-for-byte pass-through to the durable inner outbox store.
 /// </summary>
-public sealed class CoalescingRuntimePostCommitOutboxStore(
-    CoalescingInner<IRuntimePostCommitOutboxStore> inner,
-    IRuntimeCoalescingSessionAccessor sessionAccessor,
-    IWorkflowExecutionStateStore workflowExecutionStateStore) : IRuntimePostCommitOutboxStore, IPostCommitOutboxLookupStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore
+public sealed class CoalescingRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxStore, IPostCommitOutboxLookupStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore
 {
-    private readonly IRuntimePostCommitOutboxStore _inner = inner.Value;
-    private readonly IRuntimePostCommitOutboxClaimStore? _innerClaimStore = inner.Value as IRuntimePostCommitOutboxClaimStore;
-    private readonly IRuntimePostCommitOutboxClaimCompletionStore? _innerCompletionStore = inner.Value as IRuntimePostCommitOutboxClaimCompletionStore;
-    private readonly IPostCommitOutboxLookupStore? _innerLookupStore = inner.Value as IPostCommitOutboxLookupStore;
+    private readonly IRuntimeCoalescingSessionAccessor sessionAccessor;
+    private readonly IWorkflowExecutionStateStore workflowExecutionStateStore;
+    private readonly HashSet<string> requiredSourceKinds;
+
+    public CoalescingRuntimePostCommitOutboxStore(CoalescingInner<IRuntimePostCommitOutboxStore> inner,
+        IRuntimeCoalescingSessionAccessor sessionAccessor, IWorkflowExecutionStateStore workflowExecutionStateStore)
+        : this(inner, sessionAccessor, workflowExecutionStateStore, []) { }
+
+    public CoalescingRuntimePostCommitOutboxStore(CoalescingInner<IRuntimePostCommitOutboxStore> inner,
+        IRuntimeCoalescingSessionAccessor sessionAccessor, IWorkflowExecutionStateStore workflowExecutionStateStore,
+        IEnumerable<RuntimePostCommitIntentHandlerContribution> contributions)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        ArgumentNullException.ThrowIfNull(sessionAccessor);
+        ArgumentNullException.ThrowIfNull(workflowExecutionStateStore);
+        ArgumentNullException.ThrowIfNull(contributions);
+        this.sessionAccessor = sessionAccessor;
+        this.workflowExecutionStateStore = workflowExecutionStateStore;
+        _inner = inner.Value;
+        _innerClaimStore = inner.Value as IRuntimePostCommitOutboxClaimStore;
+        _innerCompletionStore = inner.Value as IRuntimePostCommitOutboxClaimCompletionStore;
+        _innerLookupStore = inner.Value as IPostCommitOutboxLookupStore;
+        requiredSourceKinds = RuntimePostCommitOutboxItems.RequiredSourceKinds(contributions);
+    }
+
+    private readonly IRuntimePostCommitOutboxStore _inner;
+    private readonly IRuntimePostCommitOutboxClaimStore? _innerClaimStore;
+    private readonly IRuntimePostCommitOutboxClaimCompletionStore? _innerCompletionStore;
+    private readonly IPostCommitOutboxLookupStore? _innerLookupStore;
 
     public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxItem>> GetDeliverableAsync(RuntimePostCommitOutboxQuery query, CancellationToken cancellationToken = default)
     {
@@ -54,6 +77,10 @@ public sealed class CoalescingRuntimePostCommitOutboxStore(
         CancellationToken cancellationToken = default) =>
         CoalescingPostCommitOutboxLookupStore.FindAsync(sessionAccessor, _innerLookupStore, outboxItemId, cancellationToken);
 
+    public ValueTask<RuntimePostCommitOutboxItem?> FindDurableAsync(string outboxItemId, CancellationToken cancellationToken = default) =>
+        (_innerLookupStore ?? throw new NotSupportedException("The inner provider cannot verify a durable outbox source."))
+            .FindDurableAsync(outboxItemId, cancellationToken);
+
     public ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>> ClaimAsync(
         RuntimePostCommitOutboxClaimRequest request,
         CancellationToken cancellationToken = default)
@@ -62,7 +89,7 @@ public sealed class CoalescingRuntimePostCommitOutboxStore(
 
         if (request.WorkflowExecutionId is { } workflowExecutionId &&
             sessionAccessor.Current is { } session && session.AppliesTo(workflowExecutionId))
-            return new ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>>(session.ClaimOutbox(request));
+            return new ValueTask<IReadOnlyCollection<RuntimePostCommitOutboxClaim>>(session.ClaimOutbox(request, item => item.StimulusDeliverySourceScope is null && !requiredSourceKinds.Contains(item.Intent.Kind)));
 
         return (_innerClaimStore ?? throw new InvalidOperationException(
             "The configured post-commit outbox store does not provide atomic claim support."))

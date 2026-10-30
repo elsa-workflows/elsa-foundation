@@ -1,5 +1,5 @@
 using CShells.Features;
-using Elsa.Platform.PackageManifest.Generator.Hints;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Studio.Core.Attributes;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -8,8 +8,8 @@ namespace Elsa.Studio.Dashboard;
 [ManifestRuntimeKind(ElsaRuntimeKinds.Studio)]
 [ManifestFeatureCategory("Studio")]
 [ManifestFeatureCategory("Dashboard")]
-[StudioModule("dashboard", "Dashboard", "navigation", "routes", "dashboard-widgets")]
-[ShellFeature(name: "DashboardStudio", DisplayName = "Dashboard", Description = "Hosts the customizable Studio dashboard.")]
+[StudioModule("dashboard", "Home", "navigation", "routes", "dashboard-widgets")]
+[ShellFeature(name: "DashboardStudio", DisplayName = "Home", Description = "Hosts the customizable Studio Home.")]
 public sealed class DashboardStudioFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)

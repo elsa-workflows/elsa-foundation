@@ -10,7 +10,7 @@ namespace Elsa.Expressions.Api.Endpoints.Descriptors.List;
 
 [Get("expressions/descriptors")]
 [RequirePermission(ExpressionsPermissions.Read)]
-public sealed class Endpoint(IRequestSender sender) : ApiEndpointWithoutRequest<ExpressionDescriptorsResponse>
+internal sealed class Endpoint(IRequestSender sender) : ApiEndpointWithoutRequest<ExpressionDescriptorsResponse>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "ListExpressionDescriptors";
 

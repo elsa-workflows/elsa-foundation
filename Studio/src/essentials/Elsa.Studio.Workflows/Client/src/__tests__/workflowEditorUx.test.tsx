@@ -1,10 +1,22 @@
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { StudioAiContributionApi } from "@elsa-workflows/studio-sdk";
-import { describeWorkflowError, isWorkflowEditorKeyboardTarget, normalizeWorkflowError } from "../workflow-editor/editorHelpers";
+import type { StudioAgentRegistry } from "@elsa-workflows/studio-sdk";
+import {
+  describeWorkflowError,
+  normalizeWorkflowError
+} from "../workflow-editor/editorHelpers";
+import {
+  hasNonCollapsedTextSelection,
+  isActivityClipboardShortcutBlocked,
+  isWorkflowEditorKeyboardTarget,
+  isWorkflowEditorOverlayOpen
+} from "../workflow-editor/activityClipboardShortcuts";
 import { WorkflowAlert } from "../workflow-editor/WorkflowAlert";
 import { WorkflowRuntimePanel } from "../workflow-editor/editorPanels";
+import { createValidationActivityLabels } from "../validationActivityLabels";
+import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
+import { flowchartStructureKind } from "../flowchartStartNode";
 import { useAiProviderAvailability } from "../workflow-editor/useAiProviderAvailability";
 import { formatActivityVersion } from "../workflowFormatting";
 import type { WorkflowTestRunView } from "../workflowTypes";
@@ -111,6 +123,217 @@ describe("isWorkflowEditorKeyboardTarget", () => {
     expect(isWorkflowEditorKeyboardTarget(editable)).toBe(true);
     expect(isWorkflowEditorKeyboardTarget(button)).toBe(false);
     expect(isWorkflowEditorKeyboardTarget(null)).toBe(false);
+    expect(isWorkflowEditorKeyboardTarget(window)).toBe(false);
+    expect(isWorkflowEditorKeyboardTarget(document)).toBe(false);
+  });
+
+  it("walks the keydown composedPath through a shadow tree into the code editor", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const editor = document.createElement("section");
+    editor.dataset.studioCodeEditor = "true";
+    const inner = document.createElement("span");
+    editor.appendChild(inner);
+    host.attachShadow({ mode: "open" }).appendChild(editor);
+
+    let blocked: boolean | undefined;
+    let targetOnly: boolean | undefined;
+    const listener = (event: KeyboardEvent) => {
+      targetOnly = isWorkflowEditorKeyboardTarget(event.target);
+      blocked = isActivityClipboardShortcutBlocked(event);
+    };
+    window.addEventListener("keydown", listener, true);
+    inner.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "d",
+      ctrlKey: true,
+      bubbles: true,
+      composed: true
+    }));
+    window.removeEventListener("keydown", listener, true);
+
+    expect(targetOnly).toBe(false);
+    expect(blocked).toBe(true);
+    host.remove();
+  });
+
+  it("treats Monaco and text-node targets as editor-owned from the node even when the caret is elsewhere", () => {
+    const monaco = document.createElement("div");
+    monaco.className = "monaco-editor";
+    const inputArea = document.createElement("textarea");
+    inputArea.className = "inputarea";
+    monaco.appendChild(inputArea);
+    document.body.appendChild(monaco);
+
+    const editor = document.createElement("section");
+    editor.dataset.studioCodeEditor = "true";
+    const token = document.createElement("span");
+    token.appendChild(document.createTextNode("buyer.email"));
+    editor.appendChild(token);
+    document.body.appendChild(editor);
+
+    const previouslyFocused = document.createElement("button");
+    document.body.appendChild(previouslyFocused);
+    previouslyFocused.focus();
+
+    expect(isWorkflowEditorKeyboardTarget(inputArea)).toBe(true);
+    expect(isWorkflowEditorKeyboardTarget(token.firstChild)).toBe(true);
+    expect(document.activeElement).toBe(previouslyFocused);
+
+    monaco.remove();
+    editor.remove();
+    previouslyFocused.remove();
+  });
+
+  it("blocks a keydown outside the editor when the caret is still inside it", () => {
+    const editor = document.createElement("section");
+    editor.dataset.studioCodeEditor = "true";
+    const surface = document.createElement("textarea");
+    editor.appendChild(surface);
+    document.body.appendChild(editor);
+    surface.focus();
+
+    const event = new KeyboardEvent("keydown", { key: "d", ctrlKey: true, bubbles: true, composed: true });
+    document.body.dispatchEvent(event);
+
+    expect(document.activeElement).toBe(surface);
+    expect(isWorkflowEditorKeyboardTarget(event.target)).toBe(false);
+    expect(isActivityClipboardShortcutBlocked(event)).toBe(true);
+
+    editor.remove();
+  });
+
+  it("blocks shortcuts while a code editor is swapping engines, but not for an idle compact preview", () => {
+    const designer = document.createElement("section");
+    const canvas = document.createElement("div");
+    designer.appendChild(canvas);
+    document.body.appendChild(designer);
+
+    const swapping = document.createElement("section");
+    swapping.dataset.studioCodeEditor = "true";
+    designer.appendChild(swapping);
+    expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(true);
+
+    const preview = document.createElement("button");
+    preview.className = "studio-code-editor-preview";
+    swapping.appendChild(preview);
+    expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(false);
+
+    swapping.remove();
+    designer.remove();
+  });
+
+  it("does not treat a revoked-authorization editor as swapping", () => {
+    const designer = document.createElement("section");
+    const canvas = document.createElement("div");
+    designer.appendChild(canvas);
+    document.body.appendChild(designer);
+
+    const revoked = document.createElement("section");
+    revoked.dataset.studioCodeEditor = "true";
+    const status = document.createElement("div");
+    status.className = "studio-code-editor-status";
+    status.textContent = "Expression source is hidden because the authorization session changed.";
+    revoked.appendChild(status);
+    designer.appendChild(revoked);
+    expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(false);
+
+    revoked.remove();
+    designer.remove();
+  });
+});
+
+describe("activity clipboard shortcut gating", () => {
+  it("blocks shortcuts while a dialog or menu is open", () => {
+    const designer = document.createElement("section");
+    const canvas = document.createElement("div");
+    designer.appendChild(canvas);
+    document.body.appendChild(designer);
+
+    expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(false);
+
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    dialog.getBoundingClientRect = () => ({
+      x: 0, y: 0, top: 0, left: 0, right: 240, bottom: 160, width: 240, height: 160, toJSON: () => ({})
+    });
+    const dialogButton = document.createElement("button");
+    dialog.appendChild(dialogButton);
+    designer.appendChild(dialog);
+
+    expect(isWorkflowEditorOverlayOpen(designer)).toBe(true);
+    expect(isActivityClipboardShortcutBlocked(dialogButton, designer)).toBe(true);
+    expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(true);
+
+    dialog.style.display = "none";
+    expect(isWorkflowEditorOverlayOpen(designer)).toBe(false);
+    expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(false);
+
+    dialog.remove();
+    designer.remove();
+  });
+
+  it("does not treat a menu outside the designer as an open designer overlay", () => {
+    const designer = document.createElement("section");
+    const canvas = document.createElement("div");
+    designer.appendChild(canvas);
+    document.body.appendChild(designer);
+
+    const shellMenu = document.createElement("div");
+    shellMenu.setAttribute("role", "menu");
+    shellMenu.getBoundingClientRect = () => ({
+      x: 0, y: 0, top: 0, left: 0, right: 180, bottom: 80, width: 180, height: 80, toJSON: () => ({})
+    });
+    document.body.appendChild(shellMenu);
+
+    expect(isWorkflowEditorOverlayOpen(designer)).toBe(false);
+    expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(false);
+
+    const portalMenu = document.createElement("div");
+    portalMenu.className = "wf-editor-actions-popover";
+    portalMenu.setAttribute("role", "menu");
+    portalMenu.getBoundingClientRect = () => ({
+      x: 0, y: 0, top: 0, left: 0, right: 200, bottom: 120, width: 200, height: 120, toJSON: () => ({})
+    });
+    document.body.appendChild(portalMenu);
+
+    expect(isWorkflowEditorOverlayOpen(designer)).toBe(true);
+    expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(true);
+
+    shellMenu.remove();
+    portalMenu.remove();
+    designer.remove();
+  });
+
+  it("blocks shortcuts whose target is outside the designer", () => {
+    const designer = document.createElement("section");
+    const outside = document.createElement("button");
+    document.body.appendChild(designer);
+    document.body.appendChild(outside);
+
+    expect(isActivityClipboardShortcutBlocked(outside, designer)).toBe(true);
+    expect(isActivityClipboardShortcutBlocked(document.body, designer)).toBe(false);
+    expect(isActivityClipboardShortcutBlocked(window, designer)).toBe(false);
+    expect(isActivityClipboardShortcutBlocked(document, designer)).toBe(false);
+
+    designer.remove();
+    outside.remove();
+  });
+
+  it("detects a non-collapsed text selection", () => {
+    const paragraph = document.createElement("p");
+    paragraph.textContent = "Validation failed";
+    document.body.appendChild(paragraph);
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    expect(hasNonCollapsedTextSelection()).toBe(true);
+
+    selection?.removeAllRanges();
+    expect(hasNonCollapsedTextSelection()).toBe(false);
+    paragraph.remove();
   });
 });
 
@@ -214,6 +437,57 @@ describe("accepted test runs with incidents", () => {
     expect(onOpenRun).toHaveBeenCalledWith("run-generic");
   });
 
+  it("rewrites a VF-ACT-003 rejection into user terms and keeps the code secondary", () => {
+    const writeLine: ActivityCatalogItem = {
+      activityVersionId: "write-line-v1",
+      activityTypeKey: "Elsa.Activities.Console.WriteLine",
+      version: "1.0.0",
+      category: "Console",
+      displayName: "Write Line",
+      executionType: "Task",
+      inputs: [{ referenceKey: "text", name: "Text", displayName: "Text" }],
+      outputs: []
+    };
+    const named: ActivityNode = {
+      nodeId: "writeline-22ab948a",
+      activityVersionId: writeLine.activityVersionId,
+      inputs: [],
+      outputs: []
+    };
+    const flowchartRoot: ActivityNode = {
+      nodeId: "root",
+      activityVersionId: "flowchart-v1",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: flowchartStructureKind,
+        schemaVersion: "1",
+        payload: { activities: [named], connections: [], startNodeId: named.nodeId }
+      }
+    };
+    const activityLabels = createValidationActivityLabels({
+      root: flowchartRoot,
+      presentation: [{ nodeId: named.nodeId, displayName: "Say hello" }],
+      catalogByVersion: new Map([[writeLine.activityVersionId, writeLine]])
+    });
+    const testRun: WorkflowTestRunView = {
+      testRunId: "test-run-rejected",
+      definitionId: "definition-1",
+      definitionVersionId: "draft:1",
+      status: "Rejected",
+      reason: "VF-ACT-003: Activity node 'writeline-22ab948a' omits required input 'text', which has no pinned default. Every published input must lower to exactly one canonical binding."
+    };
+    flushSync(() => root.render(
+      <WorkflowRuntimePanel testRun={testRun} onOpenRun={() => {}} activityLabels={activityLabels} />
+    ));
+
+    expect(container.querySelector(".wf-runtime-reason-text")?.textContent)
+      .toBe("Required input \"Text\" on \"Say hello\" (Write Line) is empty.");
+    expect(container.querySelector(".wf-alert-code")?.textContent).toBe("VF-ACT-003");
+    expect(container.querySelector(".wf-runtime-reason")?.getAttribute("title")).toContain("writeline-22ab948a");
+    expect(container.textContent).not.toMatch(/pinned default|canonical binding/i);
+  });
+
   it("keeps an ordinary accepted legacy receipt green when no fault evidence is present", () => {
     const testRun: WorkflowTestRunView = {
       testRunId: "test-run-accepted",
@@ -248,14 +522,14 @@ describe("useAiProviderAvailability", () => {
     };
   }
 
-  function Probe({ ai }: { ai: StudioAiContributionApi }) {
+  function Probe({ ai }: { ai: StudioAgentRegistry }) {
     const available = useAiProviderAvailability(ai);
     return <span data-testid="value">{available ? "available" : "unavailable"}</span>;
   }
 
   it("reflects the current value and reacts to provider availability changes", () => {
     const providerAvailability = createAvailabilityStub(false);
-    const ai = { providerAvailability } as unknown as StudioAiContributionApi;
+    const ai = { providerAvailability } as unknown as StudioAgentRegistry;
 
     flushSync(() => root.render(<Probe ai={ai} />));
     expect(container.querySelector("[data-testid='value']")?.textContent).toBe("unavailable");

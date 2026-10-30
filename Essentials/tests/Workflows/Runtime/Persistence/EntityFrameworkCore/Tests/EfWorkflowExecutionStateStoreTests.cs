@@ -123,10 +123,10 @@ public sealed class EfWorkflowExecutionStateStoreTests
             Assert.Equal(state.Authority.RootInitiator, roundTrip.Authority.RootInitiator);
             Assert.True(await first.Store.DeleteAsync(state.WorkflowExecutionId));
             Assert.False(await first.Store.DeleteAsync(state.WorkflowExecutionId));
-            await first.Store.SaveAsync(state);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => first.Store.SaveAsync(state).AsTask());
         }
         await using var restarted = database.Open("tenant-a");
-        Assert.Equal(state.WorkflowExecutionId, (await restarted.Store.FindAsync(state.WorkflowExecutionId))!.WorkflowExecutionId);
+        Assert.Null(await restarted.Store.FindAsync(state.WorkflowExecutionId));
         await using var other = database.Open("tenant-b");
         Assert.Null(await other.Store.FindAsync(state.WorkflowExecutionId));
     }

@@ -22,7 +22,16 @@ public sealed record ActivityAuthoringDescriptorView(
     JsonElement? ContainerStructure,
     ActivityAuthoringTemplateView AuthoringTemplate,
     ActivityAuthoringIntrinsicView? Intrinsic = null,
-    ActivityAuthoringProvenanceView? Provenance = null);
+    ActivityAuthoringProvenanceView? Provenance = null,
+    /// <summary>
+    /// Optional designer icon from <c>[Activity(Icon)]</c>: a lucide name, <c>asset:package/path</c>,
+    /// or <c>ext:name</c>. Null when the activity does not declare one or the value was unsafe.
+    /// </summary>
+    string? IconName = null)
+{
+    /// <summary>Optional v1 elsa.activity-palette presentation hints; never runtime admission rules.</summary>
+    public JsonElement? PaletteHints { get; init; }
+}
 
 /// <summary>
 /// Provenance of a persisted catalog entry: which reconciliation source produced the version
@@ -57,6 +66,9 @@ public sealed record ActivityAuthoringIntrinsicView(
 /// One input of an authoring descriptor. <see cref="IsSensitive"/> and <see cref="IsCredential"/> carry the
 /// activity's sensitivity declaration and are always present: false for an input that declares nothing and for every
 /// engine-intrinsic input. A credential input is sensitive too, and accepts only a secret reference or no binding.
+/// <see cref="Tier"/> is the presentation-only disclosure group (<c>essential</c>, <c>optional</c>,
+/// <c>setting</c>) and is <see langword="null"/> when the activity does not declare one or the stored
+/// value is not one of those three strings. The client then applies its own default.
 /// </summary>
 public sealed record ActivityInputDescriptorView(
     string ReferenceKey,
@@ -78,7 +90,9 @@ public sealed record ActivityInputDescriptorView(
     string? DefaultSyntax,
     JsonElement? UiSpecifications,
     bool IsSensitive,
-    bool IsCredential);
+    bool IsCredential,
+    string? Tier = null,
+    string? ConnectionType = null);
 
 public sealed record ActivityOutputDescriptorView(
     string Name,
@@ -87,7 +101,11 @@ public sealed record ActivityOutputDescriptorView(
     string? DisplayName,
     string? Description,
     string? Category,
-    bool IsBrowsable);
+    bool IsBrowsable)
+{
+    /// <summary>The stable contract reference key, when the output declares one.</summary>
+    public string? ReferenceKey { get; init; }
+}
 
 public sealed record ActivityPortDescriptorView(
     string Name,

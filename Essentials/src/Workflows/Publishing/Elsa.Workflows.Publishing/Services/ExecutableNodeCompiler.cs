@@ -13,6 +13,8 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Attributes;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -29,23 +31,28 @@ public sealed class ExecutableNodeCompiler(
     IWellKnownTypeRegistry wellKnownTypeRegistry,
     RuntimeInputBindingCompiler inputBindingCompiler,
     RuntimeOutputCaptureCompiler outputCaptureCompiler,
-    IEnumerable<IOperatorActivitySchedulingCapabilityProvider>? operatorSchedulingCapabilityProviders = null)
+    IEnumerable<IOperatorActivitySchedulingCapabilityProvider>? operatorSchedulingCapabilityProviders = null,
+    ValueConversionPlanResolver? conversionPlanResolver = null)
 {
     private readonly IReadOnlyCollection<IOperatorActivitySchedulingCapabilityProvider> _operatorSchedulingCapabilityProviders =
         (operatorSchedulingCapabilityProviders ?? []).ToArray();
+
+    private readonly ValueConversionPlanResolver _conversionPlanResolver = conversionPlanResolver ?? new(wellKnownTypeRegistry: wellKnownTypeRegistry);
 
     public ExecutableNode CompileRoot(
         ActivityNode rootActivity,
         ActivityTreeProjection projection,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
         IReadOnlyDictionary<string, ExecutableNode>? placedActivities = null,
-        IEnumerable<VariableDefinition>? workflowVariables = null) =>
+        IEnumerable<VariableDefinition>? workflowVariables = null,
+        IEnumerable<InputDefinition>? workflowInputs = null) =>
         CompileNode(
             rootActivity,
             projection,
             activityRows,
             placedActivities ?? new Dictionary<string, ExecutableNode>(),
-            workflowVariables as IReadOnlyCollection<VariableDefinition> ?? workflowVariables?.ToArray() ?? []);
+            workflowVariables as IReadOnlyCollection<VariableDefinition> ?? workflowVariables?.ToArray() ?? [],
+            workflowInputs as IReadOnlyCollection<InputDefinition> ?? workflowInputs?.ToArray() ?? []);
 
     /// <summary>
     /// Compiles the unbound root of a source-owned activity template through the same descriptor and
@@ -96,13 +103,25 @@ public sealed class ExecutableNodeCompiler(
         ActivityTreeProjection projection,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
         IReadOnlyDictionary<string, ExecutableNode> placedActivities,
-        IReadOnlyCollection<VariableDefinition> workflowVariables)
+        IReadOnlyCollection<VariableDefinition> workflowVariables,
+        IReadOnlyCollection<InputDefinition> workflowInputs)
     {
+        if (!Enum.IsDefined(activity.ExecutionPlacement))
+            throw BackgroundExecutionNotEligible(activity, $"execution placement '{activity.ExecutionPlacement}' is not defined");
+
+        if (activity.ExecutionPlacement == ActivityExecutionPlacement.Background && activity.Intrinsic is not null)
+            throw BackgroundExecutionNotEligible(activity, "engine intrinsics cannot run as background activities");
+
         if (placedActivities.TryGetValue(activity.NodeId, out var placed))
+        {
+            if (activity.ExecutionPlacement == ActivityExecutionPlacement.Background)
+                throw BackgroundExecutionNotEligible(activity, "reusable activity boundaries are not supported");
+
             return placed;
+        }
 
         if (activity.Intrinsic is not null)
-            return CompileIntrinsicNode(activity, projection, activityRows, placedActivities, workflowVariables);
+            return CompileIntrinsicNode(activity, projection, activityRows, placedActivities, workflowVariables, workflowInputs);
 
         var activityVersion = activityRows[activity.ActivityVersionId];
         var descriptor = new RuntimeActivityDescriptor(
@@ -119,7 +138,7 @@ public sealed class ExecutableNodeCompiler(
             : ActivityTypeMetadata.GetDeclaredActivityType(clrActivityType) ?? catalogActivityType;
         inputBindingCompiler.EnsureSecretBindingsAdmissible(activity.NodeId, descriptor, activity.Inputs);
         var inputBindings = inputBindingCompiler.CompileAll(activity.NodeId, inputDefinitions, activity.Inputs);
-        var childSlots = CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables);
+        var childSlots = CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables, workflowInputs);
         var executionType = clrActivityType is not null && ActivityTypeMetadata.IsTrigger(clrActivityType)
             ? TriggerNodeMetadata.TriggerExecutionType
             : activityVersion.ExecutionType.ToString();
@@ -128,6 +147,9 @@ public sealed class ExecutableNodeCompiler(
         var activityContract = clrActivityType is null
             ? null
             : BuildActivityContract(activity, activityVersion, inputDefinitions, clrActivityType, activityType, structure, inputBindings: inputBindings);
+
+        if (activity.ExecutionPlacement == ActivityExecutionPlacement.Background)
+            ValidateBackgroundExecution(activity, clrActivityType, childSlots, structure, activityContract);
 
         var outputCaptures = CompileOutputCaptures(activity, activityContract, workflowVariables);
 
@@ -139,15 +161,109 @@ public sealed class ExecutableNodeCompiler(
             descriptor: descriptor,
             inputBindings: inputBindings,
             outputCaptures: outputCaptures,
-            metadata: new Dictionary<string, string>
-            {
-                ["authoredNodeId"] = activity.NodeId,
-                [TriggerNodeMetadata.ExecutionTypeKey] = executionType
-            },
+            metadata: CompileNodeMetadata(activity.NodeId, executionType, clrActivityType),
             childSlots: childSlots,
             structure: structure,
-            activityContract: activityContract);
+            activityContract: activityContract,
+            executionPlacement: activity.ExecutionPlacement);
     }
+
+    private static Dictionary<string, string> CompileNodeMetadata(string nodeId, string executionType, Type? clrActivityType)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            ["authoredNodeId"] = nodeId,
+            [TriggerNodeMetadata.ExecutionTypeKey] = executionType
+        };
+
+        // Spec 258 R-3: how the node handles faults below it, read by the runtime without constructing the activity.
+        if (StructuralFaultHandling(clrActivityType) is { } faultHandling)
+            metadata[RuntimeMetadataKeys.StructuralFaultHandling] = faultHandling;
+        // #3135: whether rescheduling a faulted child the node already evaluated may reach it, read at preflight.
+        if (clrActivityType is not null && typeof(IRuntimeAcceptsRescheduledFaultedChild).IsAssignableFrom(clrActivityType))
+            metadata[RuntimeMetadataKeys.AcceptsRescheduledFaultedChild] = "true";
+        if (clrActivityType?.GetCustomAttribute<ActivityChildControlConsumerAttribute>() is { } control)
+        {
+            if (!typeof(IRuntimeStructuralActivity).IsAssignableFrom(clrActivityType) ||
+                !typeof(IRuntimeActivityChildControlConsumer).IsAssignableFrom(clrActivityType))
+                throw new InvalidOperationException("A child-control declaration requires a structural control consumer.");
+            metadata[RuntimeMetadataKeys.ChildControlConsumerKey] = control.Key;
+            metadata[RuntimeMetadataKeys.ChildControlConsumerVersion] = control.Version.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return metadata;
+    }
+
+    private static string? StructuralFaultHandling(Type? clrActivityType)
+    {
+        if (clrActivityType is null)
+            return null;
+        if (typeof(IRuntimeActivityDescendantFaultHandler).IsAssignableFrom(clrActivityType))
+            return RuntimeMetadataKeys.StructuralFaultHandlingDescendant;
+        if (typeof(IRuntimeActivityChildFaultHandler).IsAssignableFrom(clrActivityType) ||
+            typeof(IRuntimeActivityChildOutcomeHandler).IsAssignableFrom(clrActivityType))
+            return RuntimeMetadataKeys.StructuralFaultHandlingChild;
+        return null;
+    }
+
+    private static void ValidateBackgroundExecution(
+        ActivityNode activity,
+        Type? clrActivityType,
+        IReadOnlyCollection<ExecutableChildSlot> childSlots,
+        ExecutableActivityStructure? structure,
+        Elsa.Activities.Runtime.Core.Models.ActivityContract? activityContract)
+    {
+        if (clrActivityType is null)
+            throw BackgroundExecutionNotEligible(activity, "the activity type is not a registered CLR activity");
+
+        if (structure is not null || childSlots.Count > 0 ||
+            typeof(IRuntimeStructuralActivity).IsAssignableFrom(clrActivityType) ||
+            typeof(IRuntimeActivityChildCompletionHandler).IsAssignableFrom(clrActivityType) ||
+            typeof(IRuntimeActivityChildFaultHandler).IsAssignableFrom(clrActivityType) ||
+            typeof(IRuntimeActivityChildOutcomeHandler).IsAssignableFrom(clrActivityType) ||
+            typeof(IRuntimeActivityChildNotificationHandler).IsAssignableFrom(clrActivityType))
+        {
+            throw BackgroundExecutionNotEligible(activity, "structural activities and nodes with children are not supported");
+        }
+
+        if (typeof(IStatefulActivity).IsAssignableFrom(clrActivityType))
+            throw BackgroundExecutionNotEligible(activity, "stateful activities are not supported");
+
+        if (typeof(IRuntimeActivityCheckpointParticipant).IsAssignableFrom(clrActivityType))
+            throw BackgroundExecutionNotEligible(activity, "checkpoint-participating activities are not supported");
+
+        if (activityContract is null)
+            throw BackgroundExecutionNotEligible(activity, "the activity has no pinned typed result contract");
+
+        if (!activityContract.SupportsBackgroundExecution)
+            throw BackgroundExecutionNotEligible(activity, "the activity type does not declare BackgroundExecutionSafe");
+
+        var resultClrType = FindTypedActivityResult(clrActivityType);
+        if (resultClrType == typeof(object) ||
+            activityContract.Result.Type.Alias is "Object" or "Elsa.Any")
+        {
+            throw BackgroundExecutionNotEligible(activity, "untyped object results are not supported");
+        }
+
+        var resultRepresentations = activityContract.Result.Projections.Values
+            .Select(projection => projection.EffectiveSourceRepresentation)
+            .Prepend(activityContract.Result.EffectiveSourceRepresentation);
+        if (typeof(Stream).IsAssignableFrom(resultClrType) ||
+            resultRepresentations.Any(representation => representation == ValueRepresentation.TransientResource))
+            throw BackgroundExecutionNotEligible(activity, "transient result values are not supported");
+
+        var resultPolicies = activityContract.Result.Projections.Values
+            .Select(projection => projection.Policy)
+            .Prepend(activityContract.Result.Policy);
+        if (resultPolicies.Any(policy => !policy.IsPersistable))
+            throw BackgroundExecutionNotEligible(activity, "transient result values are not supported");
+
+        if (resultPolicies.Any(policy => policy.IsSensitive || policy.RequiresEncryption))
+            throw BackgroundExecutionNotEligible(activity, "sensitive or encryption-required result values are not supported");
+    }
+
+    private static InvalidOperationException BackgroundExecutionNotEligible(ActivityNode activity, string reason) =>
+        new($"VF-BG-001: Background execution is not eligible for activity node '{activity.NodeId}': {reason}.");
 
     /// <summary>
     /// Turns a leaf activity's authored outputs (<see cref="ActivityNode.Outputs"/>) into durable output captures
@@ -177,7 +293,8 @@ public sealed class ExecutableNodeCompiler(
         ActivityTreeProjection projection,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
         IReadOnlyDictionary<string, ExecutableNode> placedActivities,
-        IReadOnlyCollection<VariableDefinition> workflowVariables)
+        IReadOnlyCollection<VariableDefinition> workflowVariables,
+        IReadOnlyCollection<InputDefinition> workflowInputs)
     {
         var intrinsic = activity.Intrinsic!;
         var runtimeKind = intrinsic.Kind switch
@@ -194,6 +311,12 @@ public sealed class ExecutableNodeCompiler(
             _ => throw new ArgumentOutOfRangeException(nameof(intrinsic.Kind), intrinsic.Kind, "Authored workflow intrinsic kind is not defined.")
         };
         var stringType = new TypeReference("String");
+        // Studio authors the intrinsic with a dynamic value type. The selected declaration owns the
+        // assignment contract, including collection shape; never publish a stale authoring fallback as
+        // the destination type and defer the mismatch to scheduler dispatch.
+        var valueType = intrinsic.Variable is { } target
+            ? ResolveIntrinsicVariableType(activity.NodeId, target, projection, workflowVariables)
+            : intrinsic.ValueType;
         var inputTypes = runtimeKind switch
         {
             WorkflowIntrinsicKind.Control or WorkflowIntrinsicKind.Finish =>
@@ -202,9 +325,9 @@ public sealed class ExecutableNodeCompiler(
                 new Dictionary<string, TypeReference>(StringComparer.Ordinal)
                 {
                     [WorkflowIntrinsicInputKeys.Name] = stringType,
-                    [WorkflowIntrinsicInputKeys.Value] = intrinsic.ValueType!
+                    [WorkflowIntrinsicInputKeys.Value] = valueType!
                 },
-            _ => new Dictionary<string, TypeReference>(StringComparer.Ordinal) { [WorkflowIntrinsicInputKeys.Value] = intrinsic.ValueType! }
+            _ => new Dictionary<string, TypeReference>(StringComparer.Ordinal) { [WorkflowIntrinsicInputKeys.Value] = valueType! }
         };
         var authoredInputs = activity.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
         if (authoredInputs.Count != inputTypes.Count || inputTypes.Keys.Any(key => !authoredInputs.ContainsKey(key)))
@@ -234,6 +357,11 @@ public sealed class ExecutableNodeCompiler(
                     IsRequired: true),
                 authoredInputs[input.Key].Value),
             StringComparer.Ordinal);
+        if (intrinsic.Variable is not null)
+        {
+            var key = WorkflowIntrinsicInputKeys.Value;
+            bindings[key] = PinIntrinsicSourceConversion(activity.NodeId, bindings[key], projection, workflowVariables, workflowInputs);
+        }
         foreach (var literalKey in LiteralIntrinsicKeys(runtimeKind))
         {
             var binding = bindings[literalKey];
@@ -248,7 +376,7 @@ public sealed class ExecutableNodeCompiler(
             ? null
             : new RuntimeVariableReference(
                 intrinsic.Variable.ReferenceKey,
-                intrinsic.Variable.DeclaringScopeId ?? VariableReference.WorkflowScopeId);
+                intrinsic.Variable.IsWorkflowScope ? VariableReference.WorkflowScopeId : intrinsic.Variable.DeclaringScopeId!);
         var activityType = $"elsa.intrinsic.{intrinsic.Kind.ToString().ToLowerInvariant()}";
         var descriptorPayload = JsonSerializer.SerializeToElement(new
         {
@@ -269,11 +397,68 @@ public sealed class ExecutableNodeCompiler(
                 ["authoredNodeId"] = activity.NodeId,
                 [TriggerNodeMetadata.ExecutionTypeKey] = ActivityExecutionType.Action.ToString()
             },
-            childSlots: CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables),
+            childSlots: CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables, workflowInputs),
             structure: CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity)),
             activityContract: null,
             intrinsicKind: runtimeKind,
             intrinsicVariable: variable);
+    }
+
+    private RuntimeInputBinding PinIntrinsicSourceConversion(
+        string nodeId,
+        RuntimeInputBinding binding,
+        ActivityTreeProjection projection,
+        IReadOnlyCollection<VariableDefinition> workflowVariables,
+        IReadOnlyCollection<InputDefinition> workflowInputs)
+    {
+        TypeReference? sourceType = binding.Source switch
+        {
+            RuntimeInputBindingSource.VariableRead => ResolveIntrinsicVariableType(nodeId,
+                new VariableReference(binding.Variable!.VariableKey, binding.Variable.DeclaringScopeId), projection, workflowVariables),
+            RuntimeInputBindingSource.WorkflowRequest when string.IsNullOrWhiteSpace(binding.WorkflowRequest!.Path) =>
+                workflowInputs.SingleOrDefault(input => StringComparer.Ordinal.Equals(input.Name, binding.WorkflowRequest.MemberKey))?.Type,
+            _ => null
+        };
+        if (binding.Source is not RuntimeInputBindingSource.VariableRead and not RuntimeInputBindingSource.WorkflowRequest)
+            return binding;
+
+        // Dynamic JSON has no static source contract. Runtime validates its actual payload against
+        // the destination contract before storage; do not invent a source type or parse string content.
+        if (sourceType is null || sourceType.Alias == "Elsa.Any")
+            return binding;
+        var source = new ValueTypeDescriptor(sourceType.Alias, sourceType.CollectionKind);
+        try
+        {
+            var context = new ValueConversionBindingContext(nodeId, binding.InputKey, ValueConversionBindingKind.Input);
+            var plan = _conversionPlanResolver.Resolve(source, ValueRepresentationDefaults.Infer(source),
+                binding.TargetType, binding: context);
+            return new RuntimeInputBinding(binding.InputKey, binding.TargetType, binding.EffectivePolicy, binding.Source,
+                binding.Literal, binding.WorkflowRequest, binding.Variable, binding.ActivityResult, binding.Expression, binding.Metadata,
+                plan, binding.ConversionRequest, binding.Secret);
+        }
+        catch (ValueConversionPublicationException exception)
+        {
+            throw new ArgumentException($"Workflow intrinsic node '{nodeId}' input '{binding.InputKey}': {exception.Message}", exception);
+        }
+    }
+
+    private TypeReference ResolveIntrinsicVariableType(
+        string nodeId,
+        VariableReference target,
+        ActivityTreeProjection projection,
+        IReadOnlyCollection<VariableDefinition> workflowVariables)
+    {
+        // Visibility is checked by ValidateIntrinsicVariableTargets before node compilation. Resolve
+        // this exact declaring scope, rather than a display name that may be shadowed in another scope.
+        IEnumerable<VariableDefinition> declarations = workflowVariables;
+        if (!target.IsWorkflowScope)
+        {
+            var owner = projection.Nodes.FirstOrDefault(node => StringComparer.Ordinal.Equals(node.NodeId, target.DeclaringScopeId));
+            declarations = owner is null ? [] : activityStructureService.ProjectScopedVariables(owner);
+        }
+
+        return declarations.SingleOrDefault(variable => StringComparer.Ordinal.Equals(variable.ReferenceKey, target.ReferenceKey))?.Type
+            ?? throw new ArgumentException($"Workflow intrinsic node '{nodeId}' targets undeclared variable '{target.ReferenceKey}' in scope '{target.DeclaringScopeId}'.");
     }
 
     private static IReadOnlyCollection<string> LiteralIntrinsicKeys(WorkflowIntrinsicKind kind) => kind switch
@@ -310,7 +495,8 @@ public sealed class ExecutableNodeCompiler(
                 input.DefaultValue.HasValue,
                 input.DefaultValue,
                 RuntimeInputBindingCompiler.EffectivePolicy(activity.NodeId, input, state),
-                isCredential: input.IsCredential == true);
+                isCredential: input.IsCredential == true,
+                connectionType: input.ConnectionType);
         });
         var outputDefinitions = activityVersion.Outputs.ToDictionary(output => output.ReferenceKey, StringComparer.Ordinal);
         var outputStates = activity.Outputs.ToDictionary(output => output.ReferenceKey, StringComparer.Ordinal);
@@ -357,14 +543,12 @@ public sealed class ExecutableNodeCompiler(
                 ValueRepresentationDefaults.Infer(new ValueTypeDescriptor(resultReference.Alias, resultReference.CollectionKind))),
             outcomes,
             new ActivityActivationRequirement(typeof(ClrActivityDescriptor).FullName!, TypeAliasConvention.CanonicalAlias(activityType)),
-            ResolveSideEffectProfile(activityType));
+            ResolveSideEffectProfile(activityType),
+            supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true));
     }
 
-    // An unmarked activity is External (fail-safe); only an explicit
-    // [ActivitySideEffectProfile(ReplaySafe)] opts a pure/deterministic activity into a deferrable claim boundary.
-    private static SideEffectProfile ResolveSideEffectProfile(Type activityType) =>
-        activityType.GetCustomAttribute<ActivitySideEffectProfileAttribute>(inherit: true)?.Profile
-        ?? SideEffectProfile.External;
+    // The rule is shared with the design-time ActivitySideEffectProfileReader (spec 261 FR-513).
+    private static SideEffectProfile ResolveSideEffectProfile(Type activityType) => ActivitySideEffectProfiles.Of(activityType);
 
     private static ValueRepresentation ResolveSourceRepresentation(
         OutputAttribute attribute,
@@ -481,12 +665,13 @@ public sealed class ExecutableNodeCompiler(
         ActivityTreeProjection projection,
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
         IReadOnlyDictionary<string, ExecutableNode> placedActivities,
-        IReadOnlyCollection<VariableDefinition> workflowVariables)
+        IReadOnlyCollection<VariableDefinition> workflowVariables,
+        IReadOnlyCollection<InputDefinition> workflowInputs)
     {
         return childSlots
             .Select(slot =>
             {
-                var children = slot.Activities.Select(activity => CompileNode(activity, projection, activityRows, placedActivities, workflowVariables)).ToArray();
+                var children = slot.Activities.Select(activity => CompileNode(activity, projection, activityRows, placedActivities, workflowVariables, workflowInputs)).ToArray();
                 var context = new OperatorActivitySchedulingCapabilityCompilationContext(
                     parentActivityType,
                     parentExecutableNodeId,

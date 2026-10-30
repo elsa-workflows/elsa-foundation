@@ -36,7 +36,7 @@ public sealed class ActivitiesDesignApiContractTests
         ["Definitions.Recommendation"] = "Elsa.Activities.Design.Api.Commands.SetRecommendedReusableActivityVersion",
         ["Definitions.Picker"] = "Elsa.Activities.Design.Api.Requests.ListRecommendedActivityDefinitions",
         ["Definitions.ListDrafts"] = "Elsa.Activities.Design.Api.Commands.ListReusableActivityDrafts",
-        ["Definitions.AddDraft"] = "Elsa.Activities.Design.Api.Commands.CreateReusableActivityDraft",
+        ["Definitions.AddDraft"] = "Elsa.Activities.Design.Api.Commands.CreateReusableActivityDraftRequest",
         ["Definitions.ListVersions"] = "Elsa.Activities.Design.Api.Commands.ListReusableActivityVersions",
         ["Drafts.Get"] = "Elsa.Activities.Design.Api.Commands.GetReusableActivityDraft",
         ["Drafts.Replace"] = "Elsa.Activities.Design.Api.Commands.ReplaceReusableActivityDraft",
@@ -137,7 +137,7 @@ public sealed class ActivitiesDesignApiContractTests
             var policy = Assert.IsType<PermissionPolicyParseResult>(new PermissionPolicyCodec().Parse(disposition.Value!));
             Assert.Single(policy.Descriptor!.Permissions);
             Assert.DoesNotContain(PermissionKey.Normalize(PermissionKey.Wildcard), policy.Descriptor.Permissions);
-            Assert.Equal(PermissionKey.Normalize(route.Action == "manage" ? "activity-design.manage" : "activity-design.read"), policy.Descriptor.Permissions.Single());
+            Assert.Equal(PermissionKey.Normalize(route.Action == "manage" ? "activities/design:manage" : "activities/design:read"), policy.Descriptor.Permissions.Single());
 
             var accepts = endpoint.Metadata.GetMetadata<IAcceptsMetadata>();
             var expectedRequest = RequestTypes[route.Id];

@@ -1,5 +1,5 @@
 import {
-  createAiContributionApi,
+  createAgentRegistry,
   createContributionRegistry,
   createDashboardWidgetRegistry,
   createDialogController,
@@ -15,7 +15,7 @@ import {
 
 /**
  * An honest, minimal implementation of `ElsaStudioModuleApi` built ENTIRELY from the
- * factories the SDK exports publicly (`createContributionRegistry`, `createAiContributionApi`,
+ * factories the SDK exports publicly (`createContributionRegistry`, `createAgentRegistry`,
  * `createDialogController`, `createEndpointContext`). Nothing here is faked or `as any`-cast:
  * every registry is a real registry, `dialogs` is a real dialog controller, and `backend` is
  * a real endpoint context.
@@ -27,7 +27,7 @@ import {
  * `@elsa-workflows/studio-workflows`'s `register(api)` touches exactly:
  *   - `api.dialogs`               (passed to its internal `setDialogs`)
  *   - `api.featureAreas.add(...)` (registers one "Workflows" feature area with nav + routes)
- * and each registered route component reads `api.backend` / `api.ai` / the various editor
+ * and each registered route component reads `api.backend` / `api.agent` / the various editor
  * registries at RENDER time. So a working stub only needs those to be real and callable.
  */
 export function createStubModuleApi(backendBaseUrl: string): ElsaStudioModuleApi {
@@ -41,6 +41,8 @@ export function createStubModuleApi(backendBaseUrl: string): ElsaStudioModuleApi
   const navigation = createContributionRegistry<StudioNavigationContribution>({ slot: studioSlots.navigation });
   const routes = createContributionRegistry<StudioRouteContribution>({ slot: studioSlots.routes });
   const featureAreas = createFeatureAreaRegistry(navigation, routes);
+  const dashboardWidgets = createDashboardWidgetRegistry();
+  const agent = createAgentRegistry();
 
   return {
     host,
@@ -49,7 +51,8 @@ export function createStubModuleApi(backendBaseUrl: string): ElsaStudioModuleApi
     featureAreas,
     navigation,
     routes,
-    dashboardWidgets: createDashboardWidgetRegistry(),
+    dashboardWidgets,
+    homeWidgets: dashboardWidgets,
     diagnosticsWidgets: createContributionRegistry({ slot: studioSlots.diagnosticsWidgets }),
     panels: createContributionRegistry({ slot: studioSlots.panels }),
     toolbarActions: createContributionRegistry({ slot: studioSlots.toolbarActions }),
@@ -58,21 +61,13 @@ export function createStubModuleApi(backendBaseUrl: string): ElsaStudioModuleApi
     expressionEditors: createContributionRegistry({ slot: studioSlots.expressionEditors }),
     workflowRunInputEditors: createContributionRegistry({ slot: studioSlots.workflowRunInputEditors }),
     settingEditors: createContributionRegistry({ slot: studioSlots.settingEditors }),
-    agent: {
-      contextProviders: createContributionRegistry({ slot: studioSlots.agentContextProviders }),
-      promptStarters: createContributionRegistry({ slot: studioSlots.agentPromptStarters }),
-      capabilities: createContributionRegistry({ slot: studioSlots.agentCapabilities }),
-      actions: createContributionRegistry({ slot: studioSlots.agentActions }),
-      toolSlots: createContributionRegistry({ slot: studioSlots.agentToolSlots }),
-      toolContracts: createContributionRegistry({ slot: studioSlots.agentToolContracts }),
-      resultRenderers: createContributionRegistry({ slot: studioSlots.agentResultRenderers })
-    },
+    agent,
     workflowDesigner: {
       nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers }),
       toolboxItems: createContributionRegistry({ slot: studioSlots.workflowDesignerToolboxItems }),
       panels: createContributionRegistry({ slot: studioSlots.workflowDesignerPanels })
     },
-    ai: createAiContributionApi(),
+    ai: agent,
     dialogs: dialogController.api,
     diagnostics: createContributionRegistry({ slot: studioSlots.diagnostics })
   };

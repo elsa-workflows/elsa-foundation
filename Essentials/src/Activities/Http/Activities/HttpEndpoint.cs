@@ -20,7 +20,9 @@ namespace Elsa.Activities.Http.Activities;
 [RefusesSecretBinding(nameof(RequestTimeout), SecretBindingRefusalReason.FixedAtPublish)]
 [RefusesSecretBinding(nameof(RequestSizeLimit), SecretBindingRefusalReason.FixedAtPublish)]
 [RefusesSecretBinding(nameof(ResponseMode), SecretBindingRefusalReason.FixedAtPublish)]
+[Activity(Icon = "Webhook")]
 [TriggerActivity]
+[Version("1.1.0")]
 public sealed class HttpEndpoint :
     StatefulTriggerActivity<HttpEndpointResult, HttpEndpointState, HttpRequestModel>
 {
@@ -36,7 +38,7 @@ public sealed class HttpEndpoint :
     }
 
     /// <summary>The endpoint-relative route template.</summary>
-    [ActivityInput(Key = nameof(Path), Category = "Simple", Order = 10)]
+    [ActivityInput(Key = nameof(Path), Category = "Simple", Order = 10, Tier = InputTier.Essential)]
     [Required]
     public string Path { get; set; } = string.Empty;
 
@@ -46,27 +48,38 @@ public sealed class HttpEndpoint :
         Category = "Simple",
         Order = 20,
         UIHint = ActivityInputUIHints.CheckList,
-        Options = ["GET", "POST", "PUT", "HEAD", "DELETE"])]
+        Options = ["GET", "POST", "PUT", "HEAD", "DELETE"],
+        Tier = InputTier.Essential)]
     public ICollection<string>? SupportedMethods { get; set; }
 
     /// <summary>Whether this node may start a workflow.</summary>
-    [ActivityInput(Key = nameof(CanStartWorkflow), Category = "Simple", Order = 0)]
+    [ActivityInput(Key = nameof(CanStartWorkflow), DisplayName = "Start new workflows", Description = "Allow incoming requests to start new workflow instances. When off, this activity can still wait for requests in an existing workflow.", Category = "Simple", Order = 0, Tier = InputTier.Setting)]
     public bool CanStartWorkflow { get; set; }
 
-    [ActivityInput(Key = nameof(Authorize), Category = "Advanced", Order = 100)]
+    [ActivityInput(Key = nameof(Authorize), Category = "Advanced", Order = 100, Tier = InputTier.Setting)]
     public bool Authorize { get; set; }
 
-    [ActivityInput(Key = nameof(Policy), Category = "Advanced", Order = 110)]
+    [ActivityInput(Key = nameof(Policy), Category = "Advanced", Order = 110, Tier = InputTier.Setting)]
     public string? Policy { get; set; }
 
-    [ActivityInput(Key = nameof(RequestTimeout), Category = "Advanced", Order = 120)]
+    [ActivityInput(Key = nameof(RequestTimeout), Category = "Advanced", Order = 120, Tier = InputTier.Optional)]
     public TimeSpan? RequestTimeout { get; set; }
 
-    [ActivityInput(Key = nameof(RequestSizeLimit), Category = "Advanced", Order = 130)]
+    [ActivityInput(Key = nameof(RequestSizeLimit), Category = "Advanced", Order = 130, Tier = InputTier.Optional)]
     public long? RequestSizeLimit { get; set; }
 
-    [ActivityInput(Key = nameof(ResponseMode), Category = "Simple", Order = 30)]
-    public ResponseMode ResponseMode { get; set; } = ResponseMode.Async;
+    [ActivityInput(
+        Key = nameof(ResponseMode),
+        DisplayName = "Response mode",
+        Description = "Choose whether to wait for the workflow response or accept the request and run the workflow in the background.",
+        Category = "Simple",
+        Order = 30,
+        UIHint = ActivityInputUIHints.Dropdown,
+        DefaultValue = "Sync",
+        Tier = InputTier.Essential)]
+    [ActivityInputOption("Wait for workflow response", ResponseMode.Sync)]
+    [ActivityInputOption("Accept and run in background", ResponseMode.Async)]
+    public ResponseMode ResponseMode { get; set; } = ResponseMode.Sync;
 
     protected override ValueTask<ActivityTransition<HttpEndpointResult, HttpEndpointState>> ExecuteAsync(
         ActivityStartContext<HttpRequestModel> context)

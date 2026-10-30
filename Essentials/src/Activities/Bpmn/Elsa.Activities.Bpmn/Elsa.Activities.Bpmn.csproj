@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Tests" />
+    <InternalsVisibleTo Include="Elsa.Activities.Bpmn.Interchange.Tests" />
+    <PackageReference Include="Bpmn.Model" />
+    <PackageReference Include="Bpmn.Semantics" />
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
   </ItemGroup>

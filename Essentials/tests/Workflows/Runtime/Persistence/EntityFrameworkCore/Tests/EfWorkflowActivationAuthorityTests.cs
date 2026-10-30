@@ -82,6 +82,32 @@ public sealed class EfWorkflowActivationAuthorityTests
     }
 
     [Fact]
+    public async Task SQLite_batch_listing_returns_each_definition_slots_and_chunks_large_id_sets()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var context = NewContext(connection);
+        await context.Database.EnsureCreatedAsync();
+        var authority = new EfWorkflowActivationAuthority(context, new Accessor("tenant-a"));
+
+        Assert.True((await authority.TryActivateAsync(new("definition-000", "default", "activation-live", WorkflowActivationSource.Publishing, 0, Now))).Succeeded);
+        Assert.True((await authority.TryActivateAsync(new("definition-001", "default", "activation-empty", WorkflowActivationSource.Publishing, 0, Now))).Succeeded);
+        Assert.True((await authority.TryDeactivateAsync("definition-001", "default", WorkflowActivationSource.Publishing, 1, Now)).Succeeded);
+        Assert.True((await authority.TryActivateAsync(new("definition-500", "default", "activation-chunk", WorkflowActivationSource.Publishing, 0, Now))).Succeeded);
+
+        var ids = Enumerable.Range(0, 501).Select(index => $"definition-{index:D3}").ToArray();
+        var listed = await authority.ListByDefinitionIdsAsync(ids);
+
+        Assert.Equal(3, listed.Count);
+        Assert.Equal("activation-live", listed.Single(slot => slot.WorkflowDefinitionId == "definition-000").ActiveActivationId);
+        Assert.Null(listed.Single(slot => slot.WorkflowDefinitionId == "definition-001").ActiveActivationId);
+        Assert.Equal("activation-chunk", listed.Single(slot => slot.WorkflowDefinitionId == "definition-500").ActiveActivationId);
+
+        var other = new EfWorkflowActivationAuthority(context, new Accessor("tenant-b"));
+        Assert.Empty(await other.ListByDefinitionIdsAsync(["definition-000", "definition-500"]));
+    }
+
+    [Fact]
     public async Task SQLite_proves_activation_identity_uniqueness_revision_cas_and_restart_recovery()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

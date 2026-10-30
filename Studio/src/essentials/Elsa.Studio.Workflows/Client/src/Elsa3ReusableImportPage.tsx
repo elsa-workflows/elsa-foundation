@@ -33,9 +33,16 @@ import {
   groupElsa3ReusableImportItems,
   diagnosticPathSegmentKind,
   diagnosticSeverity,
-  importReceiptStatus,
+  importPublicationStatus,
+  importPublicationStatusLabel,
+  importReceiptApplyMessage,
+  importReceiptNeedsResume,
+  importReceiptOutcomeLabel,
   importResourceDisposition,
   isElsa3ReusableImportItemSelectable,
+  isPublishedImportStatus,
+  publicationForSource,
+  summarizeImportPublications,
   startElsa3ReusableImportAnalysis,
   summarizeElsa3ReusableImportSelection,
   type Elsa3ReusableImportAnalysis
@@ -43,6 +50,7 @@ import {
 import type {
   Elsa3MigrationDiagnostic,
   Elsa3ReusableImportItem,
+  Elsa3ReusableImportPublication,
   Elsa3ReusableImportReceipt,
   Elsa3ReusableImportSelectionReadiness,
   Elsa3ReusableImportUploadResult
@@ -439,9 +447,8 @@ export function Elsa3ReusableImportPage({
     if (generation !== reviewedOperationGeneration.current) return;
     setReceipt(result);
     setApplyStatus("ready");
-    setMessage(importReceiptStatus(result.status) === "AlreadyImported"
-      ? "Already imported. The durable receipt is identical and no second mutation was made."
-      : "Import applied atomically. Every created or reused artifact is listed in the durable receipt.");
+    // The receipt owns unpublished-apply guidance so the sticky status bar cannot cover it or repeat it.
+    setMessage(importReceiptNeedsResume(result) ? "" : importReceiptApplyMessage(result));
   };
 
   const redactAuthorizedState = () => {
@@ -460,7 +467,11 @@ export function Elsa3ReusableImportPage({
   };
 
   return (
-    <main className="ad-page" aria-labelledby="elsa3-import-title">
+    <main
+      className="ad-page"
+      aria-labelledby="elsa3-import-title"
+      style={message && !receipt ? { paddingBlockEnd: "5.5rem" } : undefined}
+    >
       <button type="button" className="ad-back" disabled={applyStatus === "loading"} onClick={() => navigate("/workflows/activity-definitions")}>
         <ArrowLeft size={16} aria-hidden /> Activity Definitions
       </button>
@@ -660,7 +671,15 @@ export function Elsa3ReusableImportPage({
 
       {receipt ? <ImportReceipt receipt={receipt} navigate={navigate} /> : null}
       {diagnostics.length ? <DiagnosticList diagnostics={diagnostics} /> : null}
-      {message ? <div style={styles.status} role={applyStatus === "failed" || uploadStatus === "failed" || analysisStatus === "failed" || selectionStatus === "failed" ? "alert" : "status"} aria-live="polite">{message}</div> : null}
+      {message ? (
+        <div
+          style={receipt ? styles.statusStatic : styles.status}
+          role={applyStatus === "failed" || uploadStatus === "failed" || analysisStatus === "failed" || selectionStatus === "failed" ? "alert" : "status"}
+          aria-live="polite"
+        >
+          {message}
+        </div>
+      ) : null}
     </main>
   );
 }
@@ -785,15 +804,26 @@ function ImportReceipt({
   receipt: Elsa3ReusableImportReceipt;
   navigate(path: string): void;
 }) {
+  const publicationSummary = summarizeImportPublications(receipt.publications);
+  const outcomeLabel = importReceiptOutcomeLabel(receipt);
+  const unpublished = publicationSummary.outcome === "partlyPublished" || publicationSummary.outcome === "nonePublished";
   return (
-    <section style={styles.receipt} aria-labelledby="elsa3-receipt-title">
-      <header style={styles.split}>
-        <div>
-          <span style={styles.successBadge}><CheckCircle2 size={14} /> {importReceiptStatus(receipt.status)}</span>
-          <h2 id="elsa3-receipt-title">Durable import receipt</h2>
-        </div>
+    <section
+      style={unpublished ? styles.partialReceipt : styles.receipt}
+      aria-labelledby="elsa3-receipt-title"
+    >
+      <header style={styles.receiptHeader}>
+        <h2 id="elsa3-receipt-title" style={styles.receiptTitle}>Durable import receipt</h2>
+        <span style={unpublished ? styles.warningBadge : styles.successBadge} data-receipt-outcome={outcomeLabel}>
+          {unpublished ? <XCircle size={14} /> : <CheckCircle2 size={14} />} {outcomeLabel}
+        </span>
         <code>{receipt.receiptId}</code>
       </header>
+      {unpublished ? (
+        <p style={styles.resume} role="status">
+          {importReceiptApplyMessage(receipt)}
+        </p>
+      ) : null}
       <dl style={styles.identityGrid}>
         <div><dt>Plan ID</dt><dd><code>{receipt.planId}</code></dd></div>
         <div><dt>Collection handle</dt><dd><code>{receipt.collectionHandle}</code></dd></div>
@@ -801,43 +831,91 @@ function ImportReceipt({
         <div><dt>Completed</dt><dd>{formatDateTime(receipt.completedAt)}</dd></div>
       </dl>
       <div style={styles.receiptSources}>
-        {receipt.sources.map(source => (
-          <article key={source.sourceVersionId} style={styles.row}>
-            <header style={styles.split}>
-              <strong>{source.sourceDefinitionId} · {source.sourceVersionId}</strong>
-              <span>{importResourceDisposition(source.workflowDisposition)}</span>
-            </header>
-            <div style={styles.actions}>
-              <button
-                type="button"
-                onClick={() => navigate(`/workflows/definitions?definition=${encodeURIComponent(source.workflowDefinitionId)}&version=${encodeURIComponent(source.workflowVersionId)}`)}
-              >
-                <Network size={14} /> Open {source.activityDefinitionId ? "wrapper " : ""}Workflow
-              </button>
-              {source.activityDefinitionId && source.activityDefinitionVersionId ? (
+        {receipt.sources.map(source => {
+          const publication = publicationForSource(receipt.publications, source.sourceVersionId);
+          return (
+            <article key={source.sourceVersionId} style={styles.row}>
+              <header style={styles.split}>
+                <strong>{source.sourceDefinitionId} · {source.sourceVersionId}</strong>
+                <span>{importResourceDisposition(source.workflowDisposition)}</span>
+              </header>
+              {publication ? <PublicationState publication={publication} /> : null}
+              <div style={styles.actions}>
                 <button
                   type="button"
-                  onClick={() => navigate(`/workflows/activity-definitions?definition=${encodeURIComponent(source.activityDefinitionId!)}&section=versions&version=${encodeURIComponent(source.activityDefinitionVersionId!)}`)}
+                  onClick={() => navigate(`/workflows/definitions?definition=${encodeURIComponent(source.workflowDefinitionId)}&version=${encodeURIComponent(source.workflowVersionId)}`)}
                 >
-                  <Link2 size={14} /> Open Activity Definition version
+                  <Network size={14} /> Open {source.activityDefinitionId ? "wrapper " : ""}Workflow
                 </button>
-              ) : null}
-            </div>
-            <small>
-              Workflow: {importResourceDisposition(source.workflowDisposition)}
-              {source.activityDefinitionDisposition !== null && source.activityDefinitionDisposition !== undefined
-                ? ` · Activity Definition: ${importResourceDisposition(source.activityDefinitionDisposition)}`
-                : ""}
-              {source.activityVersionDisposition !== null && source.activityVersionDisposition !== undefined
-                ? ` · Activity Definition version: ${importResourceDisposition(source.activityVersionDisposition)}`
-                : ""}
-              <br />
-              Workflow navigation identity: {source.workflowNavigationIdentity}
-              {source.activityVersionNavigationIdentity ? ` · Activity version navigation identity: ${source.activityVersionNavigationIdentity}` : ""}
-            </small>
-          </article>
-        ))}
+                {source.activityDefinitionId && source.activityDefinitionVersionId ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/workflows/activity-definitions?definition=${encodeURIComponent(source.activityDefinitionId!)}&section=versions&version=${encodeURIComponent(source.activityDefinitionVersionId!)}`)}
+                  >
+                    <Link2 size={14} /> Open Activity Definition version
+                  </button>
+                ) : null}
+              </div>
+              <small>
+                Workflow: {importResourceDisposition(source.workflowDisposition)}
+                {source.activityDefinitionDisposition !== null && source.activityDefinitionDisposition !== undefined
+                  ? ` · Activity Definition: ${importResourceDisposition(source.activityDefinitionDisposition)}`
+                  : ""}
+                {source.activityVersionDisposition !== null && source.activityVersionDisposition !== undefined
+                  ? ` · Activity Definition version: ${importResourceDisposition(source.activityVersionDisposition)}`
+                  : ""}
+                <br />
+                Workflow navigation identity: {source.workflowNavigationIdentity}
+                {source.activityVersionNavigationIdentity ? ` · Activity version navigation identity: ${source.activityVersionNavigationIdentity}` : ""}
+              </small>
+            </article>
+          );
+        })}
       </div>
+      {receipt.warnings?.length ? <ConversionWarnings warnings={receipt.warnings} /> : null}
+    </section>
+  );
+}
+
+function PublicationState({ publication }: { publication: Elsa3ReusableImportPublication }) {
+  const status = importPublicationStatus(publication.status);
+  const published = isPublishedImportStatus(publication.status);
+  return (
+    <section
+      style={published ? styles.publication : styles.unpublishedPublication}
+      aria-label={`Publication state for ${publication.sourceVersionId}`}
+      data-status={status}
+    >
+      <header style={styles.split}>
+        <strong>{importPublicationStatusLabel(publication.status)}</strong>
+        {publication.errorCode ? <code>{publication.errorCode}</code> : null}
+      </header>
+      {publication.blockedBy ? <p>Blocked by <code>{publication.blockedBy}</code></p> : null}
+      {(publication.diagnostics ?? []).map((diagnostic, index) => (
+        <article key={`${diagnostic.code ?? diagnostic.message}:${index}`}>
+          {diagnostic.message ? <p>{diagnostic.message}</p> : null}
+          {diagnostic.remediation ? <p><b>Remediation:</b> {diagnostic.remediation}</p> : null}
+        </article>
+      ))}
+    </section>
+  );
+}
+
+function ConversionWarnings({ warnings }: { warnings: Elsa3MigrationDiagnostic[] }) {
+  return (
+    <section style={styles.warning} aria-label="Conversion warnings">
+      <h3>Conversion warnings</h3>
+      <p>These describe where Elsa 4 behaves differently at run time. They stay on the receipt.</p>
+      {warnings.map((warning, index) => (
+        <article key={`${warning.code}:${warning.path}:${index}`} style={styles.diagnostic}>
+          <header style={styles.split}>
+            <strong>{warning.code}</strong>
+            <span>{diagnosticSeverity(warning.severity)}</span>
+          </header>
+          <p>{warning.message}</p>
+          {warning.guidance ? <p><b>Guidance:</b> {warning.guidance}</p> : null}
+        </article>
+      ))}
     </section>
   );
 }
@@ -1044,18 +1122,57 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gap: "1rem"
   },
+  partialReceipt: {
+    border: "1px solid var(--studio-warning)",
+    borderRadius: "var(--studio-radius-lg)",
+    background: "color-mix(in srgb, var(--studio-warning) 12%, var(--studio-surface))",
+    padding: "1.25rem",
+    display: "grid",
+    gap: "1rem"
+  },
   receiptSources: {
     display: "grid",
     gap: "0.75rem"
   },
+  publication: {
+    display: "grid",
+    gap: "0.5rem"
+  },
+  unpublishedPublication: {
+    display: "grid",
+    gap: "0.5rem",
+    borderInlineStart: "3px solid var(--studio-warning)",
+    background: "var(--studio-surface-raised)",
+    padding: "0.75rem"
+  },
+  resume: {
+    margin: 0
+  },
+  receiptHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "0.75rem",
+    flexWrap: "wrap"
+  },
+  receiptTitle: {
+    margin: 0
+  },
   status: {
     position: "sticky",
     insetBlockEnd: "0.75rem",
+    zIndex: 1,
     border: "1px solid var(--studio-border)",
     borderRadius: "var(--studio-radius-md)",
     background: "var(--studio-surface-raised)",
     padding: "0.75rem",
     boxShadow: "var(--studio-shadow-sm)"
+  },
+  statusStatic: {
+    border: "1px solid var(--studio-border)",
+    borderRadius: "var(--studio-radius-md)",
+    background: "var(--studio-surface-raised)",
+    padding: "0.75rem"
   },
   successBadge: {
     display: "inline-flex",
@@ -1064,6 +1181,9 @@ const styles: Record<string, CSSProperties> = {
     color: "var(--studio-success-fg)"
   },
   warningBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
     color: "var(--studio-warning-fg)"
   },
   safetyBadge: {

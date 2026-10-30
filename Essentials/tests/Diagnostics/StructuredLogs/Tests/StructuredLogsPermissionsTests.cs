@@ -9,11 +9,11 @@ namespace Elsa.Diagnostics.StructuredLogs.Tests;
 
 public sealed class StructuredLogsPermissionsTests
 {
-    private const string ExpectedPermission = "Diagnostics:StructuredLogs";
+    private const string ExpectedPermission = "diagnostics/structured-logs:read";
     private const string ExpectedOwner = "Elsa.Diagnostics.StructuredLogs";
 
     [Fact]
-    public void Structured_logs_contributor_has_one_stable_module_owned_permission_without_implication()
+    public void Structured_logs_contributor_has_one_stable_module_owned_permission()
     {
         var contributor = CreateContributor();
         var permissions = contributor.Contribute().ToArray();
@@ -25,7 +25,6 @@ public sealed class StructuredLogsPermissionsTests
         Assert.Equal(ExpectedPermission, permission.Key);
         Assert.Equal(ExpectedOwner, permission.OwnerId);
         Assert.Equal(contributor.ContributorType, permission.ContributorType);
-        Assert.True(permission.Implies is null or { Count: 0 });
     }
 
     [Fact]

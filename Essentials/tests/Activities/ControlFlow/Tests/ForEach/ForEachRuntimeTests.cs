@@ -9,7 +9,7 @@ using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
@@ -246,7 +246,7 @@ public sealed class ForEachRuntimeTests
     private static string[] ConsoleLines(string output) =>
         output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
 
-    private static IPayloadSerializer Serializer => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+    private static readonly IPayloadSerializer Serializer = SerializationServices.PayloadSerializer();
 
     private sealed record ForEachDescriptor;
 }

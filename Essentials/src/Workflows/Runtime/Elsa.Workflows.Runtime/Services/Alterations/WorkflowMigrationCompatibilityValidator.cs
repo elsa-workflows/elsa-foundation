@@ -92,6 +92,7 @@ public sealed class WorkflowMigrationCompatibilityValidator
         StringComparer.Ordinal.Equals(source.Descriptor.ConsumerKey, target.Descriptor.ConsumerKey) &&
         IsRequirementCompatible(source.Descriptor.SchemaVersion, target.Descriptor.SchemaVersion, target.Metadata) &&
         SameActivityContract(source.ActivityContract, target.ActivityContract) &&
+        source.ExecutionPlacement == target.ExecutionPlacement &&
         source.IntrinsicKind == target.IntrinsicKind &&
         Equals(source.IntrinsicVariable, target.IntrinsicVariable);
 

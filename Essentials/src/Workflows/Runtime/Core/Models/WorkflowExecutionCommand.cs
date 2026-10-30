@@ -33,5 +33,9 @@ public enum WorkflowExecutionCommandKind
     CancelActivityScope = 15,
     RetryActivityBoundary = 16,
     NotifyParentActivity = 17,
-    AlterWorkflow = 18
+    AlterWorkflow = 18,
+    /// <summary>Delivers an operator's intervention decision to the structural parent that requested it (spec 260 R-5).</summary>
+    DeliverInterventionDecision = 19,
+    /// <summary>Delivers exact-source nonterminal called-workflow control through its caller inbox.</summary>
+    DeliverChildControl = 20
 }

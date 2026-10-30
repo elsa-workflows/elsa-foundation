@@ -25,7 +25,7 @@ now=$(date -u +%s)
 day=86400
 
 # Never swept, in addition to branches GitHub marks protected.
-exempt_re='^(main|publish-state|release/.*|rc/.*)$'
+exempt_re='^(main|publish-state|generated-maps|release/.*|rc/.*)$'
 
 # Issue thresholds; keep in step with the policy doc.
 max_programs=2

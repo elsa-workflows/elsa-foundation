@@ -1,0 +1,6 @@
+#nullable enable
+Elsa.Agent.Extensions.AgentServiceCollectionExtensions
+Elsa.Agent.FoundationAgentAbstractionsFeature
+Elsa.Agent.FoundationAgentAbstractionsFeature.FoundationAgentAbstractionsFeature() -> void
+static Elsa.Agent.Extensions.AgentServiceCollectionExtensions.AddFoundationAgentAbstractions(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+virtual Elsa.Agent.FoundationAgentAbstractionsFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

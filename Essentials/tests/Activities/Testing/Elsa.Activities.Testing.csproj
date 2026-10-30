@@ -19,6 +19,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../../src/Cluster/Core/Elsa.Cluster.Core.csproj" />
+    <ProjectReference Include="../../../src/Cluster/InProcess/Elsa.Cluster.InProcess.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
@@ -27,6 +29,7 @@
     <ProjectReference Include="..\..\..\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Api\Elsa.Workflows.Runtime.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\Serialization\Testing\Elsa.Serialization.Testing.csproj" />
   </ItemGroup>
 
 </Project>

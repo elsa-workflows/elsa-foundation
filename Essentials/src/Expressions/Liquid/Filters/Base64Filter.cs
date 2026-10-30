@@ -10,7 +10,7 @@ namespace Elsa.Expressions.Liquid.Filters;
 /// <summary>
 /// A liquid filter that converts a value into a base 64 string representation.
 /// </summary>
-public sealed class Base64Filter : ILiquidFilter
+internal sealed class Base64Filter : ILiquidFilter
 {
     public const string Key = "base64";
 

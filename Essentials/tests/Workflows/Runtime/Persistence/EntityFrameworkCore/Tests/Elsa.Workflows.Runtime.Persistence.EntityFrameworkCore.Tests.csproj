@@ -20,7 +20,12 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Use the same authored BPMN fixture builders for old-writer and EF restart witnesses. -->
+    <Compile Include="../../../../../Activities/Bpmn/Tests/BpmnRuntimeFixture.cs" Link="Fixtures/BpmnRuntimeFixture.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- Built as a real child host; the tests drive its Kestrel endpoints and private fixture control pipe. -->
+    <ProjectReference Include="..\..\..\..\..\..\src\Cluster\Readability\Elsa.Cluster.Readability.csproj" />
     <ProjectReference Include="..\Fixtures\WorkerOidcHost\WorkerOidcHost.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Runtime\Elsa.Workflows.Runtime\Elsa.Workflows.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Runtime\Persistence\EntityFrameworkCore\Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
@@ -29,6 +34,7 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
     <!-- The durable timer pump, driven over the EF timer store by ClaimLeaseOverrunContract. -->
     <ProjectReference Include="..\..\..\..\..\..\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
+    <ProjectReference Include="../../../../../../src/Activities/Scheduling/Elsa.Activities.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Locking\FileSystem\Elsa.Locking.FileSystem.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Modularity\EntityFramework\Elsa.Modularity.EntityFramework.csproj" />
@@ -43,6 +49,8 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Activities\Bpmn\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\..\..\Activities\Testing\Elsa.Activities.Testing.csproj" />
     <!-- RecordingLogger, for the crash-repair contract's leaked-reference errors (#2251). -->

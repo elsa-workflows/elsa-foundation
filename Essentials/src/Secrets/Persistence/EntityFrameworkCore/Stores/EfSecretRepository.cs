@@ -1,6 +1,7 @@
 using Elsa.Persistence.EntityFramework;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
+using Elsa.Secrets.Persistence.EntityFrameworkCore.Configuration;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,10 +22,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
     {
         cancellationToken.ThrowIfCancellationRequested();
         ValidateIdentity(tenantId, normalizedName);
-        var record = await context.Secrets.AsNoTracking()
-            .SingleOrDefaultAsync(
-                row => row.TenantId == tenantId && row.NormalizedName == normalizedName,
-                cancellationToken);
+        var record = await FindRecordAsync(tenantId, normalizedName, cancellationToken);
         return record is null ? null : Map(record, tenantId);
     }
 
@@ -35,10 +33,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
     {
         cancellationToken.ThrowIfCancellationRequested();
         ValidateIdentity(tenantId, normalizedName);
-        var record = await context.Secrets.AsNoTracking()
-            .SingleOrDefaultAsync(
-                row => row.TenantId == tenantId && row.NormalizedName == normalizedName,
-                cancellationToken);
+        var record = await FindRecordAsync(tenantId, normalizedName, cancellationToken);
         if (record is null)
             return null;
         if (EfSchemaVersion.NotReadable(SecretsEfModule.Chain, record.SchemaVersion) ||
@@ -65,6 +60,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
         var totalCount = await query.LongCountAsync(cancellationToken);
         var records = await query
             .OrderBy(row => row.NormalizedName)
+            .ThenBy(row => row.Tombstone)
             .Skip(request.Skip)
             .Take(request.Take)
             .ToListAsync(cancellationToken);
@@ -76,14 +72,18 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(secret);
-        ValidateIdentity(secret.TenantId, secret.Name);
+        ValidateIdentity(secret);
+        var record = NewRecord(SecretDocument.FromSecret(secret));
+        // Only the row holding the name refuses a new secret; rows of secrets deleted under it do not.
         var exists = await context.Secrets.AnyAsync(
-            row => row.TenantId == secret.TenantId && row.NormalizedName == secret.Name,
+            row => row.TenantId == record.TenantId &&
+                   row.NormalizedName == record.NormalizedName &&
+                   row.Tombstone == record.Tombstone,
             cancellationToken);
         if (exists)
             return false;
 
-        context.Secrets.Add(SecretDocument.FromSecret(secret).ToRecord());
+        context.Secrets.Add(record);
         try
         {
             await context.SaveChangesAsync(cancellationToken);
@@ -106,19 +106,22 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(secret);
-        ValidateIdentity(secret.TenantId, secret.Name);
+        ValidateIdentity(secret);
         var document = SecretDocument.FromSecret(secret);
         await UnconditionalSaves.RunAsync(context, async () =>
         {
-            var existing = await context.Secrets.FindAsync([secret.TenantId, secret.Name], cancellationToken);
+            var existing = await context.Secrets.FindAsync([secret.TenantId, secret.Name, document.Tombstone], cancellationToken);
             if (existing is null)
-                context.Secrets.Add(document.ToRecord());
+                context.Secrets.Add(NewRecord(document));
             else
             {
                 // A row this build cannot read is never overwritten in this build's format.
                 EfSchemaVersion.EnsureReadable(SecretsEfModule.Chain, existing.SchemaVersion);
                 document.CopyProjectionsTo(existing);
             }
+
+            if (document.Tombstone.Length > 0)
+                await FreeNameAsync(secret, cancellationToken);
 
             try
             {
@@ -148,18 +151,23 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
         if (!SecretRevisionMapper.TryParse(expectedRevision, out var expectedToken))
             return SecretRevisionMapper.InvalidRevision();
 
-        ValidateIdentity(secret.TenantId, secret.Name);
+        ValidateIdentity(secret);
         var document = SecretDocument.FromSecret(secret);
-        var existing = await context.Secrets.FindAsync([secret.TenantId, secret.Name], cancellationToken);
+        // A revision guards the row holding the name: a deleted secret's row is history, and no revision saves over it.
+        // A create, which has no revision, targets the row its document maps to.
+        var tombstone = expectedToken is null ? document.Tombstone : "";
+        var existing = await context.Secrets.FindAsync([secret.TenantId, secret.Name, tombstone], cancellationToken);
         // Settled before the stored revision is compared, and before a row this build cannot read is replaced.
         if (existing is not null)
             EfSchemaVersion.EnsureReadable(SecretsEfModule.Chain, existing.SchemaVersion);
 
+        SecretRecord saved;
         if (expectedToken is null)
         {
             if (existing is not null)
                 return new SecretRevisionSaveResult(SecretRevisionSaveStatus.Conflict);
-            context.Secrets.Add(document.ToRecord());
+            saved = NewRecord(document);
+            context.Secrets.Add(saved);
         }
         else if (existing is null)
         {
@@ -169,9 +177,18 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
         {
             return new SecretRevisionSaveResult(SecretRevisionSaveStatus.Conflict);
         }
-        else
+        else if (document.Tombstone.Length == 0)
         {
             document.CopyProjectionsTo(existing);
+            saved = existing;
+        }
+        else
+        {
+            // Deleting frees the name. The row that held it goes in the same save that adds the secret's tombstoned row,
+            // so the delete is one atomic change, and the delete of the old row still carries the revision compared above.
+            context.Secrets.Remove(existing);
+            saved = document.ToRecord();
+            context.Secrets.Add(saved);
         }
 
         try
@@ -195,11 +212,44 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
             throw new InvalidOperationException($"Could not save secret '{secret.Name}'.", exception);
         }
 
-        var saved = existing ?? context.Secrets.Local.Single(row =>
-            row.TenantId == secret.TenantId && row.NormalizedName == secret.Name);
         return new SecretRevisionSaveResult(
             SecretRevisionSaveStatus.Saved,
             SecretRevisionMapper.Revision(saved.ConcurrencyToken));
+    }
+
+    /// <summary>
+    /// The row holding the name or, when no secret holds it, the deleted one with the greatest tombstone (for generated
+    /// ids, the latest created). A deleted row is returned so a read can tell a deleted secret from one that never
+    /// existed; it never shadows the secret holding the name.
+    /// </summary>
+    private Task<SecretRecord?> FindRecordAsync(string tenantId, string normalizedName, CancellationToken cancellationToken) =>
+        context.Secrets.AsNoTracking()
+            .Where(row => row.TenantId == tenantId && row.NormalizedName == normalizedName)
+            .OrderBy(row => row.Tombstone != "")
+            .ThenByDescending(row => row.Tombstone)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    /// <summary>
+    /// The row a write adds for <paramref name="document"/>. A row that holds a name is added only when the row its delete
+    /// will write under the secret's id fits the key as well, so a secret this store accepts can always be deleted.
+    /// </summary>
+    private static SecretRecord NewRecord(SecretDocument document)
+    {
+        if (document.Tombstone.Length == 0)
+            SecretNameConstraints.ValidateKeyLength(document.TenantId, document.NormalizedName, document.Secret.Id);
+        return document.ToRecord();
+    }
+
+    /// <summary>
+    /// Takes the row holding the name out of the save that writes <paramref name="secret"/>'s tombstoned row, so the
+    /// secret is deleted and its name freed in one change. A row another secret holds the name with by now is left
+    /// alone: saving an earlier secret's deleted copy never removes its successor.
+    /// </summary>
+    private async Task FreeNameAsync(Secret secret, CancellationToken cancellationToken)
+    {
+        var live = await context.Secrets.FindAsync([secret.TenantId, secret.Name, ""], cancellationToken);
+        if (live is not null && string.Equals(Map(live, secret.TenantId).Id, secret.Id, StringComparison.Ordinal))
+            context.Secrets.Remove(live);
     }
 
     private IQueryable<SecretRecord> ListQuery(string tenantId, SecretRepositoryListRequest request)
@@ -302,6 +352,21 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
     {
         ValidateTenantId(tenantId);
         SecretNameConstraints.Validate(normalizedName);
+    }
+
+    private static void ValidateIdentity(Secret secret)
+    {
+        ValidateIdentity(secret.TenantId, secret.Name);
+        if (secret.Status != SecretStatus.Deleted)
+            return;
+
+        // A deleted secret's id becomes its row's tombstone, and a blank one would read as the row holding the name.
+        if (!SecretRecordConfiguration.IsTombstone(secret.Id))
+        {
+            throw new ArgumentException(
+                $"A deleted secret needs a non-blank id of at most {SecretRecordConfiguration.TombstoneMaximumLength} characters.",
+                nameof(secret));
+        }
     }
 
     private static void ValidateTenantId(string tenantId)

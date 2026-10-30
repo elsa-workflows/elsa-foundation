@@ -3,8 +3,8 @@
   "createdAt": "2026-06-24T12:00:00\u002B00:00",
   "dependencies": [],
   "identity": {
-    "artifactHash": "sha256:8dafbfa0210f0b041483862a0b4a18088ff0418960e26d1342d7144cae5d7f4d",
-    "artifactId": "artifact-8dafbfa0210f",
+    "artifactHash": "sha256:14f4b67446d9453d33118a2bb9ea4426dc1e13920de01ef95cfc8324d74db058",
+    "artifactId": "artifact-14f4b67446d9",
     "artifactVersion": "1.0.0",
     "definitionId": "definition-1",
     "definitionVersionId": "version-1"
@@ -82,6 +82,10 @@
       {
         "Key": "executionType",
         "Value": "Action"
+      },
+      {
+        "Key": "runtime.acceptsRescheduledFaultedChild",
+        "Value": "true"
       }
     ],
     "structure": {

@@ -23,8 +23,6 @@ using Elsa.Diagnostics.StructuredLogs;
 using Elsa.Diagnostics.StructuredLogs.Endpoints;
 using Elsa.Expressions;
 using Elsa.Expressions.Api;
-using Elsa.Expressions.Api.Models;
-using Elsa.Expressions.Api.Requests;
 using Elsa.Foundation.Identity;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Extensions;
@@ -134,6 +132,11 @@ public sealed class DomainManagementApiCompositionTests
         new("/publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/executable-export", "GET"),
         new("/publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/test-runs", "POST"),
         new("/publishing/workflows/drafts/test-runs", "POST"),
+        new("/publishing/workflows/drafts/test-run-options", "POST"),
+        new("/publishing/workflow-test-runs/{testRunId}", "GET"),
+        new("/publishing/workflow-test-runs/{testRunId}/stop", "POST"),
+        new("/publishing/workflow-test-runs/{testRunId}/waits", "GET"),
+        new("/publishing/workflow-test-runs/{testRunId}/events", "POST"),
         new("/publishing/preflight", "POST"),
         new("/design/activities/drafts/{draftId}/publication-preflight", "POST"),
         new("/design/activities/drafts/{draftId}/publish", "POST"),
@@ -159,18 +162,11 @@ public sealed class DomainManagementApiCompositionTests
         await host.AssertJourneyAsync(HttpMethod.Post, "/publishing/workflows/version-1/publish", new { });
         await host.AssertJourneyAsync(HttpMethod.Get, "/runtime/workflows/executables");
 
-        var expressions = await host.Client.GetFromJsonAsync<ExpressionDescriptorsResponse>("/expressions/descriptors");
-        Assert.NotNull(expressions);
-        Assert.Equal(new[] { "Input", "Literal", "Object", "Variable" }, expressions.Items.Select(x => x.Type));
-        Assert.Equal(
-            new[]
-            {
-                ExpressionEditingModeView.Reference,
-                ExpressionEditingModeView.Literal,
-                ExpressionEditingModeView.Structured,
-                ExpressionEditingModeView.Reference
-            },
-            expressions.Items.Select(x => x.EditingMode));
+        // The response types are internal to the expressions API; Studio reads this JSON, and so does the journey.
+        using var expressions = JsonDocument.Parse(await host.Client.GetStringAsync("/expressions/descriptors"));
+        var items = expressions.RootElement.GetProperty("items").EnumerateArray().ToArray();
+        Assert.Equal(new[] { "Input", "Literal", "Object", "Variable" }, items.Select(x => x.GetProperty("type").GetString()));
+        Assert.Equal(new[] { "reference", "literal", "structured", "reference" }, items.Select(x => x.GetProperty("editingMode").GetString()));
 
         var capabilities = await host.Client.GetFromJsonAsync<ApiCapabilitiesDocument>("/capabilities");
         Assert.NotNull(capabilities);
@@ -503,7 +499,7 @@ public sealed class DomainManagementApiCompositionTests
             StructuredLogsApi.MapStructuredLogsApi(app);
             StudioPreferencesApi.MapStudioPreferencesApi(app);
             if (includeExpressions)
-                ExpressionsApi.MapExpressionsApi(app);
+                new ExpressionsApiFeature().MapEndpoints(app, app.Environment);
             app.Use(async (context, next) =>
             {
                 context.User = new ClaimsPrincipal(new ClaimsIdentity(
@@ -560,8 +556,8 @@ public sealed class DomainManagementApiCompositionTests
     {
         public async Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
         {
-            if (request is ListExpressionDescriptors expressionDescriptors)
-                return await HandleExpressionDescriptors<T>(expressionDescriptors, cancellationToken);
+            if (request.GetType().Assembly == typeof(ExpressionsApiFeature).Assembly)
+                return await HandleWithRegisteredHandler(request, cancellationToken);
             if (request is GetActivityAuthoringCapabilities authoringCapabilities)
             {
                 var handler = services.GetRequiredService<
@@ -583,12 +579,13 @@ public sealed class DomainManagementApiCompositionTests
             return (T)response;
         }
 
-        private async Task<T> HandleExpressionDescriptors<T>(
-            ListExpressionDescriptors request,
-            CancellationToken cancellationToken) where T : notnull
+        // The expressions request, its response and its handler are internal to their API, so the journey recognizes the
+        // request by its assembly and forwards it to whichever handler the expressions feature registered for it.
+        private async Task<T> HandleWithRegisteredHandler<T>(IRequest<T> request, CancellationToken cancellationToken) where T : notnull
         {
-            var handler = services.GetRequiredService<IRequestHandler<ListExpressionDescriptors, ExpressionDescriptorsResponse>>();
-            return (T)(object)await handler.Handle(request, cancellationToken);
+            var handlerType = typeof(IRequestHandler<,>).MakeGenericType(request.GetType(), typeof(T));
+            var handler = services.GetRequiredService(handlerType);
+            return await (Task<T>)handlerType.GetMethod("Handle")!.Invoke(handler, [request, cancellationToken])!;
         }
     }
 

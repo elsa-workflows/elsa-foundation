@@ -1,8 +1,10 @@
+using Elsa.Studio.Api.Authorization;
 using System.Net;
 using System.Net.Http.Json;
 using Elsa.Studio.Api.Models;
 using Elsa.Studio.Api.Options;
-using Elsa.Studio.Web;
+using Elsa.Studio.Hosting;
+using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,11 +14,11 @@ namespace Elsa.Studio.Tests;
 
 /// <summary>
 /// Exercises the Studio management bridge (ADR 0037) at its HTTP boundary: a TestServer hosts the real bridge wiring
-/// (<see cref="StudioBackendManagementBridge"/> + client + interim auth), and a recording stub stands in for the
+/// (public Hosting composition and its private client/auth), and a recording stub stands in for the
 /// backend host so status mapping and the "zero outbound calls when unconfigured" fail-closed guarantee are asserted
 /// against the wire, not mocked internals.
 /// </summary>
-public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
+public sealed class StudioBackendManagementBridgeTests : IAsyncLifetime
 {
     private const string StatusRoute = "/_elsa/studio/backend-management/status";
     private const string RegistryRoute = "/_elsa/studio/backend-management/registry";
@@ -114,8 +116,8 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
     public async Task AllowsAuthenticatedBrowserRequestWithModuleManagementReadWhenStudioAuthEnabled()
     {
         // The backend session endpoint validates the browser bearer AND reports its permissions; a session holding
-        // module-management.read passes the status/registry read gate (#249).
-        var backend = SessionBackend(StudioBridgeAuth.ModuleManagementReadPermission);
+        // module-management:read passes the status/registry read gate (#249).
+        var backend = SessionBackend(StudioBridgeAuthorization.ModuleManagementReadPermission);
         var client = await StartConfiguredHostAsync(backend, authEnabled: true, bearer: ValidBearer);
 
         var status = await GetStatusAsync(client);
@@ -126,7 +128,7 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
     [Fact]
     public async Task ForbidsAuthenticatedBrowserStatusRequestMissingModuleManagementReadWhenStudioAuthEnabled()
     {
-        // A live session that lacks module-management.read is FORBIDDEN (403) — a distinct authorization failure, not a
+        // A live session that lacks module-management:read is FORBIDDEN (403) — a distinct authorization failure, not a
         // 401 and not a backend-status state. No backend management call is issued for a forbidden caller.
         var backend = SessionBackend();
         var client = await StartConfiguredHostAsync(backend, authEnabled: true, bearer: ValidBearer);
@@ -148,11 +150,11 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
 
         var envelope = await GetRegistryAsync(client);
 
-        Assert.Equal(StudioBackendManagementStatus.Available, envelope.Status);
-        Assert.NotNull(envelope.Registry);
+        Assert.Equal(StudioBackendManagementStatus.Available, envelope.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Object, envelope.GetProperty("registry").ValueKind);
         // The backend registry payload is passed through under the Studio-owned envelope.
-        Assert.Equal("backend", envelope.Registry!.Value.GetProperty("host").GetProperty("id").GetString());
-        Assert.Equal("m1", envelope.Registry!.Value.GetProperty("modules")[0].GetProperty("id").GetString());
+        Assert.Equal("backend", envelope.GetProperty("registry").GetProperty("host").GetProperty("id").GetString());
+        Assert.Equal("m1", envelope.GetProperty("registry").GetProperty("modules")[0].GetProperty("id").GetString());
         // The management key rode only on the single Studio->backend call.
         Assert.Single(backend.Requests);
         Assert.Equal(ManagementKey, backend.Requests[0].ManagementKey);
@@ -170,8 +172,8 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
 
         var envelope = await GetRegistryAsync(client);
 
-        Assert.Equal(StudioBackendManagementStatus.Unconfigured, envelope.Status);
-        Assert.Null(envelope.Registry);
+        Assert.Equal(StudioBackendManagementStatus.Unconfigured, envelope.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, envelope.GetProperty("registry").ValueKind);
         // Fail closed: no outbound backend request may be issued.
         Assert.Empty(backend.Requests);
     }
@@ -189,8 +191,8 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
 
         var envelope = await GetRegistryAsync(client);
 
-        Assert.Equal(expected, envelope.Status);
-        Assert.Null(envelope.Registry);
+        Assert.Equal(expected, envelope.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, envelope.GetProperty("registry").ValueKind);
     }
 
     // ---- Cross-surface browser-side guarantees ----
@@ -237,13 +239,13 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
         return status!;
     }
 
-    private static async Task<StudioBackendManagementRegistryEnvelope> GetRegistryAsync(HttpClient client)
+    private static async Task<JsonElement> GetRegistryAsync(HttpClient client)
     {
         var response = await client.GetAsync(RegistryRoute);
         response.EnsureSuccessStatusCode();
-        var envelope = await response.Content.ReadFromJsonAsync<StudioBackendManagementRegistryEnvelope>();
-        Assert.NotNull(envelope);
-        return envelope!;
+        var envelope = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(JsonValueKind.Object, envelope.ValueKind);
+        return envelope;
     }
 
     // A backend whose session endpoint recognizes ValidBearer with the given host-control permissions (none models a
@@ -274,22 +276,20 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
 
         // Route both the typed management client and the named auth client through the recording backend stub so the
         // test asserts real HTTP behaviour (status codes, headers, outbound-call counts) at the wire.
-        builder.Services.AddHttpClient(nameof(StudioBackendManagementClient))
-            .ConfigurePrimaryHttpMessageHandler(() => backend);
-        builder.Services.AddHttpClient(StudioBridgeAuthHandler.HttpClientName)
-            .ConfigurePrimaryHttpMessageHandler(() => backend);
+        builder.Services.RouteAllBackendClientsThrough(backend);
 
         var app = builder.Build();
-        app.UseAuthentication();
-        app.UseAuthorization();
-        app.MapStudioBackendManagementBridge();
+        app.UseElsaStudio();
+        app.MapElsaStudio();
 
         await app.StartAsync();
         _app = app;
         return app.GetTestClient();
     }
 
-    public async ValueTask DisposeAsync()
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
     {
         if (_app is not null)
             await _app.DisposeAsync();

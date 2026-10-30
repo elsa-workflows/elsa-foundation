@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 1,
+  "task": "T048 exact durable source context and canonical coalesced source",
+  "sourceParentCommit": "7ee54692d7644ad8441859210ec60102efbc4f40",
+  "filesSha256": {
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IPostCommitOutboxLookupStore.cs": "11dffada2ffc57fb3305e34889d5133ded8657895268f428efc670c5ae89ce73",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimePostCommitDurableSourceIntentHandler.cs": "a25b4abb7fcb510bdb03584ea45114c171f9d385a13e259575c399c1d133fa7e",
+    "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimePostCommitIntentDispatcher.cs": "08965bb663234f27b8300229cd9ab2b5b349d9d2738578914f0d3145d4d435a7",
+    "Essentials/src/Workflows/Runtime/Core/Exceptions/RuntimePostCommitSourceBoundaryException.cs": "f323f7c52a2751a902fa52153be095b6a896877d8d6cfcda6211f319222e9343",
+    "Essentials/src/Workflows/Runtime/Core/Extensions/RuntimePostCommitIntentHandlerServiceCollectionExtensions.cs": "f9199a34faf30126ce2a340c52cb41ccd4d71a373a71ea737ff97a9246204ad5",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitIntentHandlerContribution.cs": "0e592699fb50f81a72547ab2f221b05d3c1f1fb8f2236f3e8dfc39900b99b93f",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimePostCommitOutbox.cs": "bb40a751daa783110e7b63e53fdce877b9e2e8ea4bce93be7215a6d5d475cadf",
+    "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt": "acf8042822ae838d6b5c72f43e09057e1ba6462bf92ae26ce7fc1213cb794641",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md": "1e1ac13f549f3b431d82db8e8dca91aea33584963255f9d4bbd0f0e65a559658",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs": "a4fd1fc64ffb51e8aabd98cc372efb46b3c75c3a33f5e4a9c50a9c5546fc3a27",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs": "82b21c9479798ecae610a6a479fd827b90444bb8f5802a7f11db4bf13114f6fc",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs": "703ddd4810723efab55bf5070ce2914e284963ae9408b0459d2d9fbd2671b66d",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitIntentDispatcher.cs": "3b94d5565adcc0e752d0f69b516a7361e76154dc5aa57c13eb852e0447cf099e",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitOutboxItems.cs": "796e65bfef63046528f3843362a542a21631d742d3708a6c9ed60aeeeb57faee",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitOutboxProcessor.cs": "b00159a39d5712f7e00a1119ea6311e6b180f81fe95468de1b698638e359139b",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingPostCommitOutboxLookupStore.cs": "af63a178b830bd124df000934ebdd8375ce3a17803f1cd47ad3dd45678cb9929",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs": "fb9d0628c35bc4d5fa40640555ec92cedf10807644db49cdc3e7e9bbf8d09c56",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimePostCommitOutboxStore.cs": "4606d78b518a2e97b57a3deb8b383dc130081c8da314b73235b535e6f5fa96da",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/RuntimeCoalescingDrainScopeFactory.cs": "7b2ad166dc44fa20763b930626175135f5c84efcedc3d9c559e462a095eb46af",
+    "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/RuntimeCoalescingSession.cs": "1d79012c53d4519d6e550048ea37508d81e9f74eafcaeb96e1e2a4ce0f41895c",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs": "3b11eaa6b975e02b121f22b6004386e2d13a58e0e33486dc594ae7fc856de8ef",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/RuntimePostCommitOutboxWriteVersion.cs": "e04fe7c45f0d278106f21881ce0780c0f84f8234a985376ab4b174e631b6df6c",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/StimulusDeliverySchemaGateTests.cs": "e450e91081dee89ec8cfacd9030cd12951e1e75dabd5233a229682a8e123366f",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/StimulusDeliveryStoreTests.cs": "f06d7ed5d6f82d982031ecd0269c68bf42b2692dc0297a34e435312b54386cd1",
+    "Essentials/tests/Workflows/Runtime/Tests/RuntimePostCommitDurableSourceTests.cs": "b23ac5179750a8ae73b9975fd7fc1da3d53be15281315815ab94eb205126010e",
+    "specs/1006-bpmn-library-adoption/contracts/broadcast-recipient-snapshot.md": "741c81c55e36346cad432540385873f7ff77f68d8c5e10cb3e643088bb89ce47"
+  },
+  "checks": [
+    {
+      "project": "Workflow Runtime",
+      "passed": 2766,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "project": "Runtime EF",
+      "passed": 1089,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "sourceBoundaryControlsInWholeRuntime": 22,
+      "actualEfFlushControls": 2,
+      "includesCommitAcknowledgementLossAndPeerDelivery": true
+    },
+    {
+      "publicCoreApiAdditions": 13,
+      "publicCoreApiRemovals": 0,
+      "originalClrSignaturesPreserved": true
+    },
+    {
+      "frozenAuthoringFingerprintSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+      "unchanged": true
+    }
+  ],
+  "mutations": [
+    {
+      "name": "drop-context-in-default-dispatcher",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     1, Skipped:     0, Total:     3, Duration: 41 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "omit-row-witness-requirement",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 41 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "omit-independent-registration-requirement",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     1, Skipped:     0, Total:     2, Duration: 49 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "silent-old-handler-default",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 33 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "use-overlay-capable-lookup",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     3, Passed:     1, Skipped:     0, Total:     4, Duration: 51 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "omit-exact-intent-proof",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     2, Skipped:     0, Total:     3, Duration: 45 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "omit-current-deadline",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     1, Skipped:     0, Total:     2, Duration: 44 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "claim-required-overlay-before-flush",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 59 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "refold-peer-owned-source",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 123 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "omit-commit-scope-witness",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     2, Passed:     0, Skipped:     0, Total:     2, Duration: 135 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "authorize-inside-caller-transaction",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 529 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "write-scope-witness-under-v1",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 538 ms - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "remint-uncertain-quiescence",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 146 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    },
+    {
+      "name": "accept-new-decision-while-prepared",
+      "exitCode": 1,
+      "summary": "Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 133 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)",
+      "compileError": false
+    }
+  ],
+  "reviews": {
+    "correctness": "clean after source-scope, default-context, constructor and uncertain-flush corrections",
+    "standards": "clean after corrections",
+    "acceptance": "clean; final receipt hashes, API, control counts, mutation results and finite limits independently verified",
+    "fullPrRounds": 0
+  },
+  "limits": [
+    "Generic required-source seam only; existing publisher has not been enabled for recipient cohorts.",
+    "EF public-flush fixture uses an in-memory queue and no scheduled work. It proves physical EF checkpoint/source context, not full host queue or restart recovery.",
+    "Prepared flush identity is retained within one drain scope. Actual host/restart and source-retention qualification remains T049-T051.",
+    "Historical provider and host receipts remain bound to their original source.",
+    "T045, remaining story evidence, deletion guards, current host/Studio, full-PR review and required checks remain open.",
+    "ADR0063 remains proposed; #2898/#2907 and the program retain production acceptance gates."
+  ]
+}

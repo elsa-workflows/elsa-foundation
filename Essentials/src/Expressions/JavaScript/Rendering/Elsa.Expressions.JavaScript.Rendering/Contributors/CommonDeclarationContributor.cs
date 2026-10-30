@@ -6,7 +6,7 @@ using System.Text.Json.Nodes;
 
 namespace Elsa.Expressions.JavaScript.Rendering.Contributors;
 
-public sealed class CommonDeclarationContributor(IOptions<JavaScriptDeclarationOptions> options, IJavaScriptTypeDeclarationFactory factory)
+internal sealed class CommonDeclarationContributor(IOptions<JavaScriptDeclarationOptions> options, IJavaScriptTypeDeclarationFactory factory)
     : IJavaScriptDeclarationContributor
 {
     public ValueTask Contribute(IJavaScriptDeclarationsContributionContext context, CancellationToken cancellationToken)

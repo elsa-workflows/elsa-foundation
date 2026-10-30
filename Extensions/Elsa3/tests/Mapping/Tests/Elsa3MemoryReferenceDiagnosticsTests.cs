@@ -13,7 +13,6 @@ public sealed class Elsa3MemoryReferenceDiagnosticsTests
     [InlineData("cross-subtree", "VF-IMP-003", "$.root.activities[1].activities[0].Value.memoryReference", "shared", "/root/right/consumer", "key:value")]
     [InlineData("ambiguous", "VF-IMP-002", "$.root.activities[1].Value.memoryReference", "shared", "/root/consumer", "key:value")]
     [InlineData("cyclic", "VF-IMP-004", "$.root.activities[0].Input.memoryReference", "b-result", "/root/a", "key:input")]
-    [InlineData("custom", "VF-IMP-007", "$.root.Mystery.memoryReference", "custom", "/root", "Mystery")]
     [InlineData("mutation-script", "VF-IMP-005", "$.root.Value.expression.value", null, "/root", "key:value")]
     [InlineData("dynamic-script", "VF-IMP-006", "$.root.Value.expression.value", null, "/root", "key:value")]
     [InlineData("incompatible", "VF-IMP-008", "$.root.Value.typeName", null, "/root", "key:value")]
@@ -45,6 +44,28 @@ public sealed class Elsa3MemoryReferenceDiagnosticsTests
             Assert.False(diagnostic.Metadata.ContainsKey("MemoryReferenceId"));
         else
             Assert.Equal(expectedMemoryId, diagnostic.Metadata["MemoryReferenceId"]);
+    }
+
+    /// <summary>
+    /// A property that is no declared member is an unknown member (spec FR-010), reported before value flow is lowered,
+    /// so it is never also a value-flow shape error.
+    /// </summary>
+    [Fact]
+    public async Task Import_property_that_is_no_declared_member_reports_unknown_member()
+    {
+        var testCase = CreateCase("custom");
+        var fixture = new Elsa3MemoryReferenceImportFixture(testCase.Shapes);
+
+        var result = await fixture.ImportAsync(testCase.Definition, "custom.json");
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnknownMember, diagnostic.Code);
+        Assert.Equal("$.root.Mystery", diagnostic.Path);
+        Assert.Equal("Mystery", diagnostic.Metadata["Property"]);
+        Assert.Equal("root", diagnostic.Metadata["ActivityNodeId"]);
+        Assert.Equal("custom.json", diagnostic.Metadata["SourceName"]);
+        Assert.Equal("custom", diagnostic.Metadata["DefinitionId"]);
     }
 
     [Fact]
@@ -131,9 +152,12 @@ public sealed class Elsa3MemoryReferenceDiagnosticsTests
         var definition = Workflow(
             "ambiguous",
             Activity("root", "Elsa.Sequence", children: [producer, consumer]),
+            // A producer capturing into a declared variable that a consumer reads is the ordinary Elsa 3 pattern
+            // (plan D-17); the read is ambiguous only when two variables share the memory id.
             variables:
             [
                 new Elsa3Variable { Id = "shared", Name = "shared-variable", TypeName = "String" },
+                new Elsa3Variable { Id = "shared", Name = "shared-duplicate", TypeName = "String" },
             ]);
         return Case(definition, Container(), Producer(), Consumer());
     }

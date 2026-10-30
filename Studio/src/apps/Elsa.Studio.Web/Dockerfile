@@ -17,11 +17,19 @@
 # ---- Build stage ------------------------------------------------------------
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
+ARG STUDIO_VERSION=1.0.0
 
 # Copy Studio-owned build configuration first so restore layers cache well. The extension
 # projects import these files through their studio-level Directory.Build/Packages wrappers.
 COPY Studio/Directory.Build.props Studio/Directory.Packages.props Studio/NuGet.config Studio/icon.png ./Studio/
 COPY Studio/Elsa.Studio.slnx ./Studio/
+
+# The optional administration package references only these lightweight Foundation libraries.
+# Their shared build/version inputs and compile-only naming analyzer are required in this context too.
+COPY Directory.Build.props Directory.Packages.props VersionLines.props PackageVersioning.props PackageRanges.targets .editorconfig ./
+COPY Essentials/build/Analyzers/ ./Essentials/build/Analyzers/
+COPY Essentials/src/Modularity/Core/ ./Essentials/src/Modularity/Core/
+COPY Essentials/src/Modularity/Nuplane/ ./Essentials/src/Modularity/Nuplane/
 
 # Copy the Studio host and shared modules.
 COPY Studio/src/ ./Studio/src/
@@ -29,8 +37,10 @@ COPY Studio/src/ ./Studio/src/
 # Copy only the optional Studio modules consumed by the host, not every Foundation extension.
 COPY Extensions/Attention/studio/ ./Extensions/Attention/studio/
 COPY Extensions/ConsoleStream/studio/ ./Extensions/ConsoleStream/studio/
+COPY Extensions/Connections/studio/ ./Extensions/Connections/studio/
 COPY Extensions/Diagnostics.OpenTelemetry/studio/ ./Extensions/Diagnostics.OpenTelemetry/studio/
 COPY Extensions/Diagnostics.StructuredLogs/studio/ ./Extensions/Diagnostics.StructuredLogs/studio/
+COPY Extensions/Etl/studio/ ./Extensions/Etl/studio/
 COPY Extensions/ExpressionEditors.JavaScript/studio/ ./Extensions/ExpressionEditors.JavaScript/studio/
 COPY Extensions/ExpressionEditors.Liquid/studio/ ./Extensions/ExpressionEditors.Liquid/studio/
 COPY Extensions/ExtensionBuilder/studio/ ./Extensions/ExtensionBuilder/studio/
@@ -42,7 +52,7 @@ COPY Extensions/Workflows.Dashboard/studio/ ./Extensions/Workflows.Dashboard/stu
 # Fail the image build clearly if the frontend build was skipped. The generated
 # wwwroot files are intentionally ignored by Git, so this protects both CI and
 # local Docker builds from publishing an assetless image that returns 404 at `/`.
-RUN test -f Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/index.html
+RUN test -f Studio/src/essentials/Elsa.Studio.Hosting/wwwroot/studio/index.html
 
 # Restore and publish only the web host; project references are pulled in transitively.
 #
@@ -52,11 +62,13 @@ RUN test -f Studio/src/apps/Elsa.Studio.Web/wwwroot/studio/index.html
 # feed and NuGet resolves the newer stable version instead.
 RUN dotnet restore Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj \
         --configfile Studio/NuGet.config \
-        -p:WarningsNotAsErrors=NU1603
+        -p:WarningsNotAsErrors=NU1603 \
+        -p:Version=$STUDIO_VERSION
 RUN dotnet publish Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj \
         -c Release \
         --no-restore \
         -p:WarningsNotAsErrors=NU1603 \
+        -p:Version=$STUDIO_VERSION \
         -o /app/publish
 
 # ---- Runtime stage ----------------------------------------------------------

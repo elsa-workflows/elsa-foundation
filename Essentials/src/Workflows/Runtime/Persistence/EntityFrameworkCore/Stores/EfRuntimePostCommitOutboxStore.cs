@@ -1,6 +1,9 @@
 using System.Text.Json;
+using System.Transactions;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
@@ -15,15 +18,113 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 /// against the shared relational context. The adapter remains opt-in until the complete runtime checkpoint writer
 /// can compose every participant, but completion never hides a partial dispatch write.
 /// </remarks>
-public sealed class EfRuntimePostCommitOutboxStore(
-    RuntimeDbContext context,
-    IPersistenceAccessContextAccessor accessContextAccessor) : IRuntimePostCommitOutboxStore,
+public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxStore,
     IPostCommitOutboxLookupStore,
     IRuntimePostCommitOutboxClaimStore,
     IRuntimePostCommitOutboxClaimCompletionStore,
-    IWorkflowDispatchRedriveStore
+    IWorkflowDispatchRedriveStore,
+    IStimulusDeliveryStore
 {
+    private readonly RuntimeDbContext context;
+    private readonly IPersistenceAccessContextAccessor accessContextAccessor;
+    private readonly TimeProvider timeProvider;
+    private readonly WorkflowExecutableStartSourceResolver? retentionSources;
+    private readonly IWorkflowExecutableRootWriteLeaseManager? retentionLeases;
+    private readonly EfWorkflowExecutableSourceReferenceStore? retentionReferences;
+
+    public EfRuntimePostCommitOutboxStore(RuntimeDbContext context, IPersistenceAccessContextAccessor accessContextAccessor)
+        : this(context, accessContextAccessor, TimeProvider.System) { }
+
+    public EfRuntimePostCommitOutboxStore(RuntimeDbContext context, IPersistenceAccessContextAccessor accessContextAccessor,
+        TimeProvider? timeProvider)
+    {
+        this.context = context ?? throw new ArgumentNullException(nameof(context));
+        this.accessContextAccessor = accessContextAccessor ?? throw new ArgumentNullException(nameof(accessContextAccessor));
+        this.timeProvider = timeProvider ?? TimeProvider.System;
+    }
+
+    public EfRuntimePostCommitOutboxStore(RuntimeDbContext context, IPersistenceAccessContextAccessor accessContextAccessor,
+        TimeProvider? timeProvider, IWorkflowExecutableSourceReferenceStore sourceReferenceStore,
+        IWorkflowExecutableRootWriteLeaseManager rootWriteLeaseManager)
+        : this(context, accessContextAccessor, timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(sourceReferenceStore); ArgumentNullException.ThrowIfNull(rootWriteLeaseManager);
+        if (sourceReferenceStore is EfWorkflowExecutableSourceReferenceStore references && ReferenceEquals(references.Context, context))
+        {
+            retentionReferences = references;
+            retentionSources = new(references.WithAccess(accessContextAccessor), this.timeProvider);
+            retentionLeases = rootWriteLeaseManager;
+        }
+    }
+
     private const int ProviderPageSize = RuntimeStorePageRequest.MaximumLimit;
+
+    async ValueTask IStimulusDeliveryStore.EnsureOrdinaryCollectionAllowedAsync(IRuntimePostCommitOutboxStore outbox, IWorkflowExecutableStore executables,
+        IWorkflowExecutableSourceReferenceStore references, IWorkflowExecutionStateStore executions, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(outbox); cancellationToken.ThrowIfCancellationRequested();
+        if (!ReferenceEquals(outbox, this) || executables.GetMaterialStore() is not EfWorkflowExecutableStore material ||
+            references is not EfWorkflowExecutableSourceReferenceStore selectedReferences || executions is not EfWorkflowExecutionStateStore states ||
+            !ReferenceEquals(material.Context, context) || !ReferenceEquals(selectedReferences.Context, context) || !ReferenceEquals(states.Context, context))
+            throw new NotSupportedException("Ordinary collection requires its actual EF material/outbox/reference/execution context.");
+        PersistenceScope? scope = null;
+        try
+        {
+            EnsureCommittedSourceBoundary();
+            if (context.ChangeTracker.HasChanges()) throw new InvalidOperationException("Ordinary collection requires a clean context.");
+            scope = accessContextAccessor.Current.RequireScope();
+            if (material.AccessContext.RequireScope() != scope || selectedReferences.AccessContext.RequireScope() != scope || states.AccessContext.RequireScope() != scope)
+                throw new NotSupportedException("Ordinary collection requires one actual EF material/outbox/reference/execution scope.");
+            var sources = await ReadRetentionSourcesAsync(context, scope.Value, cancellationToken);
+            if (sources.Any(source => source.StimulusDeliveryProtocolVersion is not null || source.StimulusDeliverySourceScope is not null || source.RecipientSnapshot is not null))
+                throw new StimulusDeliveryRetentionException(scope, new InvalidOperationException("Ordinary collection cannot serve saved stimulus protocol data."));
+            EnsureCommittedSourceBoundary();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (StimulusDeliveryRetentionException) { throw; }
+        catch (Exception exception) when (exception is IOException or OperationCanceledException || EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        { throw new StimulusDeliveryRetentionException(scope, exception); }
+    }
+
+    bool IStimulusDeliveryStore.CanRetainExecutables(IRuntimePostCommitOutboxStore outbox, IWorkflowExecutableStore executables,
+        IWorkflowExecutableSourceReferenceStore references, IWorkflowExecutionStateStore executions)
+    {
+        if (!ReferenceEquals(outbox, this) || executables?.GetMaterialStore() is not EfWorkflowExecutableStore material ||
+            references is not EfWorkflowExecutableSourceReferenceStore selectedReferences ||
+            executions is not EfWorkflowExecutionStateStore states ||
+            retentionReferences is null || retentionLeases is null ||
+            !ReferenceEquals(material.Context, context) || !ReferenceEquals(selectedReferences.Context, context) ||
+            !ReferenceEquals(states.Context, context)) return false;
+        try
+        {
+            var scope = accessContextAccessor.Current.RequireScope();
+            return material.AccessContext.RequireScope() == scope && selectedReferences.AccessContext.RequireScope() == scope &&
+                   retentionReferences.AccessContext.RequireScope() == scope &&
+                   states.AccessContext.RequireScope() == scope;
+        }
+        catch (InvalidOperationException) { return false; }
+        catch (Exception exception) when (exception is IOException or OperationCanceledException || EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        { throw new StimulusDeliveryRetentionException(null, exception); }
+    }
+
+    async ValueTask<IReadOnlyCollection<string>> IStimulusDeliveryStore.ListPinnedExecutableArtifactIdsAsync(
+        IWorkflowExecutableStore executables, IWorkflowExecutableSourceReferenceStore references,
+        IWorkflowExecutionStateStore executions, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(executables); ArgumentNullException.ThrowIfNull(references); ArgumentNullException.ThrowIfNull(executions);
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            if (!((IStimulusDeliveryStore)this).CanRetainExecutables(this, executables, references, executions))
+                throw new NotSupportedException("Physical stimulus retention requires the actual EF stores, context and scope.");
+            if (context.ChangeTracker.HasChanges()) throw new InvalidOperationException("Physical stimulus retention requires a clean context.");
+            return await ListPinnedExecutableArtifactIdsAsync(cancellationToken);
+        }
+        catch (StimulusDeliveryRetentionException exception) when (cancellationToken.IsCancellationRequested && exception.InnerException is OperationCanceledException)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(exception.InnerException!).Throw(); throw;
+        }
+    }
 
     public async ValueTask SavePendingAsync(
         RuntimePostCommitOutboxItem item,
@@ -42,7 +143,9 @@ public sealed class EfRuntimePostCommitOutboxStore(
             throw DifferentPendingItem(item.OutboxItemId);
         }
 
-        var row = ToEntity(item, scope, id, revision: 1);
+        if (item.RecipientSnapshot?.RetentionAcceptanceVersion is not null)
+            throw new InvalidOperationException("A pending source cannot mint verified cohort acceptance.");
+        var row = ToEntity(item, scope, id, revision: 1, WriteVersion(item));
         context.RuntimePostCommitOutbox.Add(row);
         try
         {
@@ -66,6 +169,265 @@ public sealed class EfRuntimePostCommitOutboxStore(
             Detach(row);
             throw;
         }
+    }
+
+    public ValueTask<RuntimePostCommitOutboxItem?> FindDurableAsync(string outboxItemId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outboxItemId);
+        cancellationToken.ThrowIfCancellationRequested();
+        EnsureCommittedSourceBoundary();
+        return FindAsync(outboxItemId, cancellationToken);
+    }
+
+    private void EnsureCommittedSourceBoundary()
+    {
+        if (System.Transactions.Transaction.Current is not null || context.Database.CurrentTransaction is not null ||
+            context.Database.GetEnlistedTransaction() is not null)
+            throw new InvalidOperationException("A durable source cannot be authorized inside a caller-owned transaction.");
+    }
+
+    public async ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken cancellationToken = default)
+    {
+        PersistenceScope? retentionScope = null;
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            EnsureCommittedSourceBoundary();
+            var scope = accessContextAccessor.Current.RequireScope().Value;
+            retentionScope = new(scope);
+            var sources = await ReadRetentionSourcesAsync(context, scope, cancellationToken);
+            var roots = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var source in sources)
+            {
+                if (source.RecipientSnapshot is not { } cohort) continue;
+                foreach (var start in cohort.Starts)
+                {
+                    var key = source.Intent.IdempotencyKey ?? throw new InvalidDataException("A saved start cohort has no deterministic source key.");
+                    var target = KeyedWorkflowStartIdentity.For(key, start.Executable.ArtifactId).WorkflowExecutionId;
+                    if (source.Status != RuntimePostCommitOutboxStatus.Delivered ||
+                        !await EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstonedAsync(context, scope, target, cancellationToken))
+                        roots.Add(start.Executable.ArtifactId);
+                }
+            }
+            EnsureCommittedSourceBoundary();
+            return roots.Order(StringComparer.Ordinal).ToArray();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception) when (exception is IOException or OperationCanceledException || EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        { throw new StimulusDeliveryRetentionException(retentionScope, exception); }
+    }
+
+    // Finite same-scope pages; deliberate conservative traversal on rare GC/deletion paths. Do not use the current
+    // claim/publisher authorization read: delivered sources can outlive the publisher and an uncreated target.
+    internal static async ValueTask<IReadOnlyList<RuntimePostCommitOutboxItem>> ReadRetentionSourcesAsync(
+        RuntimeDbContext context, string scope, CancellationToken cancellationToken)
+    {
+        var sources = new List<RuntimePostCommitOutboxItem>();
+        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
+        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
+        string? after = null;
+        while (true)
+        {
+            var query = context.RuntimePostCommitOutbox.AsNoTracking().Where(row =>
+                row.ScopeKeyHash == scopeHash || row.ScopeKey == scopeKey);
+            // Either scope projection can reveal a corrupt owned row. Page by the actual unique physical
+            // key, so contradictory/duplicate logical-order projections cannot hide a source at a page seam.
+            if (after is not null) query = query.Where(row => row.Id.CompareTo(after) > 0);
+            var page = await query.OrderBy(row => row.Id).Take(ProviderPageSize).ToArrayAsync(cancellationToken);
+            foreach (var row in page) sources.Add(ReadChecked(row, scope));
+            if (page.Length < ProviderPageSize) return sources;
+            after = page[^1].Id;
+        }
+    }
+
+    public async ValueTask<StimulusDeliverySnapshot> InstallAsync(PostCommitDeliveryContext source,
+        StimulusDeliverySnapshot candidate, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source); ArgumentNullException.ThrowIfNull(candidate);
+        if (!candidate.MatchesSource(source)) throw new ArgumentException("The proposed cohort does not match its source.", nameof(candidate));
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            var access = accessContextAccessor.Current; var scope = access.RequireScope(); access.EnsureScope(source.Scope);
+            EnsureCommittedSourceBoundary();
+            if (retentionSources is null || retentionLeases is null)
+                throw new NotSupportedException("Verified cohort installation requires coherent native reference and root-lease stores.");
+            if (context.ChangeTracker.HasChanges())
+                throw new InvalidOperationException("Verified cohort installation requires a clean context for its owned transaction.");
+            Exception? lastConflict = null;
+            for (var attempt = 0; attempt < 8; attempt++)
+            {
+                context.ChangeTracker.Clear();
+                try
+                {
+                    var initial = await ReadFacts();
+                    _ = initial.Source.InstallRecipientSnapshot(source, candidate, initial.Publisher, scope, timeProvider.GetUtcNow());
+                    if (initial.Source.RecipientSnapshot is { } existing) return Verified(existing);
+                    if (candidate.SelectedAt < source.Intent.RecordedAt || candidate.SelectedAt > timeProvider.GetUtcNow())
+                        throw new InvalidDataException("The recipient selection timestamp is outside this source delivery.");
+                    var dependencies = candidate.GetExecutionDependencies(source.Intent);
+                    var roots = candidate.Starts.Select(start => start.Executable).Append(initial.Publisher.PinnedExecutable).ToArray();
+                    StimulusDeliverySnapshot? result = null;
+                    await retentionLeases.ExecuteFencedAsync(roots, "stimulus:" + source.SourceOutboxItemId + ":" + Guid.NewGuid().ToString("N"), async (grants, token) =>
+                    {
+                        await retentionSources.ValidateCapturedInScopeAsync(candidate.Starts, scope, token);
+                        await using var transaction = await context.Database.BeginTransactionAsync(token);
+                        try
+                        {
+                            // Material is locked before ownership. All workflow/reference facts are read before
+                            // ownership locks; deletion may hold another workflow root while scanning source rows.
+                            await new EfWorkflowExecutableStore(context, accessContextAccessor).FenceRootWriteLeasesAsync(grants, timeProvider, token);
+                            var facts = await ReadFacts(token);
+                            if (!WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(facts.Publisher.PinnedExecutable, initial.Publisher.PinnedExecutable))
+                                throw new InvalidDataException("The publisher executable changed before cohort acceptance.");
+                            _ = facts.Source.InstallRecipientSnapshot(source, candidate, facts.Publisher, scope, timeProvider.GetUtcNow());
+                            if (facts.Source.RecipientSnapshot is { } winner) { result = Verified(winner); return; }
+                            foreach (var id in dependencies) await FenceExecutionDependencyAsync(scope.Value, id, token);
+                            // Re-read physical source/claim after all awaited fences. No workflow-root read occurs here.
+                            var row = await LoadAsync(scope.Value, source.SourceOutboxItemId, tracking: true, token) ??
+                                throw new InvalidDataException("The exact recipient source is missing.");
+                            await context.Entry(row).ReloadAsync(token);
+                            if (context.Entry(row).State == EntityState.Detached) throw new InvalidDataException("The recipient source was removed.");
+                            var current = ReadChecked(row, scope.Value, source.SourceOutboxItemId);
+                            var accepted = new StimulusDeliverySnapshot(candidate.Version, candidate.SourceOutboxItemId,
+                                candidate.IntentFingerprint, candidate.Scope, candidate.SelectedAt, candidate.StimulusType,
+                                candidate.StimulusHash, candidate.Starts, candidate.Resumes, StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion);
+                            var installed = current.InstallRecipientSnapshot(source, accepted, facts.Publisher, scope, timeProvider.GetUtcNow());
+                            if (current.RecipientSnapshot is { } laterWinner) { result = Verified(laterWinner); return; }
+                            token.ThrowIfCancellationRequested();
+                            Copy(row, installed, scope.Value, checked(row.Revision + 1), WriteVersion(installed));
+                            await context.SaveChangesAsync(token);
+                            await transaction.CommitAsync(token);
+                            result = Verified(installed.RecipientSnapshot!);
+                        }
+                        catch
+                        {
+                            try { await transaction.RollbackAsync(CancellationToken.None); } catch { }
+                            throw;
+                        }
+                    }, cancellationToken);
+                    context.ChangeTracker.Clear();
+                    return result ?? throw new InvalidOperationException("Verified cohort installation did not produce a persisted result.");
+                }
+                catch (Exception exception) when (exception is DbUpdateConcurrencyException ||
+                    EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
+                {
+                    lastConflict = exception; context.ChangeTracker.Clear();
+                }
+            }
+            throw new IOException("The recipient source remained contended; retry without dispatching.", lastConflict);
+
+            async ValueTask<(RuntimePostCommitOutboxItem Source, WorkflowExecutionState Publisher)> ReadFacts(CancellationToken token = default)
+            {
+                if (token == default) token = cancellationToken;
+                var row = await LoadAsync(scope.Value, source.SourceOutboxItemId, tracking: false, token) ??
+                    throw new InvalidDataException("The exact recipient source is missing.");
+                var publisherRow = await context.WorkflowExecutionStates.AsNoTracking().SingleOrDefaultAsync(item =>
+                    item.Id == EfWorkflowExecutionStateStore.CreateId(scope.Value, source.Intent.WorkflowExecutionId), token) ??
+                    throw new InvalidDataException("The authoritative publisher is missing.");
+                var publisher = EfWorkflowExecutionStateStore.ReadChecked(publisherRow, scope.Value, source.Intent.WorkflowExecutionId);
+                access.EnsureTenantScope(publisher.TenantId);
+                row = await LoadAsync(scope.Value, source.SourceOutboxItemId, tracking: false, token) ??
+                    throw new InvalidDataException("The recipient source was removed during publisher validation.");
+                return (ReadChecked(row, scope.Value, source.SourceOutboxItemId), publisher);
+            }
+            static StimulusDeliverySnapshot Verified(StimulusDeliverySnapshot snapshot) =>
+                snapshot.RetentionAcceptanceVersion == StimulusDeliverySnapshot.CurrentRetentionAcceptanceVersion ? snapshot :
+                    throw new InvalidDataException("The existing data-only cohort has no verified retention acceptance; it must not be restamped.");
+        }
+        catch (RuntimePostCommitOutboxStaleClaimException) { context.ChangeTracker.Clear(); throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { context.ChangeTracker.Clear(); throw; }
+        catch (Exception exception)
+        {
+            context.ChangeTracker.Clear();
+            throw new StimulusDeliveryBoundaryException(source.SourceOutboxItemId, exception,
+                exception is WorkflowExecutableRootWriteLeaseLostException or WorkflowExecutableRootWriteLeaseUnavailableException ||
+                EfRelationalExceptionClassifier.IsProviderFailure(exception) ||
+                exception is not (InvalidDataException or InvalidOperationException or ArgumentException or NotSupportedException or WorkflowExecutableReferenceRejectedException));
+        }
+    }
+
+    private async ValueTask FenceExecutionDependencyAsync(string scope, string workflowExecutionId, CancellationToken cancellationToken)
+    {
+        var row = await EfExecutionLivenessStateStore.WorkflowExecutionDeletionOwnershipRows(context, scope, workflowExecutionId)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstone(row, scope, workflowExecutionId))
+            throw new InvalidDataException("A saved cohort execution dependency was retired before acceptance.");
+        if (row is null)
+        {
+            var state = new ExecutionLivenessState(RuntimeExecutionOwnershipStateId.For(workflowExecutionId), workflowExecutionId,
+                null, null, null, null, [], new Dictionary<string, string> { [RuntimeMetadataKeys.OwnershipFencingToken] = "0" });
+            context.ExecutionLivenessStates.Add(EfExecutionLivenessStateStore.ToEntity(state, scope, 1));
+            await context.SaveChangesAsync(cancellationToken); // Acquire the unique missing-owner fence before source CAS.
+            return;
+        }
+        var touched = await context.ExecutionLivenessStates.Where(candidate => candidate.Id == row.Id && candidate.Revision == row.Revision)
+            .ExecuteUpdateAsync(update => update.SetProperty(candidate => candidate.Revision, row.Revision + 1), cancellationToken);
+        if (touched != 1) throw new DbUpdateConcurrencyException("Cohort execution ownership changed before acceptance.");
+    }
+
+    async ValueTask<PostCommitDeliveryContext> IStimulusDeliveryStore.ReadSourceAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source); cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            var access = accessContextAccessor.Current; var scope = access.RequireScope(); access.EnsureScope(source.Scope);
+            EnsureCommittedSourceBoundary();
+            if (context.ChangeTracker.HasChanges()) throw new InvalidOperationException("Canonical stimulus source reads require a clean context.");
+            var row = await LoadAsync(scope.Value, source.SourceOutboxItemId, tracking: false, cancellationToken)
+                ?? throw new InvalidDataException("The exact stimulus source is missing.");
+            var current = ReadChecked(row, scope.Value, source.SourceOutboxItemId);
+            var publisherRow = await context.WorkflowExecutionStates.AsNoTracking().SingleOrDefaultAsync(
+                candidate => candidate.Id == EfWorkflowExecutionStateStore.CreateId(scope.Value, current.Intent.WorkflowExecutionId), cancellationToken)
+                ?? throw new InvalidDataException("The authoritative stimulus publisher is missing.");
+            var publisher = EfWorkflowExecutionStateStore.ReadChecked(publisherRow, scope.Value, current.Intent.WorkflowExecutionId);
+            access.EnsureTenantScope(publisher.TenantId);
+            row = await LoadAsync(scope.Value, source.SourceOutboxItemId, tracking: false, cancellationToken)
+                ?? throw new InvalidDataException("The stimulus source was removed during publisher validation.");
+            current = ReadChecked(row, scope.Value, source.SourceOutboxItemId);
+            EnsureCommittedSourceBoundary();
+            if (context.ChangeTracker.HasChanges() || accessContextAccessor.Current.RequireScope() != scope)
+                throw new InvalidOperationException("The canonical stimulus source access boundary changed during validation.");
+            return current.OpenStimulusDeliverySource(source, publisher, scope, timeProvider.GetUtcNow());
+        }
+        catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception)
+        { throw new StimulusDeliveryBoundaryException(source.SourceOutboxItemId, exception,
+            EfRelationalExceptionClassifier.IsProviderFailure(exception) ||
+            exception is not (InvalidDataException or InvalidOperationException or ArgumentException or NotSupportedException)); }
+    }
+
+    public async ValueTask<PostCommitDeliveryContext> ReadSavedStartSourceAsync(WorkflowExecutableStimulusDeliveryAuthority authority,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(authority); cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            var access = accessContextAccessor.Current; var scope = access.RequireScope(); access.EnsureScope(authority.Scope);
+            EnsureCommittedSourceBoundary();
+            var row = await LoadAsync(scope.Value, authority.SourceOutboxItemId, tracking: false, cancellationToken)
+                ?? throw new InvalidDataException("The exact saved-start source is missing.");
+            var current = ReadChecked(row, scope.Value, authority.SourceOutboxItemId);
+            var publisherRow = await context.WorkflowExecutionStates.AsNoTracking().SingleOrDefaultAsync(
+                candidate => candidate.Id == EfWorkflowExecutionStateStore.CreateId(scope.Value, current.Intent.WorkflowExecutionId), cancellationToken)
+                ?? throw new InvalidDataException("The authoritative saved-start publisher is missing.");
+            var publisher = EfWorkflowExecutionStateStore.ReadChecked(publisherRow, scope.Value, current.Intent.WorkflowExecutionId);
+            access.EnsureTenantScope(publisher.TenantId);
+            // Publisher lookup awaited a separate read. Do not authorize the earlier claim snapshot if a peer
+            // completed/reclaimed the source meanwhile, even when its old visibility deadline is still future.
+            row = await LoadAsync(scope.Value, authority.SourceOutboxItemId, tracking: false, cancellationToken)
+                ?? throw new InvalidDataException("The saved-start source was removed during publisher validation.");
+            current = ReadChecked(row, scope.Value, authority.SourceOutboxItemId);
+            EnsureCommittedSourceBoundary();
+            return current.OpenSavedStartSource(authority, publisher, scope, timeProvider.GetUtcNow());
+        }
+        catch (RuntimePostCommitOutboxStaleClaimException) { throw; }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception)
+        { throw new StimulusDeliveryBoundaryException(authority.SourceOutboxItemId, exception,
+            EfRelationalExceptionClassifier.IsProviderFailure(exception) ||
+            exception is not (InvalidDataException or InvalidOperationException or ArgumentException or NotSupportedException)); }
     }
 
     public async ValueTask<RuntimePostCommitOutboxItem?> FindAsync(
@@ -120,7 +482,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
                 continue;
 
             var claim = RuntimePostCommitOutboxClaimTransitions.Claim(current, request);
-            Copy(row, claim.Item, scope, checked(row.Revision + 1));
+            Copy(row, claim.Item, scope, checked(row.Revision + 1), WriteVersion(claim.Item));
             try
             {
                 await context.SaveChangesAsync(cancellationToken);
@@ -164,7 +526,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
         if (renewed is null)
             return null;
 
-        Copy(row, renewed.Item, scope, checked(row.Revision + 1));
+        Copy(row, renewed.Item, scope, checked(row.Revision + 1), WriteVersion(renewed.Item));
         try
         {
             await context.SaveChangesAsync(cancellationToken);
@@ -244,7 +606,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
             result.FailureMessage,
             current.DeliveryFencingToken,
             deliveryVisibleAfter: null);
-        Copy(row, updated, scope, checked(row.Revision + 1));
+        Copy(row, updated, scope, checked(row.Revision + 1), WriteVersion(updated));
         try
         {
             await context.SaveChangesAsync(cancellationToken);
@@ -279,7 +641,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
                    ?? throw NotFound(claim.OutboxItemId);
         var current = ReadChecked(row, scope, claim.OutboxItemId);
         var completed = RuntimePostCommitOutboxClaimTransitions.Complete(current, claim, result);
-        Copy(row, completed, scope, checked(row.Revision + 1));
+        Copy(row, completed, scope, checked(row.Revision + 1), WriteVersion(completed));
         try
         {
             await context.SaveChangesAsync(cancellationToken);
@@ -354,7 +716,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            Copy(row, resolution.OutboxItem, scope, checked(row.Revision + 1));
+            Copy(row, resolution.OutboxItem, scope, checked(row.Revision + 1), WriteVersion(resolution.OutboxItem));
             if (dispatchRow is not null && resolution.WorkflowDispatch is not null)
                 WorkflowDispatchEfSupport.Copy(dispatchRow, resolution.WorkflowDispatch, scope, checked(dispatchRow.Revision + 1));
 
@@ -363,7 +725,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
                 followUpRow = await LoadAsync(scope, followUp.OutboxItemId, tracking: true, cancellationToken);
                 if (followUpRow is null)
                 {
-                    followUpRow = ToEntity(followUp, scope, RowId(scope, followUp.OutboxItemId), revision: 1);
+                    followUpRow = ToEntity(followUp, scope, RowId(scope, followUp.OutboxItemId), revision: 1, WriteVersion(followUp));
                     context.RuntimePostCommitOutbox.Add(followUpRow);
                 }
                 else
@@ -467,7 +829,7 @@ public sealed class EfRuntimePostCommitOutboxStore(
         try
         {
             WorkflowDispatchEfSupport.Copy(dispatchRow!, transition.WorkflowDispatch!, scope, checked(dispatchRow!.Revision + 1));
-            Copy(deadLetterRow!, transition.OutboxItem!, scope, checked(deadLetterRow!.Revision + 1));
+            Copy(deadLetterRow!, transition.OutboxItem!, scope, checked(deadLetterRow!.Revision + 1), WriteVersion(transition.OutboxItem!));
             await context.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return transition.Result;
@@ -564,40 +926,49 @@ public sealed class EfRuntimePostCommitOutboxStore(
             : await query.AsNoTracking().SingleOrDefaultAsync(cancellationToken);
     }
 
+    private string WriteVersion(RuntimePostCommitOutboxItem item) => RuntimePostCommitOutboxWriteVersion.For(context, item);
+
     internal static RuntimePostCommitOutboxEntity ToEntity(
         RuntimePostCommitOutboxItem item,
         string scope,
         string id,
-        long revision) => new()
+        long revision,
+        string writeVersion)
     {
-        Id = id,
-        ScopeKey = EfRuntimeOperationalStoreSupport.Encode(scope),
-        ScopeKeyHash = EfRuntimeOperationalStoreSupport.Hash(scope),
-        OutboxItemId = EfRuntimeOperationalStoreSupport.Encode(item.OutboxItemId),
-        OutboxItemIdHash = EfRuntimeOperationalStoreSupport.Hash(item.OutboxItemId),
-        OutboxItemIdOrderKey = OutboxOrderKey(item.OutboxItemId),
-        WorkflowExecutionId = EfRuntimeOperationalStoreSupport.Encode(item.Intent.WorkflowExecutionId),
-        WorkflowExecutionIdHash = EfRuntimeOperationalStoreSupport.Hash(item.Intent.WorkflowExecutionId),
-        WorkflowExecutionIdOrderKey = OrderKey(item.Intent.WorkflowExecutionId),
-        IntentKind = item.Intent.Kind,
-        IntentKindHash = EfRuntimeOperationalStoreSupport.Hash(item.Intent.Kind),
-        Status = (int)item.Status,
-        RecordedAtUtcTicks = item.RecordedAt.UtcTicks,
-        DeliverableAtUtcTicks = Ticks(DeliverableAt(item)),
-        ClaimableAtUtcTicks = ClaimableAt(item).UtcTicks,
-        ClaimableIsEligible = IsClaimable(item),
-        ContentJson = RuntimeArtifactJson.Serialize(item),
-        SchemaVersion = RuntimePostCommitOutboxEfModule.SchemaVersion,
-        Revision = revision
-    };
+        if (item.StimulusDeliverySourceScope is { } sourceScope && sourceScope.Value != scope)
+            throw new InvalidOperationException("The declared recipient source does not belong to this provider write scope.");
+        return new()
+        {
+            Id = id,
+            ScopeKey = EfRuntimeOperationalStoreSupport.Encode(scope),
+            ScopeKeyHash = EfRuntimeOperationalStoreSupport.Hash(scope),
+            OutboxItemId = EfRuntimeOperationalStoreSupport.Encode(item.OutboxItemId),
+            OutboxItemIdHash = EfRuntimeOperationalStoreSupport.Hash(item.OutboxItemId),
+            OutboxItemIdOrderKey = OutboxOrderKey(item.OutboxItemId),
+            WorkflowExecutionId = EfRuntimeOperationalStoreSupport.Encode(item.Intent.WorkflowExecutionId),
+            WorkflowExecutionIdHash = EfRuntimeOperationalStoreSupport.Hash(item.Intent.WorkflowExecutionId),
+            WorkflowExecutionIdOrderKey = OrderKey(item.Intent.WorkflowExecutionId),
+            IntentKind = item.Intent.Kind,
+            IntentKindHash = EfRuntimeOperationalStoreSupport.Hash(item.Intent.Kind),
+            Status = (int)item.Status,
+            RecordedAtUtcTicks = item.RecordedAt.UtcTicks,
+            DeliverableAtUtcTicks = Ticks(DeliverableAt(item)),
+            ClaimableAtUtcTicks = ClaimableAt(item).UtcTicks,
+            ClaimableIsEligible = IsClaimable(item),
+            ContentJson = RuntimeArtifactJson.Serialize(item),
+            SchemaVersion = writeVersion,
+            Revision = revision
+        };
+    }
 
     internal static void Copy(
         RuntimePostCommitOutboxEntity row,
         RuntimePostCommitOutboxItem item,
         string scope,
-        long revision)
+        long revision,
+        string writeVersion)
     {
-        var replacement = ToEntity(item, scope, row.Id, revision);
+        var replacement = ToEntity(item, scope, row.Id, revision, writeVersion);
         row.ScopeKey = replacement.ScopeKey;
         row.ScopeKeyHash = replacement.ScopeKeyHash;
         row.OutboxItemId = replacement.OutboxItemId;
@@ -658,12 +1029,23 @@ public sealed class EfRuntimePostCommitOutboxStore(
         RuntimePostCommitOutboxItem item;
         try
         {
+            using var content = JsonDocument.Parse(row.ContentJson);
+            foreach (var name in new[] { "recipientSnapshot", "stimulusDeliveryProtocolVersion", "stimulusDeliverySourceScope" })
+            {
+                var fields = content.RootElement.EnumerateObject()
+                    .Where(property => property.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).ToArray();
+                if (fields.Length > 1 || fields.Any(property => property.Value.ValueKind == JsonValueKind.Null))
+                    throw new InvalidDataException("Present recipient protocol state cannot be null or duplicated.");
+            }
             item = RuntimeArtifactJson.Deserialize<RuntimePostCommitOutboxItem>(RuntimePostCommitOutboxEfModule.Chain.Upcast<RuntimePostCommitOutboxEntity>(row.SchemaVersion, (nameof(row.ContentJson), row.ContentJson))[nameof(row.ContentJson)]!);
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException or InvalidOperationException or NotSupportedException)
         {
             throw new InvalidDataException("The persisted post-commit outbox item is not valid current data.", exception);
         }
+
+        if (item.StimulusDeliverySourceScope is { } sourceScope && sourceScope.Value != scope)
+            throw new InvalidDataException("The recipient protocol scope differs from its physical source row.");
 
         if (!StringComparer.Ordinal.Equals(item.OutboxItemId, outboxItemId) ||
             row.Id != EfRuntimeOperationalStoreSupport.CompositeId(scope, physicalId) ||
@@ -755,7 +1137,10 @@ public sealed class EfRuntimePostCommitOutboxStore(
             lastFailureMessage,
             item.Metadata,
             deliveryFencingToken,
-            deliveryVisibleAfter);
+            deliveryVisibleAfter,
+            item.StimulusDeliveryProtocolVersion,
+            item.StimulusDeliverySourceScope,
+            item.RecipientSnapshot);
 
     private static RuntimePostCommitOutboxStatus NormalizeDeliveryStatus(
         RuntimePostCommitOutboxItem existing,

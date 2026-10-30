@@ -18,7 +18,9 @@
 | `IActivityExecutionValuePayloadAuditSink` | Receives every authorized, denied, or unavailable raw value-payload resolution attempt, including the stable audit subject and request correlation ID, without receiving the payload itself. The default writes structured metadata to the host logger. |
 | `ActivityExecutionLayoutReader` | Projects composite-boundary structure from the pinned executable artifact and joins optional source-reference geometry. It never loads Design state and retains authored nodes that did not execute, including immediate nested boundary roots while keeping their descendants lazy. |
 | Runtime diagnostics settings store and `IRuntimeDiagnosticsSettingsService` | Back the canonical diagnostics settings resource; durable or centrally managed hosts may replace the underlying settings persistence. |
-| `IWorkflowAlterationRequestContext` | Supplies authenticated submitter, tenant partition, authority scope, and request correlation evidence. Request bodies never choose tenant/authority scope. |
+| `IWorkflowRuntimeOperatorAccess` | Answers whether the caller may manage one run (spec 260 FR-416), for the `permissions.canManage` signal on the run details, and, through `CanManageRuntimeAsync`, whether the caller may manage the runtime itself, for the diagnostics settings' `permissions.canManage` (#3130). The default (`HttpContextWorkflowRuntimeOperatorAccess`) evaluates `workflows/runtime:manage` with Foundation Identity's evaluator and the caller's tenant, with the run as resource or no resource, and fails closed; an implementation that does not override `CanManageRuntimeAsync` answers `false`. A display hint only: submission and saving still enforce the permission. |
+| `ActivityStateViewProjectorRegistry` | Holds the composed `IActivityStateViewProjector` contributions (spec 260 R-6) by private-state alias for the state view route; a duplicate alias fails startup through `ValidateActivityStateViewProjectorsStartupTask`. `RuntimeActivityStateViewCapabilitySource` advertises the `activity-execution-state-view` link only when a projector is composed. |
+| `IWorkflowAlterationRequestContext` | Supplies authenticated submitter, tenant partition, authority scope, and request correlation evidence, and decides per run whether the caller may manage an explicitly named run (`CanManageAsync`, the permission run deletion evaluates, with the run's state as the resource). Request bodies never choose tenant/authority scope. |
 | `IWorkflowAlterationAdmissionGate` | Checks bounded capacity before a durable alteration plan exists. A rejection maps to `429`; it must not consume the idempotency key. |
 | `IWorkflowAlterationStore` | Runtime's plan/job persistence port. The API uses redacted projections only and never decrypts `ProtectedPayload`. |
 
@@ -28,8 +30,8 @@ Optional stimulus/trigger providers are additive contributors to Runtime routing
 
 Activity-execution detail exposes capture truth and stable evidence identities but never embeds raw captured payloads. Clients resolve a payload through the dedicated `value-evidence/{evidenceId}/payload` capability only after the separate payload-resolution authorization and audit path succeeds.
 
-Alteration endpoints are a durable command/query surface: submit and cancel require `workflow-runtime.manage`; plan
-and job reads require `workflow-runtime.read`. Hosts add custom alteration implementations through the Runtime
+Alteration endpoints are a durable command/query surface: submit and cancel require `workflows/runtime:manage`; plan
+and job reads require `workflows/runtime:read`. Hosts add custom alteration implementations through the Runtime
 `AddWorkflowAlterationHandler<T>` contribution, not by adding API request handlers or wire-level CLR type names. The
 API exposes no handler payload schema endpoint: descriptor-only discovery remains the trusted host's
 `IWorkflowAlterationRegistry` concern, avoiding handler construction and executable payload-type leakage.

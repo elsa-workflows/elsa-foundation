@@ -39,7 +39,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -151,13 +150,13 @@ public sealed class WorkerHttpFixtureHostEvidenceTests : IDisposable
             new { });
         Assert.Equal(HttpStatusCode.Unauthorized, anonymousResponse.StatusCode);
 
-        host.Client.DefaultRequestHeaders.Add("X-Worker-Permission", "workflow-runtime.read");
+        host.Client.DefaultRequestHeaders.Add("X-Worker-Permission", "workflows/runtime:read");
         using var forbiddenResponse = await host.Client.PostAsJsonAsync(
             "/runtime/workflows/executables/worker-event-artifact/execute",
             new { });
         Assert.Equal(HttpStatusCode.Forbidden, forbiddenResponse.StatusCode);
         host.Client.DefaultRequestHeaders.Remove("X-Worker-Permission");
-        host.Client.DefaultRequestHeaders.Add("X-Worker-Permission", "workflow-runtime.execute");
+        host.Client.DefaultRequestHeaders.Add("X-Worker-Permission", "workflows/runtime:execute");
 
         using var executeResponse = await host.Client.PostAsJsonAsync(
             "/runtime/workflows/executables/worker-event-artifact/execute",
@@ -188,7 +187,7 @@ public sealed class WorkerHttpFixtureHostEvidenceTests : IDisposable
             new DispatchStimulus(
                 bookmark.StimulusType,
                 bookmark.StimulusHash,
-                JsonSerializer.SerializeToElement(new EventReceived("worker-ready")),
+                JsonSerializer.SerializeToElement(new { eventName = "worker-ready" }),
                 Mode: "ResumeOnly"));
         Assert.Equal(HttpStatusCode.OK, stimulusResponse.StatusCode);
         var stimulus = await stimulusResponse.Content.ReadFromJsonAsync<DispatchStimulusResponse>();
@@ -212,7 +211,6 @@ public sealed class WorkerHttpFixtureHostEvidenceTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
         foreach (var path in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
             File.Delete(path);
     }

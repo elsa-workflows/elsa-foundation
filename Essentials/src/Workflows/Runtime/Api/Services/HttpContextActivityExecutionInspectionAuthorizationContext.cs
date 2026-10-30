@@ -16,9 +16,9 @@ namespace Elsa.Workflows.Runtime.Api.Services;
 /// </summary>
 public sealed class HttpContextActivityExecutionInspectionAuthorizationContext : IActivityInspectionContextAsync
 {
-    public const string StructurePermission = "workflows.activity-executions.inspect";
-    public const string SensitiveValuesPermission = "workflows.activity-executions.inspect-values";
-    public const string ResolveValuePayloadsPermission = "workflows.activity-executions.resolve-value-payloads";
+    public const string StructurePermission = "workflows/activity-executions:inspect";
+    public const string SensitiveValuesPermission = "workflows/activity-executions:inspect-values";
+    public const string ResolveValuePayloadsPermission = "workflows/activity-executions:resolve-value-payloads";
     private readonly IPermissionAuthorizationService _authorization;
     private readonly NormalizedPrincipalValidator _principalValidator;
     private readonly ClaimsPrincipal _principal;

@@ -1,7 +1,6 @@
 using CShells.Features;
 using Elsa.Agent.Anthropic.Extensions;
 using Elsa.Agent.Anthropic.Options;
-using Elsa.Agent.Core.Extensions;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -13,9 +12,10 @@ namespace Elsa.Agent.Anthropic;
 [ShellFeature(
     name: "AnthropicAgent",
     DisplayName = "Anthropic (Claude) Agent Provider",
-    Description = "Registers the Anthropic Claude agent provider, driven by the host orchestrator over the shared tool currency. Enabling this excludes other agent harnesses (single active harness)."
+    Description = "Registers the Anthropic Claude agent provider, driven by the host orchestrator over the shared tool currency. Enabling this excludes other agent harnesses (single active harness).",
+    DependsOn = new object[] { typeof(FoundationAgentAbstractionsFeature) }
 )]
-public sealed class AnthropicAgentFeature : IShellFeature
+public class AnthropicAgentFeature : FoundationAgentAbstractionsFeature
 {
     public bool Enabled { get; set; }
 
@@ -32,9 +32,9 @@ public sealed class AnthropicAgentFeature : IShellFeature
 
     public bool IncludeSensitiveContextContent { get; set; }
 
-    public void ConfigureServices(IServiceCollection services)
+    public override void ConfigureServices(IServiceCollection services)
     {
-        services.AddFoundationAgentAbstractions();
+        base.ConfigureServices(services);
         services.AddAnthropicAgentProvider();
         services.Configure<AnthropicAgentOptions>(options =>
         {

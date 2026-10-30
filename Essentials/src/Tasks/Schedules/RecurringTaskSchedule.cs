@@ -3,7 +3,7 @@ using Elsa.Tasks.Schedules.Expressions;
 
 namespace Elsa.Tasks.Schedules;
 
-public sealed class RecurringTaskSchedule(IDictionary<Type, IntervalExpression> scheduledTasks)
+internal sealed class RecurringTaskSchedule(IDictionary<Type, IntervalExpression> scheduledTasks)
 {
     public IDictionary<Type, IntervalExpression> ScheduledTasks { get; } = scheduledTasks;
 

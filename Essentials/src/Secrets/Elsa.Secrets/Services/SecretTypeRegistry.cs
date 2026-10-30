@@ -1,4 +1,5 @@
 using Elsa.Secrets.Core.Contracts;
+using Elsa.Secrets.Core.Exceptions;
 using Elsa.Secrets.Core.Models;
 
 namespace Elsa.Secrets.Services;
@@ -14,7 +15,7 @@ public sealed class SecretTypeRegistry(IEnumerable<ISecretTypeProvider> provider
         if (TryGet(name, out var provider))
             return provider!;
 
-        throw new InvalidOperationException("Secret type not found.");
+        throw new SecretStoreConfigurationException("Secret type not found.");
     }
 
     public bool TryGet(string name, out ISecretTypeProvider? provider) => _providers.TryGetValue(name, out provider);

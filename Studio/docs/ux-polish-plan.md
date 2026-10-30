@@ -2,9 +2,16 @@
 
 A comparative UX review of **Elsa 4 Studio** (Vite + React 19, custom `--wf-*` CSS, `@xyflow/react`) against the more polished **Elsa 3 designer** (Next.js + Tailwind + shadcn/ui), with a prioritized backlog for closing the gap.
 
-- **Target to improve:** `elsa-foundation-studio` — workflow editor at `src/essentials/Elsa.Studio.Workflows/Client/src/styles.css` + `module.tsx`; host shell at `src/apps/Elsa.Studio.Web/Client/src/app/`.
+- **Target to improve:** `elsa-foundation-studio` — workflow editor at `src/essentials/Elsa.Studio.Workflows/Client/src/styles.css` + `module.tsx`; host shell at `src/essentials/Elsa.Studio.Hosting/Client/src/app/`.
 - **Reference:** `elsa-foundation-designer` — shadcn/Radix component layer, OKLCH tokens, sonner toasts.
 - **Constraint:** This is a plan only. No application code is changed by this document.
+
+> **Historical baseline:** The comparisons and backlog below preserve the original comparative
+> review. Later scoped implementation and corrective slices changed selected Workflow surfaces.
+> Use the [UX design spec](ux/design-spec.md) as the current normative authority. The linked
+> issue slices record their own acceptance; the [#3075 acceptance record](https://github.com/elsa-workflows/elsa-foundation/issues/3075)
+> remains the authority for the nine composed qualification rows and their evidence. The scoped
+> updates below do not claim coverage across every editor or detail surface.
 
 ---
 
@@ -16,7 +23,7 @@ The gap concentrates in five themes, in rough order of impact:
 
 1. **Typography "shouting."** Elsa 4 leans on `text-transform: uppercase` + `font-weight: 800` at 10–12px for *almost every* label — panel titles, section labels, `dt`, tabs, form-field labels, category toggles, port labels. This heavy, all-caps texture is the single biggest reason the UI reads as "busier / less refined" than Elsa 3, which uses sentence-case, medium-weight, 60%-opacity labels. This is a cheap, high-impact fix.
 2. **Self-inflicted token bypass.** The host shell *defines* radius, shadow, and type tokens, but the workflow module ignores them — hardcoding radii (`6/7/8/10px`), font sizes (`10/11/12/13/14/20px`), and inline `rgba(15,23,42,…)` shadows that don't adapt to dark mode. Elsa 3's cohesion comes from *consistent* scales; Elsa 4 has the scales but doesn't consume them.
-3. **Missing loading / empty / error finish.** Elsa 3 has skeleton rows, centered spinner-with-text, error cards (icon + title + explanation), and empty states (large muted icon + title + description + CTA). Elsa 4's `.wf-empty` is a single line of text; there are no skeletons and minimal error styling.
+3. **Original review gap: incomplete loading / empty / error finish.** Elsa 3 has broader list-state patterns. Since the original review, the Workflow Definitions, Workflow Executables, and Runs lists have adopted scoped skeleton, richer empty-state, and error-card patterns. That delivery does not imply complete coverage across the editor and every detail surface.
 4. **Overlays appear/disappear instantly.** Elsa 3 animates every overlay (dialog zoom-in-95 + fade, dropdown directional slide-in, tooltip fade). Elsa 4's dialogs, connect menu, and syntax picker pop in with no transition, and panel collapse is an abrupt `display:none`. Motion is where "care" is felt.
 5. **Hand-rolled controls drift.** Each button/tab/field is styled by an ad-hoc selector group, so interaction states are uneven (no active "press" feedback, focus sometimes `outline`, sometimes `box-shadow`, sometimes `outline-offset`). Elsa 3 routes everything through a few CVA variants, so every control behaves identically.
 
@@ -28,6 +35,14 @@ Most of the win is available in **(a) quick token-level work** with no structura
 
 Legend: ✅ = Elsa 4 already comparable/good · ⚠️ = noticeable gap · 🔴 = clear gap that drives the "less polished" feeling.
 
+### Home — direct workflow tasks (`exists`)
+
+The #3063 Home slice adds a compact Workflow tasks group before the configurable widgets: one-use **Create workflow**, **Continue editing** by current draft identity, **Needs attention** into Runs' active-incident view, and **Browse workflows**. A single current-draft candidate opens its exact definition; multiple candidates use a chooser that shows stable IDs. Empty and failed discovery stay separate, and a stale or unavailable editor keeps the selected ID with explicit recovery. The group does not participate in widget preferences. Known permission checks only explain Home affordances; Workflows endpoints retain authorization authority, including the existing anonymous posture. No separate Home polish backlog item was present; the broader editor and shell work below remains open independently.
+
+### Resource pages — consistency (#3071 accepted)
+
+Secrets and Connections follow the accepted [resource-list contract](ux/design-spec.md#resource-list-consistency-3071) recorded in [Foundation #3071](https://github.com/elsa-workflows/elsa-foundation/issues/3071): a familiar heading/search/results hierarchy and one primary header create action. Secrets keeps Edit direct and progressively discloses its secondary operations; Connections keeps Details as its domain entry. Search, truthful inventory coverage, masking, permissions, confirmation and focus behavior remain part of the contract. Home's Needs attention destination mirrors effective runtime-read access without changing Continue. This slice acceptance does not mark the broader #3075 composed qualification complete.
+
 ### 1. Workflow definition editor — canvas
 
 | Aspect | Elsa 3 (reference) | Elsa 4 Studio | Verdict |
@@ -38,7 +53,7 @@ Legend: ✅ = Elsa 4 already comparable/good · ⚠️ = noticeable gap · 🔴 
 | Connection drag | — | No dashed preview line / drop-zone highlight while dragging | ⚠️ |
 | Empty canvas | — | `.wf-empty-canvas-add` centered button with good hover (`1709–1729`) | ✅ |
 | Breadcrumb | — | Raw text links, no separators (`1464–1479`) | ⚠️ |
-| Reduced motion | Respected via Tailwind defaults | No `@media (prefers-reduced-motion)` anywhere | ⚠️ |
+| Reduced motion | Respected via Tailwind defaults | Original review baseline: no rule in the audited workflow stylesheet. Scoped reduce-motion rules now exist for selected workflow, editor, and dialog surfaces; check remaining surfaces individually. | ⚠️ Partial |
 
 ### 2. Editor — activity palette
 
@@ -79,8 +94,8 @@ Legend: ✅ = Elsa 4 already comparable/good · ⚠️ = noticeable gap · 🔴 
 | Row hover/select | `hover:bg-muted/50`, `data-[state=selected]` | `:hover`→accent-soft, `[aria-selected]`→accent 14% mix, focus outline (`707–735`) | ✅ Good |
 | Header labels | Sentence/medium | `11px/700/uppercase` (`1074–1080`) | ⚠️ |
 | Status | `Badge` variants (Published/Draft) | `.wf-status-badge` semantic by `data-status` (`672–705`) | ✅ Comparable |
-| Loading | 6 skeleton rows matching real height | None — blank while loading | 🔴 |
-| Empty | Centered `size-14` icon + title + description + CTA | `.wf-empty` = one muted text line (`1289–1293`) | 🔴 |
+| Loading | 6 skeleton rows matching real height | Original baseline was blank; Workflow Definitions now uses `WfListSkeleton`. This is scoped list coverage, not editor-wide coverage. | ⚠️ Partial |
+| Empty | Centered `size-14` icon + title + description + CTA | Original baseline used a one-line `.wf-empty`; Workflow Definitions now uses `WfEmptyState`. Check other empty surfaces individually. | ⚠️ Partial |
 | Pagination | shadcn controls | `.wf-pagination` summary + controls, disabled states (`860–929`) | ✅ Good |
 
 ### 6. Instances list & instance viewer
@@ -91,7 +106,7 @@ Legend: ✅ = Elsa 4 already comparable/good · ⚠️ = noticeable gap · 🔴 
 | Activity/incident lists | — | `.wf-instance-activity` w/ selected `inset 3px 0 0 accent`, severity-tinted incidents (`549–633`) | ✅ Good semantic color |
 | Status badges | Badge variants | `data-status` running/completed/faulted/suspended (`672–705`) | ✅ |
 | Unmatched evidence | — | Dashed-border cards (`609–633`) | ✅ Nice touch |
-| Loading/empty/error | Skeletons + error cards | Minimal — same `.wf-empty`/`.wf-alert` text rows (`228–281`) | 🔴 |
+| Loading/empty/error | Skeletons + error cards | The Runs list now uses `WfListSkeleton`, `WfEmptyState`, and `WfErrorCard`. Run detail and timeline still contain simpler `.wf-empty` loading/empty states; this is not all-surface coverage. | ⚠️ Partial |
 
 ### 7. Cross-cutting: feedback & motion
 
@@ -100,9 +115,9 @@ Legend: ✅ = Elsa 4 already comparable/good · ⚠️ = noticeable gap · 🔴 
 | Toasts | sonner w/ per-type lucide icons, theme-aware | No toast system surfaced; relies on inline status banners / themed dialogs | ⚠️ |
 | Dialog motion | Backdrop fade + popup zoom-in-95, 100ms | `.wf-dialog`/`.wf-property-editor-dialog` appear instantly (`931–1058`, `2351–2474`) | 🔴 |
 | Focus rings | One recipe everywhere (3px ring/50%) | Mix of `outline`, `box-shadow`, `outline-offset` per element | ⚠️ Inconsistent |
-| Reduced motion | Honored | Absent | ⚠️ |
+| Reduced motion | Honored | Original review baseline: absent. Scoped rules now cover selected workflow/editor/dialog surfaces; verify remaining surfaces individually. | ⚠️ Partial |
 
-### Cross-cutting: host shell (`Elsa.Studio.Web/Client`)
+### Cross-cutting: host shell (`Elsa.Studio.Hosting/Client`)
 
 The shell is genuinely strong and **not** a major source of the gap: backdrop-blur sticky topbar (`422–498`), nav active-indicator bar (`.nav-section a::before`, `1715–1741`), tinted `.nav-icon-tile`, status-dot footer with glow ring, a real spacing/radius/shadow/transition token set (`tokens.css`), and a 7-theme OKLCH system (`themes/presets.ts`). The irony: **the shell's tokens are the fix** for the workflow module's hardcoding.
 
@@ -118,19 +133,19 @@ The shell is genuinely strong and **not** a major source of the gap: backdrop-bl
 | A2 | Hardcoded radii (`6/7/8/10px`) don't track the shell's radius scale | Replace literals with `--radius-sm`/`--radius`/`--radius-md`/`--radius-xl` (defined in `Web/Client/.../tokens.css`/`app/styles.css:8–13`). Add `--wf-radius-*` aliases on `.wf-page`/`.wf-editor` mapping to host tokens | `Workflows/.../styles.css` (global) — reuse existing `--radius-*` | S |
 | A3 | Inline `rgba(15,23,42,…)` shadows on nodes/dialogs don't adapt to dark mode | Define `--wf-shadow-node`, `--wf-shadow-overlay`, `--wf-shadow-menu` on `.wf-editor`, derived from host `--shadow-md/lg/xl` (`app/styles.css:23–27`); reference them in `.wf-node`, `.wf-dialog`, `.wf-syntax-picker-menu`, `.wf-property-editor-dialog` | New `--wf-shadow-*` tokens; reuse `--shadow-*` | S |
 | A4 | Hardcoded font sizes (`10/11/12/13/14/20px`) → unbounded type scale | Map to the shell type tokens (`--studio-body-size` 13, `--studio-label-size` 12, `--studio-section-title-size` 16, `--studio-page-title-size` 20) plus one new `--wf-text-2xs` (10px, for port labels/badges) — mirrors Elsa 3's bounded `text-2xs→base` scale | `tokens.css:30–33`; new `--wf-text-2xs`; apply across `styles.css` | M |
-| A5 | Activity icon colors hardcoded (`#10b981/#0284c7/#d97706/#f472b6`) → won't follow theme | Promote to `--wf-activity-terminal/composite/runtime/trigger` tokens on `.wf-editor`, defaulting to current hex; lets themes override | `styles.css:1524–1630`; `module.tsx:3327–3342` (`renderActivityIcon`) | S |
+| A5 | Activity icon colors hardcoded (`#10b981/#0284c7/#d97706/#f472b6`) → won't follow theme | **Done (palette + nodes):** category tones go through `--studio-wf-activity-*` then `--studio-success` / `--studio-accent` / `--studio-warning` / `--studio-danger`. Glyphs resolve from a catalog `icon` / `iconName` (lucide, `asset:`, `ext:`), then type, then category. Extensions register `ext:` icons via `registerActivityIcons`. | `activityIcons.ts`; `styles.css` `.wf-activity-icon` / `.wf-node-icon`; `renderActivityIcon` | S |
 | A6 | Inconsistent focus recipe (outline vs box-shadow vs offset) | Adopt one ring recipe: `box-shadow: 0 0 0 3px color-mix(in srgb, var(--wf-accent) 40%, transparent)` via a shared `.wf-focusable:focus-visible` or a CSS custom-property mixin; reconcile `.wf-grid-row` (`711`), `.wf-side-resize-handle` (`1320`), form inputs (`1011`, `2173`), autosave toggle (`115`) | `styles.css` (focus rules) | S |
 | A7 | Disabled buttons use opacity only (`0.55–0.6`) → possible WCAG-AA contrast fail | Add an explicit disabled color token (`--wf-disabled-text`) instead of relying on opacity; keep `cursor:not-allowed` | `styles.css:145–149`, `920–923`, `1264–1267` | S |
-| A8 | No reduced-motion support | Add a global `@media (prefers-reduced-motion: reduce) { * { transition-duration: 0.01ms !important; animation: none !important; } }` block | `Workflows/.../styles.css` + `app/styles.css` | S |
+| A8 | Reduced-motion support was absent in the original review | Scoped rules now exist in selected workflow/editor/dialog styles. Keep them and audit uncovered interactive surfaces before adding targeted support; avoid a global reset that could interfere with component behavior. | `Workflows/.../styles.css:7374`; selected dialog/activity styles | S |
 | A9 | Breadcrumbs are bare text links | Add a `/` or chevron separator (lucide `ChevronRight` already imported) and `--wf-muted-text` styling | `module.tsx` breadcrumb render; `styles.css:1464–1479` | S |
 
 ### (b) Component-level polish (0.5–2 days each)
 
 | # | Problem | Proposed change | Files | Effort |
 |---|---|---|---|---|
-| B1 | **No skeleton loaders** — grids/editor show blank while loading | Add a `.wf-skeleton` rule (`animate-pulse`-equivalent: `background: linear-gradient` shimmer or opacity keyframe) and render N skeleton rows at real row height for definitions/instances; a centered spinner-with-text for the editor (mirror Elsa 3 `definition-editor.tsx` loading) | `styles.css` (new `.wf-skeleton`); list render sites in `module.tsx` | M |
-| B2 | **Weak empty states** — `.wf-empty` is one line | Define a shared `.wf-empty-state` (centered, `~48px` muted icon tile + title + description + optional CTA). Apply to empty definitions list, empty instances list, empty canvas. Use existing lucide icons | `styles.css:1289`; render sites in `module.tsx` | M |
-| B3 | **No real error states** | Add `.wf-error-card` (destructive icon + bold title + muted explanation), replacing bare `.wf-alert` text for load failures in editor + instance viewer | `styles.css:228–281`; `module.tsx`, `ActivityPropertiesPanel.tsx` | M |
+| B1 | **Original review gap; partially delivered:** Workflow Definitions, Workflow Executables, and Runs lists use `WfListSkeleton` | Audit remaining blank loading surfaces, such as editor and detail views, and add a shared pattern only where the current source still has a loading gap. Do not infer coverage beyond the named lists. | `workflow-editor/StatusViews.tsx`; the three list render sites; remaining loading views | M |
+| B2 | **Original review gap; partially delivered:** the Definitions, Executables, and Runs lists use `WfEmptyState` | Check remaining empty surfaces, including the canvas, individually; extend the existing pattern only where it is still missing. | `workflow-editor/StatusViews.tsx`; list render sites; remaining empty views | M |
+| B3 | **Original review gap; partially delivered:** the Definitions, Executables, and Runs lists use `WfErrorCard` | Audit remaining editor and detail failures individually; use the current error-card pattern where a source-confirmed gap remains. Do not treat list coverage as an all-surface guarantee. | `workflow-editor/StatusViews.tsx`; list render sites; remaining error views | M |
 | B4 | **Overlays pop in with no motion** | Add enter/exit animation to `.wf-dialog`, `.wf-property-editor-dialog`, `.wf-syntax-picker-menu`, `.wf-connect-menu`: backdrop `fade-in`, popup `zoom-in(0.97→1)` + fade over `120ms`. Pure CSS keyframes, gated by reduced-motion (A8) | `styles.css:931–1058`, `1731–1819`, `2180–2474` | M |
 | B5 | **Button drift** — many ad-hoc button selectors, no press feedback | Consolidate into a small set of utility classes: `.wf-btn` (base) + `.wf-btn--primary/--ghost/--danger` + `.wf-btn--sm`. Add `:active { transform: translateY(1px); }` press feedback. Migrate toolbar, row-actions, pagination, dialog-actions to them | `styles.css:120–149`, `825–859`, `860–929`, `1028–1057` | L |
 | B6 | Panel collapse is abrupt `display:none` | Animate the grid-template-column width transition (`--wf-palette-width`/`--wf-inspector-width`) and fade content opacity instead of hard hide | `styles.css:1106–1277`; `module.tsx` collapse logic | M |
@@ -146,7 +161,7 @@ The shell is genuinely strong and **not** a major source of the gap: backdrop-bl
 | C2 | Properties panel is a flat list vs Elsa 3's collapsible tinted section cards | Adopt a `.wf-section-card` pattern: collapsible header, tinted icon square per group (input/output/runtime), hover shadow, chevron rotation. Improves scannability of dense property forms | `styles.css:2083–2178`; `ActivityPropertiesPanel.tsx` | L |
 | C3 | No connection-drawing feedback | Add a dashed preview edge that follows the cursor while dragging a connection, and highlight valid target handles/drop slots | `module.tsx` (xyflow connection handlers); `styles.css` handle rules `1632–1659` | L |
 | C4 | Drag-and-drop from palette lacks feedback | Add a drag ghost element + valid drop-zone highlight on the canvas when dragging an activity from the palette | `module.tsx` DnD; `styles.css` palette/canvas | L |
-| C5 | Loading transitions are binary (blank → full) | Orchestrate skeleton→content cross-fade for editor and lists once B1 lands, so data arrival feels smooth rather than a snap | `module.tsx` data-loading sites | M |
+| C5 | Loading transitions remain a surface-specific finish item | Keep the existing skeleton-to-content treatment on covered lists; inspect uncovered editor/detail transitions and add motion only where the current flow has a visible discontinuity. | Workflow editor and remaining data-loading sites | M |
 
 ---
 
@@ -156,7 +171,7 @@ The shell is genuinely strong and **not** a major source of the gap: backdrop-bl
 Do the token-level quick wins that change the *feel* immediately: A1 (label softening) → A4 (bounded type scale) → A2/A3 (radius + shadow tokens) → A6 (one focus recipe) → A7/A8/A9. Outcome: the UI stops "shouting" and gains the quiet consistency that reads as polish — the biggest lever for the owner's specific complaint, with zero structural risk.
 
 **Phase 2 — "Never show a void" (≈3–4 days).**
-B1 (skeletons) → B2 (empty states) → B3 (error cards) → B9 (list depth). These are the states Elsa 3 conspicuously handles and Elsa 4 doesn't; they're where polish is most *noticed* because they appear on every page load.
+Audit remaining loading, empty, and error states after the scoped skeleton, empty-state, and error-card patterns landed on the Definitions, Executables, and Runs lists. Keep any follow-up scoped to surfaces where the current source still shows a concrete gap; then consider B9 (list depth).
 
 **Phase 3 — "Add the motion & finish" (≈3–5 days).**
 B4 (overlay animations) → B7 (node hover) → B6 (panel collapse) → B5 (button consolidation + press feedback) → B8 (toasts). Accumulated micro-interactions are the "somehow" in "looks more polished somehow."
@@ -166,7 +181,7 @@ C1 (shared primitive layer) first — it absorbs and standardizes everything fro
 
 ### Token work summary
 
-- **Reuse existing host tokens:** `--radius-sm/--radius/--radius-md/--radius-xl` (A2), `--shadow-sm/md/lg/xl` (A3), `--studio-*-size` type tokens (A4), `--transition-fast/base/slow` (already used). The shell already defines these in `Elsa.Studio.Web/Client/src/app/ui/tokens.css` and `app/styles.css` — the workflow module just needs to consume them.
+- **Reuse existing host tokens:** `--radius-sm/--radius/--radius-md/--radius-xl` (A2), `--shadow-sm/md/lg/xl` (A3), `--studio-*-size` type tokens (A4), `--transition-fast/base/slow` (already used). The shell already defines these in `Elsa.Studio.Hosting/Client/src/app/ui/tokens.css` and `app/styles.css` — the workflow module just needs to consume them.
 - **Add new `--wf-*` tokens:** `--wf-text-2xs` (A4), `--wf-shadow-node/overlay/menu` (A3), `--wf-activity-terminal/composite/runtime/trigger` (A5), `--wf-label-weight`/`--wf-label-transform` (A1), `--wf-disabled-text` (A7), `--wf-radius-*` aliases if a local mapping is cleaner than referencing host tokens directly (A2).
 
 ---

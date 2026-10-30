@@ -1,0 +1,28 @@
+{
+  "processes": {
+    "firstBackend": {
+      "controllerProcessId": 80533,
+      "processId": 80534,
+      "startEpochSeconds": 1793153510,
+      "childRunning": false,
+      "controllerRunning": false
+    },
+    "recoveredBackend": {
+      "controllerProcessId": 80796,
+      "processId": 80797,
+      "startEpochSeconds": 1793153599,
+      "childRunning": true,
+      "controllerRunning": true
+    },
+    "studio": {
+      "controllerProcessId": 41058,
+      "processId": 41059,
+      "startEpochSeconds": 1793141918,
+      "childRunning": true,
+      "controllerRunning": true
+    }
+  },
+  "onlyVerifiedOwnedProcessesStopped": true,
+  "userLocalhostPairUntouched": true,
+  "recoveredOwnedPairRetainedForMainQualification": true
+}

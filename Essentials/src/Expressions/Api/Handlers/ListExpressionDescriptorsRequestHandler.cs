@@ -6,7 +6,7 @@ using Elsa.Mediator.Core.Contracts;
 
 namespace Elsa.Expressions.Api.Handlers;
 
-public sealed class ListExpressionDescriptorsRequestHandler(IExpressionDescriptorRegistry registry)
+internal sealed class ListExpressionDescriptorsRequestHandler(IExpressionDescriptorRegistry registry)
     : IRequestHandler<ListExpressionDescriptors, ExpressionDescriptorsResponse>
 {
     private static readonly ExpressionDescriptorView[] IntrinsicAuthoringDescriptors =

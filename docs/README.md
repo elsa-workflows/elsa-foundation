@@ -1,32 +1,49 @@
-# Elsa Foundation Docs
+# Elsa Foundation docs
 
-This docs library is the knowledge lookup layer for `elsa-foundation`. Prefer these docs for orientation and terminology; use the constitution files as quality gates.
+Start here if you are a developer who wants to run, understand or contribute to Elsa 4. The pages are grouped by what you are trying to do.
 
-## Start points
+> **Two terms you will see:** the **glossary** is where each concept is defined once; other pages summarise and link back. The **constitution** is the pair of rule files under `.specify/memory/` that hold the architecture gates a change must pass. Use these docs to learn; use the constitution when a review points you at a gate.
 
-- [Architecture tour](architecture-tour.md) - concise tour of the architecture and core workflows.
-- [Skill catalog](skills/catalog.md) - AI-provider-neutral workflow descriptions.
-- [First-user prompt options](reference/first-user-prompts.md) - simple prompts for new architects and engineers entering the workspace.
-- [Root/framework glossary](glossary/root.md) - modular-framework terms.
-- [Elsa glossary](glossary/elsa.md) - Elsa-specific architecture terms.
-- [Reference docs](reference/README.md) - worked examples, case studies, and explanatory walkthroughs extracted from gate documents.
-- [Maps index](maps/README.md) - repo maps and generated-map expectations.
-- [Reports index](reports/README.md) - inventory, unfinished work, and future verification reports.
+## Run it
 
-## Worked references
+- [Docker Hub quickstart](docker-hub-quickstart.md): run the prebuilt images with plain `docker run`, supply your own `shells.json`, and see how Studio feature toggles are saved.
+- [Docker and compose](docker.md): the production image for Elsa.Workbench, and the PostgreSQL + Elsa.Workbench + Elsa Studio reference stack.
 
-- [Docker & compose](docker.md) - production image for Elsa.Workbench plus the PostgreSQL + Elsa.Workbench + Elsa Studio reference stack.
-- [Docker Hub quickstart](docker-hub-quickstart.md) - run the prebuilt Docker Hub images with plain `docker run`, supply a custom `shells.json`, and understand how Studio feature toggles persist.
-- [Foundation host package feeds](foundation-host-feeds.md) - pointing `Elsa.Foundation.Host` at a directory feed or a remote NuGet feed, and why a wildcard include pattern yields nothing on a remote one.
-- [Seams and bridges](seams.md) - worked activities/workflows boundary example.
-- [Serialization rule](serialization.md) - canonical payload-serialization rule and exceptions.
-- [Durable resumption](runtime-durable-resumption.md) - durable storage vs durable resumption, crash windows A/B/C, and the at-least-once/at-most-once asymmetry.
-- [Bookmark expiration](bookmark-expiration.md) - the `ExpiresAt` admissibility cutoff, its non-timeout semantics, and concrete finite/indefinite wait examples.
-- [Durable timers](runtime-durable-timers.md) - the `Delay` activity, the durable timer store + hosted pump, and the three timer correctness cruxes (delete-on-Dispatched safety, bookmark-expiry, idempotent fire); and the at-least-once guarantee of Timer/Cron start triggers.
-- [Runtime fault behavior](runtime-fault-behavior.md) - what happens when an activity throws vs when a handler throws, the drain observer chain that decides each, and the defaults behind both.
+## Understand it
 
-## Documentation rule
+Read these roughly in order:
 
-Define each concept once in the glossary. Other docs may summarize briefly, then link back to the canonical term.
-Constitution draft history and open work belong in reports, not in the gate text.
-Worked examples and long explanatory walkthroughs belong in reference docs, not in the gate text.
+1. [Architecture tour](architecture-tour.md): what Elsa 4 is made of and the patterns that hold it together.
+2. [How a workflow executes](how-a-workflow-executes.md): one request followed from the server's entry point to a saved checkpoint.
+3. [Seams and bridges](seams.md): a worked example of how the activities and workflows domains connect.
+4. [Runtime fault behaviour](runtime-fault-behavior.md): what happens when an activity throws versus when a runtime handler throws, and the defaults behind each.
+5. [Recovering after a crash](runtime-durable-resumption.md): durable storage versus durable resumption, crash windows A/B/C, and the at-least-once delivery rule.
+6. [Durable timers](runtime-durable-timers.md): the `Delay` activity, the durable timer store and pump, why firing is safe to repeat, and the at-least-once guarantee of Timer/Cron start triggers.
+7. [Bookmark expiration](bookmark-expiration.md): the `ExpiresAt` cut-off, why it is not a timeout, and examples of finite and indefinite waits.
+
+## Rules to follow
+
+- [Serialization rule](serialization.md): how payloads must be serialised, and the exceptions.
+
+## Operate it
+
+- [Foundation host package feeds](foundation-host-feeds.md): pointing `Elsa.Foundation.Host` at a directory or remote NuGet feed, and why a wildcard include pattern finds nothing on a remote feed.
+- [Secrets key rotation](secrets-key-rotation.md): rotating the key that protects stored secrets.
+
+## Look things up
+
+| You need… | Go to |
+|---|---|
+| A framework term | [Root glossary](glossary/root.md) |
+| An Elsa term | [Elsa glossary](glossary/elsa.md) |
+| Step-by-step task descriptions (tool-neutral, usable by people and AI assistants) | [Skill catalog](skills/catalog.md) |
+| Ideas for a first question to ask about the repo | [First-user prompt options](reference/first-user-prompts.md) |
+| Worked examples, case studies and walkthroughs | [Reference docs](reference/README.md) |
+| Repo maps and what the generated maps should contain, and where to read or generate them | [Maps index](maps/README.md) |
+| Inventories, unfinished work and verification reports | [Reports index](reports/README.md) |
+
+## How these docs are organised
+
+- Define each concept once, in the glossary. Other pages may summarise briefly, then link to it.
+- The constitution's draft history and open work go in reports, not in the gate text.
+- Worked examples and long walkthroughs go in reference docs, not in the gate text.

@@ -1,0 +1,154 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Elsa.Architecture.Analyzers -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/build/Analyzers/bin/Release/netstandard2.0/Elsa.Architecture.Analyzers.dll
+  Elsa.Pipelines.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Pipelines/Core/bin/Release/net10.0/Elsa.Pipelines.Core.dll
+  Elsa.Events.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Events/Core/bin/Release/net10.0/Elsa.Events.Core.dll
+  Elsa.Foundation.Identity.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/Core/bin/Release/net10.0/Elsa.Foundation.Identity.Core.dll
+  Elsa.Primitives -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Primitives/Primitives/bin/Release/net10.0/Elsa.Primitives.dll
+  Elsa.Attention.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Attention/Core/bin/Release/net10.0/Elsa.Attention.Core.dll
+  Elsa.Api.AspNetCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Api/AspNetCore/bin/Release/net10.0/Elsa.Api.AspNetCore.dll
+  Elsa.Expressions.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/Core/bin/Release/net10.0/Elsa.Expressions.Core.dll
+  Elsa.Tasks.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Tasks/Core/bin/Release/net10.0/Elsa.Tasks.Core.dll
+  Elsa.Serialization.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Serialization/Core/bin/Release/net10.0/Elsa.Serialization.Core.dll
+  Elsa.Activities.Design.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Core/bin/Release/net10.0/Elsa.Activities.Design.Core.dll
+  Elsa.Tasks.Schedules -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Tasks/Schedules/bin/Release/net10.0/Elsa.Tasks.Schedules.dll
+  Elsa.Activities.Runtime.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Runtime/Core/bin/Release/net10.0/Elsa.Activities.Runtime.Core.dll
+  Elsa.Workflows.Design.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Core/bin/Release/net10.0/Elsa.Workflows.Design.Core.dll
+  Elsa.Workflows.Runtime.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Core/bin/Release/net10.0/Elsa.Workflows.Runtime.Core.dll
+  Elsa.Foundation.Identity -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/bin/Release/net10.0/Elsa.Foundation.Identity.dll
+  Elsa.Workflows.Runtime -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/bin/Release/net10.0/Elsa.Workflows.Runtime.dll
+  Elsa.Activities.Bpmn -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/bin/Release/net10.0/Elsa.Activities.Bpmn.dll
+  Elsa.Activities.Bpmn.Interchange -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Interchange/bin/Release/net10.0/Elsa.Activities.Bpmn.Interchange.dll
+  Elsa.Activities.Bpmn.Interchange.Tests -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Interchange/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.Interchange.Tests.dll
+Test run for /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Interchange/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.Interchange.Tests.dll (.NETCoreApp,Version=v10.0)
+The following Tests are available:
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnBoundaryEventInterchangeTests.Import_ResolvesBoundaryKinds_WithListenerChildren_AndValidates
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnBoundaryEventInterchangeTests.BoundaryEvents_RoundTripThroughExportImport_WithFidelity
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnBoundaryEventInterchangeTests.BoundaryEvent_AttachedToChildlessHost_IsDropped
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCallActivityInterchangeTests.Import_Bound_SynthesizesDispatchWorkflowChild_RecordsPassthrough_AndValidates
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCallActivityInterchangeTests.Import_Unbound_RecordsPassthrough_AddsInfoFinding_AndValidates
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCallActivityInterchangeTests.Import_HonorsWaitForCompletionFalse
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCallActivityInterchangeTests.Bound_RoundTripsThroughExportImport_WithFidelity
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCallActivityInterchangeTests.FireAndForget_RoundTripsWaitForCompletionFalse
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCallActivityInterchangeTests.Unbound_RoundTripsCalledElementPassthrough_StillDegrades
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCallActivityInterchangeTests.Export_Bound_WithoutPassthrough_FallsBackToWorkflowDefinitionId
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCatalogBindingTests.Malformed_registered_binder_structure_raises_contextual_domain_exception
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCatalogBindingTests.Registered_endpoint_resolves_exact_profile_references_from_visible_catalog(inventory: "available")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCatalogBindingTests.Registered_endpoint_resolves_exact_profile_references_from_visible_catalog(inventory: "missing-delay")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCatalogBindingTests.Registered_endpoint_resolves_exact_profile_references_from_visible_catalog(inventory: "newer-version-only")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCatalogBindingTests.Registered_endpoint_resolves_exact_profile_references_from_visible_catalog(inventory: "build-metadata")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCatalogBindingTests.Registered_endpoint_resolves_exact_profile_references_from_visible_catalog(inventory: "prerelease")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCatalogBindingTests.Registered_endpoint_resolves_exact_profile_references_from_visible_catalog(inventory: "no-recommendation")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCollaborationInterchangeTests.TwoPoolCollaboration_ImportsBothProcesses_WithPoolsLanesAndWiring
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCollaborationInterchangeTests.ProcessIdOption_SelectsPrimary_WithoutChangingProcessNodes
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCollaborationInterchangeTests.NameMismatchMessageFlow_DegradesLoudly
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCollaborationInterchangeTests.BlackBoxPool_AndBlackBoxFlow_AreInfo
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCollaborationInterchangeTests.UnresolvableParticipantRef_AndFlowRef_Degrade
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCollaborationInterchangeTests.NonExecutableProcess_ImportsWithInfoFinding
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCollaborationInterchangeTests.SingleProcessDocument_IsByteIdenticalPrimary_PlusOneEntryList
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCollaborationInterchangeTests.SinglePoolWithLane_RoundTripsParticipantWrapper
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCollaborationInterchangeTests.MessageFlows_ReEmitOnExport
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCollaborationInterchangeTests.Import_And_Export_AreDeterministic
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCompensationInterchangeTests.Import_ResolvesBoundaryHandlerAndThrow_AndValidates
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCompensationInterchangeTests.Compensation_RoundTripsThroughExportImport_WithFidelity
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCompensationInterchangeTests.CompensateEnd_RoundTrips
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCompensationInterchangeTests.CompensationBoundary_WithoutAssociation_IsDropped
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCompensationInterchangeTests.OrphanIsForCompensationActivity_IsDropped
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCompensationInterchangeTests.AssociationTarget_ParticipatingInSequenceFlows_IsNotAHandler_BoundaryDrops
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCompensationInterchangeTests.CompensateThrow_WithUnresolvableActivityRef_IsDropped_WithFlowCascade
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnCompensationInterchangeTests.CompensateEnd_WithUnresolvableActivityRef_DegradesToNoneEnd
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnDocumentImporterTests.Nested_lane_extension_loss_is_reported_recursively
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnDocumentImporterTests.Unrepresented_content_is_reported_at_each_retained_source_location(element: "definitions", subject: "defs")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnDocumentImporterTests.Unrepresented_content_is_reported_at_each_retained_source_location(element: "collaboration", subject: "collaboration")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnDocumentImporterTests.Unrepresented_content_is_reported_at_each_retained_source_location(element: "participant", subject: "pool-p")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnDocumentImporterTests.Unrepresented_content_is_reported_at_each_retained_source_location(element: "messageFlow", subject: "message")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnDocumentImporterTests.Unrepresented_content_is_reported_at_each_retained_source_location(element: "lane", subject: "lane")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnDocumentImporterTests.Unknown_host_capability_cannot_qualify_execution_readiness
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnDocumentImporterTests.Typed_expression_round_trip_retains_body_and_language_without_turning_it_into_an_outcome
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnDocumentImporterTests.Import_MapsSupportedElementsAndFlows
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnDocumentImporterTests.Import_NestsSubprocessAsBoundBpmnProcessChild
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnDocumentImporterTests.Import_AuthorsNestedSubprocessAsNonStarting
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnDocumentImporterTests.Import_ReportsDegradedAndDroppedElements
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnDocumentImporterTests.Import_PreservesDiagramShapes
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnDocumentImporterTests.Analyze_InventoriesProcessesAndElements
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnDocumentImporterTests.Import_RejectsNonBpmnDocuments
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEscalationInterchangeTests.Import_ResolvesEscalationThrowEndAndBoundaries_AndValidates
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEscalationInterchangeTests.EscalationEvents_RoundTripThroughExportImport_WithFidelity
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEscalationInterchangeTests.RefLessThrow_IsDropped
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEscalationInterchangeTests.RefLessEnd_DegradesToNoneEnd
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEscalationInterchangeTests.TaskHostBoundary_IsDropped
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEscalationInterchangeTests.CodeCollisionAndDuplicateCatchAll_AreDropped
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventBasedGatewayInterchangeTests.EventBasedGateway_RoundTripsThroughExportImport
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventBasedGatewayInterchangeTests.ImportedEventBasedGateway_TargetingNonCatch_RejectsOnGraphValidation
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventDefinitionImportTests.Import_MessageStart_ResolvesNameFromRootDeclaration_AsPureElement
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventDefinitionImportTests.Import_SignalStart_ResolvesName
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventDefinitionImportTests.Import_TimerStart_MapsTimeCycleToIntervalOrCron(cycle: "PT5M", expectedKey: "interval", expectedValue: "PT5M")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventDefinitionImportTests.Import_TimerStart_MapsTimeCycleToIntervalOrCron(cycle: "R5/PT1H", expectedKey: "interval", expectedValue: "PT1H")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventDefinitionImportTests.Import_TimerStart_MapsTimeCycleToIntervalOrCron(cycle: "0 * * * *", expectedKey: "cron", expectedValue: "0 * * * *")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventDefinitionImportTests.Import_UnresolvableStart_DegradesToNoneStart(startXml: "<startEvent id=\"bad\"><messageEventDefinition mes"···)
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventDefinitionImportTests.Import_UnresolvableStart_DegradesToNoneStart(startXml: "<startEvent id=\"bad\"><timerEventDefinition><time"···)
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventDefinitionImportTests.Import_UnresolvableStart_DegradesToNoneStart(startXml: "<startEvent id=\"bad\"><messageEventDefinition mes"···)
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventDefinitionImportTests.Import_TimerCatch_SynthesizesBoundDelayChild
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventDefinitionImportTests.Import_MessageOrSignalCatch_SynthesizesBoundEventChild(declarationName: "message", definitionName: "messageEventDefinition", refAttribute: "messageRef")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventDefinitionImportTests.Import_MessageOrSignalCatch_SynthesizesBoundEventChild(declarationName: "signal", definitionName: "signalEventDefinition", refAttribute: "signalRef")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventDefinitionImportTests.Import_UnbindableCatch_DropsAndCascadesFlows(catchXml: "<intermediateCatchEvent id=\"bad\"><messageEventDe"···)
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventDefinitionImportTests.Import_UnbindableCatch_DropsAndCascadesFlows(catchXml: "<intermediateCatchEvent id=\"bad\"><linkEventDefin"···)
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventDefinitionImportTests.Import_UnbindableCatch_DropsAndCascadesFlows(catchXml: "<intermediateCatchEvent id=\"bad\" />")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventDefinitionImportTests.Import_Retains_new_timer_descriptors_and_reports_missing_host_binding(xmlKind: "timeDate", value: "2026-12-01T12:00:00Z", property: "date", capability: "TimerDateWait")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventDefinitionImportTests.Import_Retains_new_timer_descriptors_and_reports_missing_host_binding(xmlKind: "timeCycle", value: "0 * * * *", property: "cycle", capability: "TimerCycleWait")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventDefinitionImportTests.Analyze_CountsCatchEvents_RegardlessOfDrop
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventDefinitionPublishParityTests.Retained_typed_condition_is_refused_by_the_real_trigger_publish_preflight
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventDefinitionPublishParityTests.ImportedEventDefinitions_PublishAndValidate_ThroughRealRuntimeSeams
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventSubprocessInterchangeTests.Import_ResolvesEventSubprocesses_AndValidates
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventSubprocessInterchangeTests.EventSubprocesses_RoundTripThroughExportImport_WithFidelity
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventSubprocessInterchangeTests.BodyWithNoStart_Drops
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventSubprocessInterchangeTests.TimeCycleTimer_IsRetainedWithExplicitUnsupportedHostCapability
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventSubprocessInterchangeTests.CompensateTrigger_Drops
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventSubprocessInterchangeTests.ExternalTriggerEventSubprocess_RoundTripsWithSynthesizedListener(kind: "message", interrupting: True)
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventSubprocessInterchangeTests.ExternalTriggerEventSubprocess_RoundTripsWithSynthesizedListener(kind: "message", interrupting: False)
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventSubprocessInterchangeTests.ExternalTriggerEventSubprocess_RoundTripsWithSynthesizedListener(kind: "signal", interrupting: True)
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventSubprocessInterchangeTests.ExternalTriggerEventSubprocess_RoundTripsWithSynthesizedListener(kind: "signal", interrupting: False)
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventSubprocessInterchangeTests.ExternalTriggerEventSubprocess_RoundTripsWithSynthesizedListener(kind: "timer", interrupting: True)
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventSubprocessInterchangeTests.ExternalTriggerEventSubprocess_RoundTripsWithSynthesizedListener(kind: "timer", interrupting: False)
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventSubprocessInterchangeTests.ErrorEventSubprocess_RoundTripsThroughExportImport_WithFidelity
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventSubprocessInterchangeTests.NonInterruptingError_Degrades
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnEventSubprocessInterchangeTests.DuplicateEscalationCode_Drops
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnInterchangeRegistrationTests.Registered_import_export_and_work_binder_form_the_actual_conversion_path
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnInterchangeRegistrationTests.Startup_rejects_a_missing_required_interchange_registration(missing: "importer")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnInterchangeRegistrationTests.Startup_rejects_a_missing_required_interchange_registration(missing: "exporter")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnInterchangeRegistrationTests.Startup_rejects_a_missing_required_interchange_registration(missing: "binder")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnInterchangeRegistrationTests.Startup_rejects_competing_binders_instead_of_selecting_the_last_one
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnInterchangeRegistrationTests.Explicit_host_binding_policy_is_used_by_the_registered_importer
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnMessageInterchangeTests.Import_ResolvesMessageThrowEndAndSendReceiveTasks_AndValidates
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnMessageInterchangeTests.MessageEvents_RoundTripThroughExportImport_WithFidelity
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnMessageInterchangeTests.NameLessMessageThrow_IsDropped_AndFlowsCascade
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnMessageInterchangeTests.NameLessMessageEnd_DegradesToNoneEnd
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnMessageInterchangeTests.NameLessSendReceiveTasks_ImportUnbound_WithInfoFinding
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnMessageInterchangeTests.SignalThrow_IsRetainedAndBoundToPublishEvent
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnMessageInterchangeTests.Import_IsDeterministic
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnMultiInstanceInterchangeTests.Import_ResolvesCardinalityLoop_OnSubprocessHost
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnMultiInstanceInterchangeTests.Import_ParallelLoop_DefaultsIsSequentialFalse
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnMultiInstanceInterchangeTests.Import_MultiInstanceTask_DegradesToNoLoop_WithFinding
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnMultiInstanceInterchangeTests.Import_CollectionMode_DegradesToNoLoop_WithFinding
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnMultiInstanceInterchangeTests.Import_CollectionMode_DeclaredVariable_ResolvesCollectionLoop
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnMultiInstanceInterchangeTests.Import_CollectionMode_UndeclaredVariable_DegradesToNoLoop_WithFinding
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnMultiInstanceInterchangeTests.Import_CollectionMode_ReservedItemVariable_DegradesToNoLoop_WithFinding
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnMultiInstanceInterchangeTests.CollectionLoop_RoundTripsThroughExportImport_WithFidelity
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnMultiInstanceInterchangeTests.Import_NonIntegerCardinality_DegradesToNoLoop_WithFinding
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnMultiInstanceInterchangeTests.CardinalityLoop_RoundTripsThroughExportImport_WithFidelity
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnRoundTripTests.ExportThenImport_RoundTripsElementsFlowsAndConditions
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnRoundTripTests.CyclicProcess_ImportsClean_AndRoundTrips
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnRoundTripTests.Export_SynthesizesDiagramWhenAbsent_AndPreservesAuthoredShapes
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnRoundTripTests.ExportThenImport_RoundTripsNestedSubprocess
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnRoundTripTests.EventDefinedStart_RoundTripsDefinitionAndProperties(type: "timer", propertyKey: "cron", propertyValue: "0 * * * *")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnRoundTripTests.EventDefinedStart_RoundTripsDefinitionAndProperties(type: "timer", propertyKey: "interval", propertyValue: "PT5M")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnRoundTripTests.EventDefinedStart_RoundTripsDefinitionAndProperties(type: "message", propertyKey: "name", propertyValue: "order-placed")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnRoundTripTests.EventDefinedStart_RoundTripsDefinitionAndProperties(type: "signal", propertyKey: "name", propertyValue: "cancel-requested")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnRoundTripTests.TimerCatchEvent_RoundTripsDurationAndRegeneratesDelayChild
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnRoundTripTests.MessageOrSignalCatchEvent_RoundTripsNameAndRegeneratesEventChild(type: "message")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnRoundTripTests.MessageOrSignalCatchEvent_RoundTripsNameAndRegeneratesEventChild(type: "signal")
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnTransactionInterchangeTests.Import_ResolvesTransactionCancelEndAndCancelBoundary_AndValidates
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnTransactionInterchangeTests.Transaction_RoundTripsThroughExportImport_WithFidelity
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnTransactionInterchangeTests.CancelEnd_OutsideTransaction_DegradesToNoneEnd
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnTransactionInterchangeTests.CancelBoundary_OnNonTransactionHost_IsDropped_WithFlowCascade
+    Elsa.Activities.Bpmn.Interchange.Tests.BpmnTransactionInterchangeTests.SecondCancelBoundary_OnTransactionHost_IsDropped

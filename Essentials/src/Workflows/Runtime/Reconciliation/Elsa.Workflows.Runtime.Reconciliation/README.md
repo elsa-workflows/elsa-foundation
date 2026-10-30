@@ -2,6 +2,12 @@
 
 Startup reconciliation of the workflow artifacts a host ships: `WorkflowArtifactReconcilerStartupTask` activates them when the shell starts. It is a `[SingleNodeTask]`, so on a cluster the nodes run it one at a time (#2192). That is why it waits for the lock where the node-local reconcilers do not.
 
+## Executable hash compatibility
+
+New workflow publications use behavioral hash schema v2, which covers each complete input binding, including its destination type and expression result contract. Import verifies through `IWorkflowExecutableHasher.MatchesHash`: the canonical hasher recognizes both v2 and the historical v1 rendering, then import still checks the artifact id's hash suffix. The closure envelope remains format v1; its transport shape has not changed.
+
+Retained v1 artifacts keep their original ids, hashes and bodies. Their hashes verify the original v1 coverage; that historical coverage is not retroactively expanded. New compilations always emit v2, so republishing after a compiler correction creates a new executable rather than reusing a retained v1 body. No stored artifact or historical execution is rewritten.
+
 ## Why the passes take turns
 
 Two passes over one mounted set activate each artifact under the same activation id, so two nodes starting together race calls for one activation on every artifact. Each call holds a root-write lease of its own (#2274), and every slot move is one commit of `IWorkflowActivationSwitch`, whose rules keep such a race from leaving a slot wrong without a word; its documentation describes them.

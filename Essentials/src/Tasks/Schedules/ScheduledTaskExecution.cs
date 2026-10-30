@@ -3,23 +3,69 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Tasks.Schedules;
 
-public sealed class ScheduledTaskExecution : IScheduledTaskExecution, IDisposable, IAsyncDisposable
+internal sealed class ScheduledTaskExecution : IScheduledTaskExecution, IDisposable, IAsyncDisposable
 {
+    /// <summary>The longest due time <see cref="Timer"/> accepts: 4294967294 milliseconds, about 49.7 days.</summary>
+    internal static readonly TimeSpan MaxTimerWait = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
+
     private readonly Func<Task> _action;
-    private readonly Func<TimeSpan> _interval;
     private readonly Timer _timer;
     private readonly ILogger? _logger;
+    private readonly TimeProvider _timeProvider;
+    private long _armedAt;
+    private TimeSpan _wait;
 
-    public ScheduledTaskExecution(Func<Task> action, Func<TimeSpan> interval, ILogger? logger = null)
+    public ScheduledTaskExecution(Func<Task> action, Func<TimeSpan> interval, ILogger? logger = null, TimeProvider? timeProvider = null)
     {
         _action = action;
-        _interval = interval;
+        Interval = interval;
         _logger = logger;
-        _timer = new Timer(Callback, null, interval(), Timeout.InfiniteTimeSpan);
+        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timer = new Timer(Callback, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        ScheduleNextRun();
+    }
+
+    /// <summary>What to wait before the next run, read once now and again after every run.</summary>
+    internal Func<TimeSpan> Interval { get; }
+
+    /// <summary>
+    /// The due time to arm the timer with when <paramref name="remaining"/> is left before the next run, or
+    /// <see langword="null"/> when the run is due now. A wait longer than <see cref="MaxTimerWait"/> is armed in parts.
+    /// </summary>
+    internal static TimeSpan? NextArm(TimeSpan remaining)
+    {
+        if (remaining == Timeout.InfiniteTimeSpan)
+            return Timeout.InfiniteTimeSpan;
+        if (remaining <= TimeSpan.Zero)
+            return null;
+
+        // Rounded up, because the timer truncates to whole milliseconds and would otherwise fire before the due time.
+        var milliseconds = Math.Ceiling(remaining.TotalMilliseconds);
+        return milliseconds >= MaxTimerWait.TotalMilliseconds ? MaxTimerWait : TimeSpan.FromMilliseconds(milliseconds);
+    }
+
+    private void ScheduleNextRun()
+    {
+        _armedAt = _timeProvider.GetTimestamp();
+        _wait = Interval();
+        _timer.Change(NextArm(_wait) ?? TimeSpan.Zero, Timeout.InfiniteTimeSpan);
     }
 
     private async void Callback(object? state)
     {
+        if (_wait == Timeout.InfiniteTimeSpan)
+            return;
+
+        var remaining = _wait - _timeProvider.GetElapsedTime(_armedAt);
+        // A finite tick exactly 1ms late also equals the infinite-wait sentinel. Only a
+        // positive remainder can re-arm a finite wait; overdue ticks must run the action.
+        if (remaining > TimeSpan.Zero && NextArm(remaining) is { } rest)
+        {
+            // The timer fired on one part of a wait longer than it can hold: arm the rest without running.
+            Rearm(() => _timer.Change(rest, Timeout.InfiniteTimeSpan));
+            return;
+        }
+
         try
         {
             await _action();
@@ -32,14 +78,24 @@ public sealed class ScheduledTaskExecution : IScheduledTaskExecution, IDisposabl
         }
         finally
         {
-            try
-            {
-                _timer.Change(_interval(), Timeout.InfiniteTimeSpan);
-            }
-            catch (ObjectDisposedException)
-            {
-                // Timer was disposed, ignore.
-            }
+            Rearm(ScheduleNextRun);
+        }
+    }
+
+    // Runs on the timer thread of an async void callback, so nothing may escape it.
+    private void Rearm(Action arm)
+    {
+        try
+        {
+            arm();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Timer was disposed, ignore.
+        }
+        catch (Exception e)
+        {
+            _logger?.LogError(e, "Could not schedule the next run of the scheduled timer action; it will not run again");
         }
     }
 

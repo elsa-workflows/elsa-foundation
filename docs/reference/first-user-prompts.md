@@ -1,6 +1,6 @@
 # First-User Prompt Options
 
-Use these prompts when a new architect or engineer enters `elsa-foundation`. They are intentionally simple. The agent should answer through the Architecture Tour, skills catalog, program-goal buckets, reports, maps, and constitutions as needed.
+Use these prompts when a new architect or engineer enters `elsa-foundation`. They are intentionally simple. The agent should answer through the Architecture Tour, skills catalog, program-goal buckets, reports, maps ([maps index](../maps/README.md)), and constitutions as needed.
 
 ## Orientation Prompts
 
@@ -64,7 +64,7 @@ I am starting work in elsa-foundation.
 Please use the Architecture Tour first, then select the right skill and program-goal bucket for my task:
 [describe task here]
 
-If you invoke generated maps and the manifest says inputs are dirty or freshness is uncertain, refresh the relevant map first and review the generated findings before continuing.
+If you need generated maps, generate them locally with `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` or read the `generated-maps` branch (see the [maps index](../maps/README.md)), and review the generated findings before continuing.
 
 Warn me if the task depends on draft or unratified constitution material. If ratification is the goal, help me start a targeted work unit with the available skills and guardrails.
 

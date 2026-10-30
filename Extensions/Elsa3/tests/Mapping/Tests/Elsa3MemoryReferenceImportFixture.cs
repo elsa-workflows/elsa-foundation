@@ -6,7 +6,10 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa3.Mapping.Conversion;
 using Elsa3.Mapping.Mappings;
+using Elsa3.Mapping.Tests.Support;
+using Microsoft.Extensions.DependencyInjection;
 using Elsa3.Mapping.Services;
 using Elsa3.Models;
 
@@ -16,22 +19,20 @@ internal sealed class Elsa3MemoryReferenceImportFixture
 {
     private readonly Elsa3WorkflowDefinitionImporter _importer;
 
+    /// <summary>
+    /// The import over a catalog holding <paramref name="shapes"/> as test activities (resolved verbatim by type key)
+    /// and the real Elsa 4 activities for every built-in Elsa 3 type the map targets.
+    /// </summary>
     public Elsa3MemoryReferenceImportFixture(params ActivityShape[] shapes)
     {
-        var typeRegistry = new TestWellKnownTypeRegistry();
-        var activityLookup = new TestActivityDefinitionLookup(shapes);
-        var activityMapper = new Elsa3ActivityToState(activityLookup);
-        var stateMapper = new Elsa3WorkflowDefinitionToState(
-            typeRegistry,
-            activityMapper,
-            new Elsa3ArgumentDefinitionToInputOutput(typeRegistry));
+        var activityLookup = new TestActivityDefinitionLookup(shapes, RealActivityCatalog.Create());
+        var scope = ConversionServices.Create(activityLookup).CreateScope();
         var versionMapper = new Elsa3WorkflowDefinitionToWorkflowDefinitionVersion(
-            stateMapper,
             new TestWorkflowDefinitionFactory(),
             new TestWorkflowDefinitionVersionFactory());
-        var referenceGraph = new Elsa3MemoryReferenceGraph(activityLookup);
-        var valueFlowLowerer = new Elsa3ValueFlowLowerer(new Elsa3ExpressionRewriter());
-        _importer = new Elsa3WorkflowDefinitionImporter(versionMapper, referenceGraph, valueFlowLowerer);
+        _importer = new Elsa3WorkflowDefinitionImporter(
+            scope.ServiceProvider.GetRequiredService<IElsa3DefinitionConverter>(),
+            versionMapper);
     }
 
     public ValueTask<Elsa3MigrationResult<IWorkflowDefinitionVersion>> ImportAsync(
@@ -209,9 +210,11 @@ internal sealed class Elsa3MemoryReferenceImportFixture
     {
         private readonly IReadOnlyDictionary<string, TestActivityDefinitionVersion> _versionsByType;
         private readonly IReadOnlyDictionary<string, TestActivityDefinitionVersion> _versionsById;
+        private readonly IActivityDefinitionLookup _real;
 
-        public TestActivityDefinitionLookup(IEnumerable<ActivityShape> shapes)
+        public TestActivityDefinitionLookup(IEnumerable<ActivityShape> shapes, IActivityDefinitionLookup real)
         {
+            _real = real;
             _versionsByType = shapes
                 .DistinctBy(x => x.Type, StringComparer.Ordinal)
                 .Select(shape => new TestActivityDefinitionVersion(shape))
@@ -220,7 +223,11 @@ internal sealed class Elsa3MemoryReferenceImportFixture
         }
 
         public Task<IActivityDefinition> GetDefinition(string idOrActivityTypeKey, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IActivityDefinition>(_versionsByType[idOrActivityTypeKey].Definition);
+            _versionsByType.TryGetValue(idOrActivityTypeKey, out var version)
+                ? Task.FromResult(version.Definition)
+                : _versionsByType.Values.FirstOrDefault(item => item.Definition.Id == idOrActivityTypeKey) is { } byId
+                    ? Task.FromResult(byId.Definition)
+                    : _real.GetDefinition(idOrActivityTypeKey, cancellationToken);
 
         public Task<IEnumerable<IActivityDefinition>> ListDefinitions(
             string? id = null,
@@ -233,16 +240,22 @@ internal sealed class Elsa3MemoryReferenceImportFixture
             Task.FromResult<IEnumerable<IActivityDefinition>>(_versionsByType.Values.Select(x => x.Definition));
 
         public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IActivityDefinitionVersion>(_versionsById[versionId]);
+            _versionsById.TryGetValue(versionId, out var version)
+                ? Task.FromResult<IActivityDefinitionVersion>(version)
+                : _real.GetVersion(versionId, cancellationToken);
 
         public Task<IActivityDefinitionVersion?> FindVersion(string versionId, CancellationToken cancellationToken = default) =>
-            Task.FromResult<IActivityDefinitionVersion?>(_versionsById.GetValueOrDefault(versionId));
+            _versionsById.TryGetValue(versionId, out var version)
+                ? Task.FromResult<IActivityDefinitionVersion?>(version)
+                : _real.FindVersion(versionId, cancellationToken);
 
         public Task<IEnumerable<ActivityDefinitionVersionSummary>> ListVersions(
             string definitionId,
             CancellationToken cancellationToken = default)
         {
-            var version = _versionsByType.Values.Single(x => x.Definition.Id == definitionId);
+            var version = _versionsByType.Values.SingleOrDefault(x => x.Definition.Id == definitionId);
+            if (version is null)
+                return _real.ListVersions(definitionId, cancellationToken);
             return Task.FromResult<IEnumerable<ActivityDefinitionVersionSummary>>(
             [
                 new(version.Id, version.Version, DateTimeOffset.UnixEpoch, version.ExecutionType),
@@ -325,36 +338,5 @@ internal sealed class Elsa3MemoryReferenceImportFixture
                 state,
                 sourceCreatedAt,
                 DateTimeOffset.UnixEpoch);
-    }
-
-    private sealed class TestWellKnownTypeRegistry : IWellKnownTypeRegistry
-    {
-        private static readonly IReadOnlyDictionary<string, Type> Types = new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["Object"] = typeof(object),
-            ["String"] = typeof(string),
-            ["Boolean"] = typeof(bool),
-            ["Int32"] = typeof(int),
-        };
-
-        public void RegisterType(Type type, string alias)
-        {
-        }
-
-        public bool TryGetAlias(Type type, out string alias)
-        {
-            alias = type.Name;
-            return true;
-        }
-
-        public bool TryGetType(string alias, out Type type) => Types.TryGetValue(alias, out type!);
-        public IEnumerable<Type> ListTypes() => Types.Values;
-        public string GetAliasOrDefault(Type type) => type.Name;
-        public Type GetTypeOrDefault(string alias) => Types.GetValueOrDefault(alias, typeof(object));
-        public bool TryGetTypeOrDefault(string alias, out Type type)
-        {
-            type = GetTypeOrDefault(alias);
-            return true;
-        }
     }
 }

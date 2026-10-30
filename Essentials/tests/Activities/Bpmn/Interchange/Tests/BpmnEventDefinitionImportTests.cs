@@ -17,7 +17,7 @@ public sealed class BpmnEventDefinitionImportTests
     private const string Bpmn = "http://www.omg.org/spec/BPMN/20100524/MODEL";
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly BpmnDocumentImporter _importer = new();
+    private readonly BpmnDocumentImporter _importer = new(new BpmnWorkBinder());
 
     private static string Document(string declarations, string processBody) => $$"""
         <definitions xmlns="{{Bpmn}}" id="defs" targetNamespace="https://example.org">
@@ -156,7 +156,7 @@ public sealed class BpmnEventDefinitionImportTests
         var child = Assert.Single(structure.Activities);
         Assert.Equal("node-catch-timer", child.NodeId);
         Assert.Equal(BpmnDocumentImporter.DefaultDelayActivityVersionId, child.ActivityVersionId);
-        Assert.Equal("PT30S", Literal(child, "Duration"));
+        Assert.Equal("00:00:30", Literal(child, "Duration"));
         Assert.Equal(2, structure.SequenceFlows.Count); // both flows retained
     }
 
@@ -188,7 +188,6 @@ public sealed class BpmnEventDefinitionImportTests
     }
 
     [Theory]
-    [InlineData("""<intermediateCatchEvent id="bad"><timerEventDefinition><timeCycle>0 * * * *</timeCycle></timerEventDefinition></intermediateCatchEvent>""")] // recurring on a catch
     [InlineData("""<intermediateCatchEvent id="bad"><messageEventDefinition messageRef="missing" /></intermediateCatchEvent>""")] // unresolvable ref
     [InlineData("""<intermediateCatchEvent id="bad"><linkEventDefinition /></intermediateCatchEvent>""")] // unsupported type
     [InlineData("""<intermediateCatchEvent id="bad" />""")] // no definition
@@ -213,6 +212,30 @@ public sealed class BpmnEventDefinitionImportTests
         Assert.Empty(structure.SequenceFlows);
         Assert.Contains(result.Analysis.Issues, issue =>
             issue.Severity == BpmnImportIssueSeverity.Dropped && issue.ElementId is "f1" or "f2");
+    }
+
+    [Theory]
+    [InlineData("timeDate", "2026-12-01T12:00:00Z", "date", "TimerDateWait")]
+    [InlineData("timeCycle", "0 * * * *", "cycle", "TimerCycleWait")]
+    public void Import_Retains_new_timer_descriptors_and_reports_missing_host_binding(string xmlKind, string value, string property, string capability)
+    {
+        var structure = Import("", $"""
+            <startEvent id="start" />
+            <intermediateCatchEvent id="wait"><timerEventDefinition><{xmlKind}>{value}</{xmlKind}></timerEventDefinition></intermediateCatchEvent>
+            <endEvent id="end" />
+            <sequenceFlow id="f1" sourceRef="start" targetRef="wait" />
+            <sequenceFlow id="f2" sourceRef="wait" targetRef="end" />
+            """, out var result);
+
+        var wait = Assert.Single(structure.Elements, element => element.ElementId == "wait");
+        Assert.Equal(value, Assert.Single(wait.EventDefinitions).Properties[property]);
+        Assert.Null(wait.ChildNodeId);
+        Assert.Equal(2, structure.SequenceFlows.Count);
+        Assert.Contains(result.Analysis.Capabilities, finding => finding.ElementId == "wait" && finding.Capability == capability &&
+            finding.Availability == BpmnImportCapabilityAvailability.Unsupported);
+        Assert.False(result.Analysis.CanExecute);
+        var xml = new BpmnDocumentExporter().Export(result.ProcessNode);
+        Assert.Contains(value, xml, StringComparison.Ordinal);
     }
 
     [Fact]

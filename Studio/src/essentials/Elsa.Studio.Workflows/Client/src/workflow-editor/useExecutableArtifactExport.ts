@@ -24,9 +24,16 @@ export interface ExecutableArtifactExportState {
   supported: boolean;
   /** The published version to export, or null when this workflow has no published version yet. */
   target: PublishedExecutableTarget | null;
+  /** The published version independently of export support, for features that inspect or run it. */
+  publishedTarget: PublishedExecutableTarget | null;
 }
 
-const unavailable: ExecutableArtifactExportState = { status: "unavailable", supported: false, target: null };
+const unavailable: ExecutableArtifactExportState = {
+  status: "unavailable",
+  supported: false,
+  target: null,
+  publishedTarget: null
+};
 
 /**
  * Gates the "Export artifact" action on the two things it needs: the server advertising the export
@@ -48,7 +55,12 @@ export function useExecutableArtifactExport({
   publishedArtifactId?: string | null;
   enabled?: boolean;
 }): ExecutableArtifactExportState {
-  const [state, setState] = useState<ExecutableArtifactExportState>({ status: "loading", supported: false, target: null });
+  const [state, setState] = useState<ExecutableArtifactExportState>({
+    status: "loading",
+    supported: false,
+    target: null,
+    publishedTarget: null
+  });
   // Hold the context in a ref so the effect depends on the stable `baseUrl` string rather than on the
   // context object identity, which changes on every parent render.
   const contextRef = useRef(context);
@@ -62,21 +74,26 @@ export function useExecutableArtifactExport({
     }
 
     let active = true;
-    setState(previous => previous.status === "loading" ? previous : { ...previous, status: "loading" });
+    setState({ status: "loading", supported: false, target: null, publishedTarget: null });
     void (async () => {
-      try {
-        const supported = await isWorkflowExecutableExportAvailable(contextRef.current);
-        if (!active) return;
-        if (!supported) {
-          setState(unavailable);
-          return;
-        }
-        const executables = await listExecutables(contextRef.current, { scope: "published", includeRetired: false });
-        if (!active) return;
-        setState({ status: "ready", supported: true, target: selectPublishedExecutable(executables, definitionId) });
-      } catch {
-        if (active) setState(unavailable);
+      const [exportAvailability, executableList] = await Promise.all([
+        isWorkflowExecutableExportAvailable(contextRef.current).catch(() => false),
+        listExecutables(contextRef.current, { scope: "published", includeRetired: false }).then(
+          executables => ({ available: true as const, executables }),
+          () => ({ available: false as const, executables: [] as WorkflowExecutableSummary[] })
+        )
+      ]);
+      if (!active) return;
+
+      const publishedTarget = executableList.available
+        ? selectPublishedExecutable(executableList.executables, definitionId)
+        : null;
+      if (!exportAvailability || !executableList.available) {
+        setState({ ...unavailable, publishedTarget });
+        return;
       }
+
+      setState({ status: "ready", supported: true, target: publishedTarget, publishedTarget });
     })();
 
     return () => { active = false; };

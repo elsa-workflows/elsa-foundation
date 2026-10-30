@@ -7,8 +7,9 @@ namespace Elsa.Workflows.Runtime.Services.Executables;
 /// <summary>
 /// Decorates a durable executable store with bounded process-local caching of immutable artifacts.
 /// </summary>
-public sealed class CachingWorkflowExecutableStore : WorkflowExecutableStoreDecorator
+public sealed class CachingWorkflowExecutableStore : WorkflowExecutableStoreDecorator, IWorkflowExecutableStore
 {
+    IWorkflowExecutableStore IWorkflowExecutableStore.GetMaterialStore() => Inner.GetMaterialStore();
     private const string DefaultPartition = "default";
 
     private readonly WorkflowExecutableCache _cache;

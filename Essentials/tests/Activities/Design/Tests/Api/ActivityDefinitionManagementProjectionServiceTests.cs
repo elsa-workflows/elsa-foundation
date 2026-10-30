@@ -1,7 +1,10 @@
 using Elsa.Activities.Design.Api.Commands;
 using Elsa.Activities.Design.Api.Models;
 using Elsa.Activities.Design.Api.Services;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Services;
+using Elsa.Primitives.Diagnostics;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Microsoft.Extensions.Options;
@@ -173,6 +176,7 @@ public sealed class ActivityDefinitionManagementProjectionServiceTests
         store.SeedDefinition("design", "tenant-a");
         store.SeedDefinition("source", "tenant-a", ActivityContentAuthorityKind.ProviderSource);
         store.SeedVersion("design", "1.0.0", ActivityDefinitionVersionLifecycle.Active);
+        store.SeedVersion("source", "1.0.0", ActivityDefinitionVersionLifecycle.Active);
         var service = Service(store, new("tenant-a", "tenant-a/manage-no-provider", true, false));
 
         var draft = Assert.Single((await service.ListDraftsAsync(new("definition-design"), default)).Items);
@@ -188,16 +192,115 @@ public sealed class ActivityDefinitionManagementProjectionServiceTests
         var source = await service.GetDefinitionAsync("definition-source", default);
         Assert.False(Assert.Single(source.Actions, x => x.Action == "edit-definition").Allowed);
         Assert.True(Assert.Single(source.Actions, x => x.Action == "set-recommendation").Allowed);
-        Assert.True(Assert.Single(source.Actions, x => x.Action == "fork-definition").Allowed);
+        var fork = Assert.Single(source.Actions, x => x.Action == "fork-definition");
+        Assert.False(fork.Allowed);
+        Assert.Equal("activity.provider.authoring-forbidden", fork.UnavailableCode);
+        var sourceVersion = Assert.Single((await service.ListVersionsAsync(new("definition-source"), default)).Items);
+        Assert.False(Assert.Single(sourceVersion.Actions, x => x.Action == "fork-definition").Allowed);
     }
 
-    private static ActivityDefinitionManagementProjectionService Service(ProjectionStore store, Context context) => new(
+    [Fact]
+    public async Task Fork_actions_require_a_recommended_active_version_and_an_exact_authorized_conversion()
+    {
+        var collisionStore = SourceWithVersion("clr-sequence", "clr.sequence");
+        var legacyGraph = new TestProvider("graph.provider", new HashSet<string>(StringComparer.Ordinal) { "1" });
+        var collisionService = Service(
+            collisionStore,
+            new("tenant-a", "tenant-a/manage", true),
+            new ActivityProviderRegistry([legacyGraph]));
+        var collision = await collisionService.GetDefinitionAsync("definition-clr-sequence", default);
+        var collisionAction = Assert.Single(collision.Actions, x => x.Action == "fork-definition");
+        Assert.False(collisionAction.Allowed);
+        Assert.Equal("activity.provider.migration-unsupported", collisionAction.UnavailableCode);
+
+        var sameProviderStore = SourceWithVersion("graph-source", "graph.provider");
+        var sameProviderService = Service(
+            sameProviderStore,
+            new("tenant-a", "tenant-a/manage", true),
+            new ActivityProviderRegistry([legacyGraph]));
+        var sameProvider = await sameProviderService.GetDefinitionAsync("definition-graph-source", default);
+        Assert.True(Assert.Single(sameProvider.Actions, x => x.Action == "fork-definition").Allowed);
+
+        var crossProviderStore = SourceWithVersion("clr-explicit", "clr.sequence");
+        var explicitGraph = new TestProvider(
+            "graph.provider",
+            new HashSet<string>(StringComparer.Ordinal),
+            new HashSet<ActivityProviderManifestSource>
+            {
+                new("clr.sequence", "1")
+            });
+        var crossProviderService = Service(
+            crossProviderStore,
+            new("tenant-a", "tenant-a/manage", true),
+            new ActivityProviderRegistry([explicitGraph]));
+        var crossProvider = await crossProviderService.GetDefinitionAsync("definition-clr-explicit", default);
+        Assert.True(Assert.Single(crossProvider.Actions, x => x.Action == "fork-definition").Allowed);
+
+        var deniedService = Service(
+            crossProviderStore,
+            new("tenant-a", "tenant-a/manage-no-provider", true, false),
+            new ActivityProviderRegistry([explicitGraph]));
+        var denied = await deniedService.GetDefinitionAsync("definition-clr-explicit", default);
+        var deniedAction = Assert.Single(denied.Actions, x => x.Action == "fork-definition");
+        Assert.False(deniedAction.Allowed);
+        Assert.Equal("activity.provider.authoring-forbidden", deniedAction.UnavailableCode);
+
+        var noRecommendationStore = SourceWithVersion("no-recommendation", "graph.provider", recommend: false);
+        var noRecommendationService = Service(
+            noRecommendationStore,
+            new("tenant-a", "tenant-a/manage", true),
+            new ActivityProviderRegistry([legacyGraph]));
+        var noRecommendation = await noRecommendationService.GetDefinitionAsync("definition-no-recommendation", default);
+        var noRecommendationAction = Assert.Single(noRecommendation.Actions, x => x.Action == "fork-definition");
+        Assert.False(noRecommendationAction.Allowed);
+        Assert.Equal("activity.version.recommendation-ineligible", noRecommendationAction.UnavailableCode);
+        var version = Assert.Single((await noRecommendationService.ListVersionsAsync(new("definition-no-recommendation"), default)).Items);
+        Assert.True(Assert.Single(version.Actions, x => x.Action == "fork-definition").Allowed);
+    }
+
+    private static ProjectionStore SourceWithVersion(string suffix, string providerKey, bool recommend = true)
+    {
+        var store = new ProjectionStore();
+        store.SeedDefinition(suffix, "tenant-a", ActivityContentAuthorityKind.ProviderSource);
+        store.SeedVersion(suffix, "1.0.0", ActivityDefinitionVersionLifecycle.Active, providerKey, "1", recommend);
+        return store;
+    }
+
+    private static ActivityDefinitionManagementProjectionService Service(
+        ProjectionStore store,
+        Context context,
+        IActivityProviderRegistry? providers = null) => new(
         store,
+        providers ?? new ActivityProviderRegistry([new TestProvider(
+            "test.provider",
+            new HashSet<string>(StringComparer.Ordinal) { "1" })]),
         context,
         new HmacActivityManagementCursorCodec(Options.Create(new ActivityTokenSigningOptions
         {
             SigningKey = "activity-management-tests-signing-key"
         })));
+
+    private sealed class TestProvider(
+        string providerKey,
+        IReadOnlySet<string> legacySources,
+        IReadOnlySet<ActivityProviderManifestSource>? exactSources = null) : IActivityProvider
+    {
+        public string ProviderKey => providerKey;
+        public IReadOnlySet<string> SupportedManifestSchemas { get; } = new HashSet<string>(StringComparer.Ordinal) { "1" };
+        public ActivityProviderAuthoringCapabilities AuthoringCapabilities { get; } = new(
+            providerKey,
+            [new("1", true, legacySources) { MigratableFrom = exactSources }],
+            new([]));
+
+        public ValueTask<ActivityContractProposal> ProposeContractAsync(ActivityProviderContractProposalRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ActivityContractProposal([], []));
+
+        public ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateAsync(ActivityProviderManifest manifest, ActivityContract contract, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyList<ActivityDiagnostic>>([]);
+
+        public ValueTask<ActivityManifestMigration> MigrateAsync(ActivityManifestMigrationRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new ActivityManifestMigration(request.Source, []));
+    }
 
     private sealed class Context(
         string? tenantId,
@@ -236,11 +339,17 @@ public sealed class ActivityDefinitionManagementProjectionServiceTests
             Current.Drafts.Add(Draft($"draft-{suffix}", definitionId, tenantId, _sequence));
         }
 
-        public void SeedVersion(string definitionSuffix, string version, ActivityDefinitionVersionLifecycle lifecycle)
+        public void SeedVersion(
+            string definitionSuffix,
+            string version,
+            ActivityDefinitionVersionLifecycle lifecycle,
+            string providerKey = "test.provider",
+            string providerSchemaVersion = "1",
+            bool recommend = true)
         {
             var definitionId = $"definition-{definitionSuffix}";
             var versionId = $"version-{definitionSuffix}-{version}";
-            Current.Versions.Add(Version(versionId, definitionId, version, lifecycle, _sequence));
+            Current.Versions.Add(Version(versionId, definitionId, version, lifecycle, _sequence, providerKey, providerSchemaVersion));
             var definition = Current.Definitions.Single(x => x.DefinitionId == definitionId);
             Current.Definitions.Remove(definition);
             Current.Definitions.Add(Definition(
@@ -250,8 +359,12 @@ public sealed class ActivityDefinitionManagementProjectionServiceTests
                 definition.ContentAuthority.Kind,
                 _sequence,
                 versionId,
-                versionId,
-                1));
+                recommend ? versionId : null,
+                1,
+                providerKey: providerKey,
+                providerSchemaVersion: providerSchemaVersion,
+                recommendationLifecycle: lifecycle,
+                recommendationVersion: version));
         }
 
         public void AdvanceWithDefinition(string suffix, string? tenantId)
@@ -362,7 +475,11 @@ public sealed class ActivityDefinitionManagementProjectionServiceTests
             string? headVersionId = null,
             string? recommendedVersionId = null,
             long versionCount = 0,
-            bool omitDisplayName = false) => new()
+            bool omitDisplayName = false,
+            string providerKey = "test.provider",
+            string providerSchemaVersion = "1",
+            ActivityDefinitionVersionLifecycle recommendationLifecycle = ActivityDefinitionVersionLifecycle.Active,
+            string recommendationVersion = "1.0.0") => new()
         {
             Id = $"definition-revision-{definitionId}-{sequence}",
             TenantId = tenantId,
@@ -383,8 +500,10 @@ public sealed class ActivityDefinitionManagementProjectionServiceTests
                 authority == ActivityContentAuthorityKind.Design ? WellKnownActivityContentAuthorities.Design : "source.provider"),
             HeadVersionId = headVersionId,
             RecommendedVersionId = recommendedVersionId,
-            HeadProviderKey = headVersionId is null ? null : "test.provider",
-            RecommendationProviderKey = recommendedVersionId is null ? null : "test.provider",
+            Head = headVersionId is null ? null : new(headVersionId, recommendationVersion, recommendationLifecycle, providerKey, providerSchemaVersion),
+            Recommendation = recommendedVersionId is null ? null : new(recommendedVersionId, recommendationVersion, recommendationLifecycle, providerKey, providerSchemaVersion),
+            HeadProviderKey = headVersionId is null ? null : providerKey,
+            RecommendationProviderKey = recommendedVersionId is null ? null : providerKey,
             DraftCount = 1,
             VersionCount = versionCount,
             UpdatedAt = Now
@@ -420,7 +539,9 @@ public sealed class ActivityDefinitionManagementProjectionServiceTests
             string definitionId,
             string version,
             ActivityDefinitionVersionLifecycle lifecycle,
-            long sequence) => new()
+            long sequence,
+            string providerKey = "test.provider",
+            string providerSchemaVersion = "1") => new()
         {
             Id = $"version-revision-{versionId}-{sequence}",
             ResourceId = versionId,
@@ -436,8 +557,8 @@ public sealed class ActivityDefinitionManagementProjectionServiceTests
             TenantId = "tenant-a",
             Version = version,
             Lifecycle = lifecycle,
-            ProviderKey = "test.provider",
-            ProviderSchemaVersion = "1",
+            ProviderKey = providerKey,
+            ProviderSchemaVersion = providerSchemaVersion,
             PublishedAt = Now
         };
 

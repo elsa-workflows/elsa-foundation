@@ -20,7 +20,7 @@ src/*/*/wwwroot/
 .vscode/
 
 # Local dev-only visual harness for the studio client
-src/apps/Elsa.Studio.Web/Client/harness/
+src/essentials/Elsa.Studio.Hosting/Client/harness/
 
 # Local Studio host Theme Store data
 src/apps/Elsa.Studio.Web/studio-theme-store.json

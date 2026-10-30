@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 1,
+  "reviewedSourceParentCommit": "e54ea7f57f79602182c22fcea89f4ccb3f3fc673",
+  "reviewRound": 2,
+  "fullPrRoundBound": 6,
+  "actionableFindingsFixed": 1,
+  "newExactHeadReviewRequired": true,
+  "actualFixedSourceHostProofPending": true,
+  "executedRedFailures": 25,
+  "redPositiveControlsPassed": 3,
+  "focusedGreenCases": 28,
+  "wholePassedCases": 6812,
+  "wholeFailedCases": 0,
+  "wholeSkippedCases": 0,
+  "newDispatchCases": 24,
+  "newEfCases": 4,
+  "publicApiOrConstructorChanges": false,
+  "filesSha256": {
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowControlProducerEnricher.cs": "4976b49110fdb49887096dd6562c7a7b16503a33404f142502c24d60260e23b5",
+    "Essentials/src/Activities/DispatchWorkflow/Runtime/Services/WorkflowDispatchCompletionEnricher.cs": "4e88471da1a0bc40a84d228729d5e7642f0a2727080a919a191ee28e62e65cf6",
+    "Essentials/src/Workflows/Runtime/Core/Models/RuntimeChildControl.cs": "8d50313e1392d48effd23e9db697a28bd77af0ea1df0a2d0adb643da8d7e5111",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfActivityExecutionStateStore.cs": "cfc9d0007bef3d9a7cc1bc14dfab64d0ada5172c374311954ab5b6aee91afe7b",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/RuntimeArtifactJson.cs": "f40344dd01b87e31ec3cdcb6ee948496ac019f1ef26807bfc15a0abdf23ab455",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/ChildControlContractTests.PersistedWire.cs": "1d4bdd1f204488fd1bc1f309b9bea0b176aae29d91f4392ef77ad4e70d21c47f",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/ChildControlContractTests.cs": "5fd3d24f627179dc4d3d92919fa6758da397d1e1b22d3e3a675805cb1516825f",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/WorkflowControlProducerTests.PersistedWire.cs": "34fac47a21d7f2c8d489f4e288738918cb3b20be4cf5cb10490792b3cd2a2fa6",
+    "Essentials/tests/Activities/DispatchWorkflow/Tests/WorkflowControlProducerTests.cs": "48c0fb3f8951e69a36289b3ba9becbd6452e558744c0fb985ee26b09831b033e",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfActivityExecutionStoresTests.ChildControlWire.cs": "28c5844fbf9406be9de2a2763e3578ecfeea21d76622d40dc21a3e66828663d1",
+    "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/EfActivityExecutionStoresTests.cs": "bab78f09fb6dfe5e2731836572b81d37eeada5540f9f534c63a8ba328f2d87f3",
+    "specs/1006-bpmn-library-adoption/contracts/called-workflow-control.md": "7bd2f217e44c7fcb7422638b877407c667bb165694716b652d6daa3af7671170",
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire-fix.md": "79f731acd1481e270de6deaf884159b9c5bfd63bc27ceb302ebaf03508460a9f",
+    "specs/1006-bpmn-library-adoption/tasks.md": "2a26a95f3e514315aaccca6e88490a5c8b559487f9e34a41dc3e86d828ab534f"
+  },
+  "portableArtifacts": {
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/activities-discovery.txt": {
+      "sha256": "d182d5118235278b57615c2c79860c8b12b1b474ce742fbbf23446f178d1f184",
+      "bytes": 119793
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/activities-whole.log.gz": {
+      "sha256": "51fd1794b42aa07b58a2d2ed198e3460939fa2b22d8f855953cd08ed19508a8e",
+      "bytes": 298
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/activities-whole.trx.gz": {
+      "sha256": "5fa5bcaa1a91a183a9ee499a892bb54f40321fd7aea5a3663ace1f7d3ae020ea",
+      "bytes": 189470
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/architecture-discovery.txt": {
+      "sha256": "c8e3ce94cb0918640dec7b2ec954d14388e644a43acaeb1317702d300e929991",
+      "bytes": 169401
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/architecture-whole.log.gz": {
+      "sha256": "1c6c78cf2129cc8715c82f2a6a592f664c6a5e6b2b4679df1b431b449ce06f7d",
+      "bytes": 3645
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/architecture-whole.trx.gz": {
+      "sha256": "f69e66cca06ccf423f2f960b6d825a11ec72a3acb61636c8d847fd0a6e27bd61",
+      "bytes": 154466
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/bpmn-discovery.txt": {
+      "sha256": "1eecd816e9ad3ca24a06aa1432ec15aa42ff11ef37ce0f6cea7a94180b531081",
+      "bytes": 56055
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/bpmn-whole.log.gz": {
+      "sha256": "673f59a7f6e7895512be7af7f751ccdbd6322ac1706eaa92dbf4d55c0ef76259",
+      "bytes": 298
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/bpmn-whole.trx.gz": {
+      "sha256": "5d7f1158ade02be42836ba1dd023856891cb643aa9818d3d048f1487aa9995a6",
+      "bytes": 88812
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/dispatch-discovery.txt": {
+      "sha256": "d7b64bb899bcb5b9db7a5e66d9f240e7e14be4d500ec34a4b0a4a035ae96293a",
+      "bytes": 67536
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/dispatch-green.log.gz": {
+      "sha256": "d6b4cde9ef1ea54881cb31e539001b21aac0e14982a5921ac8b8f98a45b42173",
+      "bytes": 2807
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/dispatch-green.trx.gz": {
+      "sha256": "309972d483c68d9f44fb427feaca7701ecd39e137c870327b54ec71604ad112c",
+      "bytes": 4043
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/dispatch-red.log.gz": {
+      "sha256": "c858bfe050c5bc1262974bcedbedf91de6b90293dfd025f6938e7391a46b4bc7",
+      "bytes": 5436
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/dispatch-red.trx.gz": {
+      "sha256": "b17e5686143c8a1afc3d514c74c59088a777e3867fed7bfcb6b1f72891dd738b",
+      "bytes": 5819
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/dispatch-whole.log.gz": {
+      "sha256": "96383970a28539563272aebab31308f1e107d438e2fa6afa88ab9e352000fa60",
+      "bytes": 308
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/dispatch-whole.trx.gz": {
+      "sha256": "703f76a5efa4fabe0ebd1f986a2edb8e641af26a20cff8011522c6af6e4f47b2",
+      "bytes": 89506
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/ef-discovery.txt": {
+      "sha256": "f75e16bb8374192c4ef1e5cacc45abfa49ebeae52ea8fc8acc0a46b147ae209f",
+      "bytes": 348191
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/ef-green.log.gz": {
+      "sha256": "30a00dc75923965a8bdeab62400688c7b683bc54c78bf5b7026cd3401f14643f",
+      "bytes": 1484
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/ef-green.trx.gz": {
+      "sha256": "ec579202b3fb979bed54b016707b34a2974725c161645bfa9eb2d7780d160dc8",
+      "bytes": 1720
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/ef-red.log.gz": {
+      "sha256": "7af67812ea035b3e0d5e5983b63f09e7d06b67960ca96685f6d608837dd90891",
+      "bytes": 2736
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/ef-red.trx.gz": {
+      "sha256": "dd12e3fa493efd176f428e7001afd5341e6a3c504062889d8cb0e270a36ea8d7",
+      "bytes": 2277
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/ef-whole.log.gz": {
+      "sha256": "d37fed19419b4b767f0fdf5dc8e9edb9b79b992f3a4ccc5a7acdbf0d261ce47c",
+      "bytes": 329
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/ef-whole.trx.gz": {
+      "sha256": "4f40cf545d2ffc2226d6a1ddcc1e00f914ff4ca3884df0d655549da6c07ee9bf",
+      "bytes": 468827
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/maps.log.gz": {
+      "sha256": "331099547a70ba6594d7004b2f491da5fa852cfb2cebba8b98e78c4d02acfc47",
+      "bytes": 76
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/runtime-discovery.txt": {
+      "sha256": "5ce28aab0c9c3b4461664780146de73b340b1bd4dbe194af1abc479f22156aa5",
+      "bytes": 458323
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/runtime-whole.log.gz": {
+      "sha256": "2bab692ec2bdff3f33c2b040d9744b09729514b41f253826e6df4f105f61be78",
+      "bytes": 300
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/runtime-whole.trx.gz": {
+      "sha256": "8152e46b6ec461309eaeeb988a4ed95b3ab5374c22d9aded7b2d1b712b972cdc",
+      "bytes": 827021
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/unchanged-source-regression-red.json": {
+      "sha256": "40a56386d5e568910d8b275128c19659416de07d97e23043da44f138c68291ba",
+      "bytes": 6293
+    },
+    "specs/1006-bpmn-library-adoption/evidence/round2-control-wire/whole-project-reconciliation.json": {
+      "sha256": "e8314792f5be0704a8cb5ad6489ca8c455778f8a9629a8ab44e235b451c9365c",
+      "bytes": 5542
+    }
+  },
+  "frozenAuthoringSha256": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "remaining": [
+    "Corrected-code actual host qualification",
+    "Full-PR round3 and required exact-head checks",
+    "Protected merge/resulting-main and separate ADR0063",
+    "Independent 2898/2907/program production evidence"
+  ]
+}

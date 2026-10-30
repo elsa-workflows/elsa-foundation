@@ -29,6 +29,20 @@ public sealed class ScopedVariableAuthoringContractTests
     }
 
     [Fact]
+    public void Visible_variable_types_follow_the_selected_declarations_and_their_collection_shapes()
+    {
+        var local = Variable("same-key", "Counter") with { Type = new Elsa.Primitives.Models.TypeReference("Int32", Elsa.Primitives.Models.CollectionKind.List) };
+        var outer = Variable("same-key", "Counter") with { Type = new Elsa.Primitives.Models.TypeReference("Boolean") };
+        var state = State(activities: [Node("container", childActivities: [Node("child")], containerVariables: [local])], variables: [outer]);
+
+        var visible = Authoring().GetVisibleVariables(state, "child");
+
+        Assert.Collection(visible,
+            v => Assert.Equal(local.Type, v.Type),
+            v => Assert.Equal(outer.Type, v.Type));
+    }
+
+    [Fact]
     public void Visible_variable_view_is_json_serializable_for_the_wire()
     {
         var state = State(activities: [Node("n1")], variables: [Variable("var-wf", "WorkflowVar")]);

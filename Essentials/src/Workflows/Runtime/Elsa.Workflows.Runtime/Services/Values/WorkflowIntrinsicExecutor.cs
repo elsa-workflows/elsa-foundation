@@ -21,9 +21,12 @@ public sealed class WorkflowIntrinsicExecutor(
     IRuntimeActivityExecutionInspectionAccumulator inspectionAccumulator,
     TimeProvider timeProvider,
     IExternalPayloadStore? externalPayloadStore = null,
-    IPortableExpressionEvaluator? portableExpressionEvaluator = null)
+    IPortableExpressionEvaluator? portableExpressionEvaluator = null,
+    IRuntimeValueConversionExecutor? valueConversionExecutor = null,
+    IWorkflowExecutableInputValidator? inputValidator = null)
 {
-    private readonly RuntimePortableExpressionEvaluator _portableExpressionEvaluator = new(portableExpressionEvaluator, externalPayloadStore);
+    private readonly IRuntimeValueConversionExecutor _valueConversionExecutor = valueConversionExecutor ?? new RuntimeValueConversionExecutor();
+    private readonly RuntimePortableExpressionEvaluator _portableExpressionEvaluator = new(portableExpressionEvaluator, externalPayloadStore, valueConversionExecutor);
     private readonly RuntimeExternalEnvelopeStorage _externalEnvelopeStorage = new(externalPayloadStore);
 
     public async ValueTask<RuntimeCheckpointCommit> ExecuteAsync(
@@ -117,7 +120,8 @@ public sealed class WorkflowIntrinsicExecutor(
             intrinsicState,
             executable,
             runtimeView,
-            cancellationToken);
+            cancellationToken,
+            validateAssignmentPayload: true);
         ValidateAssignment(frameOwner.Frame, target.VariableKey, valueBinding, value, node.ExecutableNodeId);
 
         var changedFrame = frameOwner.Frame.Set(target.VariableKey, value, frameOwner.Frame.Revision);
@@ -589,13 +593,23 @@ public sealed class WorkflowIntrinsicExecutor(
         ActivityExecutionState intrinsicState,
         WorkflowExecutable executable,
         IReadOnlyCollection<ActivityExecutionState> runtimeView,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool validateAssignmentPayload = false)
     {
         ThrowIfWithheld(binding);
         var durableValues = await durableValueStateStore.ListAllDurableValueStatesAsync(workflowState.WorkflowExecutionId, cancellationToken);
         var projections = RuntimeInputBindingStateProjection.ProjectAll(durableValues);
-        var visibleFrames = BuildVisibleFrames(workflowState, intrinsicState, runtimeView);
+        var (visibleFrames, boundary) = BuildVisibleFrames(workflowState, intrinsicState, runtimeView, durableValues);
         var frameEnvelopes = ToAddressEnvelopes(visibleFrames);
+        if (boundary is not null)
+            RuntimeClosedScope.AliasWorkflowScope(visibleFrames[0], frameEnvelopes);
+        // Below a closed activity execution scope the request inputs and root variables are the boundary's.
+        var workflowInputEnvelopes = boundary is null
+            ? projections.WorkflowInputEnvelopes
+            : RuntimeClosedScope.InputEnvelopes(boundary, durableValues, executable);
+        var rootVariableNames = boundary is null
+            ? null
+            : RuntimeInputBindingStateProjection.ProjectBoundaryVariableNames(durableValues, boundary.InvocationId);
 
         var context = new RuntimeInputBindingResolutionContext(
             workflowState.WorkflowExecutionId,
@@ -603,9 +617,10 @@ public sealed class WorkflowIntrinsicExecutor(
             consumerInvocation: intrinsicState,
             runtimeView: runtimeView,
             executable: executable,
-            workflowInputEnvelopes: projections.WorkflowInputEnvelopes,
+            workflowInputEnvelopes: workflowInputEnvelopes,
             variableEnvelopes: frameEnvelopes,
-            visibleVariablesByName: RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes(executable, visibleFrames));
+            visibleVariablesByName: RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes(executable, visibleFrames, rootVariableNames),
+            correlationId: projections.CorrelationId);
         var resolved = inputBindingResolver.Resolve(binding, context);
         if (resolved.Source == RuntimeInputBindingSource.Expression)
         {
@@ -625,6 +640,8 @@ public sealed class WorkflowIntrinsicExecutor(
             var envelope = evaluated.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
                 ? ValueEnvelope.Null(binding.TargetType, evaluated.EffectivePolicy)
                 : ValueEnvelope.Inline(binding.TargetType, evaluated.Value, evaluated.EffectivePolicy);
+            if (validateAssignmentPayload)
+                ValidateAssignmentPayload(binding, envelope, intrinsicState.Execution.ExecutableNodeId);
             return await ApplyStorageAsync(
                 workflowState.WorkflowExecutionId,
                 intrinsicState.InvocationId,
@@ -648,7 +665,48 @@ public sealed class WorkflowIntrinsicExecutor(
             source.Policy,
             $"Intrinsic input '{binding.InputName}' on node '{intrinsicState.Execution.ExecutableNodeId}'");
 
-        var combined = new ValueEnvelope(binding.TargetType, source.Presence, source.InlineValue, source.ExternalReference, combinedPolicy);
+        // Encryption-required values are withheld by storage without inspecting their payload.
+        if (combinedPolicy.RequiresEncryption)
+            return await ApplyStorageAsync(workflowState.WorkflowExecutionId, intrinsicState.InvocationId, binding.InputName,
+                source.Retype(binding.TargetType), source.Policy, combinedPolicy, cancellationToken);
+
+        var conversionSource = new ValueEnvelope(source.Type, source.Presence, source.InlineValue, source.ExternalReference, combinedPolicy);
+        if (source.ExternalReference is not null &&
+            (validateAssignmentPayload || HasExternalProjection(binding) || binding.ConversionPlan is { Operation: not ValueConversionOperation.Identity and not ValueConversionOperation.NullableCompatibility }))
+        {
+            if (externalPayloadStore is null)
+                throw new InvalidOperationException($"Intrinsic input '{binding.InputName}' requires an IExternalPayloadStore for conversion.");
+            JsonElement payload;
+            try
+            {
+                payload = await externalPayloadStore.ReadAsync(source.ExternalReference, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                throw new InvalidOperationException($"External payload for intrinsic input '{binding.InputName}' could not be read.", exception);
+            }
+            if (HasExternalProjection(binding))
+            {
+                var path = ExternalProjectionPath(binding, executable);
+                foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (payload.ValueKind != JsonValueKind.Object || !TryGetProperty(payload, segment, out payload))
+                        throw new InvalidOperationException($"External source path '{path}' for intrinsic input '{binding.InputName}' is unavailable.");
+                }
+            }
+            conversionSource = payload.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+                ? ValueEnvelope.Null(source.Type, combinedPolicy)
+                : ValueEnvelope.Inline(source.Type, payload.Clone(), combinedPolicy);
+        }
+        var combined = binding.ConversionPlan is null
+            ? conversionSource.Retype(binding.TargetType)
+            : _valueConversionExecutor.Convert(conversionSource, binding.ConversionPlan);
+        if (validateAssignmentPayload)
+            ValidateAssignmentPayload(binding, combined, intrinsicState.Execution.ExecutableNodeId);
         return await ApplyStorageAsync(
             workflowState.WorkflowExecutionId,
             intrinsicState.InvocationId,
@@ -656,7 +714,62 @@ public sealed class WorkflowIntrinsicExecutor(
             combined,
             source.Policy,
             combinedPolicy,
-            cancellationToken);
+            cancellationToken,
+            source.ExternalReference?.StorageProfile);
+    }
+
+    private void ValidateAssignmentPayload(RuntimeInputBinding binding, ValueEnvelope value, string nodeId)
+    {
+        if (value.Presence != ValuePresence.Present || value.Policy.RequiresEncryption ||
+            value.Type is { Alias: "Elsa.Any", CollectionKind: CollectionKind.Single })
+            return;
+        var validator = inputValidator
+            ?? throw new InvalidOperationException($"Intrinsic input '{binding.InputName}' on node '{nodeId}' requires an IWorkflowExecutableInputValidator.");
+        // Elsa.Any is a portable runtime token; Object is its CLR element type in the registry.
+        var validationType = binding.TargetType.Alias == "Elsa.Any"
+            ? new TypeReference("Object", binding.TargetType.CollectionKind)
+            : binding.TargetType.ToTypeReference();
+        var contract = new WorkflowExecutableInputContract(WorkflowExecutableInputContract.CurrentVersion,
+            [new WorkflowDeclaredInput(binding.InputName, validationType, isRequired: true)]);
+        var validation = validator.Validate(contract,
+            [new KeyValuePair<string, JsonElement>(binding.InputName, value.InlineValue!.Value)]);
+        if (!validation.IsValid)
+            throw new InvalidOperationException($"Intrinsic input '{binding.InputName}' on node '{nodeId}' does not match '{binding.TargetType.Alias}': " +
+                string.Join(" ", validation.Findings.Select(finding => finding.Message)));
+    }
+
+    private static bool HasExternalProjection(RuntimeInputBinding binding) =>
+        binding.Source == RuntimeInputBindingSource.WorkflowRequest && !string.IsNullOrWhiteSpace(binding.WorkflowRequest!.Path) ||
+        binding.Source == RuntimeInputBindingSource.ActivityResult && binding.ActivityResult!.ProjectionKey != "$result";
+
+    private static string ExternalProjectionPath(RuntimeInputBinding binding, WorkflowExecutable executable)
+    {
+        if (binding.Source == RuntimeInputBindingSource.WorkflowRequest)
+        {
+            var reference = binding.WorkflowRequest!;
+            var segments = reference.Path!.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var offset = segments.Length > 0 && StringComparer.OrdinalIgnoreCase.Equals(segments[0], reference.MemberKey) ? 1 : 0;
+            return string.Join('.', segments.Skip(offset));
+        }
+        var result = binding.ActivityResult!;
+        return executable.NodesById.GetValueOrDefault(result.ProducerExecutableNodeId)?.ActivityContract?.Result.Projections.GetValueOrDefault(result.ProjectionKey)?.Path
+            ?? throw new InvalidOperationException($"Intrinsic input '{binding.InputName}' requires a pinned result projection '{result.ProjectionKey}'.");
+    }
+
+    private static bool TryGetProperty(JsonElement value, string name, out JsonElement property)
+    {
+        if (value.TryGetProperty(name, out property))
+            return true;
+        foreach (var candidate in value.EnumerateObject())
+        {
+            if (StringComparer.OrdinalIgnoreCase.Equals(candidate.Name, name))
+            {
+                property = candidate.Value;
+                return true;
+            }
+        }
+        property = default;
+        return false;
     }
 
     private async ValueTask<ValueEnvelope> ApplyStorageAsync(
@@ -666,7 +779,8 @@ public sealed class WorkflowIntrinsicExecutor(
         ValueEnvelope value,
         ValueProtectionPolicy sourcePolicy,
         ValueProtectionPolicy effectivePolicy,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? fallbackStorageProfile = null)
     {
         return await _externalEnvelopeStorage.RewriteAsync(
             new RuntimeExternalEnvelopeRewriteRequest(
@@ -675,7 +789,8 @@ public sealed class WorkflowIntrinsicExecutor(
                 $"Intrinsic value '{valueName}'",
                 value,
                 sourcePolicy,
-                effectivePolicy),
+                effectivePolicy,
+                fallbackStorageProfile),
             cancellationToken);
     }
 
@@ -695,6 +810,13 @@ public sealed class WorkflowIntrinsicExecutor(
             ancestorId = ancestor.ParentActivityExecutionId;
         }
 
+        // Inside a closed activity execution scope nothing above the boundary is a write target, and the
+        // workflow root frame is not visible. Writing the boundary's own variables is not supported yet.
+        var boundaryIndex = ancestors.FindIndex(RuntimeClosedScope.IsClosedBoundary);
+        var insideClosedScope = boundaryIndex >= 0;
+        if (insideClosedScope)
+            ancestors = ancestors.Take(boundaryIndex).ToList();
+
         var activityOwner = ancestors.FirstOrDefault(state =>
             state.VariableFrame is { Status: VariableFrameStatus.Active } frame &&
             StringComparer.Ordinal.Equals(frame.ScopeId, declaringScopeId));
@@ -709,7 +831,8 @@ public sealed class WorkflowIntrinsicExecutor(
         if (readOnlyIteration is not null)
             throw new InvalidOperationException($"Iteration variable scope '{declaringScopeId}' is read-only and cannot be targeted by a Set, merge, or reduce intrinsic.");
 
-        if (workflowState.RootVariableFrame is { Status: VariableFrameStatus.Active } root &&
+        if (!insideClosedScope &&
+            workflowState.RootVariableFrame is { Status: VariableFrameStatus.Active } root &&
             StringComparer.Ordinal.Equals(root.ScopeId, declaringScopeId))
             return new FrameOwner(root, WorkflowOwned: true, ActivityOwner: null);
 
@@ -717,15 +840,12 @@ public sealed class WorkflowIntrinsicExecutor(
             $"Variable scope '{declaringScopeId}' is not visible to intrinsic execution '{intrinsicState.InvocationId}'.");
     }
 
-    private static List<VariableFrameState> BuildVisibleFrames(
+    private static (List<VariableFrameState> Frames, ActivityExecutionState? ClosedScopeBoundary) BuildVisibleFrames(
         WorkflowExecutionState workflowState,
         ActivityExecutionState intrinsicState,
-        IReadOnlyCollection<ActivityExecutionState> runtimeView)
+        IReadOnlyCollection<ActivityExecutionState> runtimeView,
+        IReadOnlyCollection<DurableValueState> durableValues)
     {
-        var ordered = new List<VariableFrameState>();
-        if (workflowState.RootVariableFrame is { Status: VariableFrameStatus.Active } root)
-            ordered.Add(root);
-
         var byId = runtimeView.ToDictionary(state => state.InvocationId, StringComparer.Ordinal);
         var ancestors = new Stack<ActivityExecutionState>();
         var ancestorId = intrinsicState.ParentActivityExecutionId;
@@ -736,7 +856,17 @@ public sealed class WorkflowIntrinsicExecutor(
             ancestorId = ancestor.ParentActivityExecutionId;
         }
 
-        foreach (var ancestor in ancestors)
+        // The same closed-scope rule as RuntimeContainerScopeService.BuildVisibleFramesAsync.
+        var chain = ancestors.ToList();
+        var boundaryIndex = RuntimeClosedScope.IndexOfNearest(chain);
+        var boundary = boundaryIndex < 0 ? null : chain[boundaryIndex];
+        var ordered = new List<VariableFrameState>();
+        if (boundary is not null)
+            ordered.Add(RuntimeClosedScope.CreateFrame(boundary, durableValues));
+        else if (workflowState.RootVariableFrame is { Status: VariableFrameStatus.Active } root)
+            ordered.Add(root);
+
+        foreach (var ancestor in chain.Skip(boundaryIndex + 1))
         {
             if (ancestor.IterationVariableFrame is { Status: VariableFrameStatus.Active } iteration)
                 ordered.Add(iteration);
@@ -747,7 +877,7 @@ public sealed class WorkflowIntrinsicExecutor(
         if (intrinsicState.IterationVariableFrame is { Status: VariableFrameStatus.Active } currentIteration)
             ordered.Add(currentIteration);
 
-        return ordered;
+        return (ordered, boundary);
     }
 
     private static Dictionary<RuntimeVariableValueAddress, ValueEnvelope> ToAddressEnvelopes(

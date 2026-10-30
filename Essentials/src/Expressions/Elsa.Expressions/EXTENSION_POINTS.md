@@ -12,6 +12,8 @@ descriptors are metadata only; they do not carry runtime handler factories.
 - **Register:** `services.AddScoped<IPortableExpressionHandler, MyPortableHandler>()`.
 - **Boundary:** The request contains portable source/options and immutable declared parameters. It
   exposes no workflow context, variable frame, service provider, delegate, or mutation callback.
+  Workflow-instance metadata (correlation ID, instance ID) reaches a handler only as a declared
+  `WorkflowInstance` parameter value, never as ambient state.
 
 Shipped implementations are `PortableJavaScriptExpressionHandler` and
 `PortableLiquidExpressionHandler`, both restricted to `binding-pure-v1`.
@@ -38,7 +40,7 @@ Shipped implementations are `PortableJavaScriptExpressionHandler` and
 
 ## Cross-references
 
-- JavaScript binding boundary: [`Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](../Elsa.Expressions.JavaScript/EXTENSION_POINTS.md).
-- Liquid binding boundary: [`Elsa.Expressions.Liquid/EXTENSION_POINTS.md`](../Elsa.Expressions.Liquid/EXTENSION_POINTS.md).
-- JS rendering declaration contributors: [`Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md`](../Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md).
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- JavaScript binding boundary: [`Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](../JavaScript/Elsa.Expressions.JavaScript/EXTENSION_POINTS.md).
+- Liquid binding boundary: [`Elsa.Expressions.Liquid/EXTENSION_POINTS.md`](../Liquid/EXTENSION_POINTS.md).
+- JS rendering declaration contributors: [`Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md`](../JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md).
+- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).

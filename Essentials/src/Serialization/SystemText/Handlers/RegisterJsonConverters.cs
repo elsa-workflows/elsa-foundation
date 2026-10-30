@@ -9,7 +9,7 @@ namespace Elsa.Serialization.SystemText.Handlers;
 /// Replaces the former one-event-handler-per-contributor sprawl; features now contribute by
 /// registering an <see cref="IJsonConverterSource"/>.
 /// </summary>
-public sealed class RegisterJsonConverters(IEnumerable<IJsonConverterSource> sources)
+internal sealed class RegisterJsonConverters(IEnumerable<IJsonConverterSource> sources)
     : IEventHandler<JsonPayloadConvertersInitializing>
 {
     public Task Handle(JsonPayloadConvertersInitializing domainEvent, CancellationToken cancellationToken)

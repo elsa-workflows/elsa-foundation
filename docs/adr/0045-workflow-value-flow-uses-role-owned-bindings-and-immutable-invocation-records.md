@@ -141,6 +141,11 @@ and commit under [ADR 0048](0048-container-output-captures-resolve-through-produ
 The capture's frame mutation participates in the producing completion checkpoint; unbound activity
 completion and activity transitions still cannot write variables.
 
+**Proposed amendment.**
+[ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) (proposed)
+would add a third, declared variable-write form (changes an activity step makes, committed with the step) and a
+step-read channel at invoke beside input materialization. Until it is accepted, this section stands as written.
+
 Potentially concurrent ordinary writes to the same variable fail validation unless an explicit,
 deterministic merge or reduction governs them. This refines ADR 0027's previously open concurrent
 write policy. Reads occur when the consumer invocation materializes its inputs, and a completed `Set`
@@ -168,11 +173,27 @@ mutating host functions.
 Stateful scripts are activities that receive inputs and return typed results. Their results can feed
 an explicit `Set` operation. This decision supersedes the canonical-model portion of ADR 0030 that
 kept JavaScript variable write-back and ambient output accessors: those surfaces may remain only as
-isolated migration compatibility while the new model is introduced.
+isolated migration compatibility while the new model is introduced. (Proposed amendment:
+[ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md)
+would let RunJavaScript change variables as a declared write form; input-binding expressions stay pure.)
 
 Time, randomness, and other nondeterministic data enter an expression as explicit pinned parameters
 or through a separately specified deterministic runtime capability. Merely marking an expression
 read-only is not enough if its evaluator can reach mutable ambient state.
+
+**Amendment (issue #2717): workflow-instance metadata as a declared parameter.** An expression parameter
+binding may also read metadata of the running workflow instance: its correlation ID or its instance ID
+(`{"kind":"WorkflowInstance","member":"correlationId"|"instanceId"}`). This is a fifth canonical parameter
+kind beside literal, workflow request, variable and activity result; it is not an ambient accessor, because an
+expression sees the value only through the parameter it declares, and the binding-pure-v1 profile is unchanged.
+The value comes from committed runtime state, never live memory: the instance ID is the workflow execution ID,
+and the correlation ID is the latest committed identity durable value, which the workflow-started checkpoint
+seeds from the start request and a `SetCorrelationId` intrinsic replaces. An instance without a correlation ID
+binds JSON null. Like every input read, a change is seen by inputs materialized after it commits; snapshots
+already pinned are not re-evaluated, and a re-materialized snapshot (replay, a `While` pass) reads the same
+committed value. A runtime build that predates this kind cannot read an executable that uses it; before GA this
+is accepted, not mitigated. The Elsa 3 converter lowers `getCorrelationId()` and `getWorkflowInstanceId()` to it
+(spec 247).
 
 ### 6. Separate activity contracts, activations, and invocations
 
@@ -194,7 +215,10 @@ fields and injected services never survive a suspension.
 
 The activity transition algebra distinguishes complete, suspend, fault, and cancel. An activity
 transition does not contain hidden variable mutations; explicit `Set` nodes remain the only normal
-variable-write mechanism. The activity invocation contract returns that transition directly; it does
+variable-write mechanism. (Proposed amendment:
+[ADR 0090](0090-activities-change-variables-as-a-unit-of-work-committed-with-the-step.md) would add a
+third write form, with `context.Variables.Set` as an exception to the sentence below; see §4.) The activity
+invocation contract returns that transition directly; it does
 not publish successful values or outcomes through mutable execution-context `Set` methods.
 
 ### 7. Provide a generated method-call authoring facade

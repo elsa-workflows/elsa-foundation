@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Models;
@@ -34,7 +33,7 @@ namespace Elsa.Activities.Http.Middleware;
 /// <b>Async/202.</b> The router's start and resume paths are asynchronous (they enqueue work through the actor
 /// mailbox); the middleware does not wait for the workflow to run. When at least one instance was started OR
 /// resumed it replies <c>202 Accepted</c> with <c>{ started: [...], resumed: [...] }</c> (started/resumed
-/// execution ids); when neither happened it replies <c>404 Not Found</c>.
+/// execution ids) plus response-mode diagnostics; when neither happened it replies <c>404 Not Found</c>.
 /// </para>
 /// <para>
 /// <b>Sync.</b> When the resolved <see cref="MergedHttpEndpointOptions.ResponseMode"/>
@@ -48,9 +47,11 @@ namespace Elsa.Activities.Http.Middleware;
 /// that authored no <see cref="WriteHttpResponse"/>, and a non-local (<see cref="BookmarkResumeDispatchStatus"/>
 /// deferred) dispatch whose ambient services never crossed the transport — with no locality inspection. The 404
 /// branch (zero starts AND zero dispatched resumes) still runs FIRST, before the sink is consulted. Sink resolution
-/// is null-safe: an absent registration degrades to async behaviour rather than throwing. The per-endpoint timeout
-/// (408) and fault mapping (400/500) already enclose the dispatch and now bound the synchronous wait. Async mode is
-/// bit-identical to the pre-E behaviour — no sink populate, no ambient services.
+/// is null-safe: an absent registration degrades to async behaviour rather than throwing. A finite host timeout
+/// bounds synchronous request work and response delivery; an endpoint may choose a shorter limit. Timeout expiry
+/// maps to 408 before response start and aborts an already-started response; client disconnects remain silent.
+/// Async mode keeps authored timeout behavior, with no sink
+/// population or ambient services.
 /// </para>
 /// <para>
 /// <b>Live input.</b> The full <see cref="HttpRequestModel"/> (path, method, headers, query, body) is serialized
@@ -173,6 +174,51 @@ public sealed class HttpEndpointMiddleware(
             ? ResolveEndpointOptions(claimants)
             : HttpEndpointStimulusOptions.MergeForResume(await ResolveWaitingBookmarkMetadataAsync(stimulusHash, context.RequestAborted));
 
+        var clientAborted = context.RequestAborted;
+        var requestTimeout = endpointOptions.RequestTimeout is { } authoredTimeout && authoredTimeout > TimeSpan.Zero
+            ? authoredTimeout
+            : (TimeSpan?)null;
+        if (endpointOptions.ResponseMode == ResponseMode.Sync)
+            requestTimeout = requestTimeout is { } shorter && shorter < _options.SyncRequestTimeout
+                ? shorter
+                : _options.SyncRequestTimeout;
+
+        using var timeoutSource = requestTimeout is not null
+            ? CancellationTokenSource.CreateLinkedTokenSource(clientAborted)
+            : null;
+        if (timeoutSource is not null && endpointOptions.ResponseMode == ResponseMode.Sync)
+        {
+            timeoutSource.CancelAfter(requestTimeout!.Value);
+            context.RequestAborted = timeoutSource.Token;
+        }
+
+        try
+        {
+            await HandleMatchedEndpointAsync(context, endpointPath, routeValues, stimulusHash, claimants, endpointOptions, timeoutSource, clientAborted);
+        }
+        catch (OperationCanceledException exception) when (!clientAborted.IsCancellationRequested && timeoutSource?.IsCancellationRequested == true)
+        {
+            // Restore the client token before writing a timeout response. Expiry cancels request work, not the
+            // live connection, and must produce 408 rather than being mistaken for a disconnected caller.
+            context.RequestAborted = clientAborted;
+            await HandleDispatchFaultAsync(context, exception, timedOut: true);
+        }
+        finally
+        {
+            context.RequestAborted = clientAborted;
+        }
+    }
+
+    private async Task HandleMatchedEndpointAsync(
+        HttpContext context,
+        string endpointPath,
+        IReadOnlyDictionary<string, string> routeValues,
+        string stimulusHash,
+        IReadOnlyCollection<WorkflowTriggerBinding> claimants,
+        MergedHttpEndpointOptions endpointOptions,
+        CancellationTokenSource? timeoutSource,
+        CancellationToken clientAborted)
+    {
         // Authorization runs before the body is read, before ambiguity/existence is disclosed, and before any
         // dispatch (#592 item 10 — auth before disclosure). Fail closed: an Authorize endpoint with no
         // handler composed (WorkflowsRuntimeHttp feature absent) denies. Every distinct merged policy must pass —
@@ -186,7 +232,7 @@ public sealed class HttpEndpointMiddleware(
             {
                 var authorizationHandler = context.RequestServices?.GetService(typeof(IHttpEndpointAuthorizationHandler)) as IHttpEndpointAuthorizationHandler;
                 authorized = authorizationHandler is not null
-                    && await AuthorizeAllPoliciesAsync(authorizationHandler, context, endpointOptions.Policies);
+                    && await HttpEndpointRequestAuthorization.AuthorizeAsync(authorizationHandler, context, endpointOptions.Policies);
             }
             catch (HttpEndpointAuthorizationConfigurationException)
             {
@@ -218,7 +264,7 @@ public sealed class HttpEndpointMiddleware(
         }
 
         var maxBodyBytes = endpointOptions.RequestSizeLimit ?? _options.MaxRequestBodyBytes;
-        var requestModel = await BuildRequestModelAsync(context, endpointPath, routeValues, maxBodyBytes);
+        var requestModel = await HttpEndpointRequestModelReader.ReadAsync(context, endpointPath, routeValues, maxBodyBytes);
         if (requestModel is null)
         {
             context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
@@ -252,24 +298,21 @@ public sealed class HttpEndpointMiddleware(
                 schemaVersion: 1),
             providerId: HttpEndpoint.ActivityType);
 
-        // Per-endpoint RequestTimeout bounds dispatch (which drains inline on the in-process actor, so it can
-        // genuinely take time); faults map to statuses via the endpoint fault handler seam.
-        // Non-positive values are rejected at publish; the > Zero guard here is defense in depth
-        // against hand-seeded binding metadata — CancelAfter would throw on a negative TimeSpan.
+        // Async keeps its existing authored dispatch timeout; only Sync has a host deadline covering body
+        // reading and response delivery as well. Do not start an Async endpoint's timer while reading its body.
+        if (!sync)
+            timeoutSource?.CancelAfter(endpointOptions.RequestTimeout!.Value);
         StimulusRoutingResult result;
-        using var timeoutSource = endpointOptions.RequestTimeout is { } timeout && timeout > TimeSpan.Zero
-            ? CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted)
-            : null;
-        timeoutSource?.CancelAfter(endpointOptions.RequestTimeout!.Value);
         try
         {
             result = await router.RouteAsync(dispatch, timeoutSource?.Token ?? context.RequestAborted);
         }
-        catch (Exception exception) when (!context.RequestAborted.IsCancellationRequested)
+        catch (Exception exception) when (!clientAborted.IsCancellationRequested)
         {
-            // A genuine dispatch fault (not a client abort — that path is swallowed by the top-level guard in
-            // InvokeAsync): map it to a status. A per-endpoint timeout trip is an OperationCanceledException on
-            // the linked token while RequestAborted stays live, so it lands here (mapped to 408), not the guard.
+            // Preserve the established dispatch fault policy, including an authored live response. Other
+            // request faults must reach the host for logging and connection abort; only deadline cancellation
+            // is translated by the outer request boundary.
+            context.RequestAborted = clientAborted;
             await HandleDispatchFaultAsync(context, exception, timedOut: timeoutSource?.IsCancellationRequested == true);
             return;
         }
@@ -323,10 +366,24 @@ public sealed class HttpEndpointMiddleware(
             }
         }
 
+        var response = sync
+            ? new
+            {
+                mode = "sync",
+                reason = "workflow-response-not-produced",
+                message = "The workflow may have suspended, reached no response activity, or continued on another worker. Inspect the run."
+            }
+            : new
+            {
+                mode = "async",
+                reason = "background-accepted",
+                message = "The endpoint accepts work in the background and returns 202 before the workflow responds."
+            };
+
         context.Response.StatusCode = StatusCodes.Status202Accepted;
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsync(
-            JsonSerializer.Serialize(new { started = startedIds, resumed = resumedIds }),
+            JsonSerializer.Serialize(new { started = startedIds, resumed = resumedIds, response }),
             context.RequestAborted);
     }
 
@@ -355,30 +412,6 @@ public sealed class HttpEndpointMiddleware(
     }
 
     /// <summary>
-    /// Runs the authorization handler once per distinct <paramref name="policies"/> and requires ALL to pass
-    /// (fail closed): a resume-only match can span waiting bookmarks with divergent policies, so an
-    /// endpoint is authorized only when every declared policy is satisfied. When the set is empty the endpoint is
-    /// protected by an authorize-only check (a single call with a null policy), preserving the single-policy
-    /// (claimant) behavior. Short-circuits on the first denial.
-    /// </summary>
-    private static async ValueTask<bool> AuthorizeAllPoliciesAsync(
-        IHttpEndpointAuthorizationHandler handler,
-        HttpContext context,
-        IReadOnlyCollection<string> policies)
-    {
-        if (policies.Count == 0)
-            return await handler.AuthorizeAsync(new AuthorizeHttpEndpointContext(context, Policy: null));
-
-        foreach (var policy in policies)
-        {
-            if (!await handler.AuthorizeAsync(new AuthorizeHttpEndpointContext(context, policy)))
-                return false;
-        }
-
-        return true;
-    }
-
-    /// <summary>
     /// Resolves the endpoint options metadata for a resume-only match (no trigger claimant) from EVERY waiting
     /// bookmark matching this stimulus hash. Uses the expiry-aware lookup and filters to the
     /// matched stimulus hash, so an expired or differently-hashed bookmark never supplies options. The caller merges
@@ -400,16 +433,18 @@ public sealed class HttpEndpointMiddleware(
     /// <summary>Maps a dispatch fault to a response status via the endpoint fault handler seam; inline fallback (the shared <see cref="Elsa.Http.Core.HttpEndpointFaultMapping"/>) when the policy feature is absent.</summary>
     private static async Task HandleDispatchFaultAsync(HttpContext context, Exception exception, bool timedOut)
     {
-        // Sync mode can fault AFTER WriteHttpResponse already wrote the live response (e.g. endpoint -> write ->
-        // stalling activity tripping the request timeout). Once the response has started, a status code can no
-        // longer be written — attempting it throws and escapes as an unhandled pipeline exception on a connection
-        // that already carries the workflow-authored response. The caller got that response; the fault remains
-        // observable in durable state per normal runtime semantics, so the response is left untouched.
+        // Headers cannot be replaced once the response starts. A deadline can interrupt body delivery, so
+        // abort that connection rather than completing a truncated success response. Ordinary dispatch-phase
+        // post-write faults keep the existing authored response intact. Other failures propagate to the host.
         if (context.Response.HasStarted)
+        {
+            if (timedOut && exception is OperationCanceledException)
+                context.Abort();
             return;
+        }
 
         var faultException = timedOut && exception is OperationCanceledException
-            ? new TimeoutException("The endpoint's request timeout elapsed before dispatch completed.", exception)
+            ? new TimeoutException("The HTTP endpoint request timeout elapsed before the response completed.", exception)
             : exception;
 
         if (context.RequestServices?.GetService(typeof(IHttpEndpointFaultHandler)) is IHttpEndpointFaultHandler faultHandler)
@@ -425,56 +460,4 @@ public sealed class HttpEndpointMiddleware(
     private static readonly IReadOnlyDictionary<string, string> EmptyRouteValues =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Builds the request model; null when the body exceeds <paramref name="maxBodyBytes"/>.</summary>
-    private static async Task<HttpRequestModel?> BuildRequestModelAsync(
-        HttpContext context,
-        string endpointPath,
-        IReadOnlyDictionary<string, string> routeValues,
-        long maxBodyBytes)
-    {
-        if (context.Request.ContentLength is { } declaredLength && declaredLength > maxBodyBytes)
-            return null;
-
-        string? body = null;
-        if (context.Request.Body.CanRead)
-        {
-            body = await ReadBodyBoundedAsync(context.Request.Body, maxBodyBytes, context.RequestAborted);
-            if (body is null)
-                return null; // Exceeded the cap during streaming (Content-Length absent or lied).
-            if (body.Length == 0)
-                body = null;
-        }
-
-        var headers = context.Request.Headers
-            .ToDictionary(header => header.Key, header => header.Value.Select(v => v ?? string.Empty).ToArray(), StringComparer.OrdinalIgnoreCase);
-        var query = context.Request.Query
-            .ToDictionary(item => item.Key, item => item.Value.Select(v => v ?? string.Empty).ToArray(), StringComparer.OrdinalIgnoreCase);
-
-        // Parsed content is NOT persisted here: the HttpEndpoint activity derives it from
-        // Body + the Content-Type header via the deterministic IHttpRequestBodyParser seam, so the stimulus payload
-        // carries the raw body exactly once instead of the body plus a re-encoded copy of it.
-        return new HttpRequestModel(
-            Path: HttpEndpointStimulus.NormalizeTemplate(endpointPath),
-            Method: context.Request.Method.ToUpperInvariant(),
-            Headers: headers,
-            Query: query,
-            Body: body,
-            RouteData: new Dictionary<string, string>(routeValues, StringComparer.OrdinalIgnoreCase));
-    }
-
-    /// <summary>Reads the body up to the byte cap (enforced during streaming, not only via Content-Length); null when exceeded.</summary>
-    private static async Task<string?> ReadBodyBoundedAsync(Stream body, long maxBodyBytes, CancellationToken cancellationToken)
-    {
-        using var buffer = new MemoryStream();
-        var chunk = new byte[8192];
-        int read;
-        while ((read = await body.ReadAsync(chunk, cancellationToken)) > 0)
-        {
-            if (buffer.Length + read > maxBodyBytes)
-                return null;
-            buffer.Write(chunk, 0, read);
-        }
-
-        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
-    }
 }

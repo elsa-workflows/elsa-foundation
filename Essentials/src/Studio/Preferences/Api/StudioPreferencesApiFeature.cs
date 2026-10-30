@@ -25,6 +25,9 @@ public class StudioPreferencesApiFeature : IWebShellFeature
         services.AddScoped<StudioPreferenceScopeResolver>();
     }
 
-    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
+    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment)
+    {
         StudioPreferencesApi.MapStudioPreferencesApi(endpoints);
+        StudioHomeLayoutApi.MapStudioHomeLayoutApi(endpoints);
+    }
 }

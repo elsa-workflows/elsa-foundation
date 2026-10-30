@@ -52,7 +52,17 @@ type RuntimeValueResolutionState = {
   error?: string;
 };
 
-export function RuntimeValueEvidenceCard({ snapshot, listItem = true }: { snapshot: ActivityExecutionInspectionValueSnapshot; listItem?: boolean }) {
+export function RuntimeValueEvidenceCard({
+  snapshot,
+  listItem = true,
+  compactObjects = false,
+  showCaptureMode = true
+}: {
+  snapshot: ActivityExecutionInspectionValueSnapshot;
+  listItem?: boolean;
+  compactObjects?: boolean;
+  showCaptureMode?: boolean;
+}) {
   const typeName = runtimeValueTypeLabel(snapshot.type) || "Unknown";
   return (
     <article className="wf-runtime-input" role={listItem ? "listitem" : undefined}>
@@ -61,14 +71,22 @@ export function RuntimeValueEvidenceCard({ snapshot, listItem = true }: { snapsh
           <strong>{snapshot.name}</strong>
           <small>{typeName}</small>
         </span>
-        <small>{formatCaptureMode(snapshot.captureMode)}</small>
+        {showCaptureMode ? <small className="wf-runtime-capture-mode">{formatCaptureMode(snapshot.captureMode)}</small> : null}
       </header>
-      <RuntimeValueEvidenceContent snapshot={snapshot} />
+      <RuntimeValueEvidenceContent snapshot={snapshot} compactObjects={compactObjects} />
     </article>
   );
 }
 
-export function RuntimeValueEvidenceContent({ snapshot, presentation = "card" }: { snapshot: ActivityExecutionInspectionValueSnapshot; presentation?: "card" | "input" }) {
+export function RuntimeValueEvidenceContent({
+  snapshot,
+  presentation = "card",
+  compactObjects = false
+}: {
+  snapshot: ActivityExecutionInspectionValueSnapshot;
+  presentation?: "card" | "input";
+  compactObjects?: boolean;
+}) {
   const scope = useContext(RuntimeValueEvidenceResolutionContext);
   const evidenceId = snapshot.evidenceId?.trim() || null;
   const access = snapshot.accessState ?? snapshot.access;
@@ -130,13 +148,14 @@ export function RuntimeValueEvidenceContent({ snapshot, presentation = "card" }:
     canResolve &&
     (!snapshot.isSensitive || explicitlyRequested) &&
     !protectedAccess;
+  const expandRoot = presentation === "card" && !compactObjects;
 
   return (
     <>
       <div className="wf-runtime-input-content">
         {resolvedPayload && currentResolution?.status === "ready" ? (
           captureModeKey === "diagnosticsnapshot" && isDiagnosticSnapshotNode(currentResolution.payload)
-            ? <DiagnosticSnapshotTree node={currentResolution.payload} expandRoot={presentation === "card"} />
+            ? <DiagnosticSnapshotTree node={currentResolution.payload} expandRoot={expandRoot} />
             : <>
                 {presentation === "card" ? <small>Captured value</small> : null}
                 <RuntimeInputPayload payload={currentResolution.payload} />
@@ -148,7 +167,7 @@ export function RuntimeValueEvidenceContent({ snapshot, presentation = "card" }:
         ) : snapshot.isSensitive ? (
           <>
             {isProtectedDiagnosticSnapshot(diagnosticSnapshot) && isDiagnosticSnapshotNode(diagnosticSnapshot)
-              ? <DiagnosticSnapshotTree node={diagnosticSnapshot} expandRoot={presentation === "card"} />
+              ? <DiagnosticSnapshotTree node={diagnosticSnapshot} expandRoot={expandRoot} />
               : <p title="Runtime value is protected because this input is sensitive.">{presentation === "input" ? "Protected value" : "Runtime value is protected because this input is sensitive."}</p>}
             {canShowSensitiveValue ? (
               <button
@@ -166,7 +185,7 @@ export function RuntimeValueEvidenceContent({ snapshot, presentation = "card" }:
             {currentResolution?.status === "failed" ? <p role="alert">Could not resolve captured value: {currentResolution.error}</p> : null}
           </>
         ) : isDiagnosticSnapshotNode(diagnosticSnapshot) ? (
-          <DiagnosticSnapshotTree node={diagnosticSnapshot} expandRoot={presentation === "card"} />
+          <DiagnosticSnapshotTree node={diagnosticSnapshot} expandRoot={expandRoot} />
         ) : hasPayload ? (
           <RuntimeInputPayload payload={snapshot.payload} />
         ) : (

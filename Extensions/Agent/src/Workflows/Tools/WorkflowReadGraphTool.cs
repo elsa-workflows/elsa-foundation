@@ -5,34 +5,26 @@ using Elsa.Agent.Workflows.Services;
 
 namespace Elsa.Agent.Workflows.Tools;
 
-/// <summary>
-/// Read-only tool that returns the current workflow graph (activities, connections, revision) so a
-/// multi-step agent can re-read the graph after edits, or when the graph was too large to inline up front.
-/// It reads from the <c>workflow.definition</c> attachment Studio supplies on the turn; a future revision can
-/// read straight from the draft store. Registered now so it activates once the provider surfaces tool calls.
-/// </summary>
+/// <summary>Reads the admitted, value-free graph snapshot without claiming a durable resource read.</summary>
 public sealed class WorkflowReadGraphTool : IAgentTool
 {
-    // Harness tool names must match ^[a-zA-Z0-9_-]+$ (GitHub Copilot + Anthropic reject dots), so no '.' separators.
     public const string ToolName = "workflow_read_graph";
+    public AgentToolDescriptor Descriptor { get; } = new(ToolName, "Read open workflow graph",
+        "Returns admitted activity identities, connections, positions and working-state revision. Activity property values are excluded.",
+        AgentToolMutability.ReadOnly, AgentRisk.ReadOnly, """{"type":"object","properties":{},"additionalProperties":false}""",
+        ["workflows/design:read"], ["/workflows"])
+    { ModuleId = WorkflowAgentSnapshot.ModuleId, ResultType = "workflows.graph", ResultSchemaVersion = "1" };
 
-    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-
-    public AgentToolDescriptor Descriptor { get; } = new(
-        ToolName,
-        "Read workflow graph",
-        "Returns the open workflow's activities, connections, and base revision so edits can reference real node ids.",
-        AgentToolMutability.ReadOnly,
-        AgentRisk.ReadOnly,
-        """{"type":"object","properties":{},"additionalProperties":false}""",
-        [],
-        ["/workflows"]);
-
-    public Task<AgentResult<AgentToolResult>> InvokeAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+    public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
     {
-        var graph = WorkflowAgentGraphReader.Read(invocation.Context);
-        var content = JsonSerializer.Serialize(graph, SerializerOptions);
-        return Task.FromResult(AgentResult<AgentToolResult>.Success(
-            new(invocation.ToolCallId, Descriptor.Name, true, content, graph)));
+        var attachments = invocation.Context.Where(item => item.ContentType == "workflow.definition" && item.Origin == AgentContextOrigin.ClientSnapshot).ToArray();
+        if (invocation.Arguments.Count != 0 || attachments.Length != 1 || !WorkflowAgentSnapshot.TryRead(attachments[0], out var snapshot, out _))
+            return Task.FromResult(AgentResult<AgentToolPreparation>.Failure("agent.workflow.snapshot_required", "One admitted workflow snapshot and no arguments are required.", 409));
+        return Task.FromResult(AgentResult<AgentToolPreparation>.Success(new(snapshot!.Target, snapshot.Content, AgentRisk.ReadOnly,
+            new("workflows.graph", "1", snapshot.Content), RequiresApproval: false)));
     }
+
+    public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
+        => Task.FromResult(AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, Descriptor.Name, true,
+            "Read the admitted workflow working-state snapshot; no resource was changed.", new("workflows.graph", "1", invocation.Arguments))));
 }

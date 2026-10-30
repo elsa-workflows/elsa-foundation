@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Xml.Linq;
+using Elsa.Maps.Projects;
 using Xunit;
 using static Elsa.Architecture.Tests.RepoPaths;
 
@@ -7,8 +8,8 @@ namespace Elsa.Architecture.Tests;
 
 /// <summary>
 /// NuGet lock files (#2122, docs/reference/nuget-lock-files.md): every project in <c>Elsa.Server.slnx</c> restores
-/// against a committed <c>packages.lock.json</c>, and the dependency map's pinned-transitive edges, which the maps
-/// generator reads from those files, still name exactly what pack writes into each nuspec.
+/// against a committed <c>packages.lock.json</c>, and the dependency map's pinned-transitive edges, which the shared
+/// project-graph scan reads from those files, still name exactly what pack writes into each nuspec.
 /// </summary>
 public sealed class NuGetLockFileTests
 {
@@ -44,17 +45,17 @@ public sealed class NuGetLockFileTests
     }
 
     /// <summary>
-    /// The maps generator reads a packable project's pinned-transitive edges from its lock file, but
+    /// The project-graph scan reads a packable project's pinned-transitive edges from its lock file, but
     /// pack writes the nuspec from restore's <c>centralTransitiveDependencyGroups</c>. The two lists differ wherever a
-    /// pinned package is reached only through a <c>PrivateAssets="all"</c> reference, which the generator reads from the
-    /// project file to bridge. A reading that drifted from NuGet's would regenerate the same wrong map the maps check
-    /// compares with, and pass there, so this holds every committed edge to NuGet's own list, from the restore CI runs
-    /// before this suite.
+    /// pinned package is reached only through a <c>PrivateAssets="all"</c> reference, which the scan reads from the
+    /// project file to bridge. A reading that drifted from NuGet's would derive the same wrong dataset the versioning
+    /// calculator reads, and nothing else would notice, so this holds every edge to NuGet's own list, from the restore
+    /// CI runs before this suite.
     /// </summary>
     [Fact]
     public void Every_packable_nodes_pinned_transitive_edges_are_the_packages_restore_lists_for_its_nuspec()
     {
-        using var map = JsonDocument.Parse(File.ReadAllBytes(Path.Join(RepoRoot, "docs", "maps", "dependency-map.json")));
+        using var map = JsonDocument.Parse(DependencyMapJson.Serialize(RepoContext.Discover(RepoRoot)));
         var packable = map.RootElement.GetProperty("nodes").EnumerateArray().Where(node => node.GetProperty("packable").GetBoolean()).ToArray();
 
         var violations = packable

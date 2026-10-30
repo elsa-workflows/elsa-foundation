@@ -10,6 +10,72 @@ namespace Elsa.Activities.Bpmn.Interchange.Tests;
 
 public sealed class BpmnDocumentImporterTests
 {
+    [Fact]
+    public void Nested_lane_extension_loss_is_reported_recursively()
+    {
+        const string document = """
+            <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:vendor="urn:vendor" id="defs" targetNamespace="urn:test">
+              <process id="p" isExecutable="true"><startEvent id="start"/>
+                <subProcess id="sub"><laneSet id="lanes"><lane id="nested-lane" vendor:tag="kept"><flowNodeRef>nested-start</flowNodeRef></lane></laneSet>
+                  <startEvent id="nested-start"/><endEvent id="nested-end"/><sequenceFlow id="nested-flow" sourceRef="nested-start" targetRef="nested-end"/>
+                </subProcess><endEvent id="end"/><sequenceFlow id="to-sub" sourceRef="start" targetRef="sub"/><sequenceFlow id="to-end" sourceRef="sub" targetRef="end"/>
+              </process>
+            </definitions>
+            """;
+        var analysis = new BpmnDocumentImporter(new BpmnWorkBinder()).Analyze(document);
+        Assert.Contains(analysis.Issues, issue => issue.ElementId == "nested-lane" && issue.Severity == BpmnImportIssueSeverity.Degraded);
+        Assert.False(analysis.CanExecute);
+    }
+
+    [Theory]
+    [InlineData("definitions", "defs")]
+    [InlineData("collaboration", "collaboration")]
+    [InlineData("participant", "pool-p")]
+    [InlineData("messageFlow", "message")]
+    [InlineData("lane", "lane")]
+    public void Unrepresented_content_is_reported_at_each_retained_source_location(string element, string subject)
+    {
+        const string document = """
+            <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:vendor="urn:vendor" id="defs" targetNamespace="urn:test">
+              <collaboration id="collaboration"><participant id="pool-p" processRef="p"/><participant id="pool-q" processRef="q"/>
+                <messageFlow id="message" sourceRef="start-p" targetRef="start-q"/></collaboration>
+              <process id="p" isExecutable="true"><laneSet id="lanes"><lane id="lane"><flowNodeRef>start-p</flowNodeRef></lane></laneSet>
+                <startEvent id="start-p"/><endEvent id="end-p"/><sequenceFlow id="p-flow" sourceRef="start-p" targetRef="end-p"/></process>
+              <process id="q" isExecutable="true"><startEvent id="start-q"/><endEvent id="end-q"/><sequenceFlow id="q-flow" sourceRef="start-q" targetRef="end-q"/></process>
+            </definitions>
+            """;
+        var analysis = new BpmnDocumentImporter(new BpmnWorkBinder()).Analyze(document.Replace($"<{element} ", $"<{element} vendor:tag=\"kept\" ", StringComparison.Ordinal));
+        Assert.Contains(analysis.Issues, issue => issue.ElementId == subject && issue.Severity == BpmnImportIssueSeverity.Degraded &&
+            issue.Message.Contains("not fully represented", StringComparison.Ordinal));
+        Assert.False(analysis.CanExecute);
+    }
+
+    [Fact]
+    public void Unknown_host_capability_cannot_qualify_execution_readiness()
+    {
+        var analysis = new BpmnImportAnalysis([], new Dictionary<string, int>(), [])
+            { HostInventoryVerified = true, Capabilities = [new BpmnImportCapability("element", "future-work", BpmnImportCapabilityAvailability.Unknown, "Unassessed")] };
+        Assert.False(analysis.CanExecute);
+    }
+
+    [Fact]
+    public void Typed_expression_round_trip_retains_body_and_language_without_turning_it_into_an_outcome()
+    {
+        var imported = new BpmnDocumentImporter(new BpmnWorkBinder()).Import(SampleDocument);
+        var structure = imported.ProcessNode.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
+        var flow = Assert.Single(structure.SequenceFlows, flow => flow.FlowId == "flow-reject");
+        Assert.Null(flow.ConditionOutcome);
+        Assert.Contains(imported.Analysis.Capabilities, finding => finding.ElementId == "flow-reject" &&
+            finding.Availability == BpmnImportCapabilityAvailability.Unsupported);
+        Assert.False(imported.Analysis.CanExecute);
+        var xml = new BpmnDocumentExporter().Export(imported.ProcessNode);
+        var document = System.Xml.Linq.XDocument.Parse(xml);
+        System.Xml.Linq.XNamespace bpmn = Bpmn;
+        var exported = document.Descendants(bpmn + "sequenceFlow").Single(element => (string?)element.Attribute("id") == "flow-reject");
+        Assert.Equal("amount > 1000", exported.Element(bpmn + "conditionExpression")!.Value);
+        Assert.DoesNotContain(exported.Attributes(), attribute => attribute.Name.LocalName == "conditionOutcome");
+    }
+
     private const string Bpmn = "http://www.omg.org/spec/BPMN/20100524/MODEL";
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -61,7 +127,7 @@ public sealed class BpmnDocumentImporterTests
         </definitions>
         """;
 
-    private readonly BpmnDocumentImporter _importer = new();
+    private readonly BpmnDocumentImporter _importer = new(new BpmnWorkBinder());
 
     private BpmnAuthoredStructure ImportStructure(out BpmnImportResult result)
     {
@@ -82,6 +148,7 @@ public sealed class BpmnDocumentImporterTests
         var gateway = structure.Elements.Single(element => element.ElementId == "gw-decision");
         Assert.Equal(BpmnElementTypes.ExclusiveGateway, gateway.ElementType);
         Assert.Equal("flow-reject", gateway.DefaultFlowId);
+        Assert.True(structure.SequenceFlows.Single(flow => flow.FlowId == "flow-reject").IsDefault);
 
         var terminate = structure.Elements.Single(element => element.ElementId == "end-terminated");
         Assert.Contains(terminate.EventDefinitions, definition => definition.Type == BpmnEventDefinitionTypes.Terminate);
@@ -108,6 +175,21 @@ public sealed class BpmnDocumentImporterTests
         var childStructure = child.Structure!.Payload.Deserialize<BpmnAuthoredStructure>(SerializerOptions)!;
         Assert.Equal(["sub-start", "sub-task", "sub-end"], childStructure.Elements.Select(element => element.ElementId));
         Assert.Equal(2, childStructure.SequenceFlows.Count);
+    }
+
+    [Fact]
+    public void Import_AuthorsNestedSubprocessAsNonStarting()
+    {
+        // Spec 238: a nested process never starts the workflow, so it must produce no start bindings, which the
+        // start-path rule would refuse below its parent process. The root process keeps its default.
+        var structure = ImportStructure(out var result);
+
+        var child = Assert.Single(structure.Activities);
+        var canStartWorkflow = Assert.Single(child.Inputs, input => input.ReferenceKey == nameof(BpmnProcessActivity.CanStartWorkflow));
+        // The child is read back through the structure payload, so the literal arrives as JSON.
+        Assert.Equal(JsonValueKind.False, Assert.IsType<JsonElement>(canStartWorkflow.Value.Value).ValueKind);
+        Assert.Equal("Literal", canStartWorkflow.Value.ExpressionType);
+        Assert.DoesNotContain(result.ProcessNode.Inputs, input => input.ReferenceKey == nameof(BpmnProcessActivity.CanStartWorkflow));
     }
 
     [Fact]

@@ -68,11 +68,21 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // packaging. Re-baselined with the usual sub-0.5 kB entry margin and ~1.5 kB landing margins. The
 // diagnostic half stays off the entry: the misplaced-trigger check and the panel's fault types are
 // reached through the deferred validation surface.
+// Unified execution qualification (#3399) adds readable status foregrounds and literal collection-slot
+// labels to the shared adapter. Against the same workspace dependencies, the parent measured upgrades
+// at 375.22 kB and the corrected implementation measures 375.51 kB. Keep the existing heavy-surface
+// exclusion checks and give this shared code/CSS growth 0.5 kB of budget; no deferred surface moved eager.
+// Weaver module ownership (#3437) removes workflow context/registration/application knowledge from
+// the host and places the necessary native registration metadata here. First candidate measurements
+// were Definitions 388.67 kB / upgrades 379.78 kB. Deferring the native result renderer until review
+// and limiting affordances to the proved explain/layout journeys reduced these to 387.22 / 378.34 kB.
+// Add 3 kB to the previous 384.50 / 376.00 kB limits for this measured ownership cost; entry, stylesheet,
+// individual-chunk and heavy-surface guards are unchanged. The parent tree was not rebuilt separately.
 const budgets = {
   entryJavaScript: 127_500,
   stylesheet: 185_000,
-  definitionsLandingTotal: 384_500,
-  upgradeLandingTotal: 375_500,
+  definitionsLandingTotal: 387_500,
+  upgradeLandingTotal: 379_000,
   individualChunk: 500_000
 };
 
@@ -84,12 +94,21 @@ const deferredHeavySurfaces = [
   "WorkflowEditor",
   "WorkflowExecutableInspector",
   "WorkflowExecutables",
-  "WorkflowInstances"
+  "WorkflowInstances",
+  "WorkflowTestDrivePanel",
+  "WorkflowTestRunControls",
+  "CreateWorkflowDialog",
+  "workflowTestHttpAction"
 ];
 
 const excludedFromDefinitionsLanding = deferredHeavySurfaces.filter(name => name !== "WorkflowDefinitions");
 const deferredInspectorSharedChunks = ["conversionSettings"];
 const variableTargetPickerMarker = "Loading visible variables… The current target is preserved.";
+const testDriveSetupMarker = "Test the captured draft with workflow inputs and one selected start.";
+const testDriveControlsMarker = "No supported waits are active on this Test Run.";
+const testDriveHttpActionMarker = "The prepared HTTP action did not contain a safe server-relative URL.";
+const createWorkflowDialogMarker = "What should this workflow do?";
+const httpStarterMarker = "The HTTP starter needs Flowchart, HTTP Endpoint and Write HTTP Response activities on this server.";
 
 function collectStaticFiles(entryKey, files = new Set(), visitedEntries = new Set()) {
   if (visitedEntries.has(entryKey)) return files;
@@ -147,7 +166,11 @@ for (const chunkName of deferredHeavySurfaces) {
 
 const entryFiles = collectStaticFiles("src/module.tsx");
 const definitionsLandingFiles = new Set(entryFiles);
-collectStaticFiles("src/workflow-editor/pages.tsx", definitionsLandingFiles);
+// Shared browse helpers can make Vite emit the route facade under a hashed manifest key.
+// Follow the emitted route chunk and all its static imports, keeping the same landing budget.
+const workflowPages = findChunk("pages");
+if (!workflowPages.isDynamicEntry) throw new Error("The workflow pages are no longer emitted as a deferred entry.");
+collectStaticEntryFiles(workflowPages, definitionsLandingFiles);
 collectStaticEntryFiles(findChunk("WorkflowDefinitions"), definitionsLandingFiles);
 const upgradeLandingFiles = new Set(entryFiles);
 collectStaticFiles("src/ActivityUpgradeWorkbenchPage.tsx", upgradeLandingFiles);
@@ -187,6 +210,44 @@ if (!workflowEditorJavaScript.includes(variableTargetPickerMarker)) {
 if (authenticatedLandingJavaScript.includes(variableTargetPickerMarker)) {
   throw new Error("The variable-target picker leaked into an eager Workflows landing closure.");
 }
+if (authenticatedLandingJavaScript.includes(testDriveSetupMarker)) {
+  throw new Error("The Test Drive setup panel leaked into an eager Workflows landing closure.");
+}
+if (authenticatedLandingJavaScript.includes(testDriveControlsMarker)) {
+  throw new Error("The Test Drive controls leaked into an eager Workflows landing closure.");
+}
+if (authenticatedLandingJavaScript.includes(testDriveHttpActionMarker)) {
+  throw new Error("The Test Drive HTTP action leaked into an eager Workflows landing closure.");
+}
+if (authenticatedLandingJavaScript.includes(createWorkflowDialogMarker)) {
+  throw new Error("The create-workflow dialog leaked into an eager Workflows landing closure.");
+}
+if (authenticatedLandingJavaScript.includes(httpStarterMarker)) {
+  throw new Error("The HTTP workflow starter leaked into an eager Workflows landing closure.");
+}
+
+const activityIconTableMarker = "FlagTriangleRight";
+if (await readJavaScript(entryJavaScriptFiles).then(source => source.includes(activityIconTableMarker))) {
+  throw new Error("The activity icon table leaked into the Workflows JavaScript entry.");
+}
+if (authenticatedLandingJavaScript.includes(activityIconTableMarker)) {
+  throw new Error("The activity icon table leaked into an eager Workflows landing closure.");
+}
+
+const activityIconGlyphsChunk = Object.values(manifest).find(entry =>
+  typeof entry.src === "string" && entry.src.endsWith("activityIconGlyphs.tsx")
+);
+if (!activityIconGlyphsChunk) throw new Error("Bundle manifest is missing the activityIconGlyphs chunk.");
+if (!activityIconGlyphsChunk.isDynamicEntry) {
+  throw new Error("activityIconGlyphs is no longer emitted as a deferred entry.");
+}
+if (
+  entryFiles.has(activityIconGlyphsChunk.file)
+  || definitionsLandingFiles.has(activityIconGlyphsChunk.file)
+  || upgradeLandingFiles.has(activityIconGlyphsChunk.file)
+) {
+  throw new Error("activityIconGlyphs leaked into an eager Workflows landing closure.");
+}
 
 const [entrySize, stylesheetSize, definitionsLandingSize, definitionsLandingTotalSize, upgradeLandingTotalSize] = await Promise.all([
   measure(entryJavaScriptFiles),
@@ -197,6 +258,22 @@ const [entrySize, stylesheetSize, definitionsLandingSize, definitionsLandingTota
 ]);
 
 const jsFiles = [...new Set(Object.values(manifest).map(entry => entry.file).filter(file => file.endsWith(".js")))];
+const allJavaScript = await readJavaScript(jsFiles);
+if (!allJavaScript.includes(testDriveSetupMarker)) {
+  throw new Error("The Test Drive setup panel is missing from the Workflows bundle.");
+}
+if (!allJavaScript.includes(testDriveControlsMarker)) {
+  throw new Error("The Test Drive controls are missing from the Workflows bundle.");
+}
+if (!allJavaScript.includes(testDriveHttpActionMarker)) {
+  throw new Error("The Test Drive HTTP action is missing from the Workflows bundle.");
+}
+if (!allJavaScript.includes(createWorkflowDialogMarker)) {
+  throw new Error("The create-workflow dialog is missing from the Workflows bundle.");
+}
+if (!allJavaScript.includes(httpStarterMarker)) {
+  throw new Error("The HTTP workflow starter is missing from the Workflows bundle.");
+}
 const jsSizes = await Promise.all(jsFiles.map(async file => ({ file, bytes: (await stat(resolve(outputRoot, file))).size })));
 const largestChunk = jsSizes.reduce((largest, candidate) => candidate.bytes > largest.bytes ? candidate : largest);
 

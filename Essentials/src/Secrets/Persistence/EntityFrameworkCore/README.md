@@ -31,9 +31,9 @@ already references `Microsoft.EntityFrameworkCore.Sqlite` for OpenIddict, so Sql
 EF works without another provider package. SqlServer / PostgreSql / MySql require the host to
 add that engine.
 
-The MySQL context and provider selection are production-owned, but MySQL migration artifacts and
-full lifecycle proof remain deferred to the migration work unit. The focused MySQL model and
-repository proof is under `Essentials/tests/Secrets/Persistence/EntityFrameworkCore/MySql/Tests`.
+MySQL is production-owned like the other three providers: it has had its own migration chain since
+#1755, and its repository and migration proof is under
+`Essentials/tests/Secrets/Persistence/EntityFrameworkCore/MySql/Tests`.
 
 Enable `SecretsEntityFrameworkCore` in `shells.json` (or the docker compose overlay). Registering a
 second Secrets persistence backend throws an `InvalidOperationException` naming both backends.
@@ -82,16 +82,56 @@ different policy from its neighbours sets that key under its own `Configuration`
 
 ## Schema
 
-Table `elsa_secrets`. Key: `TenantId` + `NormalizedName`. Projected list/search columns
+Table `elsa_secrets`. Key: `TenantId` + `NormalizedName` + `Tombstone`. Projected list/search columns
 carry the searchable and filterable values. Full `Secret` document in `Payload`.
 OCC is an explicit `ConcurrencyToken` stamped on save — **not** cross-provider
 `IsRowVersion()` (Sqlite inserts NULL). On Sqlite, `MaxActiveVersionExpiresAt` is
 stored as UTC ticks (`INTEGER`) so active-only expiry comparisons translate.
 
+A soft delete frees the name. `Tombstone` is empty for the secret that holds a name and is the
+secret's id once it is deleted, so the key admits one row holding each tenant's name and any number
+of deleted secrets beside it, each with its versions. Deleting moves the row out of the empty
+tombstone in one save, guarded by the row's revision; a new secret then takes the name with an id
+and versions of its own. Lookups by name return the secret holding it, or, when none does, a deleted
+one, so a reader can tell "deleted" from "never existed". This is a plain key on every provider:
+no filtered index, which MySQL lacks, and no dependence on how a provider treats nulls in a unique
+index. The `FreeNameOnDelete` migration gives rows that were already deleted the tombstone
+`-deleted-before-reuse`, because their ids live in the JSON payload and a migration cannot read them
+there without raw SQL, which a host-configured schema cannot redirect. On MySQL the key moves in one
+raw `ALTER TABLE`: `MySql.EntityFrameworkCore` generates no SQL for `DropPrimaryKey` or `AddPrimaryKey`,
+so a migration relying on them applies and is recorded while the old key stays. MySQL refuses a
+configured schema, so raw SQL cannot be misdirected there.
+
+Stop every host on a build from before `FreeNameOnDelete` before applying it. Such a host knows no
+tombstone, so a secret it deletes afterwards stays in the row that holds its name, and the name stays
+taken. Host startup then fails closed naming `post-migrate`, whose `SecretsProjectionReindex` moves
+that row under the secret's id, which frees the name.
+
+A secret's tenant id, name and id together are limited to 450 characters
+(`SecretNameConstraints.MaximumKeyLength`) on every provider, because the row a delete writes is keyed
+by all three, and 450 UTF-16 characters are the 900 bytes SQL Server allows a clustered key. Generated
+ids have 11 characters, so a tenant id and a name have 439 between them. A create past the limit is
+refused with a validation error that names the longest name the tenant can have, so a secret created
+since this limit was introduced can always be deleted.
+
+Known limits, all on SQL Server only, where the key is bounded at 900 bytes; PostgreSQL, MySQL and
+SQLite have no such bound here, so the audit does not check key length:
+
+- A live secret created before this limit, whose tenant id and name together have 440 to 450
+  characters, cannot be deleted: the row its delete writes is refused. Shorten or recreate it.
+- `FreeNameOnDelete` fails loudly for an already-deleted row whose tenant id and name together exceed
+  429 characters, because its 21-character `-deleted-before-reuse` tombstone takes the key past 450.
+  Shorten or remove that row by hand, then apply the migration again.
+- `post-migrate` cannot repair a 440-to-450-character row of that kind that an older host deleted in
+  place, because the row it would move the secret to is refused. `SecretsProjectionReindex` then
+  fails with a `SecretsProjectionException` that names the tenant and secret name and rolls back its
+  batch. Shorten or remove that row by hand and rerun `post-migrate`. Only SQL Server's key-length
+  refusal (error 1946) is reported this way; any other failure of a move, such as a deadlock, a timeout
+  or a lost concurrency race, propagates as itself and also rolls back the batch.
+
 Derived contexts: `SecretsSqliteDbContext`, `SecretsSqlServerDbContext`,
-`SecretsPostgreSqlDbContext`, and `SecretsMySqlDbContext`. The SQLite, SQL Server, and PostgreSQL
-contexts each have their own `Migrations/` folder and `ModelSnapshot`; MySQL production migrations
-are intentionally not included in this slice.
+`SecretsPostgreSqlDbContext`, and `SecretsMySqlDbContext`. Each has its own
+`Migrations/<Provider>/` folder and `ModelSnapshot`.
 History table: `__EFMigrationsHistory_ElsaSecrets`.
 
 ### Persisted text projections
@@ -113,13 +153,15 @@ dotnet elsa persistence post-migrate --modules Secrets --provider <provider>
 ```
 
 `SecretsProjectionReindex` rewrites the stored projection columns and document copies from the
-authoritative `Secret` payload in bounded keyset transactions over `(TenantId, NormalizedName)`
-while preserving concurrency tokens. Rows created on a host whose runtime casing data differed from
-this pinned table otherwise remain unreadable through canonical lookups. Host startup — and
-`apply`/`validate` — audit every row in bounded, read-only keyset pages over
-`(TenantId, NormalizedName)` and fail closed naming `post-migrate` instead of silently serving a
-partially readable store. No command ever reindexes as a side effect; only `post-migrate` does
-(ADR 0076 D8).
+authoritative `Secret` payload in bounded keyset transactions over the whole key
+`(TenantId, NormalizedName, Tombstone)` while preserving concurrency tokens. Rows created on a host
+whose runtime casing data differed from this pinned table otherwise remain unreadable through
+canonical lookups. Host startup — and `apply`/`validate` — audit every row in bounded, read-only
+keyset pages over the same key and fail closed naming `post-migrate` instead of silently serving a
+partially readable store. A deleted secret still in the row that holds its name, which a host on a
+build from before `FreeNameOnDelete` leaves, makes `post-migrate` required in the same way, and the
+reindex moves it under the secret's id. A live secret under a tombstone fails closed as a damaged
+row. No command ever reindexes as a side effect; only `post-migrate` does (ADR 0076 D8).
 
 The mapping deviates from plain Unicode 16 only at the exact, exhaustively tested boundary `U+017F`
 and `U+16EBB` through `U+16ED3`. This module persists projected text rather than a separate

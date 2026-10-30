@@ -13,6 +13,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using EventActivity = Elsa.Activities.Primitives.Activities.Event;
 
+using BpmnDiagnosticKind = global::Bpmn.Model.State.BpmnDiagnosticKind;
+using BpmnExecutionState = global::Bpmn.Model.State.BpmnExecutionState;
+using BpmnTokenStatus = global::Bpmn.Model.State.BpmnTokenStatus;
+
 namespace Elsa.Activities.Bpmn.Tests;
 
 /// <summary>
@@ -78,7 +82,7 @@ public sealed class BpmnEventBasedGatewayTests
         Assert.Equal(2, armedRace.MemberTokenIds.Count);
 
         // The message stimulus fires first: it wins, routes onward, and the timer sibling loses.
-        var resumed = await fixture.ResumeAsync(messageBookmark, JsonSerializer.SerializeToElement(new EventReceived("order-shipped")));
+        var resumed = await fixture.ResumeAsync(messageBookmark, JsonSerializer.SerializeToElement(new { eventName = "order-shipped" }));
 
         resumed.AssertCompleted("node-wait");
         Assert.Equal(WorkflowExecutionStatus.Running, resumed.WorkflowState?.Status);
@@ -92,7 +96,7 @@ public sealed class BpmnEventBasedGatewayTests
         var loserChild = resumed.State("node-delay");
         Assert.Equal(ActivityExecutionStatus.Cancelled, loserChild.Status);
         Assert.Equal("ParentCancelled", loserChild.SubStatus);
-        Assert.Equal(BpmnExecutionEngine.EventGatewayRaceCancellationReason, loserChild.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
+        Assert.Equal("bpmn.event-based-gateway.superseded-by-first-catch", loserChild.Metadata[RuntimeMetadataKeys.ScopeCancellationReason]);
         var remainingBookmark = Assert.Single(await fixture.BookmarksAsync());
         Assert.Equal(EventStimulus.Hash("all-done"), remainingBookmark.StimulusHash);
     }
@@ -138,7 +142,7 @@ public sealed class BpmnEventBasedGatewayTests
         Assert.Equal(3, (await fixture.BookmarksAsync()).Count);
         var winnerBookmark = Assert.Single(await fixture.BookmarksAsync(), candidate => candidate.StimulusHash == EventStimulus.Hash("evt-a"));
 
-        var resumed = await fixture.ResumeAsync(winnerBookmark, JsonSerializer.SerializeToElement(new EventReceived("evt-a")));
+        var resumed = await fixture.ResumeAsync(winnerBookmark, JsonSerializer.SerializeToElement(new { eventName = "evt-a" }));
 
         // The winner runs to completion; both losing siblings' children are torn down and their bookmarks cleaned.
         resumed.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
@@ -224,7 +228,7 @@ public sealed class BpmnEventBasedGatewayTests
         var run = await fixture.RunAsync(executable);
         var messageBookmark = Assert.Single(await fixture.BookmarksAsync(), candidate => candidate.StimulusHash == EventStimulus.Hash("order-shipped"));
 
-        var resumed = await fixture.ResumeAsync(messageBookmark, JsonSerializer.SerializeToElement(new EventReceived("order-shipped")));
+        var resumed = await fixture.ResumeAsync(messageBookmark, JsonSerializer.SerializeToElement(new { eventName = "order-shipped" }));
 
         var process = resumed.State(BpmnRuntimeFixture.ProcessNodeId);
         Assert.Equal(ActivityExecutionStatus.Faulted, process.Status);
@@ -236,12 +240,11 @@ public sealed class BpmnEventBasedGatewayTests
     }
 
     [Fact]
-    public async Task Terminate_WhileRaceLive_CancelsMembersLogically_WithoutSeamATeardown()
+    public async Task Terminate_WhileRaceLive_CancelsMemberSubtrees_AndCleansBookmarks()
     {
         // One parallel branch waits on a "kill" event; the other opens a live race. Resuming "kill" routes to a
-        // terminate end event: terminate's CancelLiveWork logically cancels the live race members and ends the
-        // process, but stages NO seam-A subtree cancellation. The losing race children therefore stay
-        // suspended with their bookmarks intact — the observable proof that no runtime teardown happened.
+        // terminate end event. Released 0.5.0 requests teardown of already-issued work as well as
+        // logical cancellation; Foundation must reclaim the suspended children and their bookmarks.
         await using var fixture = await CreateFixtureAsync("actexec-bpmn", "actexec-kill", "actexec-a", "actexec-b");
         var executable = fixture.NewExecutable(
             children:
@@ -284,19 +287,15 @@ public sealed class BpmnEventBasedGatewayTests
         Assert.Equal(3, (await fixture.BookmarksAsync()).Count);
         var killBookmark = Assert.Single(await fixture.BookmarksAsync(), candidate => candidate.StimulusHash == EventStimulus.Hash("kill"));
 
-        var resumed = await fixture.ResumeAsync(killBookmark, JsonSerializer.SerializeToElement(new EventReceived("kill")));
+        var resumed = await fixture.ResumeAsync(killBookmark, JsonSerializer.SerializeToElement(new { eventName = "kill" }));
 
         resumed.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
         Assert.Empty(await fixture.Provider.GetRequiredService<IIncidentStateStore>()
             .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId));
 
-        // Logical-only: the race members' children were NOT terminalized through seam A — they stay suspended
-        // and their durable event bookmarks survive (contrast with a first-catch win, which cleans them).
-        Assert.NotEqual(ActivityExecutionStatus.Cancelled, resumed.State("node-a").Status);
-        Assert.NotEqual(ActivityExecutionStatus.Cancelled, resumed.State("node-b").Status);
-        var survivingBookmarks = await fixture.BookmarksAsync();
-        Assert.Contains(survivingBookmarks, bookmark => bookmark.StimulusHash == EventStimulus.Hash("evt-a"));
-        Assert.Contains(survivingBookmarks, bookmark => bookmark.StimulusHash == EventStimulus.Hash("evt-b"));
+        Assert.Equal(ActivityExecutionStatus.Cancelled, resumed.State("node-a").Status);
+        Assert.Equal(ActivityExecutionStatus.Cancelled, resumed.State("node-b").Status);
+        Assert.Empty(await fixture.BookmarksAsync());
     }
 
     [Fact]

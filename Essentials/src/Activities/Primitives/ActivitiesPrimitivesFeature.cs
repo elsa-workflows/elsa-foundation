@@ -39,18 +39,23 @@ public class ActivitiesPrimitivesFeature : IShellFeature
         // Contribute the Event start-trigger's stimulus provider so the publish-time trigger extractor
         // can recognize published Event nodes and index them. Enumerable so other activity features add their own.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityTriggerStimulusProvider, EventTriggerStimulusProvider>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<ITestRunTriggerDriver, EventTestRunDriver>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<ITestRunWaitDriver, EventTestRunWaitDriver>());
 
         // The PublishEvent durable-first send surface. The invocation-keyed staging buffer mirrors the
         // DispatchWorkflow stager's layering (registered as both the activity-facing stager and the engine-facing
         // accessor the invoke handler drains); the post-commit handler routes the staged stimulus in StartAndResume
         // mode. Registered additively per the AddRuntimePostCommitIntentHandler pattern (a distinct intent kind).
         services.TryAddSingleton<PublishStimulusStagingBuffer>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStimulusDeliveryIntentAdapter, PublishStimulusIntentAdapter>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, PublishStimulusSchemaGuard>());
         services.TryAddSingleton<IPublishStimulusStager>(
             serviceProvider => serviceProvider.GetRequiredService<PublishStimulusStagingBuffer>());
         services.TryAddSingleton<IPublishStimulusStagingAccessor>(
             serviceProvider => serviceProvider.GetRequiredService<PublishStimulusStagingBuffer>());
         services.AddRuntimePostCommitIntentHandler<PublishStimulusExecutor>(
             PublishStimulusConstants.PublishStimulusIntentKind,
-            new RuntimePostCommitRetryPolicy(maxAttempts: 4, delay: TimeSpan.FromSeconds(1)));
+            new RuntimePostCommitRetryPolicy(maxAttempts: 4, delay: TimeSpan.FromSeconds(1)),
+            requiresDurableSource: true, stimulusDeliveryProtocolVersion: StimulusDeliverySnapshot.CurrentVersion);
     }
 }

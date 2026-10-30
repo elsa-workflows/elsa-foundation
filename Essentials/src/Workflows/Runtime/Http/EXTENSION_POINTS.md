@@ -47,7 +47,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 - **Usage:** populates the per-shell `IRouteTable` from the durable trigger index at startup by delegating to `IHttpEndpointRouteTableSynchronizer.RefreshAsync`, so a fresh host or a restart has every published HTTP endpoint's route before the endpoint middleware runs — serialized against any concurrent observer refresh under the same lock. The index/bookmark observers keep it fresh thereafter for changes made on this node; the convergence pump below picks up changes made on other nodes.
 
 ### `HttpEndpointRouteTableConvergencePumpTask` → `IRecurringTask` *(Core — `Elsa.Tasks.Core`; #2190)*
-- **Kind:** Contribution into the Tasks recurring-task seam (`TryAddEnumerable`, Singleton), built on `BackoffSweepPumpTask` with its adaptive schedule; runs on every node.
+- **Kind:** Contribution into the Tasks recurring-task seam (`TryAddEnumerable`, Singleton), built on `BackoffSweepWorkerTask` with its adaptive schedule; runs on every node.
 - **Usage:** each tick calls `IHttpEndpointRouteTableSynchronizer.ConvergeAsync`, which compares the resolver's cheap fingerprint with the fingerprint of the last successful refresh and rebuilds only when they differ. Settings on the feature: `RouteTableConvergenceIntervalSeconds` (default 5, the convergence bound) and `RouteTableConvergenceMaxBackoffSeconds` (default 60); a non-positive or non-finite value fails `ConfigureServices`. Options type: `HttpEndpointRouteTableConvergenceOptions`. **Failure policy:** a failed check, a foreign `OperationCanceledException` such as a provider command timeout included, is logged at error level and widens the interval; only the shell's own cancellation ends a tick quietly.
 
 ---
@@ -63,6 +63,6 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Workflows.Runtime
 
 ## Cross-references
 
-- HTTP content downloads: [`Elsa.Http/EXTENSION_POINTS.md`](../Elsa.Http/EXTENSION_POINTS.md).
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- HTTP content downloads: [`Http/Elsa.Http/EXTENSION_POINTS.md`](../../../Http/Elsa.Http/EXTENSION_POINTS.md).
+- Repo-wide index: [`EXTENSION_POINTS.md`](../../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.2 + §2.22.1.

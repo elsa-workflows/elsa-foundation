@@ -159,7 +159,7 @@ public static class BpmnElementTypes
     public const string EndEvent = "endEvent";
     public const string IntermediateCatchEvent = "intermediateCatchEvent";
 
-    /// <summary>An intermediate throw event; this slice wires it for the compensation definition only.</summary>
+    /// <summary>An intermediate throw event interpreted by the released library and supported host bindings.</summary>
     public const string IntermediateThrowEvent = "intermediateThrowEvent";
     public const string Task = "task";
     public const string UserTask = "userTask";
@@ -172,9 +172,8 @@ public static class BpmnElementTypes
 
     /// <summary>
     /// A call activity: a task-family element that invokes a separately published Elsa workflow by
-    /// binding a <c>Elsa.DispatchWorkflow</c> child. Resolves to the task family (behaviors stay semantics-unaware);
-    /// its only behavioral distinction is the engine-side failure-outcome translation and its
-    /// interchange fidelity.
+    /// binding a waited <c>Elsa.DispatchWorkflow</c> child. Capable pinned parents consume the
+    /// declared ordered child-control protocol; existing pins retain ordinary outcome delivery.
     /// </summary>
     public const string CallActivity = "callActivity";
     public const string SubProcess = "subProcess";

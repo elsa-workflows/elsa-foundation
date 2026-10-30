@@ -5,7 +5,11 @@ using Elsa3.Models;
 
 namespace Elsa3.Activities.Design.Import.Services;
 
-public sealed class ReusableActivityCollectionAnalyzer : IReusableActivityCollectionAnalyzer
+/// <param name="triggers">
+/// Which flagged activities are triggers (spec 246 D-6, spec 248). Without it, every activity marked
+/// <c>canStartWorkflow</c> in a reusable workflow counts as a start trigger.
+/// </param>
+public sealed class ReusableActivityCollectionAnalyzer(IReusableActivityTriggerClassifier? triggers = null) : IReusableActivityCollectionAnalyzer
 {
     public ValueTask<ReusableActivityImportPlan> AnalyzeAsync(
         ReusableActivityImportCollection collection,
@@ -112,8 +116,14 @@ public sealed class ReusableActivityCollectionAnalyzer : IReusableActivityCollec
                         }));
                 }
 
-                if (isReusable && activity.CustomProperties?.CanStartWorkflow == true)
+                // On a non-trigger the flag only picks the flowchart's start node, which conversion keeps (spec 248).
+                var isTrigger = triggers?.IsTrigger(activity.Type);
+                if (isReusable && activity.CustomProperties?.CanStartWorkflow == true && isTrigger != false)
                 {
+                    // A type the classifier does not know may be a custom activity that is not a trigger.
+                    var unknownType = isTrigger is null
+                        ? $" If '{activity.Type}' is not a trigger, clear 'Can start workflow' on it instead, and check that the flowchart still starts where it should: Elsa 3 then starts at the first activity nothing leads into."
+                        : string.Empty;
                     directStarts.Add(new(activity.NodeId, activity.Type));
                     if (activity.Activities?.Count > 0 || activity.Connections?.Count > 0)
                     {
@@ -122,8 +132,21 @@ public sealed class ReusableActivityCollectionAnalyzer : IReusableActivityCollec
                             $"Direct-start activity '{activity.NodeId}' owns nested behavior that cannot be separated into the generated wrapper deterministically.",
                             source.Id,
                             path,
-                            guidance: "Refactor the Elsa 3 trigger into a leaf trigger before importing the reusable collection.",
+                            // A leaf trigger is refused too (UnsupportedStartTrigger), so the advice is the same: take the trigger out.
+                            guidance: "Move the trigger and the activities it owns into their own Elsa 3 workflow that calls the reusable workflow, then re-export the collection." + unknownType,
                             metadata: new Dictionary<string, string> { ["nodeId"] = activity.NodeId, ["isRoot"] = isRoot.ToString() }));
+                    }
+                    else
+                    {
+                        // Spec 246 D-6: the wrapper cannot start from the trigger and a graph activity body may not hold
+                        // one, so the reusable would not start the way it did in Elsa 3.
+                        itemDiagnostics.Add(Diagnostic(
+                            ReusableActivityImportDiagnosticCodes.UnsupportedStartTrigger,
+                            $"Reusable workflow '{source.DefinitionId}' version {source.Version} starts from trigger '{activity.NodeId}' ({activity.Type}). Elsa 4 cannot start a reusable activity from a trigger.",
+                            source.Id,
+                            path,
+                            guidance: "Move the trigger into its own Elsa 3 workflow that calls the reusable workflow, then re-export the collection." + unknownType,
+                            metadata: new Dictionary<string, string> { ["nodeId"] = activity.NodeId, ["activityType"] = activity.Type }));
                     }
                 }
 
@@ -140,7 +163,7 @@ public sealed class ReusableActivityCollectionAnalyzer : IReusableActivityCollec
                         $"Reusable workflow reference at node '{activity.NodeId}' could not be resolved to one exact reusable Elsa 3 workflow version.",
                         source.Id,
                         path,
-                        guidance: "Include the exact reusable target version in the analyzed collection and remove ambiguous or non-reusable references.",
+                        guidance: "Include the exact reusable target version in the analyzed collection. A workflow that is not usable as an activity cannot be used as one: call it with Dispatch Workflow or Execute Workflow instead. The import does not carry its outputs over (a captured Execute Workflow result is refused); a caller that uses an output reads it after import from the Elsa 4 Dispatch Workflow's Result, which holds the outputs when it waits for completion.",
                         metadata: ReferenceMetadata(activity, reference),
                         dependencySourceIdentity: reference.VersionId ?? reference.DefinitionId,
                         dependencyPathKind: reference.VersionId is null
@@ -222,10 +245,25 @@ public sealed class ReusableActivityCollectionAnalyzer : IReusableActivityCollec
         }
     }
 
+    /// <summary>
+    /// Built-in activities that start another workflow by its definition id. Their <c>workflowDefinitionId</c> is the
+    /// workflow they dispatch, not a reusable activity they run inline, so they convert as Dispatch Workflow and their
+    /// target may be a regular workflow (spec 246).
+    /// </summary>
+    private static readonly HashSet<string> DispatchTypes = new(StringComparer.Ordinal)
+    {
+        "Elsa.DispatchWorkflow",
+        "Elsa.ExecuteWorkflow",
+        "Elsa.BulkDispatchWorkflows"
+    };
+
     private static ReusableReference? ReadReference(
         Elsa3Activity activity,
         IReadOnlyDictionary<string, Elsa3WorkflowDefinition[]> reusableByDefinition)
     {
+        if (DispatchTypes.Contains(activity.Type))
+            return null;
+
         var exactVersionId = ReadString(activity.AdditionalProperties, "workflowDefinitionVersionId");
         var definitionId = ReadString(activity.AdditionalProperties, "workflowDefinitionId");
         if (!string.IsNullOrWhiteSpace(exactVersionId) || !string.IsNullOrWhiteSpace(definitionId))

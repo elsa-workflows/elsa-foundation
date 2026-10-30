@@ -14,7 +14,7 @@ namespace Elsa.Serialization.Core;
 /// accumulated contributions into this registry via <see cref="Register"/>. After startup,
 /// <see cref="Converters"/> is read directly.
 /// </summary>
-public sealed class JsonPayloadConverterRegistry
+internal sealed class JsonPayloadConverterRegistry
 {
     private readonly List<JsonConverter> _converters = new();
     private int _revision;

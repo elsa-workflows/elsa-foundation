@@ -15,6 +15,7 @@ import type {
   Elsa3MigrationDiagnostic,
   Elsa3ReusableImportAnalysisPage,
   Elsa3ReusableImportItem,
+  Elsa3ReusableImportPublication,
   Elsa3ReusableImportReceipt
 } from "../elsa3ReusableImportTypes";
 
@@ -296,6 +297,77 @@ describe("Elsa 3 reusable import workbench", () => {
     await waitFor(() => expect(container.textContent).toContain("guarantees that no partial Design documents were written"));
     expect(getElsa3ReusableImportReceipt).not.toHaveBeenCalled();
   });
+
+  it("shows a partly published apply as partly published, with publication state and conversion warnings", async () => {
+    const container = await applyReviewedImport(receipt("Applied", {
+      sources: [sourceReceipt("owner"), sourceReceipt("dependency")],
+      publications: [
+        publishedPublication("dependency-v1", "activity-dependency-v1"),
+        refusedPublication("owner-v1", "activity-owner-v1")
+      ],
+      warnings: [behaviourWarning()]
+    }));
+
+    await waitFor(() => expect(container.textContent).toContain("Partly published"));
+    expect(receiptOutcome(container)).toBe("Partly published");
+    expect(container.textContent).not.toContain("Import applied atomically. Every created or reused artifact is listed in the durable receipt.");
+    expect(container.textContent).not.toContain("None of the imported reusable versions were published.");
+    expect(container.textContent).toContain("1 of 2 imported reusable versions are published.");
+    expect(occurrences(container.textContent ?? "", "The commit is atomic; publishing is per version.")).toBe(1);
+    expect(occurrences(container.textContent ?? "", "To finish, re-upload the export and apply it under a new idempotency key.")).toBe(1);
+    expect(stickyApplyStatus(container)).toBeUndefined();
+    expect(container.querySelector('[data-status="Published"] strong')?.textContent).toBe("Published");
+    expect(container.querySelector('[data-status="Refused"] strong')?.textContent).toBe("Publishing refused");
+    expect(container.textContent).not.toContain("Publication Published");
+    expect(container.textContent).not.toContain("Publication Refused");
+    expect(container.querySelector('[data-status="Published"]')).not.toBeNull();
+    expect(container.querySelector('[data-status="Refused"]')).not.toBeNull();
+    expect(container.textContent).toContain("activity.version.bump-insufficient");
+    expect(container.textContent).toContain("Version 'activity-owner-v1' is below the published minimum.");
+    expect(container.textContent).toContain("Select the older version together with the newer versions in one apply, or leave it out.");
+    expect(container.textContent).toContain("Conversion warnings");
+    expect(container.textContent).toContain("ELS3-BEHAVIOUR-OUTCOME-UNREACHED");
+    expect(container.textContent).toContain("The declared outcome Escalated is never reached.");
+    expect(container.textContent).toContain("Review whether callers still need that Elsa 3 outcome.");
+  });
+
+  it("shows a receipt with no published versions as not published, not partly published", async () => {
+    const container = await applyReviewedImport(receipt("Applied", {
+      sources: [sourceReceipt("owner"), sourceReceipt("dependency")],
+      publications: [
+        refusedPublication("dependency-v1", "activity-dependency-v1"),
+        {
+          activityDefinitionVersionId: "activity-owner-v1",
+          sourceVersionId: "owner-v1",
+          status: "NotPublishedDependency",
+          errorCode: "ELS3-REUSABLE-DEPENDENCY-NOT-PUBLISHED",
+          blockedBy: "activity-dependency-v1",
+          diagnostics: [{
+            code: "ELS3-REUSABLE-DEPENDENCY-NOT-PUBLISHED",
+            message: "Version 'activity-owner-v1' was not published because the version it uses was not published.",
+            remediation: "Resolve the blocked dependency, then re-upload the export and apply it under a new idempotency key."
+          }]
+        }
+      ]
+    }));
+
+    await waitFor(() => expect(container.textContent).toContain("Not published"));
+    expect(receiptOutcome(container)).toBe("Not published");
+    expect(container.textContent).not.toContain("Partly published");
+    expect(container.textContent).toContain("None of the imported reusable versions were published.");
+    expect(container.textContent).not.toContain("are published");
+    expect(occurrences(container.textContent ?? "", "The commit is atomic; publishing is per version.")).toBe(1);
+    expect(occurrences(container.textContent ?? "", "To finish, re-upload the export and apply it under a new idempotency key.")).toBe(1);
+    expect(stickyApplyStatus(container)).toBeUndefined();
+    expect(container.querySelector('[data-status="Refused"] strong')?.textContent).toBe("Publishing refused");
+    expect(container.querySelector('[data-status="NotPublishedDependency"] strong')?.textContent)
+      .toBe("Not published: depends on an unpublished version");
+    expect(container.textContent).not.toContain("Publication Refused");
+    expect(container.textContent).not.toContain("Publication Not published");
+    expect(container.textContent).not.toContain("NotPublishedDependency");
+    expect(container.querySelector('[data-status="Refused"]')).not.toBeNull();
+    expect(container.querySelector('[data-status="NotPublishedDependency"]')).not.toBeNull();
+  });
 });
 
 function render(ui: React.ReactElement) {
@@ -421,7 +493,10 @@ function page(
   };
 }
 
-function receipt(status: "Applied" | "AlreadyImported"): Elsa3ReusableImportReceipt {
+function receipt(
+  status: "Applied" | "AlreadyImported",
+  extras: Partial<Elsa3ReusableImportReceipt> = {}
+): Elsa3ReusableImportReceipt {
   return {
     receiptId: "receipt",
     collectionHandle: "collection",
@@ -448,7 +523,8 @@ function receipt(status: "Applied" | "AlreadyImported"): Elsa3ReusableImportRece
       activityVersionDisposition: "Created",
       activityDefinitionNavigationIdentity: "/design/activities/definitions/activity-owner",
       activityVersionNavigationIdentity: "/design/activities/versions/activity-owner-v1"
-    }]
+    }],
+    ...extras
   };
 }
 
@@ -460,4 +536,98 @@ function uploadResult() {
     sourceVersionCount: 1,
     contentLength: 2
   };
+}
+
+async function applyReviewedImport(applied: Elsa3ReusableImportReceipt) {
+  const owner = item("owner", "owner-v1", {
+    isReusable: true,
+    activityDefinitionId: "activity-owner",
+    activityDefinitionVersionId: "activity-owner-v1"
+  });
+  const dependency = item("dependency", "dependency-v1", {
+    isReusable: true,
+    activityDefinitionId: "activity-dependency",
+    activityDefinitionVersionId: "activity-dependency-v1"
+  });
+  vi.mocked(analyzeElsa3ReusableCollection).mockResolvedValue(page([owner, dependency]));
+  vi.mocked(expandElsa3ReusableSelection).mockResolvedValue({
+    collectionHandle: "collection",
+    planId: "plan",
+    requestedSourceVersionIds: ["owner-v1"],
+    expandedSourceVersionIds: ["owner-v1", "dependency-v1"],
+    addedDependencySourceVersionIds: ["dependency-v1"],
+    isReady: true,
+    diagnostics: []
+  });
+  vi.mocked(applyElsa3ReusableImport).mockResolvedValue(applied);
+  const container = render(<Elsa3ReusableImportPage context={context} navigate={vi.fn()} />);
+  input(container, "Authorized collection handle", "collection");
+  click(button(container, "Analyze immutable collection"));
+  await waitFor(() => expect(container.textContent).toContain("owner-v1"));
+  click(checkbox(container, "Select owner exact source version 1"));
+  await waitFor(() => expect(container.textContent).toContain("Required dependency"));
+  click(button(container, "Review exact import"));
+  click(button(container, "Apply reviewed import"));
+  await waitFor(() => expect(container.textContent).toContain("Durable import receipt"));
+  return container;
+}
+
+function sourceReceipt(sourceDefinitionId: string): Elsa3ReusableImportReceipt["sources"][number] {
+  return {
+    sourceDefinitionId,
+    sourceVersionId: `${sourceDefinitionId}-v1`,
+    workflowDefinitionId: `wrapper-${sourceDefinitionId}`,
+    workflowVersionId: `wrapper-${sourceDefinitionId}-v1`,
+    workflowDisposition: "Created",
+    workflowNavigationIdentity: `/design/workflows/definitions/wrapper-${sourceDefinitionId}/versions/wrapper-${sourceDefinitionId}-v1`,
+    activityDefinitionId: `activity-${sourceDefinitionId}`,
+    activityDefinitionVersionId: `activity-${sourceDefinitionId}-v1`,
+    activityDefinitionDisposition: "Created",
+    activityVersionDisposition: "Created",
+    activityDefinitionNavigationIdentity: `/design/activities/definitions/activity-${sourceDefinitionId}`,
+    activityVersionNavigationIdentity: `/design/activities/versions/activity-${sourceDefinitionId}-v1`
+  };
+}
+
+function publishedPublication(sourceVersionId: string, activityDefinitionVersionId: string): Elsa3ReusableImportPublication {
+  return { activityDefinitionVersionId, sourceVersionId, status: "Published" };
+}
+
+function refusedPublication(sourceVersionId: string, activityDefinitionVersionId: string): Elsa3ReusableImportPublication {
+  return {
+    activityDefinitionVersionId,
+    sourceVersionId,
+    status: 2,
+    errorCode: "activity.version.bump-insufficient",
+    diagnostics: [{
+      code: "activity.version.bump-insufficient",
+      message: `Version '${activityDefinitionVersionId}' is below the published minimum.`,
+      remediation: "Select the older version together with the newer versions in one apply, or leave it out."
+    }]
+  };
+}
+
+function behaviourWarning(): Elsa3MigrationDiagnostic {
+  return {
+    severity: "Warning",
+    code: "ELS3-BEHAVIOUR-OUTCOME-UNREACHED",
+    message: "The declared outcome Escalated is never reached.",
+    guidance: "Review whether callers still need that Elsa 3 outcome.",
+    metadata: {},
+    pathSegments: [],
+    cycle: []
+  };
+}
+
+function receiptOutcome(container: HTMLElement) {
+  return container.querySelector("[data-receipt-outcome]")?.getAttribute("data-receipt-outcome") ?? null;
+}
+
+function stickyApplyStatus(container: HTMLElement) {
+  return [...container.querySelectorAll("div")].find(element =>
+    element.style.position === "sticky" && element.textContent?.includes("The commit is atomic"));
+}
+
+function occurrences(text: string, snippet: string) {
+  return text.split(snippet).length - 1;
 }

@@ -30,15 +30,14 @@ public sealed record IdentityProviderCapabilitiesResponse(
 
 /// <summary>
 /// A single catalogued permission projected for clients, including feature-contributed host-control
-/// permissions. <see cref="Implies"/> lets clients (such as the Studio management bridge) reason about
-/// coarse grants like <c>manage</c> implying <c>read</c>.
+/// permissions. The catalog carries no implications; the evaluator's one rule is that <c>manage</c> on a
+/// resource satisfies <c>read</c> on the same resource.
 /// </summary>
 public sealed record IdentityPermissionResponse(
     string Key,
     string DisplayName,
     string Category,
-    string Description,
-    IReadOnlyCollection<string> Implies);
+    string Description);
 
 public sealed record RefreshTokenRequest(string RefreshToken);
 

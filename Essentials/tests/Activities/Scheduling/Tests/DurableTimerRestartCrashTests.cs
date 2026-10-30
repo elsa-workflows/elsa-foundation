@@ -166,7 +166,6 @@ public sealed class DurableTimerRestartCrashTests
 
         public void Dispose()
         {
-            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
             foreach (var file in new[] { path, $"{path}-shm", $"{path}-wal" })
                 if (File.Exists(file))
                     File.Delete(file);
