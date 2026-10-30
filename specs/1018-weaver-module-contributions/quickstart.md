@@ -28,6 +28,8 @@ The browser configuration requires `ELSA_WEAVER_OWNED_URL`, `ELSA_WEAVER_WORKFLO
 
 Run affected build/lint/package checks required by changed projects and compare project/build evidence after the Core split; no blanket solution test run is implied. Source composition is candidate evidence. The independent package witness below remains a separate gate.
 
+Stop detaches the foreground conversation immediately; the next prompt creates a fresh server session. Earlier changes, receipts and rendered results remain available. A late acknowledgement still confirms its original invocation/session, without replaying its mutation or reopening the stopped conversation. When the turn ID has not arrived, only that detached stream may learn and cancel its original turn; it cannot overwrite a new session. Durable paused-turn cancellation/history and recovery remain M2 qualification work.
+
 ## Two positive journeys
 
 1. Open a workflow draft with an existing node in the owned composed host. Invoke the module prompt action with explicit attachment/source/correlation. Observe exact definition ID, draft revision, selected node and admitted attachment in context, with redacted/excluded content diagnosed.

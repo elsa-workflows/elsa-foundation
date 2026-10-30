@@ -9,6 +9,39 @@ import type { AgentStreamEvent } from "../../agent/agentTypes";
 import { WeaverSurface } from "../WeaverSurface";
 
 describe("WeaverSurface", () => {
+  it("starts a fresh conversation after Stop when the original accepted receipt leaves its session busy", async () => {
+    const fixture = await pendingConfirmationFixture(false);
+    fixture.client.createSession = vi.fn<AgentClient["createSession"]>(async () => ({ sessionId: "fresh-session", status: "active", contextAttachments: [] }));
+    fixture.client.sendMessage = vi.fn<AgentClient["sendMessage"]>(async session => {
+      if (session === "agt_1") throw new StudioHttpError(409, "The original paused session remains busy.");
+      return { messageId: "fresh-message", status: "pending", streamUrl: `/_elsa/agent/sessions/${session}/stream` };
+    });
+    try {
+      flushSync(() => buttonByText(fixture.container, "Stop")!.click()); await flushPromises();
+      fixture.resolveAcknowledgement(); await flushPromises();
+      expect(fixture.streams()).toBe(1); expect(fixture.container.querySelector('[data-status="executed"]')).toBeTruthy();
+      typeAndSend(fixture.container, "A fresh request"); await flushPromises();
+      expect(fixture.client.createSession).toHaveBeenCalledTimes(1);
+      expect(fixture.client.sendMessage).toHaveBeenCalledWith("fresh-session", expect.any(Object));
+      expect(fixture.client.acknowledgeClient).toHaveBeenCalledWith("agt_1", "i", expect.objectContaining({ outcome: "applied" }));
+      expect(fixture.mutate).toHaveBeenCalledTimes(1); expect(fixture.container.textContent).toContain("next prompt starts a new conversation");
+    } finally { fixture.unmount(); }
+  });
+
+  it("does not reattach a superseded createSession response after Stop and a fresh conversation", async () => {
+    const api = readyApi(); const client = readyClient(); let stale!: (value: Awaited<ReturnType<AgentClient["createSession"]>>) => void;
+    client.createSession = vi.fn<AgentClient["createSession"]>().mockImplementationOnce(() => new Promise(resolve => { stale = resolve; })).mockResolvedValue({ sessionId: "fresh-session", status: "active", contextAttachments: [] });
+    const subscribeStream = ((_context, _url, emit) => { emit({ type: "message-completed", messageId: "msg_1" }); return { close() {} }; }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+    const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/" }} variant="dock" client={client} subscribeStream={subscribeStream} />);
+    try {
+      await flushPromises(); typeAndSend(container, "First request"); await flushPromises(); flushSync(() => buttonByText(container, "Stop")!.click()); await flushPromises();
+      typeAndSend(container, "Second request"); await flushPromises();
+      stale({ sessionId: "stopped-session", status: "active", contextAttachments: [] }); await flushPromises();
+      typeAndSend(container, "Third request"); await flushPromises();
+      expect(client.createSession).toHaveBeenCalledTimes(2); expect(vi.mocked(client.sendMessage).mock.calls.map(([session]) => session)).toEqual(["fresh-session", "fresh-session"]);
+    } finally { unmount(); }
+  });
+
   it("retains a late automatic server receipt after Stop without reopening its cancelled turn", async () => {
     const api = readyApi(); const client = readyClient(); const invocation = preparedInvocation(api);
     invocation.executionLocation = "server"; invocation.client = null; invocation.requiresApproval = false;
@@ -200,11 +233,12 @@ describe("WeaverSurface", () => {
     unmount();
   });
 
-  it("does not re-subscribe a stream when stopped while the message is still sending", async () => {
+  it("does not let a stopped late duplicate message response finish a fresh conversation", async () => {
     const api = readyApi();
     const client = readyClient();
-    let resolveSend: ((value: { messageId: string; status: "pending"; streamUrl: string }) => void) | undefined;
-    client.sendMessage = vi.fn(() => new Promise(resolve => { resolveSend = resolve; })) as AgentClient["sendMessage"];
+    let resolveSend: ((value: Awaited<ReturnType<AgentClient["sendMessage"]>>) => void) | undefined;
+    client.createSession = vi.fn<AgentClient["createSession"]>().mockResolvedValueOnce({ sessionId: "stopped-session", status: "active", contextAttachments: [] }).mockResolvedValue({ sessionId: "fresh-session", status: "active", contextAttachments: [] });
+    client.sendMessage = vi.fn<AgentClient["sendMessage"]>().mockImplementationOnce(() => new Promise(resolve => { resolveSend = resolve; })).mockResolvedValue({ messageId: "fresh-message", status: "pending", streamUrl: "/_elsa/agent/sessions/fresh-session/stream" });
     const subscribeStream = vi.fn(() => ({ close: () => {} })) as unknown as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
 
     const { container, unmount } = render(
@@ -217,11 +251,13 @@ describe("WeaverSurface", () => {
 
     // The turn is parked awaiting sendMessage; stop, then let the send resolve.
     flushSync(() => container.querySelector<HTMLButtonElement>(".weaver-stop")?.click());
-    resolveSend?.({ messageId: "msg_1", status: "pending", streamUrl: "/_elsa/agent/sessions/agt_1/stream" });
+    typeAndSend(container, "Fresh request"); await flushPromises();
+    resolveSend?.({ messageId: "msg_1", status: "completed", streamUrl: "/_elsa/agent/sessions/stopped-session/stream", warnings: [{ code: "agent.message.duplicate", message: "Already completed." }] });
     await flushPromises();
 
-    expect(subscribeStream).not.toHaveBeenCalled();
-    expect(container.querySelector(".weaver-send")).toBeTruthy();
+    expect(subscribeStream).toHaveBeenCalledTimes(1);
+    expect(container.querySelector(".weaver-surface")?.getAttribute("aria-busy")).toBe("true");
+    expect(container.textContent).not.toContain("already accepted");
 
     unmount();
   });
@@ -229,6 +265,7 @@ describe("WeaverSurface", () => {
   it("cancels the turn server-side when stopped before the turn id is known", async () => {
     const api = readyApi();
     const client = readyClient();
+    client.createSession = vi.fn<AgentClient["createSession"]>().mockResolvedValueOnce({ sessionId: "stopped-session", status: "active", contextAttachments: [] }).mockResolvedValue({ sessionId: "fresh-session", status: "active", contextAttachments: [] });
     let emit: ((event: AgentStreamEvent) => void) | undefined;
     const subscribeStream = ((_ctx, _url, onEvent) => { emit = onEvent; return { close: () => {} }; }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
 
@@ -242,10 +279,15 @@ describe("WeaverSurface", () => {
 
     // Stream is open but no turn-started yet: stop, then let the turn identify itself.
     flushSync(() => container.querySelector<HTMLButtonElement>(".weaver-stop")?.click());
-    flushSync(() => emit?.({ type: "turn-started", turnId: "turn_9", maxSteps: 8 }));
+    const stoppedEmit = emit;
+    typeAndSend(container, "A fresh request"); await flushPromises();
+    flushSync(() => stoppedEmit?.({ type: "turn-started", turnId: "turn_9", maxSteps: 8 }));
+    flushSync(() => stoppedEmit?.({ type: "message-completed", messageId: "stopped-message" }));
     await flushPromises();
 
-    expect(client.cancelTurn).toHaveBeenCalledWith("agt_1", "turn_9");
+    expect(client.cancelTurn).toHaveBeenCalledWith("stopped-session", "turn_9");
+    expect(client.cancelTurn).not.toHaveBeenCalledWith("fresh-session", "turn_9");
+    expect(container.querySelector(".weaver-surface")?.getAttribute("aria-busy")).toBe("true");
 
     unmount();
   });

@@ -195,6 +195,46 @@ test("a dropped real accepted acknowledgement response retries its exact receipt
   } finally { await page.unroute("**/client-invocations/*/acknowledgements"); }
 });
 
+test("Stop detaches a paused accepted-ACK conversation and the next prompt uses a fresh server session", async ({ page }, testInfo) => {
+  await page.goto(`/workflows/definitions?definition=${encodeURIComponent(definitionId!)}`);
+  const node = page.locator(`.react-flow__node[data-id="${nodeId}"]`); await expect(node).toBeVisible();
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const before = await readDefinition(page.request); const priorPosition = await node.getAttribute("style");
+  let release!: () => void, arrived!: () => void, accepted: unknown, executions = 0;
+  const held = new Promise<void>(resolve => { arrived = resolve; }); const released = new Promise<void>(resolve => { release = resolve; });
+  const streamURLs: string[] = [];
+  page.on("request", request => { if (request.method() === "POST" && request.url().endsWith("/execute")) executions++; if (request.method() === "GET" && request.url().endsWith("/stream")) streamURLs.push(request.url()); });
+  await page.route("**/client-invocations/*/acknowledgements", async route => {
+    const original = await route.fetch(); expect(original.ok()).toBe(true); accepted = await original.json();
+    expect(accepted).toMatchObject({ data: { executed: true, toolResult: { succeeded: true } } });
+    arrived(); await released; await route.fulfill({ response: original });
+  });
+  try {
+    await page.getByRole("button", { name: /^Weaver/ }).click(); const dock = page.getByRole("region", { name: "Weaver assistant" });
+    await dock.getByLabel("Ask Weaver").fill(JSON.stringify({ toolName: "workflow_set_designer_position", arguments: { activityId: nodeId, x: 480, y: 320 } }));
+    const originalMessage = page.waitForResponse(response => response.url().endsWith("/messages") && response.request().method() === "POST");
+    await dock.getByRole("button", { name: "Send message" }).click(); const first = await originalMessage; expect(first.ok()).toBe(true);
+    const proposal = dock.locator(".agent-proposal").first(); await expect(proposal).toHaveAttribute("data-status", "awaiting-approval"); await approveReviewed(page, proposal);
+    const confirmed = page.waitForResponse(response => response.url().endsWith("/acknowledgements") && response.request().method() === "POST");
+    await proposal.getByRole("button", { name: "Apply", exact: true }).click(); await held;
+    await expect(node).toHaveAttribute("style", /translate\(480px, 320px\)/);
+    const cancel = page.waitForResponse(response => response.url().endsWith("/cancel") && response.request().method() === "POST");
+    await dock.getByRole("button", { name: "Stop Weaver", exact: true }).click(); const cancellation = await cancel; expect(cancellation.ok()).toBe(true);
+    const cancelBody = await cancellation.json(); expect(cancelBody.data.cancelled).toBe(false);
+    release(); expect((await confirmed).ok()).toBe(true); await expect(proposal).toHaveAttribute("data-status", "executed");
+    await expect(dock).toContainText("next prompt starts a new conversation"); await expect(dock.getByLabel("Ask Weaver")).toBeEnabled();
+    const next = page.waitForResponse(response => response.url().endsWith("/messages") && response.request().method() === "POST");
+    await dock.getByLabel("Ask Weaver").fill("Summarize the current context without changing it."); await dock.getByRole("button", { name: "Send message" }).click();
+    const fresh = await next; expect(fresh.ok()).toBe(true); expect(fresh.url()).not.toBe(first.url()); await expect(dock).toHaveAttribute("aria-busy", "false");
+    expect(streamURLs.filter(url => url === first.url().replace(/\/messages$/, "/stream"))).toHaveLength(1); expect(executions).toBe(1);
+    expect((await readDefinition(page.request)).draft).toEqual(before.draft);
+    const screenshot = testInfo.outputPath("stop-fresh-conversation-with-prior-receipt.png"); await page.screenshot({ path: screenshot, fullPage: true });
+    await testInfo.attach("stop-fresh-conversation-with-prior-receipt", { path: screenshot, contentType: "image/png" });
+    await proposal.getByRole("button", { name: "Undo whole change" }).click(); await expect(node).toHaveAttribute("style", priorPosition!);
+    await testInfo.attach("stopped-conversation-detachment", { body: JSON.stringify({ controlledRealResponseDelay: true, accepted, cancelBody, oldMessagesURL: first.url(), newMessagesURL: fresh.url(), streamURLs, executions, persistedDraftUnchanged: true, wholeUndoRestored: true }, null, 2), contentType: "application/json" });
+  } finally { release(); await page.unroute("**/client-invocations/*/acknowledgements"); }
+});
+
 test("genuine expiry before and after approval drains both retained outcomes without effects", async ({ page, context }, testInfo) => {
   test.setTimeout(8 * 60_000);
   const before = await readNote(page.request);

@@ -107,9 +107,8 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
   // Bumped whenever a turn starts or is stopped, so an in-flight startTurn can detect that it was
   // superseded/cancelled during one of its awaits and bail out before re-subscribing a stream.
   const turnGenerationRef = useRef(0);
-  // Set when Stop is pressed after the stream is open but before 'turn-started' reveals the turn id.
-  // The stream is kept open just long enough to learn the id and cancel the turn server-side.
-  const stopRequestedRef = useRef(false);
+  // A stream stopped before its turn id arrives retains only its original cancellation observer.
+  const detachedStreamsRef = useRef(new Set<AgentStreamSubscription>());
   const sessionIdRef = useRef<string | null>(null);
   const streamRef = useRef<AgentStreamSubscription | null>(null);
   const pendingProposalIdsRef = useRef(new Set<string>());
@@ -168,7 +167,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     return () => { disposed = true; };
   }, [agentClient, api]);
 
-  const ensureSession = useCallback(async (collected: StudioAgentContextAttachment[]) => {
+  const ensureSession = useCallback(async (collected: StudioAgentContextAttachment[], generation: number) => {
     if (sessionIdRef.current) return sessionIdRef.current;
     const response = await agentClient.createSession({
       mode,
@@ -176,29 +175,15 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       activeSurface: surface,
       clientContext: { studioVersion: api.host.hostVersion, sdkVersion: api.host.sdkVersion, moduleIds: [] }
     });
-    sessionIdRef.current = response.sessionId;
-    setSessionId(response.sessionId);
-    setAttachments(mergeAttachments(collected, response.contextAttachments));
+    if (generation === turnGenerationRef.current) {
+      sessionIdRef.current = response.sessionId;
+      setSessionId(response.sessionId);
+      setAttachments(mergeAttachments(collected, response.contextAttachments));
+    }
     return response.sessionId;
   }, [agentClient, api.host.hostVersion, api.host.sdkVersion, mode, surface]);
 
   const handleStreamEvent = useCallback((event: AgentStreamEvent) => {
-    if (stopRequestedRef.current) {
-      // Stopped before we knew the turn id: cancel the turn as soon as it identifies itself,
-      // tear down on any terminal event, and drop everything else so no content keeps streaming.
-      if (event.type === "turn-started") {
-        stopRequestedRef.current = false;
-        turnIdRef.current = event.turnId;
-        if (sessionIdRef.current) void agentClient.cancelTurn(sessionIdRef.current, event.turnId).catch(() => undefined);
-        streamRef.current?.close();
-        streamRef.current = null;
-      } else if (event.type === "message-completed" || event.type === "turn-cancelled" || event.type === "error") {
-        stopRequestedRef.current = false;
-        streamRef.current?.close();
-        streamRef.current = null;
-      }
-      return;
-    }
 
     switch (event.type) {
       case "module-result":
@@ -297,15 +282,33 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     const controllers = clientControllersRef.current;
     const confirmations = clientConfirmationsRef.current;
     const generation = turnGenerationRef;
+    const detached = detachedStreamsRef.current;
     return () => {
       const uncertain = controllers.size > 0 || [...confirmations.values()].some(item => item.generation === generation.current);
       mountedRef.current = false;
       generation.current++;
       streamRef.current?.close(); turnAbortRef.current?.abort();
+      for (const stream of detached) stream.close(); detached.clear();
       for (const controller of controllers) controller.abort();
       publishTurnResult("failed", uncertain ? "The assistant closed before confirmation; the observed change may already have been applied." : "The assistant closed before completing the request.");
     };
   }, [publishTurnResult]);
+
+  const subscribeToTurn = useCallback((session: string, url: string, generation: number, messageId: string | undefined, requestId: string | null) => {
+    const closeDetached = () => { if (subscription) { subscription.close(); detachedStreamsRef.current.delete(subscription); } };
+    const subscription = subscribeStream(api.backend, url, event => {
+      if (generation !== turnGenerationRef.current) {
+        if (event.type === "turn-started") { void agentClient.cancelTurn(session, event.turnId).catch(() => undefined); closeDetached(); }
+        else if (event.type === "message-completed" || event.type === "turn-cancelled" || event.type === "error") closeDetached();
+        return;
+      }
+      handleStreamEvent(event);
+    }, error => {
+      if (generation !== turnGenerationRef.current) { closeDetached(); return; }
+      setError(getAgentErrorMessage(error)); publishTurnResult("failed", "", requestId); finishTurn();
+    }, { defaultMessageId: messageId });
+    return subscription;
+  }, [agentClient, api.backend, handleStreamEvent, publishTurnResult, subscribeStream]);
 
   const startTurn = useCallback(async (request: StudioAgentPromptRequest) => {
     const { message, requestId } = request;
@@ -313,7 +316,6 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     const generation = ++turnGenerationRef.current;
     turnAbortRef.current?.abort();
     const turnAbort = new AbortController(); turnAbortRef.current = turnAbort;
-    stopRequestedRef.current = false;
     turnRequestIdRef.current = requestId ?? null;
     setChatState("streaming");
     setError(null);
@@ -333,25 +335,20 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       const collected = collection.attachments;
       if (turnGenerationRef.current !== generation) return settle("cancelled");
       setAttachments(collected);
-      const activeSessionId = await ensureSession(collected);
+      const activeSessionId = await ensureSession(collected, generation);
       if (turnGenerationRef.current !== generation) return settle("cancelled");
       const response = await agentClient.sendMessage(activeSessionId, { message, mode, contextAttachments: collected, capabilityId: capabilities[0]?.id, requestId: deliveryId, source: request.source, promptMode: request.mode });
+      // A stopped/superseded response cannot mutate or finish the current conversation.
+      if (turnGenerationRef.current !== generation) return settle("cancelled");
       if (response.warnings?.length) setContextDiagnostics(current => [...current, ...response.warnings!.filter(item => item.code !== "agent.message.duplicate").map(item => ({ contributorId: item.target ?? "agent", code: item.code, message: item.message, required: false }))]);
       if (response.status !== "pending" && response.warnings?.some(item => item.code === "agent.message.duplicate")) {
         setError("This delivery was already accepted; it will not run again. Review the existing session outcome.");
         settle("failed"); finishTurn(); return;
       }
-      // The user stopped (or started another turn) while we were awaiting; do not re-open a stream.
-      if (turnGenerationRef.current !== generation) return settle("cancelled");
       setMessages(current => [...current, { id: response.messageId, role: "assistant", content: ASSISTANT_PLACEHOLDER, status: "streaming" }]);
       turnMessageIdRef.current = response.messageId;
       streamRef.current?.close();
-      streamRef.current = subscribeStream(
-        api.backend,
-        response.streamUrl,
-        handleStreamEvent,
-        streamError => { setError(getAgentErrorMessage(streamError)); publishTurnResult("failed", ""); finishTurn(); },
-        { defaultMessageId: response.messageId });
+      streamRef.current = subscribeToTurn(activeSessionId, response.streamUrl, generation, response.messageId, requestId ?? null);
     } catch (e) {
       if (turnGenerationRef.current !== generation) return settle("cancelled");
       settle("failed");
@@ -359,7 +356,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       setMessages(current => [...current, { id: `error-${current.length}`, role: "error", content: getAgentErrorMessage(e), status: "failed" }]);
       finishTurn();
     }
-  }, [agentClient, api, capabilities, ensureSession, handleStreamEvent, mode, publishTurnResult, subscribeStream, surface]);
+  }, [agentClient, api, capabilities, ensureSession, mode, publishTurnResult, subscribeToTurn, surface]);
 
   const steer = useCallback(async (message: string) => {
     const id = `followup-${Date.now()}-${Math.random()}`;
@@ -401,20 +398,13 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     for (const controller of clientControllersRef.current) controller.abort();
     const sessionId = sessionIdRef.current;
     const turnId = turnIdRef.current;
-    if (sessionId && turnId) {
-      void agentClient.cancelTurn(sessionId, turnId).catch(() => undefined);
-      streamRef.current?.close();
-      streamRef.current = null;
-    } else if (sessionId && streamRef.current) {
-      // The stream is open but 'turn-started' hasn't arrived yet, so we don't know the turn id.
-      // Keep listening until it does (handleStreamEvent cancels + tears down) instead of closing
-      // blind and leaving the backend turn running.
-      stopRequestedRef.current = true;
-    } else {
-      streamRef.current?.close();
-      streamRef.current = null;
-    }
-    setMessages(current => current.map(message => message.status === "streaming" ? { ...message, status: "cancelled" } : message));
+    const stoppedStream = streamRef.current;
+    // Stop detaches this foreground conversation before any new prompt may start.
+    sessionIdRef.current = null; setSessionId(null); streamRef.current = null;
+    if (sessionId && turnId) { void agentClient.cancelTurn(sessionId, turnId).catch(() => undefined); stoppedStream?.close(); }
+    else if (sessionId && stoppedStream) detachedStreamsRef.current.add(stoppedStream);
+    else stoppedStream?.close();
+    setMessages(current => [...current.map(message => message.status === "streaming" ? { ...message, status: "cancelled" as const } : message), { id: `stopped-${turnGenerationRef.current}`, role: "progress", content: "Stopped this conversation. Your next prompt starts a new conversation; prior changes and receipts remain available.", status: "completed" }]);
     publishTurnResult("cancelled", "");
     finishTurn();
     setProposals(current => current.map(proposal => clientConfirmationsRef.current.has(proposal.id) ? { ...proposal, status: "uncertain", error: "Stopped waiting for confirmation. The observed change may already have been applied; retry only confirms its receipt." } : proposal));
@@ -448,12 +438,8 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     streamRef.current?.close();
     setChatState("streaming");
     setMessages(current => current.map(message => message.id === messageId && message.status === "pending" ? { ...message, status: "streaming", content: ASSISTANT_PLACEHOLDER } : message));
-    streamRef.current = subscribeStream(api.backend, `/_elsa/agent/sessions/${encodeURIComponent(session)}/stream`, handleStreamEvent,
-      streamError => {
-        if (generation !== turnGenerationRef.current) return;
-        setError(getAgentErrorMessage(streamError)); publishTurnResult("failed", "", requestId); finishTurn();
-      }, { defaultMessageId: messageId ?? undefined });
-  }, [api.backend, handleStreamEvent, publishTurnResult, subscribeStream]);
+    streamRef.current = subscribeToTurn(session, `/_elsa/agent/sessions/${encodeURIComponent(session)}/stream`, generation, messageId ?? undefined, requestId);
+  }, [subscribeToTurn]);
 
   const runReviewedDecision = useCallback(async (action: "approveProposal" | "denyProposal" | "executeProposal", proposalId: string, revision: string | undefined, prepared?: AgentActionProposal["preparedInvocation"]) => {
     const generation = turnGenerationRef.current;
