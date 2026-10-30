@@ -5,7 +5,7 @@ const outputDir = process.env.ELSA_WEAVER_OWNED_ARTIFACTS ?? "../../../test-resu
 if (!baseURL) throw new Error("Set ELSA_WEAVER_OWNED_URL to the explicitly owned qualification host; this suite never starts or changes a host.");
 for (const ownedURL of [baseURL, process.env.ELSA_WEAVER_OWNED_BACKEND_URL ?? baseURL]) {
   const address = new URL(ownedURL);
-  if (!["localhost", "127.0.0.1", "[::1]"].includes(address.hostname) || ["7030", "7243"].includes(address.port)) {
+  if (!["localhost", "127.0.0.1", "[::1]"].includes(address.hostname) || ["5089", "5095", "7030", "7243"].includes(address.port)) {
     throw new Error("Weaver composed qualification requires separate owned local ports, not developer hosts.");
   }
 }

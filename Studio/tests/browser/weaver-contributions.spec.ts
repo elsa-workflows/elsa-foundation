@@ -1,4 +1,5 @@
-import { expect, test, type APIRequestContext } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
+import { autosaveDelayMs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/constants";
 
 const definitionId = process.env.ELSA_WEAVER_WORKFLOW_ID;
 const nodeId = process.env.ELSA_WEAVER_ACTIVITY_ID;
@@ -66,6 +67,143 @@ test("real composed Studio reviews a native layout edit, observes working state 
   expect((await readDefinition(request)).draft).toEqual(before.draft);
   await testInfo.attach("observed-native-receipt", { body: JSON.stringify({ contextTarget: body.contextAttachments.find((item: { contentType: string }) => item.contentType === "workflow.definition").target, observation }, null, 2), contentType: "application/json" });
 });
+
+test("a stale server proposal shows its terminal refusal and drains without another owning write", async ({ page, context }, testInfo) => {
+  const before = await readNote(page.request);
+  const stale = await prepareNote(page, `Stale proposal ${Date.now()}`);
+  await approveReviewed(page, stale.proposal);
+  const other = await context.newPage();
+  try {
+    const winner = await prepareNote(other, `Winning proposal ${Date.now()}`);
+    await approveReviewed(other, winner.proposal);
+    const winnerExecution = other.waitForResponse(response => response.url().endsWith("/execute") && response.request().method() === "POST");
+    await winner.proposal.getByRole("button", { name: "Apply", exact: true }).click();
+    expect((await winnerExecution).ok()).toBe(true);
+    await expect(winner.proposal).toHaveAttribute("data-status", "executed");
+    const changed = await readNote(page.request);
+    expect(changed.writeCount).toBe(before.writeCount + 1);
+    const refused = page.waitForResponse(response => response.url().endsWith("/execute") && response.request().method() === "POST");
+    await stale.proposal.getByRole("button", { name: "Apply", exact: true }).click();
+    const response = await refused; expect(response.status()).toBe(409);
+    const terminal = await response.json();
+    expect(terminal.data).toMatchObject({ executed: false, status: "failed", toolResult: { succeeded: false } });
+    await expect(stale.proposal).toHaveAttribute("data-status", "failed");
+    await expect(stale.dock.getByLabel("Ask Weaver")).toBeEnabled();
+    await expect(stale.dock).toHaveAttribute("aria-busy", "false");
+    expect(await readNote(page.request)).toEqual(changed);
+    const screenshot = testInfo.outputPath("stale-owner-refusal.png");
+    await page.screenshot({ path: screenshot, fullPage: true });
+    await testInfo.attach("stale-owner-refusal", { path: screenshot, contentType: "image/png" });
+    await testInfo.attach("stale-owner-readback", { body: JSON.stringify({ before, changed, terminal, final: await readNote(page.request) }, null, 2), contentType: "application/json" });
+  } finally { await other.close(); }
+});
+
+test("a real Save A response delayed until after native Weaver B cannot release B to autosave or remove Undo", async ({ page }, testInfo) => {
+  await page.goto(`/workflows/definitions?definition=${encodeURIComponent(definitionId!)}`);
+  const node = page.locator(`.react-flow__node[data-id="${nodeId}"]`);
+  await expect(node).toBeVisible();
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const baseline = await readDefinition(page.request); const priorPosition = await node.getAttribute("style");
+  const capabilities = await (await page.request.get(backendPath("/capabilities"))).json();
+  const draftLink = capabilities.capabilities.find((item: { id: string }) => item.id === "elsa.api.workflow-design")
+    ?.links.find((item: { rel: string }) => item.rel === "workflow-drafts")?.href;
+  expect(draftLink).toBeTruthy();
+  const saveURL = backendPath(draftLink.replace("{draftId}", encodeURIComponent(baseline.draft.id)));
+  let release!: () => void, arrived!: () => void, delayed = false;
+  const releaseResponse = new Promise<void>(resolve => { release = resolve; });
+  const actualSaveReachedOwner = new Promise<void>(resolve => { arrived = resolve; });
+  const writes: unknown[] = [];
+  page.on("request", request => { if (request.url() === saveURL && request.method() === "PUT") writes.push(request.postDataJSON()); });
+  // Controlled real-response delay: route.fetch performs the actual owning backend IO. The exact
+  // original response is fulfilled later; no payload, status, tool result or backend is fabricated.
+  await page.route(saveURL, async route => {
+    if (route.request().method() !== "PUT" || delayed) { await route.continue(); return; }
+    delayed = true;
+    const original = await route.fetch(); expect(original.ok()).toBe(true); arrived();
+    await releaseResponse; await route.fulfill({ response: original });
+  });
+  try {
+    const savedResponse = page.waitForResponse(response => response.url() === saveURL && response.request().method() === "PUT");
+    await page.getByRole("button", { name: "Save", exact: true }).click(); await actualSaveReachedOwner;
+    const persistedA = await readDefinition(page.request);
+    await page.getByRole("button", { name: /^Weaver/ }).click();
+    const dock = page.getByRole("region", { name: "Weaver assistant" });
+    await dock.getByLabel("Ask Weaver").fill(JSON.stringify({ toolName: "workflow_set_designer_position", arguments: { activityId: nodeId, x: 480, y: 320 } }));
+    await dock.getByRole("button", { name: "Send message" }).click();
+    const proposal = dock.locator(".agent-proposal").first();
+    await expect(proposal).toHaveAttribute("data-status", "awaiting-approval"); await approveReviewed(page, proposal);
+    const acknowledged = page.waitForResponse(response => response.url().endsWith("/acknowledgements") && response.request().method() === "POST");
+    await proposal.getByRole("button", { name: "Apply", exact: true }).click();
+    const observation = await acknowledged; expect(observation.ok()).toBe(true);
+    await expect(proposal).toHaveAttribute("data-status", "executed");
+    await expect(node).toHaveAttribute("style", /translate\(480px, 320px\)/);
+    expect(await readDefinition(page.request)).toEqual(persistedA);
+    release(); expect((await savedResponse).ok()).toBe(true);
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
+    // Observe more than two actual configured debounce periods; an erroneous released hold writes B.
+    await page.waitForTimeout(autosaveDelayMs * 2 + 200);
+    expect(writes).toHaveLength(1); expect((await readDefinition(page.request)).draft).toEqual(persistedA.draft);
+    const undo = proposal.getByRole("button", { name: "Undo whole change" }); await expect(undo).toBeEnabled();
+    const screenshot = testInfo.outputPath("real-save-response-delay-held-b.png");
+    await page.screenshot({ path: screenshot, fullPage: true });
+    await testInfo.attach("real-save-response-delay-held-b", { path: screenshot, contentType: "image/png" });
+    await undo.click(); await expect(node).toHaveAttribute("style", priorPosition!);
+    expect((await readDefinition(page.request)).draft).toEqual(persistedA.draft);
+    await testInfo.attach("controlled-real-save-response-delay", { body: JSON.stringify({ controlledRealResponseDelay: true, saveURL, writes: writes.length, persistedLayoutA: persistedA.draft.layout, acknowledged: observation.request().postDataJSON(), wholeUndoRestoredLayoutA: true }, null, 2), contentType: "application/json" });
+  } finally { release(); await page.unroute(saveURL); }
+});
+
+test("genuine approved-proposal expiry refuses without effects, drains and accepts a new prompt", async ({ page }, testInfo) => {
+  test.setTimeout(8 * 60_000);
+  const before = await readNote(page.request);
+  const prepared = await prepareNote(page, `Must never persist after expiry ${Date.now()}`);
+  const approved = await approveReviewed(page, prepared.proposal);
+  const expiresAt = Date.parse(approved.data.preparedInvocation.expiresAt);
+  expect(Number.isFinite(expiresAt)).toBe(true);
+  const waitMs = Math.max(0, expiresAt - Date.now() + 1000);
+  expect(waitMs).toBeLessThan(6 * 60_000);
+  const waitingStartedAt = new Date().toISOString();
+  // Real wall clock only: no fake clock, clock endpoint, altered proposal or accelerated lifetime.
+  await page.waitForTimeout(waitMs);
+  const expired = page.waitForResponse(response => response.url().endsWith("/execute") && response.request().method() === "POST");
+  await prepared.proposal.getByRole("button", { name: "Apply", exact: true }).click();
+  const response = await expired; expect(response.status()).toBe(409);
+  const terminal = await response.json(); expect(terminal.data).toMatchObject({ status: "expired", executed: false, toolResult: null });
+  await expect(prepared.proposal).toHaveAttribute("data-status", "expired");
+  await expect(prepared.dock.getByLabel("Ask Weaver")).toBeEnabled();
+  const next = page.waitForResponse(response => response.url() === prepared.messagesURL && response.request().method() === "POST");
+  await prepared.dock.getByLabel("Ask Weaver").fill("Summarize the admitted note context without changing it.");
+  await prepared.dock.getByRole("button", { name: "Send message" }).click(); expect((await next).ok()).toBe(true);
+  await expect(prepared.dock).toHaveAttribute("aria-busy", "false");
+  expect(await readNote(page.request)).toEqual(before);
+  const screenshot = testInfo.outputPath("genuine-expiry-refusal-and-recovery.png");
+  await page.screenshot({ path: screenshot, fullPage: true });
+  await testInfo.attach("genuine-expiry-refusal-and-recovery", { path: screenshot, contentType: "image/png" });
+  await testInfo.attach("genuine-expiry-no-effect", { body: JSON.stringify({ waitingStartedAt, approvedExpiresAt: approved.data.preparedInvocation.expiresAt, waitMs, actualAttemptAt: new Date().toISOString(), terminal, before, after: await readNote(page.request), sameSessionMessagesURL: prepared.messagesURL }, null, 2), contentType: "application/json" });
+});
+
+async function readNote(request: APIRequestContext) {
+  const response = await request.get(backendPath("/_qualification/weaver/note")); expect(response.ok()).toBe(true);
+  return response.json();
+}
+
+async function prepareNote(page: Page, value: string) {
+  await page.goto("/qualification/weaver-note"); await expect(page.getByTestId("note-value")).toBeVisible();
+  await page.getByLabel("New note value").fill(value);
+  const sent = page.waitForResponse(response => response.url().includes("/_elsa/agent/sessions/") && response.url().endsWith("/messages") && response.request().method() === "POST");
+  await page.getByRole("button", { name: "Review note change", exact: true }).click();
+  const response = await sent; expect(response.ok()).toBe(true);
+  const dock = page.getByRole("region", { name: "Weaver assistant" }); const proposal = dock.locator(".agent-proposal").first();
+  await expect(proposal).toHaveAttribute("data-status", "awaiting-approval");
+  return { dock, proposal, messagesURL: response.url() };
+}
+
+async function approveReviewed(page: Page, proposal: Locator) {
+  const decision = page.waitForResponse(response => response.url().endsWith("/approve") && response.request().method() === "POST");
+  await proposal.getByRole("button", { name: "Approve", exact: true }).click();
+  const response = await decision; expect(response.ok()).toBe(true);
+  await expect(proposal).toHaveAttribute("data-status", "approved"); return response.json();
+}
 
 test("an unrelated module contributes context, review and a persisted owner-observed effect without shared domain branches", async ({ page }, testInfo) => {
   const value = `Reviewed qualification note ${Date.now()}`;
