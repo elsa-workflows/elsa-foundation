@@ -71,6 +71,8 @@ function renderPanel(
   } = {}
 ) {
   const container = document.createElement("div");
+  // Embedded authoring surfaces supply a scoped token root that also owns their overlays.
+  container.className = "wf-tokens";
   document.body.appendChild(container);
   const root = createRoot(container);
   const descriptor: StudioActivityDescriptor = {

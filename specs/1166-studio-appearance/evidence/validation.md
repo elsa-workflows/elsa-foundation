@@ -48,3 +48,15 @@ Owner feedback identified the competing back label, uppercase Draft eyebrow, tit
 - The owned preview on port7031 was rebuilt and restarted. A fresh signed-in browser opened the owner's exact draft on the real backend without network or page errors; its title and `Draft · Saved` status were inspected. Only the owned preview was restarted. [Actual live header, Classic Dim](activity-draft-header-dim.png).
 
 Independent review of the updated head and its hosted checks are tracked on PR #3449. The separate baseline test-host repair remains PR #3460; pending gates are not reported as passed.
+
+## Expanded property editor stacking follow-up
+
+The expanded property editor was rendered inside its inspector row. In Focus Canvas the inspector is a stacking context below the resize handles, so the dialog's existing z-index could not place it above those handles. The dialog now portals to the nearest resource token/page root, preserving React state and scoped theme variables while escaping the inspector's stacking and containment. Standalone panels fall back to their owner document's body. No z-index was increased.
+
+- A rendered Activity Definition / Focus regression fails before the portal repair: `elementFromPoint` reaches a resize handle within the dialog's rectangle. All eight new workflow/activity × legacy/Quiet/Focus/Open cases pass afterward. They verify handle interception by the dialog or scrim, theme-colored background, Escape/Close behavior and edited expression persistence across reopening.
+- The complete adaptive-panel, expression-code-intelligence and dictionary browser specs pass: 27/27, no skips. The complete Workflows unit suite passes 2,673/2,673 across 197 files. Existing standalone test queries now follow the portaled dialog; the property-group fixture supplies the same scoped token root as an embedded resource. Value, validation and masked-input assertions were retained.
+- Full workspace typecheck and lint, production build and unchanged bundle budgets, .NET host build, architecture 592/592 and generated-map check pass.
+- The owned preview at port 7031 was rebuilt. A fresh signed-in browser opened the owner's actual While / Condition dialog in Focus Canvas: both resize-handle positions hit the dialog or its scrim, with no page/network errors. No expression was edited in that live verification.
+- [Rendered Focus Canvas property editor fixture](activity-property-overlay-focus.png). The committed capture uses synthetic fixture data; the live check retains no authored expression in published evidence.
+
+The initial unhandled-Escape probe was corrected to focus the dialog's Close button before pressing Escape: the code editor intentionally consumes its own Escape shortcut. Eight older unit queries initially assumed that expanded content stayed within the property row's render container; they were reconciled to the scoped overlay owner without changing their behavioral assertions. Independent review and exact-head CI results are recorded on PR #3449.

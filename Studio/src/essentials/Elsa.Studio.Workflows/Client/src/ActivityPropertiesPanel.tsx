@@ -1,4 +1,5 @@
 import { type KeyboardEvent as ReactKeyboardEvent, memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Braces, Cable, Code2, KeyRound, Maximize2, SlidersHorizontal, Type, X, type LucideIcon } from "lucide-react";
 import { AdvancedSection, AnchoredPopover } from "@elsa-workflows/studio-ui";
 import {
@@ -1112,7 +1113,8 @@ function PropertyRow({
       {provider && dynamicOptions.status === "ready" && dynamicOptions.options.length === 0 ? (
         <p className="wf-property-options-status" role="status">No options available.</p>
       ) : null}
-      {expanded ? (
+      {/* Escape panel stacking/containment while retaining the resource's scoped theme tokens. */}
+      {expanded && rowRef.current ? createPortal(
         <ExpandedPropertyEditor
           input={input}
           dictionarySessionScope={dictionarySessionScope}
@@ -1135,7 +1137,8 @@ function PropertyRow({
           onConversionChange={next => onChange(writeInputValue(activity, input, next), input)}
           onSyntaxChange={setSyntax}
           onClose={closeExpanded}
-        />
+        />,
+        rowRef.current.closest(".wf-tokens, .wf-editor, .wf-page") ?? rowRef.current.ownerDocument.body
       ) : null}
     </div>
   );
