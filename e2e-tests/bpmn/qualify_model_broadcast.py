@@ -6,11 +6,14 @@ Only this controller's owned processes and isolated stores are stopped or captur
 """
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+from datetime import datetime, timezone
 import gzip
 import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import subprocess
@@ -72,16 +75,23 @@ def main():
         if child is None or child.poll() is not None: return
         owned(child); child.kill(); child.wait(timeout=30); exits.append({'processId': child.pid, 'exitCode': child.returncode})
 
-    def launch(probe):
+    def launch(probe, assist=False):
         nonlocal host, api
-        role = 'probe' if probe else 'standard'
-        if probe: features['BpmnRecoveryProbe'] = {'ControlDirectory': str(control)}
-        else: features.pop('BpmnRecoveryProbe', None)
-        q.write_json(root / 'shells.json', shells)
+        role = 'probe' if probe else 'standard'; content_root = root
+        selected = json.loads(json.dumps(shells)); selected_features = selected['CShells']['Shells']['default']['Features']
+        if probe: selected_features['BpmnRecoveryProbe'] = {'ControlDirectory': str(control)}
+        else: selected_features.pop('BpmnRecoveryProbe', None)
+        if assist:
+            content_root = root / 'assist'; content_root.mkdir(); (content_root / 'packages').mkdir()
+            for name in ('appsettings.json', 'appsettings.Development.json'): shutil.copyfile(root / name, content_root / name)
+            selected_features['WorkflowsRuntimeEntityFrameworkCore']['ConnectionString'] = 'Data Source=' + str(root / 'runtime.db') + ';Pooling=False'
+            for name in ('ActivitiesDesignEntityFrameworkCore', 'WorkflowsDesignEntityFrameworkCore', 'WorkflowsPublishingEntityFrameworkCore'):
+                selected_features[name]['ConnectionString'] = 'Data Source=' + str(root / 'design.db') + ';Pooling=False'
+        q.write_json(content_root / 'shells.json', selected)
         log_path = root / ('host-' + str(len(processes)) + '.log'); log = log_path.open('w'); logs.append(log)
-        host = subprocess.Popen(['dotnet', str(assemblies[role]), '--contentRoot', str(root), '--urls', 'http://127.0.0.1:0'], cwd=root,
+        host = subprocess.Popen(['dotnet', str(assemblies[role]), '--contentRoot', str(content_root), '--urls', 'http://127.0.0.1:0'], cwd=content_root,
             env={**os.environ, 'ASPNETCORE_ENVIRONMENT': 'Development'}, stdout=log, stderr=subprocess.STDOUT)
-        children.append(host); processes.append({'role': role, 'processId': host.pid, 'controllerProcessId': os.getpid(), 'started': q.process_field(host.pid, 'lstart')})
+        children.append(host); processes.append({'role': 'assist-standard' if assist else role, 'processId': host.pid, 'controllerProcessId': os.getpid(), 'started': q.process_field(host.pid, 'lstart')})
         def address():
             if host.poll() is not None: raise RuntimeError('The owned host exited; private logs: ' + str(root))
             hits = [line.split('Now listening on: ', 1)[1].strip() for line in log_path.read_text().splitlines() if 'Now listening on: ' in line]
@@ -97,26 +107,32 @@ def main():
 
     def read(*arguments): return json.loads(subprocess.check_output(['dotnet', str(reader), *map(str, arguments)], text=True, timeout=30))
     def model(identity): return read('--read-bpmn-direct', root / 'runtime.db', identity)
+    @contextmanager
+    def frozen():
+        stopped = []
+        try:
+            for child in children:
+                if child.poll() is not None: continue
+                owned(child); os.kill(child.pid, signal.SIGSTOP); stopped.append(child)
+                wait(lambda: 'T' in q.process_field(child.pid, 'stat'), bool, 'The owned host did not stop for capture.', 5)
+            if not stopped: raise ValueError('A live owned host is required for this capture.')
+            yield
+        finally:
+            for child in stopped: owned(child); os.kill(child.pid, signal.SIGCONT)
     def broadcast(publisher):
         nonlocal observations
         observations += 1; path = root / ('source-' + str(observations) + '.sqlite')
-        q.backup_sqlite(root / 'runtime.db', path)
+        with frozen(): read('--backup-sqlite', root / 'runtime.db', path)
         return read('--find-publisher-source', path, q.digest(path), 'default', publisher)
 
     def capture(label):
-        if host.poll() is None:
-            owned(host); os.kill(host.pid, signal.SIGSTOP)
-            wait(lambda: 'T' in q.process_field(host.pid, 'stat'), bool, 'The owned host did not stop for capture.', 5)
-        else: raise ValueError('Capture requires the live owned process at its real cut.')
-        try:
+        with frozen():
             result = {}
             for store in ('runtime', 'design'):
                 raw = root / (label + '-' + store + '.sqlite'); backup = read('--backup-sqlite', root / (store + '.db'), raw)
                 path = output / (label + '-' + store + '.sqlite.gz'); path.write_bytes(gzip.compress(raw.read_bytes()))
                 result[store] = {'file': path.name, 'databaseSha256': q.digest(raw), 'gzipSha256': q.digest(path), 'observer': backup}
             snapshots[label] = result
-        finally:
-            owned(host); os.kill(host.pid, signal.SIGCONT)
 
     def native_node(identity, kind, inputs): return q.node(identity, api.activity(kind), inputs)
     def publish(name, node):
@@ -174,7 +190,9 @@ def main():
         wait(lambda: marker_path.exists(), bool, 'The real publisher did not reach its selected cut.', 60)
         marker = json.loads(marker_path.read_text()); publisher_id = marker['workflowExecutionId']; q.write_json(output / 'cut-marker.json', marker)
         at_cut = broadcast(publisher_id); q.write_json(output / 'cut-source.json', at_cut)
+        assist = None
         if args.cut == 'after-resume':
+            primary = host, api; launch(False, assist=True); assist = host; host, api = primary
             initial_id = initial['model']['executionId']; initial_ids = {w['nativeWork']['workerExecutionId'] for w in initial['model']['payload']['work']}
             rearmed = wait(lambda: model(initial_id), lambda value: len(value['model']['payload'].get('nativeResults', [])) == 1 and
                 len({w['nativeWork']['workerExecutionId'] for w in value['model']['payload']['work']} - initial_ids) == 1,
@@ -185,7 +203,10 @@ def main():
         late = start_model(publication, 'late-model'); q.write_json(output / 'late-before-crash.json', late)
         before_source = broadcast(publisher_id); q.write_json(output / 'before-source.json', before_source)
         if at_cut['source']['snapshot'] != before_source['source']['snapshot']: raise ValueError('A newly armed listener changed an installed source cohort.')
-        capture('pending'); stop(host)
+        current = before_source['source']; deadline = re.sub(r'\.(\d{1,7})(?=[+-])', lambda m: '.' + m[1].ljust(6, '0')[:6], current['deliveryVisibleAfter'].replace('Z', '+00:00'))
+        if current['status'] != 'Delivering' or current['deliveringOwnerId'] != marker['ownerId'] or current['deliveryFencingToken'] != marker['fencingToken'] or datetime.now(timezone.utc) >= datetime.fromisoformat(deadline):
+            raise ValueError('The original source claim did not remain fresh and unacknowledged through the actual crash cut.')
+        capture('pending'); stop(host); stop(assist)
         try: submitted = pending.result(timeout=5)
         except (OSError, TimeoutError, urllib.error.URLError): submitted = None
         executor.shutdown(wait=True)
@@ -218,8 +239,9 @@ def main():
         q.write_json(output / 'process.json', {'schemaVersion': 1, 'kind': 'actual-model-broadcast-recovery', 'sourceRevision': source, 'cut': args.cut,
             'publication': publication, 'workerPublication': worker, 'publisherPublication': publisher, 'publisherExecutionId': publisher_id,
             'submitted': submitted, 'modelExecutionIds': models, 'products': products, 'processes': processes, 'exits': exits, 'snapshots': snapshots,
+            'ownedHosts': len(processes), 'separateStandardConsumerBeforeCrash': assist is not None,
             'stateSeeded': False, 'clockEdited': False, 'standardRecoveryHosts': True, 'retainedLoopWaitsAreIntentional': looping})
-        print(json.dumps({'sourceRevision': source, 'cut': args.cut, 'models': len(models), 'wholeStores': 6, 'ownedHosts': 3}))
+        print(json.dumps({'sourceRevision': source, 'cut': args.cut, 'models': len(models), 'wholeStores': 6, 'ownedHosts': len(processes)}))
     except Exception as error:
         if host is not None and host.poll() is None:
             try: capture('failed')
