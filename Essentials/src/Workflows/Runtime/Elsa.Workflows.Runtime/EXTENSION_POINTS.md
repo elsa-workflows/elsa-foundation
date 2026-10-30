@@ -679,7 +679,14 @@ Leaf-owned contracts for clustered workflow-execution placement and cross-node c
 - **Kind:** Replacement (one scheduler owns durable-timer registration for a runtime composition).
 - **Signature:** `ScheduleAsync(DurableTimer timer, ...)`.
 - **Usage:** thin activity-facing wrapper over `IDurableTimerStore.SaveAsync`. The `Delay` activity builds the `DurableTimer` (deriving `DueTime` from the injected `TimeProvider`) and calls this to write its timer before creating the matching bookmark.
+
 - **Default implementation:** `DurableTimerScheduler` *(registered by the `WorkflowsRuntimeScheduling` feature)*.
+
+### `DurableTimerScheduled` *(Core — `Elsa.Workflows.Runtime.Core`)*
+- **Kind:** Named informational event, published deferred after a successful timer save with the stored existing-wins deadline. Background event delivery isolates handler failures. Enqueue failure is logged and leaves periodic recovery available. Register scoped `IEventHandler<DurableTimerScheduled>` participants through the Events registration helpers.
+- **Default participant:** `WorkflowsRuntimeScheduling` registers its bounded local wakeup hint. The pump starts immediately, then wakes at the earlier of the next known eligible deadline and its recovery cadence. Notification/query races retain the earlier hint; storage and fenced claims remain authoritative. Whole-sweep failures suppress acceleration and keep existing backoff.
+- **Provider query:** `IDurableTimerStore.GetNextDueTimeAsync` optionally returns the earliest `max(DueTime, claim/retry visibility)` in the current persistence scope. Built-in in-memory and EF stores implement it; the compatible default returns null. The pump queries only claim-capable providers, because legacy retry eligibility is private to the pump. Legacy providers keep periodic recovery. No payload, scoped service or second durable scheduler is retained in the hint.
+- **Recovery:** every sweep visits fresh operation scopes. Startup rediscovers future/overdue rows, and periodic sweeps discover missed hints and other-host writes. Prompt cross-host delivery requires a separate notification transport; without one the recovery interval remains its discovery bound. Timer/Cron use their separate recurring pump.
 
 ### `IRecurringTriggerScheduleStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one store owns recurring-start schedules for a runtime composition).

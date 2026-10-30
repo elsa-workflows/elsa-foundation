@@ -27,6 +27,25 @@ public sealed class EfDurableTimerStore(
 
     public bool SupportsClaimTransitions => true;
 
+    public async ValueTask<DateTimeOffset?> GetNextDueTimeAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
+        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
+        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
+        var row = await context.DurableTimers.AsNoTracking()
+            .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == scopeKey)
+            .OrderBy(x => x.VisibleAfterUtcTicks > x.DueTimeUtcTicks ? x.VisibleAfterUtcTicks : x.DueTimeUtcTicks)
+            .ThenBy(x => x.TimerIdOrderKey)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (row is null)
+            return null;
+        var timer = ReadChecked(row, scope);
+        return row.VisibleAfterUtcTicks is { } visible && visible > timer.DueTime.UtcTicks
+            ? new DateTimeOffset(visible, TimeSpan.Zero)
+            : timer.DueTime;
+    }
+
     public async ValueTask<DurableTimer> SaveAsync(
         DurableTimer timer,
         CancellationToken cancellationToken = default)

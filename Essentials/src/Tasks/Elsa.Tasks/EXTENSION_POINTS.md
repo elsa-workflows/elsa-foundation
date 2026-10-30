@@ -111,6 +111,7 @@ skeleton. The base owns it once: `ExecuteAsync` runs the derived `SweepAsync`, r
 on success, and on any handled exception increments it and reports through `OnSweepFailed` without
 rethrowing (so a failing sweep cannot crash the host); `CurrentSweepInterval` widens geometrically from
 `SweepInterval` toward `MaxBackoffInterval`, and `GetSchedule` feeds it to an `AdaptiveIntervalSchedule`.
+`GetSchedule` is virtual so a worker can supply deadline-aware scheduling while retaining the shared sweep/failure policy; ordinary workers retain the existing interval schedule.
 
 A derivation supplies the sweep, its failure log message, and optionally: which exceptions feed the
 backoff (`IsHandledSweepException`; everything by default — override to let fatal exceptions escape),

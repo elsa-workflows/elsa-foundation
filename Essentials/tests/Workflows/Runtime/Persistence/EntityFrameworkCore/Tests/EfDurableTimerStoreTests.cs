@@ -18,6 +18,28 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 public sealed class EfDurableTimerStoreTests
 {
     [Fact]
+    public async Task Next_deadline_is_scoped_restart_durable_and_respects_claim_and_retry_visibility()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var now = new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        await using (var fixture = database.Open("tenant-a"))
+        {
+            Assert.Null(await fixture.Store.GetNextDueTimeAsync());
+            await fixture.Store.SaveAsync(Timer("wf", "due", now));
+            await fixture.Store.SaveAsync(Timer("wf", "future", now.AddSeconds(5)));
+            var claim = Assert.Single(await fixture.Store.ClaimDueAsync(new("peer", now, TimeSpan.FromSeconds(10), 1)));
+            Assert.Equal(now.AddSeconds(5), await fixture.Store.GetNextDueTimeAsync());
+            await fixture.Store.DeleteAsync("wf", "future");
+            Assert.Equal(now.AddSeconds(10), await fixture.Store.GetNextDueTimeAsync());
+            Assert.True((await fixture.Store.ReleaseClaimAsync(claim, now.AddSeconds(20))).Succeeded);
+        }
+        await using var restarted = database.Open("tenant-a");
+        Assert.Equal(now.AddSeconds(20), await restarted.Store.GetNextDueTimeAsync());
+        await using var other = database.Open("tenant-b");
+        Assert.Null(await other.Store.GetNextDueTimeAsync());
+    }
+
+    [Fact]
     public async Task Save_is_existing_wins_scoped_and_survives_restart()
     {
         await using var database = await TestDatabase.CreateAsync();

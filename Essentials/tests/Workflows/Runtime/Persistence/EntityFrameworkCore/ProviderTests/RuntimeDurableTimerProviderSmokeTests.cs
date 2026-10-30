@@ -70,6 +70,7 @@ internal static class RuntimeDurableTimerProviderSmoke
             await store.SaveAsync(Timer("workflow-order", "future", now.AddTicks(1)));
 
             var due = await store.ListDueAsync(now, 2);
+            Assert.Equal(now, await store.GetNextDueTimeAsync());
             Assert.Equal(new[] { "a", "b" }, due.Select(timer => timer.TimerId));
             var firstPage = await store.ListPageAsync(new DurableTimerPageQuery("workflow-order", 2));
             Assert.Equal(new[] { "a", "b" }, firstPage.Items.Select(timer => timer.TimerId));
@@ -90,6 +91,7 @@ internal static class RuntimeDurableTimerProviderSmoke
             await claimStore.SaveAsync(Timer("workflow-claim", "timer", now));
             initialClaim = Assert.Single(await claimStore.ClaimDueAsync(new RuntimeDurableTimerClaimRequest(
                 "worker-a", now, TimeSpan.FromMinutes(1), 1)));
+            Assert.Equal(initialClaim.VisibleAfter, await claimStore.GetNextDueTimeAsync());
         }
 
         await using (var recovered = createContext(connectionString))
@@ -105,6 +107,7 @@ internal static class RuntimeDurableTimerProviderSmoke
             Assert.Equal(RuntimeDurableTimerClaimTransitionStatus.Succeeded,
                 (await claimStore.CompleteClaimAsync(recoveredClaim)).Status);
             Assert.Null(await claimStore.FindAsync("workflow-claim", "timer"));
+            Assert.Null(await claimStore.GetNextDueTimeAsync());
         }
     }
 
