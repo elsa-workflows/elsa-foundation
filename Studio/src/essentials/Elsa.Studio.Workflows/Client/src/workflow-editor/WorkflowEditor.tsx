@@ -1186,16 +1186,18 @@ export function WorkflowEditor({
       render: () => <>
         {runCanvas.eligible ? <div className="wf-attached-inspector-views"><PanelTabList label="Activity view" activeTabId={inspectorView} onSelect={value => setInspectorView(value as "configuration" | "run-data")}
           tabs={[{ id: "configuration", title: "Configuration", order: 0, icon: null, render: () => null }, { id: "run-data", title: "Run data", order: 1, icon: null, render: () => null }]} /></div> : null}
-        {inspectorView === "run-data" && runCanvas.eligible ? <React.Suspense fallback={<p role="status">Loading activity inspection…</p>}>
-          <AttachedRunActivityInspector context={context} canvas={runCanvas} selection={runSelection} activityId={inspectedNode?.nodeId ?? null}
-            ownerId={scopeOwner?.nodeId ?? null} catalog={catalog} expressionEditors={expressionEditors} onEnter={execution => {
-              const root = draft.state.rootActivity;
-              const node = root ? findActivityNode(root, execution.authoredActivityId, catalogByVersion) : null;
-              const firstChild = node ? getChildSlots(node, catalogByVersion)[0]?.activities[0] : null;
-              const path = root ? findNodeScopePath(root, firstChild?.nodeId ?? execution.authoredActivityId, activity => { const item = catalogByVersion.get(activity.activityVersionId); return item ? getActivityDisplay(item) : activity.nodeId; }, catalogByVersion) : null;
-              if (path) navigateToScope(path, firstChild?.nodeId ?? execution.authoredActivityId);
-            }} />
-        </React.Suspense> : selectedBpmnElement && !selectedNode ? (
+        {inspectorView === "run-data" && runCanvas.eligible ? <div className="wf-inspector-tab-panel">
+          <React.Suspense fallback={<p role="status">Loading activity inspection…</p>}>
+            <AttachedRunActivityInspector context={context} canvas={runCanvas} selection={runSelection} activityId={inspectedNode?.nodeId ?? null}
+              ownerId={scopeOwner?.nodeId ?? null} catalog={catalog} expressionEditors={expressionEditors} onEnter={execution => {
+                const root = draft.state.rootActivity;
+                const node = root ? findActivityNode(root, execution.authoredActivityId, catalogByVersion) : null;
+                const firstChild = node ? getChildSlots(node, catalogByVersion)[0]?.activities[0] : null;
+                const path = root ? findNodeScopePath(root, firstChild?.nodeId ?? execution.authoredActivityId, activity => { const item = catalogByVersion.get(activity.activityVersionId); return item ? getActivityDisplay(item) : activity.nodeId; }, catalogByVersion) : null;
+                if (path) navigateToScope(path, firstChild?.nodeId ?? execution.authoredActivityId);
+              }} />
+          </React.Suspense>
+        </div> : selectedBpmnElement && !selectedNode ? (
         <BpmnElementInspector
           element={selectedBpmnElement}
           outboundFlows={selectedBpmnElementFlows}
