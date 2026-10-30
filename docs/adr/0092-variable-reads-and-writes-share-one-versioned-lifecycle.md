@@ -226,55 +226,80 @@ default (Sipke's position, agreed by Joey). Some designs genuinely accept last-w
 
 A lost-update fault is an ordinary activity fault. It becomes an incident and the workflow's incident strategy decides
 what happens (`FaultWorkflow`, `ContinueWithIncidents` or `WaitForIntervention`; see `docs/runtime-fault-behavior.md`).
-Recovery uses the alterations API's retry. No new recovery mechanism is introduced.
+Recovery uses the operator actions of decision 8: retry, re-execute, or accept the recorded completion. No other
+recovery mechanism is introduced.
 
 A lost-update fault is detected at commit, so the step's body has already run, and its external effects have already
-happened. A retry runs the body again; idempotency of external effects belongs to the workflow designer (D-2). Note
-that an operator retry is a new invocation with a new `InvocationId` (decision 8), so an activity that keys its
-idempotency on `InvocationId` does **not** deduplicate it: its external effects repeat. The incident therefore records
-the rejected result (under the existing protection rules), so that an operator can see what
-the body produced, for example a payment id, and decide between a retry and applying it. How an operator applies a
-recorded result is left to the implementing spec (open question 11).
+happened. Rerunning the body repeats them; idempotency of external effects belongs to the workflow designer (D-2).
+A retry keeps the `InvocationId`, so an activity that keys its idempotency on it deduplicates; a re-execution has a
+new `InvocationId`, so its external effects repeat (decision 8). The incident therefore records the rejected
+completion (under the existing protection rules), so that an operator can see what the body produced, for example a
+payment id, and choose between the three actions of decision 8.
 
-### 8. An operator retry reads fresh inputs
+### 8. Operators retry, re-execute, or accept a recorded completion
 
-A retry or reschedule requested by an operator through the alterations API is a new execution (D-2: "a re-run is a new
-execution with new values"). Its successor already gets a new invocation id; it now also materializes its inputs again
-from current committed state, with a new input read set, as Set, Merge and Reduce successors already do.
+Recovery and operator actions are kept apart (@sfmskywalker's position, 29 October):
 
-This differs from **recovery of the same invocation**, which keeps its committed snapshot and input read set:
+- **Recovery** resumes the same invocation from durable state and keeps its committed snapshot and input read set:
+  redelivery after a crash, before the step committed (ADR 0045 §3, Sipke's follow-up 2: "retain committed input
+  snapshots on retry"), and resume after a suspension (decision 11). A durably completed invocation is never run again
+  because downstream scheduling was interrupted.
+- **Retry** is an operator action on the same invocation. It keeps the `InvocationId`, the operation keys derived from
+  it and the committed input snapshot, and starts a new attempt. It suits a transient failure, such as an HTTP 503,
+  where an external service can deduplicate on the same idempotency key. After a lost-update fault a retry reads the
+  same outdated base and faults again, unless the node uses `LastWins`.
+- **Re-execute** is an operator action that creates a new invocation: a new `InvocationId`, inputs materialized again
+  from current committed state, and a new input read set, as Set, Merge and Reduce successors already do. Its external
+  effects repeat on purpose. A reschedule through the alterations API
+  ([ADR 0049](0049-runtime-alterations-use-snapshotted-atomic-jobs.md)), including one midway in the workflow, is a
+  re-execution (D-2: "a re-run is a new execution with new values").
+- **Accept recorded completion** is an operator action for a step whose body succeeded but whose commit conflicted
+  (a lost-update fault). It does not run the body again. It revalidates the current state, scope, contracts and
+  policies, then applies the complete recorded transition (write intents, captures, output changes and outcomes)
+  atomically and duplicate-safely, as a recorded override like `LastWins`. The original conflict and its resolution
+  stay in the history. It does not apply to a body that faulted, and a returned result alone is not enough: the
+  completion data it needs is retained under the existing protection rules.
 
-- redelivery after a crash, before the step committed (ADR 0045 §3, Sipke's follow-up 2: "retain committed input
-  snapshots on retry");
-- resume after a suspension (same invocation, see decision 11).
+In every case a new attempt starts with no session reads; it reads again through the session (ADR 0090 §6).
 
-In both cases a new attempt starts with no session reads; it reads again through the session (ADR 0090 §6).
-
-This **amends ADR 0045 §3**. Its sentence "retries and resumptions retain one stable logical `InvocationId` and the
-same input snapshot" becomes: attempts and resumptions of one invocation retain its `InvocationId` and snapshot; an
-operator retry or reschedule creates a new invocation, with a new `InvocationId` (as the code already does) and fresh
+An operator chooses the action, and the API and Studio name them distinctly, so "retry" never silently means fresh
 inputs.
 
-*Why.* Without this, a lost-update fault followed by a retry would read the same outdated value and fault again, or,
-with `LastWins`, lose the update again. And a variable an operator corrected would never reach the retried step. The
-distinction keeps Sipke's follow-up 2 for what it was meant for, recovery, while an operator's retry gets the values
-the operator just fixed.
+This **amends ADR 0045 §3**. Its sentence "retries and resumptions retain one stable logical `InvocationId` and the
+same input snapshot" becomes: recovery and retries of one invocation retain its `InvocationId` and snapshot; a
+re-execution, including a reschedule, creates a new invocation with a new `InvocationId` and fresh inputs. Today's
+code gives an operator retry a new id and keeps the snapshot (Context, item 3), which matches neither action; the
+implementing spec splits it.
 
-### 9. A stale base is refreshed before background admission
+*Why.* A variable an operator corrected with `ModifyVariable` must be able to reach the step, and a lost-update fault
+must be recoverable without reading the same outdated value again: that is re-execution. A transient failure should
+be retried without changing inputs or idempotency keys: that is retry. And when the body's work is already done, for
+example a payment made, the operator can keep it instead of repeating it: that is accepting the recorded completion.
 
-Just before a background step is admitted, the coordinator compares its input read set with the current versions. If
-any base is already stale, it materializes the inputs again, instead of sending the worker outdated values. This is
-safe because nothing has run yet.
+### 9. A stale base is refreshed before background admission, under an explicit contract
 
-The refreshed snapshot is recorded as a new snapshot that supersedes the first, with its own read set. The first stays
-in the history, so inspection never shows values the body did not see, and the snapshot the body receives is immutable
-from then on (ADR 0045 §3). This follows the precedent of the #977 amendment, which also keeps the pinned record when
-it re-materializes.
+Just before a background step is admitted, the coordinator compares its input read set with the current versions.
+If a variable it read has changed since Start, the coordinator refreshes the inputs instead of sending the worker
+outdated values. A refresh follows this contract:
+
+- **Trigger.** Only a variable in the input read set that changed between Start and admission. Nothing else refreshes
+  a committed snapshot; recorded snapshots stay fixed by default.
+- **Identity.** A refresh is a new *evaluation* of the same invocation. The `InvocationId` stays; the evaluation gets
+  its own sequence number, and idempotency keys derive from the evaluation. Input evaluation may call registered
+  functions with external effects (D-5), so those effects repeat, deliberately: idempotency belongs to the designer
+  (D-2).
+- **Opt-out.** A node can turn refresh off. Its stale base is then handled at commit, as any other (decisions 5 and 6).
+- **Recording.** The refreshed snapshot supersedes the first and links to it with the reason, for example
+  "`count` v3 → v4". Both stay in the history, so inspection never shows values the body did not see, and the
+  snapshot the body receives is immutable from then on (ADR 0045 §3). This follows the precedent of the #977
+  amendment, which also keeps the pinned record when it re-materializes.
 
 It covers only the gap between Start and admission. The long gap while the worker runs is covered by the commit rule
 (decision 5). Inline steps do not need it once decision 10 holds.
 
-*Why.* It prevents lost-update faults that can be seen coming, at the last moment where refreshing has no side effects.
+*Why.* It prevents lost-update faults that can be seen coming. It is not free of effects, because input evaluation
+can call effectful functions (Sipke, 29 October), so the contract makes the repetition explicit and lets a node
+refuse it.
 
 ### 10. An inline step does not leave a gap between its reads and its body
 
@@ -326,15 +351,20 @@ A write replaces the whole value of a variable. Two branches that change differe
 whole object, so the second is a lost update under decision 5. The guidance for authors is to keep independent data in
 separate variables.
 
-A three-way merge on conflict (base, mine, theirs; merge when different fields changed, conflict when the same field
-did) would let such changes combine. It is deliberately **not** part of this decision. It needs the core lifecycle to
-be in place and agreed first, and evidence on its cost for large values. It is listed under *Alternatives*.
+A conservative JSON-object merge is a **planned explicit opt-in policy** (proposed by @sfmskywalker, 29 October). It
+keeps the base snapshot and the read dependencies, combines only compatible field changes, treats arrays atomically,
+keeps null and absence apart, validates the complete merged value, and commits it atomically. Where independence
+cannot be established it is a normal conflict: disjoint writes alone do not prove independence, because one
+calculation may have read a field the other changed. It needs the base value retained, which a version and a digest
+cannot rebuild. Its design follows in a follow-up ADR, once this lifecycle is agreed and the storage cost is measured.
+Until then the whole variable is the unit.
 
 ## Consequences
 
 - **ADR 0045 §3.** Its retry sentence is amended (decision 8): attempts and resumptions of one invocation keep the id
-  and the snapshot, as today; an operator retry or reschedule is a new invocation with a new id and fresh inputs. Before background admission a stale snapshot may be
-  superseded by a new one (decision 9). A `While` pass that re-materializes under the #977 amendment records its own
+  and the snapshot, as do operator retries; a re-execution, including a reschedule, is a new invocation with a new id
+  and fresh inputs (decision 8). Before background admission a stale snapshot may be superseded by a new evaluation
+  under the refresh contract (decision 9). A `While` pass that re-materializes under the #977 amendment records its own
   input read set for that evaluation.
 - **ADR 0045 §4.** "Reads occur when the consumer invocation materializes its inputs" stays true, and those reads are
   now recorded with versions.
@@ -366,11 +396,15 @@ be in place and agreed first, and evidence on its cost for large values. It is l
 - 0 → 1 → 0 applies without a fault and is recorded; a real lost update faults by default.
 - `LastWins` per activity type and per node, always recorded and visible.
 - The rule is identical for inline and background steps, captures and session writes, frames and rows.
-- An operator retry and reschedule materialize fresh inputs; crash redelivery and resume keep the snapshot. A
-  successor that now goes through Start again does not activate its owned frames a second time.
-- `ModifyVariable` then retry uses the corrected value; a step committing over an operator's change faults.
-- A stale base is refreshed before background admission; the superseding snapshot is what the worker sees, and the
-  first stays in the history.
+- A retry keeps the `InvocationId` and snapshot; a re-execution and a reschedule materialize fresh inputs with a new
+  id; crash redelivery and resume keep the snapshot. A successor that now goes through Start again does not activate
+  its owned frames a second time.
+- `ModifyVariable` then re-execute uses the corrected value; a step committing over an operator's change faults.
+- Accept recorded completion applies the whole recorded transition atomically without running the body, revalidates
+  first, is duplicate-safe, refuses a faulted body, and keeps the conflict and resolution in the history.
+- A stale base is refreshed before background admission as a new evaluation with its own idempotency keys; the
+  superseding snapshot is what the worker sees, the first stays in the history linked with the reason, and a node
+  with refresh turned off faults or applies `LastWins` at commit instead.
 - A lost-update incident records the rejected result.
 - Inline steps have no gap between input materialization and the body (decision 10), with the claim and flush rules
   of ADR 0032 kept.
@@ -399,8 +433,8 @@ operations Elsa understands. A natural later step for Merge and Reduce; not a ge
 **Field-level patches.** Rejected in ADR 0090: array patches by index land in the wrong place after another branch
 changed the array, and merged values must be validated again.
 
-**Three-way merge on conflict.** Promising, and compatible with this design, because the base digest and the base
-version are already recorded. Deferred until this lifecycle is agreed and its cost is measured (decision 14).
+**Three-way merge on conflict.** Now a planned opt-in policy (decision 14), designed in a follow-up ADR. The base
+digest and version identify the base, but do not rebuild it, so the policy also retains the base value.
 
 ## Questions for the reviewers
 
@@ -416,19 +450,22 @@ you would change.
 3. **Strict or options?** Default `Fault`, with `LastWins` per activity type and per node, and nothing else
    (decision 6). Or should there be one strict behaviour only, which is simpler to learn, test and support?
 4. **Version plus digest** instead of value comparison alone, with 0 → 1 → 0 applying without a fault (decision 5).
-5. **Retry.** An operator retry or reschedule materializes fresh inputs, while crash recovery and resume keep the
-   snapshot (decision 8). Sipke, does this keep the intent of your follow-up 2?
-6. **Refresh before background admission** instead of faulting later, recorded as a superseding snapshot (decision 9).
+5. **Retry, re-execute, accept** (decision 8, changed 30 October after Sipke's 29 October positions). Recovery and
+   retry keep the snapshot; re-execution, including a reschedule, gets fresh inputs; accepting a recorded completion
+   applies it without rerunning the body. Sipke, does this match the three actions you described?
+6. **Refresh contract** (decision 9, changed 30 October). A refresh is a new evaluation with its own idempotency
+   keys, so effects in input evaluation repeat deliberately, and a node can turn it off. Sipke, does this cover
+   re-evaluation, identities, effects and the recorded replacement?
 7. **No gap for inline steps** (decision 10). Do you see a reason in the claim and flush rules (ADR 0032 R2) why an
    `External` leaf's inputs cannot be materialized right before its body, as fusion already does for `ReplaySafe`
    leaves?
 8. **Suspended steps** keep their base, so a long wait can end in a lost-update fault (decision 11). Is that the right
    answer for long-running workflows?
-9. **Granularity.** The whole variable now, and a three-way merge later (decision 14).
+9. **Granularity.** The whole variable now; your conservative JSON-object merge as a planned opt-in policy, designed
+   in a follow-up ADR (decision 14, changed 30 October). Agreed?
 10. **Scope with A-3.** If writing variables from scripts becomes a compatibility mode only, this ADR still holds for
     bindings and captures. Do you agree it is independent of A-3's answer?
-11. **A rejected result.** The incident records the result a faulted step produced (decision 7). A retry is a new
-    invocation, so `InvocationId`-keyed idempotency will not stop its external effects from repeating. Should an
-    operator be able to apply the recorded result as `LastWins` instead of retrying?
+11. **A rejected result.** Answered by decision 8 (30 October): accepting the recorded completion is an operator
+    action. Is the list of what it revalidates complete?
 12. **Write history cost.** Extra rows per write, or derived from checkpoint commits; values always, or opt-in with a
     retention limit (decision 13)?
