@@ -35,6 +35,8 @@ import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting
 import { activityGraphLayoutFromDesign } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphDocumentAdapter";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+const bpmnDecisionFixture = new URLSearchParams(window.location.search).get("bpmn-decision");
+const persistEditor = new URLSearchParams(window.location.search).has("adaptive-ports") || !!bpmnDecisionFixture;
 const adaptivePorts = new URLSearchParams(window.location.search).get("adaptive-ports");
 const adaptiveStorageKey = `adaptive-ports:${window.location.search}`;
 
@@ -121,11 +123,26 @@ function editorDraft(): WorkflowDraft {
       }));
     }
   }
+  if (bpmnDecisionFixture) root.structure!.payload = {
+    activities: bpmnDecisionFixture === "unbound" ? [] : [{ nodeId: "decision", activityVersionId: "decision-v1", inputs: [], outputs: [], structure: null }],
+    elements: [
+      { elementId: "decision-element", elementType: bpmnDecisionFixture === "legacy" ? "task" : "exclusiveGateway",
+        ...(bpmnDecisionFixture !== "unbound" ? { childNodeId: "decision" } : {}) },
+      { elementId: "high-end", elementType: "endEvent", name: "High" },
+      { elementId: "low-end", elementType: "endEvent", name: "Low" }
+    ],
+    sequenceFlows: [
+      { flowId: "high-flow", sourceRef: "decision-element", targetRef: "high-end" },
+      { flowId: "low-flow", sourceRef: "decision-element", targetRef: "low-end" }
+    ]
+  };
   return {
     id: "draft-1",
     definitionId: "definition-1",
     state: { variables: [], rootActivity: root, inputs: [], outputs: [] },
-    layout: adaptivePorts ? [
+    layout: bpmnDecisionFixture ? [
+      { nodeId: "decision-element", x: 220, y: 200 }, { nodeId: "high-end", x: 480, y: 80 }, { nodeId: "low-end", x: 480, y: 320 }
+    ] : adaptivePorts ? [
       { nodeId: "write-one", x: 200, y: 80 },
       { nodeId: "write-two", x: adaptivePorts === "offset" ? 305 : 200, y: adaptivePorts === "offset" ? 430 : adaptivePorts === "dense" ? 1100 : 320 },
       { nodeId: "write-three", x: 600, y: 80 }
@@ -154,7 +171,7 @@ function sequenceRootActivity(): ActivityNode {
 }
 
 function activityGraphSequenceValue(): StudioActivityDefinitionImplementationEditorProps["value"] {
-  if (adaptivePorts) {
+  if (persistEditor) {
     const draft = editorDraft();
     return { payload: { rootActivity: draft.state.rootActivity, variables: [], outputMappings: [], outcomeMappings: [] }, layout: activityGraphLayoutFromDesign(draft.layout) };
   }
@@ -218,7 +235,7 @@ function ActivityDuplicateEditorFixtureContent() {
 }
 
 function ControlledActivityGraphFixture({ context }: { context: StudioEndpointContext }) {
-  const [value, setValue] = useState<StudioActivityDefinitionImplementationEditorProps["value"]>(() => adaptivePorts && sessionStorage.getItem(adaptiveStorageKey)
+  const [value, setValue] = useState<StudioActivityDefinitionImplementationEditorProps["value"]>(() => persistEditor && sessionStorage.getItem(adaptiveStorageKey)
     ? JSON.parse(sessionStorage.getItem(adaptiveStorageKey)!) : activityGraphSequenceValue());
   const readOnly = new URLSearchParams(window.location.search).has("read-only");
   const [diagnosticResult, setDiagnosticResult] = useState("");
@@ -237,23 +254,26 @@ function ControlledActivityGraphFixture({ context }: { context: StudioEndpointCo
     historyResetKey="draft-1:activity-sequence"
     value={value}
     readOnly={readOnly}
-    onChange={next => { setValue(next); if (adaptivePorts) sessionStorage.setItem(adaptiveStorageKey, JSON.stringify(next)); }}
+    onChange={next => { setValue(next); if (persistEditor) sessionStorage.setItem(adaptiveStorageKey, JSON.stringify(next)); }}
   />{rootSlots && readOnly ? <><button onClick={() => document.querySelector("[data-provider-diagnostic-focus-root]")!.dispatchEvent(new CustomEvent(activityGraphDiagnosticFocusEvent, {
     cancelable: true, detail: { location: { referenceKey: "else-leaf" }, complete: (result: { kind: string }) => setDiagnosticResult(result.kind) }
   }))}>Focus Else diagnostic</button><output data-testid="diagnostic-result">{diagnosticResult}</output></> : null}{slotAssignment || rootSlots ? <output hidden data-testid="activity-graph-payload">{JSON.stringify(value.payload)}</output> : null}</>;
 }
 
 export function createEditorContext(live?: { status: string; disconnected: boolean }): StudioEndpointContext {
-  let draft = adaptivePorts && new URLSearchParams(window.location.search).get("host") !== "activity" && sessionStorage.getItem(adaptiveStorageKey)
+  let draft = persistEditor && new URLSearchParams(window.location.search).get("host") !== "activity" && sessionStorage.getItem(adaptiveStorageKey)
     ? JSON.parse(sessionStorage.getItem(adaptiveStorageKey)!) as WorkflowDraft : editorDraft();
   const runCanvas = new URLSearchParams(window.location.search).get("run-canvas");
   const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");
   const paletteFixtures: ActivityCatalogItem[] = new URLSearchParams(window.location.search).has("palette-context") ? [
     bpmnActivity,
-    { ...writeLineCatalog, activityVersionId: "decision-v1", activityTypeKey: "Elsa.BpmnDecision", displayName: "BPMN Decision", category: "BPMN", paletteHints: { containerModes: ["bpmn"], description: "BPMN Decision is intended for a gateway in a BPMN Process." } },
+    { ...writeLineCatalog, activityVersionId: "decision-v1", activityTypeKey: "Elsa.BpmnDecision", displayName: "BPMN Decision", category: "BPMN", inputs: [{
+      referenceKey: "Outcome", name: "Outcome", typeName: "System.String", displayName: "Outcome", order: 0,
+      isBrowsable: true, isWrapped: true, defaultSyntax: "Literal"
+    }], paletteHints: { containerModes: ["bpmn"], description: "BPMN Decision is intended for a gateway in a BPMN Process." } },
     { ...writeLineCatalog, activityVersionId: "complete-v1", activityTypeKey: "Elsa.Complete", displayName: "Complete", paletteHints: { resourceKinds: ["activity-definition-graph"] } }
   ] : [];
-  const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity, ...(slotAssignment ? [whileActivity] : []), ...(rootSlots ? [ifActivity] : []), ...paletteFixtures, ...(adaptivePorts ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : [])];
+  const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity, ...(slotAssignment ? [whileActivity] : []), ...(rootSlots ? [ifActivity] : []), ...paletteFixtures, ...(adaptivePorts && !bpmnDecisionFixture ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : [])];
   const compiled = (node: ActivityNode): object => ({
     executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
     activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown",
@@ -312,7 +332,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
                 id: "elsa.api.workflow-design",
                 contractVersion: "1",
                 links: [{ rel: "workflow-definitions", href: "design/workflows/definitions" },
-                  ...(adaptivePorts ? [{ rel: "workflow-drafts", href: "design/workflows/drafts/{draftId}", templated: true }] : [])]
+                  ...(persistEditor ? [{ rel: "workflow-drafts", href: "design/workflows/drafts/{draftId}", templated: true }] : [])]
               },
               {
                 id: "elsa.api.activity-design",
@@ -398,7 +418,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
         return {};
       },
       putJson: async (_url: string, body: unknown) => {
-        if (adaptivePorts) {
+        if (persistEditor) {
           draft = { ...draft, ...body as object };
           sessionStorage.setItem(adaptiveStorageKey, JSON.stringify(draft));
         }

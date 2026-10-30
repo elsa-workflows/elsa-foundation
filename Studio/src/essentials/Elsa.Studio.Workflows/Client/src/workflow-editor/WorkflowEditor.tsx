@@ -109,11 +109,11 @@ import {
   resolveActivityInspectorTabId,
   type ActivityInspectorTabId
 } from "./InspectorPanel";
-import { BpmnElementInspector } from "../bpmn/BpmnElementInspector";
+import { BpmnElementInspector, BpmnElementConfiguration } from "../bpmn/BpmnElementInspector";
 import { bpmnPaletteElements } from "../bpmn/bpmnPaletteElements";
 import { emptyGraphElements } from "../graph-authoring/graphPaletteElements";
-import { collectOwnedNodeIds, findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
-import { bpmnElementTypeLabel, bpmnStructureKind, type BpmnElement, type BpmnSequenceFlow } from "../bpmn/bpmnTypes";
+import { bindBpmnDecision, collectOwnedNodeIds, findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
+import { bpmnElementTypeLabel, isBpmnDecisionType, bpmnStructureKind, type BpmnElement, type BpmnSequenceFlow } from "../bpmn/bpmnTypes";
 import { exportBpmnDocument, importBpmnDocument, layoutFromBpmnDiagram, summarizeBpmnImportIssues, withDiagramFromLayout } from "../api/bpmnInterchange";
 import { SlotEmptyState } from "./SlotEmptyState";
 import { PublicationReviewDialog } from "./PublicationReviewDialog";
@@ -919,6 +919,23 @@ export function WorkflowEditor({
     const target = findBpmnElement(scopeOwner, flow.targetRef);
     return target ? target.name?.trim() || bpmnElementTypeLabel(target) : flow.targetRef;
   }, [scopeOwner]);
+  const decisionCatalogItem = paletteCatalog.find(item => isBpmnDecisionType(item.activityTypeKey));
+  const addBpmnDecision = () => {
+    if (editorDoc.pinned || !selectedBpmnElement || !decisionCatalogItem) return;
+    const decision = createActivityNode(decisionCatalogItem, createNodeId(decisionCatalogItem));
+    updateScopeOwnerBpmnPayload(current => bindBpmnDecision(current, selectedBpmnElement.elementId, decision));
+  };
+  const bpmnInspectorProps = selectedBpmnElement ? {
+    element: selectedBpmnElement,
+    outboundFlows: selectedBpmnElementFlows,
+    onChangeElement: updateSelectedBpmnElement,
+    onChangeFlow: updateSelectedBpmnFlow,
+    onSetDefaultFlow: setSelectedBpmnDefaultFlow,
+    targetLabelFor: bpmnFlowTargetLabel,
+    readOnly: editorDoc.pinned,
+    isDecision: isBpmnDecisionType(selectedNode ? catalogByVersion.get(selectedNode.activityVersionId)?.activityTypeKey : undefined),
+    onAddDecision: decisionCatalogItem ? addBpmnDecision : undefined
+  } : null;
 
   // BPMN XML interchange (root scope of a BPMN workflow only): export downloads the root with the
   // canvas layout stamped into BPMNDI; import replaces the root's structure with the converted
@@ -1195,17 +1212,11 @@ export function WorkflowEditor({
               const path = root ? findNodeScopePath(root, firstChild?.nodeId ?? execution.authoredActivityId, activity => { const item = catalogByVersion.get(activity.activityVersionId); return item ? getActivityDisplay(item) : activity.nodeId; }, catalogByVersion) : null;
               if (path) navigateToScope(path, firstChild?.nodeId ?? execution.authoredActivityId);
             }} />
-        </React.Suspense> : selectedBpmnElement && !selectedNode ? (
-        <BpmnElementInspector
-          element={selectedBpmnElement}
-          outboundFlows={selectedBpmnElementFlows}
-          onChangeElement={updateSelectedBpmnElement}
-          onChangeFlow={updateSelectedBpmnFlow}
-          onSetDefaultFlow={setSelectedBpmnDefaultFlow}
-          targetLabelFor={bpmnFlowTargetLabel}
-        />
+        </React.Suspense> : bpmnInspectorProps && !selectedNode ? (
+        <BpmnElementInspector {...bpmnInspectorProps} />
       ) : (
         <InspectorPanel
+          bpmnRoutingPanel={bpmnInspectorProps && selectedNode ? <BpmnElementConfiguration {...bpmnInspectorProps} /> : undefined}
           key={inspectedNode?.nodeId ?? "no-activity"}
           context={context}
           readOnly={editorDoc.pinned}

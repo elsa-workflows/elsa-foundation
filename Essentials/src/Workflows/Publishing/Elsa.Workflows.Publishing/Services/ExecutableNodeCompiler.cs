@@ -104,7 +104,8 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
         IReadOnlyDictionary<string, ExecutableNode> placedActivities,
         IReadOnlyCollection<VariableDefinition> workflowVariables,
-        IReadOnlyCollection<InputDefinition> workflowInputs)
+        IReadOnlyCollection<InputDefinition> workflowInputs,
+        IReadOnlyCollection<string>? bpmnDecisionOutcomes = null)
     {
         if (!Enum.IsDefined(activity.ExecutionPlacement))
             throw BackgroundExecutionNotEligible(activity, $"execution placement '{activity.ExecutionPlacement}' is not defined");
@@ -138,7 +139,7 @@ public sealed class ExecutableNodeCompiler(
             : ActivityTypeMetadata.GetDeclaredActivityType(clrActivityType) ?? catalogActivityType;
         inputBindingCompiler.EnsureSecretBindingsAdmissible(activity.NodeId, descriptor, activity.Inputs);
         var inputBindings = inputBindingCompiler.CompileAll(activity.NodeId, inputDefinitions, activity.Inputs);
-        var childSlots = CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables, workflowInputs);
+        var childSlots = CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables, workflowInputs, activity.Structure);
         var executionType = clrActivityType is not null && ActivityTypeMetadata.IsTrigger(clrActivityType)
             ? TriggerNodeMetadata.TriggerExecutionType
             : activityVersion.ExecutionType.ToString();
@@ -146,7 +147,7 @@ public sealed class ExecutableNodeCompiler(
         var structure = CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity));
         var activityContract = clrActivityType is null
             ? null
-            : BuildActivityContract(activity, activityVersion, inputDefinitions, clrActivityType, activityType, structure, inputBindings: inputBindings);
+            : BuildActivityContract(activity, activityVersion, inputDefinitions, clrActivityType, activityType, structure, inputBindings: inputBindings, bpmnDecisionOutcomes: bpmnDecisionOutcomes);
 
         if (activity.ExecutionPlacement == ActivityExecutionPlacement.Background)
             ValidateBackgroundExecution(activity, clrActivityType, childSlots, structure, activityContract);
@@ -476,7 +477,8 @@ public sealed class ExecutableNodeCompiler(
         string activityTypeKey,
         ExecutableActivityStructure? structure,
         string? contractVersion = null,
-        IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null)
+        IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null,
+        IReadOnlyCollection<string>? bpmnDecisionOutcomes = null)
     {
         var resultType = FindTypedActivityResult(activityType);
         if (resultType is null)
@@ -521,7 +523,15 @@ public sealed class ExecutableNodeCompiler(
             })
             .ToArray();
         var resultReference = TypeReferenceFactory.FromClrType(resultType, TypeAliasConvention.CanonicalAlias);
-        var outcomes = ResolveOutcomes(activityType, structure, inputBindings);
+        var outcomes = ResolveOutcomes(activityType, structure, inputBindings).ToHashSet(StringComparer.Ordinal);
+        if (bpmnDecisionOutcomes is not null)
+        {
+            outcomes.UnionWith(bpmnDecisionOutcomes);
+            // A literal may deliberately select the default path without naming a conditional flow.
+            if (inputBindings?.GetValueOrDefault("Outcome")?.LiteralValue is { ValueKind: JsonValueKind.String } literal &&
+                !string.IsNullOrWhiteSpace(literal.GetString()))
+                outcomes.Add(literal.GetString()!.Trim());
+        }
         var resultPolicy = projections.Aggregate(
             ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result },
             (policy, projection) => ValuePolicyCombiner.Combine(
@@ -666,12 +676,14 @@ public sealed class ExecutableNodeCompiler(
         IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows,
         IReadOnlyDictionary<string, ExecutableNode> placedActivities,
         IReadOnlyCollection<VariableDefinition> workflowVariables,
-        IReadOnlyCollection<InputDefinition> workflowInputs)
+        IReadOnlyCollection<InputDefinition> workflowInputs,
+        ActivityNodeStructure? parentStructure = null)
     {
         return childSlots
             .Select(slot =>
             {
-                var children = slot.Activities.Select(activity => CompileNode(activity, projection, activityRows, placedActivities, workflowVariables, workflowInputs)).ToArray();
+                var children = slot.Activities.Select(activity => CompileNode(activity, projection, activityRows, placedActivities, workflowVariables, workflowInputs,
+                    BpmnDecisionOutcomes(parentStructure, activity, activityRows))).ToArray();
                 var context = new OperatorActivitySchedulingCapabilityCompilationContext(
                     parentActivityType,
                     parentExecutableNodeId,
@@ -686,6 +698,35 @@ public sealed class ExecutableNodeCompiler(
 
                 return new ExecutableChildSlot(slot.Name, children, capabilities.SingleOrDefault());
             })
+            .ToArray();
+    }
+
+    // Outcome names are authored on the owning BPMN element's sequence flows, not on the leaf's
+    // CLR contract. Pin them on that Decision invocation just as Switch pins its authored case labels.
+    // Keep the runtime's finite outcome validation and every other activity contract unchanged.
+    private static IReadOnlyCollection<string>? BpmnDecisionOutcomes(
+        ActivityNodeStructure? parentStructure,
+        ActivityNode child,
+        IReadOnlyDictionary<string, ActivityDefinitionVersion> activityRows)
+    {
+        if (parentStructure?.Kind != "elsa.bpmn.structure" ||
+            !activityRows.TryGetValue(child.ActivityVersionId, out var version) ||
+            version.Definition?.ActivityTypeKey != "Elsa.Activities.Bpmn.Activities.BpmnDecision" ||
+            !parentStructure.Payload.TryGetProperty("elements", out var elements) ||
+            !parentStructure.Payload.TryGetProperty("sequenceFlows", out var flows))
+            return null;
+
+        var elementIds = elements.EnumerateArray()
+            .Where(element => element.TryGetProperty("childNodeId", out var nodeId) && nodeId.GetString() == child.NodeId)
+            .Select(element => element.GetProperty("elementId").GetString())
+            .ToHashSet(StringComparer.Ordinal);
+        return flows.EnumerateArray()
+            .Where(flow => elementIds.Contains(flow.GetProperty("sourceRef").GetString()))
+            .Where(flow => !flow.TryGetProperty("isDefault", out var isDefault) || isDefault.ValueKind != JsonValueKind.True)
+            .Select(flow => flow.TryGetProperty("conditionOutcome", out var outcome) ? outcome.GetString() : null)
+            .Where(outcome => !string.IsNullOrWhiteSpace(outcome))
+            .Select(outcome => outcome!.Trim())
+            .Distinct(StringComparer.Ordinal)
             .ToArray();
     }
 

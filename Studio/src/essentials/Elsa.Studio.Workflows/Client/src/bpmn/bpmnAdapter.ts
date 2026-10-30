@@ -7,6 +7,8 @@ import { collectActivityNodeIds, getActivityDisplay, getChildSlots, readStructur
 import {
   bpmnElementTypes,
   bpmnStructureKind,
+  isBpmnDecisionType,
+  isDecisionGatewayType,
   type BpmnElement,
   type BpmnSequenceFlow,
   type BpmnShapeDescriptor
@@ -225,13 +227,15 @@ export function createBpmnShapeNode(shape: BpmnShapeDescriptor, position: XYPosi
 
 // Canvas node + ActivityNode pair for a catalog activity dropped into a BPMN scope: the activity
 // becomes a slot child and the element binds it. Container activities land as subProcess elements,
-// everything else as a task.
+// decisions as exclusive gateways, and other leaves as tasks.
 export function createBpmnBoundNode(
   catalogItem: ActivityCatalogItem,
   activityNode: ActivityNode,
   position: XYPosition
 ): Node<BpmnNodeData> {
-  const elementType = isContainerCatalogItem(catalogItem) ? bpmnElementTypes.subProcess : bpmnElementTypes.task;
+  const elementType = isBpmnDecisionType(catalogItem.activityTypeKey)
+    ? bpmnElementTypes.exclusiveGateway
+    : isContainerCatalogItem(catalogItem) ? bpmnElementTypes.subProcess : bpmnElementTypes.task;
   const element: BpmnElement = {
     elementId: createBpmnElementId(elementType),
     elementType,
@@ -255,6 +259,21 @@ export function createBpmnBoundNode(
         iconTone: resolveActivityIconTone(catalogItem)
       },
       childSlots: getChildSlots(activityNode, catalogItem)
+    }
+  };
+}
+
+// Attach once, retaining the gateway's identity, routing, layout and opaque authored fields.
+export function bindBpmnDecision(owner: ActivityNode, elementId: string, decision: ActivityNode): ActivityNode {
+  const element = findBpmnElement(owner, elementId);
+  if (!element || element.childNodeId || !isDecisionGatewayType(element.elementType)) return owner;
+  const activities = owner.structure!.payload.activities;
+  const updated = updateBpmnElement(owner, elementId, { childNodeId: decision.nodeId });
+  return {
+    ...updated,
+    structure: {
+      ...updated.structure!,
+      payload: { ...updated.structure!.payload, activities: [...(Array.isArray(activities) ? activities : []), decision] }
     }
   };
 }
