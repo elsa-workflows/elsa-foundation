@@ -1,0 +1,9 @@
+Observed durable 429 and completed sibling; owned predecessor terminated.
+Owned private diagnostic root: /var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-etl-http-recovery-uyk9_gud
+Traceback (most recent call last):
+  File "/Users/sipke/.codex/worktrees/f236/elsa-foundation/e2e-tests/etl/qualify_http_recovery.py", line 1297, in <module>
+    if __name__=="__main__":main()
+  File "/Users/sipke/.codex/worktrees/f236/elsa-foundation/e2e-tests/etl/qualify_http_recovery.py", line 1103, in main
+    raise ValueError("The actual inverse-order cancellation was not deferred: "+sdk_log.read_text())
+ValueError: The actual inverse-order cancellation was not deferred: {"operation":"enqueue-model-owned-native-start","accepted":false,"failureType":"RuntimeSchedulerWorkUnavailableException","message":"Native downstream cancellation remains owed."}
+

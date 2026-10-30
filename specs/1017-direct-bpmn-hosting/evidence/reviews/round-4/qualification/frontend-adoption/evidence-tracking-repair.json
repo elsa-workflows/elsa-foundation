@@ -1,0 +1,75 @@
+{
+  "source": "7187d245deed72e8783a951938cf577dfb9afa43",
+  "failedCiSource": "78554070a07b5a71481abf106bf33e12acc6fa19",
+  "failedJob": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/41144275369/job/124365777454",
+  "failure": "MSB3030 missing original producer-ready.log",
+  "originalManifestHashesUnchanged": true,
+  "allExplicitHostingFixtureInputsTracked": true,
+  "restoredAssets": [
+    {
+      "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-1/acceptance-cancel-order/build.log",
+      "sha256": "1862c4d0e4658aefb26a1a1e6abff1c140cc8048ba8768d4ef78d7e8998719bb",
+      "bytes": 286
+    },
+    {
+      "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-1/acceptance-cancel-order/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-1/inverse-observer-signal/controller.log",
+      "sha256": "8ed32038fa4c3c361990042e38f4ccf60a5ce5684f56273d6d2092c52863721c",
+      "bytes": 848
+    },
+    {
+      "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-1/inverse-observer-diagnostic/controller.log",
+      "sha256": "3822e058ee04aa134887759738a879c27343916cc6f05dbfa2038236da663d0a",
+      "bytes": 876
+    },
+    {
+      "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-4/acceptance/current-studio-controls.log",
+      "sha256": "2ca9675e41f622ba9a2566e72097c590759f55ce99ff27c3c9454d169a54c706",
+      "bytes": 1604
+    },
+    {
+      "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-4/acceptance/etl-controls.log",
+      "sha256": "9dbd13999c3a5da394abfe4bdd026d6ee9b3421993b48ea326a629e9ce6ed4a8",
+      "bytes": 360
+    },
+    {
+      "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-4/acceptance/waiting-old-writer/producer-ready.log",
+      "sha256": "3571dc48e819f4cb10ffd936cdf9528033dfd20921a9f39fc3ce1427f9e2715a",
+      "bytes": 32886
+    },
+    {
+      "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-4/acceptance/current-cancel-control/control.log",
+      "sha256": "fd0ff651467c1ec346ef55aafa83a264c430e72fbf8fec508226c2f96cf1cb5d",
+      "bytes": 22749
+    },
+    {
+      "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-4/correctness/focused-runtime.log",
+      "sha256": "68e15b591a7c6cbc2f46ab48b8034643d8df633e894e34d4ca7f454302714784",
+      "bytes": 455
+    },
+    {
+      "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-4/correctness/router-probe/build.log",
+      "sha256": "387ad0556156af4ea4930a237410edc8507d59cb522bfff6fd000d70e0d56a3e",
+      "bytes": 76
+    },
+    {
+      "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-4/correctness/router-probe/result.log",
+      "sha256": "3dfc8ee0d6653c7d78ef1cbdeec667ea7539d26cb437524dac2444eb37d01755",
+      "bytes": 894
+    },
+    {
+      "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-4/standards/probe.log",
+      "sha256": "52694b22b68d71b49a33f587ece5adb7f6cd6f05806aa4f46a55212f5b0ccaba",
+      "bytes": 655
+    },
+    {
+      "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-4/standards/probe-dispatcher.log",
+      "sha256": "a0f9eaeef9df1d27ac159add6374165258a83b3436be27d7d0ca70cf041c801b",
+      "bytes": 3040
+    }
+  ]
+}

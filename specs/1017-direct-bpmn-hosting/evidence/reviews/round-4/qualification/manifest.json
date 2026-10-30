@@ -294,13 +294,17 @@
     },
     {
       "path": "frontend-adoption/README.md",
-      "sha256": "d2b18166ffa87399c973f9e5a299a82acf82b059a7e30e09f3b62c9477c8ed4c"
+      "sha256": "b4681e3e01dd6ad9091e0238fd5f4a1f96d8c63680568df37eac778a13378247"
     },
     {
       "path": "frontend-adoption/architecture-final-tree.log.gz",
       "sha256": "abb3da02f56310f1947c786f5029ddf717161ca92048d36e77354b98eaa31f1a",
       "decodedSha256": "c19274c7f476a88a7ac292ecd05b250e78d0d34ea07c1df156085bcfc1cd5bfc",
       "decodedBytes": 447
+    },
+    {
+      "path": "frontend-adoption/evidence-tracking-repair.json",
+      "sha256": "e0e7ddf369f4c59f9b1fc0d45e965f817904d330221fc8de58e5f4d19b0aaede"
     },
     {
       "path": "frontend-adoption/frontend-adoption-architecture.trx.gz",
