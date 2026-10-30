@@ -1,7 +1,7 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider, useTheme } from "../app/components/ThemeProvider";
 import { getTheme, getThemeModeDefinition } from "../app/themes/presets";
 import { appearanceResetStorageKeys } from "../app/themes/appearance";
@@ -124,8 +124,12 @@ describe("independent workspace appearance", () => {
     localStorage.setItem("elsa-studio-theme", "drift");
     localStorage.setItem("elsa-studio-color-scheme", "custom-removed");
     await render({ http: { getJson: async () => normalizeThemeStore() } } as unknown as StudioEndpointContext);
-    expect(localStorage.getItem("elsa-studio-color-scheme")).toBeNull();
-    expect(html().getAttribute("data-color-scheme")).toBe("drift");
+    // Store reconciliation writes preferences before the follow-up render applies DOM colors.
+    await vi.waitFor(() => {
+      expect(localStorage.getItem("elsa-studio-color-scheme")).toBeNull();
+      expect(html().getAttribute("data-theme")).toBe("drift");
+      expect(html().getAttribute("data-color-scheme")).toBe("drift");
+    });
   });
 
   it("previews a full preset transiently without rewriting independent preferences", async () => {
