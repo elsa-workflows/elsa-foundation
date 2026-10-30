@@ -97,6 +97,31 @@ this page, needs an authorized role, a scope, a reason and a record on the PR.
 **Review.** The PR requests every approver in its plan, so GitHub notifies them at once. Small points are settled in
 PR comments and reviews. A topic that cannot be settled in comments goes to a meeting.
 
+**Reconciliation.** A review or a position comment that raises more than a couple of points gets a reconciliation: a
+table that answers every point.
+- **Who writes it:** the PR's author for a review of one PR; the coordinator for a position that spans several PRs or
+  decisions.
+- **Where:** on the PR for a single review. On the initiative issue for a position across PRs, with a pointer on each
+  PR it changes.
+- **Each row** has the point, where it lives (PR, ADR section, spec), a status, a named drafter and the answer:
+  - **agreed:** the author of the point and the PR text say the same, or will once the drafter applies it (the row
+    names the commit when it is applied);
+  - **needs clarification:** a question back, asked where the point lives;
+  - **differs:** the positions, the current text, and the answer or options.
+- **Every point the PR adopts** also gets a short reply on its review thread, naming the commit.
+- **A reconciliation never makes anything agreed.** It says what each PR's text will be. Agreement still follows the
+  rule below: every approver in the PR's approval plan approves the PR.
+- **Open rows reach the board:** a clarification names who must answer in *Who is needed where*, and a "differs" that
+  comments do not settle becomes a meeting topic.
+
+```markdown
+| # | Point | Where | Status | Answer | Drafter |
+|---|---|---|---|---|---|
+| 1 | Exact member matching | #1234 decision 2 | agreed | Adopted in abc1234 | @drafter |
+| 2 | Unmatched-key severity | #1234 | needs clarification | Warning or refusal? | @drafter |
+| 3 | Outcome API | #1240 | differs | Setters only until a case shows they cannot express it | @drafter |
+```
+
 **Agreement.** A decision is agreed when every approver in the PR's approval plan, other than the PR's author, has
 approved it (GitHub does not let authors approve their own PR). The coordinator then:
 - commits `Status: accepted (<date>)` on the PR branch, or asks the author to;
@@ -139,7 +164,9 @@ an architect. The source record stays visible before the next sync. The pointer 
 - it sets the "Last synced" line on the board;
 - it reports who is blocking whom, and offers reminders and meeting topics, without sending them;
 - it also reads the linked PRs and issues, so that work reported without a pointer (for example a PR approved in the
-  browser) still reaches the board.
+  browser) still reaches the board;
+- it checks that every reconciliation row has reached its PR (applied, asked, or on the meeting list), and offers a
+  reconciliation for any multi-point review or position that has none yet.
 
 **Check-in.** "Where am I needed on #N?" reads three things:
 - the board;
