@@ -115,8 +115,9 @@ It permits:
 - the current time, random values and GUID generation. Evaluators run in UTC with the invariant culture, and
   time comes from the host's `TimeProvider`;
 - functions implemented in .NET that are registered for this profile and exchange only JSON values with
-  the expression. Functions carry no effect profile: a call is never refused or skipped because of what
-  it does, and the workflow designer owns the idempotency of external effects (D-6).
+  the expression. A call is never refused or skipped because of what it does, and the workflow designer
+  owns the idempotency of external effects (D-6). No function profile is required; a durability hint, if
+  the D-2 details need one, is defined there.
 
 It forbids:
 

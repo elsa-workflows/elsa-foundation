@@ -59,12 +59,14 @@ behaviour.
 - **The name starts a new family at v1.** The succession from `binding-pure-v1` is recorded here, not in the version
   number.
 - **It also allows functions implemented in .NET** that are registered for the profile and exchange only JSON values
-  with the script (D-5). Functions carry no effect profile; a call is never refused or skipped because of what it
-  does (D-6).
+  with the script (D-5). A call is never refused or skipped because of what it does (D-6). No function profile is
+  required; if the D-2 details amendment of ADR 0045 needs a classification for the durability boundary of input
+  evaluation, it is a durability hint defined there.
 - **It forbids live .NET objects,** always. Scripts that may use objects the host explicitly registers use a separate
   profile, for example `binding-readonly-interop-v1` (analysis A-1, ADR 0046 amendment V10). A host opt-in allows that
   profile, and the executable pins it like any profile, so one profile name never means different behaviour on
-  different hosts.
+  different hosts. General .NET access is never available to a binding: a host may allow it only for script
+  activities, through a further, separately named profile (ADR 0046 amendment V10).
 - **Spec 095's expression contract defines the profile in full.** That definition is amended alongside this ADR.
 
 The profile is part of the expression definition, so changing it changes expression fingerprints and artifact hashes
