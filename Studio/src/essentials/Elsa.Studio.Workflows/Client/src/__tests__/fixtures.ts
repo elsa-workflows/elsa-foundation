@@ -90,6 +90,31 @@ export const forEachActivity: ActivityCatalogItem = {
   }]
 };
 
+export const whileActivity: ActivityCatalogItem = {
+  ...writeLine,
+  activityVersionId: "activity-while-v1",
+  activityTypeKey: "Elsa.Activities.ControlFlow.While.Activities.While",
+  category: "Control Flow",
+  displayName: "While",
+  designFacets: [{
+    kind: "elsa.while.structure",
+    schemaVersion: "1.0.0",
+    payload: {
+      mode: "generic",
+      supportsScopedVariables: false,
+      slots: [{ name: "While.Body", property: "body", displayName: "Body", cardinality: "single" }],
+      initialPayload: { body: null }
+    }
+  }]
+};
+
+export function whileNode(nodeId: string, body: ActivityNode | null): ActivityNode {
+  return {
+    nodeId, activityVersionId: whileActivity.activityVersionId, inputs: [], outputs: [],
+    structure: { kind: "elsa.while.structure", schemaVersion: "1.0.0", payload: { body } }
+  };
+}
+
 // Built-in engine-intrinsic catalog descriptors (foundation #942). Shapes mirror
 // IntrinsicAuthoringDescriptorProvider: stable version ids, Primitives category, additive `intrinsic`
 // block, and a value/variable (or name) input. `type` is the raw backend field; the catalog fetch
