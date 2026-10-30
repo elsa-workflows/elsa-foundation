@@ -196,11 +196,11 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   return <>
   <main className="ad-page ad-workbench" aria-labelledby="activity-definition-title">
     <header className="ad-workbench-header ad-definition-header">
-      <nav className="ad-definition-navigation" aria-label="Activity definition navigation">
+      <div className="ad-definition-navigation">
         <button type="button" className="ad-back" onClick={() => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null })}>
           <ArrowLeft size={14} aria-hidden /> Activity Definitions
         </button>
-      </nav>
+      </div>
       <div className="ad-definition-identity">
         <h1 id="activity-definition-title">{detail.definition.displayName}</h1>
         {detail.definition.description ? <p>{detail.definition.description}</p> : null}
