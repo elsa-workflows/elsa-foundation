@@ -75,16 +75,31 @@ hold. The **Check** column says who must guarantee it under this ADR; the **Toda
 |---|---|---|---|
 | C1 | **A leaf.** A CLR activity that is not an intrinsic, not a reusable activity boundary, has no children, and is not a structural activity or a child completion, fault, outcome or notification handler. | E | enforced |
 | C2 | **Completes in one go.** It does not suspend (`IStatefulActivity`) and does not take part in checkpoints. | E | enforced |
-| C3 | **Typed result.** It has a pinned, typed result contract; the result is not `object` or `Any`. | E | publish only |
+| C3 | **Typed result.** It has a pinned, typed result contract; the result is not `object` or `Any`. *Limit of today's support (below).* | E | publish only |
 | C4 | **Durable result.** No stream, transient-resource or non-persistable result or projection. | E | publish checks all three; run time checks persistability only |
-| C5 | **No hidden result.** No sensitive or encryption-required result or projection. | E | enforced |
+| C5 | **No hidden result.** No sensitive or encryption-required result or projection. *Limit of today's support (below).* | E | enforced |
 | C6 | **No coordinator effects from the body.** The body does not dispatch workflows or publish stimuli; those belong to the coordinator. | R | enforced at run time |
 | C7 | **Tolerates running more than once.** After a worker is lost the body runs again. Its external effects are idempotent, or keyed on the stable invocation identity (`InvocationId`), as D-2 requires of every external effect. | D | in spec 241, not on the attribute |
 | C8 | **Cancels cooperatively.** The body observes its cancellation token and stops. A body that ignores it cannot change the outcome (spec 241 FR-008), but it keeps a worker busy. | D | in spec 241, not on the attribute |
-| C9 | **Variables only through inputs and results.** The body does not read or write workflow variables. Variables reach it through its inputs, read on the coordinator; its result reaches variables through output captures, applied on the coordinator. Both are protected by the lost-update rule of ADR 0092. Enforced by refusing a background placement for an activity that reads variables by name (`IRuntimeScopedVariableReader`), and later for one with ADR 0090's `[AccessesUndeclaredVariables]` or a writable `VariableReference<T>` input. | E | **new**: true by construction, not enforced |
+| C9 | **Variables only through inputs and results.** The body does not read or write workflow variables. Variables reach it through its inputs, read on the coordinator; its result reaches variables through output captures, applied on the coordinator. Both are protected by the lost-update rule of ADR 0092. Enforced by refusing a background placement for an activity that reads variables by name (`IRuntimeScopedVariableReader`), and later for one with ADR 0090's `[AccessesUndeclaredVariables]` or a writable `VariableReference<T>` input. *Limit of today's support (below).* | E | **new**: true by construction, not enforced |
 
-C9 holds until A-3 and ADR 0090 decide otherwise. If they give background steps a variable session, that session
-reads and writes through the ADR 0092 mechanism, and C9 changes in this ADR, not elsewhere.
+**Limits of today's support.** C3, C5 and C9 do not ban a category for good. They hold because the support a
+background step would need does not exist yet, and they are refused clearly until it does, never by silently
+returning missing values. Each names what lifts it:
+
+- **C3** lifts with the ADR 0046 value model, where `Any` is plain JSON with a defined adapter
+  ([#3422](https://github.com/elsa-workflows/elsa-foundation/pull/3422), spec S-8).
+- **C5** lifts with a worker transport that carries protection (encryption and redaction) symmetrically for inputs,
+  results, projections and session data. Secret references resolve at worker activation; secret material does not
+  enter ordinary persisted snapshots because a step moves to a worker.
+- **C9** lifts with a variable session for background steps through the ADR 0092 mechanism, with isolation, read
+  recording and atomic finalization on the coordinator. A-3 is agreed in direction: writes are a general capability
+  (folded into the ADR 0090 amendment,
+  [#3425](https://github.com/elsa-workflows/elsa-foundation/pull/3425)).
+
+When one lifts, the criterion changes in this ADR, not elsewhere. Nothing changes in behaviour today. Placement stays
+the workflow author's choice within what the host supports (decision 5). This follows @sfmskywalker's position of
+29 October: support based on capability, not blanket bans on sessions, `Any` or sensitive values.
 
 ### 3. The enforced criteria live in one place
 
@@ -151,8 +166,8 @@ question of whether it should exist belongs to A-3.
 2. **The new criteria C7, C8 and C9.** Are they right, and is anything missing? For example, a bound on how long a body
    may run, or a rule about which services a body may use.
 3. **One place** (decision 3). Any reason the publish and run-time checks must stay separate lists?
-4. **C9 and A-3.** Sipke, does C9 match how you see A-3 going, or do you expect background steps to get a variable
-   session?
+4. **Limits of today's support** (changed 30 October). C3, C5 and C9 are refused until the support they name exists.
+   Sipke, does this match your capability-based position, and is the list of what lifts each one right?
 5. **Provider order.** Must a background result be applied in the same order on every provider, or is the order
    between unordered branches undefined anyway (D-8) and only the write history needs to show it?
 6. **Inputs.** Results must be durable and not hidden (C4, C5), but the input snapshot that travels to the worker is
