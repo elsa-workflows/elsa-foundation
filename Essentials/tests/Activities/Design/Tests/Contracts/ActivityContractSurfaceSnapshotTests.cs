@@ -50,6 +50,7 @@ public sealed class ActivityContractSurfaceSnapshotTests
     public void The_catalog_allows_an_http_response_without_a_body()
     {
         var activity = Assert.Single(ScanShippedActivities(), model => model.ActivityTypeKey == "Elsa.Activities.Http.Activities.WriteHttpResponse");
+        Assert.Equal("1.1.0", activity.Version);
         var body = Assert.Single(activity.Outputs, output => output.ReferenceKey == "Body");
         Assert.False(body.IsRequired);
         Assert.True(body.IsNullable);
