@@ -1,0 +1,13 @@
+[
+  "dotnet",
+  "run",
+  "--project",
+  "/tmp/elsa-2898-closed-reader-diagnostic/Diagnostic.csproj",
+  "--",
+  "/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/bpmn/DeliveryRecoveryRead/bin/Release/net10.0/DeliveryRecoveryRead.dll",
+  "/tmp/elsa-2898-closed-reader-diagnostic/refused.sqlite",
+  "default",
+  "/tmp/elsa-2898-called-repeat-6153c1c23/2/evidence/diagnostics/checked-refusal-8c42c0d6372b4f6f8713b0b034f81328/0-finished-api.json",
+  "/tmp/elsa-2898-called-repeat-6153c1c23/2/evidence/diagnostics/checked-refusal-8c42c0d6372b4f6f8713b0b034f81328/1-notice-marker.json",
+  "finished"
+]

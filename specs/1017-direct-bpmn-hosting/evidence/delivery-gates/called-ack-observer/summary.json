@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "compiledSourceRevision": "6153c1c23bf66f3b63f4f218147b1f2a7b5c2730",
+  "focusedInitialPassed": 1,
+  "repeatAttempts": [
+    {
+      "attempt": 1,
+      "passed": 1
+    },
+    {
+      "attempt": 2,
+      "failed": 1
+    }
+  ],
+  "repeatStoppedOnFirstFailure": true,
+  "closedSnapshotRetained": true,
+  "closedSnapshotHashUnchangedDuringDiagnostic": true,
+  "actualReaderHash": "a0a7060e641834579845abbfd0bfcc037eb6b2509b20a8d77c8076d328ca6eb3",
+  "failureReason": "The later real terminal source has no equivalent durable consumption proof.",
+  "physicalPendingSources": 1,
+  "pendingSourceKind": "Elsa.Activities.DispatchWorkflow.ResumeParent",
+  "physicalPendingStatus": "Delivering",
+  "callerCompleted": true,
+  "qualifyingFinalGate": false,
+  "fix": "The fixture waits for actual durable source acknowledgements before stopping the host; the checked-provider guard and runtime implementation stay unchanged."
+}

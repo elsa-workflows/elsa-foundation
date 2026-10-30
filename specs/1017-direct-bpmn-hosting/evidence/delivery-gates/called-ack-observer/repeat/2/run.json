@@ -1,0 +1,19 @@
+{
+  "sourceRevision": "6153c1c23bf66f3b63f4f218147b1f2a7b5c2730",
+  "command": [
+    "dotnet",
+    "test",
+    "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+    "-c",
+    "Release",
+    "--no-build",
+    "--no-restore",
+    "--filter",
+    "FullyQualifiedName~LegacyCalledAcknowledgmentUpgradeTests",
+    "--logger",
+    "trx;LogFileName=called.trx",
+    "--results-directory",
+    "/tmp/elsa-2898-called-repeat-6153c1c23/2"
+  ],
+  "evidenceDirectory": "/tmp/elsa-2898-called-repeat-6153c1c23/2/evidence"
+}

@@ -178,3 +178,8 @@ After prerequisite implementation is complete, T011/T012 can be developed/run in
 ## Implementation strategy
 
 Keep one claimed issue and one draft PR. Complete/review spec → plan → tasks, then capture the baseline and implement in small commits with focused checks. Demonstrate US1 first; continue all required stories and service integration without claiming partial issue completion. Preserve the frozen authoring/state boundary, named semantic owners and actual result/settlement proofs. Maintain concise GitHub checkpoints at material transitions and Project62 mirrors; no new checkpoint issues or competing backlog.
+
+
+## Consolidated implementation evidence
+
+The [qualification index](evidence/qualification.md) maps all22 functional requirements, six success criteria and five #2898 criteria to source-bound actual receipts and declared limits. It also records the implementation path deviations: existing Runtime resumption tests rather than a new Resumption test project, existing native dispatch contribution ports rather than a new DispatchWorkflow layer, and the actual bridge/retry test classes rather than duplicate planned filenames. The [8061-pass whole-project gate](evidence/delivery-gates/4d77feefd/README.md) retains its source; the expanded32-case hosting run atc34c1f4e1 is31 passed/one checked-provider refusal, not green. Refusal-time closed-store diagnostics are now retained by the test observer and a focused reproduction is in progress. T043/T044 and final review/merge stay open. Newer main/Studio changes still need adoption and affected qualification; prior T041 evidence is not relabelled.

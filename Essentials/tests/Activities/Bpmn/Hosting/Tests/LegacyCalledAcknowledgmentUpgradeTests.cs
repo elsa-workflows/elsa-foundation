@@ -91,6 +91,8 @@ public sealed class LegacyCalledAcknowledgmentUpgradeTests
                 Assert.Equal(Activity(recoveredParent, "node-warning")["activityExecutionId"]!.GetValue<string>(), Activity(finishedParent, "node-warning")["activityExecutionId"]!.GetValue<string>());
                 Assert.Equal("Completed", Activity(finishedParent, "node-warning")["status"]!.GetValue<string>());
                 Assert.Equal("Completed", Activity(finishedParent, "node-normal")["status"]!.GetValue<string>());
+                // Recipient completion precedes the sender's durable acknowledgement; observe both before stopping it.
+                await WaitForSourceAcknowledgmentsAsync(host);
                 await host.StopAsync();
                 var finishedBackup = Path.Combine(temporary.FullName, "finished.sqlite"); await BackupAsync(host.RuntimeDatabase, finishedBackup);
                 var finishedApi = Receipt(original, finishedParent, finishedChild, "Finished", "FinishWarning");
@@ -130,6 +132,20 @@ public sealed class LegacyCalledAcknowledgmentUpgradeTests
                 limits = new[] { "Legacy native/BpmnProcess called-control acknowledgment only; no direct-model parent bridge or settlement is proved.",
                     "Broadcast, active MI/compensation/control, actual Studio and native/ETL service integration remain open." }
             }, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }) + Environment.NewLine);
+        }
+    }
+
+    private static async Task WaitForSourceAcknowledgmentsAsync(OwnedWorkbench host)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
+        while (true)
+        {
+            await using var connection = Read(host.RuntimeDatabase); await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT COUNT(*) FROM elsa_runtime_post_commit_outbox WHERE Status <> 2";
+            if ((long)(await command.ExecuteScalarAsync())! == 0) return;
+            Assert.True(DateTimeOffset.UtcNow < deadline, "Actual called-result sources have not durably acknowledged.");
+            await Task.Delay(100);
         }
     }
 
