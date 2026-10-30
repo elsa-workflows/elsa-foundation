@@ -73,11 +73,13 @@ public sealed class RunBpmnParallelWorkbenchTests
         var directory = Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_EVIDENCE_DIRECTORY");
         var caseName = "parallel-" + parent.ToLowerInvariant();
         var initial = new Dictionary<string, JsonNode[]>();
+        var knownWork = new Dictionary<string, List<JsonNode>>();
         foreach (var id in ids)
         {
             var work = (await host.GetAsync(Path(id) + "/work"))["items"]!.AsArray();
             Assert.Equal(2, work.Count);
             initial[id] = [Work(work, "left"), Work(work, "right")];
+            knownWork[id] = initial[id].ToList();
         }
         checkedStages["bothWaiting"] = await Checked();
         foreach (var id in ids) commands[id + ":left"] = await Complete(id, initial[id][0], "left");
@@ -110,6 +112,7 @@ public sealed class RunBpmnParallelWorkbenchTests
             joined[id] = await host.GetAsync(Path(id));
             Assert.Equal(3, joined[id]["revision"]!.GetValue<long>());
             afterJoin[id] = Assert.Single((await host.GetAsync(Path(id) + "/work"))["items"]!.AsArray())!;
+            knownWork[id].Add(afterJoin[id]);
             Assert.Equal("after-join", afterJoin[id]["elementId"]!.GetValue<string>());
             var replay = await Complete(id, initial[id][1], "right"); commands[id + ":right-replay"] = replay;
             AssertReplay(replay, id, "right");
@@ -156,7 +159,7 @@ public sealed class RunBpmnParallelWorkbenchTests
                 nativeExecutionId = nativeId, modelExecutionId = modelId, directCounterpartId = directId, published, publication, initial, afterJoin,
                 commands, views, nativeFinal, processes, ownedProcesses, exits, snapshots, binaries = host.DescribeBinaries(source, includePublishing: true),
                 termination = ".NET Process.Kill(entireProcessTree: true)", executionStateEdited = false, claimEdited = false, clockEdited = false,
-                normalization = "Only tokens.producingWorkHandle equal to the owning model execution ID becomes $model.",
+                normalization = "Only tokens.producingWorkHandle is normalized: the owning model ID becomes $model; an observed local human invocation becomes its exact element/binding/token/iteration tuple.",
                 limits = new[] { "Actual SQLite and built-in single-node actor; model-owned human work and existing native parents only.",
                     "No cancellation, ETL, timer, broadcast or upgraded-host result is inferred from this partial-fork witness." } };
             var output = System.IO.Path.Combine(directory, caseName);
@@ -199,7 +202,7 @@ public sealed class RunBpmnParallelWorkbenchTests
                     await host.SnapshotAsync("refused-design.sqlite.gz", diagnostic, design: true) };
                 var receipt = new { sourceRevision = Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_SOURCE_REVISION"), parent,
                     nativeExecutionId = nativeId, modelExecutionId = modelId, directCounterpartId = directId,
-                    published, publication, initial, commands, views, ownedProcesses, exitCode = host.LastStoppedExitCode, stores,
+                    published, publication, initial, knownWork, commands, views, ownedProcesses, exitCode = host.LastStoppedExitCode, stores,
                     binaries = host.DescribeBinaries(Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_SOURCE_REVISION"), includePublishing: true),
                     executionStateEdited = false, claimEdited = false, clockEdited = false, qualifyingJourney = false };
                 await File.WriteAllTextAsync(System.IO.Path.Combine(output, "refused-case.json"), JsonSerializer.Serialize(receipt, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }));
@@ -207,11 +210,18 @@ public sealed class RunBpmnParallelWorkbenchTests
             Assert.True(same, "The same accepted partial-fork inputs produced different released-interpreter states.");
             return value;
         }
-        static JsonNode Normalize(JsonNode model)
+        JsonNode Normalize(JsonNode model)
         {
             var state = model["payload"]!["state"]!.DeepClone();
+            var execution = model["executionId"]!.GetValue<string>();
+            var handles = knownWork[execution].ToDictionary(work => work["invocationId"]!.GetValue<string>(), work => "$human:" +
+                new JsonArray(work["elementId"]!.DeepClone(), work["bindingId"]!.DeepClone(), work["tokenId"]!.DeepClone(), work["iterationId"]?.DeepClone()).ToJsonString());
             foreach (var token in state["tokens"]!.AsArray())
-                if (token!["producingWorkHandle"]?.GetValue<string>() == model["executionId"]!.GetValue<string>()) token["producingWorkHandle"] = "$model";
+            {
+                var handle = token!["producingWorkHandle"]?.GetValue<string>();
+                if (handle == execution) token["producingWorkHandle"] = "$model";
+                else if (handle is not null && handles.TryGetValue(handle, out var local)) token["producingWorkHandle"] = local;
+            }
             return state;
         }
         async Task Capture(string stage)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Verify actual paired direct/native partial-fork recovery, including physical stores and one permitted normalization."""
-from contextlib import closing
+from copy import deepcopy
 import argparse
 import importlib.util
 import json
@@ -15,6 +15,19 @@ PHASES = ('bothWaiting', 'partial', 'recovered', 'joined', 'final', 'retained')
 
 def require(condition, message):
     if not condition: raise ValueError(message)
+
+
+def semantic_state(model, case):
+    state = deepcopy(model['payload']['state']); identity = model['executionId']
+    known = [*case['initial'][identity]]
+    if identity in case['afterJoin']: known.append(case['afterJoin'][identity])
+    handles = {w['invocationId']: '$human:' + json.dumps([w[k] for k in ('elementId', 'bindingId', 'tokenId', 'iterationId')], separators=(',', ':')) for w in known}
+    require(len(handles) == len(known), 'The observed local human-work ledger repeats an invocation.')
+    for token in state['tokens']:
+        handle = token['producingWorkHandle']
+        if handle == identity: token['producingWorkHandle'] = '$model'
+        elif handle in handles: token['producingWorkHandle'] = handles[handle]
+    return state
 
 
 def verify(path):
@@ -62,7 +75,7 @@ def verify(path):
                 model['payload']['nativeParent'] == original['payload']['nativeParent'] and
                 checked['nativeParent']['pinnedExecutable'] == first['nativeParent']['pinnedExecutable'],
                 'A partial-fork stage changed its actual model/native identity, incarnation or parent address.')
-            require(v.semantic_state(model) == v.semantic_state(counterpart), 'The actual direct/embedded released-interpreter traces differ after the single permitted normalization.')
+            require(semantic_state(model, case) == semantic_state(counterpart, case), 'The actual direct/embedded released-interpreter traces differ after the permitted model-local producer-handle normalization.')
             revision, elements = (1, {'left', 'right'}) if phase == 'bothWaiting' else (2, {'right'}) if phase in ('partial', 'recovered') else (3, {'after-join'}) if phase == 'joined' else (5, set())
             require(model['revision'] == revision and counterpart['revision'] == (4 if phase in ('final', 'retained') else revision) and
                 {w['elementId'] for w in model['payload']['work']} == {w['elementId'] for w in counterpart['payload']['work']} == elements and
@@ -105,11 +118,19 @@ def verify(path):
                     for model in (checked['model'], checked['directCounterpart']):
                         require(connection.execute('SELECT COUNT(*) FROM elsa_runtime_model_input WHERE ExecutionId = ?', (v.key(model['executionId']),)).fetchone()[0] == model['revision'],
                             'A physical partial-fork input receipt is absent or duplicated.')
+                        identity = model['executionId']; observed = {w['elementId']: w for w in case['initial'][identity]}
+                        observed['after-join'] = case['afterJoin'][identity]
+                        for step, element in [('left', 'left')] + ([] if phase == 'partial' else [('right', 'right'), ('finish', 'after-join')]):
+                            command = case['commands'][identity + ':' + step]; work = observed[element]
+                            row = connection.execute('SELECT ContentJson FROM elsa_runtime_model_input WHERE ExecutionId = ? AND InputId = ?', (v.key(identity), v.key(command['inputId']))).fetchone()
+                            receipt = json.loads(row[0]) if row else {}
+                            require(receipt.get('invocationId') == v.key(work['invocationId']) and receipt.get('attemptId') == v.key(work['attemptId']),
+                                'The observed human-work ledger is not bound to its physical invocation/attempt receipt.')
                     require(connection.execute('SELECT COUNT(*) FROM elsa_runtime_activity_execution_state').fetchone()[0] == (1 if parent == 'Root' else 3),
                         'The physical native continuation ran more than once.')
     return {'sourceRevision': source, 'actualParentPairs': 4, 'modelExecutionsCompleted': 8, 'wholeStoresVerified': 24,
         'partialBranchesPreservedAcrossProcessLoss': True, 'singleLogicalJoins': 8, 'directEmbeddedTracesEqual': True,
-        'normalization': 'Only tokens.producingWorkHandle equal to the owning model ID becomes $model.',
+        'normalization': 'Only tokens.producingWorkHandle: owning model ID or observed local human invocation mapped by exact element/binding/token/iteration.',
         'etlOrStudioAcceptanceProved': False}
 
 
