@@ -126,8 +126,9 @@ function editorDraft(): WorkflowDraft {
   if (bpmnDecisionFixture) root.structure!.payload = {
     activities: bpmnDecisionFixture === "unbound" ? [] : [{ nodeId: "decision", activityVersionId: "decision-v1", inputs: [], outputs: [], structure: null }],
     elements: [
-      { elementId: "decision-element", elementType: bpmnDecisionFixture === "legacy" ? "task" : "exclusiveGateway",
-        ...(bpmnDecisionFixture !== "unbound" ? { childNodeId: "decision" } : {}) },
+      { elementId: "decision-element", elementType: bpmnDecisionFixture.startsWith("legacy") ? "task" : "exclusiveGateway",
+        ...(bpmnDecisionFixture !== "unbound" ? { childNodeId: "decision" } : {}),
+        ...(bpmnDecisionFixture === "legacy-loop" ? { loopCharacteristics: { kind: "standard" } } : {}) },
       { elementId: "high-end", elementType: "endEvent", name: "High" },
       { elementId: "low-end", elementType: "endEvent", name: "Low" }
     ],
@@ -267,7 +268,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
   const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");
   const paletteFixtures: ActivityCatalogItem[] = new URLSearchParams(window.location.search).has("palette-context") ? [
     bpmnActivity,
-    { ...writeLineCatalog, activityVersionId: "decision-v1", activityTypeKey: "Elsa.BpmnDecision", displayName: "BPMN Decision", category: "BPMN", inputs: [{
+    { ...writeLineCatalog, activityVersionId: "decision-v1", activityTypeKey: "Elsa.Activities.Bpmn.Activities.BpmnDecision", displayName: "BPMN Decision", category: "BPMN", inputs: [{
       referenceKey: "Outcome", name: "Outcome", typeName: "System.String", displayName: "Outcome", order: 0,
       isBrowsable: true, isWrapped: true, defaultSyntax: "Literal"
     }], paletteHints: { containerModes: ["bpmn"], description: "BPMN Decision is intended for a gateway in a BPMN Process." } },

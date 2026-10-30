@@ -112,7 +112,7 @@ import {
 import { BpmnElementInspector, BpmnElementConfiguration } from "../bpmn/BpmnElementInspector";
 import { bpmnPaletteElements } from "../bpmn/bpmnPaletteElements";
 import { emptyGraphElements } from "../graph-authoring/graphPaletteElements";
-import { bindBpmnDecision, collectOwnedNodeIds, findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
+import { bpmnGatewayConversionBlocker, bindBpmnDecision, collectOwnedNodeIds, findBpmnElement, readBpmnSequenceFlows, updateBpmnDefaultFlow, updateBpmnElement, updateBpmnFlow } from "../bpmn/bpmnAdapter";
 import { bpmnElementTypeLabel, isBpmnDecisionType, bpmnStructureKind, type BpmnElement, type BpmnSequenceFlow } from "../bpmn/bpmnTypes";
 import { exportBpmnDocument, importBpmnDocument, layoutFromBpmnDiagram, summarizeBpmnImportIssues, withDiagramFromLayout } from "../api/bpmnInterchange";
 import { SlotEmptyState } from "./SlotEmptyState";
@@ -934,6 +934,7 @@ export function WorkflowEditor({
     targetLabelFor: bpmnFlowTargetLabel,
     readOnly: editorDoc.pinned,
     isDecision: isBpmnDecisionType(selectedNode ? catalogByVersion.get(selectedNode.activityVersionId)?.activityTypeKey : undefined),
+    conversionBlockedReason: bpmnGatewayConversionBlocker(scopeOwner, selectedBpmnElement),
     onAddDecision: decisionCatalogItem ? addBpmnDecision : undefined
   } : null;
 

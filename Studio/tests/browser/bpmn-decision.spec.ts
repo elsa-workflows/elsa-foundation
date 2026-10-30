@@ -52,6 +52,16 @@ for (const host of ["workflow", "activity"]) {
     await expect(routing(page).getByLabel("Condition outcome for flow to High", { exact: true })).toHaveValue("High");
   });
 
+  test(`${host} preserves task loop settings by explaining and disabling gateway conversion`, async ({ page }) => {
+    await page.goto(`/?mode=activity-duplicate-editor&host=${host}&composition=bpmn&palette-context&bpmn-decision=legacy-loop&theme=dark`);
+    await element(page).click();
+    await expect(routing(page).getByLabel("Gateway type")).toBeDisabled();
+    await expect(routing(page).getByRole("note")).toContainText("Remove this task's loop or multi-instance settings");
+    await expect(element(page).locator(".wf-bpmn-task")).toBeVisible();
+    await outcome(page).fill("High");
+    await expect(outcome(page)).toHaveValue("High");
+  });
+
   test(`${host} attaches a decision to an existing gateway and inserts new decisions as gateways`, async ({ page }) => {
     await page.goto(`/?mode=activity-duplicate-editor&host=${host}&composition=bpmn&palette-context&bpmn-decision=unbound&theme=dark`);
     await page.locator(".wf-bpmn-node[data-element-type='exclusiveGateway']").click();

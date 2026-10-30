@@ -11,6 +11,7 @@ interface BpmnElementInspectorProps {
   readOnly?: boolean;
   isDecision?: boolean;
   onAddDecision?(): void;
+  conversionBlockedReason?: string;
 }
 
 // Inspector for a pure BPMN structure element (event/gateway/unbound task) — these have no underlying
@@ -39,7 +40,7 @@ export function BpmnElementInspector(props: BpmnElementInspectorProps) {
 // Shared with the activity inspector so bound gateways retain both expression and routing editors.
 export function BpmnElementConfiguration({
   element, outboundFlows, onChangeElement, onChangeFlow, onSetDefaultFlow, targetLabelFor,
-  readOnly = false, isDecision = false, onAddDecision
+  readOnly = false, isDecision = false, onAddDecision, conversionBlockedReason
 }: BpmnElementInspectorProps) {
   const gateway = isDecisionGatewayType(element.elementType);
   return (
@@ -52,13 +53,14 @@ export function BpmnElementConfiguration({
       {gateway || isDecision ? <>
         <label className="wf-form-field">
           <span>Gateway type</span>
-          <select value={element.elementType} disabled={readOnly}
+          <select value={element.elementType} disabled={readOnly || !!conversionBlockedReason}
             onChange={event => onChangeElement(element.elementId, { elementType: event.target.value })}>
             {!gateway ? <option value={element.elementType}>{bpmnElementTypeLabel(element)} (existing)</option> : null}
             <option value="exclusiveGateway">Exclusive gateway — one path</option>
             <option value="inclusiveGateway">Inclusive gateway — matching paths</option>
           </select>
         </label>
+        {conversionBlockedReason ? <p className="wf-muted" role="note">{conversionBlockedReason}</p> : null}
         {isDecision ? <p className="wf-muted">
           Outcome returns a path name, such as High or Low. Choose an expression syntax for rules based on
           workflow data. Expressions must return a configured outcome name, or Done for the fallback path.

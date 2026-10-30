@@ -316,9 +316,23 @@ export function updateBpmnDefaultFlow(owner: ActivityNode, sourceElementId: stri
   };
 }
 
+// Gateway conversion must preserve task-owned behavior until the author explicitly removes it.
+export function bpmnGatewayConversionBlocker(owner: ActivityNode | null | undefined, element: BpmnElement): string | undefined {
+  if (!owner || isDecisionGatewayType(element.elementType)) return undefined;
+  if (readBpmnElements(owner).some(candidate => candidate.attachedToRef === element.elementId))
+    return "Remove this task's boundary events before converting it to a gateway.";
+  if (element.loopCharacteristics != null)
+    return "Remove this task's loop or multi-instance settings before converting it to a gateway.";
+  if (element.isForCompensation === true || element.compensationHandlerElementId)
+    return "Remove this task's compensation settings before converting it to a gateway.";
+  return undefined;
+}
+
 // Immutably applies `patch` to one element of a BPMN owner's payload (inspector edits).
 export function updateBpmnElement(owner: ActivityNode, elementId: string, patch: Partial<BpmnElement>): ActivityNode {
   if (owner.structure?.kind !== bpmnStructureKind) return owner;
+  const current = findBpmnElement(owner, elementId);
+  if (current && patch.elementType && isDecisionGatewayType(patch.elementType) && bpmnGatewayConversionBlocker(owner, current)) return owner;
   const elements = readBpmnElements(owner).map(element =>
     element.elementId === elementId ? { ...element, ...patch, elementId: element.elementId } : element);
 

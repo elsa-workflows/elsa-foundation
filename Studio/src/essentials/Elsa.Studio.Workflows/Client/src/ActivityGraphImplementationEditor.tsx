@@ -51,6 +51,7 @@ import {
 import {
   buildBpmnCanvas,
   bindBpmnDecision,
+  bpmnGatewayConversionBlocker,
   collectRemovedGraphNodeIds,
   createBpmnBoundNode,
   createBpmnFlowEdge,
@@ -586,6 +587,7 @@ export function ActivityGraphImplementationEditor({
     targetLabelFor: bpmnFlowTargetLabel,
     readOnly,
     isDecision: isBpmnDecisionType(selected ? catalogByVersion.get(selected.activityVersionId)?.activityTypeKey : undefined),
+    conversionBlockedReason: bpmnGatewayConversionBlocker(owner, selectedBpmnElement),
     onAddDecision: decisionCatalogItem ? addBpmnDecision : undefined
   } : null;
 

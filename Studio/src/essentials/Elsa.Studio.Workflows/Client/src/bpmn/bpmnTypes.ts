@@ -82,7 +82,7 @@ export function isDecisionGatewayType(elementType: string) {
 }
 
 export function isBpmnDecisionType(activityTypeKey: string | undefined) {
-  return activityTypeKey?.split(".").at(-1) === "BpmnDecision";
+  return activityTypeKey === "Elsa.Activities.Bpmn.Activities.BpmnDecision";
 }
 
 export function isTerminateEndEvent(element: BpmnElement) {
