@@ -114,7 +114,8 @@ internal sealed class Elsa3FolderImportTask(
             logger.LogInformation("Elsa 3 import '{SourceId}': {Code} {Message}", _options.SourceId, warning.Code, warning.Message);
 
         var reusables = (result.Publications ?? []).Count(state => state.Status is ReusableActivityPublicationStatus.Published or ReusableActivityPublicationStatus.AlreadyPublished);
-        LogSummary(scope, reusables, publications.Count, publications.Count(entry => entry.Value == WorkflowPublicationStatus.Published), skipped);
+        LogSummary(scope, reusables, publications.Count(entry => entry.Value != WorkflowPublicationStatus.Failed),
+            publications.Count(entry => entry.Value == WorkflowPublicationStatus.Published), skipped);
         FailIfStrict(skipped, scope, logSkipped: false);
     }
 
@@ -200,8 +201,8 @@ internal sealed class Elsa3FolderImportTask(
             + string.Join("; ", skipped.Select(item => $"{item.Code} {item.DefinitionId} v{item.Version} ({item.FilePath}): {item.Cause}")));
     }
 
-    /// <param name="reusables">Reusable activities that are published, by this start or earlier.</param>
-    /// <param name="workflows">Workflow definitions (wrappers included) whose newest imported version is publishable.</param>
+    /// <param name="reusables">Imported reusable activity versions that have been published, by this start or earlier.</param>
+    /// <param name="workflows">Workflow definitions (wrappers included) whose newest imported version has been published, by this start or earlier.</param>
     /// <param name="published">Of those, the ones this start published.</param>
     private void LogSummary(PersistenceScope scope, int reusables, int workflows, int published, IReadOnlyList<Elsa3SkippedItem> skipped)
     {

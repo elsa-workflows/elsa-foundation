@@ -21,8 +21,7 @@ namespace Elsa.Workflows.Publishing.Services;
 /// <para>
 /// <b>Ordered after the startup reconcilers</b> (<c>[Order(5)]</c>): the design-side reconcilers, export and the Elsa 3
 /// folder import (orders 1 to 4) publish through the same journal, so this pass finds only what nothing else brought into
-/// line. It runs on every
-/// node: every transition is a compare-and-swap, so two nodes converging one slot write it once.
+/// line. It runs on every node: every transition is a compare-and-swap, so two nodes converging one slot write it once.
 /// </para>
 /// </remarks>
 [Order(5)]

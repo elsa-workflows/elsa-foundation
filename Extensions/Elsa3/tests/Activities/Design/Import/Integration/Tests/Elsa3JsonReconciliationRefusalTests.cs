@@ -80,6 +80,36 @@ public sealed class Elsa3JsonReconciliationRefusalTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task A_workflow_whose_publication_fails_is_reported_and_strict_mode_then_fails_the_start()
+    {
+        // Two workflows claim the same HTTP endpoint: both import, the second publication is refused by the publisher.
+        File.WriteAllText(Path.Join(_folder.FullName, "a-http.json"), HttpHello("Hello from Elsa 3").ToJsonString());
+        var twin = HttpHello("Hello from the twin");
+        twin["id"] = "http-twin-v1";
+        twin["definitionId"] = "http-twin";
+        twin["name"] = "http-twin";
+        File.WriteAllText(Path.Join(_folder.FullName, "b-twin.json"), twin.ToJsonString());
+
+        var host = await Elsa3ImportHost.StartAsync(withHttp: true, reconcileFolder: _folder.FullName);
+        try
+        {
+            Assert.NotNull(await host.ActivePublicationAsync("http-hello"));
+            Assert.Null(await host.ActivePublicationAsync("http-twin"));
+            var skip = Assert.Single(host.Warnings.Entries, entry => entry.Contains("skipped http-twin version 1", StringComparison.Ordinal));
+            Assert.Contains("ELS3-RECONCILE-PUBLISH-FAILED", skip, StringComparison.Ordinal);
+            Assert.Contains(host.Warnings.Entries, entry => entry.Contains("0 reusable activities and 1 workflows in place; 1 workflows published by this start; 1 skipped", StringComparison.Ordinal));
+
+            // Strict mode finds it after the commit: the start fails, and what was published stays.
+            var failure = await Assert.ThrowsAnyAsync<Exception>(() => host.RestartAsync(_folder.FullName, strict: true));
+            Assert.Contains(Chain(failure), exception => exception is Elsa3ReconciliationFailedException && exception.Message.Contains("ELS3-RECONCILE-PUBLISH-FAILED", StringComparison.Ordinal));
+        }
+        finally
+        {
+            host.DeleteStores();
+        }
+    }
+
     /// <summary>
     /// The approval reusable, its caller and the HTTP workflow, which import; and four that do not: a reusable using an
     /// Elsa 3 activity with no Elsa 4 counterpart, its caller, a reusable that sets a variable (#3023), and a document

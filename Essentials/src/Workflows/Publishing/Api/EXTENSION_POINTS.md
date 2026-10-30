@@ -40,7 +40,7 @@ default, so this contract and the activity-draft services that consume it are re
 feature. A replacement must supply the same tenant/scope facts the activity-draft publish/test-run flow expects.
 
 Known decorator: `Elsa3JsonReconciliation` (spec 235) wraps the registered context so its startup task can publish
-imported Elsa 3 reusables in its persistence scope's tenant, inside its own operation scope only; every other call
+imported Elsa 3 reusables in its persistence scope's tenant (and rows with no tenant), inside its own operation scope only; every other call
 reaches the decorated context unchanged.
 
 ### Activity draft Test Runs

@@ -39,9 +39,17 @@ internal sealed class Elsa3JsonFileReader(ILogger<Elsa3JsonFileReader> logger)
         if (!Directory.Exists(folderPath))
             throw new Elsa3ReconciliationFailedException($"The Elsa 3 import folder '{folderPath}' does not exist.");
 
-        var files = Directory.EnumerateFiles(folderPath, "*.json", SearchOption.TopDirectoryOnly)
-            .OrderBy(Path.GetFileName, StringComparer.Ordinal)
-            .ToArray();
+        string[] files;
+        try
+        {
+            files = Directory.EnumerateFiles(folderPath, "*.json", SearchOption.TopDirectoryOnly)
+                .OrderBy(Path.GetFileName, StringComparer.Ordinal)
+                .ToArray();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new Elsa3ReconciliationFailedException($"The Elsa 3 import folder '{folderPath}' could not be read: {exception.Message}", exception);
+        }
         if (files.Length == 0)
             logger.LogInformation("The Elsa 3 import folder '{FolderPath}' holds no *.json files; nothing is imported.", folderPath);
         return files;

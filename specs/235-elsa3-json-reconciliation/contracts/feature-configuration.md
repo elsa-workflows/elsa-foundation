@@ -45,7 +45,8 @@ shape the collection upload accepts). The upload's size and count limits do not 
 ## Strict mode
 
 With `FailOnUnconvertible: true`, the start fails with `Elsa3ReconciliationFailedException`, listing the skipped
-items; items skipped before the commit fail it before anything is written in that persistence scope.
+items; items skipped before the commit fail it before anything is written in that persistence scope. Publication
+refusals and failures are found after the commit, so they fail the start after it, and what was committed stays.
 
 ## Always fatal
 

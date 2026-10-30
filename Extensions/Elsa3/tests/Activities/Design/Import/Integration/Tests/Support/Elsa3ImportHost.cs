@@ -181,7 +181,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
 
     public IShell Shell { get; }
 
-    /// <summary>Every warning and error the host logged, for failure messages.</summary>
+    /// <summary>Every warning and error the host logged, and the folder import's information lines.</summary>
     public WarningLog Warnings { get; }
     public HttpClient Client { get; }
 
@@ -707,8 +707,14 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
             // Disposing the app leaves the shell's recurring tasks running against the stores. A host restarted on the
             // same stores would then have the old shell's resumption pump re-drive its executions, a second owner that
             // fences the first out (StaleToken). Stop them first.
-            await Shell.ServiceProvider.GetRequiredService<Elsa.Tasks.Core.ITaskManager>().StopExecutingRegisteredTasks();
-            await _app.DisposeAsync();
+            try
+            {
+                await Shell.ServiceProvider.GetRequiredService<Elsa.Tasks.Core.ITaskManager>().StopExecutingRegisteredTasks();
+            }
+            finally
+            {
+                await _app.DisposeAsync();
+            }
         }
         finally
         {

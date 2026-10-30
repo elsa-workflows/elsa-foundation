@@ -137,7 +137,8 @@ review found two blockers in the first version of this file; R-3 and R-5 carry t
   treats a null reference tenant as matching any scope (`WorkflowExecutableStartSourceResolver`). Everything else a
   start writes carries the scope's tenant (R-3), so the publication must too. `PublishReconciledWorkflowVersions`
   sends no tenant, which is why its call is not copied as is.
-- **Several nodes at once** (FR-011): two nodes can both find no record of T and both publish. If the first has
+- **Several nodes at once** (FR-011; *the type-based catch below is superseded by plan A-8: after any failed
+  `PublishWorkflow` the task reads the journal again, whatever the exception*): two nodes can both find no record of T and both publish. If the first has
   activated T by the time the second runs, the handler's same-artifact short-circuit answers "already published"
   without a new publication (`PublishWorkflowRequestHandler.cs:135-145`). If both run before either activates, the
   second is refused in one of three ways, and the task catches all three, reads the journal again and, when it now

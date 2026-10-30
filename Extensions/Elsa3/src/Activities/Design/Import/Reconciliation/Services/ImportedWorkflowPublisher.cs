@@ -74,9 +74,10 @@ internal sealed class ImportedWorkflowPublisher(
             // Another node may have published the same version between the check and the request; its refusal can take
             // several forms (an expected-publication mismatch, a slot revision conflict, an artifact the slot already
             // serves), so the journal decides, not the exception type.
-            return await PublishedByAnotherNodeAsync(version, cancellationToken)
-                ? WorkflowPublicationStatus.AlreadyPublished
-                : Failed(version, exception);
+            if (!await PublishedByAnotherNodeAsync(version, cancellationToken))
+                return Failed(version, exception);
+            logger.LogDebug(exception, "Publishing imported workflow version {VersionId} failed, but its slot's journal now holds it.", version.WorkflowVersionId);
+            return WorkflowPublicationStatus.AlreadyPublished;
         }
     }
 
@@ -87,7 +88,6 @@ internal sealed class ImportedWorkflowPublisher(
             var slot = await FindTargetSlotAsync(version.WorkflowDefinitionId, version.WorkflowVersionId, cancellationToken);
             if (!await WasPublishedAsync(slot, version.WorkflowVersionId, cancellationToken))
                 return false;
-            logger.LogDebug("Imported workflow version {VersionId} was published by another node.", version.WorkflowVersionId);
             return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

@@ -34,8 +34,8 @@ import's persistence provider, today `Elsa3ImportActivitiesEntityFrameworkCore`.
 
 Exactly one of `FilePath`, `Files` and `FolderPath`; otherwise the shell refuses to activate. `FolderPath` reads the
 folder's top-level `*.json` files in ordinal file-name order. A file holds one Elsa 3 workflow definition (an Elsa 3
-Studio export) or a JSON array of them; the upload's size and count limits do not apply. A missing folder or an
-unreadable file fails the start, naming the path; an empty folder imports nothing.
+Studio export) or a JSON array of them; the upload's size and count limits do not apply. A missing or unreadable
+folder or file fails the start, naming the path; an empty folder imports nothing.
 
 ## What a start does
 
@@ -59,7 +59,8 @@ start ends with one information line per persistence scope:
 Elsa 3 import 'elsa3' in persistence scope 'default': 4 reusable activities and 5 workflows in place; 5 workflows published by this start; 0 skipped.
 ```
 
-"In place" counts what is published now, by this start or an earlier one; a restart with unchanged input reports
+"In place" counts what this start imported (or found imported) and what has been published at least once, by this
+start or an earlier one; it does not say which version a slot serves now. A restart with unchanged input reports
 `0 workflows published by this start`.
 
 ## Restarts and changes
@@ -79,7 +80,8 @@ Elsa 3 import 'elsa3' in persistence scope 'default': 4 reusable activities and 
 ## When the start fails
 
 - `FailOnUnconvertible` is set and a workflow is skipped. A skip found before the commit fails the scope before
-  anything is written in it.
+  anything is written in it. A reusable the publisher refuses, the workflows it blocks, or a workflow whose
+  publication fails are found after the commit: the start fails then, and what was committed and published stays.
 - The import refuses something it does not attribute to one workflow: a credential literal in a converted node, a
   changed workflow under an Elsa 3 version already imported (identity collision), or an analysis error that names no
   workflow.
