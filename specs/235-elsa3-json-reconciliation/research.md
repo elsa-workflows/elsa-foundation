@@ -165,8 +165,8 @@ review found two blockers in the first version of this file; R-3 and R-5 carry t
 - **Decision**: The import's `{n}.0.0`. The converter revision `N.R.0` and the golden-output test are deferred
   (spec revision 2026-10-30).
 - **Consequence**: after a converter change, a restart against a persistent store hits the import's identity collision
-  for changed items and fails the start (R-5). JTest hosts run on fresh stores. A located collision diagnostic, or
-  `N.R.0`, is what makes this skippable later.
+  for changed items and fails the start (R-5). Before Elsa 4 GA that store is rebuilt (R-10). JTest hosts run on fresh
+  stores. The converter revision `N.R.0` is what lets stored data survive later.
 
 ## R-10 Alignment with epic #3052 (checked 2026-10-30)
 
@@ -201,10 +201,11 @@ ADR 0092, ADR 0093, ADR 0048 (D-8, D-9) and the D-2 details are runtime semantic
 **Not on the board, so for architect review rather than an ADR:** the startup publishing grant (R-3) changes who the
 activity publisher accepts outside a request. No ADR covers publishing authorization today; the PR flags it.
 
-**Options for item 1** (decision for the approvers): (a) un-defer the converter revision, `{n}.{R}.0` on both paths
-with the golden test, and every converter-changing spec bumps R (pre-GA, ADR 0080 D4); (b) keep `{n}.0.0` and state
-that a persistent store is rebuilt after a converter upgrade until (a) lands, with S-0 to S-9 carrying that note.
-For item 2, add the import's binding material to S-9 intake item 7 either way.
+**Decision on items 1 and 2** (Joey Barten, 2026-10-30): Elsa 4 is not in production, so no stored Elsa 4 data has
+to survive a converter or serialization change. Keep `{n}.0.0`. After a converter upgrade, or S-9, a host that
+imported with an earlier converter rebuilds its store; the feature README says so. The converter revision
+(`{n}.{R}.0` with the golden test) is the follow-up for when stored data must survive, before Elsa 4 GA. Rejected for
+now: un-deferring it in this spec, which adds work that protects data nobody keeps yet.
 
 ## R-9 Names and §E2.7
 

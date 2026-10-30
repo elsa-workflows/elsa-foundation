@@ -279,6 +279,9 @@ rest of the folder is imported and published. Repeat with the strict option and 
 ## Assumptions
 
 - The JTest suite collection is external (JTEST-nexxbiz); this spec's tests use in-repo fixtures.
+- Elsa 4 is not in production, so no stored Elsa 4 data has to survive a converter or serialization change. After
+  such a change (the converter specs S-0 to S-8 and S-9 on epic #3052), a host that imported earlier rebuilds its
+  store; the README says so. The converter revision is the follow-up before GA (research R-10).
 - §E2.8 activity versioning and Model X are provisional. This feature writes through the import's commit, not through
   the reconcilers, so it relies on the import's identity rules rather than on Model X.
 - Imported workflows are not source-owned (the import does not set `IsSourceOwned`), so a reconciliation source's
