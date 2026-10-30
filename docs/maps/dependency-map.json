@@ -20113,6 +20113,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Tasks.Testing",
+          "path": "Essentials/tests/Tasks/Testing/Elsa.Tasks.Testing.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Testing",
           "path": "Essentials/tests/Testing/Elsa.Testing.csproj"
         },
