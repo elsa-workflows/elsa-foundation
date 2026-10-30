@@ -20,8 +20,8 @@ $ARGUMENTS
 
 1. Read `docs/skills/catalog.md#initiative-coordination` and `docs/contributing/initiatives.md`.
 2. Find the initiative: the issue given, or the `initiative`-labelled parent (at any depth) or `Part of #N` of the work in hand. If there is none, stop; this skill does not apply.
-3. Find the user's role: the assignee is the coordinator, people in **Who is needed where** are technical architects, otherwise infer it from the request and never refuse.
+3. Find the user's role: the assignee (or the delegate the board records) is the coordinator, people in the board's **Approvers** list are approvers; otherwise infer what the user is doing and never refuse. Contribution, GitHub permissions or a bot's identity never grant approval authority.
 4. Do the requested action as the catalog describes: check in, contribute an analysis, report work, sync (coordinator only) or start an initiative.
-5. Apply the size guard before every post. Stop and offer the choices instead of working around a limit.
+5. Apply the size guard before every post: split into numbered comments or link a canonical record yourself; ask only when an alternative changes content, destination or access.
 
-Only the coordinator edits the initiative's description. Do not touch `docs/program-goals/`.
+Only the coordinator, or the recorded delegate, edits the initiative's description. Do not touch `docs/program-goals/`.
