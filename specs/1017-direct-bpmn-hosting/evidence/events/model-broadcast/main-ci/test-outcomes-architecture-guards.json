@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "shard": "architecture-guards",
+  "headSha": "b9cf52c181b79e3e79eef233f7d61cb0843f4da7",
+  "failedTwice": [],
+  "passedOnRetry": [],
+  "quarantinedFailed": [],
+  "slow": [
+    {
+      "test": "Elsa.Architecture.Tests.FeatureCompositionTests.Every_feature_composes_and_each_service_it_registers_resolves",
+      "seconds": 41.2
+    },
+    {
+      "test": "Elsa.Architecture.Tests.PackageVersioningPackTests.A_computed_pack_carries_its_version_fingerprint_and_source_commit",
+      "seconds": 16.5
+    },
+    {
+      "test": "Elsa.Architecture.Tests.PackageVersioningPackTests.A_third_partys_range_left_unbounded_by_hand_still_passes_the_pack",
+      "seconds": 14.4
+    },
+    {
+      "test": "Elsa.Architecture.Tests.PermissionAuthorizationBoundaryTests.Every_reviewed_permission_claim_reader_still_reads_permission_claims",
+      "seconds": 47.1
+    },
+    {
+      "test": "Elsa.Architecture.Tests.RetiredTermEnforcementGuardTests.Every_production_project_compiles_with_the_analyzer",
+      "seconds": 12.9
+    }
+  ],
+  "aborted": null
+}

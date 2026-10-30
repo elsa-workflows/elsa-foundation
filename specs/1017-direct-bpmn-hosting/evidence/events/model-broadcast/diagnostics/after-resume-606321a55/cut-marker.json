@@ -1,0 +1,123 @@
+{
+  "caseId": "actual-cut",
+  "phase": "after-resume",
+  "providerEvent": null,
+  "sourceOutboxItemId": "commit:77b82e52a0378ee6:invoke:14lTTTubvPi:activity-completed:14lTTTubvPi:7fff03aafa7481a4:0",
+  "sourceCommitId": "commit:77b82e52a0378ee6:invoke:14lTTTubvPi:activity-completed:14lTTTubvPi",
+  "intentFingerprint": "987149bc635143bf041c7701ef34db9a119c362420b377cf304fa2974c3cd1f4",
+  "scope": "default",
+  "ownerId": "runtime-outbox-751768500f5347a0a538343f4bb0b262",
+  "fencingToken": 1,
+  "visibleAfter": "2026-10-30T01:13:10.196639+00:00",
+  "workflowExecutionId": "14lTTTrdNyY",
+  "snapshot": {
+    "version": 1,
+    "sourceOutboxItemId": "commit:77b82e52a0378ee6:invoke:14lTTTubvPi:activity-completed:14lTTTubvPi:7fff03aafa7481a4:0",
+    "intentFingerprint": "987149bc635143bf041c7701ef34db9a119c362420b377cf304fa2974c3cd1f4",
+    "scope": {
+      "persistenceScope": {
+        "value": "default"
+      },
+      "tenantId": "default",
+      "partition": {
+        "value": "default"
+      },
+      "runKind": 2,
+      "testScope": null
+    },
+    "selectedAt": "2026-10-30T01:12:10.231839+00:00",
+    "stimulusType": "Event",
+    "stimulusHash": "sha256:d7fab52ad0221ba39b84b29091a7e4c9f4790a895d3ecd66239eb0de46f3a68e",
+    "starts": [],
+    "resumes": [
+      {
+        "workflowExecutionId": "wfexec:start:v1:89c1aa76933aea563dd6ab0a2b0793f09917b6f6f76861f3c1cb9726f204aef3",
+        "bookmarkId": "14lTTOVNDgE:attempt:1:trigger:1",
+        "activityExecutionId": "14lTTOVNDgE",
+        "executableNodeId": "event",
+        "resumeTargetId": "event:resume-target:event",
+        "stimulusType": "Event",
+        "stimulusHash": "sha256:d7fab52ad0221ba39b84b29091a7e4c9f4790a895d3ecd66239eb0de46f3a68e",
+        "createdAt": "2026-10-30T01:12:09.195423+00:00",
+        "expiresAt": null,
+        "registrationCapture": {
+          "version": 1,
+          "generation": 2634753939886836951,
+          "executable": {
+            "artifactId": "artifact-6467c3ce0251",
+            "definitionId": "14lTTK2XpTd",
+            "definitionVersionId": "14lTTK45pPS",
+            "artifactVersion": "1.0.0",
+            "artifactHash": "sha256:6467c3ce025159c85ff41fe02ba82e8cf25bc63759d962d2b91b0ebe25c7829d"
+          },
+          "scope": {
+            "persistenceScope": {
+              "value": "default"
+            },
+            "tenantId": "default",
+            "partition": {
+              "value": "default"
+            },
+            "runKind": 2,
+            "testScope": null
+          },
+          "pinnedSource": null,
+          "metadata": {
+            "runtime.schedulerWorkItemId": "1b5a893b1e951aae:create-bookmark:14lTTOVNDgE:attempt:1:trigger:1",
+            "runtime.commandId": "fdbb03cb6e6dc362:create-bookmark:14lTTOVNDgE:attempt:1:trigger:1",
+            "runtime.reason": "ActivitySuspended"
+          },
+          "payloadFingerprint": "5ad38304b535c2987dbd24657c1a11b884984ff600d9f389deb0d4e634fee792"
+        }
+      },
+      {
+        "workflowExecutionId": "wfexec:start:v1:fea52b54a9577073e319754f4e5f5d5366c7cbfe2d5bb1170f63cb43e4355334",
+        "bookmarkId": "14lTTR21wBA:attempt:1:trigger:1",
+        "activityExecutionId": "14lTTR21wBA",
+        "executableNodeId": "event",
+        "resumeTargetId": "event:resume-target:event",
+        "stimulusType": "Event",
+        "stimulusHash": "sha256:d7fab52ad0221ba39b84b29091a7e4c9f4790a895d3ecd66239eb0de46f3a68e",
+        "createdAt": "2026-10-30T01:12:09.541951+00:00",
+        "expiresAt": null,
+        "registrationCapture": {
+          "version": 1,
+          "generation": 4028966992236013984,
+          "executable": {
+            "artifactId": "artifact-6467c3ce0251",
+            "definitionId": "14lTTK2XpTd",
+            "definitionVersionId": "14lTTK45pPS",
+            "artifactVersion": "1.0.0",
+            "artifactHash": "sha256:6467c3ce025159c85ff41fe02ba82e8cf25bc63759d962d2b91b0ebe25c7829d"
+          },
+          "scope": {
+            "persistenceScope": {
+              "value": "default"
+            },
+            "tenantId": "default",
+            "partition": {
+              "value": "default"
+            },
+            "runKind": 2,
+            "testScope": null
+          },
+          "pinnedSource": null,
+          "metadata": {
+            "runtime.schedulerWorkItemId": "1ac7cfd3cea4aa3a:create-bookmark:14lTTR21wBA:attempt:1:trigger:1",
+            "runtime.commandId": "ba0e7c8f1ee8e851:create-bookmark:14lTTR21wBA:attempt:1:trigger:1",
+            "runtime.reason": "ActivitySuspended"
+          },
+          "payloadFingerprint": "5ad38304b535c2987dbd24657c1a11b884984ff600d9f389deb0d4e634fee792"
+        }
+      }
+    ],
+    "retentionAcceptance": {
+      "version": 1
+    }
+  },
+  "proposal": null,
+  "acceptedExecution": "wfexec:start:v1:89c1aa76933aea563dd6ab0a2b0793f09917b6f6f76861f3c1cb9726f204aef3",
+  "acceptedBookmark": "14lTTOVNDgE:attempt:1:trigger:1",
+  "observedStart": null,
+  "capturedAtUtc": "2026-10-30T01:12:10.39856+00:00"
+}

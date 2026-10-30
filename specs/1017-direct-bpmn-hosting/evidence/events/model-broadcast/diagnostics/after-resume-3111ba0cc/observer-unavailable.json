@@ -1,0 +1,10 @@
+[
+  {
+    "operation": "--backup-sqlite",
+    "failureType": "IOException",
+    "label": "source-observation",
+    "attempt": 1,
+    "observedAtUtc": "2026-10-30T01:19:17.289489+00:00",
+    "sourceStateEdited": false
+  }
+]
