@@ -1,0 +1,36 @@
+.acme-home-settings,
+.acme-home-card,
+.acme-home-result {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.acme-home-settings {
+  max-width: 44rem;
+  padding: 1.5rem;
+}
+
+.acme-home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.acme-home-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 1rem;
+  margin: 0;
+}
+
+.acme-home-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.acme-home-settings label {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}

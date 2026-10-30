@@ -218,6 +218,12 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
     });
   }, [api]);
 
+  const consumeIncomingPrompt = useCallback((id: string) => {
+    // The shell outlives dock and registry remounts. Retaining an attempted request here
+    // would submit it again as fresh intent when a new assistant lifetime becomes ready.
+    setIncomingPrompt(current => current?.id === id ? null : current);
+  }, []);
+
   // Probe the agent provider once so provider-gated affordances (e.g. the workflow "Risks" action) can be
   // disabled before the user opens the Weaver dock. "unavailable"/"disabled" mean the provider can deliver
   // nothing; a failed probe is treated the same. The Weaver dock refreshes this on its own bootstrap.
@@ -446,7 +452,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         ) : null}
       </ShellFrame>
       {assistantOpen ? (
-        <WeaverSurface api={api!} surface={{ route: path }} variant="dock" onClose={() => setAssistantOpen(false)} onSessionIndicatorChange={setAgentSessions} incomingPrompt={incomingPrompt} />
+        <WeaverSurface api={api!} surface={{ route: path }} variant="dock" onClose={() => setAssistantOpen(false)} onSessionIndicatorChange={setAgentSessions} incomingPrompt={incomingPrompt} onPromptConsumed={consumeIncomingPrompt} />
       ) : null}
     </ThemeProvider>
   );

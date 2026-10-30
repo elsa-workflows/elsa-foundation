@@ -1,0 +1,157 @@
+using System.Text.Json;
+using Elsa.Agent.Anthropic.Services;
+using Elsa.Agent.GitHubCopilot.Services;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+
+namespace Acme.Weaver.ProtocolFixtures.Tests;
+
+public sealed class ProtocolFixtureTests : IDisposable
+{
+    private readonly string directory = Path.Combine(Path.GetTempPath(), "acme-protocol-" + Guid.NewGuid().ToString("N"));
+    private string CommandFile => Path.Combine(directory, "command.json");
+    private string TraceFile => Path.Combine(directory, "trace.jsonl");
+
+    public ProtocolFixtureTests() => Directory.CreateDirectory(directory);
+
+    [Fact]
+    public async Task Copilot_invokes_only_the_supplied_function_with_arbitrary_nested_arguments()
+    {
+        WriteCommand("c1", "arbitrary_function", "{\"items\":[1,true,null,{\"label\":\"bounded\"}]}");
+        using var services = CopilotServices();
+        var capture = new CapturingFunction();
+        var factory = services.GetRequiredService<IGitHubCopilotClientFactory>();
+        await using var client = factory.Create(new("credential-never-traced", false, null, "connection-never-traced", null, null));
+        await using var session = await client.CreateSessionAsync(Request("session-a", [capture]), default);
+        var events = await Collect(session.SendAsync("admitted bounded context", default));
+        Assert.Equal(1, capture.Calls);
+        var items = Assert.IsType<JsonElement>(capture.Arguments!["items"]);
+        Assert.Equal("bounded", items[3].GetProperty("label").GetString());
+        Assert.Contains(events, item => item.Kind == GitHubCopilotStreamEventKind.ToolExecutionCompleted);
+        Assert.DoesNotContain("credential-never-traced", File.ReadAllText(TraceFile));
+        Assert.DoesNotContain("connection-never-traced", File.ReadAllText(TraceFile));
+    }
+
+    [Fact]
+    public async Task Anthropic_emits_a_call_then_consumes_the_actual_opaque_result_without_invoking_declarations()
+    {
+        WriteCommand("c2", "arbitrary_function", "{\"count\":3}");
+        using var services = AnthropicServices();
+        using var client = services.GetRequiredService<IAnthropicChatClientFactory>().Create("key-never-traced", "fixture");
+        var declaration = new CapturingFunction();
+        var options = new ChatOptions { Tools = [declaration] };
+        var messages = new List<ChatMessage> { new(ChatRole.User, "read the current selection") };
+        var callUpdates = await Collect(client.GetStreamingResponseAsync(messages, options));
+        var call = Assert.IsType<FunctionCallContent>(Assert.Single(callUpdates).Contents.Single());
+        Assert.Equal("c2", call.CallId);
+        Assert.Equal(0, declaration.Calls);
+        messages.Add(new(ChatRole.Assistant, [call]));
+        messages.Add(new(ChatRole.Tool, [new FunctionResultContent(call.CallId, "{\"arbitraryPayload\":{\"nested\":[false,9]}}") ]));
+        var completion = await Collect(client.GetStreamingResponseAsync(messages, options));
+        Assert.IsType<TextContent>(Assert.Single(completion).Contents.Single());
+        Assert.Equal(0, declaration.Calls);
+        Assert.Contains("arbitraryPayload", File.ReadAllText(TraceFile));
+        Assert.DoesNotContain("key-never-traced", File.ReadAllText(TraceFile));
+    }
+
+    [Fact]
+    public async Task Historical_results_do_not_hide_a_new_request_with_the_same_command_id()
+    {
+        WriteCommand("same-id", "arbitrary_function", "{}");
+        using var services = AnthropicServices();
+        using var client = services.GetRequiredService<IAnthropicChatClientFactory>().Create("unused", "fixture");
+        var messages = new List<ChatMessage> { new(ChatRole.User, "old request"),
+            new(ChatRole.Tool, [new FunctionResultContent("same-id", "old-opaque-outcome")]), new(ChatRole.User, "replayed request") };
+        var updates = await Collect(client.GetStreamingResponseAsync(messages, new ChatOptions { Tools = [new CapturingFunction()] }));
+        Assert.IsType<FunctionCallContent>(Assert.Single(updates).Contents.Single());
+        // A fresh Copilot session with the same command must also invoke; no factory-wide deduplication.
+        using var copilotServices = CopilotServices();
+        var factory = copilotServices.GetRequiredService<IGitHubCopilotClientFactory>();
+        var function = new CapturingFunction();
+        await using var copilot = factory.Create(new(null, false, null, null, null, null));
+        foreach (var sessionId in new[] { "first-session", "other-session" })
+        {
+            await using var session = await copilot.ResumeSessionAsync(Request(sessionId, [function]), default);
+            await Collect(session.SendAsync("same request", default));
+        }
+        Assert.Equal(2, function.Calls);
+    }
+
+    [Fact]
+    public async Task Copilot_continuation_requires_actual_generic_tool_identity_and_does_not_call_again()
+    {
+        WriteCommand("c3", "arbitrary_function", "{}");
+        using var services = CopilotServices();
+        await using var client = services.GetRequiredService<IGitHubCopilotClientFactory>().Create(new(null, false, null, null, null, null));
+        await using var session = await client.ResumeSessionAsync(Request("s", []), default);
+        var events = await Collect(session.SendAsync("completion\n  Typed result: {\"toolName\":\"arbitrary_function\",\"toolCallId\":\"real-host-call\",\"payload\":{\"any\":7}}\n", default));
+        Assert.DoesNotContain(events, item => item.Kind == GitHubCopilotStreamEventKind.ToolExecutionStarted);
+        Assert.Contains("real-host-call", File.ReadAllText(TraceFile));
+        await Assert.ThrowsAsync<ProtocolFixtureException>(() => Collect(session.SendAsync("no actual completion", default)));
+    }
+
+    [Fact]
+    public async Task Malformed_commands_and_unadvertised_tools_fail_without_fabricated_completion()
+    {
+        using var services = AnthropicServices();
+        using var client = services.GetRequiredService<IAnthropicChatClientFactory>().Create("unused", "fixture");
+        File.WriteAllText(CommandFile, "{\"commandId\":\"x\",\"toolName\":\"arbitrary_function\",\"arguments\":[],\"unexpected\":true}");
+        await Assert.ThrowsAsync<ProtocolFixtureException>(() => Collect(client.GetStreamingResponseAsync([new(ChatRole.User, "request")])));
+        WriteCommand("c4", "unadvertised", "{}");
+        await Assert.ThrowsAsync<ProtocolFixtureException>(() => Collect(client.GetStreamingResponseAsync([new(ChatRole.User, "request")], new ChatOptions { Tools = [new CapturingFunction()] })));
+    }
+
+    [Fact]
+    public async Task Trace_redacts_credentials_but_retains_arbitrary_payload_fields_for_audit()
+    {
+        WriteCommand("c5", "arbitrary_function", "{}");
+        using var services = AnthropicServices();
+        using var client = services.GetRequiredService<IAnthropicChatClientFactory>().Create("unused", "fixture");
+        await Collect(client.GetStreamingResponseAsync([new(ChatRole.User, "{\"password\":\"do-not-retain\",\"unrelatedCanary\":\"visible-for-audit\"} Bearer abcdefghijklmnop")],
+            new ChatOptions { Tools = [new CapturingFunction()] }));
+        var trace = File.ReadAllText(TraceFile);
+        Assert.DoesNotContain("do-not-retain", trace);
+        Assert.DoesNotContain("abcdefghijklmnop", trace);
+        Assert.Contains("visible-for-audit", trace);
+        Assert.Contains("deterministic-provider-protocol", trace);
+    }
+
+    private ServiceProvider CopilotServices()
+    {
+        var services = new ServiceCollection();
+        new CopilotProtocolFixtureFeature { CommandFile = CommandFile, TraceFile = TraceFile }.ConfigureServices(services);
+        return services.BuildServiceProvider();
+    }
+    private ServiceProvider AnthropicServices()
+    {
+        var services = new ServiceCollection();
+        new AnthropicProtocolFixtureFeature { CommandFile = CommandFile, TraceFile = TraceFile }.ConfigureServices(services);
+        return services.BuildServiceProvider();
+    }
+    private void WriteCommand(string id, string name, string arguments) => File.WriteAllText(CommandFile,
+        "{\"commandId\":" + JsonSerializer.Serialize(id) + ",\"toolName\":" + JsonSerializer.Serialize(name) + ",\"arguments\":" + arguments + "}");
+    private static GitHubCopilotSessionRequest Request(string sessionId, IReadOnlyCollection<AIFunction> functions) => new(sessionId, null, null, true, null, [], [], functions);
+    private static async Task<List<T>> Collect<T>(IAsyncEnumerable<T> stream)
+    {
+        var values = new List<T>();
+        await foreach (var value in stream) values.Add(value);
+        return values;
+    }
+    public void Dispose() => Directory.Delete(directory, recursive: true);
+
+    private sealed class CapturingFunction : AIFunction
+    {
+        public override string Name => "arbitrary_function";
+        public override string Description => "Accept arbitrary fixture arguments.";
+        public override JsonElement JsonSchema { get; } = JsonDocument.Parse("{\"type\":\"object\"}").RootElement.Clone();
+        public int Calls { get; private set; }
+        public Dictionary<string, object?>? Arguments { get; private set; }
+        protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+        {
+            Calls++;
+            Arguments = arguments.ToDictionary(pair => pair.Key, pair => pair.Value);
+            return ValueTask.FromResult<object?>(new { opaque = new[] { "arbitrary", "result" } });
+        }
+    }
+}

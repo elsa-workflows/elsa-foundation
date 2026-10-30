@@ -1,0 +1,80 @@
+using Acme.Home.Weaver;
+using Elsa.Agent.Core.Contracts;
+using Elsa.Foundation.Identity.Core.Authentication;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Studio.Preferences.Core.Contracts;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Acme.Home.Weaver.Tests;
+
+public sealed class WidgetRegistrationTests
+{
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("foreign/host")]
+    public void Feature_requires_trusted_host_configuration(string hostId)
+    {
+        var feature = new AcmeHomeWidgetFeature { StudioHostId = hostId };
+        Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(new ServiceCollection()));
+    }
+
+    [Fact]
+    public async Task Contributions_are_conditional_scoped_and_do_not_replace_native_owners()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var services = new ServiceCollection();
+        services.AddSingleton<IHttpContextAccessor>(env.Http);
+        services.AddSingleton<IAuthSessionService>(env.Auth);
+        services.AddSingleton<IPermissionAuthorizationService>(env.Permissions);
+        services.AddSingleton<IStudioPreferenceService>(env.Preferences);
+        services.AddSingleton<IAgentSessionService>(env.Sessions);
+        Assert.DoesNotContain(services, item => item.ServiceType == typeof(IAgentTool));
+        Assert.DoesNotContain(services, item => item.ServiceType == typeof(IAgentContextProvider));
+        var feature = new AcmeHomeWidgetFeature { StudioHostId = WidgetTestEnvironment.HostId };
+        feature.ConfigureServices(services);
+        feature.ConfigureServices(services); // Additive interfaces must remain idempotent.
+        Assert.DoesNotContain(services, item => item.ServiceType == typeof(IAgentProvider));
+        Assert.DoesNotContain(services, item => item.ServiceType == typeof(IPermissionContributor));
+        Assert.DoesNotContain(services, item => item.ServiceType == typeof(IStudioPreferenceStore));
+        Assert.DoesNotContain(services, item => item.ServiceType == typeof(IStudioPreferenceNamespace));
+        Assert.All(services.Where(item => item.ServiceType == typeof(IAgentTool) || item.ServiceType == typeof(IAgentContextProvider) ||
+            item.ServiceType == typeof(IAgentCapabilityProvider) || item.ServiceType == typeof(WidgetResource)), item => Assert.Equal(ServiceLifetime.Scoped, item.Lifetime));
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+        using var one = provider.CreateScope();
+        using var two = provider.CreateScope();
+        var tools = one.ServiceProvider.GetServices<IAgentTool>().ToArray();
+        Assert.Equal(new[] { WidgetContract.ReadTool, WidgetContract.WriteTool }, tools.Select(item => item.Descriptor.Name).Order().ToArray());
+        Assert.All(tools, tool => Assert.Equal(WidgetContract.Module, tool.Descriptor.ModuleId));
+        Assert.Same(one.ServiceProvider.GetRequiredService<WidgetResource>(), one.ServiceProvider.GetRequiredService<WidgetResource>());
+        Assert.NotSame(one.ServiceProvider.GetRequiredService<WidgetResource>(), two.ServiceProvider.GetRequiredService<WidgetResource>());
+        Assert.NotSame(one.ServiceProvider.GetRequiredService<IAgentContextProvider>(), two.ServiceProvider.GetRequiredService<IAgentContextProvider>());
+        Assert.Same(env.Preferences, one.ServiceProvider.GetRequiredService<IStudioPreferenceService>());
+        var contexts = one.ServiceProvider.GetServices<IAgentContextProvider>().ToArray();
+        Assert.Single(contexts);
+        Assert.Equal(new[] { WidgetContract.ResourceType }, contexts[0].Descriptor.ResourceTypes);
+        Assert.Contains(WidgetContract.GuidanceType, contexts[0].Descriptor.ContextKinds);
+        var capabilities = await one.ServiceProvider.GetRequiredService<IAgentCapabilityProvider>().GetCapabilitiesAsync();
+        Assert.Equal(new[] { "acme.home.read", "acme.home.visibility" }, capabilities.Select(item => item.Id).Order().ToArray());
+        var write = Assert.Single(tools, item => item.Descriptor.Name == WidgetContract.WriteTool);
+        Assert.Contains(WidgetContract.ReadPermission, write.Descriptor.RequiredPermissions);
+        Assert.Contains(WidgetContract.WritePermission, write.Descriptor.RequiredPermissions);
+    }
+
+    [Fact]
+    public async Task Owning_snapshot_is_bounded_and_permission_denial_is_not_missing_data()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var observed = await env.Resource.ObserveAsync(null, null, false, default);
+        var fields = System.Text.Json.JsonSerializer.SerializeToElement(WidgetContract.State(observed));
+        Assert.Equal(new[] { "hostId", "revision", "visible", "widgetId" }, fields.EnumerateObject().Select(item => item.Name).Order().ToArray());
+        Assert.Equal(WidgetTestEnvironment.HostId, fields.GetProperty("hostId").GetString());
+        env.Permissions.DeniedPermission = WidgetContract.ReadPermission;
+        var denied = await Assert.ThrowsAsync<WidgetRefusal>(() => env.Resource.ObserveAsync(null, null, false, default));
+        Assert.Equal(403, denied.Error.StatusCode);
+        var missing = await WidgetTestEnvironment.CreateAsync(null);
+        var absent = await Assert.ThrowsAsync<WidgetRefusal>(() => missing.Resource.ObserveAsync(null, null, false, default));
+        Assert.Equal(404, absent.Error.StatusCode);
+    }
+}

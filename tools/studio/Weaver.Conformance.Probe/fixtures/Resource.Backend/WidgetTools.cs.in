@@ -1,0 +1,138 @@
+using System.Text.Json;
+using Elsa.Agent.Core.Contracts;
+using Elsa.Agent.Core.Models;
+
+namespace Acme.Home.Weaver;
+
+internal static class WidgetToolValidation
+{
+    internal static readonly string StateSchema = """{"type":"object","required":["widgetId","revision","visible"],"properties":{"widgetId":{"const":"acme.home:status"},"revision":{"type":"string","minLength":1},"visible":{"type":"boolean"},"hostId":{"type":"string"}},"additionalProperties":false}""";
+    internal static readonly string ChangeSchema = """{"type":"object","required":["widgetId","revision","visible","beforeVisible","hostId"],"properties":{"widgetId":{"const":"acme.home:status"},"revision":{"type":"string","minLength":1},"visible":{"type":"boolean"},"beforeVisible":{"type":"boolean"},"hostId":{"type":"string","minLength":1}},"additionalProperties":false}""";
+
+    internal static bool Visibility(IReadOnlyDictionary<string, object?> arguments)
+    {
+        if (arguments.Count != 1 || !arguments.TryGetValue("visible", out var raw))
+            WidgetContract.Refuse("arguments_invalid", "Exactly one boolean visible argument is required.", 400);
+        else if (raw is bool boolean) return boolean;
+        else if (raw is JsonElement json && json.ValueKind is JsonValueKind.True or JsonValueKind.False) return json.GetBoolean();
+        WidgetContract.Refuse("arguments_invalid", "The visible argument must be a JSON boolean.", 400);
+        return false;
+    }
+
+    internal static bool Visibility(JsonElement arguments)
+    {
+        if (arguments.ValueKind != JsonValueKind.Object || arguments.EnumerateObject().Count() != 1 ||
+            !arguments.TryGetProperty("visible", out var visible) || visible.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            WidgetContract.Refuse("arguments_invalid", "Exactly one boolean visible argument is required.", 400);
+        return arguments.GetProperty("visible").GetBoolean();
+    }
+
+    internal static void Reference(IReadOnlyCollection<AgentContextAttachment> context, WidgetObservation state, bool required)
+    {
+        var references = context.Where(WidgetContract.IsOwn).Where(item => item.Origin != AgentContextOrigin.InstalledGuidance).ToArray();
+        if (!required && references.Length == 0) return;
+        if (references.Length != 1 || references[0].ModuleId != WidgetContract.Module || references[0].ContentType != WidgetContract.ContextType ||
+            references[0].SchemaVersion != "1" || !WidgetContract.SameTarget(references[0].Target, state))
+            WidgetContract.Refuse("context_stale", "One current Acme status card reference is required.");
+    }
+
+    internal static void Prepared(AgentPreparedToolInvocation invocation, AgentToolDescriptor descriptor)
+    {
+        if (invocation.ToolName != descriptor.Name || invocation.ModuleId != descriptor.ModuleId || invocation.ToolContractVersion != "1" ||
+            invocation.ExecutionLocation != AgentExecutionLocation.Server || invocation.Client is not null ||
+            string.IsNullOrWhiteSpace(invocation.InvocationId) || string.IsNullOrWhiteSpace(invocation.ActorId) || string.IsNullOrWhiteSpace(invocation.TenantId) ||
+            invocation.Risk != descriptor.Risk || invocation.RequiresApproval != (descriptor.Mutability == AgentToolMutability.Mutating) ||
+            invocation.ExpiresAt <= DateTimeOffset.UtcNow)
+            WidgetContract.Refuse("prepared_invalid", "The prepared operation is unavailable or does not match this installed contract.");
+    }
+
+    internal static AgentResult<T> Refused<T>(WidgetRefusal refusal) => new(default, refusal.Error);
+}
+
+internal sealed class ReadWidgetTool(WidgetResource resource) : IAgentTool
+{
+    internal static readonly AgentToolDescriptor ToolDescriptor = new(WidgetContract.ReadTool, "Read Acme status card",
+        "Read the current personal Acme status card visibility and real Home layout revision.", AgentToolMutability.ReadOnly,
+        AgentRisk.ReadOnly, """{"type":"object","properties":{},"additionalProperties":false}""",
+        [WidgetContract.ReadPermission], WidgetContract.Scopes)
+    {
+        ModuleId = WidgetContract.Module, ResultType = WidgetContract.ReadResult, ResultSchemaVersion = "1",
+        ResultJsonSchema = WidgetToolValidation.StateSchema, ResultRendererId = WidgetContract.Renderer
+    };
+    public AgentToolDescriptor Descriptor => ToolDescriptor;
+
+    public async Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (invocation.ToolName != Descriptor.Name || invocation.Arguments.Count != 0 ||
+                string.IsNullOrWhiteSpace(invocation.ActorId) || string.IsNullOrWhiteSpace(invocation.TenantId))
+                WidgetContract.Refuse("arguments_invalid", "Read requires an empty object and the current actor and tenant.", 400);
+            var state = await resource.ObserveAsync(invocation.ActorId, invocation.TenantId, false, cancellationToken);
+            WidgetToolValidation.Reference(invocation.Context, state, false);
+            return AgentResult<AgentToolPreparation>.Success(new(WidgetContract.Target(state), JsonSerializer.SerializeToElement(new { }),
+                AgentRisk.ReadOnly, WidgetContract.ReadPayload(state), false));
+        }
+        catch (WidgetRefusal refusal) { return WidgetToolValidation.Refused<AgentToolPreparation>(refusal); }
+    }
+
+    public async Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            WidgetToolValidation.Prepared(invocation, Descriptor);
+            if (invocation.Arguments.ValueKind != JsonValueKind.Object || invocation.Arguments.EnumerateObject().Any())
+                WidgetContract.Refuse("arguments_invalid", "Read requires an empty object.", 400);
+            var state = await resource.ObserveAsync(invocation.ActorId, invocation.TenantId, false, cancellationToken);
+            if (!WidgetContract.SameTarget(invocation.Target, state)) WidgetContract.Refuse("stale", "The prepared read revision has changed.");
+            if (invocation.Preview.TypeId != WidgetContract.ReadResult || invocation.Preview.SchemaVersion != "1" ||
+                !JsonElement.DeepEquals(invocation.Preview.Data, WidgetContract.ReadPayload(state).Data))
+                WidgetContract.Refuse("read_scope_changed", "The prepared read no longer matches the configured personal host scope.");
+            return AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, invocation.ToolName, true,
+                state.Visible ? "Acme status card is visible in your personal Home layout." : "Acme status card is hidden in your personal Home layout.", WidgetContract.ReadPayload(state)));
+        }
+        catch (WidgetRefusal refusal) { return WidgetToolValidation.Refused<AgentToolResult>(refusal); }
+    }
+}
+
+internal sealed class SetWidgetVisibilityTool(WidgetResource resource) : IAgentTool
+{
+    internal static readonly AgentToolDescriptor ToolDescriptor = new(WidgetContract.WriteTool, "Change Acme status card visibility",
+        "Review showing or hiding the existing Acme status card in the current personal Home layout. Other layout data is preserved.",
+        AgentToolMutability.Mutating, AgentRisk.ReviewRequired,
+        """{"type":"object","required":["visible"],"properties":{"visible":{"type":"boolean"}},"additionalProperties":false}""",
+        [WidgetContract.ReadPermission, WidgetContract.WritePermission], WidgetContract.Scopes)
+    {
+        ModuleId = WidgetContract.Module, ResultType = WidgetContract.ChangeResult, ResultSchemaVersion = "1",
+        ResultJsonSchema = WidgetToolValidation.ChangeSchema, ResultRendererId = WidgetContract.Renderer
+    };
+    public AgentToolDescriptor Descriptor => ToolDescriptor;
+
+    public async Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (invocation.ToolName != Descriptor.Name || !invocation.AllowMutations ||
+                string.IsNullOrWhiteSpace(invocation.ActorId) || string.IsNullOrWhiteSpace(invocation.TenantId))
+                WidgetContract.Refuse("mutation_denied", "This request does not admit a reviewed personal layout change.", 403);
+            var visible = WidgetToolValidation.Visibility(invocation.Arguments);
+            var state = await resource.ObserveAsync(invocation.ActorId, invocation.TenantId, true, cancellationToken);
+            WidgetToolValidation.Reference(invocation.Context, state, true);
+            if (state.Visible == visible) WidgetContract.Refuse("noop", "The Acme status card already has the requested visibility.");
+            return AgentResult<AgentToolPreparation>.Success(new(WidgetContract.Target(state), JsonSerializer.SerializeToElement(new { visible }),
+                AgentRisk.ReviewRequired, WidgetContract.Preview(state, visible), true));
+        }
+        catch (WidgetRefusal refusal) { return WidgetToolValidation.Refused<AgentToolPreparation>(refusal); }
+    }
+
+    public async Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            WidgetToolValidation.Prepared(invocation, Descriptor);
+            var visible = WidgetToolValidation.Visibility(invocation.Arguments);
+            return AgentResult<AgentToolResult>.Success(await resource.ApplyAsync(invocation, visible, cancellationToken));
+        }
+        catch (WidgetRefusal refusal) { return WidgetToolValidation.Refused<AgentToolResult>(refusal); }
+    }
+}
