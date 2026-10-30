@@ -12,6 +12,8 @@ The fix reuses the existing native cancellation source, result address, settleme
 
 This qualifies one direct model with two real Event workers restored from its actual captured state. Embedded/native-parent sibling interruption, a crash during pending model settlement, broader faults/retention/providers/rollback and final affected-source upgrade/Studio remain separate gates. Previous finite and broadcast receipts keep their executing sources.
 
+The separately sourced [pending sibling interruption matrix](../pending-sibling-interruption/README.md) now proves the pending-model crash and all four native parent shapes atf4c923ed9. It does not change the source or limits of this earlier post-consumption/pre-ACK capture. Other remaining gates still apply.
+
 ```sh
 python3 e2e-tests/bpmn/verify_sibling_cancellation.py specs/1017-direct-bpmn-hosting/evidence/events/sibling-cancellation/manifest.json
 python3 -m unittest discover -s e2e-tests/bpmn -p test_verify_sibling_cancellation.py
