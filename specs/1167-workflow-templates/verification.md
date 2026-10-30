@@ -8,6 +8,7 @@ hosts/databases and leaves existing development hosts untouched.
 | Design Core whole suite | 655 passed, no skips |
 | Design API whole suite | 183 passed, no skips |
 | Design EF whole suite | 128 passed, no skips |
+| Shared persistence schema/migration whole suite | 501 passed, no skips |
 | Architecture whole suite after graph restore | 592 passed, no skips |
 | Generated solution filters | Fresh |
 | Workflows frontend whole suite | 198 files, 2678 tests passed |
@@ -45,3 +46,12 @@ mandatory List store injection reproduces500 in that test; restoring optional
 injection returns the whole183-test API suite to green. Built-in recipes live in
 a tiny module separate from template API/designer helpers; bundle budgets stay
 unchanged (the measured closure is384.38kB, not a claimed headroom gain).
+
+
+Hosted PR shard3 exposed a missing central schema-content declaration for
+WorkflowTemplateEntity.ContentJson, plus the cross-module payload inventory missing
+its new column (eight failures across four providers). The fix declares that content
+in the existing WorkflowsDesign family and adds its one encoded ContentJson column
+to the expected inventory. No guard was removed, no EF model/schema change was
+needed, and all501 shared persistence tests plus128 Design EF tests pass locally.
+Fresh hosted checks are required on the repair commit.
