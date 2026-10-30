@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-28
 
-**Status**: Implemented — prepared for PR3410 under the lifecycle transition rule; becomes shipped at merge. Round2 corrections qualify at sourcee3ec219fc (6165 whole-project passes, four actual immediate-completion/restart journeys); retained Studio compatibility keeps source4f46 and its unchanged-path scope. Version magnitude, round3, scan/required checks, protected delivery/post-main and broader program acceptance remain open.
+**Status**: In progress — complete-PR round3 retained five findings; affected corrections, actual recovery/cancellation qualification and delivery gates remain open.
 
 **Input**: Deliver existing [#2898](https://github.com/elsa-workflows/elsa-foundation/issues/2898) within [program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892), after verified #2735 adoption: direct and embedded BPMN hosting, restart and operational races, real recoverable pipeline invocation, and supported human-task/incident commands. Preserve authoring and saved executions. Broader operational and Studio acceptance remains [#2907](https://github.com/elsa-workflows/elsa-foundation/issues/2907).
 

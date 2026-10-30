@@ -1,0 +1,13 @@
+{
+  "processReceiptsScanned": 140,
+  "pipelineOriginatedCancellation": [
+    {
+      "path": "specs/1017-direct-bpmn-hosting/evidence/pipeline/direct-cancellation/direct-cancel/process.json",
+      "kind": "actual-direct-bpmn-native-etl-pipeline-cancellation",
+      "embeddedParent": null,
+      "parent": "BpmnModel",
+      "nativeParentExecutionId": null,
+      "sourceRevision": "b5c612276334d1d39aec827b85d12cb1021e5c38"
+    }
+  ]
+}

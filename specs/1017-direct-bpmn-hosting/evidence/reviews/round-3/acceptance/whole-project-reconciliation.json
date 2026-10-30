@@ -1,0 +1,88 @@
+{
+  "source": "e3ec219fcc3a93c949d2669fc585bd1e79152abe",
+  "projects": [
+    {
+      "name": "bpmn",
+      "listed": 465,
+      "executed": 465,
+      "passed": 465,
+      "skipped": 0,
+      "theoryExpansions": [],
+      "discoverySource": "committed gzip log; original local TRX read only"
+    },
+    {
+      "name": "runtime",
+      "listed": 3067,
+      "executed": 3078,
+      "passed": 3078,
+      "skipped": 0,
+      "theoryExpansions": [
+        {
+          "method": "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident",
+          "listed": 1,
+          "executed": 2
+        },
+        {
+          "method": "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running",
+          "listed": 1,
+          "executed": 4
+        },
+        {
+          "method": "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches",
+          "listed": 1,
+          "executed": 8
+        }
+      ],
+      "discoverySource": "committed gzip log; original local TRX read only"
+    },
+    {
+      "name": "hosting",
+      "listed": 37,
+      "executed": 37,
+      "passed": 37,
+      "skipped": 0,
+      "theoryExpansions": [],
+      "discoverySource": "committed gzip log; original local TRX read only"
+    },
+    {
+      "name": "runtime-ef",
+      "listed": 1782,
+      "executed": 1782,
+      "passed": 1782,
+      "skipped": 0,
+      "theoryExpansions": [],
+      "discoverySource": "committed gzip log; original local TRX read only"
+    },
+    {
+      "name": "architecture",
+      "listed": 585,
+      "executed": 594,
+      "passed": 594,
+      "skipped": 0,
+      "theoryExpansions": [
+        {
+          "method": "Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Canonical_domain_api_depends_on_capability_aggregation_and_registers_one_stable_declaration",
+          "listed": 1,
+          "executed": 5
+        },
+        {
+          "method": "Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_collectible_api_explorer_artifact_is_rejected",
+          "listed": 1,
+          "executed": 6
+        }
+      ],
+      "discoverySource": "committed gzip log; original local TRX read only"
+    },
+    {
+      "name": "runtime-providers",
+      "listed": 209,
+      "executed": 209,
+      "passed": 209,
+      "skipped": 0,
+      "theoryExpansions": [],
+      "discoverySource": "committed gzip log; original local TRX read only"
+    }
+  ],
+  "totalPassed": 6165,
+  "skipped": 0
+}

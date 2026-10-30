@@ -1,0 +1,8 @@
+{
+  "reviewedHead": "fcf551c789c37c722b3b07d0c1cf4aecb56a16ad",
+  "executingSource": "e3ec219fcc3a93c949d2669fc585bd1e79152abe",
+  "driverSha256": "b23578d8182cf69caa4728b83c615ae7b8bd1594ba33652e8d08e06ff3caf0aa",
+  "driverByteEqualToReviewedHead": true,
+  "binary": "Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Activities.Bpmn.dll",
+  "scope": "Stateless production Graph invocation only; valid complete-inventory control accepted; one unregistered human binding refused without process/element/binding context. No HTTP-host, store or recovery acceptance inferred."
+}
