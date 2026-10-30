@@ -13,17 +13,18 @@ namespace Elsa.Workflows.Design.Api.Endpoints.Templates.Create;
 
 [Post("templates")]
 [RequirePermission(WorkflowDesignPermissions.Manage)]
-public sealed class Endpoint(IWorkflowTemplateStore store, ICredentialLiteralValidator credentials) : ApiEndpoint<SaveWorkflowTemplate, WorkflowTemplateView>
+public sealed class Endpoint(ICredentialLiteralValidator credentials, IWorkflowTemplateStore? store = null) : ApiEndpoint<SaveWorkflowTemplate, WorkflowTemplateView>
 {
     public override void Configure(ApiEndpointOptions options) { options.Operation = "WorkflowTemplatesCreate"; options.Accepts = ["application/json"]; }
     public override async Task<WorkflowTemplateView> HandleAsync(SaveWorkflowTemplate request, CancellationToken cancellationToken)
     {
+        var templates = TemplateStoreAvailability.Require(store);
         if (request.TemplateId is not null) throw new ArgumentException("Creating a template cannot replace an existing identity.");
         ArgumentNullException.ThrowIfNull(request.Content);
         ArgumentNullException.ThrowIfNull(request.Content.State);
         var content = request.Content.ToContent();
         await credentials.AdmitAsync(content.State, cancellationToken);
-        return WorkflowTemplateView.From(await store.SaveAsync(DesignOperationKey.CreateOrGenerate(request.OperationKey), null,
+        return WorkflowTemplateView.From(await templates.SaveAsync(DesignOperationKey.CreateOrGenerate(request.OperationKey), null,
             request.Name, request.Description, content, null, cancellationToken));
     }
 }

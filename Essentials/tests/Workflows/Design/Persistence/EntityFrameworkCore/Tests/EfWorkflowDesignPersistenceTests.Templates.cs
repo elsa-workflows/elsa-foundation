@@ -1,5 +1,6 @@
 using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Serialization.Core;
+using Elsa.Locking.Core;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Elsa.Workflows.Design.Core.Models;
@@ -18,6 +19,48 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests;
 
 public sealed partial class EfWorkflowDesignPersistenceTests
 {
+    [Fact]
+    public async Task Template_catalog_refuses_overflow_without_losing_read_update_delete_or_replay()
+    {
+        await using var database = new TemporarySqliteDatabase("workflow-template-limit");
+        var services = new ServiceCollection();
+        services.AddSingleton<IPayloadSerializer, TestSerializer>();
+        var locks = new RecordingLockProvider();
+        services.AddSingleton<IDistributedLockProvider>(locks);
+        services.AddSingleton<IPersistenceAccessContextAccessor>(new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+        services.AddWorkflowsDesignEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = database.ConnectionString });
+        await using var host = services.BuildServiceProvider();
+        using var scope = host.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>();
+        await db.Database.MigrateAsync();
+        var serializer = scope.ServiceProvider.GetRequiredService<IPayloadSerializer>();
+        var content = new WorkflowTemplateContent(WorkflowDefinitionState.Empty, [], []);
+        var entityType = db.Model.GetEntityTypes().Single(type => type.ClrType.Name == "WorkflowTemplateEntity").ClrType;
+        for (var index = 0; index < 999; index++)
+        {
+            var row = Activator.CreateInstance(entityType)!;
+            foreach (var (name, value) in new Dictionary<string, object> {
+                ["Id"] = "template-" + Guid.NewGuid().ToString("N"), ["TenantId"] = "tenant-a",
+                ["Name"] = "Seed " + index, ["Revision"] = Guid.NewGuid().ToString("N"),
+                ["ContentJson"] = serializer.Serialize(content) }) entityType.GetProperty(name)!.SetValue(row, value);
+            db.Add(row);
+        }
+        await db.SaveChangesAsync();
+        var store = scope.ServiceProvider.GetRequiredService<IWorkflowTemplateStore>();
+        var saved = await store.SaveAsync(new("last-template"), null, "Last slot", null, content, null);
+        Assert.Equal(1000, (await store.ListAsync()).Count);
+        Assert.Equal(saved.Id, (await store.SaveAsync(new("last-template"), null, "Last slot", null, content, null)).Id);
+        var refusal = await Assert.ThrowsAsync<ArgumentException>(() => store.SaveAsync(new("overflow"), null, "One too many", null, content, null));
+        Assert.Contains("1000", refusal.Message);
+        Assert.Equal(1000, (await store.ListAsync()).Count);
+        var updated = await store.SaveAsync(new("edit-at-limit"), saved.Id, "Edited at limit", null, content, saved.Revision);
+        await store.DeleteAsync(new("delete-at-limit"), saved.Id, updated.Revision);
+        await store.SaveAsync(new("recovered-slot"), null, "Space available", null, content, null);
+        Assert.Equal(1000, (await store.ListAsync()).Count);
+        Assert.NotEmpty(locks.Acquired);
+        Assert.Single(locks.Acquired.Distinct());
+    }
+
     [Fact]
     public async Task Template_port_refuses_implicit_replacement_and_allows_absence()
     {
@@ -43,6 +86,7 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         ServiceProvider Host(string tenant)
         {
             var services = new ServiceCollection();
+            services.AddSingleton<IDistributedLockProvider, TestLockProvider>();
             services.AddSingleton<IPayloadSerializer, TestSerializer>();
             services.AddSingleton<IPersistenceAccessContextAccessor>(new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope(tenant))));
             services.AddWorkflowsDesignEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = database.ConnectionString });

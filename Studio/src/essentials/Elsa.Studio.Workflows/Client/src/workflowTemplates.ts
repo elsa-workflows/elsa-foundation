@@ -6,10 +6,7 @@ import { getChildSlots } from "./workflowAdapter";
 
 export interface WorkflowTemplateContent { state: WorkflowDefinitionState; layout: WorkflowDraft["layout"]; activityPresentation?: WorkflowDraft["activityPresentation"] }
 export interface WorkflowTemplate { id: string; name: string; description?: string | null; revision: string; createdAt: string; lastModifiedAt: string; content: WorkflowTemplateContent }
-export const builtInWorkflowTemplates = [
-  { id: "blank", name: "Blank workflow", description: "Choose a root activity and start with an empty graph." },
-  { id: "http", name: "HTTP request and response", description: "An HTTP endpoint connected to an HTTP response." }
-] as const;
+
 
 export async function workflowTemplatesPath(context: StudioEndpointContext) {
   try { return await resolveCapabilityLink(context, capabilityIds.workflowDesign, "workflow-templates"); }

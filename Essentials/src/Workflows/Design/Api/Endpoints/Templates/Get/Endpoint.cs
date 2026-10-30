@@ -13,10 +13,10 @@ namespace Elsa.Workflows.Design.Api.Endpoints.Templates.Get;
 
 [Get("templates/{templateId}")]
 [RequirePermission(WorkflowDesignPermissions.Read)]
-public sealed class Endpoint(IWorkflowTemplateStore store) : ApiEndpoint<GetWorkflowTemplate, WorkflowTemplateView>
+public sealed class Endpoint(IWorkflowTemplateStore? store = null) : ApiEndpoint<GetWorkflowTemplate, WorkflowTemplateView>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowTemplatesGet";
     public override async Task<WorkflowTemplateView> HandleAsync(GetWorkflowTemplate request, CancellationToken cancellationToken) =>
-        WorkflowTemplateView.From(await store.FindAsync(request.TemplateId, cancellationToken)
+        WorkflowTemplateView.From(await TemplateStoreAvailability.Require(store).FindAsync(request.TemplateId, cancellationToken)
             ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowTemplate), request.TemplateId));
 }

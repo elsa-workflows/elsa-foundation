@@ -1,4 +1,4 @@
-import { builtInWorkflowTemplates } from "../workflowTemplates";
+import { builtInWorkflowTemplates } from "../builtInWorkflowTemplates";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { WorkflowTemplate } from "../workflowTemplates";
 import { useCallback, useEffect, useRef, useState } from "react";

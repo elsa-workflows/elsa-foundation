@@ -1,3 +1,4 @@
+import { builtInWorkflowTemplates } from "../builtInWorkflowTemplates";
 import "./WorkflowTemplatesPage.css";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -6,7 +7,7 @@ import { Plus, RefreshCw, Copy, Trash2 } from "lucide-react";
 import { listActivities } from "../api/activityDesign";
 import { createDefinition } from "../api/workflowDesign";
 import type { ActivityCatalogItem } from "../workflowTypes";
-import { builtInWorkflowTemplates, deleteWorkflowTemplate, listWorkflowTemplates, saveWorkflowTemplate, templateAvailabilityReason, type WorkflowTemplate } from "../workflowTemplates";
+import { deleteWorkflowTemplate, listWorkflowTemplates, saveWorkflowTemplate, templateAvailabilityReason, type WorkflowTemplate } from "../workflowTemplates";
 import { getCreateInitialState } from "./editorHelpers";
 import type { CreateWorkflowDraft } from "./editorTypes";
 import { getHttpStarterAvailabilityReason } from "./httpWorkflowStarter";

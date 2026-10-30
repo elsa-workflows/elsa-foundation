@@ -13,9 +13,9 @@ namespace Elsa.Workflows.Design.Api.Endpoints.Templates.List;
 
 [Get("templates")]
 [RequirePermission(WorkflowDesignPermissions.Read)]
-public sealed class Endpoint(IWorkflowTemplateStore store) : ApiEndpoint<ListWorkflowTemplates, IReadOnlyCollection<WorkflowTemplateView>>
+public sealed class Endpoint(IWorkflowTemplateStore? store = null) : ApiEndpoint<ListWorkflowTemplates, IReadOnlyCollection<WorkflowTemplateView>>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "WorkflowTemplatesList";
     public override async Task<IReadOnlyCollection<WorkflowTemplateView>> HandleAsync(ListWorkflowTemplates request, CancellationToken cancellationToken) =>
-        (await store.ListAsync(cancellationToken)).Select(WorkflowTemplateView.From).ToArray();
+        (await TemplateStoreAvailability.Require(store).ListAsync(cancellationToken)).Select(WorkflowTemplateView.From).ToArray();
 }

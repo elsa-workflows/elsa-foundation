@@ -1,4 +1,5 @@
 using Elsa.Primitives.Exceptions;
+using Elsa.Locking.Core;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
@@ -11,7 +12,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed class EfWorkflowTemplateStore(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access,
-    IDesignAtomicWriter atomic, IPayloadSerializer serializer) : IWorkflowTemplateStore
+    IDesignAtomicWriter atomic, IPayloadSerializer serializer, IDistributedLockProvider? lockProvider = null) : IWorkflowTemplateStore
 {
     private IQueryable<WorkflowTemplateEntity> Query() => EfDesignSupport.InScope(db.Templates, access, row => row.TenantId);
 
@@ -41,6 +42,12 @@ internal sealed class EfWorkflowTemplateStore(WorkflowsDesignDbContext db, IPers
         var json = serializer.Serialize(content);
         if (json.Length > 4 * 1024 * 1024) throw new ArgumentException("The template document exceeds 4 MiB.");
         var templateId = id ?? "template-" + Guid.NewGuid().ToString("N");
+        // Serialize catalog admission across hosts; a count in a read-committed transaction alone
+        // allows two creates to consume the final slot. Updates/deletes remain available at the cap.
+        await using var catalogLock = id is null
+            ? await (lockProvider ?? throw new InvalidOperationException("Template creation requires a distributed lock provider."))
+                .AcquireLockAsync("workflow-template-catalog:" + EfDesignSupport.ScopeKey(access.Current.RequireScope().Value), null, cancellationToken)
+            : null;
         try
         {
             return await atomic.ExecuteAsync(operationKey, "workflow.template.save.v1",
@@ -52,6 +59,8 @@ internal sealed class EfWorkflowTemplateStore(WorkflowsDesignDbContext db, IPers
                     var now = DateTimeOffset.UtcNow;
                     if (row is null)
                     {
+                        if (await Query().CountAsync(token) >= 1000)
+                            throw new ArgumentException("The template catalog has reached its limit of 1000 templates. Delete a template before creating another.");
                         row = new WorkflowTemplateEntity { Id = templateId, TenantId = access.Current.RequireScope().Value, CreatedAt = now };
                         db.Templates.Add(row);
                     }

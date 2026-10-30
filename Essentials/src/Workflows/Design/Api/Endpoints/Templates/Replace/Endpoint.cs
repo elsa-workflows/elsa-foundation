@@ -13,17 +13,18 @@ namespace Elsa.Workflows.Design.Api.Endpoints.Templates.Replace;
 
 [Put("templates/{templateId}")]
 [RequirePermission(WorkflowDesignPermissions.Manage)]
-public sealed class Endpoint(IWorkflowTemplateStore store, ICredentialLiteralValidator credentials) : ApiEndpoint<SaveWorkflowTemplate, WorkflowTemplateView>
+public sealed class Endpoint(ICredentialLiteralValidator credentials, IWorkflowTemplateStore? store = null) : ApiEndpoint<SaveWorkflowTemplate, WorkflowTemplateView>
 {
     public override void Configure(ApiEndpointOptions options) { options.Operation = "WorkflowTemplatesReplace"; options.Accepts = ["application/json"]; }
     public override async Task<WorkflowTemplateView> HandleAsync(SaveWorkflowTemplate request, CancellationToken cancellationToken)
     {
+        var templates = TemplateStoreAvailability.Require(store);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.TemplateId);
         ArgumentNullException.ThrowIfNull(request.Content);
         ArgumentNullException.ThrowIfNull(request.Content.State);
         var content = request.Content.ToContent();
         await credentials.AdmitAsync(content.State, cancellationToken);
-        return WorkflowTemplateView.From(await store.SaveAsync(DesignOperationKey.CreateOrGenerate(request.OperationKey), request.TemplateId,
+        return WorkflowTemplateView.From(await templates.SaveAsync(DesignOperationKey.CreateOrGenerate(request.OperationKey), request.TemplateId,
             request.Name, request.Description, content, request.ExpectedRevision, cancellationToken));
     }
 }

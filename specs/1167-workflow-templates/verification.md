@@ -6,8 +6,8 @@ hosts/databases and leaves existing development hosts untouched.
 | Gate | Result |
 | --- | --- |
 | Design Core whole suite | 655 passed, no skips |
-| Design API whole suite | 178 passed, no skips |
-| Design EF whole suite | 127 passed, no skips |
+| Design API whole suite | 183 passed, no skips |
+| Design EF whole suite | 128 passed, no skips |
 | Architecture whole suite after graph restore | 592 passed, no skips |
 | Generated solution filters | Fresh |
 | Workflows frontend whole suite | 198 files, 2678 tests passed |
@@ -17,7 +17,7 @@ hosts/databases and leaves existing development hosts untouched.
 | Owned rebuilt Workbench | CRUD/replay, 409, restart, independence, layout/labels passed |
 | Browser | Light/dark create/edit/copy/delete/use with variables, I/O; live Save as template; failed rename/navigation recovery passed |
 
-Discovery comparison: EF lists/runs 127 and API lists/runs 178. Core lists 585 and
+Discovery comparison: EF lists/runs 128 and API lists/runs 183. Core lists 585 and
 runs 655; architecture lists 583 and runs 592 (execution expands data-driven cases).
 All four whole projects ran without filters or skips.
 
@@ -29,9 +29,19 @@ fail; restoring it returns all four browser journeys to green. The delayed-Back
 regression also failed when Ctrl+Z bypassed the inert editor through its window
 listener; guarding that listener preserves declarations during the pending save.
 
-Production frontend output: entry 107.80 kB; stylesheet 169.36 kB; authenticated
-Definitions total 384.36 kB (384.50 budget); activity upgrades 375.49 kB (376.00 budget).
+Production frontend output: entry 107.81 kB; stylesheet 169.36 kB; authenticated
+Definitions total 384.38 kB (384.50 budget); activity upgrades 375.50 kB (376.00 budget).
 Heavy template management/editor surfaces stay deferred. Four provider Initial
 migrations were regenerated; local owned persistence execution is SQLite. Required
 CI supplies the provider matrix and whole-server build gates; pending checks are not
 counted as passed. Exact-head CI/review evidence belongs on PR #3472.
+
+Code Review follow-up: the 999→1000 boundary test reproduced successful overflow
+before the fix. Creation now holds the host's tenant-specific distributed catalog
+lock and checks capacity inside the atomic stage; refusal leaves read/edit/delete,
+replay and re-creation after deletion working. All 128 EF tests pass. Hosts without
+the optional port now return501 on all five routes (five API cases). Restoring a
+mandatory List store injection reproduces500 in that test; restoring optional
+injection returns the whole183-test API suite to green. Built-in recipes live in
+a tiny module separate from template API/designer helpers; bundle budgets stay
+unchanged (the measured closure is384.38kB, not a claimed headroom gain).

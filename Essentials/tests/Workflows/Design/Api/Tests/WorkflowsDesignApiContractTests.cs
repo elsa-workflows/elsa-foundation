@@ -163,6 +163,21 @@ public sealed class WorkflowsDesignApiContractTests
         }
     }
 
+    [Theory]
+    [InlineData("GET", "/design/workflows/templates")]
+    [InlineData("GET", "/design/workflows/templates/template-00000000000000000000000000000000")]
+    [InlineData("POST", "/design/workflows/templates")]
+    [InlineData("PUT", "/design/workflows/templates/template-00000000000000000000000000000000")]
+    [InlineData("POST", "/design/workflows/templates/template-00000000000000000000000000000000/delete")]
+    public async Task Optional_template_routes_return_not_available_when_the_store_is_absent(string method, string route)
+    {
+        await using var host = await AuthorizationHost.StartAsync();
+        using var request = LifecycleRequest(new HttpMethod(method), route, "{\"name\":\"Example\",\"expectedRevision\":\"r1\",\"content\":{\"state\":{}}}");
+        using var response = await host.Client.SendAsync(request);
+        await AssertWorkflowDesignProblemAsync(response, HttpStatusCode.NotImplemented);
+        Assert.Contains("not supported", await response.Content.ReadAsStringAsync());
+    }
+
     [Fact]
     public void Endpoint_metadata_uses_stable_owner_local_names_tags_and_consumed_security()
     {

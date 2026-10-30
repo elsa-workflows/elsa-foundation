@@ -65,3 +65,10 @@ Existing credential-literal admission applies. All reads/writes are tenant-scope
 These resources are independent of workflow publication and runtime execution. Built-in recipes
 are read-only client resources; their identifiers cannot be overwritten through these endpoints.
 See [the extension catalog](EXTENSION_POINTS.md#workflow-authoring-templates) for replacement semantics.
+
+
+Custom catalogs support 1000 templates per tenant. Creation uses the host's existing
+`IDistributedLockProvider` to serialize catalog admission and checks capacity inside
+the atomic write; a full catalog returns HTTP 400 before insertion. Replaying the
+last successful create, reading, updating and deleting remain available at capacity.
+The optional API returns HTTP 501 when no template store is configured.

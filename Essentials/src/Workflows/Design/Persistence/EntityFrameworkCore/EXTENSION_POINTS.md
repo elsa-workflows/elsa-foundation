@@ -76,3 +76,10 @@ replacement contract. No template mutation creates workflow definitions, version
 `WorkflowTemplateCapabilitySource` advertises `workflow-templates`, `workflow-template` and
 `workflow-template-delete` relations only when this port is present. Studio discovers these
 relations instead of constructing routes; code-owned Blank/HTTP recipes remain client starters.
+
+
+Custom catalogs support 1000 templates per tenant. Creation uses the host's existing
+`IDistributedLockProvider` to serialize catalog admission and checks capacity inside
+the atomic write; a full catalog returns HTTP 400 before insertion. Replaying the
+last successful create, reading, updating and deleting remain available at capacity.
+The optional API returns HTTP 501 when no template store is configured.
