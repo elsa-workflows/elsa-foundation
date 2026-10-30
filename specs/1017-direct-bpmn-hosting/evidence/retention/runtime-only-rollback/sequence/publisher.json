@@ -1,0 +1,76 @@
+{
+  "instance": {
+    "workflowExecutionId": "14ldHxWyb8t",
+    "artifactId": "artifact-6b1cf0c45be0",
+    "definitionId": "14ldD4iK466",
+    "definitionVersionId": "14ldD4iR98X",
+    "artifactVersion": "1.0.0",
+    "artifactHash": "sha256:6b1cf0c45be0c4713733452ebcfcadddec45c7bc6df7d4b1b595b4d591eda384",
+    "status": "Completed",
+    "runKind": "PublishedRun",
+    "subStatus": null,
+    "createdAt": "2026-10-30T03:29:30.228266+00:00",
+    "startedAt": "2026-10-30T03:29:30.228266+00:00",
+    "updatedAt": "2026-10-30T03:29:30.282953+00:00",
+    "completedAt": "2026-10-30T03:29:30.282953+00:00",
+    "correlationId": null,
+    "parentWorkflowExecutionId": null,
+    "tenantId": "default",
+    "activityCount": 1,
+    "incidentCount": 0,
+    "sourceReferenceId": "activation-ref:publication-14ldD4mO5bD",
+    "publicationId": "publication-14ldD4mO5bD",
+    "slotId": "activation-slot:11:14ldD4iK466:7:default",
+    "sourceKind": "WorkflowDefinitionVersion",
+    "sourceId": "14ldD4iR98X",
+    "sourceVersion": "1.0.0",
+    "activeIncidentCount": 0,
+    "blockingIncidentCount": 0
+  },
+  "activities": [
+    {
+      "activityExecutionId": "14ldHxZVkuI",
+      "workflowExecutionId": "14ldHxWyb8t",
+      "executableNodeId": "publish",
+      "authoredActivityId": "publish",
+      "activityType": "Elsa.PublishEvent",
+      "activityTypeVersion": "1.0.0+2e142e51055aa2d84c0839dffb49b3621489d9ce",
+      "status": "Completed",
+      "subStatus": null,
+      "executionSequence": 7636448141279589407,
+      "scheduledAt": "2026-10-30T03:29:30.23241+00:00",
+      "startedAt": "2026-10-30T03:29:30.234244+00:00",
+      "completedAt": "2026-10-30T03:29:30.271054+00:00",
+      "firstCheckpointId": "checkpoint:c8f2b9a9ca5604a4:schedule:publish:activity-scheduled:14ldHxZVkuI",
+      "lastCheckpointId": "checkpoint:5bb4cbb1322be859:checkpoint:WorkflowCompleted:14ldHxZVkuI",
+      "lastCommittedAt": "2026-10-30T03:29:30.282953+00:00",
+      "provenance": {
+        "parentActivityExecutionId": null,
+        "schedulingActivityExecutionId": null,
+        "schedulingWorkflowExecutionId": "14ldHxWyb8t",
+        "branchId": null,
+        "iterationId": null,
+        "executionPathId": null,
+        "executionScopeId": null,
+        "schedulingCause": "WorkflowStart",
+        "metadata": {}
+      },
+      "outcomeNames": [
+        "Done"
+      ],
+      "bookmarkCount": 0,
+      "incidentCount": 0,
+      "valueSnapshotCount": 4,
+      "metadata": {}
+    }
+  ],
+  "incidents": [],
+  "outputs": {},
+  "persistenceMode": "Balanced",
+  "inspectionGranularity": "boundary-level",
+  "activityNextContinuationToken": null,
+  "permissions": {
+    "canManage": true,
+    "canInspectValues": true
+  }
+}

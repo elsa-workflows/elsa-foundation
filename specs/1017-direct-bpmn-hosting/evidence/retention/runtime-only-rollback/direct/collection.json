@@ -1,0 +1,3352 @@
+{
+  "operation": "--retire-and-sweep",
+  "processId": 11749,
+  "controllerProcessId": 11617,
+  "executable": "/usr/local/share/dotnet/dotnet",
+  "startedAtUtc": "2026-10-30T03:24:26.558315+00:00",
+  "completedAtUtc": "2026-10-30T03:24:27.102941+00:00",
+  "referencesBefore": [
+    {
+      "sourceReferenceId": "bpmn-source:4a9aa5dd5c3f922ebd4e8eb00d798b4032558738f3b58dbd236039934cbbebfa",
+      "artifactId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+      "sourceKind": "BpmnModel",
+      "sourceId": "bpmn-source:4a9aa5dd5c3f922ebd4e8eb00d798b4032558738f3b58dbd236039934cbbebfa",
+      "sourceVersion": "1",
+      "definitionId": "bpmn-model:sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+      "definitionVersionId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+      "artifactVersion": "1.0.0",
+      "createdAt": "2026-10-30T03:24:22.742042+00:00",
+      "publishedAt": "2026-10-30T03:24:22.742042+00:00",
+      "scope": 0,
+      "expiresAt": null,
+      "deletedAt": null,
+      "deletedReason": null,
+      "activationId": null,
+      "slotId": null,
+      "tenantId": "default",
+      "layout": [],
+      "layoutSidecar": {
+        "boundarySegments": []
+      },
+      "authoredInputs": [],
+      "activityPresentation": []
+    },
+    {
+      "sourceReferenceId": "activation-ref:publication-14lcvBo8SY9",
+      "artifactId": "artifact-e6f71e5e3c38",
+      "sourceKind": "WorkflowDefinitionVersion",
+      "sourceId": "14lcvAfMXC7",
+      "sourceVersion": "1.0.0",
+      "definitionId": "14lcvAaBNgg",
+      "definitionVersionId": "14lcvAfMXC7",
+      "artifactVersion": "1.0.0",
+      "createdAt": "2026-10-30T03:24:21.8668+00:00",
+      "publishedAt": "2026-10-30T03:24:21.8668+00:00",
+      "scope": 0,
+      "expiresAt": null,
+      "deletedAt": null,
+      "deletedReason": null,
+      "activationId": "publication-14lcvBo8SY9",
+      "slotId": "activation-slot:11:14lcvAaBNgg:7:default",
+      "tenantId": "default",
+      "layout": [],
+      "layoutSidecar": {
+        "boundarySegments": []
+      },
+      "authoredInputs": [
+        {
+          "executableNodeId": "event",
+          "inputKey": "EventName",
+          "expressionType": "Literal",
+          "value": "actual-model-rollback-Direct",
+          "isSensitive": false
+        },
+        {
+          "executableNodeId": "event",
+          "inputKey": "CanStartWorkflow",
+          "expressionType": "Literal",
+          "value": false,
+          "isSensitive": false
+        }
+      ],
+      "activityPresentation": []
+    },
+    {
+      "sourceReferenceId": "bpmn-source:91224ff1327745cc02d46fa4f0384d4bb9f4776a02bc2399b2bab37d66f911b0",
+      "artifactId": "sha256:750f58cbfe221d82ef68f776d4f507bf5c61b2d06b44d76d36e1f290bac31839",
+      "sourceKind": "BpmnModel",
+      "sourceId": "bpmn-source:91224ff1327745cc02d46fa4f0384d4bb9f4776a02bc2399b2bab37d66f911b0",
+      "sourceVersion": "1",
+      "definitionId": "bpmn-model:sha256:750f58cbfe221d82ef68f776d4f507bf5c61b2d06b44d76d36e1f290bac31839",
+      "definitionVersionId": "sha256:750f58cbfe221d82ef68f776d4f507bf5c61b2d06b44d76d36e1f290bac31839",
+      "artifactVersion": "1.0.0",
+      "createdAt": "2026-10-30T03:24:22.837815+00:00",
+      "publishedAt": "2026-10-30T03:24:22.837815+00:00",
+      "scope": 0,
+      "expiresAt": null,
+      "deletedAt": null,
+      "deletedReason": null,
+      "activationId": null,
+      "slotId": null,
+      "tenantId": "default",
+      "layout": [],
+      "layoutSidecar": {
+        "boundarySegments": []
+      },
+      "authoredInputs": [],
+      "activityPresentation": []
+    }
+  ],
+  "referencesAfter": [
+    {
+      "sourceReferenceId": "bpmn-source:4a9aa5dd5c3f922ebd4e8eb00d798b4032558738f3b58dbd236039934cbbebfa",
+      "artifactId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+      "sourceKind": "BpmnModel",
+      "sourceId": "bpmn-source:4a9aa5dd5c3f922ebd4e8eb00d798b4032558738f3b58dbd236039934cbbebfa",
+      "sourceVersion": "1",
+      "definitionId": "bpmn-model:sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+      "definitionVersionId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+      "artifactVersion": "1.0.0",
+      "createdAt": "2026-10-30T03:24:22.742042+00:00",
+      "publishedAt": "2026-10-30T03:24:22.742042+00:00",
+      "scope": 0,
+      "expiresAt": null,
+      "deletedAt": "2026-10-30T03:24:26.558315+00:00",
+      "deletedReason": "owned-runtime-only-rollback-qualification",
+      "activationId": null,
+      "slotId": null,
+      "tenantId": "default",
+      "layout": [],
+      "layoutSidecar": {
+        "boundarySegments": []
+      },
+      "authoredInputs": [],
+      "activityPresentation": []
+    },
+    {
+      "sourceReferenceId": "activation-ref:publication-14lcvBo8SY9",
+      "artifactId": "artifact-e6f71e5e3c38",
+      "sourceKind": "WorkflowDefinitionVersion",
+      "sourceId": "14lcvAfMXC7",
+      "sourceVersion": "1.0.0",
+      "definitionId": "14lcvAaBNgg",
+      "definitionVersionId": "14lcvAfMXC7",
+      "artifactVersion": "1.0.0",
+      "createdAt": "2026-10-30T03:24:21.8668+00:00",
+      "publishedAt": "2026-10-30T03:24:21.8668+00:00",
+      "scope": 0,
+      "expiresAt": null,
+      "deletedAt": "2026-10-30T03:24:26.558315+00:00",
+      "deletedReason": "owned-runtime-only-rollback-qualification",
+      "activationId": "publication-14lcvBo8SY9",
+      "slotId": "activation-slot:11:14lcvAaBNgg:7:default",
+      "tenantId": "default",
+      "layout": [],
+      "layoutSidecar": {
+        "boundarySegments": []
+      },
+      "authoredInputs": [
+        {
+          "executableNodeId": "event",
+          "inputKey": "EventName",
+          "expressionType": "Literal",
+          "value": "actual-model-rollback-Direct",
+          "isSensitive": false
+        },
+        {
+          "executableNodeId": "event",
+          "inputKey": "CanStartWorkflow",
+          "expressionType": "Literal",
+          "value": false,
+          "isSensitive": false
+        }
+      ],
+      "activityPresentation": []
+    },
+    null
+  ],
+  "materialsBefore": [
+    {
+      "identity": {
+        "artifactId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+        "definitionId": "bpmn-model:sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+        "definitionVersionId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4"
+      },
+      "incarnationId": "2a06b5532e8b4b8db5b0ed8b70608d8a",
+      "createdAt": "2026-10-30T03:24:22.73237+00:00",
+      "nativeWorkflow": null,
+      "model": {
+        "formatVersion": 1,
+        "identity": {
+          "artifactId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+          "definitionId": "bpmn-model:sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+          "definitionVersionId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4"
+        },
+        "protocol": {
+          "key": "elsa.bpmn",
+          "version": 1
+        },
+        "profile": "foundation-native-work-v1",
+        "definition": {
+          "formatVersion": 5,
+          "process": {
+            "processId": "actual-rollback-Direct",
+            "elements": [
+              {
+                "elementId": "start",
+                "elementType": "startEvent"
+              },
+              {
+                "elementId": "fork",
+                "elementType": "parallelGateway"
+              },
+              {
+                "elementId": "first",
+                "elementType": "intermediateCatchEvent",
+                "bindingRef": "first-event",
+                "eventDefinitions": [
+                  {
+                    "type": "signal",
+                    "properties": {
+                      "name": "actual-model-rollback-Direct"
+                    }
+                  }
+                ]
+              },
+              {
+                "elementId": "second",
+                "elementType": "intermediateCatchEvent",
+                "bindingRef": "second-event",
+                "eventDefinitions": [
+                  {
+                    "type": "signal",
+                    "properties": {
+                      "name": "actual-model-rollback-Direct"
+                    }
+                  }
+                ]
+              },
+              {
+                "elementId": "join",
+                "elementType": "parallelGateway"
+              },
+              {
+                "elementId": "end",
+                "elementType": "endEvent"
+              }
+            ],
+            "sequenceFlows": [
+              {
+                "flowId": "begin",
+                "sourceRef": "start",
+                "targetRef": "fork"
+              },
+              {
+                "flowId": "fork-first",
+                "sourceRef": "fork",
+                "targetRef": "first"
+              },
+              {
+                "flowId": "fork-second",
+                "sourceRef": "fork",
+                "targetRef": "second"
+              },
+              {
+                "flowId": "first-join",
+                "sourceRef": "first",
+                "targetRef": "join"
+              },
+              {
+                "flowId": "second-join",
+                "sourceRef": "second",
+                "targetRef": "join"
+              },
+              {
+                "flowId": "finish",
+                "sourceRef": "join",
+                "targetRef": "end"
+              }
+            ]
+          },
+          "humanBindings": [],
+          "nativeEventBindings": [
+            {
+              "bindingId": "first-event",
+              "executable": {
+                "artifactId": "artifact-e6f71e5e3c38",
+                "definitionId": "14lcvAaBNgg",
+                "definitionVersionId": "14lcvAfMXC7",
+                "artifactVersion": "1.0.0",
+                "artifactHash": "sha256:e6f71e5e3c38d15b6e91cdd195860648a06dc88ee3949bc1b32fdfeba4d5956d"
+              }
+            },
+            {
+              "bindingId": "second-event",
+              "executable": {
+                "artifactId": "artifact-e6f71e5e3c38",
+                "definitionId": "14lcvAaBNgg",
+                "definitionVersionId": "14lcvAfMXC7",
+                "artifactVersion": "1.0.0",
+                "artifactHash": "sha256:e6f71e5e3c38d15b6e91cdd195860648a06dc88ee3949bc1b32fdfeba4d5956d"
+              }
+            }
+          ]
+        },
+        "inputContract": {
+          "version": 1,
+          "inputs": []
+        },
+        "outputs": [],
+        "dependencies": [
+          {
+            "bindingId": "first-event",
+            "executable": {
+              "artifactId": "artifact-e6f71e5e3c38",
+              "definitionId": "14lcvAaBNgg",
+              "definitionVersionId": "14lcvAfMXC7",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:e6f71e5e3c38d15b6e91cdd195860648a06dc88ee3949bc1b32fdfeba4d5956d"
+            }
+          },
+          {
+            "bindingId": "second-event",
+            "executable": {
+              "artifactId": "artifact-e6f71e5e3c38",
+              "definitionId": "14lcvAaBNgg",
+              "definitionVersionId": "14lcvAfMXC7",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:e6f71e5e3c38d15b6e91cdd195860648a06dc88ee3949bc1b32fdfeba4d5956d"
+            }
+          }
+        ],
+        "runtimeRequirements": []
+      }
+    },
+    {
+      "identity": {
+        "artifactId": "artifact-e6f71e5e3c38",
+        "definitionId": "14lcvAaBNgg",
+        "definitionVersionId": "14lcvAfMXC7",
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:e6f71e5e3c38d15b6e91cdd195860648a06dc88ee3949bc1b32fdfeba4d5956d"
+      },
+      "incarnationId": "d96110b947a54020928eb7f235e7d08e",
+      "createdAt": "2026-10-30T03:24:21.8668+00:00",
+      "nativeWorkflow": {
+        "identity": {
+          "artifactId": "artifact-e6f71e5e3c38",
+          "definitionId": "14lcvAaBNgg",
+          "definitionVersionId": "14lcvAfMXC7",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:e6f71e5e3c38d15b6e91cdd195860648a06dc88ee3949bc1b32fdfeba4d5956d"
+        },
+        "rootActivity": {
+          "executableNodeId": "event",
+          "authoredActivityId": "event",
+          "activityType": "Elsa.Event",
+          "activityTypeVersion": "1.0.0+2e142e51055aa2d84c0839dffb49b3621489d9ce",
+          "descriptorType": "elsa.clr-activity",
+          "descriptorSchemaVersion": "1",
+          "descriptorPayload": {
+            "typeAlias": "Elsa.Activities.Primitives.Activities.Event"
+          },
+          "inputBindings": {
+            "EventName": {
+              "inputName": "EventName",
+              "inputKey": "EventName",
+              "targetType": {
+                "alias": "String",
+                "collectionKind": "Single",
+                "schema": null,
+                "schemaVersion": null
+              },
+              "effectivePolicy": {
+                "lifecycle": 1,
+                "storage": 1,
+                "isSensitive": false,
+                "requiresEncryption": false,
+                "redactionMode": null,
+                "retentionPolicy": null,
+                "metadata": {}
+              },
+              "source": 0,
+              "literal": {
+                "type": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "presence": 2,
+                "inlineValue": "actual-model-rollback-Direct",
+                "externalReference": null,
+                "policy": {
+                  "lifecycle": 1,
+                  "storage": 1,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "retentionPolicy": null,
+                  "metadata": {}
+                }
+              },
+              "workflowRequest": null,
+              "variable": null,
+              "activityResult": null,
+              "literalValue": "actual-model-rollback-Direct",
+              "expression": null,
+              "metadata": {
+                "referenceKey": "EventName"
+              },
+              "conversionPlan": {
+                "schemaVersion": 1,
+                "sourceRepresentation": "TextValue",
+                "sourceType": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "targetType": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "mode": "Auto",
+                "operation": "Identity",
+                "profile": null,
+                "limits": {
+                  "maxDepth": 64,
+                  "maxCollectionItems": 10000,
+                  "maxPayloadBytes": 1048576
+                },
+                "options": {},
+                "fingerprint": "sha256:8a808515a2d6c2c5dbfec984a78d50793bf8b384e2599e28ab2dd92cb030c3cb"
+              }
+            },
+            "CanStartWorkflow": {
+              "inputName": "CanStartWorkflow",
+              "inputKey": "CanStartWorkflow",
+              "targetType": {
+                "alias": "Boolean",
+                "collectionKind": "Single",
+                "schema": null,
+                "schemaVersion": null
+              },
+              "effectivePolicy": {
+                "lifecycle": 1,
+                "storage": 1,
+                "isSensitive": false,
+                "requiresEncryption": false,
+                "redactionMode": null,
+                "retentionPolicy": null,
+                "metadata": {}
+              },
+              "source": 0,
+              "literal": {
+                "type": {
+                  "alias": "Boolean",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "presence": 2,
+                "inlineValue": false,
+                "externalReference": null,
+                "policy": {
+                  "lifecycle": 1,
+                  "storage": 1,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "retentionPolicy": null,
+                  "metadata": {}
+                }
+              },
+              "workflowRequest": null,
+              "variable": null,
+              "activityResult": null,
+              "literalValue": false,
+              "expression": null,
+              "metadata": {
+                "referenceKey": "CanStartWorkflow"
+              },
+              "conversionPlan": {
+                "schemaVersion": 1,
+                "sourceRepresentation": "TypedValue",
+                "sourceType": {
+                  "alias": "Boolean",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "targetType": {
+                  "alias": "Boolean",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "mode": "Auto",
+                "operation": "Identity",
+                "profile": null,
+                "limits": {
+                  "maxDepth": 64,
+                  "maxCollectionItems": 10000,
+                  "maxPayloadBytes": 1048576
+                },
+                "options": {},
+                "fingerprint": "sha256:bcf301f404b6d094efdf56ee1b1820115a83df947c6c2c532000ebc4bf060821"
+              }
+            },
+            "CorrelationId": {
+              "inputName": "CorrelationId",
+              "inputKey": "CorrelationId",
+              "targetType": {
+                "alias": "String",
+                "collectionKind": "Single",
+                "schema": null,
+                "schemaVersion": null
+              },
+              "effectivePolicy": {
+                "lifecycle": 1,
+                "storage": 1,
+                "isSensitive": false,
+                "requiresEncryption": false,
+                "redactionMode": null,
+                "retentionPolicy": null,
+                "metadata": {}
+              },
+              "source": 0,
+              "literal": {
+                "type": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "presence": 0,
+                "inlineValue": null,
+                "externalReference": null,
+                "policy": {
+                  "lifecycle": 1,
+                  "storage": 1,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "retentionPolicy": null,
+                  "metadata": {}
+                }
+              },
+              "workflowRequest": null,
+              "variable": null,
+              "activityResult": null,
+              "literalValue": null,
+              "expression": null,
+              "metadata": {
+                "referenceKey": "CorrelationId"
+              }
+            }
+          },
+          "outputCaptures": {},
+          "metadata": {
+            "authoredNodeId": "event",
+            "executionType": "Trigger"
+          },
+          "childSlots": [],
+          "structure": null,
+          "activityContract": {
+            "activityTypeKey": "Elsa.Event",
+            "contractVersion": "1.0.0+2e142e51055aa2d84c0839dffb49b3621489d9ce",
+            "schemaFingerprint": "sha256:009bbe4531c7de8e4059809958879b55eacb95b5902dec615eef0a162e02342b",
+            "descriptorKind": "Elsa.Primitives.Models.ClrActivityDescriptor",
+            "descriptorPayload": {
+              "typeAlias": "Elsa.Activities.Primitives.Activities.Event"
+            },
+            "inputs": {
+              "EventName": {
+                "key": "EventName",
+                "name": "EventName",
+                "type": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "isRequired": true,
+                "isNullable": false,
+                "hasDefault": false,
+                "defaultValue": null,
+                "policy": {
+                  "isPersistable": true,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "lifecycle": 0,
+                  "storage": 0,
+                  "storageProfile": null,
+                  "retentionPolicy": null
+                },
+                "editorMetadata": {}
+              },
+              "CorrelationId": {
+                "key": "CorrelationId",
+                "name": "CorrelationId",
+                "type": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "isRequired": false,
+                "isNullable": true,
+                "hasDefault": false,
+                "defaultValue": null,
+                "policy": {
+                  "isPersistable": true,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "lifecycle": 0,
+                  "storage": 0,
+                  "storageProfile": null,
+                  "retentionPolicy": null
+                },
+                "editorMetadata": {}
+              },
+              "CanStartWorkflow": {
+                "key": "CanStartWorkflow",
+                "name": "CanStartWorkflow",
+                "type": {
+                  "alias": "Boolean",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "isRequired": false,
+                "isNullable": false,
+                "hasDefault": true,
+                "defaultValue": true,
+                "policy": {
+                  "isPersistable": true,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "lifecycle": 0,
+                  "storage": 0,
+                  "storageProfile": null,
+                  "retentionPolicy": null
+                },
+                "editorMetadata": {}
+              }
+            },
+            "result": {
+              "type": {
+                "alias": "Elsa.Activities.Primitives.Activities.EventResult",
+                "collectionKind": "Single",
+                "schema": null,
+                "schemaVersion": null
+              },
+              "isRequired": true,
+              "policy": {
+                "isPersistable": true,
+                "isSensitive": false,
+                "requiresEncryption": false,
+                "redactionMode": null,
+                "lifecycle": 1,
+                "storage": 0,
+                "storageProfile": null,
+                "retentionPolicy": null
+              },
+              "sourceRepresentation": "TypedValue",
+              "projections": {
+                "Result": {
+                  "key": "Result",
+                  "path": "eventName",
+                  "type": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "isRequired": true,
+                  "policy": {
+                    "isPersistable": true,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "lifecycle": 0,
+                    "storage": 0,
+                    "storageProfile": null,
+                    "retentionPolicy": null
+                  },
+                  "sourceRepresentation": "TextValue"
+                },
+                "Payload": {
+                  "key": "Payload",
+                  "path": "payload",
+                  "type": {
+                    "alias": "System.Text.Json.JsonElement?",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "isRequired": false,
+                  "policy": {
+                    "isPersistable": true,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "lifecycle": 0,
+                    "storage": 0,
+                    "storageProfile": null,
+                    "retentionPolicy": null
+                  },
+                  "sourceRepresentation": "TypedValue"
+                }
+              }
+            },
+            "outcomes": [
+              "Done"
+            ],
+            "activation": {
+              "descriptorKind": "Elsa.Primitives.Models.ClrActivityDescriptor",
+              "capability": "Elsa.Activities.Primitives.Activities.Event"
+            }
+          },
+          "intrinsicKind": null,
+          "intrinsicVariable": null
+        },
+        "nodes": [
+          {
+            "executableNodeId": "event",
+            "authoredActivityId": "event",
+            "activityType": "Elsa.Event",
+            "activityTypeVersion": "1.0.0+2e142e51055aa2d84c0839dffb49b3621489d9ce",
+            "descriptorType": "elsa.clr-activity",
+            "descriptorSchemaVersion": "1",
+            "descriptorPayload": {
+              "typeAlias": "Elsa.Activities.Primitives.Activities.Event"
+            },
+            "inputBindings": {
+              "EventName": {
+                "inputName": "EventName",
+                "inputKey": "EventName",
+                "targetType": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "effectivePolicy": {
+                  "lifecycle": 1,
+                  "storage": 1,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "retentionPolicy": null,
+                  "metadata": {}
+                },
+                "source": 0,
+                "literal": {
+                  "type": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "presence": 2,
+                  "inlineValue": "actual-model-rollback-Direct",
+                  "externalReference": null,
+                  "policy": {
+                    "lifecycle": 1,
+                    "storage": 1,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "retentionPolicy": null,
+                    "metadata": {}
+                  }
+                },
+                "workflowRequest": null,
+                "variable": null,
+                "activityResult": null,
+                "literalValue": "actual-model-rollback-Direct",
+                "expression": null,
+                "metadata": {
+                  "referenceKey": "EventName"
+                },
+                "conversionPlan": {
+                  "schemaVersion": 1,
+                  "sourceRepresentation": "TextValue",
+                  "sourceType": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "targetType": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "mode": "Auto",
+                  "operation": "Identity",
+                  "profile": null,
+                  "limits": {
+                    "maxDepth": 64,
+                    "maxCollectionItems": 10000,
+                    "maxPayloadBytes": 1048576
+                  },
+                  "options": {},
+                  "fingerprint": "sha256:8a808515a2d6c2c5dbfec984a78d50793bf8b384e2599e28ab2dd92cb030c3cb"
+                }
+              },
+              "CanStartWorkflow": {
+                "inputName": "CanStartWorkflow",
+                "inputKey": "CanStartWorkflow",
+                "targetType": {
+                  "alias": "Boolean",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "effectivePolicy": {
+                  "lifecycle": 1,
+                  "storage": 1,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "retentionPolicy": null,
+                  "metadata": {}
+                },
+                "source": 0,
+                "literal": {
+                  "type": {
+                    "alias": "Boolean",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "presence": 2,
+                  "inlineValue": false,
+                  "externalReference": null,
+                  "policy": {
+                    "lifecycle": 1,
+                    "storage": 1,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "retentionPolicy": null,
+                    "metadata": {}
+                  }
+                },
+                "workflowRequest": null,
+                "variable": null,
+                "activityResult": null,
+                "literalValue": false,
+                "expression": null,
+                "metadata": {
+                  "referenceKey": "CanStartWorkflow"
+                },
+                "conversionPlan": {
+                  "schemaVersion": 1,
+                  "sourceRepresentation": "TypedValue",
+                  "sourceType": {
+                    "alias": "Boolean",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "targetType": {
+                    "alias": "Boolean",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "mode": "Auto",
+                  "operation": "Identity",
+                  "profile": null,
+                  "limits": {
+                    "maxDepth": 64,
+                    "maxCollectionItems": 10000,
+                    "maxPayloadBytes": 1048576
+                  },
+                  "options": {},
+                  "fingerprint": "sha256:bcf301f404b6d094efdf56ee1b1820115a83df947c6c2c532000ebc4bf060821"
+                }
+              },
+              "CorrelationId": {
+                "inputName": "CorrelationId",
+                "inputKey": "CorrelationId",
+                "targetType": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "effectivePolicy": {
+                  "lifecycle": 1,
+                  "storage": 1,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "retentionPolicy": null,
+                  "metadata": {}
+                },
+                "source": 0,
+                "literal": {
+                  "type": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "presence": 0,
+                  "inlineValue": null,
+                  "externalReference": null,
+                  "policy": {
+                    "lifecycle": 1,
+                    "storage": 1,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "retentionPolicy": null,
+                    "metadata": {}
+                  }
+                },
+                "workflowRequest": null,
+                "variable": null,
+                "activityResult": null,
+                "literalValue": null,
+                "expression": null,
+                "metadata": {
+                  "referenceKey": "CorrelationId"
+                }
+              }
+            },
+            "outputCaptures": {},
+            "metadata": {
+              "authoredNodeId": "event",
+              "executionType": "Trigger"
+            },
+            "childSlots": [],
+            "structure": null,
+            "activityContract": {
+              "activityTypeKey": "Elsa.Event",
+              "contractVersion": "1.0.0+2e142e51055aa2d84c0839dffb49b3621489d9ce",
+              "schemaFingerprint": "sha256:009bbe4531c7de8e4059809958879b55eacb95b5902dec615eef0a162e02342b",
+              "descriptorKind": "Elsa.Primitives.Models.ClrActivityDescriptor",
+              "descriptorPayload": {
+                "typeAlias": "Elsa.Activities.Primitives.Activities.Event"
+              },
+              "inputs": {
+                "EventName": {
+                  "key": "EventName",
+                  "name": "EventName",
+                  "type": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "isRequired": true,
+                  "isNullable": false,
+                  "hasDefault": false,
+                  "defaultValue": null,
+                  "policy": {
+                    "isPersistable": true,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "lifecycle": 0,
+                    "storage": 0,
+                    "storageProfile": null,
+                    "retentionPolicy": null
+                  },
+                  "editorMetadata": {}
+                },
+                "CorrelationId": {
+                  "key": "CorrelationId",
+                  "name": "CorrelationId",
+                  "type": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "isRequired": false,
+                  "isNullable": true,
+                  "hasDefault": false,
+                  "defaultValue": null,
+                  "policy": {
+                    "isPersistable": true,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "lifecycle": 0,
+                    "storage": 0,
+                    "storageProfile": null,
+                    "retentionPolicy": null
+                  },
+                  "editorMetadata": {}
+                },
+                "CanStartWorkflow": {
+                  "key": "CanStartWorkflow",
+                  "name": "CanStartWorkflow",
+                  "type": {
+                    "alias": "Boolean",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "isRequired": false,
+                  "isNullable": false,
+                  "hasDefault": true,
+                  "defaultValue": true,
+                  "policy": {
+                    "isPersistable": true,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "lifecycle": 0,
+                    "storage": 0,
+                    "storageProfile": null,
+                    "retentionPolicy": null
+                  },
+                  "editorMetadata": {}
+                }
+              },
+              "result": {
+                "type": {
+                  "alias": "Elsa.Activities.Primitives.Activities.EventResult",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "isRequired": true,
+                "policy": {
+                  "isPersistable": true,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "lifecycle": 1,
+                  "storage": 0,
+                  "storageProfile": null,
+                  "retentionPolicy": null
+                },
+                "sourceRepresentation": "TypedValue",
+                "projections": {
+                  "Result": {
+                    "key": "Result",
+                    "path": "eventName",
+                    "type": {
+                      "alias": "String",
+                      "collectionKind": "Single",
+                      "schema": null,
+                      "schemaVersion": null
+                    },
+                    "isRequired": true,
+                    "policy": {
+                      "isPersistable": true,
+                      "isSensitive": false,
+                      "requiresEncryption": false,
+                      "redactionMode": null,
+                      "lifecycle": 0,
+                      "storage": 0,
+                      "storageProfile": null,
+                      "retentionPolicy": null
+                    },
+                    "sourceRepresentation": "TextValue"
+                  },
+                  "Payload": {
+                    "key": "Payload",
+                    "path": "payload",
+                    "type": {
+                      "alias": "System.Text.Json.JsonElement?",
+                      "collectionKind": "Single",
+                      "schema": null,
+                      "schemaVersion": null
+                    },
+                    "isRequired": false,
+                    "policy": {
+                      "isPersistable": true,
+                      "isSensitive": false,
+                      "requiresEncryption": false,
+                      "redactionMode": null,
+                      "lifecycle": 0,
+                      "storage": 0,
+                      "storageProfile": null,
+                      "retentionPolicy": null
+                    },
+                    "sourceRepresentation": "TypedValue"
+                  }
+                }
+              },
+              "outcomes": [
+                "Done"
+              ],
+              "activation": {
+                "descriptorKind": "Elsa.Primitives.Models.ClrActivityDescriptor",
+                "capability": "Elsa.Activities.Primitives.Activities.Event"
+              }
+            },
+            "intrinsicKind": null,
+            "intrinsicVariable": null
+          }
+        ],
+        "nodesById": {
+          "event": {
+            "executableNodeId": "event",
+            "authoredActivityId": "event",
+            "activityType": "Elsa.Event",
+            "activityTypeVersion": "1.0.0+2e142e51055aa2d84c0839dffb49b3621489d9ce",
+            "descriptorType": "elsa.clr-activity",
+            "descriptorSchemaVersion": "1",
+            "descriptorPayload": {
+              "typeAlias": "Elsa.Activities.Primitives.Activities.Event"
+            },
+            "inputBindings": {
+              "EventName": {
+                "inputName": "EventName",
+                "inputKey": "EventName",
+                "targetType": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "effectivePolicy": {
+                  "lifecycle": 1,
+                  "storage": 1,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "retentionPolicy": null,
+                  "metadata": {}
+                },
+                "source": 0,
+                "literal": {
+                  "type": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "presence": 2,
+                  "inlineValue": "actual-model-rollback-Direct",
+                  "externalReference": null,
+                  "policy": {
+                    "lifecycle": 1,
+                    "storage": 1,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "retentionPolicy": null,
+                    "metadata": {}
+                  }
+                },
+                "workflowRequest": null,
+                "variable": null,
+                "activityResult": null,
+                "literalValue": "actual-model-rollback-Direct",
+                "expression": null,
+                "metadata": {
+                  "referenceKey": "EventName"
+                },
+                "conversionPlan": {
+                  "schemaVersion": 1,
+                  "sourceRepresentation": "TextValue",
+                  "sourceType": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "targetType": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "mode": "Auto",
+                  "operation": "Identity",
+                  "profile": null,
+                  "limits": {
+                    "maxDepth": 64,
+                    "maxCollectionItems": 10000,
+                    "maxPayloadBytes": 1048576
+                  },
+                  "options": {},
+                  "fingerprint": "sha256:8a808515a2d6c2c5dbfec984a78d50793bf8b384e2599e28ab2dd92cb030c3cb"
+                }
+              },
+              "CanStartWorkflow": {
+                "inputName": "CanStartWorkflow",
+                "inputKey": "CanStartWorkflow",
+                "targetType": {
+                  "alias": "Boolean",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "effectivePolicy": {
+                  "lifecycle": 1,
+                  "storage": 1,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "retentionPolicy": null,
+                  "metadata": {}
+                },
+                "source": 0,
+                "literal": {
+                  "type": {
+                    "alias": "Boolean",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "presence": 2,
+                  "inlineValue": false,
+                  "externalReference": null,
+                  "policy": {
+                    "lifecycle": 1,
+                    "storage": 1,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "retentionPolicy": null,
+                    "metadata": {}
+                  }
+                },
+                "workflowRequest": null,
+                "variable": null,
+                "activityResult": null,
+                "literalValue": false,
+                "expression": null,
+                "metadata": {
+                  "referenceKey": "CanStartWorkflow"
+                },
+                "conversionPlan": {
+                  "schemaVersion": 1,
+                  "sourceRepresentation": "TypedValue",
+                  "sourceType": {
+                    "alias": "Boolean",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "targetType": {
+                    "alias": "Boolean",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "mode": "Auto",
+                  "operation": "Identity",
+                  "profile": null,
+                  "limits": {
+                    "maxDepth": 64,
+                    "maxCollectionItems": 10000,
+                    "maxPayloadBytes": 1048576
+                  },
+                  "options": {},
+                  "fingerprint": "sha256:bcf301f404b6d094efdf56ee1b1820115a83df947c6c2c532000ebc4bf060821"
+                }
+              },
+              "CorrelationId": {
+                "inputName": "CorrelationId",
+                "inputKey": "CorrelationId",
+                "targetType": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "effectivePolicy": {
+                  "lifecycle": 1,
+                  "storage": 1,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "retentionPolicy": null,
+                  "metadata": {}
+                },
+                "source": 0,
+                "literal": {
+                  "type": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "presence": 0,
+                  "inlineValue": null,
+                  "externalReference": null,
+                  "policy": {
+                    "lifecycle": 1,
+                    "storage": 1,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "retentionPolicy": null,
+                    "metadata": {}
+                  }
+                },
+                "workflowRequest": null,
+                "variable": null,
+                "activityResult": null,
+                "literalValue": null,
+                "expression": null,
+                "metadata": {
+                  "referenceKey": "CorrelationId"
+                }
+              }
+            },
+            "outputCaptures": {},
+            "metadata": {
+              "authoredNodeId": "event",
+              "executionType": "Trigger"
+            },
+            "childSlots": [],
+            "structure": null,
+            "activityContract": {
+              "activityTypeKey": "Elsa.Event",
+              "contractVersion": "1.0.0+2e142e51055aa2d84c0839dffb49b3621489d9ce",
+              "schemaFingerprint": "sha256:009bbe4531c7de8e4059809958879b55eacb95b5902dec615eef0a162e02342b",
+              "descriptorKind": "Elsa.Primitives.Models.ClrActivityDescriptor",
+              "descriptorPayload": {
+                "typeAlias": "Elsa.Activities.Primitives.Activities.Event"
+              },
+              "inputs": {
+                "EventName": {
+                  "key": "EventName",
+                  "name": "EventName",
+                  "type": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "isRequired": true,
+                  "isNullable": false,
+                  "hasDefault": false,
+                  "defaultValue": null,
+                  "policy": {
+                    "isPersistable": true,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "lifecycle": 0,
+                    "storage": 0,
+                    "storageProfile": null,
+                    "retentionPolicy": null
+                  },
+                  "editorMetadata": {}
+                },
+                "CorrelationId": {
+                  "key": "CorrelationId",
+                  "name": "CorrelationId",
+                  "type": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "isRequired": false,
+                  "isNullable": true,
+                  "hasDefault": false,
+                  "defaultValue": null,
+                  "policy": {
+                    "isPersistable": true,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "lifecycle": 0,
+                    "storage": 0,
+                    "storageProfile": null,
+                    "retentionPolicy": null
+                  },
+                  "editorMetadata": {}
+                },
+                "CanStartWorkflow": {
+                  "key": "CanStartWorkflow",
+                  "name": "CanStartWorkflow",
+                  "type": {
+                    "alias": "Boolean",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "isRequired": false,
+                  "isNullable": false,
+                  "hasDefault": true,
+                  "defaultValue": true,
+                  "policy": {
+                    "isPersistable": true,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "lifecycle": 0,
+                    "storage": 0,
+                    "storageProfile": null,
+                    "retentionPolicy": null
+                  },
+                  "editorMetadata": {}
+                }
+              },
+              "result": {
+                "type": {
+                  "alias": "Elsa.Activities.Primitives.Activities.EventResult",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "isRequired": true,
+                "policy": {
+                  "isPersistable": true,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "lifecycle": 1,
+                  "storage": 0,
+                  "storageProfile": null,
+                  "retentionPolicy": null
+                },
+                "sourceRepresentation": "TypedValue",
+                "projections": {
+                  "Result": {
+                    "key": "Result",
+                    "path": "eventName",
+                    "type": {
+                      "alias": "String",
+                      "collectionKind": "Single",
+                      "schema": null,
+                      "schemaVersion": null
+                    },
+                    "isRequired": true,
+                    "policy": {
+                      "isPersistable": true,
+                      "isSensitive": false,
+                      "requiresEncryption": false,
+                      "redactionMode": null,
+                      "lifecycle": 0,
+                      "storage": 0,
+                      "storageProfile": null,
+                      "retentionPolicy": null
+                    },
+                    "sourceRepresentation": "TextValue"
+                  },
+                  "Payload": {
+                    "key": "Payload",
+                    "path": "payload",
+                    "type": {
+                      "alias": "System.Text.Json.JsonElement?",
+                      "collectionKind": "Single",
+                      "schema": null,
+                      "schemaVersion": null
+                    },
+                    "isRequired": false,
+                    "policy": {
+                      "isPersistable": true,
+                      "isSensitive": false,
+                      "requiresEncryption": false,
+                      "redactionMode": null,
+                      "lifecycle": 0,
+                      "storage": 0,
+                      "storageProfile": null,
+                      "retentionPolicy": null
+                    },
+                    "sourceRepresentation": "TypedValue"
+                  }
+                }
+              },
+              "outcomes": [
+                "Done"
+              ],
+              "activation": {
+                "descriptorKind": "Elsa.Primitives.Models.ClrActivityDescriptor",
+                "capability": "Elsa.Activities.Primitives.Activities.Event"
+              }
+            },
+            "intrinsicKind": null,
+            "intrinsicVariable": null
+          }
+        },
+        "resumeTargets": {
+          "event:resume-target:event": {
+            "resumeTargetId": "event:resume-target:event",
+            "executableNodeId": "event",
+            "handlerKey": "ResumeAsync",
+            "metadata": {},
+            "localResumeTargetId": "resume-target:event"
+          }
+        },
+        "inputContract": {
+          "version": 1,
+          "inputs": []
+        },
+        "dependencies": [],
+        "persistenceMode": null,
+        "workflowVariables": [],
+        "incidentStrategy": {
+          "alias": "Fault",
+          "version": "1"
+        },
+        "createdAt": "2026-10-30T03:24:21.8668+00:00",
+        "compatibilityMetadata": {
+          "slice": "workflow-execution-vertical-slice"
+        },
+        "runtimeRequirements": [
+          {
+            "consumerKey": "elsa.clr-activity",
+            "schemaVersion": "1"
+          }
+        ],
+        "storageDriverRequirements": []
+      },
+      "model": null
+    }
+  ],
+  "materialsAfter": [
+    {
+      "identity": {
+        "artifactId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+        "definitionId": "bpmn-model:sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+        "definitionVersionId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4"
+      },
+      "incarnationId": "2a06b5532e8b4b8db5b0ed8b70608d8a",
+      "createdAt": "2026-10-30T03:24:22.73237+00:00",
+      "nativeWorkflow": null,
+      "model": {
+        "formatVersion": 1,
+        "identity": {
+          "artifactId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+          "definitionId": "bpmn-model:sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+          "definitionVersionId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4"
+        },
+        "protocol": {
+          "key": "elsa.bpmn",
+          "version": 1
+        },
+        "profile": "foundation-native-work-v1",
+        "definition": {
+          "formatVersion": 5,
+          "process": {
+            "processId": "actual-rollback-Direct",
+            "elements": [
+              {
+                "elementId": "start",
+                "elementType": "startEvent"
+              },
+              {
+                "elementId": "fork",
+                "elementType": "parallelGateway"
+              },
+              {
+                "elementId": "first",
+                "elementType": "intermediateCatchEvent",
+                "bindingRef": "first-event",
+                "eventDefinitions": [
+                  {
+                    "type": "signal",
+                    "properties": {
+                      "name": "actual-model-rollback-Direct"
+                    }
+                  }
+                ]
+              },
+              {
+                "elementId": "second",
+                "elementType": "intermediateCatchEvent",
+                "bindingRef": "second-event",
+                "eventDefinitions": [
+                  {
+                    "type": "signal",
+                    "properties": {
+                      "name": "actual-model-rollback-Direct"
+                    }
+                  }
+                ]
+              },
+              {
+                "elementId": "join",
+                "elementType": "parallelGateway"
+              },
+              {
+                "elementId": "end",
+                "elementType": "endEvent"
+              }
+            ],
+            "sequenceFlows": [
+              {
+                "flowId": "begin",
+                "sourceRef": "start",
+                "targetRef": "fork"
+              },
+              {
+                "flowId": "fork-first",
+                "sourceRef": "fork",
+                "targetRef": "first"
+              },
+              {
+                "flowId": "fork-second",
+                "sourceRef": "fork",
+                "targetRef": "second"
+              },
+              {
+                "flowId": "first-join",
+                "sourceRef": "first",
+                "targetRef": "join"
+              },
+              {
+                "flowId": "second-join",
+                "sourceRef": "second",
+                "targetRef": "join"
+              },
+              {
+                "flowId": "finish",
+                "sourceRef": "join",
+                "targetRef": "end"
+              }
+            ]
+          },
+          "humanBindings": [],
+          "nativeEventBindings": [
+            {
+              "bindingId": "first-event",
+              "executable": {
+                "artifactId": "artifact-e6f71e5e3c38",
+                "definitionId": "14lcvAaBNgg",
+                "definitionVersionId": "14lcvAfMXC7",
+                "artifactVersion": "1.0.0",
+                "artifactHash": "sha256:e6f71e5e3c38d15b6e91cdd195860648a06dc88ee3949bc1b32fdfeba4d5956d"
+              }
+            },
+            {
+              "bindingId": "second-event",
+              "executable": {
+                "artifactId": "artifact-e6f71e5e3c38",
+                "definitionId": "14lcvAaBNgg",
+                "definitionVersionId": "14lcvAfMXC7",
+                "artifactVersion": "1.0.0",
+                "artifactHash": "sha256:e6f71e5e3c38d15b6e91cdd195860648a06dc88ee3949bc1b32fdfeba4d5956d"
+              }
+            }
+          ]
+        },
+        "inputContract": {
+          "version": 1,
+          "inputs": []
+        },
+        "outputs": [],
+        "dependencies": [
+          {
+            "bindingId": "first-event",
+            "executable": {
+              "artifactId": "artifact-e6f71e5e3c38",
+              "definitionId": "14lcvAaBNgg",
+              "definitionVersionId": "14lcvAfMXC7",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:e6f71e5e3c38d15b6e91cdd195860648a06dc88ee3949bc1b32fdfeba4d5956d"
+            }
+          },
+          {
+            "bindingId": "second-event",
+            "executable": {
+              "artifactId": "artifact-e6f71e5e3c38",
+              "definitionId": "14lcvAaBNgg",
+              "definitionVersionId": "14lcvAfMXC7",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:e6f71e5e3c38d15b6e91cdd195860648a06dc88ee3949bc1b32fdfeba4d5956d"
+            }
+          }
+        ],
+        "runtimeRequirements": []
+      }
+    },
+    {
+      "identity": {
+        "artifactId": "artifact-e6f71e5e3c38",
+        "definitionId": "14lcvAaBNgg",
+        "definitionVersionId": "14lcvAfMXC7",
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:e6f71e5e3c38d15b6e91cdd195860648a06dc88ee3949bc1b32fdfeba4d5956d"
+      },
+      "incarnationId": "d96110b947a54020928eb7f235e7d08e",
+      "createdAt": "2026-10-30T03:24:21.8668+00:00",
+      "nativeWorkflow": {
+        "identity": {
+          "artifactId": "artifact-e6f71e5e3c38",
+          "definitionId": "14lcvAaBNgg",
+          "definitionVersionId": "14lcvAfMXC7",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:e6f71e5e3c38d15b6e91cdd195860648a06dc88ee3949bc1b32fdfeba4d5956d"
+        },
+        "rootActivity": {
+          "executableNodeId": "event",
+          "authoredActivityId": "event",
+          "activityType": "Elsa.Event",
+          "activityTypeVersion": "1.0.0+2e142e51055aa2d84c0839dffb49b3621489d9ce",
+          "descriptorType": "elsa.clr-activity",
+          "descriptorSchemaVersion": "1",
+          "descriptorPayload": {
+            "typeAlias": "Elsa.Activities.Primitives.Activities.Event"
+          },
+          "inputBindings": {
+            "EventName": {
+              "inputName": "EventName",
+              "inputKey": "EventName",
+              "targetType": {
+                "alias": "String",
+                "collectionKind": "Single",
+                "schema": null,
+                "schemaVersion": null
+              },
+              "effectivePolicy": {
+                "lifecycle": 1,
+                "storage": 1,
+                "isSensitive": false,
+                "requiresEncryption": false,
+                "redactionMode": null,
+                "retentionPolicy": null,
+                "metadata": {}
+              },
+              "source": 0,
+              "literal": {
+                "type": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "presence": 2,
+                "inlineValue": "actual-model-rollback-Direct",
+                "externalReference": null,
+                "policy": {
+                  "lifecycle": 1,
+                  "storage": 1,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "retentionPolicy": null,
+                  "metadata": {}
+                }
+              },
+              "workflowRequest": null,
+              "variable": null,
+              "activityResult": null,
+              "literalValue": "actual-model-rollback-Direct",
+              "expression": null,
+              "metadata": {
+                "referenceKey": "EventName"
+              },
+              "conversionPlan": {
+                "schemaVersion": 1,
+                "sourceRepresentation": "TextValue",
+                "sourceType": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "targetType": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "mode": "Auto",
+                "operation": "Identity",
+                "profile": null,
+                "limits": {
+                  "maxDepth": 64,
+                  "maxCollectionItems": 10000,
+                  "maxPayloadBytes": 1048576
+                },
+                "options": {},
+                "fingerprint": "sha256:8a808515a2d6c2c5dbfec984a78d50793bf8b384e2599e28ab2dd92cb030c3cb"
+              }
+            },
+            "CanStartWorkflow": {
+              "inputName": "CanStartWorkflow",
+              "inputKey": "CanStartWorkflow",
+              "targetType": {
+                "alias": "Boolean",
+                "collectionKind": "Single",
+                "schema": null,
+                "schemaVersion": null
+              },
+              "effectivePolicy": {
+                "lifecycle": 1,
+                "storage": 1,
+                "isSensitive": false,
+                "requiresEncryption": false,
+                "redactionMode": null,
+                "retentionPolicy": null,
+                "metadata": {}
+              },
+              "source": 0,
+              "literal": {
+                "type": {
+                  "alias": "Boolean",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "presence": 2,
+                "inlineValue": false,
+                "externalReference": null,
+                "policy": {
+                  "lifecycle": 1,
+                  "storage": 1,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "retentionPolicy": null,
+                  "metadata": {}
+                }
+              },
+              "workflowRequest": null,
+              "variable": null,
+              "activityResult": null,
+              "literalValue": false,
+              "expression": null,
+              "metadata": {
+                "referenceKey": "CanStartWorkflow"
+              },
+              "conversionPlan": {
+                "schemaVersion": 1,
+                "sourceRepresentation": "TypedValue",
+                "sourceType": {
+                  "alias": "Boolean",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "targetType": {
+                  "alias": "Boolean",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "mode": "Auto",
+                "operation": "Identity",
+                "profile": null,
+                "limits": {
+                  "maxDepth": 64,
+                  "maxCollectionItems": 10000,
+                  "maxPayloadBytes": 1048576
+                },
+                "options": {},
+                "fingerprint": "sha256:bcf301f404b6d094efdf56ee1b1820115a83df947c6c2c532000ebc4bf060821"
+              }
+            },
+            "CorrelationId": {
+              "inputName": "CorrelationId",
+              "inputKey": "CorrelationId",
+              "targetType": {
+                "alias": "String",
+                "collectionKind": "Single",
+                "schema": null,
+                "schemaVersion": null
+              },
+              "effectivePolicy": {
+                "lifecycle": 1,
+                "storage": 1,
+                "isSensitive": false,
+                "requiresEncryption": false,
+                "redactionMode": null,
+                "retentionPolicy": null,
+                "metadata": {}
+              },
+              "source": 0,
+              "literal": {
+                "type": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "presence": 0,
+                "inlineValue": null,
+                "externalReference": null,
+                "policy": {
+                  "lifecycle": 1,
+                  "storage": 1,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "retentionPolicy": null,
+                  "metadata": {}
+                }
+              },
+              "workflowRequest": null,
+              "variable": null,
+              "activityResult": null,
+              "literalValue": null,
+              "expression": null,
+              "metadata": {
+                "referenceKey": "CorrelationId"
+              }
+            }
+          },
+          "outputCaptures": {},
+          "metadata": {
+            "authoredNodeId": "event",
+            "executionType": "Trigger"
+          },
+          "childSlots": [],
+          "structure": null,
+          "activityContract": {
+            "activityTypeKey": "Elsa.Event",
+            "contractVersion": "1.0.0+2e142e51055aa2d84c0839dffb49b3621489d9ce",
+            "schemaFingerprint": "sha256:009bbe4531c7de8e4059809958879b55eacb95b5902dec615eef0a162e02342b",
+            "descriptorKind": "Elsa.Primitives.Models.ClrActivityDescriptor",
+            "descriptorPayload": {
+              "typeAlias": "Elsa.Activities.Primitives.Activities.Event"
+            },
+            "inputs": {
+              "EventName": {
+                "key": "EventName",
+                "name": "EventName",
+                "type": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "isRequired": true,
+                "isNullable": false,
+                "hasDefault": false,
+                "defaultValue": null,
+                "policy": {
+                  "isPersistable": true,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "lifecycle": 0,
+                  "storage": 0,
+                  "storageProfile": null,
+                  "retentionPolicy": null
+                },
+                "editorMetadata": {}
+              },
+              "CorrelationId": {
+                "key": "CorrelationId",
+                "name": "CorrelationId",
+                "type": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "isRequired": false,
+                "isNullable": true,
+                "hasDefault": false,
+                "defaultValue": null,
+                "policy": {
+                  "isPersistable": true,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "lifecycle": 0,
+                  "storage": 0,
+                  "storageProfile": null,
+                  "retentionPolicy": null
+                },
+                "editorMetadata": {}
+              },
+              "CanStartWorkflow": {
+                "key": "CanStartWorkflow",
+                "name": "CanStartWorkflow",
+                "type": {
+                  "alias": "Boolean",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "isRequired": false,
+                "isNullable": false,
+                "hasDefault": true,
+                "defaultValue": true,
+                "policy": {
+                  "isPersistable": true,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "lifecycle": 0,
+                  "storage": 0,
+                  "storageProfile": null,
+                  "retentionPolicy": null
+                },
+                "editorMetadata": {}
+              }
+            },
+            "result": {
+              "type": {
+                "alias": "Elsa.Activities.Primitives.Activities.EventResult",
+                "collectionKind": "Single",
+                "schema": null,
+                "schemaVersion": null
+              },
+              "isRequired": true,
+              "policy": {
+                "isPersistable": true,
+                "isSensitive": false,
+                "requiresEncryption": false,
+                "redactionMode": null,
+                "lifecycle": 1,
+                "storage": 0,
+                "storageProfile": null,
+                "retentionPolicy": null
+              },
+              "sourceRepresentation": "TypedValue",
+              "projections": {
+                "Result": {
+                  "key": "Result",
+                  "path": "eventName",
+                  "type": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "isRequired": true,
+                  "policy": {
+                    "isPersistable": true,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "lifecycle": 0,
+                    "storage": 0,
+                    "storageProfile": null,
+                    "retentionPolicy": null
+                  },
+                  "sourceRepresentation": "TextValue"
+                },
+                "Payload": {
+                  "key": "Payload",
+                  "path": "payload",
+                  "type": {
+                    "alias": "System.Text.Json.JsonElement?",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "isRequired": false,
+                  "policy": {
+                    "isPersistable": true,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "lifecycle": 0,
+                    "storage": 0,
+                    "storageProfile": null,
+                    "retentionPolicy": null
+                  },
+                  "sourceRepresentation": "TypedValue"
+                }
+              }
+            },
+            "outcomes": [
+              "Done"
+            ],
+            "activation": {
+              "descriptorKind": "Elsa.Primitives.Models.ClrActivityDescriptor",
+              "capability": "Elsa.Activities.Primitives.Activities.Event"
+            }
+          },
+          "intrinsicKind": null,
+          "intrinsicVariable": null
+        },
+        "nodes": [
+          {
+            "executableNodeId": "event",
+            "authoredActivityId": "event",
+            "activityType": "Elsa.Event",
+            "activityTypeVersion": "1.0.0+2e142e51055aa2d84c0839dffb49b3621489d9ce",
+            "descriptorType": "elsa.clr-activity",
+            "descriptorSchemaVersion": "1",
+            "descriptorPayload": {
+              "typeAlias": "Elsa.Activities.Primitives.Activities.Event"
+            },
+            "inputBindings": {
+              "EventName": {
+                "inputName": "EventName",
+                "inputKey": "EventName",
+                "targetType": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "effectivePolicy": {
+                  "lifecycle": 1,
+                  "storage": 1,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "retentionPolicy": null,
+                  "metadata": {}
+                },
+                "source": 0,
+                "literal": {
+                  "type": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "presence": 2,
+                  "inlineValue": "actual-model-rollback-Direct",
+                  "externalReference": null,
+                  "policy": {
+                    "lifecycle": 1,
+                    "storage": 1,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "retentionPolicy": null,
+                    "metadata": {}
+                  }
+                },
+                "workflowRequest": null,
+                "variable": null,
+                "activityResult": null,
+                "literalValue": "actual-model-rollback-Direct",
+                "expression": null,
+                "metadata": {
+                  "referenceKey": "EventName"
+                },
+                "conversionPlan": {
+                  "schemaVersion": 1,
+                  "sourceRepresentation": "TextValue",
+                  "sourceType": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "targetType": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "mode": "Auto",
+                  "operation": "Identity",
+                  "profile": null,
+                  "limits": {
+                    "maxDepth": 64,
+                    "maxCollectionItems": 10000,
+                    "maxPayloadBytes": 1048576
+                  },
+                  "options": {},
+                  "fingerprint": "sha256:8a808515a2d6c2c5dbfec984a78d50793bf8b384e2599e28ab2dd92cb030c3cb"
+                }
+              },
+              "CanStartWorkflow": {
+                "inputName": "CanStartWorkflow",
+                "inputKey": "CanStartWorkflow",
+                "targetType": {
+                  "alias": "Boolean",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "effectivePolicy": {
+                  "lifecycle": 1,
+                  "storage": 1,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "retentionPolicy": null,
+                  "metadata": {}
+                },
+                "source": 0,
+                "literal": {
+                  "type": {
+                    "alias": "Boolean",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "presence": 2,
+                  "inlineValue": false,
+                  "externalReference": null,
+                  "policy": {
+                    "lifecycle": 1,
+                    "storage": 1,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "retentionPolicy": null,
+                    "metadata": {}
+                  }
+                },
+                "workflowRequest": null,
+                "variable": null,
+                "activityResult": null,
+                "literalValue": false,
+                "expression": null,
+                "metadata": {
+                  "referenceKey": "CanStartWorkflow"
+                },
+                "conversionPlan": {
+                  "schemaVersion": 1,
+                  "sourceRepresentation": "TypedValue",
+                  "sourceType": {
+                    "alias": "Boolean",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "targetType": {
+                    "alias": "Boolean",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "mode": "Auto",
+                  "operation": "Identity",
+                  "profile": null,
+                  "limits": {
+                    "maxDepth": 64,
+                    "maxCollectionItems": 10000,
+                    "maxPayloadBytes": 1048576
+                  },
+                  "options": {},
+                  "fingerprint": "sha256:bcf301f404b6d094efdf56ee1b1820115a83df947c6c2c532000ebc4bf060821"
+                }
+              },
+              "CorrelationId": {
+                "inputName": "CorrelationId",
+                "inputKey": "CorrelationId",
+                "targetType": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "effectivePolicy": {
+                  "lifecycle": 1,
+                  "storage": 1,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "retentionPolicy": null,
+                  "metadata": {}
+                },
+                "source": 0,
+                "literal": {
+                  "type": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "presence": 0,
+                  "inlineValue": null,
+                  "externalReference": null,
+                  "policy": {
+                    "lifecycle": 1,
+                    "storage": 1,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "retentionPolicy": null,
+                    "metadata": {}
+                  }
+                },
+                "workflowRequest": null,
+                "variable": null,
+                "activityResult": null,
+                "literalValue": null,
+                "expression": null,
+                "metadata": {
+                  "referenceKey": "CorrelationId"
+                }
+              }
+            },
+            "outputCaptures": {},
+            "metadata": {
+              "authoredNodeId": "event",
+              "executionType": "Trigger"
+            },
+            "childSlots": [],
+            "structure": null,
+            "activityContract": {
+              "activityTypeKey": "Elsa.Event",
+              "contractVersion": "1.0.0+2e142e51055aa2d84c0839dffb49b3621489d9ce",
+              "schemaFingerprint": "sha256:009bbe4531c7de8e4059809958879b55eacb95b5902dec615eef0a162e02342b",
+              "descriptorKind": "Elsa.Primitives.Models.ClrActivityDescriptor",
+              "descriptorPayload": {
+                "typeAlias": "Elsa.Activities.Primitives.Activities.Event"
+              },
+              "inputs": {
+                "EventName": {
+                  "key": "EventName",
+                  "name": "EventName",
+                  "type": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "isRequired": true,
+                  "isNullable": false,
+                  "hasDefault": false,
+                  "defaultValue": null,
+                  "policy": {
+                    "isPersistable": true,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "lifecycle": 0,
+                    "storage": 0,
+                    "storageProfile": null,
+                    "retentionPolicy": null
+                  },
+                  "editorMetadata": {}
+                },
+                "CorrelationId": {
+                  "key": "CorrelationId",
+                  "name": "CorrelationId",
+                  "type": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "isRequired": false,
+                  "isNullable": true,
+                  "hasDefault": false,
+                  "defaultValue": null,
+                  "policy": {
+                    "isPersistable": true,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "lifecycle": 0,
+                    "storage": 0,
+                    "storageProfile": null,
+                    "retentionPolicy": null
+                  },
+                  "editorMetadata": {}
+                },
+                "CanStartWorkflow": {
+                  "key": "CanStartWorkflow",
+                  "name": "CanStartWorkflow",
+                  "type": {
+                    "alias": "Boolean",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "isRequired": false,
+                  "isNullable": false,
+                  "hasDefault": true,
+                  "defaultValue": true,
+                  "policy": {
+                    "isPersistable": true,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "lifecycle": 0,
+                    "storage": 0,
+                    "storageProfile": null,
+                    "retentionPolicy": null
+                  },
+                  "editorMetadata": {}
+                }
+              },
+              "result": {
+                "type": {
+                  "alias": "Elsa.Activities.Primitives.Activities.EventResult",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "isRequired": true,
+                "policy": {
+                  "isPersistable": true,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "lifecycle": 1,
+                  "storage": 0,
+                  "storageProfile": null,
+                  "retentionPolicy": null
+                },
+                "sourceRepresentation": "TypedValue",
+                "projections": {
+                  "Result": {
+                    "key": "Result",
+                    "path": "eventName",
+                    "type": {
+                      "alias": "String",
+                      "collectionKind": "Single",
+                      "schema": null,
+                      "schemaVersion": null
+                    },
+                    "isRequired": true,
+                    "policy": {
+                      "isPersistable": true,
+                      "isSensitive": false,
+                      "requiresEncryption": false,
+                      "redactionMode": null,
+                      "lifecycle": 0,
+                      "storage": 0,
+                      "storageProfile": null,
+                      "retentionPolicy": null
+                    },
+                    "sourceRepresentation": "TextValue"
+                  },
+                  "Payload": {
+                    "key": "Payload",
+                    "path": "payload",
+                    "type": {
+                      "alias": "System.Text.Json.JsonElement?",
+                      "collectionKind": "Single",
+                      "schema": null,
+                      "schemaVersion": null
+                    },
+                    "isRequired": false,
+                    "policy": {
+                      "isPersistable": true,
+                      "isSensitive": false,
+                      "requiresEncryption": false,
+                      "redactionMode": null,
+                      "lifecycle": 0,
+                      "storage": 0,
+                      "storageProfile": null,
+                      "retentionPolicy": null
+                    },
+                    "sourceRepresentation": "TypedValue"
+                  }
+                }
+              },
+              "outcomes": [
+                "Done"
+              ],
+              "activation": {
+                "descriptorKind": "Elsa.Primitives.Models.ClrActivityDescriptor",
+                "capability": "Elsa.Activities.Primitives.Activities.Event"
+              }
+            },
+            "intrinsicKind": null,
+            "intrinsicVariable": null
+          }
+        ],
+        "nodesById": {
+          "event": {
+            "executableNodeId": "event",
+            "authoredActivityId": "event",
+            "activityType": "Elsa.Event",
+            "activityTypeVersion": "1.0.0+2e142e51055aa2d84c0839dffb49b3621489d9ce",
+            "descriptorType": "elsa.clr-activity",
+            "descriptorSchemaVersion": "1",
+            "descriptorPayload": {
+              "typeAlias": "Elsa.Activities.Primitives.Activities.Event"
+            },
+            "inputBindings": {
+              "EventName": {
+                "inputName": "EventName",
+                "inputKey": "EventName",
+                "targetType": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "effectivePolicy": {
+                  "lifecycle": 1,
+                  "storage": 1,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "retentionPolicy": null,
+                  "metadata": {}
+                },
+                "source": 0,
+                "literal": {
+                  "type": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "presence": 2,
+                  "inlineValue": "actual-model-rollback-Direct",
+                  "externalReference": null,
+                  "policy": {
+                    "lifecycle": 1,
+                    "storage": 1,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "retentionPolicy": null,
+                    "metadata": {}
+                  }
+                },
+                "workflowRequest": null,
+                "variable": null,
+                "activityResult": null,
+                "literalValue": "actual-model-rollback-Direct",
+                "expression": null,
+                "metadata": {
+                  "referenceKey": "EventName"
+                },
+                "conversionPlan": {
+                  "schemaVersion": 1,
+                  "sourceRepresentation": "TextValue",
+                  "sourceType": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "targetType": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "mode": "Auto",
+                  "operation": "Identity",
+                  "profile": null,
+                  "limits": {
+                    "maxDepth": 64,
+                    "maxCollectionItems": 10000,
+                    "maxPayloadBytes": 1048576
+                  },
+                  "options": {},
+                  "fingerprint": "sha256:8a808515a2d6c2c5dbfec984a78d50793bf8b384e2599e28ab2dd92cb030c3cb"
+                }
+              },
+              "CanStartWorkflow": {
+                "inputName": "CanStartWorkflow",
+                "inputKey": "CanStartWorkflow",
+                "targetType": {
+                  "alias": "Boolean",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "effectivePolicy": {
+                  "lifecycle": 1,
+                  "storage": 1,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "retentionPolicy": null,
+                  "metadata": {}
+                },
+                "source": 0,
+                "literal": {
+                  "type": {
+                    "alias": "Boolean",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "presence": 2,
+                  "inlineValue": false,
+                  "externalReference": null,
+                  "policy": {
+                    "lifecycle": 1,
+                    "storage": 1,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "retentionPolicy": null,
+                    "metadata": {}
+                  }
+                },
+                "workflowRequest": null,
+                "variable": null,
+                "activityResult": null,
+                "literalValue": false,
+                "expression": null,
+                "metadata": {
+                  "referenceKey": "CanStartWorkflow"
+                },
+                "conversionPlan": {
+                  "schemaVersion": 1,
+                  "sourceRepresentation": "TypedValue",
+                  "sourceType": {
+                    "alias": "Boolean",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "targetType": {
+                    "alias": "Boolean",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "mode": "Auto",
+                  "operation": "Identity",
+                  "profile": null,
+                  "limits": {
+                    "maxDepth": 64,
+                    "maxCollectionItems": 10000,
+                    "maxPayloadBytes": 1048576
+                  },
+                  "options": {},
+                  "fingerprint": "sha256:bcf301f404b6d094efdf56ee1b1820115a83df947c6c2c532000ebc4bf060821"
+                }
+              },
+              "CorrelationId": {
+                "inputName": "CorrelationId",
+                "inputKey": "CorrelationId",
+                "targetType": {
+                  "alias": "String",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "effectivePolicy": {
+                  "lifecycle": 1,
+                  "storage": 1,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "retentionPolicy": null,
+                  "metadata": {}
+                },
+                "source": 0,
+                "literal": {
+                  "type": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "presence": 0,
+                  "inlineValue": null,
+                  "externalReference": null,
+                  "policy": {
+                    "lifecycle": 1,
+                    "storage": 1,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "retentionPolicy": null,
+                    "metadata": {}
+                  }
+                },
+                "workflowRequest": null,
+                "variable": null,
+                "activityResult": null,
+                "literalValue": null,
+                "expression": null,
+                "metadata": {
+                  "referenceKey": "CorrelationId"
+                }
+              }
+            },
+            "outputCaptures": {},
+            "metadata": {
+              "authoredNodeId": "event",
+              "executionType": "Trigger"
+            },
+            "childSlots": [],
+            "structure": null,
+            "activityContract": {
+              "activityTypeKey": "Elsa.Event",
+              "contractVersion": "1.0.0+2e142e51055aa2d84c0839dffb49b3621489d9ce",
+              "schemaFingerprint": "sha256:009bbe4531c7de8e4059809958879b55eacb95b5902dec615eef0a162e02342b",
+              "descriptorKind": "Elsa.Primitives.Models.ClrActivityDescriptor",
+              "descriptorPayload": {
+                "typeAlias": "Elsa.Activities.Primitives.Activities.Event"
+              },
+              "inputs": {
+                "EventName": {
+                  "key": "EventName",
+                  "name": "EventName",
+                  "type": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "isRequired": true,
+                  "isNullable": false,
+                  "hasDefault": false,
+                  "defaultValue": null,
+                  "policy": {
+                    "isPersistable": true,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "lifecycle": 0,
+                    "storage": 0,
+                    "storageProfile": null,
+                    "retentionPolicy": null
+                  },
+                  "editorMetadata": {}
+                },
+                "CorrelationId": {
+                  "key": "CorrelationId",
+                  "name": "CorrelationId",
+                  "type": {
+                    "alias": "String",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "isRequired": false,
+                  "isNullable": true,
+                  "hasDefault": false,
+                  "defaultValue": null,
+                  "policy": {
+                    "isPersistable": true,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "lifecycle": 0,
+                    "storage": 0,
+                    "storageProfile": null,
+                    "retentionPolicy": null
+                  },
+                  "editorMetadata": {}
+                },
+                "CanStartWorkflow": {
+                  "key": "CanStartWorkflow",
+                  "name": "CanStartWorkflow",
+                  "type": {
+                    "alias": "Boolean",
+                    "collectionKind": "Single",
+                    "schema": null,
+                    "schemaVersion": null
+                  },
+                  "isRequired": false,
+                  "isNullable": false,
+                  "hasDefault": true,
+                  "defaultValue": true,
+                  "policy": {
+                    "isPersistable": true,
+                    "isSensitive": false,
+                    "requiresEncryption": false,
+                    "redactionMode": null,
+                    "lifecycle": 0,
+                    "storage": 0,
+                    "storageProfile": null,
+                    "retentionPolicy": null
+                  },
+                  "editorMetadata": {}
+                }
+              },
+              "result": {
+                "type": {
+                  "alias": "Elsa.Activities.Primitives.Activities.EventResult",
+                  "collectionKind": "Single",
+                  "schema": null,
+                  "schemaVersion": null
+                },
+                "isRequired": true,
+                "policy": {
+                  "isPersistable": true,
+                  "isSensitive": false,
+                  "requiresEncryption": false,
+                  "redactionMode": null,
+                  "lifecycle": 1,
+                  "storage": 0,
+                  "storageProfile": null,
+                  "retentionPolicy": null
+                },
+                "sourceRepresentation": "TypedValue",
+                "projections": {
+                  "Result": {
+                    "key": "Result",
+                    "path": "eventName",
+                    "type": {
+                      "alias": "String",
+                      "collectionKind": "Single",
+                      "schema": null,
+                      "schemaVersion": null
+                    },
+                    "isRequired": true,
+                    "policy": {
+                      "isPersistable": true,
+                      "isSensitive": false,
+                      "requiresEncryption": false,
+                      "redactionMode": null,
+                      "lifecycle": 0,
+                      "storage": 0,
+                      "storageProfile": null,
+                      "retentionPolicy": null
+                    },
+                    "sourceRepresentation": "TextValue"
+                  },
+                  "Payload": {
+                    "key": "Payload",
+                    "path": "payload",
+                    "type": {
+                      "alias": "System.Text.Json.JsonElement?",
+                      "collectionKind": "Single",
+                      "schema": null,
+                      "schemaVersion": null
+                    },
+                    "isRequired": false,
+                    "policy": {
+                      "isPersistable": true,
+                      "isSensitive": false,
+                      "requiresEncryption": false,
+                      "redactionMode": null,
+                      "lifecycle": 0,
+                      "storage": 0,
+                      "storageProfile": null,
+                      "retentionPolicy": null
+                    },
+                    "sourceRepresentation": "TypedValue"
+                  }
+                }
+              },
+              "outcomes": [
+                "Done"
+              ],
+              "activation": {
+                "descriptorKind": "Elsa.Primitives.Models.ClrActivityDescriptor",
+                "capability": "Elsa.Activities.Primitives.Activities.Event"
+              }
+            },
+            "intrinsicKind": null,
+            "intrinsicVariable": null
+          }
+        },
+        "resumeTargets": {
+          "event:resume-target:event": {
+            "resumeTargetId": "event:resume-target:event",
+            "executableNodeId": "event",
+            "handlerKey": "ResumeAsync",
+            "metadata": {},
+            "localResumeTargetId": "resume-target:event"
+          }
+        },
+        "inputContract": {
+          "version": 1,
+          "inputs": []
+        },
+        "dependencies": [],
+        "persistenceMode": null,
+        "workflowVariables": [],
+        "incidentStrategy": {
+          "alias": "Fault",
+          "version": "1"
+        },
+        "createdAt": "2026-10-30T03:24:21.8668+00:00",
+        "compatibilityMetadata": {
+          "slice": "workflow-execution-vertical-slice"
+        },
+        "runtimeRequirements": [
+          {
+            "consumerKey": "elsa.clr-activity",
+            "schemaVersion": "1"
+          }
+        ],
+        "storageDriverRequirements": []
+      },
+      "model": null
+    }
+  ],
+  "orphanArtifactId": "sha256:750f58cbfe221d82ef68f776d4f507bf5c61b2d06b44d76d36e1f290bac31839",
+  "orphanCollected": true,
+  "sweep": {
+    "deletedReferenceCount": 1,
+    "deletedArtifactCount": 1,
+    "deletedActivityTemplateCount": 0,
+    "didWork": true
+  },
+  "modelBefore": {
+    "formatVersion": 1,
+    "scope": {
+      "value": "default"
+    },
+    "executionId": "bpmn:63b242243f03b5aa3e4b5ff482ac128da07bb1c88766014f7b13c02b2932dccb",
+    "tenantId": "default",
+    "protocol": {
+      "key": "elsa.bpmn",
+      "version": 1
+    },
+    "executable": {
+      "artifactId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+      "definitionId": "bpmn-model:sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+      "definitionVersionId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4"
+    },
+    "materialIncarnationId": "2a06b5532e8b4b8db5b0ed8b70608d8a",
+    "revision": 1,
+    "lifecycle": 0,
+    "authority": {
+      "systemIdentity": "bpmn-runtime",
+      "rootInitiator": "seed-user-516dd8aa49c146bd86326874",
+      "metadata": {}
+    },
+    "createdAt": "2026-10-30T03:24:23.166628+00:00",
+    "updatedAt": "2026-10-30T03:24:23.166628+00:00",
+    "payload": {
+      "formatVersion": 2,
+      "state": {
+        "tokens": [
+          {
+            "tokenId": "token:7",
+            "atElementId": "first",
+            "flowId": "fork-first",
+            "parentTokenId": "token:4",
+            "status": 1,
+            "producingWorkHandle": "bpmn:63b242243f03b5aa3e4b5ff482ac128da07bb1c88766014f7b13c02b2932dccb",
+            "iterationKey": null,
+            "kind": null,
+            "stoppedHandle": null
+          },
+          {
+            "tokenId": "token:9",
+            "atElementId": "second",
+            "flowId": "fork-second",
+            "parentTokenId": "token:4",
+            "status": 1,
+            "producingWorkHandle": "bpmn:63b242243f03b5aa3e4b5ff482ac128da07bb1c88766014f7b13c02b2932dccb",
+            "iterationKey": null,
+            "kind": null,
+            "stoppedHandle": null
+          }
+        ],
+        "activeWork": [
+          {
+            "nodeId": "first-event",
+            "elementId": "first",
+            "tokenId": "token:7",
+            "schedulingCause": "element:intermediateCatchEvent",
+            "iterationId": null
+          },
+          {
+            "nodeId": "second-event",
+            "elementId": "second",
+            "tokenId": "token:9",
+            "schedulingCause": "element:intermediateCatchEvent",
+            "iterationId": null
+          }
+        ],
+        "diagnostics": [
+          {
+            "diagnosticId": "diag:2",
+            "kind": 0,
+            "message": "BPMN start event 'start' emitted the initial token.",
+            "elementId": "start",
+            "flowId": null,
+            "tokenId": "token:1",
+            "details": {}
+          },
+          {
+            "diagnosticId": "diag:5",
+            "kind": 0,
+            "message": "BPMN token 'token:4' arrived at element 'fork' via flow 'begin'.",
+            "elementId": "fork",
+            "flowId": "begin",
+            "tokenId": "token:4",
+            "details": {}
+          },
+          {
+            "diagnosticId": "diag:8",
+            "kind": 0,
+            "message": "BPMN token 'token:7' arrived at element 'first' via flow 'fork-first'.",
+            "elementId": "first",
+            "flowId": "fork-first",
+            "tokenId": "token:7",
+            "details": {}
+          },
+          {
+            "diagnosticId": "diag:10",
+            "kind": 0,
+            "message": "BPMN token 'token:9' arrived at element 'second' via flow 'fork-second'.",
+            "elementId": "second",
+            "flowId": "fork-second",
+            "tokenId": "token:9",
+            "details": {}
+          },
+          {
+            "diagnosticId": "diag:13",
+            "kind": 1,
+            "message": "BPMN element 'first' started work 'first-event'.",
+            "elementId": "first",
+            "flowId": null,
+            "tokenId": "token:7",
+            "details": {}
+          },
+          {
+            "diagnosticId": "diag:16",
+            "kind": 1,
+            "message": "BPMN element 'second' started work 'second-event'.",
+            "elementId": "second",
+            "flowId": null,
+            "tokenId": "token:9",
+            "details": {}
+          }
+        ],
+        "sequence": 16,
+        "races": [],
+        "loops": [],
+        "compensables": [],
+        "compensationRuns": [],
+        "terminated": false,
+        "cancelling": false,
+        "pendingFault": null
+      },
+      "work": [
+        {
+          "elementId": "first",
+          "bindingId": "first-event",
+          "tokenId": "token:7",
+          "iterationId": null,
+          "invocationId": "bpmn-work:8b84d8d094d02069b201443626fb0bbe0ebe7dfe732f70c5769eadcdbeaf1728",
+          "attemptId": "attempt:3dd395ad620b1e81485618363ab993a3a26441da7239cb5e02b14c12f2cf2a53",
+          "nativeWork": {
+            "formatVersion": 1,
+            "scope": {
+              "value": "default"
+            },
+            "executionId": "bpmn:63b242243f03b5aa3e4b5ff482ac128da07bb1c88766014f7b13c02b2932dccb",
+            "protocol": {
+              "key": "elsa.bpmn",
+              "version": 1
+            },
+            "executable": {
+              "artifactId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+              "definitionId": "bpmn-model:sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+              "definitionVersionId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4"
+            },
+            "materialIncarnationId": "2a06b5532e8b4b8db5b0ed8b70608d8a",
+            "bindingId": "first-event",
+            "invocationId": "bpmn-work:8b84d8d094d02069b201443626fb0bbe0ebe7dfe732f70c5769eadcdbeaf1728",
+            "attemptId": "attempt:3dd395ad620b1e81485618363ab993a3a26441da7239cb5e02b14c12f2cf2a53",
+            "workerExecutable": {
+              "artifactId": "artifact-e6f71e5e3c38",
+              "definitionId": "14lcvAaBNgg",
+              "definitionVersionId": "14lcvAfMXC7",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:e6f71e5e3c38d15b6e91cdd195860648a06dc88ee3949bc1b32fdfeba4d5956d"
+            },
+            "workerExecutionId": "wfexec:start:v1:33d872e6af35a49b202b9515611d50382139143bfdea52f3c852b1ab5c95cb83",
+            "sourceOutboxItemId": "model-input:8d553fa13e8570fcacd877e5d61d0a04fa11b0aaa20f23243d515dd605e6290e:bpmn-start-native:9f68f42f0dd74217682ac3101f0ace48d605f9e87809020c525cb404036b9ffd",
+            "sourceIntentId": "bpmn-start-native:9f68f42f0dd74217682ac3101f0ace48d605f9e87809020c525cb404036b9ffd",
+            "resultIntentKind": "Elsa.Bpmn.NativeWorkResult.v1",
+            "resultInputId": "native-result:f2dbc899bea68d194e4048db06e8d83148cd065379bb81c728d988a1a46ca016"
+          }
+        },
+        {
+          "elementId": "second",
+          "bindingId": "second-event",
+          "tokenId": "token:9",
+          "iterationId": null,
+          "invocationId": "bpmn-work:6b35a183363515217e63f14cd240049566780047e8f42e7761dd672739914f5d",
+          "attemptId": "attempt:ff177d1e43f10dc810c93792eee8bcf924fc33878af16d99424e8657e131eb34",
+          "nativeWork": {
+            "formatVersion": 1,
+            "scope": {
+              "value": "default"
+            },
+            "executionId": "bpmn:63b242243f03b5aa3e4b5ff482ac128da07bb1c88766014f7b13c02b2932dccb",
+            "protocol": {
+              "key": "elsa.bpmn",
+              "version": 1
+            },
+            "executable": {
+              "artifactId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+              "definitionId": "bpmn-model:sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+              "definitionVersionId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4"
+            },
+            "materialIncarnationId": "2a06b5532e8b4b8db5b0ed8b70608d8a",
+            "bindingId": "second-event",
+            "invocationId": "bpmn-work:6b35a183363515217e63f14cd240049566780047e8f42e7761dd672739914f5d",
+            "attemptId": "attempt:ff177d1e43f10dc810c93792eee8bcf924fc33878af16d99424e8657e131eb34",
+            "workerExecutable": {
+              "artifactId": "artifact-e6f71e5e3c38",
+              "definitionId": "14lcvAaBNgg",
+              "definitionVersionId": "14lcvAfMXC7",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:e6f71e5e3c38d15b6e91cdd195860648a06dc88ee3949bc1b32fdfeba4d5956d"
+            },
+            "workerExecutionId": "wfexec:start:v1:5637bf1a08dc3177b55794de26e884e3d4cef5437b8c26cc5fe42abbdcada8da",
+            "sourceOutboxItemId": "model-input:8d553fa13e8570fcacd877e5d61d0a04fa11b0aaa20f23243d515dd605e6290e:bpmn-start-native:905d09f65799b69ffdb46001dd373df13fc5a5fb2470521980e16fa70717ad64",
+            "sourceIntentId": "bpmn-start-native:905d09f65799b69ffdb46001dd373df13fc5a5fb2470521980e16fa70717ad64",
+            "resultIntentKind": "Elsa.Bpmn.NativeWorkResult.v1",
+            "resultInputId": "native-result:0a0960167bebe92ad0f8ca1c9b961739125d1bb6495a0c11ec9e45a2cc636505"
+          }
+        }
+      ],
+      "sourceReferenceId": "bpmn-source:4a9aa5dd5c3f922ebd4e8eb00d798b4032558738f3b58dbd236039934cbbebfa"
+    },
+    "terminalResult": null
+  },
+  "modelAfter": {
+    "formatVersion": 1,
+    "scope": {
+      "value": "default"
+    },
+    "executionId": "bpmn:63b242243f03b5aa3e4b5ff482ac128da07bb1c88766014f7b13c02b2932dccb",
+    "tenantId": "default",
+    "protocol": {
+      "key": "elsa.bpmn",
+      "version": 1
+    },
+    "executable": {
+      "artifactId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+      "definitionId": "bpmn-model:sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+      "definitionVersionId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4"
+    },
+    "materialIncarnationId": "2a06b5532e8b4b8db5b0ed8b70608d8a",
+    "revision": 1,
+    "lifecycle": 0,
+    "authority": {
+      "systemIdentity": "bpmn-runtime",
+      "rootInitiator": "seed-user-516dd8aa49c146bd86326874",
+      "metadata": {}
+    },
+    "createdAt": "2026-10-30T03:24:23.166628+00:00",
+    "updatedAt": "2026-10-30T03:24:23.166628+00:00",
+    "payload": {
+      "formatVersion": 2,
+      "state": {
+        "tokens": [
+          {
+            "tokenId": "token:7",
+            "atElementId": "first",
+            "flowId": "fork-first",
+            "parentTokenId": "token:4",
+            "status": 1,
+            "producingWorkHandle": "bpmn:63b242243f03b5aa3e4b5ff482ac128da07bb1c88766014f7b13c02b2932dccb",
+            "iterationKey": null,
+            "kind": null,
+            "stoppedHandle": null
+          },
+          {
+            "tokenId": "token:9",
+            "atElementId": "second",
+            "flowId": "fork-second",
+            "parentTokenId": "token:4",
+            "status": 1,
+            "producingWorkHandle": "bpmn:63b242243f03b5aa3e4b5ff482ac128da07bb1c88766014f7b13c02b2932dccb",
+            "iterationKey": null,
+            "kind": null,
+            "stoppedHandle": null
+          }
+        ],
+        "activeWork": [
+          {
+            "nodeId": "first-event",
+            "elementId": "first",
+            "tokenId": "token:7",
+            "schedulingCause": "element:intermediateCatchEvent",
+            "iterationId": null
+          },
+          {
+            "nodeId": "second-event",
+            "elementId": "second",
+            "tokenId": "token:9",
+            "schedulingCause": "element:intermediateCatchEvent",
+            "iterationId": null
+          }
+        ],
+        "diagnostics": [
+          {
+            "diagnosticId": "diag:2",
+            "kind": 0,
+            "message": "BPMN start event 'start' emitted the initial token.",
+            "elementId": "start",
+            "flowId": null,
+            "tokenId": "token:1",
+            "details": {}
+          },
+          {
+            "diagnosticId": "diag:5",
+            "kind": 0,
+            "message": "BPMN token 'token:4' arrived at element 'fork' via flow 'begin'.",
+            "elementId": "fork",
+            "flowId": "begin",
+            "tokenId": "token:4",
+            "details": {}
+          },
+          {
+            "diagnosticId": "diag:8",
+            "kind": 0,
+            "message": "BPMN token 'token:7' arrived at element 'first' via flow 'fork-first'.",
+            "elementId": "first",
+            "flowId": "fork-first",
+            "tokenId": "token:7",
+            "details": {}
+          },
+          {
+            "diagnosticId": "diag:10",
+            "kind": 0,
+            "message": "BPMN token 'token:9' arrived at element 'second' via flow 'fork-second'.",
+            "elementId": "second",
+            "flowId": "fork-second",
+            "tokenId": "token:9",
+            "details": {}
+          },
+          {
+            "diagnosticId": "diag:13",
+            "kind": 1,
+            "message": "BPMN element 'first' started work 'first-event'.",
+            "elementId": "first",
+            "flowId": null,
+            "tokenId": "token:7",
+            "details": {}
+          },
+          {
+            "diagnosticId": "diag:16",
+            "kind": 1,
+            "message": "BPMN element 'second' started work 'second-event'.",
+            "elementId": "second",
+            "flowId": null,
+            "tokenId": "token:9",
+            "details": {}
+          }
+        ],
+        "sequence": 16,
+        "races": [],
+        "loops": [],
+        "compensables": [],
+        "compensationRuns": [],
+        "terminated": false,
+        "cancelling": false,
+        "pendingFault": null
+      },
+      "work": [
+        {
+          "elementId": "first",
+          "bindingId": "first-event",
+          "tokenId": "token:7",
+          "iterationId": null,
+          "invocationId": "bpmn-work:8b84d8d094d02069b201443626fb0bbe0ebe7dfe732f70c5769eadcdbeaf1728",
+          "attemptId": "attempt:3dd395ad620b1e81485618363ab993a3a26441da7239cb5e02b14c12f2cf2a53",
+          "nativeWork": {
+            "formatVersion": 1,
+            "scope": {
+              "value": "default"
+            },
+            "executionId": "bpmn:63b242243f03b5aa3e4b5ff482ac128da07bb1c88766014f7b13c02b2932dccb",
+            "protocol": {
+              "key": "elsa.bpmn",
+              "version": 1
+            },
+            "executable": {
+              "artifactId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+              "definitionId": "bpmn-model:sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+              "definitionVersionId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4"
+            },
+            "materialIncarnationId": "2a06b5532e8b4b8db5b0ed8b70608d8a",
+            "bindingId": "first-event",
+            "invocationId": "bpmn-work:8b84d8d094d02069b201443626fb0bbe0ebe7dfe732f70c5769eadcdbeaf1728",
+            "attemptId": "attempt:3dd395ad620b1e81485618363ab993a3a26441da7239cb5e02b14c12f2cf2a53",
+            "workerExecutable": {
+              "artifactId": "artifact-e6f71e5e3c38",
+              "definitionId": "14lcvAaBNgg",
+              "definitionVersionId": "14lcvAfMXC7",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:e6f71e5e3c38d15b6e91cdd195860648a06dc88ee3949bc1b32fdfeba4d5956d"
+            },
+            "workerExecutionId": "wfexec:start:v1:33d872e6af35a49b202b9515611d50382139143bfdea52f3c852b1ab5c95cb83",
+            "sourceOutboxItemId": "model-input:8d553fa13e8570fcacd877e5d61d0a04fa11b0aaa20f23243d515dd605e6290e:bpmn-start-native:9f68f42f0dd74217682ac3101f0ace48d605f9e87809020c525cb404036b9ffd",
+            "sourceIntentId": "bpmn-start-native:9f68f42f0dd74217682ac3101f0ace48d605f9e87809020c525cb404036b9ffd",
+            "resultIntentKind": "Elsa.Bpmn.NativeWorkResult.v1",
+            "resultInputId": "native-result:f2dbc899bea68d194e4048db06e8d83148cd065379bb81c728d988a1a46ca016"
+          }
+        },
+        {
+          "elementId": "second",
+          "bindingId": "second-event",
+          "tokenId": "token:9",
+          "iterationId": null,
+          "invocationId": "bpmn-work:6b35a183363515217e63f14cd240049566780047e8f42e7761dd672739914f5d",
+          "attemptId": "attempt:ff177d1e43f10dc810c93792eee8bcf924fc33878af16d99424e8657e131eb34",
+          "nativeWork": {
+            "formatVersion": 1,
+            "scope": {
+              "value": "default"
+            },
+            "executionId": "bpmn:63b242243f03b5aa3e4b5ff482ac128da07bb1c88766014f7b13c02b2932dccb",
+            "protocol": {
+              "key": "elsa.bpmn",
+              "version": 1
+            },
+            "executable": {
+              "artifactId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+              "definitionId": "bpmn-model:sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+              "definitionVersionId": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:84ed1db961829a90a2dde0109501f7319992d3a60971167416b542075ac2bbe4"
+            },
+            "materialIncarnationId": "2a06b5532e8b4b8db5b0ed8b70608d8a",
+            "bindingId": "second-event",
+            "invocationId": "bpmn-work:6b35a183363515217e63f14cd240049566780047e8f42e7761dd672739914f5d",
+            "attemptId": "attempt:ff177d1e43f10dc810c93792eee8bcf924fc33878af16d99424e8657e131eb34",
+            "workerExecutable": {
+              "artifactId": "artifact-e6f71e5e3c38",
+              "definitionId": "14lcvAaBNgg",
+              "definitionVersionId": "14lcvAfMXC7",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:e6f71e5e3c38d15b6e91cdd195860648a06dc88ee3949bc1b32fdfeba4d5956d"
+            },
+            "workerExecutionId": "wfexec:start:v1:5637bf1a08dc3177b55794de26e884e3d4cef5437b8c26cc5fe42abbdcada8da",
+            "sourceOutboxItemId": "model-input:8d553fa13e8570fcacd877e5d61d0a04fa11b0aaa20f23243d515dd605e6290e:bpmn-start-native:905d09f65799b69ffdb46001dd373df13fc5a5fb2470521980e16fa70717ad64",
+            "sourceIntentId": "bpmn-start-native:905d09f65799b69ffdb46001dd373df13fc5a5fb2470521980e16fa70717ad64",
+            "resultIntentKind": "Elsa.Bpmn.NativeWorkResult.v1",
+            "resultInputId": "native-result:0a0960167bebe92ad0f8ca1c9b961739125d1bb6495a0c11ec9e45a2cc636505"
+          }
+        }
+      ],
+      "sourceReferenceId": "bpmn-source:4a9aa5dd5c3f922ebd4e8eb00d798b4032558738f3b58dbd236039934cbbebfa"
+    },
+    "terminalResult": null
+  },
+  "executionStateEdited": false,
+  "claimEdited": false,
+  "clockEdited": false,
+  "supportsStimulusDeliveryRetention": true,
+  "products": [
+    {
+      "name": "NativeWorkDispatch",
+      "informationalVersion": "1.0.0+2e142e51055aa2d84c0839dffb49b3621489d9ce",
+      "sha256": "d022479ffb7f396ded200b259d58bfb1bb127e3f4d660c0a4414738d8275ec23"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Core",
+      "informationalVersion": "1.0.0+2e142e51055aa2d84c0839dffb49b3621489d9ce",
+      "sha256": "211c288f81e96dedf8fc12d2f39895dbfdfee82301e4f8200b8623d0b77f2b36"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+      "informationalVersion": "1.0.0+2e142e51055aa2d84c0839dffb49b3621489d9ce",
+      "sha256": "1e3fbd1ff1cb924eaa7a2a8542a1afdace9e85e5f345cb3c90f73cc69cf945e5"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime",
+      "informationalVersion": "1.0.0+2e142e51055aa2d84c0839dffb49b3621489d9ce",
+      "sha256": "414dadd2ddff9279a3ed895b07ea3c2623789332e897240990df1e3d41762b3b"
+    }
+  ]
+}

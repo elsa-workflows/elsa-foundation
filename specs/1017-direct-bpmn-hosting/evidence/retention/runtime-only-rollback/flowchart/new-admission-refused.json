@@ -1,0 +1,11 @@
+{
+  "status": 503,
+  "body": {
+    "status": 503,
+    "errors": {
+      "generalErrors": [
+        "New BPMN execution admission is disabled."
+      ]
+    }
+  }
+}
