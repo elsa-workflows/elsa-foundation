@@ -3032,3 +3032,31 @@ function browserActivityTestRun(
 
 function initialGraphPayload() { return { rootActivity: { nodeId: "root", activityVersionId: "", inputs: [], outputs: [], structure: null }, variables: [], outputMappings: [] }; }
 function catalogActivity(activityVersionId: string, displayName: string) { return { activityVersionId, activityTypeKey: `Elsa.${displayName.replaceAll(" ", "")}`, version: "1.0.0", category: "Primitives", displayName, description: null, executionType: "sync", inputs: [], outputs: [], designFacets: [], available: true, authoringTemplate: { nodeId: "template", activityVersionId, inputs: [], outputs: [], structure: null } }; }
+
+for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
+  test(`compact Activity Definitions disclose details without expanding the row (${theme}, ${width})`, async ({ page, context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await mockActivityDefinitions(page);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/?mode=activity-definitions&theme=${theme}`);
+    const row = page.getByRole("row", { name: "Open Activity Definition Invoice evaluator", exact: true });
+    const bounds = (await row.boundingBox())!;
+    expect(bounds.height).toBeLessThanOrEqual(64);
+    await expect(row.getByText("Finance", { exact: true })).toHaveCount(0);
+    await expect(row.getByText("Evaluates invoice policy.", { exact: true })).toHaveCount(0);
+    await row.getByRole("button", { name: "Copy Definition ID", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("definition-1");
+    const trigger = row.getByRole("button", { name: "Identifiers for Invoice evaluator", exact: true });
+    await trigger.click();
+    const dialog = page.getByRole("dialog", { name: "Activity Definition identifiers for Invoice evaluator", exact: true });
+    await expect(dialog).toContainText("Category: Finance");
+    await expect(dialog).toContainText("Evaluates invoice policy.");
+    await expect(dialog).toContainText("Contoso.InvoiceEvaluator");
+    expect((await row.boundingBox())!.height).toBe(bounds.height);
+    await page.screenshot({ path: `/tmp/clean-activities-${theme}-${width}.png` });
+    await page.keyboard.press("Escape");
+    await expect(trigger).toBeFocused();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+    await expect(page).not.toHaveURL(/definition=/);
+  });
+}

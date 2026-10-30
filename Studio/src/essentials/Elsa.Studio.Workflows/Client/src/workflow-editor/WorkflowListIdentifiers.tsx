@@ -1,11 +1,13 @@
 import { useId, useRef, useState, type ReactNode } from "react";
 import { Hash, X } from "lucide-react";
 import { AnchoredPopover, CopyableIdentifier } from "@elsa-workflows/studio-ui";
-import type { WorkflowListIdentifier } from "./WorkflowListIdentity";
 import "./workflowListIdentity.css";
 
-export function WorkflowDefinitionIdentifiers({ name, identifiers, description, children }: {
+export interface WorkflowListIdentifier { label: string; value: string; }
+
+export function WorkflowListIdentifiers({ name, identifiers, description, children, kind = "Workflow definition" }: {
   name: string;
+  kind?: string;
   identifiers: readonly WorkflowListIdentifier[];
   description?: string | null;
   children?: ReactNode;
@@ -44,7 +46,7 @@ export function WorkflowDefinitionIdentifiers({ name, identifiers, description, 
       <div
         ref={dialog}
         role="dialog"
-        aria-label={`Workflow definition identifiers for ${name}`}
+        aria-label={`${kind} identifiers for ${name}`}
         tabIndex={-1}
         onClick={event => event.stopPropagation()}
         onKeyDownCapture={event => {

@@ -66,9 +66,10 @@ import {
 } from "./editorHelpers";
 import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMode } from "./useRunDetailLayout";
 import { activateWorkflowCanvasNode, decorateWorkflowCanvasElements } from "./workflowAccessibility";
-import { AdvancedSection } from "@elsa-workflows/studio-ui";
+import { AdvancedSection, CopyableIdentifier, OverflowMenu } from "@elsa-workflows/studio-ui";
 import { RunWorkflowPicker } from "./RunWorkflowPicker";
-import { WorkflowListIdentity } from "./WorkflowListIdentity";
+import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
+import "./cleanListTables.css";
 
 type WorkflowRunFlowInstance = ReactFlowInstance<Node<WorkflowNodeData>, Edge<WorkflowEdgeData>>;
 
@@ -508,6 +509,8 @@ export function WorkflowInstances({ context, navigate }: {
               /></label> : null}
               <strong>Run</strong>
             </span>
+            <span role="columnheader">Execution ID</span>
+            <span role="columnheader">Identifiers</span>
             <span role="columnheader">Kind</span>
             <span role="columnheader">Status</span>
             <span role="columnheader">Health</span>
@@ -560,34 +563,26 @@ export function WorkflowInstances({ context, navigate }: {
                   >
                     <strong>{workflowName}</strong>
                   </button>
-                  <WorkflowListIdentity
-                    primaryLabel="Execution ID"
-                    primaryValue={instance.workflowExecutionId}
-                    secondaryIdentifiers={secondaryIdentifiers}
-                    primaryClassName="wf-run-primary-identifier"
-                    secondaryClassName="wf-run-secondary-identifiers"
-                    detailsClassName="wf-run-identifiers"
-                    detailsAriaLabel={`Workflow run identifiers for ${instance.workflowExecutionId}`}
-                  />
                 </div>
               </div>
+              <span role="cell" className="wf-list-primary-id wf-run-primary-identifier"><CopyableIdentifier label="Execution ID" value={instance.workflowExecutionId} /></span>
+              <span role="cell" className="wf-run-secondary-identifiers"><WorkflowListIdentifiers kind="Workflow run" name={instance.workflowExecutionId} identifiers={secondaryIdentifiers}>
+                <p>{formatCurrentIncidentHealth(instance)}</p>
+                <p>{instance.activityCount} activities · {instance.incidentCount} incidents</p>
+              </WorkflowListIdentifiers></span>
               <span role="cell">{formatRunKind(instance.runKind)}</span>
               <span role="cell"><WorkflowStatusBadge status={instance.status} subStatus={instance.subStatus} /></span>
               <span role="cell"><CurrentIncidentHealthLabel instance={instance} /></span>
               <span role="cell">
-                <strong>{instance.activityCount} activities</strong>
-                <small>{instance.incidentCount} incidents</small>
+                <span title={`${instance.activityCount} activities · ${instance.incidentCount} incidents`}>{instance.activityCount}</span>
               </span>
               <span role="cell">{formatDate(instance.startedAt ?? instance.createdAt)}</span>
               <span role="cell">{formatDuration(instance.startedAt ?? instance.createdAt, instance.completedAt ?? instance.updatedAt)}</span>
               {canDeleteRuns ? <span role="cell" className="wf-run-row-actions wf-row-actions">
-                <button
-                  type="button"
-                  className="danger"
-                  disabled={deletingRuns}
-                  aria-label={`Delete workflow run ${instance.workflowExecutionId}`}
-                  onClick={() => void deleteRuns([instance.workflowExecutionId])}
-                >Delete</button>
+                <OverflowMenu ariaLabel={`Actions for workflow run ${instance.workflowExecutionId}`} items={[{
+                  id: "delete", label: "Delete", destructive: true, disabled: deletingRuns,
+                  onSelect: () => { void deleteRuns([instance.workflowExecutionId]); }
+                }]} />
               </span> : null}
             </div>
             );
@@ -810,7 +805,8 @@ function CurrentIncidentHealthLabel({ instance }: { instance: WorkflowInstanceSu
       : instance.activeIncidentCount! > 0
         ? "active"
         : "none";
-  return <span className="wf-run-health-indicator" data-health={health}>{formatCurrentIncidentHealth(instance)}</span>;
+  const label = health === "blocking" ? "Needs intervention" : health === "active" ? `${instance.activeIncidentCount} active` : health === "none" ? "Healthy" : "Unknown";
+  return <span className="wf-run-health-indicator" data-health={health} title={formatCurrentIncidentHealth(instance)} aria-label={formatCurrentIncidentHealth(instance)}>{label}</span>;
 }
 
 function toUtcIso(value: string) {

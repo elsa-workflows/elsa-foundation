@@ -16,7 +16,7 @@ import "./workflowFolders.css";
 import "./workflowDefinitionTable.css";
 import { LatestDefinitionVersion, PublishedDefinitionVersion } from "./DefinitionVersionCells";
 import type { WorkflowDefinitionBrowseSession } from "./workflowDefinitionBrowseSession";
-import { WorkflowDefinitionIdentifiers } from "./WorkflowDefinitionIdentifiers";
+import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
 
 const CreateWorkflowDialog = lazy(() =>
   import("./CreateWorkflowDialog").then(module => ({ default: module.CreateWorkflowDialog }))
@@ -655,10 +655,10 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
                       {isCurrentData ? <CopyableIdentifier label="Definition ID" value={definition.id} /> : <span title={definition.id}>{definition.id}</span>}
                     </span>
                     <span className="wf-definition-identities-cell" role="cell" onClick={event => event.stopPropagation()}>
-                      {isCurrentData ? <WorkflowDefinitionIdentifiers name={definition.name} identifiers={secondaryIdentifiers} description={definition.description}>
+                      {isCurrentData ? <WorkflowListIdentifiers name={definition.name} identifiers={secondaryIdentifiers} description={definition.description}>
                         {effectiveFolderSelection === "all" ? <ResultFolderBreadcrumb definition={definition} onSelect={changeFolder} /> : null}
                         {isDeleted ? <p>Deleted {formatDate(definition.deletedAt)}</p> : null}
-                      </WorkflowDefinitionIdentifiers> : null}
+                      </WorkflowListIdentifiers> : null}
                     </span>
                     <span className="wf-definition-version" role="cell"><LatestDefinitionVersion definition={definition} />{isDeleted ? <span className="wf-status-badge" data-status="cancelled">Deleted</span> : null}</span>
                     <span className="wf-definition-version" role="cell"><PublishedDefinitionVersion definition={definition} /></span>

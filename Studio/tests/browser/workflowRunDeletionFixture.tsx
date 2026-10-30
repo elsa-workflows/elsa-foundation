@@ -4,6 +4,7 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { DialogHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/dialog/DialogHost";
 import { dialogs } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/dialogs";
 import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
+import { writeAppearancePreferences } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { WorkflowInstances } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
@@ -15,8 +16,11 @@ const deletionRequests: string[] = [];
 (window as Window & { workflowRunDeletionRequests?: string[] }).workflowRunDeletionRequests = deletionRequests;
 
 function Fixture() {
+  const parameters = new URLSearchParams(window.location.search);
+  writeAppearancePreferences({ themeId: "classic", mode: parameters.get("theme") === "light" ? "light" : "dark", navigation: "left" });
   const [opened, setOpened] = useState("");
   const context = useMemo(() => {
+    const cleanList = new URLSearchParams(window.location.search).has("clean-list");
     const statuses = new URLSearchParams(window.location.search).get("statuses") === "all"
       ? ["Pending", "Running", "Suspended", "Completed", "Faulted", "Cancelled", "Unknown"]
       : undefined;
@@ -32,14 +36,15 @@ function Fixture() {
           if (path === "/capabilities") return { capabilities: [{ id: "elsa.api.runtime", contractVersion: "1", links: [
             { rel: "workflow-instances-page", href: "runtime/workflows/instances/page" },
             ...(deleteEnabled ? [{ rel: "workflow-instance-delete", href: "runtime/workflows/instances/{workflowExecutionId}", templated: true }] : [])
-          ] }] };
+          ] }, ...(cleanList ? [{ id: "elsa.api.workflow-design", contractVersion: "1", links: [{ rel: "workflow-definitions", href: "design/workflows/definitions" }] }] : [])] };
+          if (path.startsWith("/design/workflows/definitions")) return { items: [{ id: "quote-definition", name: "Unified workspace qualification — interaction" }] };
           if (path.startsWith("/runtime/workflows/instances/page")) return {
             items: runs.map((id, index) => ({
               workflowExecutionId: id, artifactId: "customer-quote", definitionId: "quote-definition", definitionVersionId: "quote-v3",
-              status: statusByRunId.get(id) ?? (id === "quote-active" ? "Running" : "Completed"), subStatus: null, runKind: "PublishedRun",
+              status: cleanList && index === 0 ? "Faulted" : statusByRunId.get(id) ?? (id === "quote-active" ? "Running" : "Completed"), subStatus: null, runKind: "PublishedRun",
               createdAt: "2026-10-18T10:00:00Z", startedAt: "2026-10-18T10:00:00Z",
               completedAt: id === "quote-active" || statusByRunId.get(id) === "Running" ? null : "2026-10-18T10:00:02Z", elapsedMilliseconds: 2000,
-              activityCount: 4, incidentCount: !statuses && index === 2 ? 1 : 0, activeIncidentCount: 0, blockingIncidentCount: 0
+              activityCount: 4, incidentCount: !statuses && index === 2 ? 1 : 0, activeIncidentCount: cleanList && index === 0 ? 2 : 0, blockingIncidentCount: cleanList && index === 0 ? 1 : 0
             })), hasNext: false, nextCursor: null, count: runs.length, totalCount: runs.length
           };
           throw new Error(`Unexpected fixture read ${path}`);
