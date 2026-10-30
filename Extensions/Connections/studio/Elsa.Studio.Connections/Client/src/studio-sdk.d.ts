@@ -8,6 +8,15 @@ declare module "@elsa-workflows/studio-sdk" {
     restoreFocusFallback?: () => void
   ): void;
 
+  export function describeApiError(error: unknown): Promise<string>;
+  export function tryExtractValidationErrors(error: unknown): Promise<Record<string, string[]> | null>;
+  export class StudioHttpError extends Error {
+    constructor(status: number, message: string, validationErrors?: Record<string, string[]> | null, payload?: unknown | null);
+    readonly status: number;
+    readonly validationErrors: Record<string, string[]> | null;
+    readonly payload: unknown | null;
+  }
+
   export interface StudioHttpClient {
     requestJson<T>(url: string, init?: RequestInit): Promise<T>;
     getJson<T>(url: string, init?: RequestInit): Promise<T>;

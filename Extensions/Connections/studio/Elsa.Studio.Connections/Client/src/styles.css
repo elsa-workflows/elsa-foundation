@@ -433,3 +433,8 @@
 }
 
 .connections-create-dialog .studio-disclosure-fold-trigger { justify-content: flex-start; }
+
+/* The count remains readable after an advanced-field error is corrected, including dark themes. */
+.connections-create-dialog .studio-status-pill[data-tone="accent"] {
+  color: var(--studio-text);
+}
