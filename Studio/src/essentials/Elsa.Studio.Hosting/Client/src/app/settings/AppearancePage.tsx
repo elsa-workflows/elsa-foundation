@@ -61,6 +61,7 @@ export function AppearancePage({
       <AppearanceCard title="Workspace style" description="Arrange your tools without changing your color scheme.">
         <RadioCardGroup
           ariaLabel="Workspace style"
+          workspacePreviews
           value={workspaceStyle ?? "theme"}
           options={[
             ...workspaceStyles.map(style => ({ value: style.id, label: style.name, description: style.description })),
@@ -178,11 +179,13 @@ function AppearanceCard({
 
 function RadioCardGroup({
   ariaLabel,
+  workspacePreviews = false,
   value,
   options,
   onChange
 }: {
   ariaLabel: string;
+  workspacePreviews?: boolean;
   value: string;
   options: Array<{ value: string; label: string; description?: string; defaultValue?: boolean; swatches?: string[]; disabled?: boolean }>;
   onChange: (value: string) => void;
@@ -215,7 +218,7 @@ function RadioCardGroup({
           disabled={option.disabled}
           onClick={() => onChange(option.value)}
         >
-          {ariaLabel === "Workspace style" && option.value !== "theme" ? (
+          {workspacePreviews && option.value !== "theme" ? (
             <span className="workspace-style-preview" data-style={option.value} aria-hidden="true"><i /><i /><i /></span>
           ) : null}
           {option.swatches && option.swatches.length > 0 ? (

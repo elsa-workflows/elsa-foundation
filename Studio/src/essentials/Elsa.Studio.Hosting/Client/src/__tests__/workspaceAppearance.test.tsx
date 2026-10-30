@@ -120,6 +120,14 @@ describe("independent workspace appearance", () => {
     expect(html().getAttribute("data-color-scheme")).toBe("classic");
   });
 
+  it("clears a definitively removed palette so the base theme supplies its colors", async () => {
+    localStorage.setItem("elsa-studio-theme", "drift");
+    localStorage.setItem("elsa-studio-color-scheme", "custom-removed");
+    await render({ http: { getJson: async () => normalizeThemeStore() } } as unknown as StudioEndpointContext);
+    expect(localStorage.getItem("elsa-studio-color-scheme")).toBeNull();
+    expect(html().getAttribute("data-color-scheme")).toBe("drift");
+  });
+
   it("previews a full preset transiently without rewriting independent preferences", async () => {
     await render();
     await update(() => { appearance.setWorkspaceStyle("focus"); appearance.setColorScheme("meridian"); });

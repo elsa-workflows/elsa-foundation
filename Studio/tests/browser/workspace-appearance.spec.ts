@@ -216,3 +216,35 @@ for (const height of [480, 600]) test(`the appearance menu scrolls every section
   await page.mouse.click(target.x + target.width / 2, target.y + target.height / 2);
   await expect(last).toHaveAttribute("aria-checked", "true");
 });
+
+for (const style of styles) for (const mode of ["light", "dark"]) {
+  test(`${style} owns its presentation independently of the inherited preset in ${mode}`, async ({ page }) => {
+    await open(page, style, "meridian", mode, "appearance");
+    const presentation = () => page.locator(".breadcrumb").evaluate(element => {
+      const root = getComputedStyle(document.documentElement);
+      const breadcrumb = getComputedStyle(element);
+      return {
+        tokens: ["--shadow-sm", "--shadow-md", "--studio-body-size", "--studio-page-title-size", "--studio-title-weight"].map(token => root.getPropertyValue(token)),
+        font: breadcrumb.fontFamily, size: breadcrumb.fontSize, transform: breadcrumb.textTransform, spacing: breadcrumb.letterSpacing
+      };
+    });
+    const baseline = await presentation();
+    for (const preset of ["signal", "atelier", "elsa-cloud"]) {
+      await page.evaluate(preset => localStorage.setItem("elsa-studio-theme", preset), preset);
+      await page.reload();
+      await expect(page.locator("html")).toHaveAttribute("data-theme", preset);
+      expect(await presentation()).toEqual(baseline);
+    }
+    const borders = await page.locator("html").evaluate(element => {
+      const probe = document.createElement("input");
+      element.append(probe);
+      probe.style.border = "1px solid var(--studio-border)";
+      const actual = getComputedStyle(probe).borderTopColor;
+      probe.style.borderColor = "var(--border)";
+      const expected = getComputedStyle(probe).borderTopColor;
+      probe.remove();
+      return { actual, expected };
+    });
+    expect(borders.actual).toBe(borders.expected);
+  });
+}

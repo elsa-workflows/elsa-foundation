@@ -1,6 +1,7 @@
 /* Workspace treatment is independent of palette identity and inherited legacy presets. */
 html[data-workspace-style] {
-  --studio-border: color-mix(in srgb, var(--border) 50%, transparent);
+  /* Legacy controls retain the palette boundary; structural dividers use edge-subtle. */
+  --studio-border: var(--border);
   --studio-panel: var(--card);
   --studio-canvas: var(--background);
   --studio-edge-subtle: color-mix(in srgb, var(--foreground) 8%, transparent);

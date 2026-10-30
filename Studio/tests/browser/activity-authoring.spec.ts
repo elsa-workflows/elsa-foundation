@@ -20,7 +20,7 @@ for (const style of ["quiet", "focus", "open"]) for (const theme of ["light", "d
     await back.focus();
     await expect(back).toBeFocused();
     await title.click();
-    const publication = (await page.locator(".ad-publication-toolbar").boundingBox())!;
+    const publication = (await page.getByRole("button", { name: "Review & publish", exact: true }).boundingBox())!;
     expect(publication.height).toBeLessThan(48);
     await page.screenshot({ path: testInfo.outputPath("draft-header-desktop.png") });
 

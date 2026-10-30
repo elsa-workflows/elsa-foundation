@@ -106,12 +106,16 @@ export function ThemeProvider({
     setNavModePreferenceState(saved.navigation);
     setCurrentTheme(nextTheme);
     setWorkspaceStyleState(saved.workspaceStyle);
-    setColorSchemeId(saved.colorSchemeId);
+    // A definitive store response can remove a palette. Clear that override so the base
+    // theme supplies colors again; an unresolved/offline store must retain the saved id.
+    const nextColorSchemeId = storeLoaded && saved.colorSchemeId !== null &&
+      !getSelectableThemes(store).some(theme => theme.id === saved.colorSchemeId) ? null : saved.colorSchemeId;
+    setColorSchemeId(nextColorSchemeId);
     if (storeLoaded && saved.themeId !== null) {
       writeAppearancePreferences({ themeId: nextTheme.id });
     }
     if (storeLoaded && saved.colorSchemeId !== null) {
-      writeAppearancePreferences({ colorSchemeId: findSelectableTheme(store, saved.colorSchemeId).id });
+      writeAppearancePreferences({ colorSchemeId: nextColorSchemeId });
     }
     setMounted(true);
   }, [store, storeLoaded]);

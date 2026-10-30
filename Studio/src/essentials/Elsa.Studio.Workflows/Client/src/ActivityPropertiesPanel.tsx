@@ -1121,7 +1121,8 @@ function PropertyRow({
       {provider && dynamicOptions.status === "ready" && dynamicOptions.options.length === 0 ? (
         <p className="wf-property-options-status" role="status">No options available.</p>
       ) : null}
-      {/* Escape panel stacking/containment while retaining the resource's scoped theme tokens. */}
+      {/* User interaction opens this after rowRef mounts. Embedders scope theme tokens with
+          .wf-tokens; without a resource scope the dialog inherits the document theme. */}
       {expanded && rowRef.current ? createPortal(
         <ExpandedPropertyEditor
           input={input}
@@ -1705,6 +1706,7 @@ export function SyntaxPicker({
       </button>
       <AnchoredPopover
         anchorRef={triggerRef}
+        // Opening is an interaction after the trigger mounts; keep its menu in the modal layer.
         portalContainer={triggerRef.current?.closest(".wf-property-editor-dialog") ?? undefined}
         open={open}
         className="wf-syntax-picker-menu"

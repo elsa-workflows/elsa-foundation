@@ -11,7 +11,7 @@
   min-width: 0;
   flex-direction: row;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   gap: 1rem;
   margin: 0;
   padding: 0;
@@ -30,20 +30,16 @@
 .ad-draft-context .ad-save-chip.is-published { color: var(--studio-text-muted); }
 
 .ad-authoring-toolbar-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 16rem) repeat(3, max-content);
   flex: 0 0 auto;
   max-width: 100%;
-  align-items: flex-start;
-  flex-wrap: wrap;
+  align-items: start;
   justify-content: flex-end;
 }
 
-.ad-publication-toolbar {
-  display: grid;
-  gap: .25rem;
-  flex: 0 1 auto;
-  max-width: min(16rem, 100%);
-  min-width: 0;
-}
+/* Status occupies its own final row, so feedback never moves the action targets. */
+.ad-publication-toolbar { display: contents; }
 
 .ad-authoring-toolbar-actions > button,
 .ad-publication-toolbar-trigger,
@@ -64,13 +60,17 @@
 }
 
 .ad-publication-toolbar-trigger {
-  width: 100%;
+  /* Fit the longest review label without shifting the following actions. */
+  width: 16rem;
+  max-width: 100%;
   border-color: var(--studio-accent);
   color: var(--studio-accent-text);
   background: var(--studio-accent);
 }
 
 .ad-publication-toolbar-status {
+  order: 1;
+  grid-column: 1 / -1;
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
   overflow-wrap: anywhere;
@@ -143,8 +143,9 @@
 }
 
 @media (max-width: 600px) {
+  .ad-draft-editor .ad-draft-heading h1 { min-height: 2lh; }
   .ad-draft-editor .ad-authoring-toolbar-actions { display: grid; width: 100%; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
-  .ad-authoring-toolbar-actions .ad-publication-toolbar { grid-column: 1 / -1; width: 100%; max-width: none; }
+  .ad-authoring-toolbar-actions .ad-publication-toolbar-trigger { grid-column: 1 / -1; width: 100%; max-width: none; }
   .ad-authoring-toolbar-actions > button,
   .ad-authoring-advanced > summary { min-width: 0; padding: .45rem .35rem; gap: .25rem; font-size: var(--studio-label-size); }
 }

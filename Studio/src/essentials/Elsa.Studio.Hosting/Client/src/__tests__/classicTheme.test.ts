@@ -124,8 +124,8 @@ describe("Classic palette", () => {
 
 describe("Classic chrome", () => {
   it("declares its own elevation recipes for light and dark, with a semibold title weight", () => {
-    const light = ruleDeclarations(tokensCss, 'html[data-theme="classic"]');
-    const dark = ruleDeclarations(tokensCss, 'html[data-theme="classic"][data-theme-mode="dark"]');
+    const light = ruleDeclarations(tokensCss, 'html:where(:not([data-workspace-style]))[data-theme="classic"]');
+    const dark = ruleDeclarations(tokensCss, 'html:where(:not([data-workspace-style]))[data-theme="classic"][data-theme-mode="dark"]');
 
     for (const recipe of [light, dark]) {
       expect(Object.keys(recipe)).toEqual(expect.arrayContaining(["--shadow-sm", "--shadow-md", "--shadow-lg", "--shadow-xl"]));
