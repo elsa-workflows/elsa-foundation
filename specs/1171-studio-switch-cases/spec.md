@@ -37,7 +37,7 @@ Preserve empty strings, whitespace, non-Latin text, brackets and replacement tok
 
 ## Requirements
 
-- **FR-001**: Add, rename, remove, choose and open cases visually, keeping Default separate.
+- **FR-001**: Add, rename, remove, choose and open cases visually, keeping Default separate. Canvas/inspector branch labels and breadcrumbs show the authored name (for example Approved), preserving the internal slot identity and exact match. Empty/padded strings use quoted labels so they remain distinguishable.
 - **FR-002**: Preserve case branch contents on rename and require confirmation before deleting contents.
 - **FR-003**: Validate exact duplicate values inline without trimming or changing matching rules.
 - **FR-004**: Respect read-only/authorization boundaries, keyboard interaction, narrow layouts, undo/redo and normal persistence in both editor hosts.

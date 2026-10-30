@@ -25,6 +25,9 @@ test("new Switch exposes visual case authoring", async ({ page }) => {
   await expect(page.locator(".wf-sequence-step")).toContainText("Switch");
   await page.getByRole("button", { name: "Add case", exact: true }).click();
   await expect(page.getByRole("textbox", { name: "Case 1 match", exact: true })).toHaveValue("Case 1");
+  await cases(page).getByRole("textbox", { name: "Case 1 match", exact: true }).fill("Approved");
+  await cases(page).getByRole("textbox", { name: "Case 1 match", exact: true }).press("Enter");
+  await expect(page.locator(".wf-sequence-slots").getByRole("button", { name: "Open Approved, Empty", exact: true })).toBeVisible();
 });
 
 for (const host of ["activity", "workflow"]) for (const composition of ["sequence", "flowchart", "bpmn"]) {
@@ -42,8 +45,9 @@ for (const host of ["activity", "workflow"]) for (const composition of ["sequenc
     await expect(cases(page).getByRole("alert")).toContainText("already used");
     await second.fill("Rejected"); await second.press("Enter");
     await expect(cases(page).getByRole("alert")).toHaveCount(0);
-    await cases(page).getByRole("button", { name: "Choose Switch.Case[Approved] activity", exact: true }).click();
+    await cases(page).getByRole("button", { name: "Choose Approved activity", exact: true }).click();
     await page.getByRole("option", { name: /Sequence/ }).click();
+    await expect(page.getByRole("button", { name: "Switch / Approved", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Add the first step", exact: true }).click();
     await page.getByRole("option", { name: /Write Line/ }).click();
     await expect(page.locator(".wf-sequence-step")).toContainText("Write Line");
@@ -56,7 +60,7 @@ for (const host of ["activity", "workflow"]) for (const composition of ["sequenc
     await page.getByRole("button", { name: /^Redo(?: Activity Graph edit)?$/ }).click();
     if (host === "workflow") await ownerNode(page).click();
     await expect(first).toHaveValue("[$&]{match}東京");
-    await expect(cases(page).getByRole("button", { name: /Change Switch.Case.*activity/ })).toHaveCount(1);
+    await expect(cases(page).getByRole("button", { name: /Change .* activity/ })).toHaveCount(1);
     await expect(page.locator(".wf-slot-list").getByRole("button", { name: "Choose Default activity", exact: true })).toBeVisible();
     if (host === "workflow") await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect.poll(async () => JSON.stringify(await savedOwner(page))).toContain('"match":"[$&]{match}東京"');

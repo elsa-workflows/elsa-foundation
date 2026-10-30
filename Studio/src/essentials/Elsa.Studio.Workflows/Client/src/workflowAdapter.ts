@@ -603,19 +603,10 @@ function readSlotActivities(value: unknown, cardinality: ChildSlot["cardinality"
 }
 
 function formatCollectionSlotLabel(descriptor: StructureDesignSlotDescriptor, index: number, labelValue?: string) {
-  const ordinal = String(index + 1);
-  if (descriptor.slotNameTemplate) {
-    // One pass keeps authored braces and dollar replacement tokens literal.
-    return descriptor.slotNameTemplate.replace(/\{([^{}]+)\}/g, (token, key: string) => {
-      if (key === descriptor.labelProperty || key === "label") return labelValue ?? ordinal;
-      if (key === "name") return descriptor.name;
-      if (key === "displayName") return descriptor.displayName;
-      if (key === "index") return ordinal;
-      return token;
-    });
-  }
-
-  return labelValue ? `${descriptor.displayName}: ${labelValue}` : `${descriptor.displayName} ${ordinal}`;
+  // The slot-name template identifies the runtime contract; authoring surfaces show the authored name.
+  // Quote empty/padded values so exact string matches remain distinguishable without changing them.
+  if (labelValue !== undefined) return labelValue === labelValue.trim() && labelValue.length > 0 ? labelValue : JSON.stringify(labelValue);
+  return `${descriptor.displayName} ${index + 1}`;
 }
 
 function resolveCatalogItem(activity: ActivityNode, catalog: ActivityCatalogLookup): ActivityCatalogItem | undefined {
