@@ -10,9 +10,9 @@ namespace Elsa.Agent.Services;
 
 internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink) : IAgentSessionService
 {
-    private readonly ConcurrentDictionary<string, AgentSession> _sessions = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, List<AgentMessage>> _messages = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, List<AgentContextAttachment>> _contexts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, AgentSession> _sessions = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, List<AgentMessage>> _messages = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, List<AgentContextAttachment>> _contexts = new(StringComparer.Ordinal);
 
     public async Task<AgentSession> CreateAsync(AgentSessionCreateRequest request, CancellationToken cancellationToken = default)
     {
@@ -150,7 +150,7 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink) : I
             return Task.FromResult<AgentMessage?>(null);
 
         lock (messages)
-            return Task.FromResult(messages.FirstOrDefault(x => string.Equals(x.Id, messageId, StringComparison.OrdinalIgnoreCase)));
+            return Task.FromResult(messages.FirstOrDefault(x => string.Equals(x.Id, messageId, StringComparison.Ordinal)));
     }
 
     public Task AddContextAsync(string sessionId, IReadOnlyCollection<AgentContextAttachment> attachments, CancellationToken cancellationToken = default)
@@ -164,7 +164,7 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink) : I
         var contexts = _contexts.GetOrAdd(sessionId, _ => []);
         lock (contexts)
         {
-            var existingIds = contexts.Select(x => x.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var existingIds = contexts.Select(x => x.Id).ToHashSet(StringComparer.Ordinal);
             foreach (var attachment in attachments.Where(x => existingIds.Add(x.Id)))
                 contexts.Add(attachment);
         }
@@ -184,7 +184,7 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink) : I
 
 internal sealed class InMemoryAgentFeedbackService(IAgentAuditSink auditSink) : IAgentFeedbackService
 {
-    private readonly ConcurrentDictionary<string, AgentFeedback> _feedback = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, AgentFeedback> _feedback = new(StringComparer.Ordinal);
 
     public async Task<AgentFeedback> AddAsync(AgentFeedback feedback, CancellationToken cancellationToken = default)
     {
@@ -219,7 +219,7 @@ internal sealed class InMemoryAgentAuditStore : IAgentAuditSink, IAgentAuditRead
         lock (_events)
         {
             IEnumerable<AgentAuditEvent> query = _events
-                .Where(x => sessionId is null || string.Equals(x.SessionId, sessionId, StringComparison.OrdinalIgnoreCase))
+                .Where(x => sessionId is null || string.Equals(x.SessionId, sessionId, StringComparison.Ordinal))
                 .OrderByDescending(x => x.CreatedAt);
 
             if (take is > 0)

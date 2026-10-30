@@ -239,7 +239,7 @@ public static class AgentApi
             }
         }
         var stored = await sessions.ListContextAsync(sessionId, context.RequestAborted);
-        var requestedStored = contextAttachmentIds.Count == 0 ? [] : stored.Where(x => contextAttachmentIds.Contains(x.Id, StringComparer.OrdinalIgnoreCase)).ToList();
+        var requestedStored = contextAttachmentIds.Count == 0 ? [] : stored.Where(x => contextAttachmentIds.Contains(x.Id, StringComparer.Ordinal)).ToList();
         var requestContext = requestedStored.Concat(contextAttachments.Select(x => x.ToDomain())).ToList();
         AgentResult<AgentContextContribution> collected;
         try

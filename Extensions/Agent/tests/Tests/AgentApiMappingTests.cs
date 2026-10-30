@@ -1,4 +1,8 @@
 using Elsa.Agent.Api;
+using Elsa.Agent.Core.Contracts;
+using Elsa.Agent.Core.Models;
+using Elsa.Agent.Workflows;
+using Elsa.Agent.Workflows.Services;
 using Elsa.Agent.Api.Constants;
 using Elsa.Api.AspNetCore;
 using Elsa.Foundation.Identity.Authorization;
@@ -7,13 +11,52 @@ using Elsa.Testing;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using System.Security.Claims;
+using System.Text.Json;
 
 namespace Elsa.Agent.Tests;
 
 public sealed class AgentApiMappingTests
 {
+    [Fact]
+    public async Task Posting_a_stored_context_identity_selects_only_its_exact_case()
+    {
+        using var root = AgentTestServices.Create(services =>
+        {
+            services.AddRouting().AddElsaEndpoints();
+            new FoundationWorkflowsAgentFeature().ConfigureServices(services);
+        });
+        using var scope = root.CreateScope();
+        var sessions = scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
+        var session = await sessions.CreateAsync(new("tenant-1", "actor-1", "conversation-1", "test", "explain", null, AgentPolicy.Default, new Dictionary<string, string>()));
+        AgentContextAttachment Attachment(string id, string intent) => new(id, "workflow.request", "wf-1", "Request", "workflow.request",
+            AgentContextSensitivity.Internal, "request", "Request metadata", JsonSerializer.SerializeToElement(new { requestKind = "workflow-definition", referenceId = "wf-1", intent }), new Dictionary<string, string>())
+        { ModuleId = WorkflowAgentSnapshot.ModuleId, SchemaVersion = "1" };
+        await sessions.AddContextAsync(session.Id, [Attachment("ContextA", "selected"), Attachment("Contexta", "unselected")]);
+        Assert.Equal(2, (await sessions.ListContextAsync(session.Id)).Count);
+        var app = new TestEndpointRouteBuilder(scope.ServiceProvider);
+        AgentApi.MapAgentApi(app);
+        var endpoint = Assert.Single(app.DataSources.SelectMany(source => source.Endpoints), endpoint => endpoint.Metadata.GetMetadata<EndpointNameMetadata>()?.EndpointName == "ElsaAgentApiEndpointsPostMessage");
+        var body = JsonSerializer.SerializeToUtf8Bytes(new { content = "Explain selected request", contextAttachmentIds = new[] { "ContextA" }, requestId = "exact-context-selection" });
+        var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider, User = new ClaimsPrincipal(new ClaimsIdentity([
+            new Claim(ClaimTypes.NameIdentifier, "actor-1"), new Claim("elsa.identity.tenant_id", "tenant-1")], "test")) };
+        context.Request.RouteValues["sessionId"] = session.Id;
+        context.Request.ContentType = "application/json";
+        context.Request.Body = new MemoryStream(body);
+        context.Request.ContentLength = body.Length;
+        context.Response.Body = new MemoryStream();
+
+        await endpoint.RequestDelegate!(context);
+
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+        var message = Assert.Single(await sessions.ListMessagesAsync(session.Id));
+        var selected = Assert.Single(message.Context, attachment => attachment.ContentType == "workflow.request");
+        Assert.Equal("selected", Assert.IsType<JsonElement>(selected.Content).GetProperty("intent").GetString());
+    }
+
     [Fact]
     public void Maps_exactly_twelve_named_operations()
     {

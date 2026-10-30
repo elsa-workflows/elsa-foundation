@@ -27,26 +27,39 @@ public sealed class AgentTurnOrchestratorTests
     }
 
     [Fact]
-    public async Task Case_variant_session_urls_share_one_foreground_lease()
+    public async Task Default_session_alias_is_unavailable_without_creating_or_bypassing_a_foreground_lease()
     {
         using var root = Build(new DeterministicAgentProvider(), [new EchoTool()]);
         using var scope = root.CreateScope();
         var sessions = scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
         var streaming = scope.ServiceProvider.GetRequiredService<IAgentStreamingService>();
+        var turns = scope.ServiceProvider.GetRequiredService<IAgentTurnRegistry>();
         var session = await CreateSessionAsync(sessions, DeterministicAgentProvider.Id);
         await PostAsync(sessions, session.Id, "read state");
         var alias = SwapCase(session.Id);
         Assert.NotEqual(session.Id, alias);
-        await using var first = streaming.StreamAsync(alias).GetAsyncEnumerator();
+        var refused = Assert.Single(await Collect(streaming.StreamAsync(alias)));
+        Assert.Equal("agent.session.unavailable", refused.Error?.Code);
+        Assert.Equal(404, refused.Error?.StatusCode);
+        Assert.False(turns.IsActive(session.Id));
+        Assert.False(turns.IsActive(alias));
+        await using var first = streaming.StreamAsync(session.Id).GetAsyncEnumerator();
         Assert.True(await first.MoveNextAsync());
         Assert.Equal(AgentStreamEventKind.Started, first.Current.Kind);
+        Assert.Equal("agent.session.unavailable", Assert.Single(await Collect(streaming.StreamAsync(alias))).Error?.Code);
+        Assert.True(turns.IsActive(session.Id));
+        Assert.False(turns.IsActive(alias));
 
         var second = await Collect(streaming.StreamAsync(session.Id));
         Assert.Equal("agent.turn.busy", Assert.Single(second).Error?.Code);
+        var canonical = new List<AgentStreamEvent> { first.Current };
+        while (await first.MoveNextAsync()) canonical.Add(first.Current);
+        Assert.Equal(AgentStreamEventKind.Completed, canonical[^1].Kind);
+        Assert.False(turns.IsActive(session.Id));
     }
 
     [Fact]
-    public async Task A_pause_started_through_a_session_alias_resumes_through_its_canonical_identity()
+    public async Task Default_session_alias_cannot_consume_a_canonical_pause_or_its_observed_result()
     {
         using var root = Build(new DeterministicAgentProvider(), [new ApplyChangeTool()]);
         using var scope = root.CreateScope();
@@ -58,13 +71,19 @@ public sealed class AgentTurnOrchestratorTests
         await PostAsync(sessions, session.Id, "mutate the resource");
         var alias = SwapCase(session.Id);
         Assert.NotEqual(session.Id, alias);
-        var first = await Collect(streaming.StreamAsync(alias));
+        Assert.Equal("agent.session.unavailable", Assert.Single(await Collect(streaming.StreamAsync(alias))).Error?.Code);
+        Assert.Null(states.Find(session.Id));
+        var first = await Collect(streaming.StreamAsync(session.Id));
         var proposal = Assert.IsType<AgentActionProposal>(Assert.Single(first, x => x.Kind == AgentStreamEventKind.ProposalCreated).Payload);
-        Assert.NotNull(states.Find(session.Id));
+        var pause = Assert.IsType<AgentPausedTurn>(states.Find(session.Id));
         Assert.Null(states.Find(alias));
+        Assert.Equal("agent.session.unavailable", Assert.Single(await Collect(streaming.StreamAsync(alias))).Error?.Code);
+        Assert.Same(pause, states.Find(session.Id));
         Assert.True((await proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
         var result = await proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision);
         Assert.True(result.Succeeded);
+        Assert.Equal("agent.session.unavailable", Assert.Single(await Collect(streaming.StreamAsync(alias))).Error?.Code);
+        Assert.Same(pause, states.Find(session.Id));
 
         var resumed = await Collect(streaming.StreamAsync(session.Id));
         Assert.Contains(resumed, x => x.Kind == AgentStreamEventKind.MessageDelta && x.Content!.Contains(result.Value!.ToolResult!.Content));

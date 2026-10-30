@@ -88,8 +88,8 @@ internal sealed class DefaultAgentTurnOrchestrator(
             yield return Error("agent.session.unavailable", "The session is missing or expired.", 404);
             yield break;
         }
-        // Session lookup accepts aliases for compatibility; all ownership/lifecycle state uses
-        // the stored identity so URL casing cannot create another foreground lease or pause.
+        // A custom store may canonicalize its lookup input. Keep lifecycle state on the returned
+        // identity; the default store requires an exact opaque session ID.
         sessionId = session.Id;
         var provider = providers.Active;
         if (provider is null)
