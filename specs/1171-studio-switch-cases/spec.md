@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3493-switch-cases`
 **Created**: 2026-10-31
-**Status**: In progress
+**Status**: Implemented — delivery PR [#3495](https://github.com/elsa-workflows/elsa-foundation/pull/3495); hosted disposition and resulting-main receipt remain on that PR and #3493.
 **Input**: Owner-requested end-to-end delivery of #3493.
 
 ## User Scenarios & Testing
