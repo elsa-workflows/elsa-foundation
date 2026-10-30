@@ -665,6 +665,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Agent",
+          "path": "Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Agent.GitHubCopilot",
           "path": "Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj"
         },
@@ -13292,8 +13297,18 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Agent",
+          "path": "Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Agent.GitHubCopilot",
           "path": "Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Workflows",
+          "path": "Extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj"
         },
         {
           "type": "internal",
@@ -21462,6 +21477,11 @@
           "path": "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Agent",
+          "path": "Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj"
+        },
+        {
           "type": "external",
           "id": "Anthropic",
           "version": "12.32.0"
@@ -21556,6 +21576,11 @@
           "path": "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Agent",
+          "path": "Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj"
+        },
+        {
           "type": "external",
           "id": "CShells.Abstractions",
           "version": "0.0.31"
@@ -21606,8 +21631,57 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Events.Core",
+          "path": "Essentials/src/Events/Core/Elsa.Events.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Primitives",
           "path": "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.AI.Abstractions",
+          "version": "10.5.1"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
+        }
+      ]
+    },
+    {
+      "path": "Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj",
+      "name": "Elsa.Agent",
+      "kind": "source",
+      "domain": "Elsa.Agent",
+      "sub_domain": "(root)",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Agent",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Events.Core",
+          "path": "Essentials/src/Events/Core/Elsa.Events.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Agent.Core",
+          "path": "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj"
         },
         {
           "type": "external",
@@ -21618,11 +21692,6 @@
           "type": "external",
           "id": "Elsa.Specifications.PackageManifest.Generator",
           "version": "0.0.1-preview.8"
-        },
-        {
-          "type": "external",
-          "id": "Microsoft.Extensions.AI.Abstractions",
-          "version": "10.5.1"
         },
         {
           "type": "external",
@@ -21638,6 +21707,11 @@
           "type": "external",
           "id": "Microsoft.Extensions.Options",
           "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.AI.Abstractions",
+          "version": "10.5.1"
         },
         {
           "type": "pinned-transitive",
@@ -21675,8 +21749,8 @@
         },
         {
           "type": "internal",
-          "id": "Elsa.Agent.Workflows",
-          "path": "Extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj"
+          "id": "Elsa.Agent",
+          "path": "Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj"
         },
         {
           "type": "external",
@@ -21758,6 +21832,11 @@
           "path": "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Agent",
+          "path": "Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj"
+        },
+        {
           "type": "external",
           "id": "CShells.Abstractions",
           "version": "0.0.31"
@@ -21818,6 +21897,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Events",
+          "path": "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Testing",
           "path": "Essentials/tests/Testing/Elsa.Testing.csproj"
         },
@@ -21838,6 +21922,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Agent",
+          "path": "Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Agent.GitHubCopilot",
           "path": "Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj"
         },
@@ -21845,6 +21934,11 @@
           "type": "internal",
           "id": "Elsa.Agent.Workflows",
           "path": "Extensions/Agent/src/Workflows/Elsa.Agent.Workflows.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells",
+          "version": "0.0.31"
         },
         {
           "type": "external",
