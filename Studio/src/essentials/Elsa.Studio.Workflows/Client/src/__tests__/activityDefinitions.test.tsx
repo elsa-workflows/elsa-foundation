@@ -148,10 +148,10 @@ describe("Activity Definitions experience", () => {
       expect(primaryRow.querySelector(".studio-copyable-identifier__value")?.getAttribute("aria-label")).toBe(`Definition ID: ${exactId}`);
       expect(duplicateRow.querySelector(".studio-copyable-identifier__value")?.getAttribute("aria-label")).toBe("Definition ID: activity-definition-duplicate-name");
 
-      const disclosure = primaryRow.querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!;
+      const disclosure = primaryRow.querySelector<HTMLButtonElement>("button[aria-haspopup=dialog]")!;
       const copyButton = primaryRow.querySelector<HTMLButtonElement>('button[aria-label="Copy Definition ID"]')!;
       expect(disclosure.getAttribute("aria-expanded")).toBe("false");
-      expect(primaryRow.querySelector(".studio-disclosure-fold-body")?.hasAttribute("hidden")).toBe(true);
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
       for (const key of ["Enter", " "]) {
         flushSync(() => disclosure.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
         flushSync(() => copyButton.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
@@ -166,10 +166,10 @@ describe("Activity Definitions experience", () => {
 
       click(disclosure);
       expect(disclosure.getAttribute("aria-expanded")).toBe("true");
-      expect(primaryRow.querySelector(".studio-disclosure-fold-body")?.hasAttribute("hidden")).toBe(false);
-      expect(primaryRow.textContent).toContain(exactTypeKey);
-      expect(primaryRow.textContent).toContain("activity-version-head-exact");
-      expect(primaryRow.textContent).toContain("activity-version-recommended-exact");
+      expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+      expect(document.body.textContent).toContain(exactTypeKey);
+      expect(document.body.textContent).toContain("activity-version-head-exact");
+      expect(document.body.textContent).toContain("activity-version-recommended-exact");
       click(copyButton);
       await waitFor(() => expect(writeText).toHaveBeenCalledWith(exactId));
       expect(rendered.container.textContent).not.toContain("Build your activity");
@@ -595,7 +595,7 @@ describe("Activity Definitions experience", () => {
     click(buttonByText(rendered.container, "Activity Definition"));
     await waitForText(rendered.container, "Build your activity");
     expect(new URLSearchParams(window.location.search).has("draft")).toBe(false);
-    expect(actionName).toBe("Continue editing draft");
+    expect(actionName).toBe("Edit draft");
     await rendered.unmount();
   });
 
@@ -618,7 +618,7 @@ describe("Activity Definitions experience", () => {
     const primaryAction = rendered.container.querySelector<HTMLButtonElement>(".ad-primary-action")!;
     await waitFor(() => expect(primaryAction.disabled).toBe(false));
     expect(primaryAction.textContent?.trim()).toBe("Open drafts");
-    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.includes("Continue editing draft"))).toBe(false);
+    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.includes("Edit draft"))).toBe(false);
     click(primaryAction);
     expect(new URLSearchParams(window.location.search).get("section")).toBe("drafts");
     expect(new URLSearchParams(window.location.search).has("draft")).toBe(false);
@@ -640,7 +640,7 @@ describe("Activity Definitions experience", () => {
     await waitForText(rendered.container, "Earlier active draft");
     click(buttonByText(rendered.container, "Next"));
     await waitForText(rendered.container, "Final active draft");
-    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent === "Continue editing draft")).toBe(false);
+    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent === "Edit draft")).toBe(false);
     click(buttonByText(rendered.container, "Open drafts"));
     expect(new URLSearchParams(window.location.search).has("draft")).toBe(false);
     await rendered.unmount();
@@ -1196,7 +1196,7 @@ describe("Activity Definitions experience", () => {
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
     await waitForText(rendered.container, "Second evaluator");
-    await waitFor(() => expect(buttonByText(rendered.container, "Continue editing draft").disabled).toBe(false));
+    await waitFor(() => expect(buttonByText(rendered.container, "Edit draft").disabled).toBe(false));
 
     click(buttonByText(rendered.container, "Drafts"));
     await waitForText(rendered.container, "Second evaluator draft");

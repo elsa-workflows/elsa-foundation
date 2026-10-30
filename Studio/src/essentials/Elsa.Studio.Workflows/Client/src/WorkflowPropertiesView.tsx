@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import { StudioButton } from "@elsa-workflows/studio-ui";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { listVariableTypeDescriptors } from "./api/expressions";
 import { getActivityAuthoringCapabilities } from "./api/activityDesign";
@@ -292,7 +293,7 @@ function EditorSection({ title, addLabel, emptyLabel, headers, isEmpty, onAdd, c
     <section className="wf-properties-section">
       <div className="wf-properties-section-head">
         <h3>{title}</h3>
-        <button type="button" className="wf-properties-add" onClick={onAdd}><Plus size={14} /> {addLabel}</button>
+        <StudioButton variant="default" size="md" className="wf-properties-add" onClick={onAdd}><Plus size={14} aria-hidden="true" />{addLabel}</StudioButton>
       </div>
       {isEmpty ? (
         <p className="wf-muted">{emptyLabel}</p>

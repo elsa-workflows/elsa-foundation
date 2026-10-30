@@ -11,7 +11,7 @@ import type {
   StudioWorkflowRunInputEditorContribution
 } from "@elsa-workflows/studio-sdk";
 import { authSessionEndedEvent, authSessionStartedEvent } from "@elsa-workflows/studio-sdk";
-import { StudioButton } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, StudioButton } from "@elsa-workflows/studio-ui";
 import {
   type ActivityDefinitionCollectionRequest,
   type ActivityDefinitionManagementView
@@ -20,9 +20,10 @@ import { formatActivityDefinitionDate, formatActivityVersion, resolveActivityDef
 import { activityDesignKeys, classifyActivityDefinitionReadFailure, isInvalidActivityDefinitionCursor, redactActivityDefinitionManagementCache, useActivityDefinitions } from "./api/activityDesign";
 import { activityDefinitionDurationBucket, activityDefinitionResultBand, observeActivityDefinitions } from "./activityDefinitionObservability";
 import { WorkflowLazyBoundary } from "./WorkflowLazyBoundary";
-import { WorkflowListIdentity } from "./workflow-editor/WorkflowListIdentity";
+import { WorkflowListIdentifiers } from "./workflow-editor/WorkflowListIdentifiers";
 import "./activityDefinitions.css";
 import "./activityDefinitionCollection.css";
+import "./workflow-editor/cleanListTables.css";
 
 const ActivityDefinitionWorkbench = lazy(() => import("./ActivityDefinitionWorkbench").then(module => ({ default: module.ActivityDefinitionWorkbench })));
 const ActivityDefinitionCreateDialog = lazy(() => import("./ActivityDefinitionCreateDialog").then(module => ({ default: module.ActivityDefinitionCreateDialog })));
@@ -382,7 +383,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
       {data && data.items.length === 0 ? <section className="ad-empty ad-collection-empty" role="status"><Database size={24} aria-hidden /><h2>{defaultDesignedView ? "No designed activities yet" : filtersActive ? "No Activity Definitions match" : "No Activity Definitions available"}</h2><p>{defaultDesignedView ? "Create a reusable activity definition, or browse built-in activities to see source-owned entries." : filtersActive ? "Clear or change the server-side filters to search the authorized collection again." : "No authorized Activity Definitions are available in this scope."}</p>{defaultDesignedView ? <div><button type="button" className="ad-primary-action" onClick={() => setCreateOpen(true)}>Create activity</button><button type="button" onClick={() => setAuthority("ProviderSource")}>Browse built-in activities</button></div> : filtersActive ? <button type="button" onClick={() => { setSearchInput(""); setProviderInput(""); setAuthority("Design"); }}>Clear filters</button> : null}</section> : null}
       {data && data.items.length > 0 ? <>
         <div className="ad-collection" role="table" aria-label="Activity Definitions" aria-rowcount={data.totalCount}>
-          <div className="ad-collection-head" role="row"><span role="columnheader">Activity</span><span role="columnheader">State</span><span role="columnheader">Updated</span></div>
+          <div className="ad-collection-head" role="row"><span role="columnheader">Activity</span><span role="columnheader">Definition ID</span><span role="columnheader">Identifiers</span><span role="columnheader">State</span><span role="columnheader">Updated</span></div>
           {data.items.map(definition => {
             const title = resolveActivityDefinitionTitle(definition.definition.displayName, definition.definition.activityTypeKey);
             const recommendation = definition.lifecycle.recommendation;
@@ -400,7 +401,12 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
               { label: "Recommended Version ID", value: definition.definition.recommendedVersionId ?? definition.lifecycle.recommendation?.versionId ?? "" }
             ].filter(identifier => identifier.value);
             return <div key={definition.definition.definitionId} className="ad-collection-row" role="row" tabIndex={0} aria-label={`Open Activity Definition ${title}`} title={rowDetails} onClick={event => { if ((event.target as HTMLElement).closest("button, input, label, a")) return; openDefinition(definition); }} onKeyDown={event => { if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return; event.preventDefault(); openDefinition(definition); }}>
-            <span role="cell" data-label="Activity" className="ad-collection-activity"><strong>{title}</strong>{definition.definition.description ? <small className="ad-collection-description">{definition.definition.description}</small> : null}<small className="ad-collection-category">{definition.definition.category}</small><WorkflowListIdentity primaryLabel="Definition ID" primaryValue={definition.definition.definitionId} secondaryIdentifiers={additionalIdentifiers} primaryClassName="ad-primary-identifier" secondaryClassName="ad-row-identifiers" detailsClassName="ad-row-identifiers-list" detailsAriaLabel={`Activity Definition identifiers for ${title}`} /></span>
+            <span role="cell" data-label="Activity" className="ad-collection-activity"><strong title={title}>{title}</strong></span>
+            <span role="cell" data-label="Definition ID" className="wf-list-primary-id ad-primary-identifier"><CopyableIdentifier label="Definition ID" value={definition.definition.definitionId} /></span>
+            <span role="cell" data-label="Identifiers"><WorkflowListIdentifiers kind="Activity Definition" name={title} identifiers={additionalIdentifiers} description={definition.definition.description}>
+              <p>Category: {definition.definition.category || "Uncategorized"}</p>
+              <p>{providerKey ? `Provider: ${providerKey} · ` : ""}Authority: {authorityKind}</p>
+            </WorkflowListIdentifiers></span>
             <span role="cell" data-label="State" className="ad-collection-state">
               {definition.lifecycle.versionCount === 0 && definition.lifecycle.draftCount > 0 ? <span className="ad-status-chip is-draft">Draft</span> : null}
               {definition.lifecycle.versionCount > 0 ? <span className="ad-status-chip is-published">Published</span> : null}

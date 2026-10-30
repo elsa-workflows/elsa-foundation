@@ -1,3 +1,4 @@
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { writeAppearancePreferences, type ThemeModePreference } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
 import React, { useMemo, useRef, useState } from "react";
@@ -18,6 +19,8 @@ import {
   sequenceActivity,
   sequenceNode,
   forEachActivity,
+  whileActivity,
+  whileNode,
   forEachNode,
   leafNode,
   writeLine
@@ -132,7 +135,12 @@ function editorDraft(): WorkflowDraft {
   };
 }
 
+const slotAssignment = new URLSearchParams(window.location.search).get("slot-assignment");
 function sequenceRootActivity(): ActivityNode {
+  if (slotAssignment) {
+    const loop = whileNode("while", null);
+    return slotAssignment === "root" ? loop : sequenceNode("sequence-root", [loop]);
+  }
   return sequenceNode("sequence-root", [
     notifyBuyer,
     forEachNode("loop", sequenceNode("body", [leafNode("nested")])),
@@ -207,7 +215,7 @@ function ActivityDuplicateEditorFixtureContent() {
 function ControlledActivityGraphFixture({ context }: { context: StudioEndpointContext }) {
   const [value, setValue] = useState<StudioActivityDefinitionImplementationEditorProps["value"]>(() => adaptivePorts && sessionStorage.getItem(adaptiveStorageKey)
     ? JSON.parse(sessionStorage.getItem(adaptiveStorageKey)!) : activityGraphSequenceValue());
-  return <ActivityGraphImplementationEditor
+  return <><ActivityGraphImplementationEditor
     context={context}
     definitionId="definition-1"
     draftId="draft-1"
@@ -223,7 +231,7 @@ function ControlledActivityGraphFixture({ context }: { context: StudioEndpointCo
     value={value}
     readOnly={false}
     onChange={next => { setValue(next); if (adaptivePorts) sessionStorage.setItem(adaptiveStorageKey, JSON.stringify(next)); }}
-  />;
+  />{slotAssignment ? <output hidden data-testid="activity-graph-payload">{JSON.stringify(value.payload)}</output> : null}</>;
 }
 
 function createEditorContext(live?: { status: string; disconnected: boolean }): StudioEndpointContext {
@@ -236,7 +244,7 @@ function createEditorContext(live?: { status: string; disconnected: boolean }): 
     { ...writeLineCatalog, activityVersionId: "decision-v1", activityTypeKey: "Elsa.BpmnDecision", displayName: "BPMN Decision", category: "BPMN", paletteHints: { containerModes: ["bpmn"], description: "BPMN Decision is intended for a gateway in a BPMN Process." } },
     { ...writeLineCatalog, activityVersionId: "complete-v1", activityTypeKey: "Elsa.Complete", displayName: "Complete", paletteHints: { resourceKinds: ["activity-definition-graph"] } }
   ] : [];
-  const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity, ...paletteFixtures, ...(adaptivePorts ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : [])];
+  const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity, ...(slotAssignment ? [whileActivity] : []), ...paletteFixtures, ...(adaptivePorts ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : [])];
   const compiled = (node: ActivityNode): object => ({
     executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
     activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown",
