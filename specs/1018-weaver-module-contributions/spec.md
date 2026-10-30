@@ -4,7 +4,9 @@
 
 **Created**: 2026-10-29
 
-**Status**: In progress — candidate implementation under #3437; independent package gate #3438 remains open
+**Status**: Implemented
+
+**Contract maturity**: Provisional candidate under #3437. Independent packed-module gate #3438 remains open before freeze; Program M2–M5 remain open.
 
 **Input**: Owner-authorized Program #3428 M1, candidate contract #3437 and independent package witness #3438. Modules own context, guidance, tools, validation, risk, result rendering and effects. A separately packaged module adds a complete journey without edits to shared Weaver, host or provider logic. This work follows the observed [M0 baseline](../../docs/reports/weaver-baseline.md).
 
