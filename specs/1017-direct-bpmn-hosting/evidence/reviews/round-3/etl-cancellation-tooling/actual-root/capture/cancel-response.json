@@ -1,0 +1,15 @@
+{
+  "cancellationAccepted": true,
+  "terminalResult": {
+    "outcome": "cancelled",
+    "acceptedRecords": 2,
+    "rejectedRecords": 0,
+    "filteredRecords": 0,
+    "diagnostic": {
+      "code": "cancelled",
+      "recordOrdinal": null,
+      "field": null
+    },
+    "settledAt": "2026-10-30T19:49:05.151511+00:00"
+  }
+}

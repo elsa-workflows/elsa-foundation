@@ -1,0 +1,118 @@
+{
+  "executingSource": "ab76430fadf67ad531bff3f1d5107ba22399ab4f",
+  "actualHostCases": 2,
+  "ownedHostsStopped": 4,
+  "wholeRuntimeStores": 4,
+  "assets": [
+    {
+      "path": "README.md",
+      "bytes": 1979,
+      "sha256": "04e10c980380364c968451174d3f2634882212953dbc90dcd5ef07a6e99870c9"
+    },
+    {
+      "path": "host.log.gz",
+      "bytes": 3447,
+      "sha256": "ff6ad94f40f1ad57f7a409158a014d1b00444f053c2bd7657d84662d6df8bfdd"
+    },
+    {
+      "path": "host.trx.gz",
+      "bytes": 1457,
+      "sha256": "53f48902b7979fc448f433898558149aed7f4b4cc282f0be84ee844c9aaad0ec"
+    },
+    {
+      "path": "old-admitted-fault/api.json",
+      "bytes": 111,
+      "sha256": "5d35d6bf271ed3058ec8e5d6cd0f834cfd6fe5772311ab59ad527735b17210ca"
+    },
+    {
+      "path": "old-admitted-fault/before.json",
+      "bytes": 19209,
+      "sha256": "82f1193afe7046808a6af23db3a31bc94847335c0f32844c74035143eebb30c0"
+    },
+    {
+      "path": "old-admitted-fault/case.json",
+      "bytes": 3988,
+      "sha256": "e931194bcc830b8cab7935d98c9491b92cabb6b103171eab72fd25e51b536249"
+    },
+    {
+      "path": "old-admitted-fault/completed-runtime.sqlite.gz",
+      "bytes": 77541,
+      "sha256": "9e0f5f7ca6226ac7501188b62ff944a41b2fef47ab9b79a4d2fe61e593d3c280"
+    },
+    {
+      "path": "old-admitted-fault/completed.json",
+      "bytes": 26262,
+      "sha256": "041c50bdf38aad82f43be3c9d29b8525e54e77415a703b9a104c3a311c26c97f"
+    },
+    {
+      "path": "old-admitted-fault/retained-runtime.sqlite.gz",
+      "bytes": 77541,
+      "sha256": "9e0f5f7ca6226ac7501188b62ff944a41b2fef47ab9b79a4d2fe61e593d3c280"
+    },
+    {
+      "path": "old-admitted-fault/retained-truth.json",
+      "bytes": 79337,
+      "sha256": "bd402668665ac2c3eafbc1d1c3483020b41d8a1420c0f3739dd42279a5f82b09"
+    },
+    {
+      "path": "old-admitted-fault/retained.json",
+      "bytes": 26262,
+      "sha256": "041c50bdf38aad82f43be3c9d29b8525e54e77415a703b9a104c3a311c26c97f"
+    },
+    {
+      "path": "old-admitted-fault/truth.json",
+      "bytes": 79337,
+      "sha256": "bd402668665ac2c3eafbc1d1c3483020b41d8a1420c0f3739dd42279a5f82b09"
+    },
+    {
+      "path": "old-unadmitted-fault/api.json",
+      "bytes": 111,
+      "sha256": "5d35d6bf271ed3058ec8e5d6cd0f834cfd6fe5772311ab59ad527735b17210ca"
+    },
+    {
+      "path": "old-unadmitted-fault/before.json",
+      "bytes": 19275,
+      "sha256": "7b1921f1993d5d6d380ad3472c73bcce82e66fde64f1e5e70b37fc9a569af551"
+    },
+    {
+      "path": "old-unadmitted-fault/case.json",
+      "bytes": 3989,
+      "sha256": "2bec2c165e487f99399fb11fee68f8511dab7eaa5ca2f9ff76fc085f0a29cfad"
+    },
+    {
+      "path": "old-unadmitted-fault/completed-runtime.sqlite.gz",
+      "bytes": 61937,
+      "sha256": "7617af496ba9544717661ba1969d774cadb1382c7497f334f346cd2ad11731a8"
+    },
+    {
+      "path": "old-unadmitted-fault/completed.json",
+      "bytes": 24573,
+      "sha256": "a5b28a43b085a978521de889a8ce1356f67cd291a5f54c8fe9215f982a5260ee"
+    },
+    {
+      "path": "old-unadmitted-fault/retained-runtime.sqlite.gz",
+      "bytes": 61937,
+      "sha256": "7617af496ba9544717661ba1969d774cadb1382c7497f334f346cd2ad11731a8"
+    },
+    {
+      "path": "old-unadmitted-fault/retained-truth.json",
+      "bytes": 40969,
+      "sha256": "3fc3535f266c18fa1c59b4421a26da17a1a9d773de7e016e52ec8372d5646443"
+    },
+    {
+      "path": "old-unadmitted-fault/retained.json",
+      "bytes": 24573,
+      "sha256": "a5b28a43b085a978521de889a8ce1356f67cd291a5f54c8fe9215f982a5260ee"
+    },
+    {
+      "path": "old-unadmitted-fault/truth.json",
+      "bytes": 40969,
+      "sha256": "3fc3535f266c18fa1c59b4421a26da17a1a9d773de7e016e52ec8372d5646443"
+    },
+    {
+      "path": "standard-release-build.log.gz",
+      "bytes": 13812,
+      "sha256": "b3e9fb2348601765bf92b9af2bb6d07000d627ba452e10868eb2dd4d863dc5ba"
+    }
+  ]
+}
