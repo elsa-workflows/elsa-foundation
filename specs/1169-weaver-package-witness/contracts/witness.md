@@ -18,7 +18,7 @@ Separate package; no resource assembly/frontend dependency or resource/type/tool
 
 Accept a new owned output directory and a unique local candidate version; optional supplied artifacts require explicit immutable producer metadata. Refuse source/driver/artifact identity mismatch. Retain producer and external author sources, lock/restore graphs, archives, published host files and normal auth evidence privately. Redact tokens/credentials from public receipts and provider trace artifacts.
 
-A clean consumer restores/builds/publishes with Node/npm/pnpm/npx denied and audited; browser automation and module production run outside that denied environment. At runtime the consumer cannot use product sources or build caches. Native package feed/store enrollment is an explicit isolated fixture input. Stop only verified owned processes.
+A clean consumer restores/builds/publishes with Node/npm/pnpm/npx denied and audited; browser automation and module production run outside that denied environment. At runtime the consumer cannot use product sources or build caches. The ordinary backend feed/state and the protected Studio feed/coordinated-store enrollment are explicit isolated fixture inputs, following the [host recipes](hosts.md). Stop only verified owned processes.
 
 Freeze common DLL/browser identities before extension. Configuration/resource/module membership may change; common implementation bytes may not. Record actual generation and contribution identity for each transition.
 

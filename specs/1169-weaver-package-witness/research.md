@@ -10,6 +10,10 @@ The scoped correction queues background publication until the public host `Appli
 
 Consumer readiness uses Nuplane's real blocking startup reconciliation with explicit `StartupFailurePolicy.FailHost`. The fixture no longer starts a redundant second reconciliation immediately after `StartAsync`; actual package transitions retain their protected manual endpoint and must be observed separately. The two diagnostic failures occurred inside `StartAsync`, before that extra call, so removing it does not stand in for the readability correction. Health, authenticated serving generation and owning-resource observations remain required after native startup.
 
+The single mixed-artifact verification passed that startup and health, then the first login failed with native root-lock contention while CShells initialized its feature catalog, before Identity ran. No authentication, serving-generation or complete coordinated-backend success is claimed. The original enrolled state and failure receipt remain preserved.
+
+Source review corrected an overprescribed host recipe: Foundation.Host/Workbench use ordinary Nuplane loading, and the backend's existing `PackageManifestFeatureCatalogContributor` reads positively unenrolled installed content. Its required package-list/reconcile/load operations support that profile. Studio's protected content reader requires coordinated admission, as stated in custom-hosting guidance. Use a fresh ordinary backend store and keep Studio coordinated. This changes no user acceptance criterion or resource authority/CAS rule, performs no enrolled-store cutover and promises no general runtime coordination repair. Both actual host journeys and every package transition still require fresh final qualification.
+
 ## Owning resource
 
 **Decision**: A separately authored widget's visibility in the explicit personal Home layout.

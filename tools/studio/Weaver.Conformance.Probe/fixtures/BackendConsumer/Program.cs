@@ -56,10 +56,11 @@ var contracts = new Assembly[] {
 var state = Path.Combine(contentRoot, "native-store", "state.json");
 Directory.CreateDirectory(Path.GetDirectoryName(state)!);
 builder.Services.AddNuplaneAdmin();
-builder.Services.AddNuplanePackageStoreMaintenance();
 builder.Services.AddNuplane(builder.Configuration.GetSection("Nuplane"), nuplane => {
     nuplane.UseBasePath(contentRoot);
-    nuplane.WithStateFile(state).UseCoordinatedPackageStore([new("default", "backend", state)], true);
+    // Match Foundation.Host/Workbench's ordinary backend loading profile. Studio's
+    // protected asset host has its own coordinated store; it is a separate composition.
+    nuplane.WithStateFile(state);
     nuplane.Services.Configure<FeedResolutionOptions>(options => options.PackageInstallRoot = Path.Combine(contentRoot, "native-store", "installs"));
     nuplane.Services.Configure<LockFileOptions>(options => options.Path = Path.Combine(contentRoot, "native-store", "nuplane.lock.json"));
     nuplane.Services.Configure<ReconciliationOptions>(options => {
@@ -131,14 +132,6 @@ builder.Services.AddOpenIddict().AddCore(options => options.UseEntityFrameworkCo
 await using var app = builder.Build();
 await using (var scope = app.Services.CreateAsyncScope())
     await scope.ServiceProvider.GetRequiredService<TokenDb>().Database.EnsureCreatedAsync();
-var maintenance = app.Services.GetRequiredService<INuplanePackageStoreMaintenanceOperations>();
-var preview = await maintenance.PreviewEnrollmentAsync();
-if (preview.Membership == "Unenrolled") {
-    if (!builder.Configuration.GetValue<bool>("Qualification:EnrollOwnedStore")) throw new InvalidOperationException("Explicit owned backend store enrollment is required.");
-    var enrollment = await maintenance.EnrollAsync(new("default", preview.RootIdentity!, 1, true, ["backend"], []));
-    if (enrollment.Status != "Complete") throw new InvalidOperationException("Owned backend enrollment failed: " + enrollment.Status);
-} else if (preview.Membership != "Complete") throw new InvalidOperationException("Backend native membership is not complete.");
-
 app.UseCors("OwnedStudio");
 app.MapShells();
 app.UseAuthentication();
@@ -168,11 +161,11 @@ app.MapGet("/__qualification/generation", async (IShellRegistry registry, Cancel
         sharedContracts = contracts.Select(assembly => new { name = assembly.GetName().Name, identity = assembly.FullName, location = assembly.Location })
     };
 }).RequirePermission(ModuleManagementPermissionKeys.Read);
-await StartupDiagnosticGate.ObserveAsync(builder.Configuration, contentRoot, "before-start", "Complete");
+await StartupDiagnosticGate.ObserveAsync(builder.Configuration, contentRoot, "before-start", null);
 try {
     await app.StartAsync();
 } catch (Exception failure) {
-    try { await StartupDiagnosticGate.ObserveAsync(builder.Configuration, contentRoot, "start-failed", "Complete", failure); }
+    try { await StartupDiagnosticGate.ObserveAsync(builder.Configuration, contentRoot, "start-failed", null, failure); }
     catch (Exception diagnosticFailure) { Console.Error.WriteLine("Owned startup diagnostic failed: " + diagnosticFailure.GetType().FullName); }
     throw;
 }

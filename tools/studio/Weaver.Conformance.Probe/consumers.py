@@ -226,7 +226,8 @@ def configure_runtime(run, *, backend_url, studio_url, admin_username, admin_pas
     backend = run.profiles["backend"]["published"]
     studio = run.profiles["studio"]["published"]
     settings = json.loads((backend / "appsettings.json").read_text())
-    settings["Qualification"].update(StudioOrigin=studio_url.rstrip("/"), EnrollOwnedStore=bool(enroll), DiagnosticGateDirectory="")
+    settings["Qualification"].pop("EnrollOwnedStore", None)
+    settings["Qualification"].update(StudioOrigin=studio_url.rstrip("/"), DiagnosticGateDirectory="")
     write_json(backend / "appsettings.json", settings)
     document = json.loads((backend / "shells.json").read_text())
     features = document["CShells"]["Shells"]["Authoring"]["Features"]

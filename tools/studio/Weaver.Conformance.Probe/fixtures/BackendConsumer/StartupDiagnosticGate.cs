@@ -5,7 +5,7 @@ using Nuplane.Abstractions.PackageStoreProtection;
 static class StartupDiagnosticGate
 {
     public static async Task ObserveAsync(IConfiguration configuration, string contentRoot, string stage,
-        string observedMembership, Exception? failure = null)
+        string? observedMembership, Exception? failure = null)
     {
         var configured = configuration["Qualification:DiagnosticGateDirectory"];
         if (string.IsNullOrWhiteSpace(configured)) return;
