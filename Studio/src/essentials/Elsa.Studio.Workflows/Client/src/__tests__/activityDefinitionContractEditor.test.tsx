@@ -16,6 +16,28 @@ afterEach(() => {
 });
 
 describe("ActivityDefinitionContractEditor", () => {
+  it("keeps an unsafe JSON default visible with a precision error and disables Apply", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    mountedRoots.push({ root, container });
+    const catalog = capabilities();
+    catalog.types[0] = { ...catalog.types[0], alias: "System.Text.Json.JsonElement", displayName: "JSON", defaultEditor: "json" };
+    const contract = contractWithDefault({ Id: 1 });
+    contract.inputs[0].type.alias = "System.Text.Json.JsonElement";
+    let committed = false;
+    flushSync(() => root.render(<ActivityDefinitionContractEditor contract={contract} capabilities={catalog}
+      expressions={[]} providerRequiredOutcomes={[]} sourceVersionId={null} baselineUnavailable={false}
+      readOnly={false} capabilitiesUnavailable={false} onChange={() => { committed = true; }}
+      onLocalValidityChange={() => undefined} />));
+    const source = '{"Id":9007199254740993}';
+    change(controlByLabel<HTMLTextAreaElement>(container, "Value (JSON)"), source);
+    expect(controlByLabel<HTMLTextAreaElement>(container, "Value (JSON)").value).toBe(source);
+    expect(container.querySelector("[role='alert']")?.textContent).toContain("losing precision");
+    expect((buttonByText(container, "Apply default") as HTMLButtonElement).disabled).toBe(true);
+    expect(committed).toBe(false);
+  });
+
   it("keeps common contract fields in the basic view and preserves advanced values when edited", () => {
     const container = document.createElement("div");
     document.body.append(container);

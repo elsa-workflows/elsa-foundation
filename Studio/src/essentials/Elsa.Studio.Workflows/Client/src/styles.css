@@ -4018,7 +4018,8 @@
 }
 
 .wf-properties-info input[type="text"],
-.wf-properties-info textarea {
+.wf-properties-info textarea,
+.wf-properties-table textarea {
   width: 100%;
   border: 1px solid var(--wf-border);
   border-radius: var(--wf-radius);
@@ -4030,7 +4031,8 @@
   box-sizing: border-box;
 }
 
-.wf-properties-info textarea {
+.wf-properties-info textarea,
+.wf-properties-table textarea {
   resize: vertical;
 }
 

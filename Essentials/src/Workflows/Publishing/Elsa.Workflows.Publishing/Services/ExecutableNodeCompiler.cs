@@ -796,8 +796,13 @@ public sealed class ExecutableNodeCompiler(
     private RuntimeVariableDeclaration CompileVariableDeclaration(string nodeId, VariableDefinition variable)
     {
         var type = new ValueTypeDescriptor(variable.Type.Alias, variable.Type.CollectionKind);
+        // The built-in JSON driver encodes into the checkpoint itself. It is not an external
+        // storage profile; Studio advertises this driver for durable variable declarations.
+        var storageProfile = StringComparer.Ordinal.Equals(variable.StorageDriverType, WellKnownRuntimeDurableValueStorageDrivers.Json)
+            ? null
+            : variable.StorageDriverType;
         var policy = ValuePolicyCombiner.ToProtectionPolicy(
-            ValuePolicyCombiner.FromAuthoredStorage(variable.StorageDriverType));
+            ValuePolicyCombiner.FromAuthoredStorage(storageProfile));
         if (policy.Storage != DurableValueStorage.Inline)
         {
             throw new ArgumentException(
@@ -814,7 +819,7 @@ public sealed class ExecutableNodeCompiler(
                     variable.ReferenceKey,
                     variable.Name,
                     variable.Type,
-                    variable.StorageDriverType,
+                    storageProfile,
                     variable.Name,
                     Category: null,
                     IsNullable: true),

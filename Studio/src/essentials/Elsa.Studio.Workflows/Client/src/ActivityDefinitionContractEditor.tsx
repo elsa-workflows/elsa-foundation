@@ -770,7 +770,7 @@ function LiteralDefaultField({ value, supportsNull, readOnly, onValidityChange, 
     const next = event.target.value;
     setSource(next);
     const parsed = parseLiteralDefault(next);
-    const nextError = !parsed.ok ? "Enter one valid JSON value." : parsed.value === null && !supportsNull ? "The selected capability type does not support null." : null;
+    const nextError = !parsed.ok ? parsed.error ?? "Enter one valid JSON value." : parsed.value === null && !supportsNull ? "The selected capability type does not support null." : null;
     setError(nextError);
     onValidityChange(!nextError);
     if (parsed.ok && !nextError) onChange(parsed.value);

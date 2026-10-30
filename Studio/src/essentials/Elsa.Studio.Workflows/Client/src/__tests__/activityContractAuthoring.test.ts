@@ -13,6 +13,12 @@ import { classifyBreakingContractTransition } from "../ActivityDefinitionContrac
 import type { ActivityAuthoringCapabilities, ActivityContract } from "../activityDefinitionTypes";
 
 describe("Activity contract authoring model", () => {
+  it("refuses JSON defaults whose numeric values would be changed by JavaScript parsing", () => {
+    expect(parseLiteralDefault('{"Id":9007199254740993}').ok).toBe(false);
+    expect(parseLiteralDefault('[1234567890.123456789012345]').ok).toBe(false);
+    expect(parseLiteralDefault('1e400').ok).toBe(false);
+    expect(parseLiteralDefault('{"id":"9007199254740993","amount":1.0,"ratio":0.1}')).toMatchObject({ ok: true });
+  });
   it("offers only capability-catalog types with an activated durable driver", () => {
     const capabilities = authoringCapabilities();
     capabilities.types.push(

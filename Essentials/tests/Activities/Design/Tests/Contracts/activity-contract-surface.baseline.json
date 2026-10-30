@@ -861,7 +861,7 @@
           "name": "Body",
           "type": "System.Text.Json.JsonElement?",
           "collectionKind": "Single",
-          "isRequired": true,
+          "isRequired": false,
           "isNullable": true,
           "sourceRepresentation": null
         },
