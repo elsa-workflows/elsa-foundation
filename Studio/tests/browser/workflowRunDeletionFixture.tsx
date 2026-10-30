@@ -17,7 +17,12 @@ const deletionRequests: string[] = [];
 
 function Fixture() {
   const parameters = new URLSearchParams(window.location.search);
-  writeAppearancePreferences({ themeId: "classic", mode: parameters.get("theme") === "light" ? "light" : "dark", navigation: "left" });
+  const theme = parameters.get("theme");
+  if (theme) writeAppearancePreferences({
+    themeId: theme === "light" || theme === "dark" ? "classic" : theme,
+    mode: (parameters.get("mode") ?? theme) === "dark" ? "dark" : "light",
+    navigation: "left"
+  });
   const [opened, setOpened] = useState("");
   const context = useMemo(() => {
     const cleanList = new URLSearchParams(window.location.search).has("clean-list");
