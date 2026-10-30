@@ -16,6 +16,8 @@ public class AcmeHomeWidgetFeature : IWebShellFeature
 {
     // Trusted operator configuration. Neither model arguments nor request headers select this key.
     public string StudioHostId { get; set; } = string.Empty;
+    public string WriteRendezvousControlFile { get; set; } = string.Empty;
+    public string WriteRendezvousReceiptFile { get; set; } = string.Empty;
 
     public virtual void ConfigureServices(IServiceCollection services)
     {
@@ -24,7 +26,18 @@ public class AcmeHomeWidgetFeature : IWebShellFeature
             throw new InvalidOperationException("AcmeHomeWidget requires a valid, fixed StudioHostId.");
         services.AddHttpContextAccessor();
         services.AddSingleton(new WidgetHost(StudioHostId));
-        services.TryAddScoped<WidgetResource>();
+        var rendezvous = WidgetWriteRendezvous.Configure(WriteRendezvousControlFile, WriteRendezvousReceiptFile, StudioHostId);
+        if (rendezvous is not null) services.TryAddSingleton(rendezvous);
+        services.TryAddScoped(provider =>
+        {
+            var native = provider.GetRequiredService<Elsa.Studio.Preferences.Core.Contracts.IStudioPreferenceService>();
+            var gate = provider.GetService<WidgetWriteRendezvous>();
+            var http = provider.GetRequiredService<IHttpContextAccessor>();
+            return new WidgetResource(http, provider.GetRequiredService<Elsa.Foundation.Identity.Core.Authentication.IAuthSessionService>(),
+                provider.GetRequiredService<Elsa.Foundation.Identity.Core.Authorization.IPermissionAuthorizationService>(),
+                gate is null ? native : new WidgetRendezvousPreferences(native, gate, http),
+                provider.GetRequiredService<WidgetHost>());
+        });
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentContextProvider, WidgetContextSource>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentCapabilityProvider, WidgetCapabilities>());
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, ReadWidgetTool>());

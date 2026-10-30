@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Diagnostics;
 using Elsa.Agent.Anthropic.Services;
 using Elsa.Agent.GitHubCopilot.Services;
 using Microsoft.Extensions.AI;
@@ -12,6 +13,7 @@ public sealed class ProtocolFixtureTests : IDisposable
     private readonly string directory = Path.Combine(Path.GetTempPath(), "acme-protocol-" + Guid.NewGuid().ToString("N"));
     private string CommandFile => Path.Combine(directory, "command.json");
     private string TraceFile => Path.Combine(directory, "trace.jsonl");
+    private string GateFile => Path.Combine(directory, "gate.json");
 
     public ProtocolFixtureTests() => Directory.CreateDirectory(directory);
 
@@ -117,16 +119,222 @@ public sealed class ProtocolFixtureTests : IDisposable
         Assert.Contains("deterministic-provider-protocol", trace);
     }
 
-    private ServiceProvider CopilotServices()
+    [Theory]
+    [InlineData("copilot")]
+    [InlineData("anthropic")]
+    public async Task Actual_caller_cancellation_while_waiting_prevents_every_call_boundary(string provider)
+    {
+        WriteCommand("gated-command", "arbitrary_function", "{}");
+        WriteGate("gated-command", "cancel-epoch", "hold");
+        using var cancellation = new CancellationTokenSource();
+        var function = new CapturingFunction();
+        var observed = new List<object>();
+        var pending = ObserveGated(provider, function, observed, cancellation.Token);
+        await WaitForGate();
+        Assert.False(pending.IsCompleted);
+        Assert.Equal(0, function.Calls);
+        if (provider == "copilot") Assert.Contains(observed, value => value is GitHubCopilotStreamEvent { Kind: GitHubCopilotStreamEventKind.Started });
+        else Assert.Empty(observed);
+
+        cancellation.Cancel();
+        var failure = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+
+        Assert.True(cancellation.IsCancellationRequested);
+        Assert.True(failure.CancellationToken.IsCancellationRequested);
+        if (provider == "anthropic") Assert.Equal(cancellation.Token, failure.CancellationToken);
+        Assert.Equal(0, function.Calls);
+        Assert.DoesNotContain(observed, value => value is ChatResponseUpdate update && update.Contents.Any(content => content is FunctionCallContent));
+        Assert.True(HasTrace("protocol.gate.cancelled"));
+        Assert.False(HasTrace(provider + ".call"));
+        Assert.False(HasTrace(provider + ".return"));
+    }
+
+    [Theory]
+    [InlineData("copilot")]
+    [InlineData("anthropic")]
+    public async Task Matching_release_allows_only_the_actual_provider_call_boundary(string provider)
+    {
+        WriteCommand("gated-command", "arbitrary_function", "{\"number\":42}");
+        WriteGate("gated-command", "release-epoch", "hold");
+        var function = new CapturingFunction();
+        var observed = new List<object>();
+        var pending = ObserveGated(provider, function, observed, default);
+        await WaitForGate();
+        Assert.False(pending.IsCompleted);
+        Assert.False(HasTrace(provider + ".call"));
+
+        WriteGate("gated-command", "release-epoch", "release");
+        await pending.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.True(HasTrace("protocol.gate.released"));
+        Assert.True(HasTrace(provider + ".call"));
+        if (provider == "copilot")
+        {
+            Assert.Equal(1, function.Calls);
+            Assert.Equal(42, Assert.IsType<JsonElement>(function.Arguments!["number"]).GetInt32());
+            Assert.Contains(observed, value => value is GitHubCopilotStreamEvent { Kind: GitHubCopilotStreamEventKind.ToolExecutionCompleted });
+        }
+        else
+        {
+            Assert.Equal(0, function.Calls);
+            var update = Assert.IsType<ChatResponseUpdate>(Assert.Single(observed));
+            Assert.Equal("gated-command", Assert.IsType<FunctionCallContent>(Assert.Single(update.Contents)).CallId);
+        }
+    }
+
+    [Fact]
+    public async Task The_actual_Copilot_session_abort_also_cancels_a_wait_without_calling()
+    {
+        WriteCommand("gated-command", "arbitrary_function", "{}");
+        WriteGate("gated-command", "abort-epoch", "hold");
+        using var services = CopilotServices(gated: true);
+        var function = new CapturingFunction();
+        await using var client = services.GetRequiredService<IGitHubCopilotClientFactory>().Create(new(null, false, null, null, null, null));
+        await using var session = await client.CreateSessionAsync(Request("abort-session", [function]), default);
+        var pending = Collect(session.SendAsync("generic pre-call gate", default));
+        await WaitForGate();
+
+        await session.AbortAsync(default);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+
+        Assert.Equal(0, function.Calls);
+        Assert.True(HasTrace("protocol.gate.cancelled"));
+        Assert.False(HasTrace("copilot.call"));
+    }
+
+    [Theory]
+    [InlineData("copilot")]
+    [InlineData("anthropic")]
+    public async Task A_release_for_another_epoch_fails_closed_without_a_call(string provider)
+    {
+        WriteCommand("gated-command", "arbitrary_function", "{}");
+        WriteGate("gated-command", "held-epoch", "hold");
+        var function = new CapturingFunction();
+        var pending = ObserveGated(provider, function, [], default);
+        await WaitForGate();
+
+        WriteGate("gated-command", "another-epoch", "release");
+        await Assert.ThrowsAsync<ProtocolFixtureException>(() => pending);
+
+        Assert.Equal(0, function.Calls);
+        Assert.False(HasTrace(provider + ".call"));
+        Assert.True(HasTrace("protocol.gate.refused"));
+        Assert.False(HasTrace("protocol.gate.cancelled"));
+    }
+
+    [Theory]
+    [InlineData("copilot")]
+    [InlineData("anthropic")]
+    public async Task Gate_timeout_is_a_fixture_failure_and_never_a_fabricated_cancellation(string provider)
+    {
+        WriteCommand("gated-command", "arbitrary_function", "{}");
+        WriteGate("gated-command", "bounded-epoch", "hold", 25);
+        using var cancellation = new CancellationTokenSource();
+        var function = new CapturingFunction();
+
+        await Assert.ThrowsAsync<ProtocolFixtureException>(() => ObserveGated(provider, function, [], cancellation.Token));
+
+        Assert.False(cancellation.IsCancellationRequested);
+        Assert.Equal(0, function.Calls);
+        Assert.True(HasTrace("protocol.gate.timedOut"));
+        Assert.False(HasTrace("protocol.gate.cancelled"));
+        Assert.False(HasTrace(provider + ".call"));
+    }
+
+    [Theory]
+    [InlineData("copilot")]
+    [InlineData("anthropic")]
+    public async Task A_gate_for_another_command_does_not_hold_an_ordinary_request(string provider)
+    {
+        WriteCommand("gated-command", "arbitrary_function", "{}");
+        WriteGate("other-command", "other-epoch", "hold");
+        var function = new CapturingFunction();
+
+        await ObserveGated(provider, function, [], default).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(provider == "copilot" ? 1 : 0, function.Calls);
+        Assert.True(HasTrace(provider + ".call"));
+        Assert.False(HasTrace("protocol.gate.waiting"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("{\"commandId\":\"gated-command\",\"epoch\":\"e\",\"state\":\"cancel\"}")]
+    [InlineData("{\"commandId\":\"gated-command\",\"epoch\":\"one\",\"epoch\":\"two\",\"state\":\"hold\"}")]
+    [InlineData("{\"commandId\":\"gated-command\",\"epoch\":\"e\",\"state\":\"hold\",\"timeoutMilliseconds\":60001}")]
+    public async Task A_configured_missing_or_invalid_gate_never_dispatches(string? gate)
+    {
+        WriteCommand("gated-command", "arbitrary_function", "{}");
+        if (gate is not null) File.WriteAllText(GateFile, gate);
+        var function = new CapturingFunction();
+
+        await Assert.ThrowsAsync<ProtocolFixtureException>(() => ObserveGated("anthropic", function, [], default));
+
+        Assert.Equal(0, function.Calls);
+        Assert.False(HasTrace("anthropic.call"));
+        Assert.False(HasTrace("protocol.gate.cancelled"));
+    }
+
+    private async Task ObserveGated(string provider, CapturingFunction function, List<object> observed, CancellationToken cancellationToken)
+    {
+        if (provider == "copilot")
+        {
+            using var services = CopilotServices(gated: true);
+            await using var client = services.GetRequiredService<IGitHubCopilotClientFactory>().Create(new(null, false, null, null, null, null));
+            await using var session = await client.CreateSessionAsync(Request("gated-session", [function]), cancellationToken);
+            await foreach (var value in session.SendAsync("generic pre-call gate", cancellationToken)) observed.Add(value);
+        }
+        else
+        {
+            using var services = AnthropicServices(gated: true);
+            using var client = services.GetRequiredService<IAnthropicChatClientFactory>().Create("unused", "fixture");
+            await foreach (var value in client.GetStreamingResponseAsync([new(ChatRole.User, "generic pre-call gate")],
+                new ChatOptions { Tools = [function] }, cancellationToken)) observed.Add(value);
+        }
+    }
+
+    private async Task WaitForGate()
+    {
+        var started = Stopwatch.GetTimestamp();
+        while (!HasTrace("protocol.gate.waiting"))
+        {
+            Assert.True(Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(10), "The actual factory did not enter its pre-call gate.");
+            await Task.Delay(10);
+        }
+    }
+
+    private bool HasTrace(string kind)
+    {
+        if (!File.Exists(TraceFile)) return false;
+        foreach (var line in File.ReadAllLines(TraceFile))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(line);
+                if (document.RootElement.GetProperty("kind").GetString() == kind) return true;
+            }
+            catch (JsonException) { } // A concurrent writer may not have finished its last line yet.
+        }
+        return false;
+    }
+
+    private void WriteGate(string id, string epoch, string state, int timeoutMilliseconds = 60_000)
+    {
+        var temporary = GateFile + ".tmp";
+        File.WriteAllText(temporary, JsonSerializer.Serialize(new { commandId = id, epoch, state, timeoutMilliseconds }));
+        File.Move(temporary, GateFile, overwrite: true);
+    }
+
+    private ServiceProvider CopilotServices(bool gated = false)
     {
         var services = new ServiceCollection();
-        new CopilotProtocolFixtureFeature { CommandFile = CommandFile, TraceFile = TraceFile }.ConfigureServices(services);
+        new CopilotProtocolFixtureFeature { CommandFile = CommandFile, TraceFile = TraceFile, GateFile = gated ? GateFile : "" }.ConfigureServices(services);
         return services.BuildServiceProvider();
     }
-    private ServiceProvider AnthropicServices()
+    private ServiceProvider AnthropicServices(bool gated = false)
     {
         var services = new ServiceCollection();
-        new AnthropicProtocolFixtureFeature { CommandFile = CommandFile, TraceFile = TraceFile }.ConfigureServices(services);
+        new AnthropicProtocolFixtureFeature { CommandFile = CommandFile, TraceFile = TraceFile, GateFile = gated ? GateFile : "" }.ConfigureServices(services);
         return services.BuildServiceProvider();
     }
     private void WriteCommand(string id, string name, string arguments) => File.WriteAllText(CommandFile,

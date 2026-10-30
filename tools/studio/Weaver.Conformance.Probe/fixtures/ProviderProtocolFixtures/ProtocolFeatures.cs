@@ -13,10 +13,11 @@ public class CopilotProtocolFixtureFeature : IShellFeature
 {
     public string CommandFile { get; set; } = string.Empty;
     public string TraceFile { get; set; } = string.Empty;
+    public string GateFile { get; set; } = string.Empty;
 
     public virtual void ConfigureServices(IServiceCollection services)
     {
-        var files = new ProtocolFiles(CommandFile, TraceFile);
+        var files = new ProtocolFiles(CommandFile, TraceFile, GateFile);
         services.Replace(ServiceDescriptor.Singleton<IGitHubCopilotClientFactory>(new ProtocolCopilotFactory(files)));
     }
 }
@@ -26,10 +27,11 @@ public class AnthropicProtocolFixtureFeature : IShellFeature
 {
     public string CommandFile { get; set; } = string.Empty;
     public string TraceFile { get; set; } = string.Empty;
+    public string GateFile { get; set; } = string.Empty;
 
     public virtual void ConfigureServices(IServiceCollection services)
     {
-        var files = new ProtocolFiles(CommandFile, TraceFile);
+        var files = new ProtocolFiles(CommandFile, TraceFile, GateFile);
         services.Replace(ServiceDescriptor.Singleton<IAnthropicChatClientFactory>(new ProtocolAnthropicFactory(files)));
     }
 }

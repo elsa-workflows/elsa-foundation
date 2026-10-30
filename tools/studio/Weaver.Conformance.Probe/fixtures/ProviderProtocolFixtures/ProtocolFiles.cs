@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -23,8 +24,9 @@ internal sealed class ProtocolFiles
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly string commandFile;
     private readonly string traceFile;
+    private readonly string? gateFile;
 
-    public ProtocolFiles(string commandFile, string traceFile)
+    public ProtocolFiles(string commandFile, string traceFile, string? gateFile = null)
     {
         if (!Path.IsPathFullyQualified(commandFile) || !Path.IsPathFullyQualified(traceFile))
             throw new ProtocolFixtureException("CommandFile and TraceFile must be explicit absolute private paths.");
@@ -32,7 +34,88 @@ internal sealed class ProtocolFiles
         this.traceFile = Path.GetFullPath(traceFile);
         if (string.Equals(this.commandFile, this.traceFile, StringComparison.Ordinal))
             throw new ProtocolFixtureException("CommandFile and TraceFile must be different files.");
+        if (!string.IsNullOrWhiteSpace(gateFile))
+        {
+            if (!Path.IsPathFullyQualified(gateFile))
+                throw new ProtocolFixtureException("GateFile must be an explicit absolute private path when configured.");
+            this.gateFile = Path.GetFullPath(gateFile);
+            if (this.gateFile == this.commandFile || this.gateFile == this.traceFile)
+                throw new ProtocolFixtureException("GateFile must differ from CommandFile and TraceFile.");
+        }
     }
+
+    public async Task BeforeCallAsync(string provider, ProtocolCommand command, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (gateFile is null) return;
+        var gate = ReadGate();
+        cancellationToken.ThrowIfCancellationRequested();
+        if (gate.CommandId != command.CommandId) return;
+        if (gate.State == "release") return;
+        Trace("protocol.gate.waiting", new { provider, command.CommandId, gate.Epoch, gate.TimeoutMilliseconds });
+        var started = Stopwatch.GetTimestamp();
+        try
+        {
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var remaining = TimeSpan.FromMilliseconds(gate.TimeoutMilliseconds) - Stopwatch.GetElapsedTime(started);
+                if (remaining <= TimeSpan.Zero)
+                {
+                    Trace("protocol.gate.timedOut", new { provider, command.CommandId, gate.Epoch });
+                    throw new ProtocolFixtureException("The bounded private pre-call gate expired without release.");
+                }
+                await Task.Delay(remaining < TimeSpan.FromMilliseconds(20) ? remaining : TimeSpan.FromMilliseconds(20), cancellationToken);
+                var current = ReadGate();
+                if (current.CommandId != gate.CommandId || current.Epoch != gate.Epoch)
+                {
+                    Trace("protocol.gate.refused", new { provider, command.CommandId, gate.Epoch, reason = "identityChanged" });
+                    throw new ProtocolFixtureException("The waiting pre-call gate command or epoch changed.");
+                }
+                cancellationToken.ThrowIfCancellationRequested();
+                if (Stopwatch.GetElapsedTime(started) >= TimeSpan.FromMilliseconds(gate.TimeoutMilliseconds))
+                {
+                    Trace("protocol.gate.timedOut", new { provider, command.CommandId, gate.Epoch });
+                    throw new ProtocolFixtureException("The bounded private pre-call gate expired without release.");
+                }
+                if (current.State != "release") continue;
+                Trace("protocol.gate.released", new { provider, command.CommandId, gate.Epoch });
+                return;
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            Trace("protocol.gate.cancelled", new { provider, command.CommandId, gate.Epoch });
+            throw;
+        }
+    }
+
+    private PreCallGate ReadGate()
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(gateFile!), new JsonDocumentOptions { MaxDepth = 4 });
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) throw new ProtocolFixtureException("The private pre-call gate must be an object.");
+            var names = root.EnumerateObject().Select(property => property.Name).ToArray();
+            if (names.Length is < 3 or > 4 || names.Distinct(StringComparer.Ordinal).Count() != names.Length ||
+                names.Any(name => name is not ("commandId" or "epoch" or "state" or "timeoutMilliseconds")) ||
+                !root.TryGetProperty("commandId", out var command) || !root.TryGetProperty("epoch", out var epoch) ||
+                !root.TryGetProperty("state", out var state))
+                throw new ProtocolFixtureException("The private pre-call gate requires commandId, epoch, state and an optional bounded timeoutMilliseconds.");
+            var id = command.GetString(); var generation = epoch.GetString(); var action = state.GetString();
+            var timeout = root.TryGetProperty("timeoutMilliseconds", out var configured) ? configured.GetInt32() : 60_000;
+            if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(generation) || action is not ("hold" or "release") || timeout is < 1 or > 60_000)
+                throw new ProtocolFixtureException("The private pre-call gate needs nonempty identities, hold/release state and a timeout within 1..60000 milliseconds.");
+            return new(id, generation, action, timeout);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or FormatException)
+        {
+            throw new ProtocolFixtureException("The private pre-call gate could not be read.", error);
+        }
+    }
+
+    private sealed record PreCallGate(string CommandId, string Epoch, string State, int TimeoutMilliseconds);
 
     public ProtocolCommand ReadCommand()
     {

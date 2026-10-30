@@ -168,6 +168,7 @@ app.MapGet("/__qualification/generation", async (IShellRegistry registry, Cancel
         sharedContracts = contracts.Select(assembly => new { name = assembly.GetName().Name, identity = assembly.FullName, location = assembly.Location })
     };
 }).RequirePermission(ModuleManagementPermissionKeys.Read);
+QualificationPrincipals.MapEndpoints(app, app.Services.GetRequiredService<IShellRegistry>(), shellName, builder.Configuration);
 await StartupDiagnosticGate.ObserveAsync(builder.Configuration, contentRoot, "before-start", null);
 try {
     await app.StartAsync();

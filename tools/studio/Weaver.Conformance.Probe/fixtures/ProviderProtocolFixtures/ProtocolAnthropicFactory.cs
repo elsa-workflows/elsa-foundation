@@ -39,9 +39,10 @@ internal sealed class ProtocolAnthropicClient(ProtocolFiles files) : IChatClient
         {
             if (functions.Count(function => string.Equals(function.Name, command.ToolName, StringComparison.Ordinal)) != 1)
                 throw new ProtocolFixtureException("The commanded tool is not uniquely advertised by the actual adapter.");
-            files.Trace("anthropic.call", new { command.CommandId, command.ToolName, command.Arguments });
             await Task.Yield();
+            await files.BeforeCallAsync("anthropic", command, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
+            files.Trace("anthropic.call", new { command.CommandId, command.ToolName, command.Arguments });
             // Do not invoke declaration-only AIFunctions: the unchanged host orchestrator dispatches this.
             yield return new ChatResponseUpdate { Role = ChatRole.Assistant,
                 Contents = [new FunctionCallContent(command.CommandId, command.ToolName, command.ToArguments())] };

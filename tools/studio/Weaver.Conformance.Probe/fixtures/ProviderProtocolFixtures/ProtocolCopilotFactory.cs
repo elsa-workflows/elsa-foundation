@@ -73,7 +73,10 @@ internal sealed class ProtocolCopilotSession(ProtocolFiles files, GitHubCopilotS
             var matches = functions.Where(function => string.Equals(function.Name, command.ToolName, StringComparison.Ordinal)).ToArray();
             if (matches.Length != 1)
                 throw new ProtocolFixtureException("The commanded tool is not uniquely advertised by the actual adapter.");
+            await files.BeforeCallAsync("copilot", command, linked.Token);
+            linked.Token.ThrowIfCancellationRequested();
             yield return new(GitHubCopilotStreamEventKind.ToolExecutionStarted, ToolCallId: command.CommandId, ToolName: command.ToolName);
+            linked.Token.ThrowIfCancellationRequested();
             files.Trace("copilot.call", new { command.CommandId, command.ToolName, command.Arguments });
             var result = await matches[0].InvokeAsync(new AIFunctionArguments(command.ToArguments()), linked.Token);
             files.Trace("copilot.return", new { command.CommandId, command.ToolName, result });
