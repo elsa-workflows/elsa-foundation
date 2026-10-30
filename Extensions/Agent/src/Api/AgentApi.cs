@@ -370,6 +370,12 @@ public static class AgentApi
             return;
         }
         var result = await proposals.ApproveAsync(proposalId, actorId, request.Revision, request.Comment, context.RequestAborted);
+        if (!result.Succeeded && await FindTerminalExecutionFailureAsync(proposals, proposalId, context.RequestAborted) is { } terminalOutcome)
+        {
+            await WriteAsync(context, new AgentApiResponse<AgentProposalExecutionResult>(terminalOutcome, result.Error),
+                AgentJsonContext.Default.AgentApiResponseAgentProposalExecutionResult, result.Error!.StatusCode);
+            return;
+        }
         await WriteAsync(context, result.Succeeded ? AgentApiResponse<AgentActionProposal>.Success(result.Value!) : AgentApiResponse<AgentActionProposal>.Failure(result.Error!), AgentJsonContext.Default.AgentApiResponseAgentActionProposal, result.Succeeded ? 200 : result.Error!.StatusCode);
     }
 
@@ -393,6 +399,12 @@ public static class AgentApi
             return;
         }
         var result = await proposals.DenyAsync(proposalId, actorId, request.Comment ?? request.Reason, context.RequestAborted);
+        if (!result.Succeeded && await FindTerminalExecutionFailureAsync(proposals, proposalId, context.RequestAborted) is { } terminalOutcome)
+        {
+            await WriteAsync(context, new AgentApiResponse<AgentProposalExecutionResult>(terminalOutcome, result.Error),
+                AgentJsonContext.Default.AgentApiResponseAgentProposalExecutionResult, result.Error!.StatusCode);
+            return;
+        }
         await WriteAsync(context, result.Succeeded ? AgentApiResponse<AgentActionProposal>.Success(result.Value!) : AgentApiResponse<AgentActionProposal>.Failure(result.Error!), AgentJsonContext.Default.AgentApiResponseAgentActionProposal, result.Succeeded ? 200 : result.Error!.StatusCode);
     }
 
