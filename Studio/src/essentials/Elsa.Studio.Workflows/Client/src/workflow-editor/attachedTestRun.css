@@ -2,6 +2,7 @@
 .wf-attached-test-run > button { padding: .35rem .5rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); background: var(--studio-surface); color: var(--studio-text); }
 .wf-attached-test-run > button:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
 .wf-attached-test-run > span { overflow-wrap: anywhere; }
+.wf-attached-execution-status { display: inline-flex; align-items: center; flex: 0 0 6rem; min-height: 22px; }
 
 .wf-attached-inspector-views { position: sticky; top: 0; z-index: 2; background: var(--studio-surface); }
 .wf-snapshot-properties { min-width: 0; margin: 0; padding: 0; border: 0; }
