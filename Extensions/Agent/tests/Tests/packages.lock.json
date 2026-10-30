@@ -212,7 +212,6 @@
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Agent": "[4.0.0-dev, )",
           "Elsa.Agent.Core": "[4.0.0-dev, )",
-          "Elsa.Agent.Workflows": "[4.0.0-dev, )",
           "GitHub.Copilot.SDK": "[1.0.4, )",
           "Microsoft.Extensions.AI.Abstractions": "[10.5.1, )",
           "Microsoft.Extensions.Configuration.Abstractions": "[10.0.10, )",

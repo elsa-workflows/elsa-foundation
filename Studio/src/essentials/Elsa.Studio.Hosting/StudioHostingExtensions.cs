@@ -32,7 +32,7 @@ public static class StudioHostingExtensions
         {
             try
             {
-                builder.Configuration.AddJsonFile(settings.ShellsFile, optional: false, reloadOnChange: true);
+                ((IConfigurationBuilder)builder.Configuration).Add(new StudioJsonConfigurationSource(settings.ShellsFile, optional: false));
             }
             catch (Exception error) when (error is IOException or FormatException or UnauthorizedAccessException)
             {

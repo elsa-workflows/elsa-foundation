@@ -100,15 +100,6 @@
           "Microsoft.Extensions.Configuration.Abstractions": "[10.0.10, )"
         }
       },
-      "elsa.agent.workflows": {
-        "type": "Project",
-        "dependencies": {
-          "CShells.Abstractions": "[0.0.31, )",
-          "Elsa.Agent": "[4.0.0-dev, )",
-          "Elsa.Agent.Core": "[4.0.0-dev, )",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.10, )"
-        }
-      },
       "elsa.events.core": {
         "type": "Project",
         "dependencies": {
