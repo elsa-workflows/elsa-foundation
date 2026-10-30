@@ -18,6 +18,7 @@ import {
 } from "../themes/navMode";
 import {
   readAppearancePreferences,
+  hasStoredAppearancePreference,
   resetAppearancePreferences,
   resolveModePreference,
   watchSystemThemeMode,
@@ -115,7 +116,7 @@ export function ThemeProvider({
     if (storeLoaded && saved.themeId !== null) {
       writeAppearancePreferences({ themeId: nextTheme.id });
     }
-    if (storeLoaded && saved.colorSchemeId !== null) {
+    if (storeLoaded && saved.colorSchemeId !== null && hasStoredAppearancePreference("colorSchemeId")) {
       writeAppearancePreferences({ colorSchemeId: nextColorSchemeId });
     }
     setMounted(true);

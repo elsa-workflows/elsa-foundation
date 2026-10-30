@@ -43,6 +43,20 @@ afterEach(async () => {
 });
 
 describe("independent workspace appearance", () => {
+  it("keeps a host palette default unpersisted so a later host default can apply", async () => {
+    window.__ELSA_STUDIO_RUNTIME__ = { appearance: { paletteId: "drift" } };
+    try {
+      await render();
+      await vi.waitFor(() => expect(html().getAttribute("data-color-scheme")).toBe("drift"));
+      expect(localStorage.getItem("elsa-studio-color-scheme")).toBeNull();
+      window.__ELSA_STUDIO_RUNTIME__ = { appearance: { paletteId: "signal" } };
+      await update(() => root.render(<div />));
+      await render();
+      await vi.waitFor(() => expect(html().getAttribute("data-color-scheme")).toBe("signal"));
+      expect(localStorage.getItem("elsa-studio-color-scheme")).toBeNull();
+    } finally { delete window.__ELSA_STUDIO_RUNTIME__; }
+  });
+
   it("uses another palette while retaining Drift's layout, typography and preset identity", async () => {
     localStorage.setItem("elsa-studio-theme", "drift");
     await render();

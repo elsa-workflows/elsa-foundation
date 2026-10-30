@@ -115,6 +115,11 @@ export function getDefaultAppearancePreferences(): AppearancePreferences {
   };
 }
 
+/** Distinguishes a stored choice from a resolved host fallback during reconciliation. */
+export function hasStoredAppearancePreference(key: keyof AppearancePreferences, storage: PreferenceStorage | undefined = defaultStorage()): boolean {
+  return storage ? safely(() => storage.getItem(appearanceStorageKeys[key]) !== null, false) : false;
+}
+
 /** Reads stored preferences; unknown or missing values fall back to the defaults. */
 export function readAppearancePreferences(storage: PreferenceStorage | undefined = defaultStorage()): AppearancePreferences {
   const read = (key: string) => (storage ? safely(() => storage.getItem(key), null) : null);
