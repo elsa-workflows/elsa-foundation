@@ -1102,6 +1102,8 @@ def main():
                     if sdk.returncode!=0 or probe["disposition"]!="Deferred" or any(source not in p["informationalVersion"] for p in probe["products"]):
                         raise ValueError("The actual inverse-order cancellation was not deferred: "+sdk_log.read_text())
                     deferred_stores=snapshots("deferred")
+                    if any(deferred_stores[name]["databaseSha256"]!=pending_stores[name]["databaseSha256"] for name in ("etl-runtime","etl-design")):
+                        raise ValueError("The result-first probe changed the coupled ETL stores before their cancellation delivery.")
                     deferred_checked=json.loads(subprocess.check_output(["dotnet",str(reader),"--read-bpmn-retirement",str(root/"elsa.db"),model_execution],text=True,timeout=30))
                     q.write_json(output/"deferred-checked.json",deferred_checked)
                     queued=deferred_checked["queuedModelInputs"]

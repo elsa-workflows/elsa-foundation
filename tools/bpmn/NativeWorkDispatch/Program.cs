@@ -214,7 +214,17 @@ try
                 model.Payload.TryGetProperty("cancellations", out var cancellations) && cancellations.ValueKind != JsonValueKind.Null && cancellations.GetArrayLength() != 0)
                 throw new InvalidOperationException("The inverse-order probe requires independent native cancellation with downstream ETL still pending.");
             var delivery = await processor.ProcessAsync(new(1, origin.WorkerExecutionId, "Elsa.Bpmn.NativeWorkResult.v1"));
-            var prematureDrain = await Drain(model.ExecutionId);
+            object prematureDrain;
+            try
+            {
+                await Drain(model.ExecutionId);
+                throw new InvalidOperationException("The premature result did not report its pending downstream dependency.");
+            }
+            catch (RuntimeSchedulerWorkUnavailableException exception) when (exception.Code == "bpmn.native-work-unavailable" &&
+                exception.SafeSummary == "Native downstream cancellation remains owed.")
+            {
+                prematureDrain = new { exception.Code, exception.SafeSummary };
+            }
             var deferredModel = await models.FindAsync(model.ExecutionId);
             var prematureReceipt = await models.FindInputAsync(model.ExecutionId, origin.ResultInputId);
             var deferredQueue = (await queue.ListAsync(new(model.ExecutionId))).Items;
