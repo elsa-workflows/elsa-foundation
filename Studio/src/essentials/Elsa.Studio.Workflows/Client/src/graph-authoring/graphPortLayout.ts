@@ -23,18 +23,18 @@ const sides = [Position.Right, Position.Bottom, Position.Left, Position.Top];
 const sideChangeMargin = 16;
 
 /** One logical handle can serve several edges; minimise their mean distance together. */
-export function choosePortSide(rect: PortNodeRect, peers: readonly PortNodeRect[], fallback: Position, previous?: Position): Position {
-  if (peers.length === 0) return fallback;
+export function choosePortSide(rect: PortNodeRect, peers: readonly PortNodeRect[], fallback: Position, previous?: Position, available: readonly Position[] = sides): Position {
+  let best = available.includes(fallback) ? fallback : available[0];
+  if (peers.length === 0) return best;
   const score = (side: Position) => {
     const x = rect.x + (side === Position.Left ? 0 : side === Position.Right ? rect.width : rect.width / 2);
     const y = rect.y + (side === Position.Top ? 0 : side === Position.Bottom ? rect.height : rect.height / 2);
     return peers.reduce((sum, peer) => sum + Math.hypot(peer.x + peer.width / 2 - x, peer.y + peer.height / 2 - y), 0) / peers.length;
   };
-  let best = fallback;
-  for (const side of sides) {
+  for (const side of available) {
     if (score(side) < score(best)) best = side;
   }
-  return previous && score(previous) - score(best) < sideChangeMargin ? previous : best;
+  return previous && available.includes(previous) && score(previous) - score(best) < sideChangeMargin ? previous : best;
 }
 
 export function layoutGraphPorts({ rect, sourceIds, acceptsInbound, incoming, outgoing, previous }: {
@@ -55,6 +55,19 @@ export function layoutGraphPorts({ rect, sourceIds, acceptsInbound, incoming, ou
     offset: 50,
     labelWidth: undefined as number | undefined
   }));
+  // A wide outcome list cannot fit along the fixed card width. Keep a readable horizontal
+  // slot per port; overflowing outcomes take the next closest available side in catalog order.
+  const horizontalCapacity = Math.max(1, Math.floor((rect?.width ?? 246) / 48) - 1);
+  const counts = new Map<Position, number>();
+  const handles = [
+    ...(target ? [{ port: target as PortPlacement, peers: incoming, fallback: Position.Left }] : []),
+    ...sources.map(port => ({ port, peers: outgoing.get(port.id) ?? [], fallback: Position.Right }))
+  ];
+  for (const { port, peers, fallback } of handles) {
+    const available = sides.filter(side => side === Position.Left || side === Position.Right || (counts.get(side) ?? 0) < horizontalCapacity);
+    if (rect && !available.includes(port.side)) port.side = choosePortSide(rect, peers, fallback, undefined, available);
+    counts.set(port.side, (counts.get(port.side) ?? 0) + 1);
+  }
   // Reserve enough space for any grouping. Changing height with the chosen side would feed
   // back into side selection and could make diagonal branches oscillate between two layouts.
   const handleCount = sources.length + (target ? 1 : 0);

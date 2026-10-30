@@ -62,6 +62,23 @@ describe("adaptive graph ports", () => {
     expect(portPlacementStyle(layout.sources[0])).toEqual({ top: `${100 / 6}%` });
   });
 
+  it("keeps dense bottom outcomes and their labels separated", () => {
+    const ids = Array.from({ length: 30 }, (_, index) => `Case ${index + 1}`);
+    const layout = layoutGraphPorts({ rect, acceptsInbound: true, sourceIds: ids, incoming: [],
+      outgoing: new Map(ids.map(id => [id, [peer(100, 1500)]])) });
+    expect(layout.sources.map(port => port.id)).toEqual(ids);
+    for (const side of [Position.Top, Position.Bottom]) {
+      const ports = layout.sources.filter(port => port.side === side);
+      for (let index = 1; index < ports.length; index++) {
+        const spacing = (ports[index].offset - ports[index - 1].offset) * rect.width / 100;
+        expect(spacing).toBeGreaterThanOrEqual(48);
+        expect(spacing).toBeGreaterThan((ports[index].labelWidth ?? 0));
+      }
+    }
+    expect(layout.sources.some(port => port.side === Position.Bottom)).toBe(true);
+    expect(layout.sources.some(port => port.side === Position.Right || port.side === Position.Left)).toBe(true);
+  });
+
   it("renders default handles before measurement and suppresses Sequence ports", () => {
     const layout = layoutGraphPorts({ acceptsInbound: true, sourceIds: ["Done"], incoming: [peer(100, 400)], outgoing: new Map() });
     expect(layout.target?.side).toBe(Position.Left);

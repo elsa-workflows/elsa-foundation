@@ -55,6 +55,11 @@ const writeLineCatalog: ActivityCatalogItem = {
   ] : [{ name: "Done", displayName: "Done", isBrowsable: true }],
   available: true
 };
+const denseOutcomeCatalog: ActivityCatalogItem = {
+  ...writeLineCatalog,
+  activityVersionId: "dense-outcomes-v1",
+  ports: Array.from({ length: 30 }, (_, index) => ({ type: "outcome", name: `Case ${index + 1}`, displayName: `Case ${index + 1}` }))
+};
 
 const workflowStartFixture = new URLSearchParams(window.location.search).has("workflow-start");
 const httpEndpointCatalog: ActivityCatalogItem = {
@@ -101,10 +106,13 @@ function editorDraft(): WorkflowDraft {
           { elementId: "write-two", elementType: "task", childNodeId: "write-two" }
         ], sequenceFlows: [{ flowId: "flow-write-one-write-two", sourceRef: "write-one", targetRef: "write-two" }] };
     } else {
-      root.structure!.payload.activities = [notifyBuyer, leafNode("write-two"), leafNode("write-three")];
+      root.structure!.payload.activities = [adaptivePorts === "dense" ? { ...notifyBuyer, activityVersionId: denseOutcomeCatalog.activityVersionId } : notifyBuyer, leafNode("write-two"), leafNode("write-three")];
       root.structure!.payload.connections = [{ id: "flow-write-one-write-two",
         source: { nodeId: "write-one", port: adaptivePorts === "branches" ? "True" : "Done" }, target: { nodeId: "write-two" } },
       ...(adaptivePorts === "branches" ? [{ id: "flow-false", source: { nodeId: "write-one", port: "False" }, target: { nodeId: "write-three" } }] : [])];
+      if (adaptivePorts === "dense") root.structure!.payload.connections = Array.from({ length: 30 }, (_, index) => ({
+        id: `flow-case-${index + 1}`, source: { nodeId: "write-one", port: `Case ${index + 1}` }, target: { nodeId: "write-two" }
+      }));
     }
   }
   return {
@@ -113,7 +121,7 @@ function editorDraft(): WorkflowDraft {
     state: { variables: [], rootActivity: root, inputs: [], outputs: [] },
     layout: adaptivePorts ? [
       { nodeId: "write-one", x: 200, y: 80 },
-      { nodeId: "write-two", x: adaptivePorts === "offset" ? 305 : 200, y: adaptivePorts === "offset" ? 430 : 320 },
+      { nodeId: "write-two", x: adaptivePorts === "offset" ? 305 : 200, y: adaptivePorts === "offset" ? 430 : adaptivePorts === "dense" ? 1100 : 320 },
       { nodeId: "write-three", x: 600, y: 80 }
     ] : [
       { nodeId: "write-one", x: 420, y: 180 },
@@ -228,7 +236,7 @@ function createEditorContext(live?: { status: string; disconnected: boolean }): 
     { ...writeLineCatalog, activityVersionId: "decision-v1", activityTypeKey: "Elsa.BpmnDecision", displayName: "BPMN Decision", category: "BPMN", paletteHints: { containerModes: ["bpmn"], description: "BPMN Decision is intended for a gateway in a BPMN Process." } },
     { ...writeLineCatalog, activityVersionId: "complete-v1", activityTypeKey: "Elsa.Complete", displayName: "Complete", paletteHints: { resourceKinds: ["activity-definition-graph"] } }
   ] : [];
-  const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity, ...paletteFixtures, ...(adaptivePorts ? [bpmnActivity] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : [])];
+  const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity, ...paletteFixtures, ...(adaptivePorts ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : [])];
   const compiled = (node: ActivityNode): object => ({
     executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
     activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown",

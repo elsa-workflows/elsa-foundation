@@ -76,6 +76,21 @@ test("first measured placement chooses shorter sides before applying movement hy
   await side(target(page), "top");
 });
 
+test("dense outcomes retain distinct handles and readable label slots", async ({ page }) => {
+  await page.goto("/?mode=activity-duplicate-editor&adaptive-ports=dense&theme=classic");
+  const card = node(page, "write-one");
+  await expect(card.locator(".source")).toHaveCount(30);
+  await expect(card.locator('.source[data-handlepos="bottom"]')).toHaveCount(4);
+  const overlaps = async (selector: string) => card.locator(selector).evaluateAll(elements => {
+    const boxes = elements.map(element => element.getBoundingClientRect());
+    return boxes.some((a, index) => boxes.slice(index + 1).some(b => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top));
+  });
+  expect(await overlaps(".source")).toBe(false);
+  expect(await overlaps(".wf-node-port-label")).toBe(false);
+  await expect(card.locator('.source[data-handleid="Case 30"]')).toHaveCount(1);
+  await expect(card.locator('.wf-node-port-label[title="Case 30"]')).toHaveCount(1);
+});
+
 test("top-facing outcome labels remain clear of selected-node tools at different zooms", async ({ page }, testInfo) => {
   await page.goto("/?mode=activity-duplicate-editor&adaptive-ports=vertical&theme=classic");
   await side(source(page), "bottom");
