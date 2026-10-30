@@ -18,7 +18,8 @@ import { flowchartStructureKind } from "../flowchartStartNode";
 import { bpmnStructureKind } from "../bpmn/bpmnTypes";
 import { sequenceStructureKind } from "../workflowAdapter";
 import { activityDragDataType } from "../workflow-editor/constants";
-import type { ActivityCatalogItem } from "../workflowTypes";
+import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
+import { bpmnActivity, flowchartActivity, whileActivity, whileNode, sequenceActivity, sequenceNode } from "./fixtures";
 
 vi.mock("../api/activityDesign", () => ({
   useWorkflowActivities: () => ({
@@ -357,6 +358,87 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
     expect(layout).toHaveLength(1);
     // The grid fallback would put the first node at (80, 80); a positioned drop must not land there.
     expect({ x: layout[0].x, y: layout[0].y }).not.toEqual({ x: 80, y: 80 });
+  });
+});
+
+describe("ActivityGraphImplementationEditor single-activity slot navigation", () => {
+  function implementation(nested: boolean, body: ActivityNode | null = null) {
+    const loop = whileNode("while", body);
+    return implementationValue({ rootActivity: nested ? sequenceNode("root", [loop]) : loop });
+  }
+
+  function selectSlot(container: HTMLElement, nested: boolean) {
+    if (nested) click(container.querySelector("[data-graph-node-id='while']")!);
+    click([...container.querySelectorAll("[role='tab']")].find(tab => tab.textContent === "Slots")!);
+    click(buttonByText(container, "Choose Body activity", "aria-label"));
+  }
+
+  function pick(container: HTMLElement, name: string) {
+    click([...container.querySelectorAll(".wf-connect-menu [role='option']")]
+      .find(option => option.querySelector("strong")?.textContent === name)!);
+  }
+
+  it.each([false, true])("opens an assigned Sequence designer and edits the body (nested=%s)", async nested => {
+    catalogItems = [whileActivity, sequenceActivity, leafCatalogItem()];
+    const rendered = renderControlledDesigner(implementation(nested));
+    selectSlot(rendered.container, nested);
+    pick(rendered.container, "Sequence");
+
+    expect(rendered.container.querySelector(".ad-graph-scope-label")?.textContent).toContain("SequenceActivities");
+    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("RootWhile / Body");
+    expect(rendered.container.querySelector(".wf-sequence-designer")).not.toBeNull();
+    await vi.waitFor(() => expect(rendered.container.querySelector("[data-graph-node-id]")).toBeNull());
+    click(buttonByText(rendered.container, "Primitives1"));
+    click(buttonByText(rendered.container, "Write line"));
+    const root = rendered.onChange.mock.calls.at(-1)![0].payload.rootActivity;
+    const loop = nested ? root.structure.payload.activities[0] : root;
+    expect(loop.nodeId).toBe("while");
+    expect(loop.structure.payload.body.activityVersionId).toBe(sequenceActivity.activityVersionId);
+    expect(loop.structure.payload.body.structure.payload.activities).toEqual([
+      expect.objectContaining({ activityVersionId: "write-line-v1" })
+    ]);
+
+    click(buttonByText(rendered.container, "Root"));
+    if (nested) {
+      await vi.waitFor(() => expect(rendered.container.querySelector("[data-graph-node-id='while']")).not.toBeNull());
+      click(rendered.container.querySelector("[data-graph-node-id='while']")!);
+    }
+    click([...rendered.container.querySelectorAll("[role='tab']")].find(tab => tab.textContent === "Slots")!);
+    click(rendered.container.querySelector(".wf-slot-row button")!);
+    expect(rendered.container.querySelector(".ad-graph-scope-label")?.textContent).toContain("SequenceActivities");
+    await vi.waitFor(() => expect(rendered.container.querySelectorAll("[data-graph-node-id]")).toHaveLength(1));
+  });
+
+  it.each([flowchartActivity, bpmnActivity])("opens the assigned $displayName designer", async activity => {
+    catalogItems = [whileActivity, activity];
+    const rendered = renderControlledDesigner(implementation(true));
+    selectSlot(rendered.container, true);
+    pick(rendered.container, activity.displayName!);
+    expect(rendered.container.querySelector(".ad-graph-scope-label")?.textContent).toContain(activity.displayName);
+    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("RootWhile / Body");
+    await vi.waitFor(() => expect(rendered.container.querySelectorAll("[data-graph-node-id]")).toHaveLength(0));
+  });
+
+  it("keeps an assigned leaf selected in its single-activity slot", async () => {
+    catalogItems = [whileActivity, sequenceActivity, leafCatalogItem()];
+    const rendered = renderControlledDesigner(implementation(true));
+    selectSlot(rendered.container, true);
+    pick(rendered.container, "Write line");
+    expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("Write line");
+    expect(rendered.container.querySelector(".wf-breadcrumb")?.textContent).toBe("RootWhile / Body");
+    expect(rendered.container.querySelectorAll("[data-graph-node-id]")).toHaveLength(1);
+  });
+
+  it("opens the container picked from an empty nested slot", async () => {
+    catalogItems = [whileActivity, sequenceActivity, leafCatalogItem()];
+    const rendered = renderControlledDesigner(implementation(true));
+    click(rendered.container.querySelector("[data-graph-node-id='while']")!);
+    click([...rendered.container.querySelectorAll("[role='tab']")].find(tab => tab.textContent === "Slots")!);
+    click(rendered.container.querySelector(".wf-slot-row button")!);
+    const card = rendered.container.querySelector(".wf-slot-empty")!;
+    click([...card.querySelectorAll("button")].find(button => button.textContent?.includes("Sequence"))!);
+    expect(rendered.container.querySelector(".ad-graph-scope-label")?.textContent).toContain("SequenceActivities");
+    await vi.waitFor(() => expect(rendered.container.querySelectorAll("[data-graph-node-id]")).toHaveLength(0));
   });
 });
 
