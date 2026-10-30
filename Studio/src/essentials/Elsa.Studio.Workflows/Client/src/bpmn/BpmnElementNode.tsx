@@ -1,22 +1,25 @@
 import React from "react";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { Handle, type NodeProps } from "@xyflow/react";
 import { renderActivityIcon } from "../activityIconView";
 import { NodeSlotBadges } from "../workflow-editor/NodeSlotBadges";
 import { RuntimeIncidentAction } from "../workflow-editor/RuntimeIncidentAction";
 import { ExecutionActivityPulse } from "../workflow-editor/ExecutionMotionPulse";
 import { bpmnElementTypes, bpmnElementTypeLabel, isEventElementType, isGatewayElementType, isTerminateEndEvent } from "./bpmnTypes";
 import type { BpmnNodeData } from "./bpmnAdapter";
+import { useGraphPortLayout } from "../graph-authoring/useGraphPortLayout";
+import { portPlacementStyle } from "../graph-authoring/graphPortLayout";
 
 // Renders one BPMN element with its standard notation shape: thin circle (start event), thick circle
 // (end event, filled when terminate), diamond with an X / + / O marker (exclusive / parallel /
 // inclusive gateway), and a rounded task/subprocess frame showing the bound Elsa activity. Start
 // events have no inbound handle; end events no outbound handle.
-export function BpmnElementNode({ data, selected }: NodeProps) {
+export function BpmnElementNode({ id, data, selected }: NodeProps) {
   const nodeData = data as BpmnNodeData;
   const element = nodeData.element;
   const acceptsInbound = element.elementType !== bpmnElementTypes.startEvent;
   const producesOutbound = element.elementType !== bpmnElementTypes.endEvent;
   const typeLabel = bpmnElementTypeLabel(element);
+  const ports = useGraphPortLayout(id, producesOutbound ? ["flow"] : [], acceptsInbound);
 
   return (
     <div
@@ -26,10 +29,10 @@ export function BpmnElementNode({ data, selected }: NodeProps) {
       title={typeLabel}
     >
       <ExecutionActivityPulse pulse={nodeData.executionPulse} status={nodeData.runtime?.status} />
-      {acceptsInbound ? <Handle type="target" position={Position.Left} /> : null}
+      {ports.target ? <Handle type="target" position={ports.target.side} style={portPlacementStyle(ports.target)} /> : null}
       {renderBpmnShape(nodeData)}
       {nodeData.runtime ? <RuntimeIncidentAction runtime={nodeData.runtime} onOpenIncident={nodeData.onIncidentClick} activityLabel={element.name?.trim() || nodeData.boundActivity?.label || typeLabel} className="wf-bpmn-incident-action" /> : null}
-      {producesOutbound ? <Handle type="source" position={Position.Right} id="flow" /> : null}
+      {ports.sources.map(port => <Handle key={port.id} type="source" position={port.side} id={port.id} style={portPlacementStyle(port)} />)}
     </div>
   );
 }

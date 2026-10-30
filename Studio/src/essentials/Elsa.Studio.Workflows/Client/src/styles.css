@@ -4784,9 +4784,10 @@ button.wf-node-slot-badge:focus-visible {
 
 .wf-node-port-label {
   position: absolute;
-  right: 9px;
-  max-width: 72px;
-  transform: translateY(-50%);
+  max-width: 128px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   border: 1px solid var(--wf-border);
   border-radius: 999px;
   background: color-mix(in srgb, var(--wf-panel-tone) 96%, transparent);
@@ -4795,7 +4796,27 @@ button.wf-node-slot-badge:focus-visible {
   font-weight: var(--wf-label-weight, 600);
   line-height: 1;
   padding: 3px 6px;
-  pointer-events: none;
+  pointer-events: auto;
+}
+
+.wf-node-port-label[data-side="right"] {
+  left: calc(100% + 10px);
+  transform: translateY(-50%);
+}
+
+.wf-node-port-label[data-side="left"] {
+  right: calc(100% + 10px);
+  transform: translateY(-50%);
+}
+
+.wf-node-port-label[data-side="top"] {
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+}
+
+.wf-node-port-label[data-side="bottom"] {
+  top: calc(100% + 10px);
+  transform: translateX(-50%);
 }
 
 .wf-edge-actions {

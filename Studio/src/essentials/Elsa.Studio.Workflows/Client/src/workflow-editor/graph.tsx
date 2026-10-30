@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { BaseEdge, EdgeLabelRenderer, Handle, Position, getBezierPath, getSmoothStepPath, type EdgeProps, type NodeProps } from "@xyflow/react";
+import { BaseEdge, EdgeLabelRenderer, Handle, getBezierPath, getSmoothStepPath, type EdgeProps, type NodeProps } from "@xyflow/react";
 import { useStudioThemeLayout, type StudioThemeLayout } from "@elsa-workflows/studio-sdk";
 import { AlertTriangle, Flag, Plus, Trash2 } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
@@ -17,6 +17,8 @@ import { httpEndpointResponseBadge } from "../httpEndpointResponseMode";
 import type { WorkflowEdge } from "./editorTypes";
 import { resolveNodeActivityVisual } from "./workflowNodeVisual";
 import { ExecutionActivityPulse } from "./ExecutionMotionPulse";
+import { useGraphPortLayout } from "../graph-authoring/useGraphPortLayout";
+import { portPlacementStyle } from "../graph-authoring/graphPortLayout";
 
 export const nodeTypes = { workflowActivity: WorkflowActivityNode, bpmnElement: BpmnElementNode };
 export const edgeTypes = { workflow: WorkflowFlowEdge };
@@ -33,6 +35,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
   const httpResponseBadge = httpEndpointResponseBadge(nodeData.httpEndpointResponseMode ?? null);
   const availabilityLookup = React.useContext(WorkflowNodeAvailabilityContext);
   const availability = availabilityLookup?.({ activityVersionId: nodeData.activityVersionId, activityTypeKey: nodeData.activityTypeKey }) ?? null;
+  const ports = useGraphPortLayout(id, sourcePorts.map(port => port.name), showFlowPorts && nodeData.acceptsInbound);
   return (
     <div
       className={["wf-node", selected ? "selected" : "", runtime ? "wf-node-runtime" : "", runtime?.hasBlockingIncident ? "faulted" : "", availability ? "wf-node-unavailable" : "", nodeData.ghost ? "wf-node-ghost" : "", nodeData.isStartNode ? "wf-node-start" : ""].filter(Boolean).join(" ")}
@@ -43,9 +46,10 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
       data-runtime-node-id={nodeData.runtimeNodeId ?? id}
       title={[nodeData.label, nodeData.description].filter(Boolean).join(" — ")}
       aria-description={nodeData.description}
+      style={{ minHeight: ports.minHeight }}
     >
       <ExecutionActivityPulse pulse={nodeData.executionPulse} status={nodeData.runtime?.status} />
-      {showFlowPorts && nodeData.acceptsInbound ? <Handle type="target" position={Position.Left} /> : null}
+      {ports.target ? <Handle type="target" position={ports.target.side} style={portPlacementStyle(ports.target)} /> : null}
       {nodeData.isStartNode ? (
         <span className="wf-node-start-badge" title="Execution starts here">
           <Flag size={11} aria-hidden="true" /> Start
@@ -82,11 +86,12 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
       />
       <WorkflowNodeRuntimeBadges data={nodeData} />
       {sourcePorts.map((port, index) => {
-        const top = `${((index + 1) / (sourcePorts.length + 1)) * 100}%`;
+        const placement = ports.sources[index];
         return (
           <React.Fragment key={port.name}>
-            <span className="wf-node-port-label" style={{ top }}>{port.displayName}</span>
-            <Handle type="source" position={Position.Right} id={port.name} style={{ top }} />
+            <span className="wf-node-port-label" data-side={placement.side} title={port.displayName}
+              style={{ ...portPlacementStyle(placement), maxWidth: placement.labelWidth }}>{port.displayName}</span>
+            <Handle type="source" position={placement.side} id={port.name} style={portPlacementStyle(placement)} />
           </React.Fragment>
         );
       })}
