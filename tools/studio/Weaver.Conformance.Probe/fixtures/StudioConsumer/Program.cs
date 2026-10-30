@@ -8,6 +8,7 @@ using Elsa.Studio.Hosting;
 using Elsa.Studio.Hosting.Nuplane;
 using Elsa.Studio.Weaver.Workflows;
 using Elsa.Studio.Workflows;
+using Microsoft.AspNetCore.DataProtection;
 using Nuplane.Admin;
 using Nuplane.Builder;
 using Nuplane.Feeds.Configuration;
@@ -18,6 +19,8 @@ using Nuplane.Sources.Directory.Builder;
 const string shellName = "Authoring";
 var builder = WebApplication.CreateBuilder(args);
 var contentRoot = builder.Environment.ContentRootPath;
+var keys = Directory.CreateDirectory(Path.Combine(contentRoot, "state", "data-protection-keys"));
+builder.Services.AddDataProtection().PersistKeysToFileSystem(keys);
 var state = Path.Combine(contentRoot, "native-store", "state.json");
 Directory.CreateDirectory(Path.GetDirectoryName(state)!);
 var studio = builder.AddElsaStudio(options => options.ShellName = shellName)
@@ -54,7 +57,14 @@ app.MapGet("/__qualification/generation", async (CancellationToken cancellationT
 }).RequireAuthorization(StudioBridgeAuthorization.ModuleManagementReadPolicyName);
 app.MapPost("/__qualification/reconcile", async (INuplaneAdminOperations operations, CancellationToken cancellationToken) =>
     await operations.TriggerReconcileAsync(cancellationToken)).RequireAuthorization(StudioBridgeAuthorization.ModuleManagementManagePolicyName);
-await app.StartAsync();
+await StartupDiagnosticGate.ObserveAsync(builder.Configuration, contentRoot, "before-start", "Complete");
+try {
+    await app.StartAsync();
+} catch (Exception failure) {
+    try { await StartupDiagnosticGate.ObserveAsync(builder.Configuration, contentRoot, "start-failed", "Complete", failure); }
+    catch (Exception diagnosticFailure) { Console.Error.WriteLine("Owned startup diagnostic failed: " + diagnosticFailure.GetType().FullName); }
+    throw;
+}
 var initial = await app.Services.GetRequiredService<INuplaneAdminOperations>().TriggerReconcileAsync(CancellationToken.None);
 if (initial.RunResult is not { IsDegraded: false }) throw new InvalidOperationException("Initial owned Studio reconciliation failed.");
 Console.WriteLine("WEAVER_STUDIO_CONSUMER_READY");

@@ -21,12 +21,11 @@ BACKEND_SHARED = (
     "Nuplane.Abstractions", "Nuplane.Loading.Abstractions", "CShells.Abstractions",
     "CShells.AspNetCore.Abstractions", "Elsa.Agent.Core", "Elsa.Foundation.Identity.Core",
     "Elsa.Studio.Preferences.Core", "Elsa.Agent.GitHubCopilot", "Elsa.Agent.Anthropic",
-    "Microsoft.Extensions.AI.Abstractions", "Microsoft.Extensions.DependencyInjection.Abstractions",
+    "Microsoft.Extensions.AI.Abstractions",
 )
 STUDIO_SHARED = (
     "Nuplane.Abstractions", "Nuplane.Loading.Abstractions", "CShells.Abstractions",
     "CShells.AspNetCore.Abstractions", "Elsa.Studio.Core", "Elsa.Studio.Api",
-    "Microsoft.Extensions.DependencyInjection.Abstractions",
 )
 PROTOCOL_FEATURES = {
     "copilot": ("GitHubCopilotAgent", "AcmeCopilotProtocolFixture"),
@@ -42,6 +41,39 @@ def write_json(path, value):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, indent=2) + "\n")
+
+
+def stage_native_archives(run, name, archives):
+    """Admit explicit retained archive inputs to an owned native feed; no runtime cache probing.
+
+    Each input is {path, sha256}; an optional identity must match the actual nuspec.
+    The caller selects the needed closure from retained producer/author archive receipts.
+    This does not reconcile, start a host, or write the run report.
+    """
+    profile = run.profiles[name]
+    staged = profile.setdefault("runtimeArchiveInputs", [])
+    for item in archives:
+        source = Path(item["path"]).resolve()
+        check(source.is_relative_to(run.root.resolve()) and source.is_file() and source.suffix.lower() == ".nupkg",
+              "Native archive input must be an explicitly retained package under the owned run root")
+        check(sha(source) == item["sha256"], "Native archive input hash differs from its retained receipt")
+        with zipfile.ZipFile(source) as archive:
+            specs = [entry for entry in archive.namelist() if entry.endswith(".nuspec")]
+            check(len(specs) == 1, "Native archive has no unique nuspec")
+            metadata = ET.fromstring(archive.read(specs[0]))
+            values = {node.tag.rsplit("}", 1)[-1]: node.text for node in metadata.iter()
+                      if node.tag.rsplit("}", 1)[-1] in {"id", "version"}}
+        check(bool(values.get("id")) and bool(values.get("version")), "Native archive identity is incomplete")
+        identity = values["id"] + "/" + values["version"]
+        check(not item.get("identity") or item["identity"] == identity, "Native archive nuspec identity differs from its retained receipt")
+        destination = profile["runtimeFeed"] / source.name
+        check(not destination.exists() or sha(destination) == item["sha256"], "Native feed already contains different bytes for this archive")
+        if not destination.exists():
+            shutil.copy2(source, destination)
+        record = {"identity": identity, "sourceArchive": str(source), "path": str(destination), "sha256": item["sha256"]}
+        if record not in staged:
+            staged.append(record)
+    return staged
 
 
 def references(run, products, externals):
@@ -116,7 +148,7 @@ def configure_runtime(run, *, backend_url, studio_url, admin_username, admin_pas
     backend = run.profiles["backend"]["published"]
     studio = run.profiles["studio"]["published"]
     settings = json.loads((backend / "appsettings.json").read_text())
-    settings["Qualification"].update(StudioOrigin=studio_url.rstrip("/"), EnrollOwnedStore=bool(enroll))
+    settings["Qualification"].update(StudioOrigin=studio_url.rstrip("/"), EnrollOwnedStore=bool(enroll), DiagnosticGateDirectory="")
     write_json(backend / "appsettings.json", settings)
     document = json.loads((backend / "shells.json").read_text())
     features = document["CShells"]["Shells"]["Authoring"]["Features"]
@@ -128,8 +160,12 @@ def configure_runtime(run, *, backend_url, studio_url, admin_username, admin_pas
     settings = json.loads((studio / "appsettings.json").read_text())
     settings["Studio"].update(BackendBaseUrl=backend_url.rstrip("/"), BackendServerBaseUrl=backend_url.rstrip("/"))
     settings["Qualification"]["EnrollOwnedStore"] = bool(enroll)
+    settings["Qualification"]["DiagnosticGateDirectory"] = ""
     write_json(studio / "appsettings.json", settings)
     select_protocol_profile(run, provider)
+    # These runtime files include the fixture's private native administrator seed.
+    for path in (backend / "appsettings.json", backend / "shells.json", studio / "appsettings.json", studio / "shells.json"):
+        path.chmod(0o600)
 
 
 def consumer_files(profile):
@@ -168,11 +204,22 @@ def prepare_consumers(run):
     """
     protocol = list(run.feed.glob("Acme.Weaver.ProtocolFixtures.*.nupkg"))
     check(len(protocol) == 1, "Supply exactly one independently packed generic protocol fixture before preparing consumers")
+    # A failed real restore/build remains intact. Retrying never overwrites its sources, cache or logs.
+    attempt = 1
+    while (run.root / ("backend" + ("" if attempt == 1 else "-attempt-" + str(attempt)) + "-consumer")).exists():
+        attempt += 1
+    suffix = "" if attempt == 1 else "-attempt-" + str(attempt)
+    attempt_record = {"attempt": attempt, "status": "preparing", "profiles": {}}
+    run.report.setdefault("consumerPreparationAttempts", []).append(attempt_record)
+    run.save()
     for name, relative, products, externals, shared, token in (
         ("backend", "BackendConsumer", BACKEND_PACKAGES, BACKEND_EXTERNAL, BACKEND_SHARED, "__BACKEND_REFERENCES__"),
         ("studio", "StudioConsumer", STUDIO_PACKAGES, STUDIO_EXTERNAL, STUDIO_SHARED, "__STUDIO_REFERENCES__"),
     ):
-        source = run.materialize(name + "-consumer", relative, {token: references(run, products, externals)})
+        owned_name = name + suffix
+        source = run.materialize(owned_name + "-consumer", relative, {token: references(run, products, externals)})
+        attempt_record["profiles"][name] = {"source": str(source), "status": "preparing"}
+        run.save()
         for ancestor in source.parents:
             check(not any((ancestor / file).exists() for file in ("Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props")),
                   "External consumer would inherit ambient build configuration: " + str(ancestor))
@@ -180,7 +227,7 @@ def prepare_consumers(run):
         check(len(projects) == 1, "Expected one external consumer project")
         project = projects[0]
         check(not list(ET.parse(project).getroot().iter("ProjectReference")), "Consumer contains a source/project reference")
-        published = run.root / (name + "-published")
+        published = run.root / (owned_name + "-published")
         settings = json.loads((source / "appsettings.json").read_text())
         settings["Nuplane"]["HostProvidedPackages"] = list(shared)
         if name == "backend":
@@ -191,11 +238,11 @@ def prepare_consumers(run):
         write_json(source / "appsettings.json", settings)
         write_json(source / "shells.json", {"CShells": {"Shells": {"Authoring": {"Name": "Authoring", "Features": features,
                      "Configuration": {"WebRouting": {"Path": ""}}}}}})
-        env, audit = run.consumer_environment(name)
+        env, audit = run.consumer_environment(owned_name)
         audit.touch(exist_ok=True)
         check(not audit.read_text().strip(), "Consumer frontend audit was already nonempty")
-        run.run(name + "-restore", [run.dotnet, "restore", str(project), "--configfile", "NuGet.Config", "--no-http-cache"], source, env)
-        run.run(name + "-locked-restore", [run.dotnet, "restore", str(project), "--configfile", "NuGet.Config", "--locked-mode", "--no-http-cache"], source, env)
+        run.run(owned_name + "-restore", [run.dotnet, "restore", str(project), "--configfile", "NuGet.Config", "--no-http-cache"], source, env)
+        run.run(owned_name + "-locked-restore", [run.dotnet, "restore", str(project), "--configfile", "NuGet.Config", "--locked-mode", "--no-http-cache"], source, env)
         assets = source / "obj/project.assets.json"
         graph = json.loads(assets.read_text())
         check(bool(graph["libraries"]) and all(library["type"] == "package" for library in graph["libraries"].values()), "Consumer reaches product source")
@@ -205,8 +252,8 @@ def prepare_consumers(run):
         check(not {"Acme.Home.Studio", "Acme.Home.Weaver", "Acme.Weaver.ProtocolFixtures"}.intersection(identities), "Baseline has a concrete resource/protocol reference")
         check(all(identities.get(package) == run.packages[package]["version"] for package in products), "Consumer did not resolve its exact product roots")
         check(set(shared).issubset(identities), "Shared contract is absent from actual published dependency closure")
-        run.run(name + "-build", [run.dotnet, "build", str(project), "-c", "Release", "--no-restore", "--nologo"], source, env)
-        run.run(name + "-publish", [run.dotnet, "publish", str(project), "-c", "Release", "--no-restore", "--no-build", "-o", str(published)], source, env)
+        run.run(owned_name + "-build", [run.dotnet, "build", str(project), "-c", "Release", "--no-restore", "--nologo"], source, env)
+        run.run(owned_name + "-publish", [run.dotnet, "publish", str(project), "-c", "Release", "--no-restore", "--no-build", "-o", str(published)], source, env)
         candidates = {}
         for identity, library in graph["libraries"].items():
             package, version = identity.rsplit("/", 1)
@@ -232,11 +279,12 @@ def prepare_consumers(run):
                    "runtimeFeed": published / "runtime-feed", "nativeStore": published / "native-store",
                    "appsettings": published / "appsettings.json", "shells": published / "shells.json"}
         if name == "backend":
-            shutil.copy2(protocol[0], profile["runtimeFeed"] / protocol[0].name)
             profile.update(commandFile=published / "protocol/command.json",
                            traceFiles={provider: published / ("protocol/" + provider + ".jsonl") for provider in PROTOCOL_FEATURES})
             write_json(profile["commandFile"], {"commandId": "baseline-readiness", "toolName": "baseline-no-tool", "arguments": {}})
         run.profiles[name] = profile
+        if name == "backend":
+            stage_native_archives(run, name, [{"path": str(protocol[0]), "sha256": sha(protocol[0])}])
         check(not audit.read_text().strip(), "Consumer invoked frontend tools")
         lock = source / "packages.lock.json"
         check(lock.is_file(), "Consumer did not retain its lock file")
@@ -244,6 +292,10 @@ def prepare_consumers(run):
             "assets": {"path": str(assets), "sha256": sha(assets)}, "lock": {"path": str(lock), "sha256": sha(lock)},
             "frontendInvocations": 0, "frontendAudit": {"path": str(audit), "sha256": sha(audit)}, "sourceReferences": [],
             "candidatePackages": candidates, "hostProvidedPackages": {package: identities[package] for package in shared},
+            "frameworkSharedAssemblies": ["Microsoft.Extensions.DependencyInjection.Abstractions"],
             "consumerDirectory": str(source), "publishedDirectory": str(published)}
+        attempt_record["profiles"][name].update(status="published", published=str(published))
         run.save()
     select_protocol_profile(run, "copilot")
+    attempt_record["status"] = "published"
+    run.save()

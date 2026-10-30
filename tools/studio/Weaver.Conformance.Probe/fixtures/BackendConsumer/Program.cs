@@ -14,10 +14,15 @@ using Elsa.Cluster.Readability;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Modularity.Api.Authorization;
+using Elsa.Modularity.Api.Services;
+using Elsa.Modularity.Core.Contracts;
+using Elsa.Modularity.Core.Models;
 using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Studio.Preferences.Core.Contracts;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Nuplane;
 using Nuplane.Admin;
 using Nuplane.Builder;
@@ -32,6 +37,8 @@ const string shellName = "Authoring";
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("shells.json", optional: false, reloadOnChange: true);
 var contentRoot = builder.Environment.ContentRootPath;
+var keys = Directory.CreateDirectory(Path.Combine(contentRoot, "state", "data-protection-keys"));
+builder.Services.AddDataProtection().PersistKeysToFileSystem(keys);
 var origin = builder.Configuration["Qualification:StudioOrigin"];
 if (!Uri.TryCreate(origin, UriKind.Absolute, out var studioOrigin) || !studioOrigin.IsLoopback)
     throw new InvalidOperationException("Set Qualification:StudioOrigin to the exact owned Studio origin before starting.");
@@ -67,6 +74,10 @@ builder.Services.AddNuplane(builder.Configuration.GetSection("Nuplane"), nuplane
 builder.Services.ShareWithShells<IReconciliationTriggerIngress>()
     .ShareWithShells<ManualReconcileCoordinator>().ShareWithShells<INuplaneAdminOperations>();
 builder.Services.AddNuplaneFeatureCatalog();
+// The real ModularityApi feature replaces these root-only guards in every shell.
+// Root validation must not manufacture a shell identity or a writable feature store.
+builder.Services.TryAddScoped<IShellFeatureConfigurationStore, RootFeatureStoreGuard>();
+builder.Services.TryAddScoped<IShellReloader, RootShellReloadGuard>();
 builder.Services.AddEfSchemaReadability();
 builder.Services.AddShellStartupValidation();
 
@@ -136,18 +147,59 @@ app.MapPost("/__qualification/reconcile", async (INuplaneAdminOperations operati
 app.MapGet("/__qualification/generation", async (IShellRegistry registry, CancellationToken cancellationToken) => {
     var shell = await registry.GetOrActivateAsync(shellName, cancellationToken);
     await using var scope = shell.BeginScope();
+    var featureStore = scope.ServiceProvider.GetRequiredService<IShellFeatureConfigurationStore>();
+    var shellReloader = scope.ServiceProvider.GetRequiredService<IShellReloader>();
+    if (featureStore.GetType() != typeof(JsonShellFeatureConfigurationStore) || shellReloader.GetType() != typeof(ShellReloader)
+        || RootFeatureStoreGuard.UseCount != 0 || RootShellReloadGuard.UseCount != 0)
+        throw new InvalidOperationException("The actual ModularityApi shell must own feature configuration and reload; root guards must remain unused.");
     var tools = await scope.ServiceProvider.GetRequiredService<IAgentToolRegistry>().ListAsync(cancellationToken);
     return new {
         generation = generations.GetValue(shell, _ => new(Guid.NewGuid().ToString("N"))).Id,
         contextSources = scope.ServiceProvider.GetServices<IAgentContextProvider>().Select(source => new { source.Descriptor.Id, source.Descriptor.ModuleId, assembly = source.GetType().Assembly.GetName().Name }),
         tools = tools.Select(tool => new { tool.Descriptor.Name, tool.Descriptor.ModuleId, tool.Descriptor.ContractVersion, assembly = tool.GetType().Assembly.GetName().Name }),
+        featureConfiguration = new {
+            store = new { type = featureStore.GetType().FullName, assembly = featureStore.GetType().Assembly.FullName },
+            reloader = new { type = shellReloader.GetType().FullName, assembly = shellReloader.GetType().Assembly.FullName },
+            rootGuardUses = RootFeatureStoreGuard.UseCount + RootShellReloadGuard.UseCount
+        },
         sharedContracts = contracts.Select(assembly => new { name = assembly.GetName().Name, identity = assembly.FullName, location = assembly.Location })
     };
 }).RequirePermission(ModuleManagementPermissionKeys.Read);
-await app.StartAsync();
+await StartupDiagnosticGate.ObserveAsync(builder.Configuration, contentRoot, "before-start", "Complete");
+try {
+    await app.StartAsync();
+} catch (Exception failure) {
+    try { await StartupDiagnosticGate.ObserveAsync(builder.Configuration, contentRoot, "start-failed", "Complete", failure); }
+    catch (Exception diagnosticFailure) { Console.Error.WriteLine("Owned startup diagnostic failed: " + diagnosticFailure.GetType().FullName); }
+    throw;
+}
 var initial = await app.Services.GetRequiredService<INuplaneAdminOperations>().TriggerReconcileAsync(CancellationToken.None);
 if (initial.RunResult is not { IsDegraded: false }) throw new InvalidOperationException("Initial owned backend reconciliation failed.");
 Console.WriteLine("WEAVER_BACKEND_CONSUMER_READY");
 await app.WaitForShutdownAsync();
 
 sealed record GenerationIdentity(string Id);
+
+sealed class RootFeatureStoreGuard : IShellFeatureConfigurationStore
+{
+    private static int _useCount;
+    public static int UseCount => Volatile.Read(ref _useCount);
+    private static InvalidOperationException Refuse()
+    {
+        Interlocked.Increment(ref _useCount);
+        return new("Resolve feature configuration through the actual shell-scoped ModularityApi service.");
+    }
+    public Task<ShellFeatureConfigurationSnapshot> LoadAsync(CancellationToken cancellationToken = default) => throw Refuse();
+    public Task<ShellFeatureConfigurationSnapshot> SaveAsync(string expectedRevision, IReadOnlyList<FeatureConfigurationChange> features, CancellationToken cancellationToken = default) => throw Refuse();
+}
+
+sealed class RootShellReloadGuard : IShellReloader
+{
+    private static int _useCount;
+    public static int UseCount => Volatile.Read(ref _useCount);
+    public Task<int> ReloadAsync(CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref _useCount);
+        throw new InvalidOperationException("Resolve feature reload through the actual shell-scoped ModularityApi service.");
+    }
+}

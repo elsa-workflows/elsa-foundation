@@ -83,6 +83,16 @@ class ConformanceRun:
     def save(self):
         write_json(self.root / "report.json", self.report)
 
+    def assert_immutable_inputs(self):
+        head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
+        check(head == self.source, "Source changed during qualification; use a fresh committed run")
+        check(not subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"],
+                                         cwd=REPO, text=True).strip(),
+              "Qualification inputs are no longer committed and clean")
+        current = {str(p.relative_to(REPO)): sha(p) for p in TOOL.rglob("*")
+                   if p.is_file() and "__pycache__" not in p.parts}
+        check(current == self.report["toolInputHashes"], "Driver/template inputs changed during qualification")
+
     def run(self, name, command, cwd, env=None):
         self.report["stage"] = name
         self.save()
@@ -115,15 +125,15 @@ class ConformanceRun:
                     node = ET.SubElement(mapping, "packageSource", key=source.attrib["key"])
                     ET.SubElement(node, "package", pattern="*")
         group = ET.SubElement(mapping, "packageSource", key="weaver-candidate")
-        for package in sorted(self.packages):
+        candidate_ids = set(self.packages)
+        candidate_ids.update(package_identity(path)["id"] for path in self.feed.glob("*.nupkg"))
+        for package in sorted(candidate_ids):
             ET.SubElement(group, "package", pattern=package)
         ET.ElementTree(root).write(target / "NuGet.Config", encoding="unicode")
         shutil.copy2(REPO / "global.json", target / "global.json")
 
     def produce(self):
-        check(not subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"],
-                                         cwd=REPO, text=True).strip(),
-              "Commit producer/tool inputs before an immutable qualification run")
+        self.assert_immutable_inputs()
         producer = self.root / "producer"
         producer.mkdir()
         self.run("archive", ["git", "archive", "--format=tar", "--output=" + str(self.root / "source.tar"), self.source], REPO)
@@ -190,6 +200,7 @@ class ConformanceRun:
         self.save()
 
     def materialize(self, name, relative, replacements=None):
+        self.assert_immutable_inputs()
         source = self.root / name
         source.mkdir()
         values = {"__PRODUCT_VERSION__": self.version, "__FIXTURE_VERSION__": "1.0.0-witness",
@@ -208,7 +219,8 @@ class ConformanceRun:
             text = path.read_text()
             for key, value in values.items():
                 text = text.replace(key, value)
-            check("__PRODUCT_VERSION__" not in text and "__SDK_TGZ__" not in text,
+            import re
+            check(not re.search(r"__[A-Z][A-Z0-9_]*__", text),
                   "Unresolved distribution input in " + str(target))
             target.write_text(text)
         self.config(source)
@@ -236,6 +248,7 @@ class ConformanceRun:
             self.produce()
             from journeys import qualify_distributions
             qualify_distributions(self)
+            self.assert_immutable_inputs()
             check(self.report["status"] == "passed" and self.report["independentPackageWitness"],
                   "Incomplete qualification cannot establish a witness")
         except BaseException as error:

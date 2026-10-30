@@ -8,10 +8,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Client/**</DefaultItemExcludes>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Description>Independent personal Home widget Weaver conformance fixture.</Description>
   </PropertyGroup>
   <ItemGroup>
+    <Content Remove="Client/**;NuGet.Config;global.json" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Elsa.Studio.Core" Version="__PRODUCT_VERSION__" />
     <PackageReference Include="CShells.Abstractions" Version="__CSHELLS_VERSION__" />
