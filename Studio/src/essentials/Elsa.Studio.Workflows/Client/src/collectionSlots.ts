@@ -33,6 +33,7 @@ export function collectionSlotsFromFacet(activity: ActivityNode, facet: Structur
 
 export function collectionSlotItems(activity: ActivityNode, collection: CollectionSlot): Record<string, unknown>[] | null {
   if (activity.structure?.kind !== collection.kind || activity.structure.schemaVersion !== collection.schemaVersion) return null;
+  if (!isRecord(activity.structure.payload)) return null;
   const items = activity.structure.payload[collection.property];
   return Array.isArray(items) && items.every(item => isRecord(item) && typeof item[collection.labelProperty] === "string"
     && (item[collection.childProperty] == null || isActivity(item[collection.childProperty]))) ? items : null;

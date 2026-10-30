@@ -82,6 +82,13 @@ describe("catalog collection slots", () => {
     facet.slots.push({ ...facet.slots[0], childProperty: "compensation" });
     expect(getCollectionSlots(empty(), multi)).toEqual([]);
   });
+
+  it.each([null, [], "opaque"])("declines a malformed structure payload %j without disrupting the inspector", payload => {
+    const node = empty();
+    node.structure!.payload = payload as unknown as Record<string, unknown>;
+    expect(getCollectionSlots(node, catalog)).toEqual([]);
+    expect(addCollectionItem(node, descriptor)).toBe(node);
+  });
 });
 
 describe("rendered collection editor", () => {
