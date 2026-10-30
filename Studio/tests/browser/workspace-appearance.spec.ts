@@ -258,6 +258,9 @@ for (const style of styles) for (const mode of ["dark", "dim"]) {
     await expect(active).toHaveAttribute("aria-current", "page");
     const hovered = page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Home", exact: true });
     await hovered.hover();
+    await hovered.evaluate(async element => {
+      await Promise.all(element.getAnimations().map(animation => animation.finished));
+    });
     const background = (element: Element) => getComputedStyle(element).backgroundColor;
     expect(await active.evaluate(background)).not.toBe(await hovered.evaluate(background));
     await page.screenshot({ path: testInfo.outputPath("active-and-hover-navigation.png") });
