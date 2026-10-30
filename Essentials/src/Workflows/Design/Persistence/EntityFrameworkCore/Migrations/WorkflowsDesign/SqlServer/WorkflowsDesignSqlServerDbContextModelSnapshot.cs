@@ -510,6 +510,62 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     b.ToTable("elsa_design_operations", (string)null);
                 });
 
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowTemplateEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("nvarchar(65)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Revision")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("elsa_workflow_templates", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinitionDraft", b =>
                 {
                     b.HasOne("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinition", "WorkflowDefinition")

@@ -36,3 +36,5 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(WorkflowDefinitionVersionLayout),
     nameof(WorkflowDefinitionVersionLayout.RecordsJson), nameof(WorkflowDefinitionVersionLayout.ActivityPresentationJson))]
 [assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(DesignOperationEntity), nameof(DesignOperationEntity.ResultJson))]
+
+[assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(WorkflowTemplateEntity), nameof(WorkflowTemplateEntity.ContentJson))]

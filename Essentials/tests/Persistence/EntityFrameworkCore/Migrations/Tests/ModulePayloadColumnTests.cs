@@ -31,6 +31,7 @@ public sealed class ModulePayloadColumnTests
         ["ExecutionCommandTransportDbContext"] = new(StringComparer.Ordinal) { ["PayloadJson"] = 1 },
         ["WorkflowsDesignDbContext"] = new(StringComparer.Ordinal)
         {
+            ["ContentJson"] = 1,
             ["StateSource"] = 2,
             ["RecordsJson"] = 2,
             ["ActivityPresentationJson"] = 2,

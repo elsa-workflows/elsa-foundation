@@ -49,7 +49,7 @@ using static Elsa.Persistence.EntityFramework.Tests.ProviderFailures;
 
 namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests;
 
-public sealed class EfWorkflowDesignPersistenceTests
+public sealed partial class EfWorkflowDesignPersistenceTests
 {
     [Fact]
     public void Definition_identity_rejects_malformed_utf16()
@@ -134,6 +134,11 @@ public sealed class EfWorkflowDesignPersistenceTests
         await using var db = Create(connection); await db.Database.EnsureCreatedAsync();
         await SeedSchemaVersionRowsAsync(db, new EfDesignAtomicWriter(db, new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")))));
 
+        // Include the new template table in the same write-stamp proof.
+        var templateType = db.Model.GetEntityTypes().Single(type => type.GetTableName() == "elsa_workflow_templates").ClrType;
+        var template = (Elsa.Primitives.Entities.TenantEntity)Activator.CreateInstance(templateType)!;
+        template.Id = "template-" + Guid.NewGuid().ToString("N"); template.TenantId = "tenant-a";
+        db.Add(template); await db.SaveChangesAsync();
         // The finalization tables belong to their own family, and their store stamps them.
         foreach (var entityType in db.Model.GetEntityTypes().ExcludingSchemaFinalization())
         {

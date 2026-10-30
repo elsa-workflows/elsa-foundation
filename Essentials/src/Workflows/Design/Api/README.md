@@ -46,3 +46,29 @@ The authoring-schema endpoints make the design API a complete headless authoring
 ## Extension points
 
 See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) for persistence ports, structure handlers, and input-option providers. API clients should use the published HTTP contracts rather than implementation services.
+
+
+### Workflow authoring templates
+
+When `IWorkflowTemplateStore` is registered, the workflow-design capability advertises:
+
+| Method | Route | Permission |
+| --- | --- | --- |
+| GET / POST | `/design/workflows/templates` | Read / Manage |
+| GET / PUT | `/design/workflows/templates/{templateId}` | Read / Manage |
+| POST | `/design/workflows/templates/{templateId}/delete` | Manage |
+
+POST creates a custom snapshot; PUT updates it. Mutation bodies carry `operationKey` for atomic
+replay; updates and deletion require `expectedRevision`. A stale revision returns HTTP 409.
+Save bodies contain name, description and content (state, layout, activityPresentation).
+Existing credential-literal admission applies. All reads/writes are tenant-scoped.
+These resources are independent of workflow publication and runtime execution. Built-in recipes
+are read-only client resources; their identifiers cannot be overwritten through these endpoints.
+See [the extension catalog](EXTENSION_POINTS.md#workflow-authoring-templates) for replacement semantics.
+
+
+Custom catalogs support 1000 templates per tenant. Creation uses the host's existing
+`IDistributedLockProvider` to serialize catalog admission and checks capacity inside
+the atomic write; a full catalog returns HTTP 400 before insertion. Replaying the
+last successful create, reading, updating and deleting remain available at capacity.
+The optional API returns HTTP 501 when no template store is configured.

@@ -255,3 +255,24 @@ Heading convention: `### <EventClassName>`. Every published `IEvent` type of the
 - Command + diff-engine overridables: [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md).
 - Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.6 + §2.22.1.
+
+
+## Workflow authoring templates
+
+`IWorkflowTemplateStore` (Design Persistence Core) is an optional scoped port. EF registers
+`EfWorkflowTemplateStore` by default in `AddWorkflowsDesignEntityFrameworkCore`; it stores
+`WorkflowTemplateContent` (authored state, layout and activity presentation) in the tenant-scoped
+`elsa_workflow_templates` table. Consumers are the Design template endpoints and Studio catalog.
+`ListAsync` / `FindAsync` read snapshots; `SaveAsync(DesignOperationKey, id?, name, description,
+content, expectedRevision)` and `DeleteAsync(DesignOperationKey, id, expectedRevision)` use the
+Design atomic writer. Updates/deletes require the last read revision; conflicts never overwrite.
+
+Alternative Design backends may omit the port, or register exactly one implementation with the
+same scope, snapshot, atomic-replay and revision guarantees. Explicit backend replacement removes
+EF-owned descriptors, including this port. EF refuses a pre-existing template port and startup
+refuses duplicate template registrations. The optional port is not a mandatory workflow backend
+replacement contract. No template mutation creates workflow definitions, versions or executables.
+
+`WorkflowTemplateCapabilitySource` advertises `workflow-templates`, `workflow-template` and
+`workflow-template-delete` relations only when this port is present. Studio discovers these
+relations instead of constructing routes; code-owned Blank/HTTP recipes remain client starters.

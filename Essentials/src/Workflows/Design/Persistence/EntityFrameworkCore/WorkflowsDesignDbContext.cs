@@ -16,6 +16,7 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
     public DbSet<WorkflowDefinitionDraft> Drafts => Set<WorkflowDefinitionDraft>();
     public DbSet<WorkflowDefinitionDraftLayout> DraftLayouts => Set<WorkflowDefinitionDraftLayout>();
     public DbSet<WorkflowDefinitionVersionLayout> VersionLayouts => Set<WorkflowDefinitionVersionLayout>();
+    internal DbSet<WorkflowTemplateEntity> Templates => Set<WorkflowTemplateEntity>();
     public DbSet<DesignOperationEntity> Operations => Set<DesignOperationEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -28,12 +29,14 @@ public abstract class WorkflowsDesignDbContext(DbContextOptions options) : DbCon
         DesignEntityConfigurations.ConfigureDraftLayout(modelBuilder.Entity<WorkflowDefinitionDraftLayout>());
         DesignEntityConfigurations.ConfigureVersionLayout(modelBuilder.Entity<WorkflowDefinitionVersionLayout>());
         DesignEntityConfigurations.ConfigureOperation(modelBuilder.Entity<DesignOperationEntity>());
+        DesignEntityConfigurations.ConfigureTemplate(modelBuilder.Entity<WorkflowTemplateEntity>());
         modelBuilder.MapSchemaFinalization(WorkflowsDesignEfModule.HistoryModuleName);
         ConfigureProvider(modelBuilder);
         // Installed unconditionally, so this context reads a frame whatever wrote it. Nothing here enables an
         // encoder: with no codec configured these columns are written exactly as they were before.
         modelBuilder.UseElsaPayloadColumns(
             this,
+            "ContentJson",
             "StateSource",
             "RecordsJson",
             "ActivityPresentationJson",

@@ -89,7 +89,7 @@ for the interactive contributor route.
 >   server runs from its own temporary content root with its own SQLite files. To reuse a port, stop your
 >   server yourself.
 > - **The platform source harness also owns its server** and uses the same lifecycle helper and free-port rules.
-> - **`http/Test-HttpResponseFlowchart.ps1` owns an isolated server** and takes no `-BaseUrl` argument.
+> - **`http/Test-HttpResponseFlowchart.ps1` and `templates/Test-WorkflowTemplates.ps1` own isolated servers** and takes no `-BaseUrl` argument.
 > - **`variables/Test-SetVariableLoop.ps1` owns an isolated server** and checks the exact counter output; it takes no `-BaseUrl` argument.
 > - **Every other server-dependent script only sends HTTP requests** to `-BaseUrl` (default `http://localhost:5095`).
 > - **Do not add `Stop-Process`, `kill`, or a port lookup that feeds one, to a script.** Use
@@ -126,7 +126,7 @@ take no server argument and can run while yours is up:
 $base = 'http://localhost:5295'
 $selfHosted = 'Test-RestartRecovery.ps1', 'Test-AlterationReplayAndRestart.ps1', 'Test-FileBasedDeployment.ps1',
               'Test-SharedPersistence.ps1', 'Test-SharedDiagnosticsPersistence.ps1', 'Test-ServerLifecycleGuard.ps1',
-              'Test-JsonSourceComposition.ps1', 'Test-UnknownFeatures.ps1', 'Test-HttpResponseFlowchart.ps1', 'Test-SetVariableLoop.ps1', 'Test-SetVariableRetainedArtifact.ps1'
+              'Test-JsonSourceComposition.ps1', 'Test-UnknownFeatures.ps1', 'Test-HttpResponseFlowchart.ps1', 'Test-WorkflowTemplates.ps1', 'Test-SetVariableLoop.ps1', 'Test-SetVariableRetainedArtifact.ps1'
 # Package-backed Rules is qualified separately with an immutable feed and deployment receipt.
 $packageQualified = 'Test-DurableRules.ps1', 'Test-NativeRulesInstallation.ps1', 'Test-RulesAdmissionRecovery.ps1'
 $failed = @()

@@ -519,6 +519,7 @@ export interface VariableTypeDescriptorsResponse {
 }
 
 export interface CreateDefinitionRequest {
+  activityPresentation?: ActivityPresentationRecord[];
   name: string;
   description?: string | null;
   initialState?: WorkflowDefinitionState | null;

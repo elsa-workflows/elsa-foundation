@@ -243,7 +243,7 @@ function ControlledActivityGraphFixture({ context }: { context: StudioEndpointCo
   }))}>Focus Else diagnostic</button><output data-testid="diagnostic-result">{diagnosticResult}</output></> : null}{slotAssignment || rootSlots ? <output hidden data-testid="activity-graph-payload">{JSON.stringify(value.payload)}</output> : null}</>;
 }
 
-function createEditorContext(live?: { status: string; disconnected: boolean }): StudioEndpointContext {
+export function createEditorContext(live?: { status: string; disconnected: boolean }): StudioEndpointContext {
   let draft = adaptivePorts && new URLSearchParams(window.location.search).get("host") !== "activity" && sessionStorage.getItem(adaptiveStorageKey)
     ? JSON.parse(sessionStorage.getItem(adaptiveStorageKey)!) as WorkflowDraft : editorDraft();
   const runCanvas = new URLSearchParams(window.location.search).get("run-canvas");
