@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { StudioActivityDefinitionImplementationEditorContribution, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ActivityDefinitionDraftView } from "./activityDefinitionTypes";
@@ -62,10 +63,10 @@ export function ActivityDefinitionProviderMigrationDialog({
 
   return <ActivityDefinitionManagementDialogShell dialogRef={dialogRef} title="Review provider migration" kicker="Atomic parallel draft" submitting={submitting} onClose={onClose}>
     <dl className="ad-review-facts">
-      <div><dt>Source draft</dt><dd><code>{draft.draftId}</code> · revision {draft.revision}</dd></div>
-      <div><dt>Source provider</dt><dd><code>{draft.provider.providerKey}</code> · schema {draft.provider.schemaVersion}</dd></div>
+      <div><dt>Source draft</dt><dd><code><CopyableValue label="Source draft" value={draft.draftId} /></code> · revision {draft.revision}</dd></div>
+      <div><dt>Source provider</dt><dd><code><CopyableValue label="Source provider" value={draft.provider.providerKey} /></code> · schema {draft.provider.schemaVersion}</dd></div>
       <div><dt>Contract</dt><dd>{contractSummary(draft.contract)}</dd></div>
-      <div><dt>Provenance</dt><dd>{draft.sourceVersionId ? <>Exact version <code>{draft.sourceVersionId}</code></> : "Blank lineage draft"}</dd></div>
+      <div><dt>Provenance</dt><dd>{draft.sourceVersionId ? <>Exact version <code><CopyableValue label="Source version ID" value={draft.sourceVersionId} /></code></> : "Blank lineage draft"}</dd></div>
     </dl>
     <label className="ad-dialog-field"><span>Advertised migration target</span><select value={target} onChange={event => setTarget(event.target.value)}><option value="" disabled>Select a provider schema</option>{choices.map(item => <option key={choiceValue(item)} value={choiceValue(item)}>{item.capability.displayName} · schema {item.schemaVersion}</option>)}</select></label>
     <div className="ad-atomic-review"><strong>Atomic result</strong><span>The backend creates one new parallel draft with the unchanged public contract and migrated opaque provider manifest. It never rewrites this source draft.</span></div>

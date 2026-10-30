@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import { AlertTriangle, CheckCircle2, GitBranch, Layers3 } from "lucide-react";
 import type {
   ActivityUpgradeDiagnostic,
@@ -45,7 +46,7 @@ export function ActivityUpgradePlanReview({
     </div> : null}
 
     <dl className="au-plan-facts">
-      <div><dt>Plan ID</dt><dd><code>{plan.planId}</code></dd></div>
+      <div><dt>Plan ID</dt><dd><code><CopyableValue label="Upgrade plan ID" value={plan.planId} /></code></dd></div>
       <div><dt>Created</dt><dd>{formatDateTime(plan.createdAt)}</dd></div>
       <div><dt>Expires</dt><dd>{formatDateTime(plan.expiresAt)}</dd></div>
       <div><dt>Atomicity</dt><dd>One stage at a time</dd></div>
@@ -55,9 +56,9 @@ export function ActivityUpgradePlanReview({
       <header><Layers3 size={18} aria-hidden /><div><h3 id="activity-upgrade-replacements">Exact replacements</h3><p>No mutable latest reference is accepted.</p></div></header>
       <ul className="au-identity-list">
         {plan.replacements.map(replacement => <li key={`${replacement.from.versionId}:${replacement.to.versionId}`}>
-          <span><strong>{replacement.from.version}</strong><code>{replacement.from.versionId}</code></span>
+          <span><strong>{replacement.from.version}</strong><code><CopyableValue label="Source version ID" value={replacement.from.versionId} /></code></span>
           <span aria-hidden>→</span>
-          <span><strong>{replacement.to.version}</strong><code>{replacement.to.versionId}</code></span>
+          <span><strong>{replacement.to.version}</strong><code><CopyableValue label="Target version ID" value={replacement.to.versionId} /></code></span>
         </li>)}
       </ul>
     </section>
@@ -67,7 +68,7 @@ export function ActivityUpgradePlanReview({
       {plan.binding?.selectedClosure.length ? <ul className="au-closure-list">
         {plan.binding.selectedClosure.map((reference, index) => <li key={`${reference.kind}:${reference.draftId ?? reference.versionId ?? reference.definitionId}:${index}`}>
           <strong>{reference.kind}</strong>
-          <code>{reference.draftId ?? reference.versionId ?? reference.definitionId}</code>
+          <code><CopyableValue label="Dependency identity" value={reference.draftId ?? reference.versionId ?? reference.definitionId} /></code>
           <span>{reference.version ? `Version ${reference.version}` : reference.revision != null ? `Revision ${reference.revision}` : "Exact identity"}</span>
         </li>)}
       </ul> : <p className="ad-inline-status">The authoritative plan returned no disclosed closure rows.</p>}
@@ -78,7 +79,7 @@ export function ActivityUpgradePlanReview({
       <ul className="au-snapshot-list">
         {plan.expectedSnapshots.map(snapshot => <li key={`${snapshot.kind}:${snapshot.id}`}>
           <strong>{snapshot.kind}</strong>
-          <code>{snapshot.id}</code>
+          <code><CopyableValue label="Snapshot ID" value={snapshot.id} /></code>
           <span>{snapshot.revision != null ? `Expected revision ${snapshot.revision}` : "Immutable snapshot"}{snapshot.headVersionId ? ` · head ${snapshot.headVersionId}` : ""}</span>
         </li>)}
       </ul>
@@ -122,13 +123,13 @@ function StageCard({
   const status = normalizeStageStatus(stage.status);
   return <li className={`au-stage is-${status.toLowerCase()}`}>
     <header>
-      <div><span>Bottom-up stage {number}</span><code>{stage.stageId}</code></div>
+      <div><span>Bottom-up stage {number}</span><code><CopyableValue label="Upgrade stage ID" value={stage.stageId} /></code></div>
       <strong>{status === "Applied" ? <CheckCircle2 size={16} aria-hidden /> : null}{status}</strong>
     </header>
     {stage.dependsOnStageIds.length ? <p>Prerequisite stages: {stage.dependsOnStageIds.join(", ")}</p> : <p>No stage prerequisites.</p>}
     <div className="au-step-list">
       {steps.map(step => <article key={step.stepId}>
-        <header><strong>{actionLabel(step.action)}</strong><code>{step.target.draftId ?? step.target.sourceVersionId ?? step.target.definitionId}</code></header>
+        <header><strong>{actionLabel(step.action)}</strong><code><CopyableValue label="Upgrade target ID" value={step.target.draftId ?? step.target.sourceVersionId ?? step.target.definitionId} /></code></header>
         <dl>
           <div><dt>Target</dt><dd>{step.target.kind} · {step.target.definitionId}</dd></div>
           <div><dt>Occurrences</dt><dd>{step.replacements.length}</dd></div>
@@ -152,7 +153,7 @@ function DiagnosticList({ diagnostics, compact = false }: { diagnostics: Activit
     <ul>{diagnostics.map((diagnostic, index) => {
       const severity = normalizeDiagnosticSeverity(diagnostic.severity);
       return <li key={`${diagnostic.code}:${diagnostic.subject.kind}:${diagnostic.subject.id}:${index}`} className={`is-${severity.toLowerCase()}`}>
-        <header><strong>{severity}</strong><code>{diagnostic.code}</code></header>
+        <header><strong>{severity}</strong><code><CopyableValue label="Diagnostic code" value={diagnostic.code} /></code></header>
         <p>{diagnostic.message}</p>
         <span>{diagnostic.subject.kind} · {diagnostic.subject.id}</span>
         {diagnostic.remediation ? <span>{diagnostic.remediation}</span> : null}

@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import {
   useCallback,
   useEffect,
@@ -469,11 +470,11 @@ function ActivityTestRunEvidence({
       <details>
         <summary>Technical details</summary>
         <dl className="ad-review-facts ad-test-run-technical">
-          <div><dt>Test Run</dt><dd><code>{view.testRunId}</code></dd></div>
-          <div><dt>Workflow execution</dt><dd><code>{view.workflowExecutionId}</code></dd></div>
-          {view.outerActivityExecutionId ? <div><dt>Outer activity execution</dt><dd><code>{view.outerActivityExecutionId}</code></dd></div> : null}
-          {view.artifactId ? <div><dt>Wrapper artifact</dt><dd><code>{view.artifactId}</code></dd></div> : null}
-          {view.sourceReferenceId ? <div><dt>Source Reference</dt><dd><code>{view.sourceReferenceId}</code></dd></div> : null}
+          <div><dt>Test Run</dt><dd><code><CopyableValue label="Test Run" value={view.testRunId} /></code></dd></div>
+          <div><dt>Workflow execution</dt><dd><code><CopyableValue label="Workflow execution" value={view.workflowExecutionId} /></code></dd></div>
+          {view.outerActivityExecutionId ? <div><dt>Outer activity execution</dt><dd><code><CopyableValue label="Outer activity execution" value={view.outerActivityExecutionId} /></code></dd></div> : null}
+          {view.artifactId ? <div><dt>Wrapper artifact</dt><dd><code><CopyableValue label="Wrapper artifact" value={view.artifactId} /></code></dd></div> : null}
+          {view.sourceReferenceId ? <div><dt>Source Reference</dt><dd><code><CopyableValue label="Source Reference" value={view.sourceReferenceId} /></code></dd></div> : null}
           {view.commandDispatchStatus ? <div><dt>Command dispatch</dt><dd>{view.commandDispatchStatus}</dd></div> : null}
         </dl>
       </details>

@@ -1,3 +1,4 @@
+import { CopyableValue } from "../ui/identity/CopyableIdentifier";
 import React, { useEffect, useRef, useState } from "react";
 import { PackagePlus, Pencil, RefreshCcw, Trash2, X } from "lucide-react";
 import { useDialogFocus } from "../../sdk";
@@ -164,7 +165,7 @@ function PackageFeedsWorkbench({
               <div key={feed.name} className="modules-list-row package-feed-row">
                 <span>
                   <strong>{feed.name}</strong>
-                  <code>{feed.serviceIndex ?? feed.directoryPath ?? "no source"}</code>
+                  <code><CopyableValue label="Package feed location" value={feed.serviceIndex ?? feed.directoryPath} placeholder="no source" /></code>
                   <small>{feed.includeAll ? "All packages" : feed.includePatterns.join(", ")}</small>
                 </span>
                 <div className="package-feed-row-actions">

@@ -1,3 +1,4 @@
+import { CopyableValue } from "../ui/identity/CopyableIdentifier";
 import React from "react";
 import { AlertTriangle, Check, Loader2, Play, X } from "lucide-react";
 import type { StudioAgentResultRendererContribution } from "../../sdk";
@@ -132,19 +133,16 @@ function ResourceTargetDetails({ proposal }: { proposal: AgentActionProposal }) 
         <dd>{target.displayName ?? target.resourceId ?? target.resourceType}</dd>
       </div>
       <div>
-        <dt>Type</dt>
-        <dd>{target.resourceType}</dd>
+        <dt>Type</dt><dd><CopyableValue label="Type" value={target.resourceType} /></dd>
       </div>
       {target.resourceId ? (
         <div>
-          <dt>ID</dt>
-          <dd>{target.resourceId}</dd>
+          <dt>ID</dt><dd><CopyableValue label="ID" value={target.resourceId} /></dd>
         </div>
       ) : null}
       {target.moduleId ? (
         <div>
-          <dt>Module</dt>
-          <dd>{target.moduleId}</dd>
+          <dt>Module</dt><dd><CopyableValue label="Module" value={target.moduleId} /></dd>
         </div>
       ) : null}
       {target.summary ? (
@@ -177,8 +175,7 @@ function AuditDetails({ proposal }: { proposal: AgentActionProposal }) {
       ) : null}
       {audit.toolId ? (
         <div>
-          <dt>Tool</dt>
-          <dd>{audit.toolId}</dd>
+          <dt>Tool</dt><dd><CopyableValue label="Tool" value={audit.toolId} /></dd>
         </div>
       ) : null}
       {audit.invocationMode ? (
@@ -195,14 +192,12 @@ function AuditDetails({ proposal }: { proposal: AgentActionProposal }) {
       ) : null}
       {audit.actor ? (
         <div>
-          <dt>Actor</dt>
-          <dd>{audit.actor}</dd>
+          <dt>Actor</dt><dd><CopyableValue label="Actor" value={audit.actor} /></dd>
         </div>
       ) : null}
       {audit.sessionId ? (
         <div>
-          <dt>Session</dt>
-          <dd>{audit.sessionId}</dd>
+          <dt>Session</dt><dd><CopyableValue label="Session" value={audit.sessionId} /></dd>
         </div>
       ) : null}
       {audit.recordedAt ? (

@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useMemo, useState } from "react";
 import type { ElsaStudioModuleApi, StudioRouteComponentProps } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
@@ -529,7 +530,7 @@ function TraceDetailHeader({ trace, onCopy, onDownload }: { trace: OTelTraceDeta
       <div>
         <span>{serviceNames.join(", ")} · {formatDuration(trace.durationMs)} · {trace.spanCount} spans · {trace.status}</span>
         <h3>{trace.name ?? trace.traceId}</h3>
-        <p>{trace.traceId}</p>
+        <p><CopyableValue label="Trace ID" value={trace.traceId} /></p>
         <time dateTime={trace.startTime}>{formatDateTime(trace.startTime)}</time>
       </div>
       <div>
@@ -575,7 +576,7 @@ function SpanInspector({ span }: { span: OTelSpan }) {
         <DetailRow name="Span ID" value={span.spanId} />
         <DetailRow name="Parent" value={span.parentSpanId} />
         <DetailRow name="Service" value={span.serviceName} />
-        <DetailRow name="Started" value={formatDateTime(span.startTime)} />
+        <DetailRow name="Started" value={span.startTime} />
         <DetailRow name="Duration" value={formatDuration(span.durationMs)} />
         <DetailRow name="Status description" value={span.statusDescription} />
       </dl>
@@ -597,7 +598,7 @@ function StatusChip({ status }: { status: SpanStatus }) {
 
 function DetailRow({ name, value }: { name: string; value?: string | null }) {
   if (!value) return null;
-  return <><dt>{name}</dt><dd>{value}</dd></>;
+  return <><dt>{name}</dt><dd>{name === "Duration" ? value : <CopyableValue label={name} value={value} />}</dd></>;
 }
 
 function createTraceSearchBody(filters: OTelFilters) {

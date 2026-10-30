@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import React from "react";
 import type {
   EtlRunConnectorPartitionView,
@@ -24,11 +25,11 @@ export function isConnectorRun(run: EtlRunDetailView): boolean {
 export function EtlRunInspection({ run }: { run: EtlRunDetailView }) {
   const partial = run.status === "faulted" || run.status === "cancelled";
   return <section className="etl-run-inspection" aria-label="Run details">
-    <h2>Run {run.runId}</h2>
+    <h2>Run <CopyableValue label="ETL run ID" value={run.runId} /></h2>
     <p role="status">{etlRunStatusLabel(run.status)}</p>
     {partial && <p>Output may be partial. The counts below describe accepted work; cancellation does not undo output already written or accepted.</p>}
     <dl className="etl-facts">
-      <dt>Published pipeline</dt><dd><code>{run.selection}</code></dd>
+      <dt>Published pipeline</dt><dd><code><CopyableValue label="Published pipeline" value={run.selection} /></code></dd>
       <dt>Source records</dt><dd>{sourceRecordCountLabel(run)}</dd>
       <dt>Accepted records</dt><dd>{run.acceptedRecords}</dd>
       <dt>Rejected records</dt><dd>{run.rejectedRecords}</dd>
@@ -40,7 +41,7 @@ export function EtlRunInspection({ run }: { run: EtlRunDetailView }) {
     </dl>
     {run.diagnostic && <section aria-label="Run diagnostic">
       <h3>Diagnostic</h3>
-      <p><code>{run.diagnostic.code}</code></p>
+      <p><code><CopyableValue label="Diagnostic code" value={run.diagnostic.code} /></code></p>
       {run.diagnostic.recordOrdinal !== null && <p>Record ordinal: {run.diagnostic.recordOrdinal}</p>}
       {run.diagnostic.field !== null && <p>Field: {run.diagnostic.field}</p>}
     </section>}
@@ -72,8 +73,8 @@ function InputIdentity({ title, alias, identity, emptyMessage }: {
     {identity ? <>
       <dl className="etl-facts">
         <dt>Binding revision</dt><dd>{identity.bindingRevision}</dd>
-        <dt>Expected SHA-256</dt><dd><code>{identity.expectedSha256 ?? "Not available"}</code></dd>
-        <dt>Prepared snapshot SHA-256</dt><dd><code>{identity.snapshotSha256 ?? "Not yet prepared"}</code></dd>
+        <dt>Expected SHA-256</dt><dd><code><CopyableValue label="Expected SHA-256" value={identity.expectedSha256} placeholder="Not available" /></code></dd>
+        <dt>Prepared snapshot SHA-256</dt><dd><code><CopyableValue label="Prepared snapshot SHA-256" value={identity.snapshotSha256} placeholder="Not yet prepared" /></code></dd>
         <dt>Prepared snapshot bytes</dt><dd>{identity.snapshotByteLength ?? "Not yet prepared"}</dd>
       </dl>
       <p>Snapshot metadata describes the last verified preparation. This view does not recheck the files.</p>

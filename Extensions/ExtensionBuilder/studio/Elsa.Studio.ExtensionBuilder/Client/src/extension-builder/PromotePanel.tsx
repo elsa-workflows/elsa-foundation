@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import { PackageCheck } from "lucide-react";
 import { StudioAlert } from "@elsa-workflows/studio-ui";
 import type { BuildArtifact, BuildResult, ExtensionBuilderCapabilities, PackagePromotionResult } from "../extensionBuilderApi";
@@ -37,9 +38,9 @@ export function PromotePanel({
       <h4>Artifact</h4>
       {artifact ? (
         <dl className="extension-builder-metadata">
-          <div><dt>Package</dt><dd>{artifact.packageId}</dd></div>
-          <div><dt>Version</dt><dd>{artifact.version}</dd></div>
-          <div><dt>File</dt><dd>{artifact.fileName ?? artifact.id}</dd></div>
+          <div><dt>Package</dt><dd><CopyableValue label="Package" value={artifact.packageId} /></dd></div>
+          <div><dt>Version</dt><dd><CopyableValue label="Version" value={artifact.version} /></dd></div>
+          <div><dt>File</dt><dd><CopyableValue label="File" value={artifact.fileName ?? artifact.id} /></dd></div>
           <div><dt>Size</dt><dd>{artifact.size ? `${artifact.size} B` : "n/a"}</dd></div>
         </dl>
       ) : <p className="extension-builder-muted">Promote becomes available after a successful build produces a package artifact.</p>}

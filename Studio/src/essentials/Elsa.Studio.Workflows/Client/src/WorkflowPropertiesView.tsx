@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -632,7 +633,7 @@ function InformationSection({ definition, definitionId, onMetaChange }: {
           ) : (definition?.description?.trim() ? definition.description : <span className="wf-muted">No description</span>)}
         </dd>
         <dt>Definition ID</dt>
-        <dd><code>{definitionId}</code></dd>
+        <dd><code><CopyableValue label="Definition ID" value={definitionId} /></code></dd>
       </dl>
     </section>
   );

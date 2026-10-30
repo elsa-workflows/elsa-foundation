@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import { RefreshCcw } from "lucide-react";
 import { StatusChip, StudioAlert } from "@elsa-workflows/studio-ui";
 import type { ExtensionBuilderCapabilities, ExtensionRuntimeStatus } from "../extensionBuilderApi";
@@ -32,8 +33,8 @@ export function RuntimePanel({
       {runtimeStatus ? (
         <>
           <dl className="extension-builder-metadata">
-            <div><dt>Package</dt><dd>{runtimeStatus.packageId}</dd></div>
-            <div><dt>Version</dt><dd>{runtimeStatus.version ?? "n/a"}</dd></div>
+            <div><dt>Package</dt><dd><CopyableValue label="Package" value={runtimeStatus.packageId} /></dd></div>
+            <div><dt>Version</dt><dd><CopyableValue label="Runtime version" value={runtimeStatus.version} placeholder="n/a" /></dd></div>
             <div><dt>State</dt><dd><StatusChip tone={runtimeTone(runtimeStatus.state)}>{runtimeStatus.state}</StatusChip></dd></div>
             <div><dt>Features</dt><dd>{runtimeStatus.features.length}</dd></div>
           </dl>
@@ -44,7 +45,7 @@ export function RuntimePanel({
             {runtimeStatus.features.map(feature => (
               <div key={feature.id} className="extension-builder-contribution-row">
                 <span>{feature.label}</span>
-                <code>{feature.type ?? feature.id}</code>
+                <code><CopyableValue label="Runtime feature type" value={feature.type ?? feature.id} /></code>
               </div>
             ))}
           </div>

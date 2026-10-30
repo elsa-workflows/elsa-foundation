@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import { Loader2, PackageCheck, Play } from "lucide-react";
 import { StatusChip } from "@elsa-workflows/studio-ui";
 import type { BuildArtifact, BuildDiagnostic, BuildResult, ExtensionBuilderCapabilities, RepositoryBuildCommand } from "../extensionBuilderApi";
@@ -72,7 +73,7 @@ export function BuildPanel({
       <h4>Build status</h4>
       {activeBuild ? (
         <dl className="extension-builder-metadata">
-          <div><dt>Build</dt><dd>{activeBuild.id}</dd></div>
+          <div><dt>Build</dt><dd><CopyableValue label="Build" value={activeBuild.id} /></dd></div>
           <div><dt>Status</dt><dd><StatusChip tone={buildTone(activeBuild.status)}>{activeBuild.status}</StatusChip></dd></div>
           <div><dt>Started</dt><dd>{formatDate(activeBuild.startedAt)}</dd></div>
           <div><dt>Finished</dt><dd>{formatDate(activeBuild.finishedAt)}</dd></div>

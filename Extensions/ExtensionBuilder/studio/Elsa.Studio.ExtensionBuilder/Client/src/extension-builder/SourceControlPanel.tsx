@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import { GitBranch, RefreshCcw, Save } from "lucide-react";
 import { StatusChip } from "@elsa-workflows/studio-ui";
 import type { SourceControlDiff, SourceControlStatus } from "../extensionBuilderApi";
@@ -37,7 +38,7 @@ export function SourceControlPanel({
     <div className="extension-builder-source-control">
       <div className="extension-builder-inspector-section">
         <h4>Working copy</h4>
-        <p><code>{status?.activeBranch ?? "No branch"}</code></p>
+        <p><code><CopyableValue label="Branch" value={status?.activeBranch} placeholder="No branch" /></code></p>
         <StatusChip tone={status?.isDirty ? "warning" : "success"}>{status?.isDirty ? "dirty" : "clean"}</StatusChip>
       </div>
 
@@ -95,7 +96,7 @@ export function SourceControlPanel({
         <h4>Diff</h4>
         {diff ? (
           <>
-            <p><code>{diff.path}</code>{diff.isStaged ? " staged" : ""}</p>
+            <p><code><CopyableValue label="File path" value={diff.path} /></code>{diff.isStaged ? " staged" : ""}</p>
             <pre className="extension-builder-diff">{diff.patch || "No diff available."}</pre>
           </>
         ) : (

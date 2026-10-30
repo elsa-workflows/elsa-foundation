@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { AlertTriangle, Flag, Repeat2, Send } from "lucide-react";
 import { CopyableIdentifier, StudioTabPanel, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
@@ -478,18 +479,14 @@ function ReusableActivityIdentity({
       <h4>Reusable boundary</h4>
       <p className="wf-muted">This placed occurrence is pinned and read-only at its immutable version. Contract authoring happens in a separate Activity Definition draft.</p>
       <dl>
-        <dt>Definition ID</dt>
-        <dd>{exactDefinitionId}</dd>
-        <dt>Version ID</dt>
-        <dd>{exactVersionId}</dd>
+        <dt>Definition ID</dt><dd><CopyableValue label="Definition ID" value={exactDefinitionId} /></dd>
+        <dt>Version ID</dt><dd><CopyableValue label="Version ID" value={exactVersionId} /></dd>
         <dt>Exact version</dt>
-        <dd>{version?.version ?? semanticVersion ?? "Unknown"}</dd>
+        <dd><CopyableValue label="Exact version" value={version?.version ?? semanticVersion} placeholder="Unknown" /></dd>
         {version ? (
           <>
-            <dt>Provider</dt>
-            <dd>{version.provider.providerKey}</dd>
-            <dt>Provider schema</dt>
-            <dd>{version.provider.schemaVersion}</dd>
+            <dt>Provider</dt><dd><CopyableValue label="Provider" value={version.provider.providerKey} /></dd>
+            <dt>Provider schema</dt><dd><CopyableValue label="Provider schema" value={version.provider.schemaVersion} /></dd>
             <dt>Lifecycle</dt>
             <dd>{version.lifecycle}</dd>
           </>

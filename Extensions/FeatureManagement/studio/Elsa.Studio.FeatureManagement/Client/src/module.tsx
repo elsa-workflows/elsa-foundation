@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, FlaskConical, Package, Settings2, ShieldAlert, RefreshCcw } from "lucide-react";
 import {
@@ -1520,14 +1521,14 @@ function FeatureMetadata({ feature, dependents }: { feature: DraftFeature; depen
     <section className="feature-management-metadata" aria-label="Feature metadata">
       <h4>Metadata</h4>
       <dl className="feature-management-detail-list">
-        <div><dt>Technical name</dt><dd><code>{feature.id}</code></dd></div>
+        <div><dt>Technical name</dt><dd><code><CopyableValue label="Feature ID" value={feature.id} /></code></dd></div>
         <div><dt>Settings</dt><dd>{feature.settings.length}</dd></div>
         <div className="feature-management-detail-wide"><dt>Categories</dt><dd><CategoryChips categories={feature.categories} /></dd></div>
         <div className="feature-management-detail-wide"><dt>Package</dt><dd>{feature.packageId ? <FeatureBadge tone="violet"><Package size={11} />{packageName}</FeatureBadge> : <span className="feature-management-muted">{packageName}</span>}</dd></div>
         {dependencies.length > 0 ? <div className="feature-management-detail-wide"><dt>Depends on</dt><dd><FeatureLinkChips ids={dependencies} /></dd></div> : null}
         {dependents.length > 0 ? <div className="feature-management-detail-wide"><dt>Required by</dt><dd><FeatureLinkChips ids={dependents} /></dd></div> : null}
-        {feature.manifestHash ? <div className="feature-management-detail-wide"><dt>Manifest hash</dt><dd><code>{feature.manifestHash}</code></dd></div> : null}
-        {feature.manifestPath ? <div className="feature-management-detail-wide"><dt>Manifest path</dt><dd><code>{feature.manifestPath}</code></dd></div> : null}
+        {feature.manifestHash ? <div className="feature-management-detail-wide"><dt>Manifest hash</dt><dd><code><CopyableValue label="Manifest hash" value={feature.manifestHash} /></code></dd></div> : null}
+        {feature.manifestPath ? <div className="feature-management-detail-wide"><dt>Manifest path</dt><dd><code><CopyableValue label="Manifest path" value={feature.manifestPath} /></code></dd></div> : null}
       </dl>
     </section>
   );

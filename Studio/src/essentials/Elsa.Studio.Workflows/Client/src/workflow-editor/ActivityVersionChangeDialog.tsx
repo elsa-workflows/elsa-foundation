@@ -1,3 +1,4 @@
+import { CopyableValue } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type {
@@ -117,8 +118,8 @@ export function ActivityVersionChangeDialog({
           </header>
 
           <dl className="wf-version-change-facts">
-            <div><dt>Definition</dt><dd>{current.definition.definitionId}</dd></div>
-            <div><dt>Selected occurrence</dt><dd>{occurrence.nodeId}</dd></div>
+            <div><dt>Definition</dt><dd><CopyableValue label="Definition" value={current.definition.definitionId} /></dd></div>
+            <div><dt>Selected occurrence</dt><dd><CopyableValue label="Selected occurrence" value={occurrence.nodeId} /></dd></div>
             <div><dt>Current exact version</dt><dd>v{current.version} · {current.versionId}</dd></div>
             <div><dt>Target exact version</dt><dd>{target.data ? `v${target.data.version} · ${target.data.versionId}` : "Select an active version"}</dd></div>
           </dl>
