@@ -802,7 +802,7 @@
     {
       "alias": "Elsa.Activities.Http.Activities.WriteHttpResponse",
       "activityTypeKey": "Elsa.Activities.Http.Activities.WriteHttpResponse",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "Http",
       "executionType": "Action",
       "inputs": [
@@ -861,7 +861,7 @@
           "name": "Body",
           "type": "System.Text.Json.JsonElement?",
           "collectionKind": "Single",
-          "isRequired": true,
+          "isRequired": false,
           "isNullable": true,
           "sourceRepresentation": null
         },

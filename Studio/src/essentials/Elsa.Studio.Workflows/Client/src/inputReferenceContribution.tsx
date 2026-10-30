@@ -36,7 +36,7 @@ function InputReferenceEditor({ descriptor, value, disabled, onChange }: StudioE
   const options = authoring.workflowInputs.map(input => ({
     input,
     type: readArgumentType(input),
-    compatible: isArgumentTypeCompatible(readArgumentType(input), descriptor.typeName)
+    compatible: isArgumentTypeCompatible(readArgumentType(input), descriptor.typeName, descriptor.collectionKind)
   }));
   const compatible = options.filter(option => option.compatible);
   const incompatible = options.filter(option => !option.compatible);

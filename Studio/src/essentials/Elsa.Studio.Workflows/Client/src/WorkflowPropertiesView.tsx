@@ -246,6 +246,17 @@ function DefaultValueCell({ value, editor, ariaLabel, onChange }: {
   ariaLabel: string;
   onChange(value: string): void;
 }) {
+  if (editor === "json") {
+    let error: string | null = null;
+    if (value.trim()) {
+      try { JSON.parse(value); } catch { error = "Enter a valid JSON value."; }
+    }
+    return <div>
+      <textarea aria-label={ariaLabel} value={value} rows={3} placeholder="(empty)"
+        aria-invalid={error ? true : undefined} onChange={event => onChange(event.target.value)} />
+      {error ? <span role="alert">{error}</span> : null}
+    </div>;
+  }
   const specialized = fitsEditor(editor, value);
   if (specialized && editor === "checkbox") {
     return (
@@ -388,9 +399,9 @@ function ArgumentsEditor({
         const rowStorageOptions = storageChoices(storageOptions, argType.alias);
         const referenceKey = readStringField(item, referenceKeyKeys);
         const warning = referenceKey ? warnings?.get(referenceKey) : undefined;
-        // A collection's default is a single scalar editor only for a `Single` type; collection defaults
-        // fall back to free text (editing a list/array default inline is out of scope).
-        const editor = argType.collectionKind === "Single" ? editorForAlias(argType.alias) : "text";
+        const typeEditor = editorForAlias(argType.alias);
+        // JSON defaults keep their raw syntax for scalar values and collections alike.
+        const editor = argType.collectionKind === "Single" || typeEditor === "json" ? typeEditor : "text";
         return (
           <tr key={index}>
             <td>
@@ -420,7 +431,9 @@ function ArgumentsEditor({
                   ariaLabel={`${namePrefix} default value`}
                   value={readVariableDefault((item as VariableDefinition).default)}
                   editor={editor}
-                  onChange={value => update(index, { default: literalDefault(value) })}
+                  onChange={value => update(index, { default: editor === "json" && value !== ""
+                    ? { value, expressionType: "Object" }
+                    : literalDefault(value) })}
                 />
               </td>
             ) : null}
