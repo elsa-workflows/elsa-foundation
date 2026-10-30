@@ -1,0 +1,66 @@
+<definitions xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="bpmnprocess-77683892-definitions" targetNamespace="https://elsa-workflows.io/schemas/bpmn" xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:elsa="https://elsa-workflows.io/schemas/bpmn">
+  <process id="bpmnprocess-77683892" isExecutable="true">
+    <startEvent id="start" name="Start">
+      <outgoing>begin</outgoing>
+    </startEvent>
+    <exclusiveGateway id="route" name="Upgraded route original" default="default-flow">
+      <incoming>begin</incoming>
+      <outgoing>default-flow</outgoing>
+      <outgoing>other-flow</outgoing>
+    </exclusiveGateway>
+    <intermediateCatchEvent id="wait" name="Default timer">
+      <incoming>default-flow</incoming>
+      <outgoing>finish</outgoing>
+      <timerEventDefinition>
+        <timeDuration>PT1S</timeDuration>
+      </timerEventDefinition>
+    </intermediateCatchEvent>
+    <endEvent id="end" name="Default complete">
+      <incoming>finish</incoming>
+    </endEvent>
+    <endEvent id="other-end" name="Other complete">
+      <incoming>other-flow</incoming>
+    </endEvent>
+    <sequenceFlow id="begin" sourceRef="start" targetRef="route" />
+    <sequenceFlow id="default-flow" sourceRef="route" targetRef="wait" />
+    <sequenceFlow id="other-flow" sourceRef="route" targetRef="other-end" elsa:conditionOutcome="Never">
+      <conditionExpression>outcome == 'Never'</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="finish" sourceRef="wait" targetRef="end" />
+  </process>
+  <bpmndi:BPMNDiagram id="bpmnprocess-77683892-diagram">
+    <bpmndi:BPMNPlane id="bpmnprocess-77683892-plane" bpmnElement="bpmnprocess-77683892">
+      <bpmndi:BPMNShape id="start_di" bpmnElement="start">
+        <dc:Bounds x="40" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="route_di" bpmnElement="route" isMarkerVisible="true">
+        <dc:Bounds x="156" y="95" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="wait_di" bpmnElement="wait">
+        <dc:Bounds x="286" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="end_di" bpmnElement="end">
+        <dc:Bounds x="402" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="other-end_di" bpmnElement="other-end">
+        <dc:Bounds x="518" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="begin_di" bpmnElement="begin">
+        <di:waypoint x="76" y="120" />
+        <di:waypoint x="156" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="default-flow_di" bpmnElement="default-flow">
+        <di:waypoint x="206" y="120" />
+        <di:waypoint x="286" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="other-flow_di" bpmnElement="other-flow">
+        <di:waypoint x="206" y="120" />
+        <di:waypoint x="518" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="finish_di" bpmnElement="finish">
+        <di:waypoint x="322" y="120" />
+        <di:waypoint x="402" y="120" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>

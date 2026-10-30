@@ -1,0 +1,51 @@
+{
+  "sourceRevision": "4f46ac55c482b3b68932ca74f147439bfdacda49",
+  "results": [
+    {
+      "name": "install",
+      "command": [
+        "pnpm",
+        "install",
+        "--frozen-lockfile"
+      ],
+      "cwd": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio",
+      "exitCode": 0
+    },
+    {
+      "name": "browser-build",
+      "command": [
+        "pnpm",
+        "-r",
+        "build"
+      ],
+      "cwd": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio",
+      "exitCode": 0
+    },
+    {
+      "name": "studio-host",
+      "command": [
+        "dotnet",
+        "build",
+        "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj",
+        "-c",
+        "Release",
+        "-p:RestoreLockedMode=true"
+      ],
+      "cwd": "/Users/sipke/.codex/worktrees/f236/elsa-foundation",
+      "exitCode": 0
+    },
+    {
+      "name": "standard-hosts",
+      "command": [
+        "dotnet",
+        "build",
+        "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+        "-c",
+        "Release",
+        "-p:ElsaBpmnRecoveryProbe=false"
+      ],
+      "cwd": "/Users/sipke/.codex/worktrees/f236/elsa-foundation",
+      "exitCode": 0
+    }
+  ]
+}

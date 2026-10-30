@@ -1,0 +1,14 @@
+{
+  "actualStudioFamiliesVerified": 2,
+  "completedNewRuns": 4,
+  "originalRunObservations": 9,
+  "wholeStoresVerified": 12,
+  "retainedNativeMaterialCounts": [
+    84,
+    92
+  ],
+  "frozenAuthoringPreserved": true,
+  "sourceRevision": "4f46ac55c482b3b68932ca74f147439bfdacda49",
+  "existingStudioCompatibilityProved": true,
+  "directModelStudioAcceptanceProved": false
+}

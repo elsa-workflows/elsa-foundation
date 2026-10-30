@@ -1,0 +1,1 @@
+One early Details selection on the original layout run was followed by Timeline during initial runtime loading. The positive capture was taken only after the graph was visibly loaded and Details selected. Cause remains unconfirmed; no product or verifier change is claimed. This repeats the previously recorded observation and is retained separately from successful captures.
