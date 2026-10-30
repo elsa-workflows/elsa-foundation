@@ -53,7 +53,7 @@ public sealed class HttpEndpoint :
     public ICollection<string>? SupportedMethods { get; set; }
 
     /// <summary>Whether this node may start a workflow.</summary>
-    [ActivityInput(Key = nameof(CanStartWorkflow), Category = "Simple", Order = 0, Tier = InputTier.Setting)]
+    [ActivityInput(Key = nameof(CanStartWorkflow), DisplayName = "Start new workflows", Description = "Allow incoming requests to start new workflow instances. When off, this activity can still wait for requests in an existing workflow.", Category = "Simple", Order = 0, Tier = InputTier.Setting)]
     public bool CanStartWorkflow { get; set; }
 
     [ActivityInput(Key = nameof(Authorize), Category = "Advanced", Order = 100, Tier = InputTier.Setting)]

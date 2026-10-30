@@ -21,6 +21,7 @@ namespace Elsa.Activities.Compensation.Activities;
 /// nothing. See <c>specs/258-compensation-nesting</c>.
 /// </para>
 /// </remarks>
+[ActivityPalette(AncestorActivityTypes = ["Elsa.Activities.Compensation.Activities.CompensationScope"], Description = "Confirm requires an enclosing Compensation Scope.")]
 [Activity(Icon = "BadgeCheck")]
 public sealed class Confirm : StructuralActivity, IRuntimeStructuralActivity
 {

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { AlertCircle, Check, Package, Plus, Search } from "lucide-react";
 import { StudioHttpError, type StudioAiContributionApi, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { OverflowMenu, StudioButton, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, OverflowMenu, StudioButton, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
 import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition, workflowDefinitionFolderMovePath } from "../api/workflowDesign";
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails, WorkflowDefinitionSummary } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
@@ -16,7 +16,7 @@ import "./workflowFolders.css";
 import "./workflowDefinitionTable.css";
 import { LatestDefinitionVersion, PublishedDefinitionVersion } from "./DefinitionVersionCells";
 import type { WorkflowDefinitionBrowseSession } from "./workflowDefinitionBrowseSession";
-import { WorkflowListIdentity } from "./WorkflowListIdentity";
+import { WorkflowDefinitionIdentifiers } from "./WorkflowDefinitionIdentifiers";
 
 const CreateWorkflowDialog = lazy(() =>
   import("./CreateWorkflowDialog").then(module => ({ default: module.CreateWorkflowDialog }))
@@ -582,6 +582,8 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
                   ) : null}
                 </div>
                 <span role="columnheader">Name</span>
+                <span className="wf-definition-id-header" role="columnheader">Definition ID</span>
+                <span role="columnheader">Identifiers</span>
                 <span role="columnheader">Latest version</span>
                 <span role="columnheader">Published version</span>
                 <span role="columnheader">Modified</span>
@@ -648,22 +650,17 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
                           </a>
                         ) : definition.name}
                       </strong>
-                      {definition.description ? <small>{definition.description}</small> : !isCurrentData ? <small>{definition.id}</small> : null}
-                      {isCurrentData ? <WorkflowListIdentity
-                        primaryLabel="Definition ID"
-                        primaryValue={definition.id}
-                        secondaryIdentifiers={secondaryIdentifiers}
-                        primaryClassName="wf-definition-primary-identifier"
-                        secondaryClassName="wf-definition-secondary-identifiers"
-                        detailsClassName="wf-definition-identifiers"
-                        detailsAriaLabel={`Workflow definition identifiers for ${definition.name}`}
-                      /> : null}
-                      {isDeleted ? <><span className="wf-status-badge" data-status="cancelled">Deleted</span><small>{formatDate(definition.deletedAt)}</small></> : null}
-                      {isCurrentData && effectiveFolderSelection === "all" ? (
-                        <ResultFolderBreadcrumb definition={definition} onSelect={changeFolder} />
-                      ) : null}
                     </span>
-                    <span className="wf-definition-version" role="cell"><LatestDefinitionVersion definition={definition} /></span>
+                    <span className="wf-definition-id wf-definition-primary-identifier" role="cell" onClick={event => event.stopPropagation()}>
+                      {isCurrentData ? <CopyableIdentifier label="Definition ID" value={definition.id} /> : <span title={definition.id}>{definition.id}</span>}
+                    </span>
+                    <span className="wf-definition-identities-cell" role="cell" onClick={event => event.stopPropagation()}>
+                      {isCurrentData ? <WorkflowDefinitionIdentifiers name={definition.name} identifiers={secondaryIdentifiers} description={definition.description}>
+                        {effectiveFolderSelection === "all" ? <ResultFolderBreadcrumb definition={definition} onSelect={changeFolder} /> : null}
+                        {isDeleted ? <p>Deleted {formatDate(definition.deletedAt)}</p> : null}
+                      </WorkflowDefinitionIdentifiers> : null}
+                    </span>
+                    <span className="wf-definition-version" role="cell"><LatestDefinitionVersion definition={definition} />{isDeleted ? <span className="wf-status-badge" data-status="cancelled">Deleted</span> : null}</span>
                     <span className="wf-definition-version" role="cell"><PublishedDefinitionVersion definition={definition} /></span>
                     <span role="cell">{formatDate(definition.lastModifiedAt)}</span>
                     <span className="wf-row-actions" role="cell" onClick={isCurrentData ? event => event.stopPropagation() : undefined}>

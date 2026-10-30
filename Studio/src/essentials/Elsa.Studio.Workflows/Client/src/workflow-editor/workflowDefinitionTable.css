@@ -136,9 +136,9 @@
 .wf-definitions-list .wf-definition-grid {
   --wf-definition-selection-track: 28px;
   --wf-definition-column-gap: 10px;
-  grid-template-columns: var(--wf-definition-selection-track) minmax(220px, 1fr) 126px 132px 142px 60px;
+  grid-template-columns: var(--wf-definition-selection-track) minmax(220px, 1fr) 180px 76px 126px 132px 142px 60px;
   column-gap: var(--wf-definition-column-gap);
-  min-width: 844px;
+  min-width: 1120px;
   margin: 0;
   border: 0;
   border-radius: 0;
@@ -233,13 +233,59 @@
   outline-offset: 2px;
 }
 
-.wf-definitions-list .wf-definition-primary-identifier {
-  margin-top: 4px;
+.wf-definition-id .studio-copyable-identifier {
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 4px;
+  font-size: var(--studio-label-size);
 }
 
-.wf-definitions-list .wf-definition-name > .wf-status-badge {
-  display: inline-flex;
-  margin-top: 4px;
+.wf-definition-id .studio-copyable-identifier__label {
+  display: none;
+}
+
+.wf-definition-id > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-definition-identifiers-popover {
+  box-sizing: border-box;
+  width: 360px;
+  max-width: calc(100vw - 16px);
+  overflow: auto;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  padding: 12px;
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  box-shadow: var(--studio-shadow-sm);
+  font-size: var(--studio-label-size);
+}
+
+.wf-definition-identifiers-popover header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.wf-definition-extra-details {
+  margin-top: 12px;
+  border-top: 1px solid var(--studio-border);
+  padding-top: 8px;
+  color: var(--studio-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.wf-definition-extra-details p {
+  margin: 4px 0;
+}
+
+.wf-definition-extra-details:empty {
+  display: none;
 }
 
 .wf-definitions-list .wf-definition-grid > .wf-grid-row > .wf-definition-version {

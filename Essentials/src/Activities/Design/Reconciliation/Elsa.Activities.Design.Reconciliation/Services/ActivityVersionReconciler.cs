@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
@@ -30,13 +31,13 @@ namespace Elsa.Activities.Design.Reconciliation.Services;
 ///    with immutable provenance (including ProvisioningHash).
 /// 4. If <c>(DefinitionId, Version)</c> is already persisted, compute the incoming hash
 ///    and compare to the persisted ProvisioningHash:
-///    - Hash difference that is only input <c>Tier</c> (or another newly hashed catalog field)
-///      → refresh the stored version in place so the catalog picks up the new disclosure group.
+///    - Hash difference that is only input presentation (<c>Tier</c>, display label or help text)
+///      → refresh the stored version in place so the catalog picks up the new disclosure group or UI wording.
 ///      Pre-GA: the first upgrade after those fields enter the hash re-reconciles existing rows
 ///      rather than throwing.
 ///    - Any other hash difference → <see cref="ActivityVersionHashMismatchException"/> (the source
 ///      is broken — same logical identity, different content).
-///    - Hashes match → skip or throw per the <see cref="DuplicateHandling"/> option.
+///    - Hashes match → honor <see cref="DuplicateHandling"/>; refresh changed palette hints when skipping.
 ///
 /// No per-pass mutating state is carried by any entity in this domain. Source disappearance
 /// is intentionally not tracked. Versions are never deleted.
@@ -179,7 +180,7 @@ public sealed class ActivityVersionReconciler(
                 return;
             }
 
-            if (IsInputTierOnlyChange(definition, existingVersion, incomingVersion))
+            if (IsInputPresentationOnlyChange(definition, existingVersion, incomingVersion))
             {
                 var expectedOldHash = existingVersion.Hash;
                 var refresh = ActivityDefinitionVersion.From(incomingVersion, definition.Id);
@@ -194,6 +195,7 @@ public sealed class ActivityVersionReconciler(
                 existingVersion.Inputs = incomingVersion.Inputs.ToArray();
                 existingVersion.Hash = incomingHash;
                 existingVersion.LastModifiedAt = refresh.LastModifiedAt;
+                await RefreshPaletteHintsIfChangedAsync(definition, existingVersion, incomingVersion, cancellationToken);
                 if (sourceVersionPublisher is not null)
                 {
                     existingVersion.Definition ??= definition;
@@ -215,10 +217,33 @@ public sealed class ActivityVersionReconciler(
 
         // Hash matches → genuine duplicate.
         HandleHashMatchedDuplicate(definition, incomingVersion.Version);
+        await RefreshPaletteHintsIfChangedAsync(definition, existingVersion, incomingVersion, cancellationToken);
         if (sourceVersionPublisher is not null)
         {
             existingVersion.Definition ??= definition;
             await sourceVersionPublisher.PublishAsync(definition, existingVersion, cancellationToken);
+        }
+    }
+
+    private async Task RefreshPaletteHintsIfChangedAsync(
+        ActivityDefinition definition,
+        ActivityDefinitionVersion existingVersion,
+        IActivityDefinitionVersion incomingVersion,
+        CancellationToken cancellationToken)
+    {
+        var incomingPalette = incomingVersion.DesignFacets.Where(facet => facet.Kind == "elsa.activity-palette").ToArray();
+        var existingPalette = existingVersion.DesignFacets.Where(facet => facet.Kind == "elsa.activity-palette").ToArray();
+        if (JsonSerializer.Serialize(incomingPalette) != JsonSerializer.Serialize(existingPalette))
+        {
+            var refresh = ActivityDefinitionVersion.From(existingVersion);
+            refresh.TenantId = existingVersion.TenantId;
+            refresh.Definition = definition;
+            refresh.DesignFacets = existingVersion.DesignFacets.Where(facet => facet.Kind != "elsa.activity-palette").Concat(incomingPalette).ToArray();
+            await refreshVersionCommand.RefreshPaletteHintsAsync(
+                CreateOperationKey("refresh-palette", incomingVersion), refresh, existingVersion.DesignFacetsSource, cancellationToken);
+            existingVersion.DesignFacets = refresh.DesignFacets;
+            existingVersion.DesignFacetsSource = refresh.DesignFacetsSource;
+            existingVersion.LastModifiedAt = refresh.LastModifiedAt;
         }
     }
 
@@ -315,20 +340,20 @@ public sealed class ActivityVersionReconciler(
         return string.Equals(existingVersion.Hash, compatibilityHash, StringComparison.Ordinal);
     }
 
-    private bool IsInputTierOnlyChange(
+    private bool IsInputPresentationOnlyChange(
         ActivityDefinition definition,
         IActivityDefinitionVersion existingVersion,
         IActivityDefinitionVersion incomingVersion)
     {
-        var existingStripped = WithStrippedInputTiers(existingVersion, definition);
-        var incomingStripped = WithStrippedInputTiers(incomingVersion, incomingVersion.Definition);
+        var existingStripped = WithStrippedInputPresentation(existingVersion, definition);
+        var incomingStripped = WithStrippedInputPresentation(incomingVersion, incomingVersion.Definition);
         return string.Equals(
             hasher.Hash(definition, existingStripped),
             hasher.Hash(incomingVersion.Definition, incomingStripped),
             StringComparison.Ordinal);
     }
 
-    private static ActivityDefinitionVersionModel WithStrippedInputTiers(
+    private static ActivityDefinitionVersionModel WithStrippedInputPresentation(
         IActivityDefinitionVersion version,
         IActivityDefinition definition) =>
         new(
@@ -343,7 +368,7 @@ public sealed class ActivityVersionReconciler(
             SourceKind: version.SourceKind,
             SourceId: version.SourceId,
             Definition: definition,
-            Inputs: version.Inputs.Select(input => input.Tier is null ? input : input with { Tier = null }).ToArray(),
+            Inputs: version.Inputs.Select(input => input with { Tier = null, DisplayName = string.Empty, Description = null }).ToArray(),
             Outputs: version.Outputs,
             DesignFacets: version.DesignFacets,
             ExecutionType: version.ExecutionType,

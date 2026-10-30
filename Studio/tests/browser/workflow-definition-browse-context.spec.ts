@@ -38,6 +38,8 @@ async function expectPriorPageIsDisplayOnly(page: import("@playwright/test").Pag
   await expect(page.getByRole("link", { name: "Second page renewal" })).toHaveCount(0);
   await expect(page.getByLabel("Select workflow definition Second page renewal")).toHaveCount(0);
   await expect(page.locator(".wf-pagination")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Identifiers for / })).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: /^Workflow definition identifiers for / })).toHaveCount(0);
 }
 
 async function recordedSearchRequests(page: import("@playwright/test").Page, searchTerm: string) {
@@ -76,6 +78,7 @@ test("narrow keyboard users preserve workflow browse context through global sear
   await expect(page).toHaveURL(/state=all/);
   await expect(page).toHaveURL(/search=workflow/);
 
+  await page.getByRole("button", { name: "Identifiers for All workflow", exact: true }).click();
   const resultBreadcrumb = page.getByRole("navigation", { name: "Folder for All workflow" });
   const operations = resultBreadcrumb.getByRole("button", { name: "Operations" });
   await operations.focus();
@@ -143,93 +146,66 @@ for (const width of [320, 390]) {
     await page.goto(`${browseUrl}&long-identities=1&workbench-shell=1`);
     await page.getByRole("button", { name: "Next page" }).click();
     const row = page.getByRole("row", { name: /Second page renewal/ });
-    await expect(row).toBeVisible();
-    await row.getByRole("button", { name: /More identifiers/ }).click();
-    const details = row.locator(".wf-definition-identifiers");
-    await expect(details.getByLabel(/^Draft ID:/)).toBeVisible();
+    await expect(row.locator(".wf-definition-name")).toHaveText("Second page renewal");
+    await expect(page.getByRole("columnheader", { name: "Definition ID", exact: true })).toBeAttached();
 
-    const geometry = await row.evaluate(element => {
-      const scroll = element.closest<HTMLElement>(".wf-definition-table-scroll")!;
+    const tracks = await row.evaluate(element => {
       const table = element.closest<HTMLElement>(".wf-definition-grid")!;
-      const header = table.querySelector<HTMLElement>(".wf-grid-head")!;
-      const cell = element.querySelector<HTMLElement>(".wf-definition-name")!;
-      const fields = Array.from(cell.querySelectorAll<HTMLElement>(".studio-copyable-identifier")).map(field => {
-        const label = field.querySelector<HTMLElement>(".studio-copyable-identifier__label")!.getBoundingClientRect();
-        const value = field.querySelector<HTMLElement>(".studio-copyable-identifier__value")!.getBoundingClientRect();
-        const button = field.querySelector<HTMLElement>(".studio-copyable-identifier__button")!.getBoundingClientRect();
-        const bounds = field.getBoundingClientRect();
-        return {
-          label: { left: label.left, right: label.right, bottom: label.bottom },
-          value: { left: value.left, right: value.right, top: value.top },
-          left: bounds.left,
-          right: bounds.right,
-          copyLeft: button.left,
-          copyRight: button.right
-        };
-      });
-      const scrollBounds = scroll.getBoundingClientRect();
-      const nameBounds = cell.querySelector<HTMLElement>(".wf-definition-link")!.getBoundingClientRect();
-      const disclosureBounds = cell.querySelector<HTMLElement>(".wf-definition-secondary-identifiers .studio-disclosure-fold-trigger")!.getBoundingClientRect();
-      const visibleLeft = scrollBounds.left + scroll.clientLeft;
-      const visibleRight = visibleLeft + scroll.clientWidth;
+      const box = (item: Element) => { const r = item.getBoundingClientRect(); return { left: r.left, width: r.width }; };
       return {
-        scroll: { left: visibleLeft, right: visibleRight, clientWidth: scroll.clientWidth, scrollWidth: scroll.scrollWidth, scrollLeft: scroll.scrollLeft },
-        header: Array.from(header.querySelectorAll<HTMLElement>("[role=columnheader]")).map(item => {
-          const bounds = item.getBoundingClientRect();
-          return { left: bounds.left, width: bounds.width };
-        }),
-        cells: Array.from(element.querySelectorAll<HTMLElement>("[role=cell]")).map(item => {
-          const bounds = item.getBoundingClientRect();
-          return { left: bounds.left, width: bounds.width };
-        }),
-        name: { left: nameBounds.left, right: nameBounds.right },
-        disclosure: { left: disclosureBounds.left, right: disclosureBounds.right },
-        rowWidth: element.getBoundingClientRect().width,
-        fields
+        header: [...table.querySelectorAll("[role=columnheader]")].map(box),
+        cells: [...element.querySelectorAll("[role=cell]")].map(box)
       };
     });
-    expect(geometry.rowWidth).toBeGreaterThan(geometry.scroll.clientWidth);
-    expect(geometry.scroll.scrollWidth).toBeGreaterThan(geometry.scroll.clientWidth);
-    expect(geometry.scroll.scrollLeft).toBe(0);
-    expect(geometry.header).toHaveLength(6);
-    expect(geometry.cells).toHaveLength(6);
-    for (let index = 0; index < geometry.header.length; index++) {
-      expect(Math.abs(geometry.header[index].left - geometry.cells[index].left), `column ${index + 1} starts on the same track`).toBeLessThanOrEqual(1);
-      expect(Math.abs(geometry.header[index].width - geometry.cells[index].width), `column ${index + 1} uses the full shared track`).toBeLessThanOrEqual(1);
-    }
-    expect(geometry.name.left).toBeGreaterThanOrEqual(geometry.scroll.left - 1);
-    expect(geometry.name.right).toBeLessThanOrEqual(geometry.scroll.right + 1);
-    expect(geometry.disclosure.left).toBeGreaterThanOrEqual(geometry.scroll.left - 1);
-    expect(geometry.disclosure.right).toBeLessThanOrEqual(geometry.scroll.right + 1);
-    expect(geometry.fields.length).toBeGreaterThanOrEqual(5);
-    for (const field of geometry.fields) {
-      expect(field.left).toBeGreaterThanOrEqual(geometry.scroll.left - 1);
-      expect(field.right).toBeLessThanOrEqual(geometry.scroll.right + 1);
-      expect(field.label.left).toBeGreaterThanOrEqual(geometry.scroll.left - 1);
-      expect(field.label.right).toBeLessThanOrEqual(geometry.scroll.right + 1);
-      expect(field.value.left).toBeGreaterThanOrEqual(geometry.scroll.left - 1);
-      expect(field.value.right).toBeLessThanOrEqual(geometry.scroll.right + 1);
-      expect(field.copyLeft).toBeGreaterThanOrEqual(geometry.scroll.left - 1);
-      expect(field.copyRight).toBeLessThanOrEqual(geometry.scroll.right + 1);
-    }
-    for (const field of geometry.fields.slice(1)) {
-      expect(field.label.bottom).toBeLessThan(field.value.top);
+    expect(tracks.header).toHaveLength(8);
+    expect(tracks.cells).toHaveLength(8);
+    for (let index = 0; index < tracks.header.length; index++) {
+      expect(Math.abs(tracks.header[index].left - tracks.cells[index].left)).toBeLessThanOrEqual(1);
+      expect(Math.abs(tracks.header[index].width - tracks.cells[index].width)).toBeLessThanOrEqual(1);
     }
 
     const primaryCopy = row.getByRole("button", { name: "Copy Definition ID" });
     await primaryCopy.focus();
     await page.keyboard.press("Enter");
-    await expect(row.getByRole("status").filter({ hasText: "Definition ID copied" })).toBeAttached();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("workflow-page-two");
+    await expect(row.getByRole("status")).toHaveText("Definition ID copied");
     expect(new URL(page.url()).searchParams.has("definition")).toBe(false);
 
-    const secondaryCopy = row.getByRole("button", { name: "Copy Draft ID" });
-    await secondaryCopy.focus();
+    const trigger = row.getByRole("button", { name: "Identifiers for Second page renewal", exact: true });
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    const details = page.getByRole("dialog", { name: "Workflow definition identifiers for Second page renewal", exact: true });
+    await expect(details).toBeVisible();
+    await expect(details.getByRole("button", { name: "Close identifiers", exact: true })).toBeFocused();
+    const geometry = await details.evaluate(element => {
+      const panel = element.closest(".wf-definition-identifiers-popover")!.getBoundingClientRect();
+      return { left: panel.left, right: panel.right, fields: [...element.querySelectorAll(".studio-copyable-identifier")].map(field => {
+        const label = field.querySelector(".studio-copyable-identifier__label")!.getBoundingClientRect();
+        const value = field.querySelector(".studio-copyable-identifier__value")!.getBoundingClientRect();
+        const copy = field.querySelector("button")!.getBoundingClientRect();
+        return { left: label.left, right: copy.right, labelBottom: label.bottom, valueTop: value.top };
+      }) };
+    });
+    expect(geometry.left).toBeGreaterThanOrEqual(7);
+    expect(geometry.right).toBeLessThanOrEqual(width - 7);
+    expect(geometry.fields).toHaveLength(4);
+    for (const field of geometry.fields) {
+      expect(field.left).toBeGreaterThanOrEqual(geometry.left);
+      expect(field.right).toBeLessThanOrEqual(geometry.right);
+      expect(field.labelBottom).toBeLessThan(field.valueTop);
+    }
+    await details.getByRole("button", { name: "Copy Draft ID", exact: true }).focus();
     await page.keyboard.press("Space");
-    await expect(row.getByRole("status").filter({ hasText: "Draft ID copied" })).toBeAttached();
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
-      .toBe(`draft-${"immutable-identifier-".repeat(7)}`);
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(`draft-${"immutable-identifier-".repeat(7)}`);
+    await expect(details.getByRole("status").filter({ hasText: "Draft ID copied" })).toHaveText("Draft ID copied");
     expect(new URL(page.url()).searchParams.has("definition")).toBe(false);
+    await page.keyboard.press("Escape");
+    await expect(details).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+    await trigger.click();
+    await expect(details).toBeVisible();
+    await page.getByRole("heading", { name: "Workflow definitions", exact: true }).click();
+    await expect(details).toHaveCount(0);
   });
 }
 

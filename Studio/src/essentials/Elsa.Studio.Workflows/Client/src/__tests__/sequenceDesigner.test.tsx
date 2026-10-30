@@ -23,6 +23,25 @@ afterEach(() => {
 });
 
 describe("SequenceDesigner", () => {
+  it("offers a workflow-start toggle only on editable trigger steps", () => {
+    const onSetWorkflowStart = vi.fn();
+    const trigger = workflowNode("endpoint", "Http Endpoint", { workflowStartEnabled: true });
+    const { render } = mount([trigger], { selectedNodeId: "endpoint", onSetWorkflowStart });
+    const toggle = container.querySelector<HTMLButtonElement>("button[aria-label='Start new workflows from Http Endpoint']")!;
+    expect(toggle).toBeTruthy();
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    click(toggle);
+    expect(onSetWorkflowStart).toHaveBeenCalledWith("endpoint", false);
+    render([{ ...trigger, data: { ...trigger.data, workflowStartEnabled: false } }]);
+    const disabledToggle = container.querySelector<HTMLButtonElement>("button[aria-label='Start new workflows from Http Endpoint']")!;
+    expect(disabledToggle.getAttribute("aria-pressed")).toBe("false");
+    click(disabledToggle);
+    expect(onSetWorkflowStart).toHaveBeenLastCalledWith("endpoint", true);
+    render([trigger], { readOnly: true });
+    expect(container.querySelector("button[aria-label='Start new workflows from Http Endpoint']")).toBeNull();
+    render([workflowNode("endpoint", "Write Line")]);
+    expect(container.querySelector("button[title='Enable workflow start']")).toBeNull();
+  });
   it("renders ordered, readable cards with ordinals and implicit connectors", () => {
     const { ref } = mount([
       workflowNode("first", "Start", { summary: "Runs first" }),
@@ -263,6 +282,7 @@ function mount(nodes: Node<WorkflowNodeData>[], overrides: Partial<{
   selectedNodeId: string | null;
   readOnly: boolean;
   availabilityLookup: WorkflowNodeAvailabilityLookup;
+  onSetWorkflowStart: (nodeId: string, enabled: boolean) => void;
 }> = {}) {
   const ref = createRef<HTMLDivElement>();
   const callbacks = {
