@@ -1152,8 +1152,8 @@ public sealed class ResponseReplaySafetyProcessTests
     /// <summary>
     /// Reviewed allowance for spec 256 (#3050): the frozen baseline predates WriteHttpResponse.Body becoming a JSON value.
     /// Its <c>String</c> Body type is upgraded to the current contract. Spec 1169 (#3477) also corrects
-    /// the documented optional Body result projection. Historical closure bytes remain unchanged;
-    /// every other difference still fails.
+    /// the documented optional Body result projection. Issue #3476 corrects the optional ContentType result projection.
+    /// Historical closure bytes remain unchanged; every other difference still fails.
     /// </summary>
     private static void ApplyStructuredBodyContractChange(JsonObject artifact)
     {
@@ -1173,6 +1173,8 @@ public sealed class ResponseReplaySafetyProcessTests
             if (projection["sourceRepresentation"]?.GetValue<string>() == "TextValue")
                 projection["sourceRepresentation"] = "TypedValue";
         }
+        if (writeResponse["activityContract"]?["result"]?["projections"]?["ContentType"] is JsonObject contentTypeProjection)
+            contentTypeProjection["isRequired"] = false;
 
         void Upgrade(JsonNode? holder, string property)
         {
