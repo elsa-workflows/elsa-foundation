@@ -4310,12 +4310,6 @@
   cursor: pointer;
 }
 
-.wf-properties-add {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
 .wf-properties-remove {
   display: inline-flex;
   align-items: center;
