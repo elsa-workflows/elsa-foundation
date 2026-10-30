@@ -72,11 +72,14 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // labels to the shared adapter. Against the same workspace dependencies, the parent measured upgrades
 // at 375.22 kB and the corrected implementation measures 375.51 kB. Keep the existing heavy-surface
 // exclusion checks and give this shared code/CSS growth 0.5 kB of budget; no deferred surface moved eager.
+// Root-slot navigation (#3470) adds a root selector, diagnostic paths and history recovery to the
+// shared adapter. The measured landing closures are 385.06 kB / 376.21 kB; allow 1 kB per landing
+// closure for that shared behavior. Entry and individual chunk budgets remain unchanged.
 const budgets = {
   entryJavaScript: 127_500,
   stylesheet: 185_000,
-  definitionsLandingTotal: 384_500,
-  upgradeLandingTotal: 376_000,
+  definitionsLandingTotal: 385_500,
+  upgradeLandingTotal: 377_000,
   individualChunk: 500_000
 };
 

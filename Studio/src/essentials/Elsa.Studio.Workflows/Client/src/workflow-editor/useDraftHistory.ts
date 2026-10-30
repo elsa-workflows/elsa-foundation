@@ -6,8 +6,8 @@ import { cloneWorkflowDraftForUndo, getDraftSignature } from "./editorHelpers";
 
 interface DraftHistoryParams {
   draft: WorkflowDraft | null;
-  // Restores a whole-draft snapshot into the editor document (resets scope + selection). The document
-  // reducer owns the cascade; the hook only decides *which* snapshot to restore.
+  // Restores a whole-draft snapshot. The host preserves the nearest surviving scope; this hook only
+  // decides which snapshot to restore.
   restoreDraft(snapshot: WorkflowDraft): void;
 }
 

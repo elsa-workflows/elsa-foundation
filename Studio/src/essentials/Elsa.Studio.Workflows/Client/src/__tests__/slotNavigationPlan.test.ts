@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCanvas,
+  findNodeScopePath,
+  updateScopeActivities,
+  updateScopeOwner,
   getChildSlots,
   planSlotNavigation,
   resolveScope,
@@ -8,6 +11,8 @@ import {
 } from "../workflowAdapter";
 import type { ActivityNode } from "../workflowTypes";
 import {
+  ifActivity,
+  ifNode,
   flowchartActivity,
   flowchartNode,
   forEachActivity,
@@ -108,7 +113,7 @@ describe("planSlotNavigation", () => {
     expect(plan.selectedNodeId).toBe("wl-4");
   });
 
-  it("root owner: a non-primary slot is not addressable", () => {
+  it("root owner: an undeclared slot is not addressable", () => {
     const rootForEach = forEachNode("fe-root3", null);
     const bogusSlot = { ...bodySlotOf(rootForEach), id: "elsa.foreach.structure:other" };
     expect(planSlotNavigation([], rootForEach, rootForEach.nodeId, bogusSlot, "x", catalogByVersion)).toBeNull();
@@ -122,5 +127,70 @@ describe("planSlotNavigation", () => {
     const badgePlan = planSlotNavigation([], root, feNode.id, feNode.data.childSlots[0], "For Each / Body", catalogByVersion);
     const inspectorPlan = planSlotNavigation([], root, foreach.nodeId, bodySlotOf(foreach), "For Each / Body", catalogByVersion);
     expect(badgePlan).toEqual(inspectorPlan);
+  });
+});
+
+
+describe("root child slots", () => {
+  const activities = [...catalog, ifActivity];
+  const slots = (root: ActivityNode) => getChildSlots(root, activities);
+  const navigate = (root: ActivityNode, frames: ScopeFrame[], index: number) =>
+    planSlotNavigation(frames, root, root.nodeId, slots(root)[index], `If / ${slots(root)[index].label}`, activities)!;
+
+  it("opens and retargets empty declared root slots independently", () => {
+    const root = ifNode("if");
+    const secondary = navigate(root, [], 1);
+    expect(secondary).not.toBeNull();
+    expect(resolveScope(root, secondary.frames, activities)?.slot.property).toBe("else");
+    expect(navigate(root, secondary.frames, 0).frames).toEqual([]);
+    expect(navigate(root, secondary.frames, 1).frames).toEqual(secondary.frames);
+  });
+
+  it("writes and removes a secondary leaf without changing its sibling", () => {
+    const root = ifNode("if", leafNode("then"), leafNode("else"));
+    const plan = navigate(root, [], 1);
+    expect(plan?.selectedNodeId).toBe("else");
+    const updated = updateScopeActivities(root, plan.frames, [leafNode("replacement")], activities);
+    expect(updated.structure!.payload.then).toBe(root.structure!.payload.then);
+    expect(resolveScope(updated, plan.frames, activities)?.slot.activities[0].nodeId).toBe("replacement");
+    const removed = updateScopeActivities(updated, plan.frames, [], activities);
+    expect(removed.structure!.payload.else).toBeNull();
+    expect(removed.structure!.payload.then).toBe(root.structure!.payload.then);
+    expect(updateScopeOwner(updated, plan.frames, { ...updated, inputs: [{ referenceKey: "test", value: true }] }, activities).inputs).toHaveLength(1);
+  });
+
+  it.each([flowchartActivity, sequenceActivity])("descends through a root secondary $displayName and preserves graph ownership", activity => {
+    const child = activity === sequenceActivity ? sequenceNode("container", [leafNode("deep")]) : flowchartNode("container", [leafNode("deep")]);
+    const root = ifNode("if", leafNode("sibling"), child);
+    const plan = navigate(root, [], 1);
+    expect(plan).not.toBeNull();
+    expect(plan.frames.filter(frame => frame.label).map(frame => frame.label)).toEqual(["If / Else"]);
+    expect(resolveScope(root, plan.frames, activities)?.owner.nodeId).toBe("container");
+    const updated = updateScopeActivities(root, plan.frames, [], activities);
+    expect(updated.structure!.payload.then).toBe(root.structure!.payload.then);
+    expect(resolveScope(updated, plan.frames, activities)?.slot.activities).toEqual([]);
+    const path = findNodeScopePath(root, "deep", node => node.nodeId === "if" ? "If" : node.nodeId, activities)!;
+    expect(path).toEqual(plan.frames);
+  });
+
+  it("rejects stale or misplaced root selectors without mutating any slot", () => {
+    const root = ifNode("if", leafNode("sibling"), sequenceNode("container", []));
+    const valid = navigate(root, [], 1).frames;
+    const invalidPaths: ScopeFrame[][] = [
+      [{ ...valid[0], ownerNodeId: "another-root" }],
+      [{ ...valid[0], slotId: "missing" }],
+      [...valid, valid[0]]
+    ];
+    for (const path of invalidPaths) {
+      expect(resolveScope(root, path, activities)).toBeNull();
+      expect(updateScopeActivities(root, path, [leafNode("wrong")], activities)).toBe(root);
+    }
+  });
+
+  it("finds a diagnostic in a secondary root slot", () => {
+    const root = ifNode("if", leafNode("sibling"), leafNode("target"));
+    const path = findNodeScopePath(root, "target", () => "If", activities);
+    expect(path).not.toBeNull();
+    expect(resolveScope(root, path!, activities)?.slot.activities.map(node => node.nodeId)).toEqual(["target"]);
   });
 });
