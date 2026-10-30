@@ -116,3 +116,17 @@ All nine appearance cases and the complete Host suite **600/600**, 53 files, pas
 The existing hosted full browser job at the previous head is still running. The local correction is held for batching until that job finishes before requesting the final available formal review round; the author loop remains capped and is not restarted.
 
 The retained hosted browser observation completed successfully at `f93f9f609`: run`40997038339`, job`123872736424`, **580 passed**, **6 existing opt-in screenshot cases skipped** (29.8minutes). No skip/fixme directives were added or changed in this PR. That result clears the remaining browser observation for batching; the prepared palette-assertion correction is now submitted for fresh exact-head CI and formal round6. Earlier-head browser and .NET/package success are retained as diagnostics, not substituted for the next head's required checks. Main is still `927f91e5`; no additional base integration is needed.
+
+### Main integration after the completed review loop
+
+The previous reviewed head `7404d271d` reached green `Build & test`, `Generated maps fresh`, `Full tier`, and all three Studio jobs. Later main commit `e81401851b077a37f8e5c6f20e38fc1864a26705` (#3448, module-owned Weaver contributions) introduced an adjacent-import conflict in `App.tsx`. Merge commit `40c689ebdc2af7bcfca36e0b18965b5f49649a51` keeps both the workspace stylesheet and the current Agent import. All other intervening main changes, including list, variable-button and slot-designer work, are retained.
+
+Combined-source local verification:
+- Complete Host **644/644**, 55files; Workflows **2,699/2,699**, 198files.
+- Six complete affected rendered specs, including assigned slot designers: **159/159**.
+- Studio .NET project **642/642**, zero failed/skipped; host build zero warnings/errors.
+- Architecture **592/592** after the prescribed locked Release/Debug graph restore; generated filters pass. The first attempt omitted the new Agent project's evaluated Debug assets and failed three EF guards; no guard was changed, and that failed attempt remains recorded.
+- Workspace typecheck, full lint (zero errors,53 existing warnings), host app/vendor and Workflows builds pass. Against current main's budget settings, authenticated Definitions is384.02kB/387.50kB and upgrades374.52kB/379.00kB; no budget limit was changed by this integration.
+- Refreshed7031 preview verifies the actual Condition dialog and nested syntax popup: both resize handles covered by dialog/scrim, menu option receives its hit-test, zero browser/network errors. No expression changed; developer7030/Workbench7243 were preserved.
+
+All six formal reviews approved the earlier reviewed commits, with no blocking finding left at round6. This merge necessarily changes the head and therefore needs fresh exact-head review and CI. The org protocol limits the loop to six rounds; this draft is prepared and tested for an owner decision authorizing one additional review of the integration, without silently resetting either review counter or reusing the previous head's clearance.
