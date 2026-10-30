@@ -68,6 +68,58 @@ test("real composed Studio reviews a native layout edit, observes working state 
   await testInfo.attach("observed-native-receipt", { body: JSON.stringify({ contextTarget: body.contextAttachments.find((item: { contentType: string }) => item.contentType === "workflow.definition").target, observation }, null, 2), contentType: "application/json" });
 });
 
+test("whole-change Undo retries after leaving a captured read-only Test Run snapshot", async ({ page }, testInfo) => {
+  await page.goto(`/workflows/definitions?definition=${encodeURIComponent(definitionId!)}`);
+  const node = page.locator(`.react-flow__node[data-id="${nodeId}"]`); await expect(node).toBeVisible();
+  await expect(page.locator(".wf-editor-save-status")).not.toHaveAttribute("data-pending", "true");
+  const before = await readDefinition(page.request); const priorPosition = await node.getAttribute("style");
+  const capabilities = await (await page.request.get(backendPath("/capabilities"))).json();
+  const runHref = capabilities.capabilities.flatMap((item: { links: { rel: string; href: string }[] }) => item.links)
+    .find((link: { rel: string }) => link.rel === "workflow-draft-test-runs")?.href;
+  expect(runHref).toBeTruthy(); const runURL = backendPath(runHref);
+  let release!: () => void, arrived!: () => void, delayed = false, actualRun: unknown;
+  const held = new Promise<void>(resolve => { release = resolve; }); const reachedOwner = new Promise<void>(resolve => { arrived = resolve; });
+  await page.route(runURL, async route => {
+    if (route.request().method() !== "POST" || delayed) { await route.continue(); return; }
+    delayed = true;
+    // Actual owner IO, with its original response held until B exists. No payload or clock is fabricated.
+    const original = await route.fetch(); expect(original.status()).toBe(200); actualRun = await original.json();
+    arrived(); await held; await route.fulfill({ response: original });
+  });
+  try {
+    await page.getByRole("button", { name: "Test Run", exact: true }).click();
+    const runResponse = page.waitForResponse(response => response.url() === runURL && response.request().method() === "POST");
+    await page.getByRole("button", { name: "Start Test Run", exact: true }).click(); await reachedOwner;
+    await page.getByRole("button", { name: /^Weaver/ }).click(); const dock = page.getByRole("region", { name: "Weaver assistant" });
+    await dock.getByLabel("Ask Weaver").fill(JSON.stringify({ toolName: "workflow_set_designer_position", arguments: { activityId: nodeId, x: 480, y: 320 } }));
+    await dock.getByRole("button", { name: "Send message" }).click(); const proposal = dock.locator(".agent-proposal").first();
+    await expect(proposal).toHaveAttribute("data-status", "awaiting-approval"); await approveReviewed(page, proposal);
+    const acknowledged = page.waitForResponse(response => response.url().endsWith("/acknowledgements") && response.request().method() === "POST");
+    await proposal.getByRole("button", { name: "Apply", exact: true }).click(); const acknowledgement = await acknowledged; expect(acknowledgement.ok()).toBe(true);
+    const observation = acknowledgement.request().postDataJSON(); const receipt = await acknowledgement.json();
+    expect(observation).toMatchObject({ outcome: "applied", result: { typeId: "workflows.layout-change", schemaVersion: "1", data: { observed: true, activityId: nodeId, x: 480, y: 320 } } });
+    expect(receipt.data.toolResult.receipt).toMatchObject({ scope: "clientWorkingState" });
+    await expect(proposal).toHaveAttribute("data-status", "executed"); await expect(node).toHaveAttribute("style", /translate\(480px, 320px\)/);
+    expect((await readDefinition(page.request)).draft).toEqual(before.draft);
+    release(); expect((await runResponse).ok()).toBe(true);
+    await page.getByRole("button", { name: "Inspect captured snapshot", exact: true }).click();
+    await expect(page.getByText("Captured snapshot · read only. Your draft edits are preserved.", { exact: true })).toBeVisible();
+    await expect(node).toHaveAttribute("style", priorPosition!);
+    const undo = proposal.getByRole("button", { name: "Undo whole change", exact: true }); await undo.click();
+    await expect(proposal.getByText("The whole-change undo point is stale; no state was replaced.", { exact: true })).toBeVisible();
+    await expect(node).toHaveAttribute("style", priorPosition!);
+    await page.getByRole("button", { name: "Return to editing", exact: true }).click();
+    await expect(node).toHaveAttribute("style", /translate\(480px, 320px\)/);
+    expect((await readDefinition(page.request)).draft).toEqual(before.draft);
+    await testInfo.attach("read-only-undo-refusal-preserves-editable-b", { body: JSON.stringify({ controlledRealResponseDelay: true, actualRun, observation, receipt, before: before.draft, persisted: (await readDefinition(page.request)).draft, editableBPreserved: true }, null, 2), contentType: "application/json" });
+    await expect(undo).toBeEnabled(); await undo.click();
+    await expect(node).toHaveAttribute("style", priorPosition!); await expect(undo).toBeDisabled();
+    await expect(proposal.getByText("Restored the working draft before the whole Weaver change.", { exact: true })).toBeVisible();
+    expect((await readDefinition(page.request)).draft).toEqual(before.draft);
+    await testInfo.attach("whole-undo-retry-observed", { body: JSON.stringify({ refusedWhileReadOnly: true, retriedAfterReturnToEditing: true, restoredBaseline: true, persistedDraftUnchanged: true }, null, 2), contentType: "application/json" });
+  } finally { release(); await page.unroute(runURL); }
+});
+
 test("a stale server proposal shows its terminal refusal and drains without another owning write", async ({ page, context }, testInfo) => {
   const before = await readNote(page.request);
   const stale = await prepareNote(page, `Stale proposal ${Date.now()}`);

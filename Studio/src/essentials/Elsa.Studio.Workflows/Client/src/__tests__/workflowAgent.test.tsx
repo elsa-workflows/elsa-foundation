@@ -2,8 +2,9 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { authSessionEndedEvent, createAgentRegistry, type StudioAgentPreparedInvocation, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, createAgentRegistry, type StudioAgentPreparedInvocation, type StudioAgentToolResult, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { registerWorkflowAgent } from "../workflowAgent";
+import { WorkflowLayoutResult } from "../workflowAgentResult";
 import { useWorkflowDocument, type WorkflowDocumentApi } from "../workflow-editor/workflowDocument";
 import { useWorkflowGraphOperationBatch } from "../workflow-editor/useWorkflowGraphOperationBatch";
 import { useWorkflowContextBridge } from "../workflow-editor/useWorkflowContextBridge";
@@ -19,6 +20,7 @@ const details = { definition: { id: "definition", name: "Test workflow" } } as W
 const noop = () => {};
 let agent: ReturnType<typeof createAgentRegistry>, controller: ReturnType<typeof registerWorkflowAgent>, doc: WorkflowDocumentApi;
 let editingAllowed: boolean;
+let layoutResult: StudioAgentToolResult | undefined;
 let persistence: ReturnType<typeof useWorkflowPersistence>, root: Root, container: HTMLDivElement;
 let operations: ReturnType<typeof useWorkflowOperations>;
 const publicationGet = vi.fn(), publicationPost = vi.fn(), publicationError = vi.fn();
@@ -29,7 +31,7 @@ function Probe() {
   operations = useWorkflowOperations({ context, draft: doc.state.draft, details, catalog: [writeLine], busy: false, saveDraft: persistence.saveDraft, flushPendingSave: persistence.flushPendingSave, reload: async () => {}, startTestRun: noop, setPublishedArtifact: noop, setOperation: noop, setStatus: noop, setError: publicationError, setActiveRightPanelId: noop, setInspectorCollapsed: noop, setAutosavePaused: persistence.setAutosavePaused });
   useWorkflowGraphOperationBatch({ draft: doc.state.draft, details, catalog: [writeLine], document: doc, controller, holdForReview: persistence.holdForReview, reviewHeld: persistence.reviewHeld, canEdit: () => editingAllowed, setStatus: noop, setError: noop });
   useWorkflowContextBridge({ controller, clientId: agent.clientId, details, draft: doc.state.draft, selectedNode: null, selectedNodeId: doc.state.selectedNodeId, selectedDescriptor: null, inspectedNode: null, inspectedDescriptor: null, inspectedIsScopeOwner: false, catalogByVersion: new Map([[writeLine.activityVersionId, writeLine]]) });
-  return <output>{JSON.stringify(doc.state.draft?.layout)}</output>;
+  return <><output>{JSON.stringify(doc.state.draft?.layout)}</output>{layoutResult ? <WorkflowLayoutResult controller={controller} proposal={null} result={layoutResult.payload?.data} toolResult={layoutResult} /> : null}</>;
 }
 function request(): StudioAgentPreparedInvocation {
   return { invocationId: "invocation", sessionId: "session", turnId: "turn", toolCallId: "call", toolName: "workflow_set_designer_position", toolContractVersion: "1", moduleId: "Elsa.Studio.Workflows", actorId: "actor", tenantId: "tenant", target: controller.snapshot!.target!, arguments: { activityId: "write", x: 150, y: 250 }, approvalDigest: "digest", risk: "reviewRequired", preview: { typeId: "workflows.layout-change", schemaVersion: "1", data: {} }, executionLocation: "clientWorkingState", requiresApproval: true, client: controller.snapshot!.client!, expiresAt: new Date(Date.now() + 60000).toISOString() };
@@ -39,7 +41,7 @@ beforeEach(() => {
   publicationGet.mockReset().mockRejectedValue(new Error("Publication reads must not start after a failed covering save."));
   publicationPost.mockReset().mockRejectedValue(new Error("Publication mutations must not start after a failed covering save."));
   publicationError.mockReset();
-  vi.useFakeTimers(); editingAllowed = true; agent = createAgentRegistry(); controller = registerWorkflowAgent(agent);
+  vi.useFakeTimers(); editingAllowed = true; layoutResult = undefined; agent = createAgentRegistry(); controller = registerWorkflowAgent(agent);
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
   flushSync(() => root.render(<Probe />)); flushSync(() => { doc.loadDraft(structuredClone(draft)); persistence.markSaved(draft); });
 });
@@ -85,6 +87,37 @@ describe("native reviewed workflow effect", () => {
     editingAllowed = true;
     let undone!: Promise<string>; flushSync(() => { undone = controller.undo!(token); }); await undone;
     expect(doc.state.draft?.layout).toEqual([]);
+  });
+  it("permits the rendered whole-change Undo to retry after temporary read-only refusal", async () => {
+    let completion!: ReturnType<NonNullable<typeof controller.execute>>;
+    flushSync(() => { completion = controller.execute!(request()); }); const result = await completion;
+    layoutResult = { toolCallId: "call", toolName: "workflow_set_designer_position", succeeded: true, content: result.summary, payload: result.result };
+    flushSync(() => root.render(<Probe />));
+    const undo = container.querySelector<HTMLButtonElement>("button")!;
+    editingAllowed = false;
+    flushSync(() => undo.click()); await vi.advanceTimersByTimeAsync(0); flushSync(() => root.render(<Probe />));
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("stale");
+    expect(doc.state.draft?.layout[0].x).toBe(150);
+    expect(undo.disabled).toBe(false);
+    editingAllowed = true;
+    flushSync(() => undo.click()); await vi.advanceTimersByTimeAsync(0); flushSync(() => root.render(<Probe />));
+    expect(doc.state.draft?.layout).toEqual([]); expect(undo.disabled).toBe(true);
+    expect(updateDraft).not.toHaveBeenCalled();
+  });
+  it("disables rendered Undo while pending and after its single native inverse commits", async () => {
+    let completion!: ReturnType<NonNullable<typeof controller.execute>>;
+    flushSync(() => { completion = controller.execute!(request()); }); const result = await completion;
+    layoutResult = { toolCallId: "call", toolName: "workflow_set_designer_position", succeeded: true, content: result.summary, payload: result.result };
+    flushSync(() => root.render(<Probe />));
+    const nativeUndo = controller.undo!; let release!: () => void;
+    const ready = new Promise<void>(resolve => { release = resolve; });
+    const invoke = vi.fn(async (token: string) => { await ready; return nativeUndo(token); }); controller.undo = invoke;
+    const undo = container.querySelector<HTMLButtonElement>("button")!;
+    flushSync(() => undo.click()); expect(undo.disabled).toBe(true);
+    flushSync(() => undo.click()); expect(invoke).toHaveBeenCalledTimes(1);
+    release(); await vi.advanceTimersByTimeAsync(0); flushSync(() => root.render(<Probe />));
+    expect(doc.state.draft?.layout).toEqual([]); expect(undo.disabled).toBe(true);
+    expect(invoke).toHaveBeenCalledTimes(1);
   });
   it("refuses an old preparation after authorization context disappears", async () => {
     const invocation = request();
