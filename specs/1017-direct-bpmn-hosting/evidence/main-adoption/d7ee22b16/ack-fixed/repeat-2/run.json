@@ -1,0 +1,20 @@
+{
+  "sourceRevision": "d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+  "command": [
+    "dotnet",
+    "test",
+    "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+    "-c",
+    "Release",
+    "--no-build",
+    "--no-restore",
+    "-p:ElsaBpmnRecoveryProbe=false",
+    "--filter",
+    "FullyQualifiedName~LegacyCalledAcknowledgmentUpgradeTests",
+    "--logger",
+    "trx;LogFileName=called.trx",
+    "--results-directory",
+    "/tmp/elsa-2898-ack-fixed-d7ee22b16/repeat-2"
+  ],
+  "exitCode": 0
+}

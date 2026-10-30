@@ -1,0 +1,14 @@
+[
+  "python3",
+  "tools/bpmn/run_owned_studio_upgrade.py",
+  "--family",
+  "original",
+  "--workbench-assembly",
+  "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll",
+  "--studio-assembly",
+  "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/src/apps/Elsa.Studio.Web/bin/Release/net10.0/Elsa.Studio.Web.dll",
+  "--reader-assembly",
+  "/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/bpmn/DeliveryRecoveryRead/bin/Release/net10.0/DeliveryRecoveryRead.dll",
+  "--output",
+  "/tmp/elsa-2898-studio-d7ee22b16/original"
+]

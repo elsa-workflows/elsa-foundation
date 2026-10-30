@@ -1,0 +1,39 @@
+{
+  "checkedAtUtc": "2026-10-30T06:38:42.585217+00:00",
+  "processes": [
+    {
+      "role": "workbench",
+      "processId": 88071,
+      "controllerProcessId": 88070,
+      "started": "Fri Oct 30 07:36:16 2026",
+      "executable": "dotnet",
+      "command": [
+        "dotnet",
+        "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll",
+        "--contentRoot",
+        "/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-studio-upgrade-_396xdp7/workbench",
+        "--urls",
+        "http://127.0.0.1:63410"
+      ],
+      "assemblySha256": "3e4fe8276db8289be82ba981983f9c4e84099548772ad7235b6c3e2587b236ba",
+      "exitCode": 0
+    },
+    {
+      "role": "studio",
+      "processId": 88074,
+      "controllerProcessId": 88070,
+      "started": "Fri Oct 30 07:36:19 2026",
+      "executable": "dotnet",
+      "command": [
+        "dotnet",
+        "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/src/apps/Elsa.Studio.Web/bin/Release/net10.0/Elsa.Studio.Web.dll",
+        "--contentRoot",
+        "/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-studio-upgrade-_396xdp7/studio",
+        "--urls",
+        "http://127.0.0.1:63411"
+      ],
+      "assemblySha256": "aff03ac1e7693e31ed018d3dd5aff37892392126479c7ac307ef60fbd637a07e",
+      "exitCode": 0
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "family": "original",
+  "sourceRevision": "d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+  "purpose": "Read-only Run Kind details inspection of the same retained published/test/legacy run identities, after the primary journey hosts stopped.",
+  "backendUrl": "http://127.0.0.1:61933",
+  "studioUrl": "http://127.0.0.1:61934",
+  "privateRoot": "/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-studio-upgrade-4a06cams",
+  "processes": [
+    {
+      "role": "workbench",
+      "processId": 86019,
+      "controllerProcessId": 86017,
+      "started": "Fri Oct 30 07:33:55 2026",
+      "executable": "dotnet",
+      "command": [
+        "dotnet",
+        "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll",
+        "--contentRoot",
+        "/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-studio-upgrade-4a06cams/workbench",
+        "--urls",
+        "http://127.0.0.1:61933"
+      ],
+      "assemblySha256": "3e4fe8276db8289be82ba981983f9c4e84099548772ad7235b6c3e2587b236ba"
+    },
+    {
+      "role": "studio",
+      "processId": 86032,
+      "controllerProcessId": 86017,
+      "started": "Fri Oct 30 07:33:58 2026",
+      "executable": "dotnet",
+      "command": [
+        "dotnet",
+        "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/src/apps/Elsa.Studio.Web/bin/Release/net10.0/Elsa.Studio.Web.dll",
+        "--contentRoot",
+        "/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-studio-upgrade-4a06cams/studio",
+        "--urls",
+        "http://127.0.0.1:61934"
+      ],
+      "assemblySha256": "aff03ac1e7693e31ed018d3dd5aff37892392126479c7ac307ef60fbd637a07e"
+    }
+  ]
+}

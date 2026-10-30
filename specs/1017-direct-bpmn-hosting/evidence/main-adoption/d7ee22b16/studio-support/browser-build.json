@@ -1,0 +1,23 @@
+{
+  "sourceRevision": "d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+  "steps": [
+    {
+      "name": "install",
+      "command": [
+        "pnpm",
+        "install",
+        "--frozen-lockfile"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "browser-build",
+      "command": [
+        "pnpm",
+        "-r",
+        "build"
+      ],
+      "exitCode": 0
+    }
+  ]
+}

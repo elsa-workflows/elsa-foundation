@@ -25,4 +25,6 @@ Iteration 1 at `62c33169a19c71fb57a352709a0ab36e27334f6b`: acceptance clean; cor
 
 ## Complete PR
 
-Zero rounds. Final review must cover the full implementation diff and all issue/PR discussion, use the three independent lenses, and stay within the six-round bound. Required exact-head checks, human holds and protected merge rules apply.
+Authoritative complete-PR round receipts and merge audit live in the [PR3410 conversation](https://github.com/elsa-workflows/elsa-foundation/pull/3410#discussion_bucket). This file indexes that record instead of maintaining a second round counter. The loop covers the full implementation diff and all issue/PR discussion, uses three independent lenses, and has a six-round bound. Required exact-head checks, human holds, pending owner decisions and protected merge rules apply.
+
+The [FR/SC acceptance index](evidence/qualification.md) and [affected-main runtime/legacy/Studio repeat](evidence/main-adoption/d7ee22b16/README.md) are qualification inputs, not a clean review round or merge audit. The spec's Implemented status/checklist retirement is prepared in this implementation PR; it becomes shipped status at merge. No broader program completion is inferred.

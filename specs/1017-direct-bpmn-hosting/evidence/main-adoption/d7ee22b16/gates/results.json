@@ -1,0 +1,47 @@
+{
+  "sourceRevision": "d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+  "steps": [
+    {
+      "name": "architecture",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--logger",
+        "trx;LogFileName=architecture.trx",
+        "--results-directory",
+        "/tmp/elsa-2898-main-gates-d7ee22b16"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "maps",
+      "command": [
+        "dotnet",
+        "run",
+        "--project",
+        "tools/maps/Elsa.Maps.Generator",
+        "--no-restore",
+        "--",
+        "check"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "tiers",
+      "command": [
+        "dotnet",
+        "run",
+        "--project",
+        "tools/maps/Elsa.Maps.Generator",
+        "--no-restore",
+        "--",
+        "test-tiers-check"
+      ],
+      "exitCode": 0
+    }
+  ]
+}

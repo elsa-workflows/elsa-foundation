@@ -1,0 +1,104 @@
+{
+  "allCompiledWorkbenchAndReaderProductsUnchanged": true,
+  "initialBroadGuardRefusedMutableCache": true,
+  "changedFiles": [
+    "Essentials/apps/Elsa.Workbench/bin/Release/net10.0/.nuplane/store-state.json"
+  ],
+  "changedFileClassification": "Mutable Nuplane store-state cache under the actual app directory; not a compiled product. Its writer is not attributed to the concurrent Studio build.",
+  "products": {
+    "workbench": {
+      "sourceCommit": "d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+      "metadataOnly": true,
+      "actualProductVersions": [
+        {
+          "name": "Elsa.Workbench.dll",
+          "productVersion": "1.0.0+d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+          "sha256": "3e4fe8276db8289be82ba981983f9c4e84099548772ad7235b6c3e2587b236ba"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.dll",
+          "productVersion": "1.0.0+d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+          "sha256": "8bf6327b5c524fbaea93f02049005d2f7bf6614432c0360b6544588ec4e304d7"
+        },
+        {
+          "name": "Elsa.Activities.Bpmn.Interchange.dll",
+          "productVersion": "1.0.0+d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+          "sha256": "331239d70f085373aa26abc473d770c936748d2039c6a933f3c678756442b28c"
+        },
+        {
+          "name": "Elsa.Workflows.Runtime.Core.dll",
+          "productVersion": "1.0.0+d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+          "sha256": "3ddb4817a9f9d1c9c07f13928b5e706fdf0e4e9080c0b0d95f1e6d51075af03f"
+        },
+        {
+          "name": "Elsa.Workflows.Runtime.dll",
+          "productVersion": "1.0.0+d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+          "sha256": "7da41bb1425e39411c727ecc9b9fda56e614c799324a2c777fbc3d600ed6f242"
+        },
+        {
+          "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+          "productVersion": "1.0.0+d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+          "sha256": "76e6e3db6dba0262892c46bc7b7a662682d26867e85553ba049279d2fb0a4f70"
+        },
+        {
+          "name": "Elsa.Activities.Runtime.dll",
+          "productVersion": "1.0.0+d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+          "sha256": "02fc4afb537f67181e6a84ffd6946db02a227028b9904bae1bb8b62db5394934"
+        },
+        {
+          "name": "Elsa.Activities.DispatchWorkflow.Runtime.dll",
+          "productVersion": "1.0.0+d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+          "sha256": "3b8e06dfe1168753808ee0c0989f5ac027dac3dcf2971c6ef82e12adb416384e"
+        },
+        {
+          "name": "Elsa.Serialization.SystemText.dll",
+          "productVersion": "1.0.0+d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+          "sha256": "a62d944de2ff43fce1c218997dbe1df4e7a61f9c805e35fb17ca7d39e5fb71a6"
+        }
+      ],
+      "releasedLibraryProducts": [
+        {
+          "name": "Bpmn.Model.dll",
+          "productVersion": "0.5.0+021d2c5bba494f17d346144d97763cd3b2a13a4b",
+          "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776"
+        },
+        {
+          "name": "Bpmn.Semantics.dll",
+          "productVersion": "0.5.0+021d2c5bba494f17d346144d97763cd3b2a13a4b",
+          "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+        },
+        {
+          "name": "Bpmn.Interchange.dll",
+          "productVersion": "0.5.0+021d2c5bba494f17d346144d97763cd3b2a13a4b",
+          "sha256": "4199d813b9e6dad4f0ec4f189b05b9084de86fb9a7d46233a85183072d88c6d9"
+        }
+      ]
+    },
+    "studio": {
+      "sourceCommit": "d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+      "metadataOnly": true,
+      "actualProductVersions": [
+        {
+          "name": "Elsa.Studio.Web.dll",
+          "productVersion": "1.0.0+d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+          "sha256": "aff03ac1e7693e31ed018d3dd5aff37892392126479c7ac307ef60fbd637a07e"
+        },
+        {
+          "name": "Elsa.Studio.Hosting.dll",
+          "productVersion": "1.0.0+d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+          "sha256": "d2255311a41555599c1fcfbfe68d4ea9fb9ee84e186df9026d12d8d64bed2969"
+        },
+        {
+          "name": "Elsa.Studio.Core.dll",
+          "productVersion": "1.0.0+d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+          "sha256": "483dcdce6b97e735ed70a424738715f86ccca4163e5fa699618b5d8d1fbdc481"
+        },
+        {
+          "name": "Elsa.Studio.Workflows.dll",
+          "productVersion": "1.0.0+d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+          "sha256": "31010c5c8ceec2e0aaf7970efb7c90d4900c0abf0c03139c3df97b653422cfaf"
+        }
+      ]
+    }
+  }
+}

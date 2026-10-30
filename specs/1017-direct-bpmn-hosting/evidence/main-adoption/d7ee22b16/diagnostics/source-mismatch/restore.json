@@ -1,0 +1,9 @@
+{
+  "sourceRevision": "c52af4d8a6e3c744d6aa8d6682c37070b2fdd5c3",
+  "command": [
+    "bash",
+    "tools/architecture/restore-ci-project-graph.sh",
+    "--locked-mode"
+  ],
+  "exitCode": 0
+}
