@@ -51,13 +51,14 @@ public sealed class BpmnDecisionPublicationTests
     [Fact]
     public void Conditional_names_are_scoped_to_the_bound_decision_and_do_not_relax_other_contracts()
     {
-        var compiled = Compile("High", "exclusiveGateway");
+        var compiled = Compile("High", "exclusiveGateway", foreignTaskCondition: true);
         var children = compiled.ChildSlots.Single().Activities;
         Assert.DoesNotContain("High", children.Single(node => node.AuthoredActivityId == "high").ActivityContract!.Outcomes);
+        Assert.DoesNotContain("Foreign", children.Single(node => node.AuthoredActivityId == "high").ActivityContract!.Outcomes);
         Assert.DoesNotContain("Foreign", children.Single(node => node.AuthoredActivityId == "decision").ActivityContract!.Outcomes);
     }
 
-    private static ExecutableNode Compile(string outcome, string gatewayType)
+    private static ExecutableNode Compile(string outcome, string gatewayType, bool foreignTaskCondition = false)
     {
         var serializer = SerializationServices.PayloadSerializer();
         var registry = ClrConstruction.RegistryFor(typeof(BpmnProcess), typeof(BpmnDecision), typeof(WriteLine));
@@ -78,7 +79,7 @@ public sealed class BpmnDecisionPublicationTests
              new("high-end", "endEvent"), new("low-end", "endEvent")],
             [new("start-flow", "start", "gateway"), new("high-flow", "gateway", "high-task", conditionOutcome: "High"),
              new("default-flow", "gateway", "low-task", isDefault: true),
-             new("high-end-flow", "high-task", "high-end"), new("low-end-flow", "low-task", "low-end")]);
+             new("high-end-flow", "high-task", "high-end", conditionOutcome: foreignTaskCondition ? "Foreign" : null), new("low-end-flow", "low-task", "low-end")]);
         var root = new ActivityNode(BpmnRuntimeFixture.ProcessNodeId, typeof(BpmnProcess).FullName!, [], [],
             new(BpmnProcess.StructureKind, BpmnProcess.StructureSchemaVersion, JsonSerializer.SerializeToElement(structure, Web)));
         var structureService = new DefaultActivityStructureService([new BpmnStructureHandler()]);

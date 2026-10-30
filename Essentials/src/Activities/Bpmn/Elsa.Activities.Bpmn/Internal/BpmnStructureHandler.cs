@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Bpmn.Activities;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -22,7 +23,25 @@ internal sealed class BpmnStructureHandler : IActivityStructureHandler
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
     {
         var structure = ReadAuthoredStructure(activity);
-        return [new ActivityChildProjection(BpmnProcessActivity.ActivitiesSlotName, structure.Activities)];
+        var outcomes = structure.Elements.Where(element => element.ChildNodeId is not null)
+            .GroupBy(element => element.ChildNodeId!, StringComparer.Ordinal)
+            .Select(group =>
+            {
+                var elements = group.ToDictionary(element => element.ElementId, StringComparer.Ordinal);
+                var names = structure.SequenceFlows
+                    .Where(flow => elements.TryGetValue(flow.SourceRef, out var element) &&
+                        !flow.IsDefault && element.DefaultFlowId != flow.FlowId)
+                    .Select(flow => flow.ConditionOutcome)
+                    .Where(name => !string.IsNullOrWhiteSpace(name))
+                    .Select(name => name!)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
+                return new ActivityChildOutcomeProjection(group.Key, typeof(BpmnDecision).FullName!, names, nameof(BpmnDecision.Outcome));
+            }).ToArray();
+        return [new ActivityChildProjection(BpmnProcessActivity.ActivitiesSlotName, structure.Activities)
+        {
+            OutcomeProjections = outcomes
+        }];
     }
 
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
