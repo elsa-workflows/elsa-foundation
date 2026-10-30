@@ -1,7 +1,7 @@
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Boxes, Code2, Download, ListTree, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
-import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, type StudioActivityPropertyEditorContribution, type StudioAiContributionApi, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, type StudioActivityPropertyEditorContribution, type StudioAgentRegistry, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
   collectActivityNodeIds,
@@ -136,10 +136,13 @@ const HttpTestRequestDialog = React.lazy(() =>
 
 export { PublicationReviewDialog } from "./PublicationReviewDialog";
 
+import type { WorkflowAgentController } from "../workflowAgent";
+
 export function WorkflowEditor({
   context,
   definitionId,
   ai,
+  weaver,
   propertyEditors,
   expressionEditors,
   expressionTooling,
@@ -152,7 +155,8 @@ export function WorkflowEditor({
 }: {
   context: StudioEndpointContext;
   definitionId: string;
-  ai: StudioAiContributionApi;
+  ai: StudioAgentRegistry;
+  weaver?: WorkflowAgentController;
   propertyEditors: StudioActivityPropertyEditorContribution[];
   expressionEditors: StudioExpressionEditorContribution[];
   expressionTooling?: StudioExpressionToolingClient;
@@ -230,7 +234,7 @@ export function WorkflowEditor({
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
   // in dedicated hooks; `markSaved`/`reload` let the loader seed the save baseline and reload after promote.
-  const { saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, setAutosavePaused, markSaved } = useWorkflowPersistence({ context, draft: editableDraft, autosaveEnabledByDefault, editDraft: editableDoc.editDraft, setStatus, setError });
+  const { holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, setAutosavePaused, markSaved } = useWorkflowPersistence({ context, draft: editableDraft, autosaveEnabledByDefault, editDraft: editableDoc.editDraft, setStatus, setError });
   const {
     details,
     setDetails,
@@ -251,7 +255,7 @@ export function WorkflowEditor({
   }, [reload, setError]);
   const editorDoc = usePinnedEditorDocument({ document: editableDoc, context, definitionId, catalog });
   const { draft, frames, selectedNodeId } = editorDoc.state;
-  const { loadDraft, replaceDraftByBatch, editDraft, editDraftAndSelect, select, navigateToScope, resetToRoot, startTestRun, setPublishedArtifact } = editorDoc;
+  const { loadDraft, editDraft, editDraftAndSelect, select, navigateToScope, resetToRoot, startTestRun, setPublishedArtifact } = editorDoc;
   // Debounced metadata saves still belong to the editable definition.
   const { updateDefinitionMeta: updateEditableDefinitionMeta } = useDefinitionMetadata({ context, details, setDetails, setStatus });
   const updateDefinitionMeta: typeof updateEditableDefinitionMeta = (...args) => { if (editorDoc.canEdit()) updateEditableDefinitionMeta(...args); };
@@ -557,9 +561,8 @@ export function WorkflowEditor({
     if (plan && plan.frames.length > frames.length) navigateToScope(plan.frames, plan.selectedNodeId);
   }, [addActivity, catalogByVersion, frames, navigateToScope, scope, scopeOwner]);
 
-  // Weaver's graph-operation batch apply/undo, dispatched via window events, funnels through the document
-  // reducer's batch transition.
-  useWorkflowGraphOperationBatch({ draft: editableDraft, details, catalog, replaceDraftByBatch, canEdit: editorDoc.canEdit, setStatus, setError });
+  // Module-owned reviewed edits use the native document comparison/transaction seam.
+  useWorkflowGraphOperationBatch({ draft: editableDraft, details, catalog, document: editorDoc, controller: weaver, holdForReview, reviewHeld, canEdit: editorDoc.canEdit, setStatus, setError });
 
   useEffect(() => {
     if (!draft?.state.rootActivity || catalog.length === 0) return;
@@ -585,7 +588,7 @@ export function WorkflowEditor({
   }, [catalog.length, catalogByVersion, draft?.state.rootActivity, editDraft]);
 
   // Mirror the live design onto window for Weaver's out-of-band tooling.
-  useWorkflowContextBridge({ details, draft, selectedNode, selectedNodeId, selectedDescriptor, inspectedNode, inspectedDescriptor, inspectedIsScopeOwner, catalogByVersion });
+  useWorkflowContextBridge({ controller: weaver, clientId: ai.clientId, details, draft, selectedNode, selectedNodeId, selectedDescriptor, inspectedNode, inspectedDescriptor, inspectedIsScopeOwner, catalogByVersion });
 
   // Memoized so contributed panels get a stable context identity and can bail out of re-renders
   // (React.memo / effect deps) while the editor re-renders for unrelated reasons.

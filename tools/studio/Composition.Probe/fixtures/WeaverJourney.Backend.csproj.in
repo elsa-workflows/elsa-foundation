@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>Weaver.Journey.Backend</PackageId>
+    <Version>__FIXTURE_VERSION__</Version>
+    <Description>Owned deterministic Weaver M1 backend journey fixture; never a production provider.</Description>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="CShells.Abstractions" Version="__CSHELLS_VERSION__" />
+    <PackageReference Include="CShells.AspNetCore.Abstractions" Version="__CSHELLS_VERSION__" />
+    <ProjectReference Include="__REPO_ROOT__/Extensions/Agent/src/Core/Elsa.Agent.Core.csproj" />
+    <ProjectReference Include="__REPO_ROOT__/Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="nuplane.json" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

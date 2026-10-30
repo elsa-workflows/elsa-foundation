@@ -4,6 +4,11 @@ import type {
   StudioAgentMode,
   StudioAgentRisk,
   StudioAgentSurface,
+  StudioAgentClientAcknowledgement,
+  StudioAgentPreparedInvocation,
+  StudioAgentResourceTarget,
+  StudioAgentToolResult,
+  StudioAgentPromptRequest,
   StudioAgentToolInvocationMode
 } from "../../sdk";
 
@@ -15,8 +20,8 @@ export type AgentProviderRiskProfile = "read-only" | "review-required" | "sandbo
 export type AgentSessionStatus = "active" | "completed" | "cancelled" | "failed" | "expired";
 export type AgentMessageRole = "user" | "assistant" | "system" | "tool" | "progress" | "error";
 export type AgentMessageStatus = "pending" | "streaming" | "completed" | "failed" | "cancelled";
-export type AgentProposalStatus = "draft" | "awaiting-approval" | "approved" | "denied" | "edited" | "expired" | "executed" | "failed" | "cancelled";
-export type AgentStreamEventType = "turn-started" | "message-started" | "message-delta" | "context-used" | "clarification-requested" | "workflow-batch-created" | "proposal-created" | "progress" | "step-started" | "step-completed" | "tool-call-requested" | "tool-call-started" | "tool-call-completed" | "plan-updated" | "message-completed" | "turn-cancelled" | "error";
+export type AgentProposalStatus = "draft" | "awaiting-approval" | "approved" | "denied" | "edited" | "expired" | "executed" | "failed" | "cancelled" | "awaiting-client" | "uncertain" | "executing";
+export type AgentStreamEventType = "turn-started" | "message-started" | "message-delta" | "context-used" | "clarification-requested" | "proposal-created" | "review-requested" | "progress" | "step-started" | "step-completed" | "tool-call-requested" | "tool-call-started" | "tool-call-completed" | "plan-updated" | "message-completed" | "turn-cancelled" | "error";
 
 export interface AgentPlanStep {
   id: string;
@@ -78,6 +83,9 @@ export interface AgentCreateSessionResponse {
 }
 
 export interface AgentMessageRequest {
+  requestId?: string;
+  source?: StudioAgentPromptRequest["source"];
+  promptMode?: StudioAgentPromptRequest["mode"];
   message: string;
   mode: StudioAgentMode;
   contextAttachments: StudioAgentContextAttachment[];
@@ -88,6 +96,7 @@ export interface AgentMessageResponse {
   messageId: string;
   status: AgentMessageStatus;
   streamUrl: string;
+  warnings?: { code: string; message: string; target?: string }[];
 }
 
 export interface AgentMessageViewModel {
@@ -114,7 +123,10 @@ export interface AgentActionProposal {
   disabledReason?: string;
   isLoading?: boolean;
   error?: string;
+  confirmationPending?: boolean;
   audit?: AgentProposalAuditState;
+  preparedInvocation?: StudioAgentPreparedInvocation;
+  toolResult?: StudioAgentToolResult;
   resultRendererId?: string;
   resultType?: string;
   result?: unknown;
@@ -123,14 +135,7 @@ export interface AgentActionProposal {
   rollback?: string;
 }
 
-export interface AgentResourceTarget {
-  resourceType: string;
-  resourceId?: string;
-  displayName?: string;
-  moduleId?: string;
-  route?: string;
-  summary?: string;
-}
+export type AgentResourceTarget = StudioAgentResourceTarget;
 
 export interface AgentProposalAuditState {
   state: string;
@@ -170,37 +175,14 @@ export interface AgentClarificationRequest {
   metadata?: Record<string, unknown>;
 }
 
-export interface WorkflowGraphOperationBatch {
-  schemaVersion: string;
-  workflowDefinitionId: string;
-  baseRevision?: string | null;
-  operations: WorkflowGraphOperation[];
-  metadata?: Record<string, unknown>;
-}
-
-export interface WorkflowGraphOperation {
-  id: string;
-  kind: string;
-  parameters: Record<string, unknown>;
-  temporaryReferences: string[];
-  summary?: string | null;
-}
-
-export interface WorkflowGraphOperationBatchApplyResult {
-  appliedCount: number;
-  finalActivityIds: string[];
-  temporaryReferences: Record<string, string>;
-  summary: string;
-  undoToken?: string;
-}
-
 export type AgentStreamEvent =
+  | { type: "review-requested"; messageId: string }
+  | { type: "module-result"; messageId: string; result: StudioAgentToolResult }
   | { type: "turn-started"; turnId: string; maxSteps: number }
   | { type: "message-started"; messageId: string; role: AgentMessageRole }
   | { type: "message-delta"; messageId: string; content: string }
   | { type: "context-used"; messageId: string; attachmentIds: string[] }
   | { type: "clarification-requested"; messageId: string; clarification: AgentClarificationRequest }
-  | { type: "workflow-batch-created"; messageId: string; batch: WorkflowGraphOperationBatch }
   | { type: "proposal-created"; proposalId: string; messageId: string; proposal?: AgentActionProposalPayload }
   | { type: "progress"; label: string; percent?: number }
   | { type: "step-started"; stepIndex: number; maxSteps: number }
@@ -227,9 +209,10 @@ export interface AgentProposalDecisionResponse {
   proposalId: string;
   approvalStatus: AgentProposalStatus;
   approvedAt?: string;
-  result?: {
-    resourceType: string;
-    resourceId: string;
-    summary: string;
-  };
+  executed?: boolean;
+  clientInvocation?: StudioAgentPreparedInvocation;
+  toolResult?: StudioAgentToolResult;
+  result?: { resourceType: string; resourceId: string; summary: string };
 }
+
+export type AgentClientAcknowledgement = StudioAgentClientAcknowledgement;

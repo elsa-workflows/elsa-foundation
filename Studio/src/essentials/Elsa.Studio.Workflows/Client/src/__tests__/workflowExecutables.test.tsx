@@ -1,7 +1,7 @@
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { listExecutables } from "../api/runtime";
 import { listDefinitions } from "../api/workflowDesign";
 import type { WorkflowDefinitionSummary, WorkflowExecutableSummary } from "../workflowTypes";
@@ -99,7 +99,7 @@ function emptyAi() {
   return {
     promptActions: { list: () => [] },
     dispatchPrompt: () => {}
-  } as unknown as StudioAiContributionApi;
+  } as unknown as StudioAgentRegistry;
 }
 
 async function flushAsyncUpdates() {

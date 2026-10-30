@@ -1,6 +1,7 @@
 import { useReducer, useMemo } from "react";
 import type { WorkflowDraft } from "../workflowTypes";
 import type { ScopeFrame } from "../workflowAdapter";
+import { getDraftRevision } from "./editorHelpers";
 import { removeActivityPresentation } from "../activityPresentation";
 import type { WorkflowTestRunState, WorkflowTestRunWaitDraftState } from "./editorTypes";
 
@@ -32,6 +33,7 @@ export function forgetRemovedNodes(draft: WorkflowDraft, removedNodeIds: Iterabl
 export interface WorkflowDocumentState {
   // The open draft. null until the definition has loaded.
   draft: WorkflowDraft | null;
+  batchTransaction?: { id: string; applied: boolean };
   // Scope navigation breadcrumb: which nested activity slot the canvas is currently showing.
   frames: ScopeFrame[];
   // Selected activity within the current scope (drives the inspector).
@@ -56,6 +58,8 @@ export const initialWorkflowDocumentState: WorkflowDocumentState = {
 export type WorkflowDraftRecipe = (state: WorkflowDocumentState) => WorkflowDraft | null;
 
 export type WorkflowDocumentAction =
+  | { type: "draftComparedAndReplacedByBatch"; transactionId: string; definitionId: string; expectedRevision: string; expectedSelection: string | null; draft: WorkflowDraft; selectedNodeId: string | null }
+
   // Wholesale draft load: initial load, post-promote reload and JSON apply. Resets
   // scope + selection but leaves testRun/publishedArtifact (they self-invalidate against the new draft).
   | { type: "draftLoaded"; draft: WorkflowDraft | null }
@@ -81,6 +85,13 @@ export type WorkflowDocumentAction =
 
 export function workflowDocumentReducer(state: WorkflowDocumentState, action: WorkflowDocumentAction): WorkflowDocumentState {
   switch (action.type) {
+    case "draftComparedAndReplacedByBatch": {
+      const applied = !!state.draft && state.draft.definitionId === action.definitionId
+        && getDraftRevision(state.draft) === action.expectedRevision && state.selectedNodeId === action.expectedSelection;
+      return applied ? { ...state, draft: action.draft, selectedNodeId: action.selectedNodeId, frames: [], testRun: null, publishedArtifactId: null,
+        batchTransaction: { id: action.transactionId, applied: true } }
+        : { ...state, batchTransaction: { id: action.transactionId, applied: false } };
+    }
     case "draftLoaded":
       return { ...state, draft: action.draft, frames: [], selectedNodeId: null };
     case "draftReplacedByBatch":
@@ -133,6 +144,9 @@ export function useWorkflowDocument() {
   const [state, dispatch] = useReducer(workflowDocumentReducer, initialWorkflowDocumentState);
 
   const actions = useMemo(() => ({
+    compareAndReplaceDraftByBatch(transactionId: string, definitionId: string, expectedRevision: string, expectedSelection: string | null, draft: WorkflowDraft, selectedNodeId: string | null) {
+      dispatch({ type: "draftComparedAndReplacedByBatch", transactionId, definitionId, expectedRevision, expectedSelection, draft, selectedNodeId });
+    },
     // Load a freshly fetched / applied draft (or clear it). Used by load() and JSON apply.
     loadDraft(draft: WorkflowDraft | null) {
       dispatch({ type: "draftLoaded", draft });

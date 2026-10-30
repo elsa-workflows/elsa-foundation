@@ -5,7 +5,7 @@ provider-neutral agent contracts to the GitHub Copilot SDK. It registers provide
 ID `github-copilot` and keeps all `GitHub.Copilot.SDK` references isolated in
 this package.
 
-Studio and workflow-authoring code must continue to call only the
+Studio and participating module code must continue to call only the
 provider-neutral `/_elsa/agent/*` endpoints. Do not add Copilot SDK DTOs,
 session objects, tokens, tool calls, or model-specific fields to Studio-facing
 contracts.
@@ -72,30 +72,17 @@ by the SDK under its configured base directory or external runtime.
 
 ## Streaming
 
-The provider maps SDK session events to provider-neutral stream events:
+The provider maps SDK text, tool lifecycle and errors to generic stream events. Installed tools execute through Elsa's invoker. Their full typed result (type ID, schema version, JSON payload and any owning-resource receipt) is returned to the SDK and emitted as `ContributedResult` / `ModuleResult`; provider code does not decode resource-specific payloads.
 
-- session start -> `Started`
-- assistant message delta -> `MessageDelta`
-- workflow-authoring JSON envelope with `resultKind=clarification` ->
-  `ClarificationRequested`
-- workflow-authoring JSON envelope with `resultKind=workflowGraphOperationBatch` ->
-  `WorkflowGraphOperationBatchCreated`
-- workflow-authoring JSON envelope with `resultKind=error` -> `Error`
-- session idle -> `Completed`
-- SDK exceptions or session errors -> `Error`
+A pending reviewed mutation returns an explicit `executed=false` proposal outcome. Review and browser application occur through the generic API, followed by the owning module's admitted acknowledgement. A receipt continuation contains the completed result, advertises no tools and does not replay the original mutation prompt. The candidate supports this foreground manual-review lifecycle in memory; cross-restart recovery remains unavailable.
 
-Cancellation is passed through to the SDK session stream. The SDK adapter aborts
-the active Copilot session when the stream cancellation token is cancelled.
+The fallback host-driven path accepts only generic message, error and tool-call envelopes. Model-authored resource JSON cannot create an applied module result.
 
-For workflow authoring, Copilot is prompted to return provider-neutral Weaver
-result envelopes rather than SDK-specific schemas. Studio still receives only
-the common agent stream contract; workflow graph operation batches use the same
-Elsa-owned contract as deterministic provider tests.
+Cancellation is passed through to the SDK session stream. The SDK adapter aborts the active Copilot session when the stream cancellation token is cancelled.
 
 ## Tool and proposal policy
 
-Copilot SDK permission requests are denied by this provider. Workflow, file,
-package, runtime, and external-service mutations must be represented as
+Copilot SDK permission requests are denied by this provider. Mutations must be represented as
 Elsa-owned proposals and executed through Elsa approval, revision validation,
 permission checks, and audit.
 

@@ -26,9 +26,20 @@ internal sealed class AgentCamelCaseEnumConverter : JsonStringEnumConverter
 [JsonSerializable(typeof(AgentTurnCancelRequest))]
 [JsonSerializable(typeof(AgentFeedbackApiRequest))]
 [JsonSerializable(typeof(AgentProposalDecisionRequest))]
+[JsonSerializable(typeof(AgentClientAcknowledgement))]
 [JsonSerializable(typeof(AgentAuditQueryRequest))]
 public partial class AgentJsonContext : JsonSerializerContext;
 
-[JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
+[JsonSourceGenerationOptions(JsonSerializerDefaults.Web, Converters = [typeof(AgentCamelCaseEnumConverter)], GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(AgentStreamEvent))]
+[JsonSerializable(typeof(AgentActionProposal))]
+[JsonSerializable(typeof(AgentToolResult))]
+[JsonSerializable(typeof(AgentPayload))]
+[JsonSerializable(typeof(AgentEffectReceipt))]
+[JsonSerializable(typeof(AgentPreparedToolInvocation))]
+[JsonSerializable(typeof(AgentTurnStarted))]
+[JsonSerializable(typeof(AgentStepDescriptor))]
+[JsonSerializable(typeof(AgentToolCallRequest))]
+[JsonSerializable(typeof(AgentToolCallOutcome))]
+[JsonSerializable(typeof(AgentPlanUpdate))]
 public partial class AgentSseJsonContext : JsonSerializerContext;

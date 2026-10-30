@@ -39,25 +39,6 @@ public sealed partial class ArchitectureGuardTests
         [
             "Elsa.Activities.Runtime.Contracts.ActivityActivationLease"
         ],
-        ["Elsa.Agent.Core"] =
-        [
-            "Elsa.Agent.Core.Services.AgentTurnRegistry",
-            "Elsa.Agent.Core.Services.DefaultAgentCapabilityCatalog",
-            "Elsa.Agent.Core.Services.DefaultAgentContextCollector",
-            "Elsa.Agent.Core.Services.DefaultAgentContextSanitizer",
-            "Elsa.Agent.Core.Services.DefaultAgentPolicyEvaluator",
-            "Elsa.Agent.Core.Services.DefaultAgentProviderRegistry",
-            "Elsa.Agent.Core.Services.DefaultAgentToolInvoker",
-            "Elsa.Agent.Core.Services.DefaultAgentToolRegistry",
-            "Elsa.Agent.Core.Services.DefaultAgentTurnOrchestrator",
-            "Elsa.Agent.Core.Services.DeterministicAgentProvider",
-            "Elsa.Agent.Core.Services.InMemoryAgentAuditStore",
-            "Elsa.Agent.Core.Services.InMemoryAgentFeedbackService",
-            "Elsa.Agent.Core.Services.InMemoryAgentProposalService",
-            "Elsa.Agent.Core.Services.InMemoryAgentSessionService",
-            "Elsa.Agent.Core.Services.InMemoryAgentTurnStateStore",
-            "Elsa.Agent.Core.Services.NoopAgentActionProposalExecutor"
-        ],
         ["Elsa.Attention.Core"] =
         [
             "Elsa.Attention.Core.AttentionAggregationService",
