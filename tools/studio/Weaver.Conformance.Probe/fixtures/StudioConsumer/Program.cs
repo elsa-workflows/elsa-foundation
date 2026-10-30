@@ -4,6 +4,7 @@ using CShells.Lifecycle;
 using CShells.Nuplane;
 using Elsa.Studio.Api.Authorization;
 using Elsa.Studio.Dashboard;
+using Elsa.Studio.FeatureManagement;
 using Elsa.Studio.Hosting;
 using Elsa.Studio.Hosting.Nuplane;
 using Elsa.Studio.Weaver.Workflows;
@@ -25,7 +26,8 @@ var state = Path.Combine(contentRoot, "native-store", "state.json");
 Directory.CreateDirectory(Path.GetDirectoryName(state)!);
 var studio = builder.AddElsaStudio(options => options.ShellName = shellName)
     .ConfigureShells(shells => shells.WithAssemblies(typeof(DashboardStudioFeature).Assembly,
-        typeof(WorkflowsStudioFeature).Assembly, typeof(WeaverWorkflowsStudioFeature).Assembly));
+        typeof(FeatureManagementStudioFeature).Assembly, typeof(WorkflowsStudioFeature).Assembly,
+        typeof(WeaverWorkflowsStudioFeature).Assembly));
 studio.AddElsaStudioNuplane(options => options.DirectoryFeedName = "weaver-studio", configureNuplane: nuplane => {
     nuplane.WithStateFile(state).UseCoordinatedPackageStore([new("default", "studio", state)], true);
     nuplane.Services.Configure<FeedResolutionOptions>(options => options.PackageInstallRoot = Path.Combine(contentRoot, "native-store", "installs"));

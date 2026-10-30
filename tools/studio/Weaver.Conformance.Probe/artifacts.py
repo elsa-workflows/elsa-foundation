@@ -33,7 +33,7 @@ BACKEND_PACKAGES = [
 ]
 STUDIO_PACKAGES = [
     "Elsa.Studio.Hosting", "Elsa.Studio.Hosting.Nuplane", "Elsa.Studio.Dashboard",
-    "Elsa.Studio.Workflows", "Elsa.Studio.Weaver.Workflows",
+    "Elsa.Studio.FeatureManagement", "Elsa.Studio.Workflows", "Elsa.Studio.Weaver.Workflows",
 ]
 
 

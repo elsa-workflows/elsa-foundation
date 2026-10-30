@@ -326,7 +326,7 @@ def prepare_consumers(run):
             settings["ConnectionStrings"]["Tokens"] = "Data Source=" + str(published / "state" / "tokens.db")
             features = backend_features(published)
         else:
-            features = {feature: {} for feature in ("StudioApi", "DashboardStudio", "WorkflowsStudio", "WeaverWorkflowsStudio")}
+            features = {feature: {} for feature in ("StudioApi", "DashboardStudio", "FeatureManagement", "WorkflowsStudio", "WeaverWorkflowsStudio")}
         write_json(source / "appsettings.json", settings)
         write_json(source / "shells.json", {"CShells": {"Shells": {"Authoring": {"Name": "Authoring", "Features": features,
                      "Configuration": {"WebRouting": {"Path": ""}}}}}})

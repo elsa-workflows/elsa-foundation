@@ -75,13 +75,20 @@ class Http:
         return json.loads(data), response_headers
 
 
-def normal_sign_in(base, username, password, output):
+def normal_sign_in(base, username, password, output, *, tenant_id=None):
     """Create private browser state through real native cookie login and token exchange."""
     jar = http.cookiejar.CookieJar()
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
     client = Http(base, opener=opener)
-    session, _ = client.json("/_elsa/identity/login", {"username": username, "password": password}, method="POST")
+    login = {"username": username, "password": password}
+    if tenant_id is not None:
+        check(isinstance(tenant_id, str) and bool(tenant_id.strip()) and tenant_id == tenant_id.strip(),
+              "Normal Identity login needs an explicit nonblank tenant")
+        login["tenantId"] = tenant_id
+    session, _ = client.json("/_elsa/identity/login", login, method="POST")
     check(session.get("status") == "authenticated", "Normal Identity login did not authenticate")
+    if tenant_id is not None:
+        check(session.get("tenantId") == tenant_id, "Normal Identity login selected another tenant")
     token, _ = client.json("/_elsa/identity/token")
     check(isinstance(token.get("accessToken"), str) and token["accessToken"], "Normal token exchange failed")
     authenticated = Http(base, bearer=token["accessToken"], opener=opener)

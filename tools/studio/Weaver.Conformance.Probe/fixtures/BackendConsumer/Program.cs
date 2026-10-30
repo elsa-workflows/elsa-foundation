@@ -179,6 +179,8 @@ try {
 // Nuplane's blocking startup service has already reconciled under FailHost. Later explicit
 // reconciliations belong to observed package transitions through the protected endpoint above.
 await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(shellName);
+await QualificationPrincipals.InitializeAsync(app.Services.GetRequiredService<IShellRegistry>(), shellName,
+    builder.Configuration, app.Lifetime.ApplicationStopping);
 Console.WriteLine("WEAVER_BACKEND_CONSUMER_READY");
 await app.WaitForShutdownAsync();
 
