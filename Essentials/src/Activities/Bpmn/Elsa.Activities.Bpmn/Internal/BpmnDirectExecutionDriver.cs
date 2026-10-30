@@ -392,10 +392,16 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         if (native && !timed && !events && (envelope.HumanBindings.Count != 0 || envelope.ServiceBindings!.Count != 1 ||
             process.Elements.Count(item => item.ElementType == BpmnElementTypes.ServiceTask) != 1))
             throw new BpmnModelValidationException("The current native service profile requires one closed published native worker, plain start/end events and optional coded error boundaries.");
-        if (timed && (process.Elements.Any(item => item.ElementType == BpmnElementTypes.UserTask && !envelope.HumanBindings.Contains(item.BindingRef!, StringComparer.Ordinal) ||
-                item.ElementType == BpmnElementTypes.ServiceTask && envelope.ServiceBindings?.Any(binding => binding.BindingId == item.BindingRef) != true) ||
-                (envelope.ServiceBindings?.Count ?? 0) > 1 || envelope.ServiceBindings is { Count: > 0 } && envelope.HumanBindings.Count != 0))
-            throw new BpmnModelValidationException("The duration profile requires explicit human work or one closed native service, with exact timer bindings.");
+        if (timed)
+        {
+            var unbound = process.Elements.FirstOrDefault(item =>
+                item.ElementType == BpmnElementTypes.UserTask && !envelope.HumanBindings.Contains(item.BindingRef!, StringComparer.Ordinal) ||
+                item.ElementType == BpmnElementTypes.ServiceTask && envelope.ServiceBindings?.Any(binding => binding.BindingId == item.BindingRef) != true);
+            if (unbound is not null)
+                throw new BpmnModelValidationException($"BPMN process '{process.ProcessId}' element '{unbound.ElementId}' requires its declared work binding '{unbound.BindingRef}'.");
+            if ((envelope.ServiceBindings?.Count ?? 0) > 1 || envelope.ServiceBindings is { Count: > 0 } && envelope.HumanBindings.Count != 0)
+                throw new BpmnModelValidationException($"BPMN process '{process.ProcessId}' duration profile requires explicit human work or one closed native service, with exact timer bindings.");
+        }
         if ((envelope.FormatVersion == 3 || timed && envelope.ServiceBindings is { Count: > 0 }) && (process.Elements.Count(item => item.ElementType == BpmnElementTypes.StartEvent) != 1 ||
             process.SequenceFlows.GroupBy(flow => flow.SourceRef, StringComparer.Ordinal).Any(group => group.Count() > 1)))
             throw new BpmnModelValidationException("The service fault policy profile requires one start and no concurrent outgoing branches.");

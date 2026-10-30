@@ -45,10 +45,10 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         var dependencies = (definition.ServiceBindings ?? []).Select(binding => new RuntimeModelDependency(binding.BindingId, binding.Executable))
             .Concat((definition.NativeEventBindings ?? []).Select(binding => new RuntimeModelDependency(binding.BindingId, binding.Executable))).ToArray();
         foreach (var binding in definition.ServiceBindings ?? [])
-            await ValidatePublishedWorkerAsync(binding.Executable, caller, cancellationToken);
+            await ValidatePublishedWorkerAsync(binding.BindingId, binding.Executable, caller, cancellationToken);
         foreach (var binding in definition.NativeEventBindings ?? [])
         {
-            var worker = await ValidatePublishedWorkerAsync(binding.Executable, caller, cancellationToken);
+            var worker = await ValidatePublishedWorkerAsync(binding.BindingId, binding.Executable, caller, cancellationToken);
             var process = definition.Process.Deserialize<BpmnProcessDefinition>(Web) ?? throw new BpmnModelValidationException("BPMN process definition is missing.");
             var catches = process.Elements.Where(element => element.BindingRef == binding.BindingId).ToArray();
             if (catches.Length != 1 || catches[0].ElementType != BpmnElementTypes.IntermediateCatchEvent ||
@@ -274,7 +274,12 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
             var page = await queue.ListAsync(query, cancellationToken);
             foreach (var work in page.Items.Where(item => item.CommandKind == WorkflowExecutionCommandKind.ExecuteModel && item.CommandId == requestId))
             {
-                var command = work.Payload?.Deserialize<RuntimeModelExecutionCommand>(Web);
+                RuntimeModelExecutionCommand? command;
+                try { command = work.Payload?.Deserialize<RuntimeModelExecutionCommand>(Web); }
+                catch (JsonException exception)
+                {
+                    throw new BpmnModelValidationException($"BPMN execution '{executionId}', request '{requestId}' has invalid owned queued-command JSON in work '{work.WorkItemId}'.", exception);
+                }
                 if (command is null || command.InputId != requestId || command.TenantId != caller.TenantId) continue;
                 var material = await materials.FindMaterialAsync(command.Executable.ArtifactId, cancellationToken);
                 if (material?.Model?.Protocol == new RuntimeExecutionProtocol(BpmnModelProtocol.Key, BpmnModelProtocol.Version)) return command;
@@ -294,13 +299,13 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         return access.Current.Scope ?? throw new BpmnModelValidationException("A model operation requires an explicit persistence scope.");
     }
 
-    private async ValueTask<WorkflowExecutable> ValidatePublishedWorkerAsync(WorkflowExecutableIdentity executable, BpmnModelCaller caller,
+    private async ValueTask<WorkflowExecutable> ValidatePublishedWorkerAsync(string bindingId, WorkflowExecutableIdentity executable, BpmnModelCaller caller,
         CancellationToken cancellationToken)
     {
         var native = await materials.FindMaterialAsync(executable.ArtifactId, cancellationToken);
         if (native?.NativeWorkflow is not { } worker || !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(native.Identity, executable) ||
-            worker.InputContract.Inputs.Count != 0)
-            throw new BpmnModelValidationException("A native work binding requires its complete native pin and a closed worker input contract.");
+            worker.InputContract is not { Inputs.Count: 0 })
+            throw new BpmnModelValidationException($"Native work binding '{bindingId}' for worker '{executable.ArtifactId}' requires its complete native pin and an explicit closed worker input contract.");
         var query = new WorkflowExecutableSourceReferenceArtifactPageQuery(executable.ArtifactId);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         while (true)
