@@ -15,9 +15,20 @@ public sealed class PublishRefusals
 
     private readonly ConcurrentDictionary<string, byte> _versionIds = new(StringComparer.Ordinal);
 
+    private volatile bool _all;
+
     public void Refuse(string versionId) => _versionIds[versionId] = 0;
-    public void Clear() => _versionIds.Clear();
-    public bool Refuses(string versionId) => _versionIds.ContainsKey(versionId);
+
+    /// <summary>Refuses every version, including those a folder import publishes while the shell activates (spec 235).</summary>
+    public void RefuseAll() => _all = true;
+
+    public void Clear()
+    {
+        _all = false;
+        _versionIds.Clear();
+    }
+
+    public bool Refuses(string versionId) => _all || _versionIds.ContainsKey(versionId);
 }
 
 /// <summary>

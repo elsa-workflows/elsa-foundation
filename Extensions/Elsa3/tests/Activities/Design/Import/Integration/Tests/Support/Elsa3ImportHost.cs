@@ -144,14 +144,35 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
 
     private readonly WebApplication _app;
     private readonly DirectoryInfo _root;
+    private readonly bool _withPublishing;
+    private readonly bool _withPublishSeam;
+    private readonly bool _withScheduling;
+    private readonly bool _withHttp;
+    private bool _ownsRoot = true;
 
-    private Elsa3ImportHost(WebApplication app, IShell shell, DirectoryInfo root, WarningLog warnings)
+    private Elsa3ImportHost(WebApplication app, IShell shell, DirectoryInfo root, WarningLog warnings,
+        bool withPublishing, bool withPublishSeam, bool withScheduling, bool withHttp)
     {
         _app = app;
         _root = root;
+        _withPublishing = withPublishing;
+        _withPublishSeam = withPublishSeam;
+        _withScheduling = withScheduling;
+        _withHttp = withHttp;
         Shell = shell;
         Warnings = warnings;
         Client = app.GetTestClient();
+    }
+
+    /// <summary>
+    /// Stops this host and starts a new one on the same stores (the same SQLite files), composed as this one was, with the
+    /// folder import of <paramref name="reconcileFolder"/> when given. This host is disposed; use the returned one.
+    /// </summary>
+    public async Task<Elsa3ImportHost> RestartAsync(string? reconcileFolder = null, bool strict = false, bool refuseAllPublications = false)
+    {
+        _ownsRoot = false;
+        await DisposeAsync();
+        return await StartAsync(_withPublishing, _withPublishSeam, _withScheduling, _withHttp, reconcileFolder, strict, refuseAllPublications, _root);
     }
 
     public IShell Shell { get; }
@@ -177,6 +198,8 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     /// scheduling activities (Delay); with <paramref name="withHttp"/> the HTTP activities, whose endpoints listen under
     /// <c>/workflows/http</c>. With <paramref name="reconcileFolder"/> the shell composes <c>Elsa3JsonReconciliation</c> on
     /// that folder (spec 235), strict when <paramref name="strict"/>, so the folder is imported while the shell activates.
+    /// With <paramref name="refuseAllPublications"/> the publish seam refuses every reusable from the first publication on
+    /// (it needs <paramref name="withPublishSeam"/>).
     /// </summary>
     public static async Task<Elsa3ImportHost> StartAsync(
         bool withPublishing = true,
@@ -184,10 +207,15 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         bool withScheduling = false,
         bool withHttp = false,
         string? reconcileFolder = null,
-        bool strict = false)
+        bool strict = false,
+        bool refuseAllPublications = false,
+        DirectoryInfo? existingRoot = null)
     {
-        var root = Directory.CreateTempSubdirectory("elsa3-import-");
+        var root = existingRoot ?? Directory.CreateTempSubdirectory("elsa3-import-");
         var warnings = new WarningLog();
+        var refusals = new PublishRefusals();
+        if (refuseAllPublications)
+            refusals.RefuseAll();
         try
         {
             var settings = ShellSettings(root.FullName, withPublishing, withPublishSeam, withScheduling, withHttp);
@@ -208,7 +236,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
             builder.Services.AddSingleton<IConfiguration>(configuration);
             builder.Services.AddSingleton<IDistributedLockProvider, ProcessLockProvider>();
             // An instance, not a type: a shell copies the host's registrations, and the tests read the one its seam uses.
-            builder.Services.AddSingleton(new PublishRefusals());
+            builder.Services.AddSingleton(refusals);
             // Same host-wide fleet/observed schema boundary as Workbench; the publisher must not infer finalization.
             builder.Services.AddEfSchemaReadability();
             builder.Services.AddFoundationIdentityAbstractions(options =>
@@ -268,8 +296,20 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
             app.UseAuthorization();
             app.MapShells();
             await app.StartAsync();
-            var shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
-            var host = new Elsa3ImportHost(app, shell, root, warnings);
+            IShell shell;
+            try
+            {
+                shell = await app.Services.GetRequiredService<IShellRegistry>().GetOrActivateAsync(ShellName);
+            }
+            catch
+            {
+                // A startup task refused the shell (for example a strict folder import); release the app's stores.
+                await app.DisposeAsync();
+                throw;
+            }
+
+            // A restarted host takes over the stores and deletes them when it is disposed.
+            var host = new Elsa3ImportHost(app, shell, root, warnings, withPublishing, withPublishSeam, withScheduling, withHttp);
             try
             {
                 await host.RequireCatalogAsync();
@@ -284,7 +324,8 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         }
         catch
         {
-            DeleteQuietly(root);
+            if (existingRoot is null)
+                DeleteQuietly(root);
             throw;
         }
     }
@@ -660,7 +701,8 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         }
         finally
         {
-            DeleteQuietly(_root);
+            if (_ownsRoot)
+                DeleteQuietly(_root);
         }
     }
 
