@@ -1,0 +1,21 @@
+{
+  "publishState": "e929cfccce72a14671ddf003b79fbb90f14118e6",
+  "packages": [
+    {
+      "package_id": "Elsa.Workflows.Runtime",
+      "version": "4.0.70-preview",
+      "commit": "0086c564b5036d1c8fbbedd93074ddf0e9d58ce8",
+      "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.workflows.runtime/4.0.70-preview/elsa.workflows.runtime.4.0.70-preview.nupkg",
+      "sha256": "41a6edb38db3b263592a024647ad58991949f7cd3417fb266b2cb2f29ee1b571",
+      "bytes": 698853
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Core",
+      "version": "4.0.56-preview",
+      "commit": "0086c564b5036d1c8fbbedd93074ddf0e9d58ce8",
+      "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.workflows.runtime.core/4.0.56-preview/elsa.workflows.runtime.core.4.0.56-preview.nupkg",
+      "sha256": "df517760f580adf511156c405590f3422e2c8b69736d95e5700656e8e95e0d13",
+      "bytes": 475998
+    }
+  ]
+}

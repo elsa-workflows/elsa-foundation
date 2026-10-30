@@ -1,0 +1,199 @@
+{
+  "kind": "retained-independent-round4-acceptance",
+  "reviewedHead": "cdc02819f852684dc855ecb111bfa261171f40b6",
+  "originalManifestSha256": "484f9b9fc11f8770067bb8ba798f2dd38e8444ac851dee92b77233807074ee4c",
+  "assets": [
+    {
+      "path": "report.md",
+      "sha256": "e34f715328b7338c4da0f7f97eb6a47486b63fcc71185d63ba1538fba67b4399"
+    },
+    {
+      "path": "source-provenance.json",
+      "sha256": "f18b77f97bfd88948ca4bbf8caacf9e9ff4ea6a79951f78456cb889819fc8968"
+    },
+    {
+      "path": "qualification-audit.json",
+      "sha256": "57acdf14486015037a1d76e71e39a073fa353b713a56fb12a38f9426b3afd176"
+    },
+    {
+      "path": "current-studio-controls.log",
+      "sha256": "2ca9675e41f622ba9a2566e72097c590759f55ce99ff27c3c9454d169a54c706"
+    },
+    {
+      "path": "etl-controls.log",
+      "sha256": "9dbd13999c3a5da394abfe4bdd026d6ee9b3421993b48ea326a629e9ce6ed4a8"
+    },
+    {
+      "path": "embedded-pipeline-cancel-audit.json",
+      "sha256": "b412bdf0e2cc7faa237382952c604529db4916a8b46fc27392f25759a5aea3c4"
+    },
+    {
+      "path": "qualify_waiting_upgrade.py",
+      "sha256": "e5dcecf9558d4edc10748f7db82c36bb6e632ca2812d72dc0006ef4fb7c57532"
+    },
+    {
+      "path": "waiting-old-writer/Program.cs",
+      "sha256": "a6443c5aa80c10a4ee2a86b5a9be1e7f48ebb7120aa6d015272dca6990f861fd"
+    },
+    {
+      "path": "waiting-old-writer/Probe.csproj.gz",
+      "sha256": "72bec2d3749438579dca8b371581aeb20c6040be3c0c47f4d0804e1ece4e8375",
+      "decodedSha256": "417fa7149a558e46abfff513e882c0c7d80bfcdabe0dc2d8959ddb8a86d4fcf6",
+      "decodedBytes": 56552
+    },
+    {
+      "path": "waiting-old-writer/producer-ready.log",
+      "sha256": "3571dc48e819f4cb10ffd936cdf9528033dfd20921a9f39fc3ce1427f9e2715a"
+    },
+    {
+      "path": "waiting-old-writer/old-waiting.snapshot.sqlite.gz",
+      "sha256": "806f95b5242b70f68fa68c5550732b3339be5cb336f94414be7f0b15ac77b049"
+    },
+    {
+      "path": "waiting-old-writer/backup-receipt.json",
+      "sha256": "ed7a840eabf65cd9bb3ba57980be61377f8fa3ee442ec0fb17281863d4e19360"
+    },
+    {
+      "path": "waiting-upgrade-final/process.json",
+      "sha256": "0141965bf2f342a372389eef9a1f613fcb33e717372beaab00eb390f6892513b"
+    },
+    {
+      "path": "waiting-upgrade-final/after-upgrade.sqlite.gz",
+      "sha256": "6ccd30436dcb184669afa86b8959a9a92a1595d965947dc256efb926e73043bf"
+    },
+    {
+      "path": "waiting-upgrade-final/backup-receipt.json",
+      "sha256": "34fb92bc89bcc835dada7359166e7ccb4d5b315c22a68e3c5dd19ab7437b8497"
+    },
+    {
+      "path": "waiting-upgrade-final/physical-retirement-view.json",
+      "sha256": "0cc9d29fa26662b6749f83bc087cd087e58698e9bef614ba18119706def8636c"
+    },
+    {
+      "path": "negative-physical-native.json",
+      "sha256": "01cd42a3395e392eb5428f0723a676ea245cd3e9985950c00382a8b819571b58"
+    },
+    {
+      "path": "negative-physical-outbox.json",
+      "sha256": "059df9a0ec46c26963b2d99ceb9ca7a68379f775ff004b8d18910d4952f2685c"
+    },
+    {
+      "path": "current-cancel-control/Program.cs",
+      "sha256": "a81425ebdf3f40f42bb1ee6df2dfa673ee53fb4b0a8d164448f122ac7f7c22cc"
+    },
+    {
+      "path": "current-cancel-control/Probe.csproj.gz",
+      "sha256": "587c8628e046a7dfc916d4b1b7a7df4893e1dbe2aca5a927e26e90aac5e4dde4",
+      "decodedSha256": "2fb8d72760096bc1cf2617c117893224a201d31c2151c30edc3aff7216d78ddc",
+      "decodedBytes": 67217
+    },
+    {
+      "path": "current-cancel-control/control.log",
+      "sha256": "fd0ff651467c1ec346ef55aafa83a264c430e72fbf8fec508226c2f96cf1cb5d"
+    },
+    {
+      "path": "current-cancel-control/control-complete.snapshot.sqlite.gz",
+      "sha256": "d017ddac6470349a0759804a602e8a9be4f9be3681ea2c043df7132fdfaa3572"
+    },
+    {
+      "path": "current-cancel-control/backup-receipt.json",
+      "sha256": "c5c8ec0452e24d74aeffc01549a75e1f6a63366287d54b7b7e4cbab757173225"
+    },
+    {
+      "path": "waiting-upgrade-final/view-0.json",
+      "sha256": "e52e7fbec7758a463a7535cb6b86d1f76e1198d790d4cf065b4cae783b719762"
+    },
+    {
+      "path": "waiting-upgrade-final/view-1.json",
+      "sha256": "e52e7fbec7758a463a7535cb6b86d1f76e1198d790d4cf065b4cae783b719762"
+    },
+    {
+      "path": "waiting-upgrade-final/view-2.json",
+      "sha256": "e52e7fbec7758a463a7535cb6b86d1f76e1198d790d4cf065b4cae783b719762"
+    },
+    {
+      "path": "waiting-upgrade-final/view-3.json",
+      "sha256": "e52e7fbec7758a463a7535cb6b86d1f76e1198d790d4cf065b4cae783b719762"
+    },
+    {
+      "path": "waiting-upgrade-final/view-4.json",
+      "sha256": "e52e7fbec7758a463a7535cb6b86d1f76e1198d790d4cf065b4cae783b719762"
+    },
+    {
+      "path": "waiting-upgrade-final/view-5.json",
+      "sha256": "e52e7fbec7758a463a7535cb6b86d1f76e1198d790d4cf065b4cae783b719762"
+    },
+    {
+      "path": "waiting-upgrade-final/view-6.json",
+      "sha256": "e52e7fbec7758a463a7535cb6b86d1f76e1198d790d4cf065b4cae783b719762"
+    },
+    {
+      "path": "waiting-upgrade-final/view-7.json",
+      "sha256": "e52e7fbec7758a463a7535cb6b86d1f76e1198d790d4cf065b4cae783b719762"
+    },
+    {
+      "path": "waiting-upgrade-final/view-8.json",
+      "sha256": "e52e7fbec7758a463a7535cb6b86d1f76e1198d790d4cf065b4cae783b719762"
+    },
+    {
+      "path": "preserved-old-products/Bpmn.Model.dll.gz",
+      "sha256": "ca75e582d348c9fdd5d1410d227f35259ea96dd072ae10870943e76ab51242de",
+      "decodedSha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776",
+      "decodedBytes": 111104
+    },
+    {
+      "path": "preserved-old-products/Bpmn.Semantics.dll.gz",
+      "sha256": "20bc4c17617763d833d8c31144f2751a5cf54ac577cb918364af20bc62f392cb",
+      "decodedSha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923",
+      "decodedBytes": 265216
+    },
+    {
+      "path": "preserved-old-products/Elsa.Activities.Bpmn.dll.gz",
+      "sha256": "08ca255f76d71ce2bb0fd137ed71085945432589874f36bb4985393045454e7a",
+      "decodedSha256": "daca65277a4c7d554da6aaa76efa6585ccc7af435275503ac1c03f63fb0a90e7",
+      "decodedBytes": 331776
+    },
+    {
+      "path": "preserved-old-products/Elsa.Activities.Flowchart.dll.gz",
+      "sha256": "5a02294aa95eef63205c48597a29d93305714e35e30bbdf504ae4dc85f0ed8c2",
+      "decodedSha256": "065151b5d06b1bc1ed90c0e0daf52a80fb3cb382a6f84289c49705cf3c5ff7d5",
+      "decodedBytes": 115712
+    },
+    {
+      "path": "preserved-old-products/Elsa.Activities.Primitives.dll.gz",
+      "sha256": "d456e34f9de26e7a15b2b0b80a0e53621567c2e5000e1d6b84cd8dd2dcc7687d",
+      "decodedSha256": "b3bee5983881048c87c736c28abf6f5a7bedae9868993e0b9150e44dce557cfd",
+      "decodedBytes": 61952
+    },
+    {
+      "path": "preserved-old-products/Elsa.Activities.Testing.dll.gz",
+      "sha256": "cb3e4510d063422b8d84ba838776cfe4f5e2289edc8456850c79dd16110d6e41",
+      "decodedSha256": "3f55d4989d4d91fa2baa8a998b711c3fc3bb67692b5bfc689cded5dfd216d35e",
+      "decodedBytes": 81408
+    },
+    {
+      "path": "preserved-old-products/Elsa.Workflows.Runtime.Core.dll.gz",
+      "sha256": "726b2289b7d10401ad5ebaf277e35de79092d7b348e02accd40f39c2d0ca578a",
+      "decodedSha256": "c7b6b2e2384b26dddcd6ebf78d5f400df1a7a86638cad76b644e3ddc741eddf8",
+      "decodedBytes": 1585152
+    },
+    {
+      "path": "preserved-old-products/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll.gz",
+      "sha256": "5786f9a310c5e15a2c7dc4106cd8e0eae12a613425c87e2262a1e038a83e50fe",
+      "decodedSha256": "6c8db6d09cd1c5ed3a523bb51e93939507402177821aebd8e28d994bf1ce1012",
+      "decodedBytes": 2705920
+    },
+    {
+      "path": "preserved-old-products/Elsa.Workflows.Runtime.dll.gz",
+      "sha256": "65b8a68985b73b71393e69be6f2ee7080cb40b4127d2b6c5876763f612b7c84d",
+      "decodedSha256": "e6d155506758cccc8754872fbe855aa9055771124ed50b9de2c2ea3820533912",
+      "decodedBytes": 2048512
+    },
+    {
+      "path": "original-manifest.json.gz",
+      "sha256": "825865661ea69398d68ca9b0d498a99d448cf15bd501294921be1bbfdecdc62f",
+      "decodedSha256": "484f9b9fc11f8770067bb8ba798f2dd38e8444ac851dee92b77233807074ee4c",
+      "decodedBytes": 7546
+    }
+  ]
+}

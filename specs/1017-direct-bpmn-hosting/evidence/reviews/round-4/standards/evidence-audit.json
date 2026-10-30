@@ -1,0 +1,32 @@
+{
+  "manifestAudit": [
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json",
+      "assetsVerified": 104
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-3/qualification/manifest.json",
+      "assetsVerified": 32
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-3/qualification/studio/manifest.json",
+      "assetsVerified": 66
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/pipeline/embedded-pipeline-cancellation/manifest.json",
+      "assetsVerified": 102
+    }
+  ],
+  "wholeProjectCounts": {
+    "runtime-ef.trx.gz": 1788,
+    "architecture.trx.gz": 594,
+    "bpmn.trx.gz": 473,
+    "hosting.trx.gz": 39,
+    "runtime.trx.gz": 3083,
+    "native-providers.trx.gz": 212
+  },
+  "totalPassed": 6189,
+  "skipped": 0,
+  "productionChangedSinceExecutingStudioSource": false,
+  "notCurrentHeadCI": true
+}

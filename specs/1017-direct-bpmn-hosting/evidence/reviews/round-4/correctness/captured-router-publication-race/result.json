@@ -1,0 +1,44 @@
+[
+  {
+    "uniqueLeaseIds": false,
+    "firstFailure": "TaskCanceledException",
+    "sourceRetiredThroughPort": true,
+    "artifactsDeletedBetweenAdmissions": 1,
+    "secondFailure": "RuntimeSchedulerWorkUnavailableException: The exact pinned model material is unavailable.",
+    "pendingCommands": 1,
+    "materialPresentAfterAdmission": false,
+    "database": "/private/tmp/elsa-2898-full-pr-r4-correctness/router-probe/bin/Release/net10.0/shared-4714f44685894802a5ac8d676d59289f.db",
+    "closedBackup": "/tmp/elsa-2898-full-pr-r4-correctness/captured-router-publication-race/shared-failing.sqlite",
+    "backupSha256": "2d6a86081f177e280e0bc2b6174fe1e2ab5acb6106c86613cf22282ae8839474",
+    "physicalCounts": {
+      "elsa_runtime_model_execution": 0,
+      "elsa_runtime_model_input": 0,
+      "elsa_runtime_scheduler_work_item": 1,
+      "elsa_runtime_workflow_executable": 0,
+      "elsa_runtime_workflow_executable_coordination": 0,
+      "elsa_runtime_workflow_executable_root_write_lease": 0,
+      "elsa_runtime_workflow_executable_source_reference": 0
+    }
+  },
+  {
+    "uniqueLeaseIds": true,
+    "firstFailure": "TaskCanceledException",
+    "sourceRetiredThroughPort": true,
+    "artifactsDeletedBetweenAdmissions": 0,
+    "secondFailure": "none",
+    "pendingCommands": 1,
+    "materialPresentAfterAdmission": true,
+    "database": "/private/tmp/elsa-2898-full-pr-r4-correctness/router-probe/bin/Release/net10.0/unique-1a71d8ca37d74c41927fd533252e89dd.db",
+    "closedBackup": "/tmp/elsa-2898-full-pr-r4-correctness/captured-router-publication-race/unique-control.sqlite",
+    "backupSha256": "87f2a9ed6223c6da7b1167bdb5ed02c2b2289d8c07b02e892c2f436f8d9e1fe6",
+    "physicalCounts": {
+      "elsa_runtime_model_execution": 0,
+      "elsa_runtime_model_input": 0,
+      "elsa_runtime_scheduler_work_item": 1,
+      "elsa_runtime_workflow_executable": 1,
+      "elsa_runtime_workflow_executable_coordination": 1,
+      "elsa_runtime_workflow_executable_root_write_lease": 0,
+      "elsa_runtime_workflow_executable_source_reference": 0
+    }
+  }
+]

@@ -1,0 +1,69 @@
+{
+  "reviewedHead": "cdc02819f852684dc855ecb111bfa261171f40b6",
+  "mergeBase": "3386a1abcc01b5ff07f127e4bc0cc07ecbe0bc37",
+  "observedOriginMain": "8b5f2b3d8662a7f31fd8b2b39d2d19e588b1cbbf",
+  "probeExecutingSource": "76e8139dc7744781fba864f8247c180134eaaaed",
+  "sourceEquivalence": [
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnDurationTimer.cs",
+      "sha256": "60b38a95ca883be4354c215175e87cc3ab3f3b40d78411da9d539583c092f589",
+      "byteEquivalent": true
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnNativeWorkBoundary.cs",
+      "sha256": "7e840ca6cda149544dcde6d6d7b15aed5b22f5e5abd0dd931eed491bcbee6cd2",
+      "byteEquivalent": true
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimePostCommitIntentDispatcher.cs",
+      "sha256": "e6694eb23e936f0208d984cc15a417c97c39fc5dc2e23463b44fdf74494b4a02",
+      "byteEquivalent": true
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Core/Models/PostCommitDeliveryContext.cs",
+      "sha256": "ce39a611af99932331cbcbbed6ac772595851ccde5fc3a0e75087c6bf296efd6",
+      "byteEquivalent": true
+    }
+  ],
+  "products": [
+    {
+      "name": "Elsa.Activities.Bpmn.dll",
+      "sha256": "9097ede1cb8b542258e1bd2a6d03cd1bfef0e9f194d0d7c6073259202f959bdb"
+    },
+    {
+      "name": "Elsa.Activities.Bpmn.Core.dll",
+      "sha256": "41eaab27b6621dc19523a92af49324ccbd3306fd5085b2e42144af666877b701"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.dll",
+      "sha256": "4a26be6c4a8f6287e6c7b113c54783a564c646fd2fb33d2bd567bde5a2d53dd2"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Core.dll",
+      "sha256": "0a9e42a7753314cc5026f9fcd90a76e63190cbb12f8cc92c05c471d110bac99b"
+    }
+  ],
+  "probeKind": "synthetic malformed-owned-data refusal through actual runtime dispatcher and BPMN handler; interface stores supply exact claimed source, not actual-host recovery",
+  "repositoryModified": false,
+  "discussion": {
+    "2898": {
+      "comments": 86,
+      "rawFileSha256": "e0b81910a2059288301d3502c7968709ce98de1b6c5971e36d0aae8deaaace65",
+      "authors": [
+        "elsa-workflows-codex[bot]"
+      ]
+    },
+    "3410": {
+      "comments": 213,
+      "rawFileSha256": "5c92abdbbc00d1b27a2a1af5124433d4bf4f536bd39812197a503a5c37f4e8b0",
+      "authors": [
+        "coderabbitai[bot]",
+        "dotnet-policy-service[bot]",
+        "elsa-workflows-codex[bot]",
+        "gitguardian[bot]"
+      ]
+    }
+  },
+  "reviewThreads": 0,
+  "reviews": 0
+}

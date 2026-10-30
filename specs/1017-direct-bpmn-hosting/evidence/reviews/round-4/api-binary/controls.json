@@ -1,0 +1,79 @@
+{
+  "kind": "reverse-contract-detects-added-public-API",
+  "results": [
+    {
+      "assembly": "Elsa.Workflows.Runtime.Core",
+      "args": [
+        "/tmp/elsa-2898-api-binary/tools/apicompat",
+        "-l",
+        "/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.Core.dll",
+        "-r",
+        "/tmp/elsa-2898-api-binary/published/elsa.workflows.runtime.core/lib/net10.0/Elsa.Workflows.Runtime.Core.dll",
+        "--lref",
+        "/tmp/elsa-2898-api-binary/current,/usr/local/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.13/ref/net10.0,/usr/local/share/dotnet/packs/Microsoft.AspNetCore.App.Ref/10.0.13/ref/net10.0",
+        "--rref",
+        "/tmp/elsa-2898-api-binary/baseline-references,/usr/local/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.13/ref/net10.0,/usr/local/share/dotnet/packs/Microsoft.AspNetCore.App.Ref/10.0.13/ref/net10.0",
+        "--enable-rule-cannot-change-parameter-name",
+        "--verbosity",
+        "High"
+      ],
+      "exitCode": 1,
+      "unresolvedReferenceCount": 0,
+      "diagnosticCount": 51,
+      "sample": [
+        "CP0002: Member 'string Elsa.Workflows.Runtime.Core.Constants.RuntimeCheckpointNames.NativeModelWorkStartRetired' exists on /tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.Core.dll but not on /tmp/elsa-2898-api-binary/published/elsa.workflows.runtime.core/lib/net10.0/Elsa.Workflows.Runtime.Core.dll",
+        "CP0002: Member 'System.Threading.Tasks.ValueTask<System.DateTimeOffset?> Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerStore.GetNextDueTimeAsync(System.Threading.CancellationToken)' exists on /tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.Core.dll but not on /tmp/elsa-2898-api-binary/published/elsa.workflows.runtime.core/lib/net10.0/Elsa.Workflows.Runtime.Core.dll",
+        "CP0002: Member 'bool Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitStore.SupportsModelCheckpoint.get' exists on /tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.Core.dll but not on /tmp/elsa-2898-api-binary/published/elsa.workflows.runtime.core/lib/net10.0/Elsa.Workflows.Runtime.Core.dll"
+      ]
+    },
+    {
+      "assembly": "Elsa.Workflows.Runtime",
+      "args": [
+        "/tmp/elsa-2898-api-binary/tools/apicompat",
+        "-l",
+        "/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.dll",
+        "-r",
+        "/tmp/elsa-2898-api-binary/published/elsa.workflows.runtime/lib/net10.0/Elsa.Workflows.Runtime.dll",
+        "--lref",
+        "/tmp/elsa-2898-api-binary/current,/usr/local/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.13/ref/net10.0,/usr/local/share/dotnet/packs/Microsoft.AspNetCore.App.Ref/10.0.13/ref/net10.0",
+        "--rref",
+        "/tmp/elsa-2898-api-binary/baseline-references,/usr/local/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.13/ref/net10.0,/usr/local/share/dotnet/packs/Microsoft.AspNetCore.App.Ref/10.0.13/ref/net10.0",
+        "--enable-rule-cannot-change-parameter-name",
+        "--verbosity",
+        "High"
+      ],
+      "exitCode": 1,
+      "unresolvedReferenceCount": 0,
+      "diagnosticCount": 5,
+      "sample": [
+        "CP0001: Type 'Elsa.Workflows.Runtime.Extensions.ModelHostingServiceCollectionExtensions' exists on /tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.dll but not on /tmp/elsa-2898-api-binary/published/elsa.workflows.runtime/lib/net10.0/Elsa.Workflows.Runtime.dll",
+        "CP0002: Member 'Elsa.Workflows.Runtime.Services.Bookmarks.DurableTimerScheduler.DurableTimerScheduler(Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerStore, Elsa.Events.Core.Contracts.IDeferredEventPublisher, Microsoft.Extensions.Logging.ILogger<Elsa.Workflows.Runtime.Services.Bookmarks.DurableTimerScheduler>?)' exists on /tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.dll but not on /tmp/elsa-2898-api-binary/published/elsa.workflows.runtime/lib/net10.0/Elsa.Workflows.Runtime.dll",
+        "CP0002: Member 'System.Threading.Tasks.ValueTask<System.DateTimeOffset?> Elsa.Workflows.Runtime.Services.Bookmarks.InMemoryDurableTimerStore.GetNextDueTimeAsync(System.Threading.CancellationToken)' exists on /tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.dll but not on /tmp/elsa-2898-api-binary/published/elsa.workflows.runtime/lib/net10.0/Elsa.Workflows.Runtime.dll"
+      ]
+    },
+    {
+      "assembly": "Elsa.Persistence.EntityFramework",
+      "args": [
+        "/tmp/elsa-2898-api-binary/tools/apicompat",
+        "-l",
+        "/tmp/elsa-2898-api-binary/current/Elsa.Persistence.EntityFramework.dll",
+        "-r",
+        "/tmp/elsa-2898-api-binary/published/elsa.persistence.entityframework/lib/net10.0/Elsa.Persistence.EntityFramework.dll",
+        "--lref",
+        "/tmp/elsa-2898-api-binary/current,/usr/local/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.13/ref/net10.0,/usr/local/share/dotnet/packs/Microsoft.AspNetCore.App.Ref/10.0.13/ref/net10.0",
+        "--rref",
+        "/tmp/elsa-2898-api-binary/baseline-references,/usr/local/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.13/ref/net10.0,/usr/local/share/dotnet/packs/Microsoft.AspNetCore.App.Ref/10.0.13/ref/net10.0",
+        "--enable-rule-cannot-change-parameter-name",
+        "--verbosity",
+        "High"
+      ],
+      "exitCode": 1,
+      "unresolvedReferenceCount": 0,
+      "diagnosticCount": 2,
+      "sample": [
+        "CP0001: Type 'Elsa.Persistence.EntityFramework.EfMigrationIncludesAttribute' exists on /tmp/elsa-2898-api-binary/current/Elsa.Persistence.EntityFramework.dll but not on /tmp/elsa-2898-api-binary/published/elsa.persistence.entityframework/lib/net10.0/Elsa.Persistence.EntityFramework.dll",
+        "CP0002: Member 'void Elsa.Persistence.EntityFramework.EfMigrationsHistory.EnsureAdded(Microsoft.EntityFrameworkCore.DbContextOptionsBuilder)' exists on /tmp/elsa-2898-api-binary/current/Elsa.Persistence.EntityFramework.dll but not on /tmp/elsa-2898-api-binary/published/elsa.persistence.entityframework/lib/net10.0/Elsa.Persistence.EntityFramework.dll"
+      ]
+    }
+  ]
+}

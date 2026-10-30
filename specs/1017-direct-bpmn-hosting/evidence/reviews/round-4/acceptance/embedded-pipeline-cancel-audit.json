@@ -1,0 +1,110 @@
+{
+  "root": {
+    "actualReferenceJourneys": [
+      {
+        "case": "capture",
+        "acceptedRecords": 2,
+        "rejectedRecords": 0,
+        "physicalOutputRecords": 2,
+        "businessErrorPreserved": false
+      }
+    ],
+    "wholeStoresVerified": 6,
+    "sourceRevision": "d3b103df0c5a96d5b9c4ae4bc679b360c8ff3337",
+    "directBpmnClosedWorkerIntegrationProved": false,
+    "runBpmnEtlIntegrationProved": true,
+    "modelHeldFaultRetryProved": false,
+    "pendingCancellationCrashProved": false,
+    "pendingCancellationStage": null,
+    "postConsumptionPreAckCrashProved": false,
+    "embeddedParent": "Root",
+    "nativeParentToPipelineCancellationProved": false,
+    "pipelineToNativeParentCancellationProved": true,
+    "pendingParentResultCrashProved": false,
+    "pipelineOriginatedCancellationProved": true,
+    "nativeWorkerOriginatedCancellationProved": false,
+    "modelToWorkerCancellationProved": false,
+    "modelCancellationBeforeAdmissionProved": false
+  },
+  "sequence": {
+    "actualReferenceJourneys": [
+      {
+        "case": "capture",
+        "acceptedRecords": 2,
+        "rejectedRecords": 0,
+        "physicalOutputRecords": 2,
+        "businessErrorPreserved": false
+      }
+    ],
+    "wholeStoresVerified": 6,
+    "sourceRevision": "d3b103df0c5a96d5b9c4ae4bc679b360c8ff3337",
+    "directBpmnClosedWorkerIntegrationProved": false,
+    "runBpmnEtlIntegrationProved": true,
+    "modelHeldFaultRetryProved": false,
+    "pendingCancellationCrashProved": false,
+    "pendingCancellationStage": null,
+    "postConsumptionPreAckCrashProved": false,
+    "embeddedParent": "Sequence",
+    "nativeParentToPipelineCancellationProved": false,
+    "pipelineToNativeParentCancellationProved": true,
+    "pendingParentResultCrashProved": false,
+    "pipelineOriginatedCancellationProved": true,
+    "nativeWorkerOriginatedCancellationProved": false,
+    "modelToWorkerCancellationProved": false,
+    "modelCancellationBeforeAdmissionProved": false
+  },
+  "flowchart": {
+    "actualReferenceJourneys": [
+      {
+        "case": "capture",
+        "acceptedRecords": 2,
+        "rejectedRecords": 0,
+        "physicalOutputRecords": 2,
+        "businessErrorPreserved": false
+      }
+    ],
+    "wholeStoresVerified": 6,
+    "sourceRevision": "d3b103df0c5a96d5b9c4ae4bc679b360c8ff3337",
+    "directBpmnClosedWorkerIntegrationProved": false,
+    "runBpmnEtlIntegrationProved": true,
+    "modelHeldFaultRetryProved": false,
+    "pendingCancellationCrashProved": false,
+    "pendingCancellationStage": null,
+    "postConsumptionPreAckCrashProved": false,
+    "embeddedParent": "Flowchart",
+    "nativeParentToPipelineCancellationProved": false,
+    "pipelineToNativeParentCancellationProved": true,
+    "pendingParentResultCrashProved": false,
+    "pipelineOriginatedCancellationProved": true,
+    "nativeWorkerOriginatedCancellationProved": false,
+    "modelToWorkerCancellationProved": false,
+    "modelCancellationBeforeAdmissionProved": false
+  },
+  "compensationscope": {
+    "actualReferenceJourneys": [
+      {
+        "case": "capture",
+        "acceptedRecords": 2,
+        "rejectedRecords": 0,
+        "physicalOutputRecords": 2,
+        "businessErrorPreserved": false
+      }
+    ],
+    "wholeStoresVerified": 6,
+    "sourceRevision": "d3b103df0c5a96d5b9c4ae4bc679b360c8ff3337",
+    "directBpmnClosedWorkerIntegrationProved": false,
+    "runBpmnEtlIntegrationProved": true,
+    "modelHeldFaultRetryProved": false,
+    "pendingCancellationCrashProved": false,
+    "pendingCancellationStage": null,
+    "postConsumptionPreAckCrashProved": false,
+    "embeddedParent": "CompensationScope",
+    "nativeParentToPipelineCancellationProved": false,
+    "pipelineToNativeParentCancellationProved": true,
+    "pendingParentResultCrashProved": false,
+    "pipelineOriginatedCancellationProved": true,
+    "nativeWorkerOriginatedCancellationProved": false,
+    "modelToWorkerCancellationProved": false,
+    "modelCancellationBeforeAdmissionProved": false
+  }
+}

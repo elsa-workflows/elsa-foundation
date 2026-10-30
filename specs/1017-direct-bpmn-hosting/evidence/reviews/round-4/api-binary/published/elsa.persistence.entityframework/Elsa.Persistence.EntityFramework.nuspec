@@ -1,0 +1,41 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>Elsa.Persistence.EntityFramework</id>
+    <version>4.0.32-preview</version>
+    <authors>Elsa Workflows</authors>
+    <license type="expression">MIT</license>
+    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
+    <projectUrl>https://github.com/elsa-workflows/elsa-foundation</projectUrl>
+    <description>Shared EF Core persistence policy for first-party Elsa modules under accepted ADR 0073:
+      per-module history table naming, provider guard, and migrate vs validate apply modes.
+      This package references EF Core + Relational and the CShells composition contract,
+      but never a database provider engine.</description>
+    <copyright>Copyright © Elsa Workflows</copyright>
+    <tags>elsa workflow workflows orchestration automation</tags>
+    <repository type="git" url="https://github.com/elsa-workflows/elsa-foundation.git" commit="0b40e42d5a7376998905817b2fb15dd4277fe418" />
+    <dependencies>
+      <group targetFramework="net10.0">
+        <dependency id="Elsa.Persistence.Schema" version="[4.0.12-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="Elsa.Primitives" version="[4.0.14-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="CShells" version="0.0.31" exclude="Build,Analyzers" />
+        <dependency id="CShells.Abstractions" version="0.0.31" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.EntityFrameworkCore" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.EntityFrameworkCore.Relational" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Configuration.EnvironmentVariables" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Configuration.Json" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Hosting.Abstractions" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Options" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Caching.Abstractions" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Caching.Memory" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Configuration" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Configuration.Abstractions" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.DependencyInjection" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.DependencyInjection.Abstractions" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging.Abstractions" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Primitives" version="10.0.10" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+  </metadata>
+</package>

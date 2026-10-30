@@ -1,0 +1,40 @@
+{
+  "reviewHead": "cdc02819f852684dc855ecb111bfa261171f40b6",
+  "productSource": "76e8139dc7744781fba864f8247c180134eaaaed",
+  "olderComparisons": [
+    {
+      "assembly": "Elsa.Workflows.Runtime.Core",
+      "exitCode": 0,
+      "unresolvedReferenceCount": 0
+    },
+    {
+      "assembly": "Elsa.Workflows.Runtime",
+      "exitCode": 0,
+      "unresolvedReferenceCount": 0
+    },
+    {
+      "assembly": "Elsa.Persistence.EntityFramework",
+      "exitCode": 0,
+      "unresolvedReferenceCount": 0
+    }
+  ],
+  "latestComparisons": [
+    {
+      "package_id": "Elsa.Workflows.Runtime",
+      "version": "4.0.70-preview",
+      "exitCode": 0,
+      "unresolvedReferenceCount": 0
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Core",
+      "version": "4.0.56-preview",
+      "exitCode": 0,
+      "unresolvedReferenceCount": 0
+    }
+  ],
+  "versionMagnitudeCleared": false,
+  "publicBinaryShapeOnly": true,
+  "suppressionUsed": false,
+  "firstIncompleteReferenceAttemptIsDiagnostic": true,
+  "targetSourceChangesSinceBuiltProducts": []
+}

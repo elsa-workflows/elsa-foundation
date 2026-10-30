@@ -1,0 +1,59 @@
+{
+  "publishState": "e929cfccce72a14671ddf003b79fbb90f14118e6",
+  "reviewedHead": "cdc02819f852684dc855ecb111bfa261171f40b6",
+  "currentProductSource": "76e8139dc7744781fba864f8247c180134eaaaed",
+  "results": [
+    {
+      "package_id": "Elsa.Workflows.Runtime",
+      "version": "4.0.70-preview",
+      "commit": "0086c564b5036d1c8fbbedd93074ddf0e9d58ce8",
+      "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.workflows.runtime/4.0.70-preview/elsa.workflows.runtime.4.0.70-preview.nupkg",
+      "sha256": "41a6edb38db3b263592a024647ad58991949f7cd3417fb266b2cb2f29ee1b571",
+      "bytes": 698853,
+      "args": [
+        "/tmp/elsa-2898-api-binary/tools/apicompat",
+        "-l",
+        "/tmp/elsa-2898-api-binary/latest-published/elsa.workflows.runtime/lib/net10.0/Elsa.Workflows.Runtime.dll",
+        "-r",
+        "/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.dll",
+        "--lref",
+        "/tmp/elsa-2898-api-binary/latest-baseline-references,/usr/local/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.13/ref/net10.0,/usr/local/share/dotnet/packs/Microsoft.AspNetCore.App.Ref/10.0.13/ref/net10.0",
+        "--rref",
+        "/tmp/elsa-2898-api-binary/current,/usr/local/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.13/ref/net10.0,/usr/local/share/dotnet/packs/Microsoft.AspNetCore.App.Ref/10.0.13/ref/net10.0",
+        "--enable-rule-cannot-change-parameter-name",
+        "--verbosity",
+        "High"
+      ],
+      "exitCode": 0,
+      "unresolvedReferenceCount": 0,
+      "leftAssemblySha256": "c9574bdcf1d701ef64cfb79ebf27992c958dc62b20953b54a8da55c14aabe329",
+      "rightAssemblySha256": "4a26be6c4a8f6287e6c7b113c54783a564c646fd2fb33d2bd567bde5a2d53dd2"
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Core",
+      "version": "4.0.56-preview",
+      "commit": "0086c564b5036d1c8fbbedd93074ddf0e9d58ce8",
+      "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.workflows.runtime.core/4.0.56-preview/elsa.workflows.runtime.core.4.0.56-preview.nupkg",
+      "sha256": "df517760f580adf511156c405590f3422e2c8b69736d95e5700656e8e95e0d13",
+      "bytes": 475998,
+      "args": [
+        "/tmp/elsa-2898-api-binary/tools/apicompat",
+        "-l",
+        "/tmp/elsa-2898-api-binary/latest-published/elsa.workflows.runtime.core/lib/net10.0/Elsa.Workflows.Runtime.Core.dll",
+        "-r",
+        "/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.Core.dll",
+        "--lref",
+        "/tmp/elsa-2898-api-binary/latest-baseline-references,/usr/local/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.13/ref/net10.0,/usr/local/share/dotnet/packs/Microsoft.AspNetCore.App.Ref/10.0.13/ref/net10.0",
+        "--rref",
+        "/tmp/elsa-2898-api-binary/current,/usr/local/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.13/ref/net10.0,/usr/local/share/dotnet/packs/Microsoft.AspNetCore.App.Ref/10.0.13/ref/net10.0",
+        "--enable-rule-cannot-change-parameter-name",
+        "--verbosity",
+        "High"
+      ],
+      "exitCode": 0,
+      "unresolvedReferenceCount": 0,
+      "leftAssemblySha256": "51729832b0f58044dc39fbce1b762f4b05ac8712d89e5a89683903c35de4ebeb",
+      "rightAssemblySha256": "0a9e42a7753314cc5026f9fcd90a76e63190cbb12f8cc92c05c471d110bac99b"
+    }
+  ]
+}
