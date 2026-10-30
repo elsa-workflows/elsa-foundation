@@ -3,6 +3,7 @@ import type {
   StudioExpressionDescriptor
 } from "@elsa-workflows/studio-sdk";
 import type { ActivityNode } from "./workflowTypes";
+import { isJsonTypeName } from "./jsonType";
 
 export interface ActivityExpression {
   type: string;
@@ -512,6 +513,7 @@ function parseClrTypeName(text: string): string {
   if (!text) return "";
   const core = stripAssemblyQualifier(text);
   if (!core) return "";
+  if (isJsonTypeName(core)) return core.endsWith("?") ? "JSON?" : "JSON";
 
   // Trailing "[]" pairs are always array markers — a generic's brackets are never empty — so a greedy
   // match of them at the very end is safe even when the base type is itself generic (List`1[…][]).

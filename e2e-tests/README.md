@@ -90,6 +90,7 @@ for the interactive contributor route.
 >   server yourself.
 > - **The platform source harness also owns its server** and uses the same lifecycle helper and free-port rules.
 > - **`http/Test-HttpResponseFlowchart.ps1` and `templates/Test-WorkflowTemplates.ps1` own isolated servers** and takes no `-BaseUrl` argument.
+> - **`http/Test-JsonActivityBindings.ps1` owns an isolated server** and checks JSON output capture, defaults and typed-variable bindings with exact response bodies.
 > - **`variables/Test-SetVariableLoop.ps1` owns an isolated server** and checks the exact counter output; it takes no `-BaseUrl` argument.
 > - **Every other server-dependent script only sends HTTP requests** to `-BaseUrl` (default `http://localhost:5095`).
 > - **Do not add `Stop-Process`, `kill`, or a port lookup that feeds one, to a script.** Use

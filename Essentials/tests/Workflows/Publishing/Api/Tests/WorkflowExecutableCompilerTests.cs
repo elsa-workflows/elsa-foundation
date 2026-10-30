@@ -2702,6 +2702,19 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task Json_storage_variables_compile_as_inline_workflow_state_including_defaults()
+    {
+        var variable = new Elsa.Expressions.Core.Models.VariableDefinition("message", "Message", new TypeReference("String"), "elsa.json", new ArgumentValue("hello", "Literal"));
+        var executable = await Compiler(WorkflowVersion(Node("write-one", Text("hello")), variables: [variable]))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        var declaration = Assert.Single(executable.WorkflowVariables);
+        Assert.Equal(DurableValueStorage.Inline, declaration.Policy.Storage);
+        Assert.Equal(DurableValueStorage.Inline, declaration.InitialBinding!.EffectivePolicy.Storage);
+        Assert.Equal("hello", declaration.InitialBinding.Literal!.InlineValue!.Value.GetString());
+    }
+
+    [Fact]
     public async Task Set_intrinsic_targeting_a_declared_workflow_variable_compiles()
     {
         var message = new Elsa.Expressions.Core.Models.VariableDefinition(

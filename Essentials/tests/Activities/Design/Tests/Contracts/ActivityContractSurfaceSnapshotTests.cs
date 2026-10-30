@@ -47,6 +47,16 @@ public sealed class ActivityContractSurfaceSnapshotTests
         "--filter FullyQualifiedName~ActivityContractSurfaceSnapshotTests";
 
     [Fact]
+    public void The_catalog_allows_an_http_response_without_a_body()
+    {
+        var activity = Assert.Single(ScanShippedActivities(), model => model.ActivityTypeKey == "Elsa.Activities.Http.Activities.WriteHttpResponse");
+        Assert.Equal("1.1.0", activity.Version);
+        var body = Assert.Single(activity.Outputs, output => output.ReferenceKey == "Body");
+        Assert.False(body.IsRequired);
+        Assert.True(body.IsNullable);
+    }
+
+    [Fact]
     public void Activity_contract_surface_matches_the_committed_baseline()
     {
         var actual = ActivityContractSurface.Serialize(ActivityContractSurface.Build(ScanShippedActivities()));

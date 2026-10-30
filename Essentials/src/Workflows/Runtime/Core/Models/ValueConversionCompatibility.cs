@@ -62,7 +62,8 @@ public static class ValueConversionCompatibility
         target.CollectionKind == CollectionKind.Single &&
         (StringComparer.OrdinalIgnoreCase.Equals(NormalizeAlias(target.Alias), "Elsa.Any") ||
          StringComparer.OrdinalIgnoreCase.Equals(NormalizeAlias(target.Alias), "Any") ||
-         StringComparer.OrdinalIgnoreCase.Equals(NormalizeAlias(target.Alias), "JsonNode"));
+         StringComparer.OrdinalIgnoreCase.Equals(NormalizeAlias(target.Alias), "JsonNode") ||
+         StringComparer.OrdinalIgnoreCase.Equals(NormalizeAlias(target.Alias), "Text.Json.JsonElement"));
 
     public static bool IsJsonObjectTarget(ValueTypeDescriptor target) =>
         target.CollectionKind == CollectionKind.Single &&

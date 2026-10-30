@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
@@ -27,7 +28,8 @@ internal sealed class DefaultVariableTypeDescriptorProvider : IVariableTypeDescr
         Descriptor("DateTimeOffset", typeof(DateTimeOffset), "Date/Time Offset", "date", false),
         Descriptor("TimeSpan", typeof(TimeSpan), "Duration", "text", false),
         Descriptor("Guid", typeof(Guid), "GUID", "text", false),
-        Descriptor("Object", typeof(object), "Object", "text", true)
+        Descriptor("Object", typeof(object), "Object", "text", true),
+        Descriptor("System.Text.Json.JsonElement", typeof(JsonElement), "JSON", "json", true)
     ];
 
     /// <inheritdoc />
