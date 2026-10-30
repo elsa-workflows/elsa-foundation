@@ -2,6 +2,7 @@
 
 **Status**: Implemented
 **Issue**: #3477
+**Allocation repair**: #3483. Originally allocated 1169 in #3482; concurrent timer work #3481 used the same number. Renumbered to 1170 under the [spec lifecycle rule](../../docs/reference/spec-lifecycle.md). Historical bare-number citations retain their original allocation.
 **Program-goal state**: none/free-flow
 
 An author can declare JSON workflow data and bind it through any activity's JSON contract. HTTP Endpoint → variable → Write Http Response is one acceptance journey, not a special case.
