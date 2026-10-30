@@ -1,3 +1,4 @@
+import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/styles.css";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { writeAppearancePreferences, type ThemeModePreference } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/themes/appearance";
 import React, { useMemo, useRef, useState } from "react";

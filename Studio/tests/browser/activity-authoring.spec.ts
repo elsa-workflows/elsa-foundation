@@ -104,3 +104,59 @@ test("keeps existing members visible without misclassifying a capability outage"
   await expect(page.getByRole("button", { name: "Add input", exact: true })).toBeDisabled();
   await expect(page.getByText(/This mutable draft is invalid until/)).toHaveCount(0);
 });
+
+for (const theme of ["light", "dark", "material"]) for (const width of [390, 1440]) {
+  test(`Add variable has shared themed hover, focus and disabled styling (${theme === "material" ? "custom material tokens" : theme}, ${width})`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 950 });
+    await page.goto(`/?mode=activity-authoring&theme=${theme === "light" ? "light" : "dark"}`);
+    await page.getByRole("tablist", { name: "Activity Definition authoring views" }).getByRole("tab", { name: "Variables", exact: true }).click();
+    if (theme === "material") await page.evaluate(() => {
+      document.documentElement.dataset.themeMaterial = "browser-fixture";
+      document.documentElement.style.setProperty("--studio-surface", "var(--studio-accent-soft)");
+      document.documentElement.style.setProperty("--studio-border", "var(--studio-accent)");
+    });
+    const panel = page.getByRole("tabpanel", { name: "Variables", exact: true });
+    const add = panel.getByRole("button", { name: "Add variable", exact: true });
+    const bounds = (await add.boundingBox())!;
+    expect(bounds.height).toBeGreaterThanOrEqual(30);
+    expect(bounds.width).toBeGreaterThanOrEqual(95);
+    const normal = await add.evaluate(element => ({ color: getComputedStyle(element).color, background: getComputedStyle(element).backgroundColor }));
+    await add.hover();
+    expect(await add.evaluate(element => getComputedStyle(element).color)).not.toBe(normal.color);
+    await add.focus();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(add).toBeFocused();
+    expect(await add.evaluate(element => getComputedStyle(element).outlineStyle)).toBe("solid");
+    expect(await add.evaluate(element => parseFloat(getComputedStyle(element).outlineWidth))).toBeGreaterThanOrEqual(2);
+    await page.screenshot({ path: `/tmp/argument-button-${theme}-${width}.png` });
+    await add.click();
+    await expect(panel.getByRole("textbox", { name: "Variable name", exact: true })).toHaveCount(1);
+    await expect(page.locator(".ad-save-chip")).toHaveText("Saved");
+    // The shared editor also runs inside disabled fieldsets in read-only views.
+    await panel.locator("fieldset.wf-container-variables").evaluate(element => { (element as HTMLFieldSetElement).disabled = true; });
+    await expect(add).toBeDisabled();
+    await expect.poll(() => add.evaluate(element => parseFloat(getComputedStyle(element).opacity))).toBeLessThan(1);
+    expect(await add.evaluate(element => getComputedStyle(element).cursor)).toBe("not-allowed");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+  });
+}
+
+for (const theme of ["light", "dark"]) {
+  test(`workflow Properties uses the same add-variable button (${theme})`, async ({ page }) => {
+    await page.goto(`/?mode=activity-duplicate-editor&theme=${theme}`);
+    await page.getByRole("tab", { name: "Properties", exact: true }).click();
+    const variables = page.locator(".wf-properties-section").filter({ has: page.getByRole("heading", { name: "Variables", exact: true }) });
+    const add = variables.getByRole("button", { name: "Add variable", exact: true });
+    await expect(add).toBeVisible();
+    expect((await add.boundingBox())!.height).toBeGreaterThanOrEqual(30);
+    await add.focus();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(add).toBeFocused();
+    expect(await add.evaluate(element => getComputedStyle(element).outlineStyle)).toBe("solid");
+    await add.click();
+    await expect(variables.getByRole("textbox", { name: "Variable name", exact: true })).toHaveCount(1);
+    await page.screenshot({ path: `/tmp/workflow-argument-button-${theme}.png` });
+  });
+}
