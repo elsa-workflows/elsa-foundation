@@ -189,7 +189,7 @@ function ControlledActivityGraphFixture({ context }: { context: StudioEndpointCo
   />;
 }
 
-function createEditorContext(live?: { status: string; disconnected: boolean }): StudioEndpointContext {
+export function createEditorContext(live?: { status: string; disconnected: boolean }): StudioEndpointContext {
   const draft = editorDraft();
   const runCanvas = new URLSearchParams(window.location.search).get("run-canvas");
   const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");

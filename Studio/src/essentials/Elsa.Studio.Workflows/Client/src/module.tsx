@@ -16,6 +16,7 @@ import {
 } from "./workflowTestStimulusEditors";
 import { compensationTargetPropertyEditor } from "./CompensationTargetEditor";
 
+const WorkflowTemplatesPage = lazy(() => import("./workflow-editor/WorkflowTemplatesPage").then(module => ({ default: module.WorkflowTemplatesRoute })));
 const WorkflowManagementPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowManagementPage })));
 const WorkflowExecutablesPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowExecutablesPage })));
 const WorkflowExecutableInspectorPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowExecutableInspectorPage })));
@@ -92,11 +93,14 @@ export function register(api: ElsaStudioModuleApi) {
         { id: "workflows-runs", title: "Runs", path: "/workflows/instances", iconColor: "#0ea5e9", placement: "main", order: 30 },
         { id: "workflows-executables", title: "Executables", path: "/workflows/executables", iconColor: "#d97706", placement: "more", order: 10 },
         { id: "workflows-activity-definitions", title: "Activity definitions", path: "/workflows/activity-definitions", iconColor: "#8b5cf6", placement: "more", order: 20 },
+        { id: "workflows-templates", title: "Templates", path: "/workflows/templates", iconColor: "#0ea5e9", placement: "more", order: 25 },
         { id: "workflows-runtime-diagnostics", title: "Runtime evidence settings", path: "/workflows/runtime-diagnostics", iconColor: "#0ea5e9", placement: "more", order: 40 },
         { id: "workflows-activity-availability", title: "Activity availability", path: "/workflows/activity-availability", iconColor: "#0d9488", placement: "more", order: 50 }
       ]
     },
     routes: [
+      { id: "workflows-templates", path: "/workflows/templates", label: "Workflow templates",
+        component: ({ navigate }) => deferred("workflow templates", <WorkflowTemplatesPage api={api} navigate={navigate} />) },
       {
         id: "workflows-elsa3-import",
         path: "/workflows/activity-definitions/import-elsa3",

@@ -62,7 +62,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     RequestFingerprint = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false, collation: "utf8mb4_0900_bin"),
                     ResultFingerprint = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false, collation: "utf8mb4_0900_bin"),
                     ResultJson = table.Column<string>(type: "longtext", nullable: false),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "datetime(6)", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
                     SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false)
                 },
                 constraints: table =>
@@ -82,18 +82,39 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     DescriptionSearchKey = table.Column<string>(type: "varchar(1792)", maxLength: 1792, nullable: true, collation: "utf8mb4_0900_bin"),
                     Name = table.Column<string>(type: "varchar(256)", maxLength: 256, nullable: false, collation: "utf8mb4_0900_bin"),
                     Description = table.Column<string>(type: "varchar(256)", maxLength: 256, nullable: true, collation: "utf8mb4_0900_bin"),
-                    DeletedAt = table.Column<DateTimeOffset>(type: "datetime(6)", nullable: true),
+                    DeletedAt = table.Column<DateTime>(type: "datetime(6)", nullable: true),
                     DeletedReason = table.Column<string>(type: "longtext", nullable: true),
                     IsSourceOwned = table.Column<bool>(type: "tinyint(1)", nullable: false),
                     SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false),
                     Id = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: true, collation: "utf8mb4_0900_bin"),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "datetime(6)", nullable: false),
-                    LastModifiedAt = table.Column<DateTimeOffset>(type: "datetime(6)", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
+                    LastModifiedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
                     TenantId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: true, collation: "utf8mb4_0900_bin")
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_elsa_workflow_definitions_v2", x => new { x.ScopeKey, x.IdLookupHash });
+                })
+                .Annotation("MySQL:Charset", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "elsa_workflow_templates",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    ScopeKey = table.Column<string>(type: "varchar(65)", maxLength: 65, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Revision = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false),
+                    Name = table.Column<string>(type: "varchar(2048)", maxLength: 2048, nullable: false, collation: "utf8mb4_0900_bin"),
+                    Description = table.Column<string>(type: "varchar(2048)", maxLength: 2048, nullable: true, collation: "utf8mb4_0900_bin"),
+                    ContentJson = table.Column<string>(type: "longtext", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
+                    LastModifiedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
+                    SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false),
+                    TenantId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: true, collation: "utf8mb4_0900_bin")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_elsa_workflow_templates", x => new { x.ScopeKey, x.Id });
                 })
                 .Annotation("MySQL:Charset", "utf8mb4");
 
@@ -109,8 +130,8 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     StateSource = table.Column<string>(type: "longtext", nullable: true),
                     SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false),
                     Id = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: true, collation: "utf8mb4_0900_bin"),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "datetime(6)", nullable: false),
-                    LastModifiedAt = table.Column<DateTimeOffset>(type: "datetime(6)", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
+                    LastModifiedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
                     TenantId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: true, collation: "utf8mb4_0900_bin")
                 },
                 constraints: table =>
@@ -137,11 +158,11 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     DefinitionIdLookupHash = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
                     SourceDraftId = table.Column<string>(type: "longtext", nullable: true),
                     StateSource = table.Column<string>(type: "longtext", nullable: true),
-                    SourceCreatedAt = table.Column<DateTimeOffset>(type: "datetime(6)", nullable: true),
+                    SourceCreatedAt = table.Column<DateTime>(type: "datetime(6)", nullable: true),
                     SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false),
                     Id = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: true, collation: "utf8mb4_0900_bin"),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "datetime(6)", nullable: false),
-                    LastModifiedAt = table.Column<DateTimeOffset>(type: "datetime(6)", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
+                    LastModifiedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
                     TenantId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: true, collation: "utf8mb4_0900_bin")
                 },
                 constraints: table =>
@@ -168,8 +189,8 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     ActivityPresentationJson = table.Column<string>(type: "longtext", nullable: false),
                     SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false),
                     Id = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: true, collation: "utf8mb4_0900_bin"),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "datetime(6)", nullable: false),
-                    LastModifiedAt = table.Column<DateTimeOffset>(type: "datetime(6)", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
+                    LastModifiedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
                     TenantId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: true, collation: "utf8mb4_0900_bin")
                 },
                 constraints: table =>
@@ -196,8 +217,8 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     ActivityPresentationJson = table.Column<string>(type: "longtext", nullable: false),
                     SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false),
                     Id = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: true, collation: "utf8mb4_0900_bin"),
-                    CreatedAt = table.Column<DateTimeOffset>(type: "datetime(6)", nullable: false),
-                    LastModifiedAt = table.Column<DateTimeOffset>(type: "datetime(6)", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
+                    LastModifiedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
                     TenantId = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: true, collation: "utf8mb4_0900_bin")
                 },
                 constraints: table =>
@@ -284,6 +305,11 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 name: "IX_elsa_workflow_definitions_v2_ScopeKey_Name_Id",
                 table: "elsa_workflow_definitions_v2",
                 columns: new[] { "ScopeKey", "Name", "Id" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_elsa_workflow_templates_SchemaVersion",
+                table: "elsa_workflow_templates",
+                column: "SchemaVersion");
         }
 
         /// <inheritdoc />
@@ -303,6 +329,9 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
 
             migrationBuilder.DropTable(
                 name: "elsa_workflow_definition_version_layouts");
+
+            migrationBuilder.DropTable(
+                name: "elsa_workflow_templates");
 
             migrationBuilder.DropTable(
                 name: "elsa_workflow_definition_drafts");

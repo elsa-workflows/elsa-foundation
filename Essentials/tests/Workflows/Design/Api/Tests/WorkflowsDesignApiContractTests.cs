@@ -85,7 +85,7 @@ public sealed class WorkflowsDesignApiContractTests
         """;
 
     [Fact]
-    public void Mapper_registers_exactly_the_27_owned_operations_with_stable_metadata()
+    public void Mapper_registers_exactly_the_32_owned_operations_with_stable_metadata()
     {
         using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(services);
@@ -93,8 +93,8 @@ public sealed class WorkflowsDesignApiContractTests
         Elsa.Workflows.Design.Api.WorkflowsDesignApi.MapWorkflowsDesignApi(routes);
 
         var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
-        Assert.Equal(27, endpoints.Length);
-        Assert.Equal(27, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.OwnerId).Distinct().Count() == 1 ? endpoints.Length : 0);
+        Assert.Equal(32, endpoints.Length);
+        Assert.Equal(32, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.OwnerId).Distinct().Count() == 1 ? endpoints.Length : 0);
 
         foreach (var endpoint in endpoints)
         {
@@ -133,6 +133,9 @@ public sealed class WorkflowsDesignApiContractTests
 
         var manageRoutes = new HashSet<string>(StringComparer.Ordinal)
         {
+            "POST design/workflows/templates",
+            "PUT design/workflows/templates/{templateId}",
+            "POST design/workflows/templates/{templateId}/delete",
             "POST design/workflows/definitions",
             "PATCH design/workflows/definitions/{definitionId}",
             "DELETE design/workflows/definitions/{definitionId}",
@@ -146,7 +149,7 @@ public sealed class WorkflowsDesignApiContractTests
             "POST design/workflows/versions/ingest"
         };
         var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
-        Assert.Equal(27, endpoints.Length);
+        Assert.Equal(32, endpoints.Length);
         foreach (var endpoint in endpoints)
         {
             var method = endpoint.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.Single();

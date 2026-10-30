@@ -84,6 +84,7 @@ const deferredHeavySurfaces = [
   "ActivityUpgradeWorkbenchPage",
   "ActivityAvailabilityPage",
   "RuntimeDiagnosticsSettingsPage",
+  "WorkflowTemplatesPage",
   "WorkflowDefinitions",
   "WorkflowEditor",
   "WorkflowExecutableInspector",

@@ -30,6 +30,7 @@ internal sealed class WorkflowDesignExceptionTranslator : IEndpointExceptionTran
         WorkflowDefinitionVersionConflictException or
             WorkflowPromotionOperationConflictException or
             WorkflowDraftChangedException or
+            WorkflowTemplateConflictException or
             WorkflowDefinitionNotSoftDeletedException =>
             EndpointProblem.General(StatusCodes.Status409Conflict, exception.Message),
         PermanentDeletionUnavailableException => EndpointProblem.General(StatusCodes.Status501NotImplemented, exception.Message),

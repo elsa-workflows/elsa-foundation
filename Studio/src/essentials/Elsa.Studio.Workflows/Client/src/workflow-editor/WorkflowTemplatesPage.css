@@ -1,0 +1,8 @@
+/* Template inventory uses the host's surface and interaction tokens. */
+.wf-template-search { max-width: 480px; margin: 16px 0; }
+.wf-template-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+.wf-template-card { padding: 20px; background: var(--wf-panel); border: 1px solid var(--wf-border); border-radius: var(--wf-radius); min-width: 0; }
+.wf-template-card h2 { margin: 12px 0 8px; font-size: 16px; overflow-wrap: anywhere; }
+.wf-template-card p { overflow-wrap: anywhere; }
+.wf-template-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.wf-template-actions button { display: inline-flex; align-items: center; gap: 6px; }

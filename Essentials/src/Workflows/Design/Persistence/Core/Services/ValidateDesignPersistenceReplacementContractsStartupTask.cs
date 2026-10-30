@@ -1,4 +1,5 @@
 using Elsa.Tasks.Core;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -16,6 +17,10 @@ public sealed class ValidateDesignPersistenceReplacementContractsStartupTask(ISe
             .Select(item => $"{item.serviceType.Name} ({item.Count} registrations)")
             .OrderBy(item => item, StringComparer.Ordinal)
             .ToArray();
+
+        // Template support is optional, but a selected port still has exactly one owner.
+        if (services.Count(descriptor => descriptor.ServiceType == typeof(IWorkflowTemplateStore)) > 1)
+            throw new InvalidOperationException("IWorkflowTemplateStore has multiple registrations; select one explicit template persistence implementation.");
 
         if (invalidRegistrations.Length > 0)
             throw new InvalidOperationException($"Workflow-design replacement contracts must have exactly one implementation; invalid registrations: {string.Join(", ", invalidRegistrations)}.");

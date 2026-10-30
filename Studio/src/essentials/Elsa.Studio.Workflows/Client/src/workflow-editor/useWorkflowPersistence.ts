@@ -1,3 +1,4 @@
+import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { WorkflowDraft } from "../workflowTypes";
@@ -10,6 +11,7 @@ import type { WorkflowDraftRecipe } from "./workflowDocument";
 interface WorkflowPersistenceParams {
   context: StudioEndpointContext;
   draft: WorkflowDraft | null;
+  documentAdapter?: WorkflowEditorDocumentAdapter;
   autosaveEnabledByDefault?: boolean;
   editDraft(recipe: WorkflowDraftRecipe): void;
   setStatus(value: string): void;
@@ -20,7 +22,7 @@ interface WorkflowPersistenceParams {
 // last-saved signature that gates autosave, and the debounced autosave effect. `saveDraft` reconciles
 // the server copy back into the live draft via the document reducer; `markSaved` lets the loader seed
 // the baseline so a freshly loaded draft doesn't immediately autosave.
-export function useWorkflowPersistence({ context, draft, autosaveEnabledByDefault = true, editDraft, setStatus, setError }: WorkflowPersistenceParams) {
+export function useWorkflowPersistence({ context, draft, documentAdapter, autosaveEnabledByDefault = true, editDraft, setStatus, setError }: WorkflowPersistenceParams) {
   const [autosaveEnabled, setAutosaveEnabled] = useState(autosaveEnabledByDefault);
   const [autosavePaused, setAutosavePaused] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -44,7 +46,7 @@ export function useWorkflowPersistence({ context, draft, autosaveEnabledByDefaul
       inFlightSavesRef.current += 1;
       setSaving(true);
       try {
-        const saved = await updateDraft(context, draftSnapshot);
+        const saved = await (documentAdapter?.save ?? updateDraft)(context, draftSnapshot);
         const savedSignature = getDraftSignature(saved);
         lastSavedDraftSignatureRef.current = savedSignature;
         // Reconcile the just-persisted draft: if the live draft still matches what we sent, adopt the
@@ -71,7 +73,7 @@ export function useWorkflowPersistence({ context, draft, autosaveEnabledByDefaul
     const queued = saveQueueRef.current.then(queuedSave, queuedSave);
     saveQueueRef.current = queued.catch(() => undefined);
     return queued;
-  }, [context, editDraft, setStatus, setError]);
+  }, [context, documentAdapter, editDraft, setStatus, setError]);
 
   // Settles pending persistence before a publish review: persists the latest draft when it has unsaved
   // edits (so the review captures the same state that will be saved), then awaits the whole save queue.

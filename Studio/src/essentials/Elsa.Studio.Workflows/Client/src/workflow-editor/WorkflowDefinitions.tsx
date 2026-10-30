@@ -330,15 +330,15 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     setStatus("");
     try {
       const folderId = folderCapability === "available" ? selectedFolderId(folderSelection) : null;
-      const { getCreateInitialState } = await import("./editorHelpers");
-      const initialState = getCreateInitialState(createDraft, catalog);
-      if (!initialState?.rootActivity) {
+      const { getCreateInitialDocument } = await import("./editorHelpers");
+      const initialDocument = getCreateInitialDocument(createDraft, catalog);
+      if (!initialDocument.initialState?.rootActivity) {
         throw new Error("Choose a starting activity that has an authoring template before creating this workflow.");
       }
       const details = await createDefinition(context, {
         name: createDraft.name.trim(),
         description: createDraft.description.trim() || null,
-        initialState,
+        ...initialDocument,
         ...(folderId ? { folderId } : {})
       });
       setCreateDraft(null);
@@ -685,6 +685,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
       {createDraft ? (
         <Suspense fallback={<div className="wf-dialog-backdrop" role="status">Loading create dialog…</div>}>
           <CreateWorkflowDialog
+            context={context}
             draft={createDraft}
             catalog={catalog}
             catalogState={catalogState}

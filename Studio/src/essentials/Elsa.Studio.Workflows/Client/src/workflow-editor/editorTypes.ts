@@ -1,3 +1,4 @@
+import type { WorkflowTemplateContent } from "../workflowTemplates";
 import type React from "react";
 import type { Edge } from "@xyflow/react";
 import type { StudioActivityDescriptor, StudioWorkflowContextConnection, StudioTestStimulusActionResult, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -12,6 +13,8 @@ export interface CreateWorkflowDraft {
   description: string;
   rootActivityVersionId: string | null;
   starter?: "http";
+  templateId?: string;
+  templateContent?: WorkflowTemplateContent;
 }
 
 export const createWorkflowRootOptions: { value: CreateWorkflowKind; label: string; hint: string }[] = [

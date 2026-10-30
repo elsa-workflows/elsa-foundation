@@ -1857,6 +1857,11 @@ async function renderRequestedFixture() {
     root.render(<ActivityDuplicateFixture />);
     return;
   }
+  if (searchParams.get("mode") === "workflow-templates") {
+    const { WorkflowTemplatesFixture } = await import("./workflowTemplatesFixture");
+    root.render(<WorkflowTemplatesFixture />);
+    return;
+  }
   if (activityDuplicateEditorFixture) {
     const { ActivityDuplicateEditorFixture } = await import("./activityDuplicateEditorFixture");
     root.render(<ActivityDuplicateEditorFixture />);
