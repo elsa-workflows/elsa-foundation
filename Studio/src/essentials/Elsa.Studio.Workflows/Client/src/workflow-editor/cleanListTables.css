@@ -95,3 +95,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.wf-run-health-indicator,
+.wf-run-activity-indicator {
+  position: relative;
+}

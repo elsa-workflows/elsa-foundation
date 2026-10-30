@@ -143,7 +143,7 @@ describe("workflow run history", () => {
     expect(button(container, "Copy Workflow definition ID")).toBeTruthy();
     expect(input(container, "Workflow run artifact").value).toBe("artifact-1");
     expect(container.textContent).toContain("Showing 1 of 42 matching runs");
-    expect(container.querySelector('[aria-label="Current health unavailable"]')).not.toBeNull();
+    expect(container.querySelector(".wf-run-health-indicator .wf-visually-hidden")?.textContent).toBe("Current health unavailable");
     expect(getJson).toHaveBeenCalledWith(
       "/runtime/workflows/instances/page?definitionId=definition-1&artifactId=artifact-1&take=10");
 

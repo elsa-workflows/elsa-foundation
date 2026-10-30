@@ -573,8 +573,9 @@ export function WorkflowInstances({ context, navigate }: {
               <span role="cell">{formatRunKind(instance.runKind)}</span>
               <span role="cell"><WorkflowStatusBadge status={instance.status} subStatus={instance.subStatus} /></span>
               <span role="cell"><CurrentIncidentHealthLabel instance={instance} /></span>
-              <span role="cell">
-                <span title={`${instance.activityCount} activities · ${instance.incidentCount} incidents`}>{instance.activityCount}</span>
+              <span role="cell" className="wf-run-activity-indicator">
+                <span aria-hidden="true" title={`${instance.activityCount} activities · ${instance.incidentCount} incidents`}>{instance.activityCount}</span>
+                <span className="wf-visually-hidden">{instance.activityCount} activities · {instance.incidentCount} incidents</span>
               </span>
               <span role="cell">{formatDate(instance.startedAt ?? instance.createdAt)}</span>
               <span role="cell">{formatDuration(instance.startedAt ?? instance.createdAt, instance.completedAt ?? instance.updatedAt)}</span>
@@ -806,7 +807,10 @@ function CurrentIncidentHealthLabel({ instance }: { instance: WorkflowInstanceSu
         ? "active"
         : "none";
   const label = health === "blocking" ? "Needs intervention" : health === "active" ? `${instance.activeIncidentCount} active` : health === "none" ? "Healthy" : "Unknown";
-  return <span className="wf-run-health-indicator" data-health={health} title={formatCurrentIncidentHealth(instance)} aria-label={formatCurrentIncidentHealth(instance)}>{label}</span>;
+  return <span className="wf-run-health-indicator" data-health={health} title={formatCurrentIncidentHealth(instance)}>
+    <span aria-hidden="true">{label}</span>
+    <span className="wf-visually-hidden">{formatCurrentIncidentHealth(instance)}</span>
+  </span>;
 }
 
 function toUtcIso(value: string) {

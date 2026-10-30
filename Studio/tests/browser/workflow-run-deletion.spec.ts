@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import axe from "axe-core";
 
 test("bulk deletion confirms exact runs, retains failed selection and retries", async ({ page }) => {
   await page.goto("/workflow-run-deletion.html");
@@ -54,7 +55,7 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
     await expect(row).toBeVisible();
     const bounds = (await row.boundingBox())!;
     expect(bounds.height).toBeLessThanOrEqual(64);
-    await expect(row.getByLabel("2 active · 1 blocking · Needs intervention", { exact: true })).toHaveText("Needs intervention");
+    await expect(row.getByRole("cell", { name: "2 active · 1 blocking · Needs intervention", exact: true })).toContainText("Needs intervention");
     await row.getByRole("button", { name: "Copy Execution ID", exact: true }).click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("quote-completed");
     const trigger = row.getByRole("button", { name: "Identifiers for quote-completed", exact: true });
@@ -79,4 +80,23 @@ test("selected run keeps its visual highlight", async ({ page }) => {
   await expect(row).toHaveAttribute("aria-selected", "true");
   await page.mouse.move(0, 0);
   await expect.poll(() => row.evaluate(element => getComputedStyle(element).background)).not.toBe(background);
+});
+
+// Cells must retain full meaning when a screen reader navigates the table by column.
+test("compact run cells expose incident totals and full health to assistive technology", async ({ page }) => {
+  await page.goto("/workflow-run-deletion.html?clean-list");
+  const row = page.getByRole("row", { name: /^Inspect workflow run quote-completed · Unified workspace/ });
+  const cells = row.getByRole("cell");
+  await expect.soft(cells.nth(6)).toHaveAccessibleName("4 activities · 0 incidents");
+  await expect.soft(cells.nth(5)).toHaveAccessibleName("2 active · 1 blocking · Needs intervention");
+  await page.addScriptTag({ content: axe.source });
+  const violations = await page.evaluate(async () => {
+    const result = await (window as Window & {
+      axe: { run: (root: Element, options: object) => Promise<{ violations: Array<{ id: string; help: string }> }> };
+    }).axe.run(document.querySelector(".wf-instance-grid")!, {
+      runOnly: { type: "rule", values: ["aria-prohibited-attr"] }, resultTypes: ["violations"]
+    });
+    return result.violations;
+  });
+  expect(violations).toEqual([]);
 });
