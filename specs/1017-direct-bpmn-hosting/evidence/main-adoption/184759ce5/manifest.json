@@ -1,0 +1,41 @@
+{
+  "kind": "unrelated-main-adoption-scope",
+  "executingSource": "833e586e74dbe3a7c4dc362ef73bdfe3f7349273",
+  "assets": [
+    {
+      "path": "README.md",
+      "sha256": "e54245b1df1f442ae8a61f78916fd573c4cb3bfedcc6b8d274ebada52f05d163",
+      "bytes": 1216
+    },
+    {
+      "path": "connections.json",
+      "sha256": "6b967a9653f8f7424e608d6adbe7aa6eb3579c80af80eabebc163493f1fc4880",
+      "bytes": 795
+    },
+    {
+      "path": "connections.log.gz",
+      "sha256": "c2961e27ea61bd9c0dd9a8c98b0511ab8252b5daa5e1443fffbfcd97d3bab769",
+      "bytes": 3674
+    },
+    {
+      "path": "connections.trx.gz",
+      "sha256": "22e5ca83cd41eab26bfd84eb54f45d5404066ecc866ac5a22363e901119638eb",
+      "bytes": 37315
+    },
+    {
+      "path": "source-boundary.json",
+      "sha256": "9274cad4f158d74c6621807c8fae9bc79a3bca8e44ad2a7e4bb52b37d31d373f",
+      "bytes": 694
+    },
+    {
+      "path": "studio-registry.json",
+      "sha256": "5d7c066853d119f41d2480c66e98697ee32ad179a10e2408c377b6c6996c8d9e",
+      "bytes": 257
+    },
+    {
+      "path": "studio-registry.log.gz",
+      "sha256": "a9874e88ffd82073b0520d53195786b002a1a4b8d4a02595f7d9285f2cf203e5",
+      "bytes": 273
+    }
+  ]
+}
