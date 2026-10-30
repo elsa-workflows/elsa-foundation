@@ -106,7 +106,7 @@ test("keeps existing members visible without misclassifying a capability outage"
 });
 
 for (const theme of ["light", "dark", "material"]) for (const width of [390, 1440]) {
-  test(`Add variable has shared themed hover, focus and disabled styling (${theme}, ${width})`, async ({ page }) => {
+  test(`Add variable has shared themed hover, focus and disabled styling (${theme === "material" ? "custom material tokens" : theme}, ${width})`, async ({ page }) => {
     await page.setViewportSize({ width, height: 950 });
     await page.goto(`/?mode=activity-authoring&theme=${theme === "light" ? "light" : "dark"}`);
     await page.getByRole("tablist", { name: "Activity Definition authoring views" }).getByRole("tab", { name: "Variables", exact: true }).click();
