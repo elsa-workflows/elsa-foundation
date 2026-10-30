@@ -86,6 +86,7 @@ order is not an override seam, and neither is `TaskStateManager`, which `TaskMan
 - `Elsa.Workflows.Design.Reconciliation` — `WorkflowsVersionReconcilerStartupTask` *(cross-domain; the same, #2187 and #2189)*
 - `Elsa.Workflows.Runtime.Reconciliation` — `WorkflowArtifactReconcilerStartupTask` *(cross-domain; `[SingleNodeTask]`, so each node reconciles its own mounted set in turn)*
 - `Elsa.Workflows.Design.Reconciliation.Git` — `GitWorkflowExportStartupTask` *(cross-domain; runs on every Writer node without a lock, because its fence is the fast-forward-only push, #2197)*
+- `Elsa3.Activities.Design.Import.Reconciliation` — `Elsa3FolderImportTask` *(cross-domain; `[Order(4)]`, imports a folder of Elsa 3 exports through the collection import and publishes them; every node, no lock, because the commit is idempotent and a publication another node made first is recognised; spec 235)*
 
 ### `IRecurringTask : ITask` *(Core — `Elsa.Tasks.Core`)*
 - **Kind:** Contributor, run on the schedule its `GetSchedule()` returns, an `ITaskSchedule` (`Elsa.Tasks.Core`).

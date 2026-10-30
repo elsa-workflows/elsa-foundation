@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Imports a folder of Elsa 3 workflow definitions at engine start through the Elsa 3 collection import, and publishes them.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa3.Activities.Design.Import.Integration.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Elsa3.Activities.Design.Import\Elsa3.Activities.Design.Import.csproj" />
+    <!-- The feature depends on Elsa3ImportActivitiesPublishing; its package comes with this one. -->
+    <ProjectReference Include="..\Publishing\Elsa3.Activities.Design.Import.Publishing.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\Essentials\src\Workflows\Publishing\Core\Elsa.Workflows.Publishing.Core.csproj" />
+    <!-- The startup grant decorates the activity publisher's authorization context, which Publishing's API owns. -->
+    <ProjectReference Include="..\..\..\..\..\..\..\Essentials\src\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\Essentials\src\Tasks\Core\Elsa.Tasks.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\Essentials\src\Mediator\Core\Elsa.Mediator.Core.csproj" />
+  </ItemGroup>
+
+</Project>
