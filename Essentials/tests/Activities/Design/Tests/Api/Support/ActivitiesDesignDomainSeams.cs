@@ -132,6 +132,9 @@ internal sealed class CaptureDomainSeams(IHttpContextAccessor contextAccessor) :
         {
             case "trusted-unexpected-failure":
                 throw new InvalidOperationException("capture-secret-internal-details");
+            case "trusted-dependency-unavailable":
+                throw new ActivityAuthoringException(503, "activity.dependency.unavailable", "Activity usage is unavailable",
+                    "Usage information has not been initialized.", recovery: new(Relation: "retry", Instruction: "Ask an administrator to restart the host, then retry."));
             case "trusted-domain-not-found":
                 throw new EntityNotFoundException("The deterministic capture entity was not found.");
             case "trusted-domain-conflict":

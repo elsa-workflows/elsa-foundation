@@ -366,6 +366,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
           ...(live ? { chosenReference: { sourceReferenceId: "fixture-reference", ...(adaptivePorts ? { layout: draft.layout } : {}), activityPresentation: draft.activityPresentation?.map(item => ({ ...item, executableNodeId: `exec-${item.nodeId}` })) } } : {})
         };
         if (runCanvas && url.startsWith("/runtime/workflows/instances/editor-execution/activity-executions?")) {
+          if (new URLSearchParams(window.location.search).has("evidence-latency")) await new Promise(resolve => setTimeout(resolve, 400));
           const query = new URL(url, "http://fixture").searchParams;
           const node = query.get("executableNodeId"), parent = query.get("parentActivityExecutionId"), ancestor = query.get("ancestorActivityExecutionId");
           const filtered = observedRecords().filter(record => (!node || record.executableNodeId === node) && (!parent || record.parentActivityExecutionId === parent)

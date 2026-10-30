@@ -541,7 +541,7 @@ public sealed class EfActivityDesignStores(
             ?? throw new InvalidOperationException($"Activity version publication '{request.RootVersionId}' was not found.");
         var owner = new ActivityDefinitionReference("ActivityVersion", root.DefinitionId, root.DefinitionVersionId, root.Version, TenantId: root.TenantId, Lifecycle: root.Lifecycle);
         var projection = await ById(db.ActivityDependencyProjections.AsNoTracking(), ActivityDependencyProjectionState.CurrentId).SingleOrDefaultAsync(cancellationToken)
-            ?? throw new InvalidOperationException("Activity dependency projection has not been initialized.");
+            ?? throw new ActivityDependencyProjectionUnavailableException();
         var watermark = Fingerprint(projection);
         if (request.Watermark is not null && !StringComparer.Ordinal.Equals(request.Watermark, watermark))
             throw new ActivityDependencyWatermarkExpiredException(request.Watermark);
