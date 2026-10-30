@@ -1,0 +1,8 @@
+{
+  "reviewedHead": "bbb21b25b1a2fa40c900d4374c2a979ff21377f4",
+  "executingBinarySource": "7fc0217a4520216834125c9b94b3a851fb02841c",
+  "driverSourceIdenticalToReviewedHead": true,
+  "driverSha256": "302f1e7de3ddcca44afb2987d4663567b32e7f0f67f0753395d4226a03483a21",
+  "probeKind": "stateless invocation of unchanged private production Graph validation; no host or execution/store mutation",
+  "responseMapping": "BpmnHostingFaultRenderer maps BpmnModelValidationException.Message directly to HTTP422"
+}

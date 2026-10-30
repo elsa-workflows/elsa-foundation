@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-28
 
-**Status**: Implemented — prepared for PR3410 under the spec lifecycle; becomes shipped at merge. Actual affected Design-history and saved Studio recovery pass at their recorded sources. Version-policy decision, full-PR review, scan/required checks, protected delivery and resulting-main verification remain open; broader #2907/program acceptance is not inferred.
+**Status**: In progress — complete-PR round2 found six surviving correctness/standards/acceptance findings. Retained runtime/legacy/Studio receipts keep their sources; fixes, affected qualification and round3 are required before preparing implementation delivery. Version-policy decision, scan/required checks, protected merge and broader program remain open.
 
 **Input**: Deliver existing [#2898](https://github.com/elsa-workflows/elsa-foundation/issues/2898) within [program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892), after verified #2735 adoption: direct and embedded BPMN hosting, restart and operational races, real recoverable pipeline invocation, and supported human-task/incident commands. Preserve authoring and saved executions. Broader operational and Studio acceptance remains [#2907](https://github.com/elsa-workflows/elsa-foundation/issues/2907).
 

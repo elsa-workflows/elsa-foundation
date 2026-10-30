@@ -1,0 +1,94 @@
+{
+  "reviewedHead": "bbb21b25b1a2fa40c900d4374c2a979ff21377f4",
+  "mergeBase": "931123c7ed45aa896539d857c6227a267d08b28f",
+  "executedProductionSource": "4f46ac55c482b3b68932ca74f147439bfdacda49",
+  "testHarnessSource": "51605da8389712dc2d1e5f65e73110d03b72ec4e",
+  "relevantSourceEquivalence": [
+    {
+      "path": "Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommit.cs",
+      "executed_source_blob": "d10cf8c4fa277c9e06d97696f8a16fce97a1b024",
+      "reviewed_head_blob": "d10cf8c4fa277c9e06d97696f8a16fce97a1b024",
+      "equal": true
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnDirectExecutionDriver.cs",
+      "executed_source_blob": "f334728ed9f9e4e160e9e38e29896dd3e39a1870",
+      "reviewed_head_blob": "f334728ed9f9e4e160e9e38e29896dd3e39a1870",
+      "equal": true
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnModelRuntime.cs",
+      "executed_source_blob": "a3500c682236460732514a081d16d68aa8c23c19",
+      "reviewed_head_blob": "a3500c682236460732514a081d16d68aa8c23c19",
+      "equal": true
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingBoundary.cs",
+      "executed_source_blob": "c2f0c94285ec01370d9aa7a6db6d089dc91c0658",
+      "reviewed_head_blob": "c2f0c94285ec01370d9aa7a6db6d089dc91c0658",
+      "equal": true
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingDelivery.cs",
+      "executed_source_blob": "6ead0fddc064d16c77313ceaa23283b923a91e09",
+      "reviewed_head_blob": "6ead0fddc064d16c77313ceaa23283b923a91e09",
+      "equal": true
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs",
+      "executed_source_blob": "ebee9861ba03534ed24fbb43204b8ae2bd1f9341",
+      "reviewed_head_blob": "ebee9861ba03534ed24fbb43204b8ae2bd1f9341",
+      "equal": true
+    },
+    {
+      "path": "Essentials/tests/Activities/Testing/WorkflowExecutionHarness.cs",
+      "executed_source_blob": "52ae01ee78d9559f10ebdc69edc38d3ae9dbbcaa",
+      "reviewed_head_blob": "52ae01ee78d9559f10ebdc69edc38d3ae9dbbcaa",
+      "equal": true
+    },
+    {
+      "path": "Essentials/tests/Activities/Behavioral/Tests/Infrastructure/Nodes.cs",
+      "executed_source_blob": "7a5412fd38a12679a933fde49145b44041cbaab4",
+      "reviewed_head_blob": "7a5412fd38a12679a933fde49145b44041cbaab4",
+      "equal": true
+    }
+  ],
+  "gitStatus": "",
+  "probeAssets": [
+    {
+      "path": "probe/Program.cs",
+      "sha256": "11cfb18f88f83ab765a3371685a6abba1d3686f65694b385bb18cce1d6fb80a0",
+      "size": 8709
+    },
+    {
+      "path": "probe/Probe.csproj",
+      "sha256": "2fb8d72760096bc1cf2617c117893224a201d31c2151c30edc3aff7216d78ddc",
+      "size": 67217
+    },
+    {
+      "path": "probe-current-instant-output.txt",
+      "sha256": "d800e4c8e8e0864ec8fa9ea15247eba04163b141d9ce9a19152c59cd166d6b8d",
+      "size": 10154
+    },
+    {
+      "path": "probe-current-human-control.txt",
+      "sha256": "f33cf94bd4726763d6e4ade27865a0a834c0d180c216da77eb3674b696f9095b",
+      "size": 14010
+    },
+    {
+      "path": "probe-current-retirement-output.txt",
+      "sha256": "874adbc378bbb611d4da43ad4690b84fb3dafc5f562046f4ef162801a5c0ad0e",
+      "size": 10570
+    },
+    {
+      "path": "probe-current-output.txt",
+      "sha256": "cfbf628305fff0bf134e228092ac0824889187cd597a7fb541690b84a0f34512",
+      "size": 10569
+    },
+    {
+      "path": "probe-output.txt",
+      "sha256": "cf33b564e85ce84fdf6f9a1f7a259a706f4df7ebfe34b602dbd228f485114a13",
+      "size": 9891
+    }
+  ]
+}

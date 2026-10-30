@@ -1,0 +1,10 @@
+{
+  "reviewedHead": "bbb21b25b1a2fa40c900d4374c2a979ff21377f4",
+  "base": "931123c7ed45aa896539d857c6227a267d08b28f",
+  "sourceSha256": {
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnModelRuntime.cs": "fa0f1178a5a5ebf767b972e099c32d2a1ef76b6038e5865af68ca8e134b6b7bf",
+    "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeModelExecutionReader.cs": "f97128063cf9759dfda128c4d8f55cebf5f833a6c66afe70462c0760bc5a5016"
+  },
+  "dependencyBinaries": "Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0; EF assembly informational revision 7fc0217a4520216834125c9b94b3a851fb02841c; both implicated classes compiled directly from reviewed source in separate probes",
+  "workspaceStatus": ""
+}
