@@ -73,6 +73,25 @@ function click(label: string) {
 }
 
 describe("execution attached to the editor canvas", () => {
+  it("shows loading feedback only until the first evidence read and retains confirmed state during refresh", async () => {
+    let release!: (value: unknown) => void;
+    api.browse.mockImplementation(() => new Promise(resolve => { release = resolve; }));
+    render(); await settle();
+    expect(latest.loading).toBe(true);
+    expect(container.textContent).toContain("Loading execution evidence…");
+    release({ totalCount: 1, items: [{ execution: activity }] }); await settle();
+    expect(latest.loading).toBe(false);
+    expect(container.textContent).not.toContain("Loading execution evidence…");
+
+    click("Refresh execution"); await settle();
+    expect(latest.loading).toBe(true);
+    expect(latest.nodes[0].data.runtime?.status).toBe("Completed");
+    expect(container.textContent).not.toContain("Loading execution evidence…");
+    release({ totalCount: 1, items: [{ execution: activity }] }); await settle();
+    expect(latest.loading).toBe(false);
+    expect(container.textContent).not.toContain("Loading execution evidence…");
+  });
+
   it("projects a verified unique occurrence without changing the document, selection or geometry", async () => {
     render(); await settle();
     expect(latest.nodes[0].data.runtime?.status).toBe("Completed");
