@@ -2,6 +2,7 @@
 import copy
 import json
 from pathlib import Path
+import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -85,7 +86,7 @@ class ProtocolCorrelationTests(unittest.TestCase):
     def tearDown(self):
         self.temporary.cleanup()
 
-    def fixture(self, provider="copilot", *, serialized=False):
+    def fixture(self, provider="copilot", *, serialized=False, read=False):
         self.sequence += 1; root = self.root / str(self.sequence); root.mkdir()
         output = root / "browser"; output.mkdir()
         command = {"commandId": "driver-command", "toolName": "sample_change", "arguments": {"opaque": [False, 3]}}
@@ -93,13 +94,16 @@ class ProtocolCorrelationTests(unittest.TestCase):
         native = {"toolCallId": call_id, "toolName": command["toolName"], "succeeded": True, "content": "Synthetic unit observation",
                   "payload": {"typeId": "sample.result", "schemaVersion": "1", "data": {"opaque": True}},
                   "receipt": {"invocationId": "invocation", "scope": "serverPersisted", "before": {"revision": "r1"}, "after": {"revision": "r2"}}}
-        adapter_result = copy.deepcopy(native); adapter_result["receipt"]["scope"] = "ServerPersisted"
+        if read: native["receipt"] = None
+        adapter_result = copy.deepcopy(native)
+        if not read: adapter_result["receipt"]["scope"] = "ServerPersisted"
         row = lambda kind, **data: {"kind": provider + "." + kind, "data": {"commandId": command["commandId"], **data}}
         rows = [row("request", sessionId="session-a", tools=[{"name": command["toolName"], "jsonSchema": {"type": "object"}}]),
                 row("call", toolName=command["toolName"], arguments=copy.deepcopy(command["arguments"]))]
         if provider == "copilot":
-            rows += [row("return", result={"status": "awaiting-approval", "executed": False, "proposalId": "proposal"}),
-                     row("continuation", sessionId="session-a", results=[adapter_result])]
+            rows += ([row("return", result=adapter_result)] if read else [
+                row("return", result={"status": "awaiting-approval", "executed": False, "proposalId": "proposal"}),
+                row("continuation", sessionId="session-a", results=[adapter_result])])
         else:
             rows += [row("continuation", results=[{"kind": "functionResult", "callId": command["commandId"],
                                                     "result": json.dumps(adapter_result) if serialized else adapter_result}])]
@@ -107,7 +111,13 @@ class ProtocolCorrelationTests(unittest.TestCase):
         transport = AgentTransport(SimpleNamespace(bearer=None), root / "transport", trace_file=trace)
         response = {"url": "http://127.0.0.1:49123/_elsa/agent/proposals/proposal/execute", "status": 200,
                     "response": {"data": {"proposalId": "proposal", "executed": True, "toolResult": native}, "error": None}}
-        fixture = SimpleNamespace(output=output, command=command, rows=rows, trace=trace, transport=transport, response=response)
+        event = {"id": "native-event", "kind": "contributedResult", "resultKind": "moduleResult", "error": None,
+                 "payload": copy.deepcopy(native)}
+        stream = {"url": "http://127.0.0.1:49123/_elsa/agent/sessions/session-a/stream", "status": 200,
+                  "contentType": "text/event-stream", "termination": "loadingFailed", "canceled": True,
+                  "errorText": "net::ERR_ABORTED", "captureError": None, "rawBody": "data: " + json.dumps(event) + "\n\n"}
+        fixture = SimpleNamespace(output=output, command=command, rows=rows, trace=trace, transport=transport,
+                                  response=response, streams=[stream] if read else [])
         self.sync(fixture)
         return fixture
 
@@ -118,6 +128,7 @@ class ProtocolCorrelationTests(unittest.TestCase):
         # responses. Their status200 must not be mistaken for an Agent envelope.
         (fixture.output / "owner-http.json").write_text(json.dumps({"status": 200, "rawBody": '{"owner":"synthetic"}'}))
         (fixture.output / "execute.json").write_text(json.dumps(fixture.response))
+        (fixture.output / "agent-streams.json").write_text(json.dumps(fixture.streams))
         fixture.trace.write_text("".join(json.dumps(row) + "\n" for row in fixture.rows))
 
     def correlate(self, fixture, provider="copilot"):
@@ -157,6 +168,44 @@ class ProtocolCorrelationTests(unittest.TestCase):
         fixture = self.fixture("anthropic", serialized=True)
         self.assertIn("receipt", self.correlate(fixture, "anthropic"))
 
+    def test_both_provider_read_shapes_match_complete_native_frame_in_aborted_stream(self):
+        for provider in ("copilot", "anthropic"):
+            with self.subTest(provider=provider):
+                fixture = self.fixture(provider, serialized=True, read=True)
+                self.assertIn("receipt", self.correlate(fixture, provider))
+
+    def test_provider_read_payload_cannot_change_while_native_read_stays_unchanged(self):
+        for provider in ("copilot", "anthropic"):
+            for field in ("payload", "content"):
+                with self.subTest(provider=provider, field=field):
+                    fixture = self.fixture(provider, serialized=True, read=True)
+                    native_bytes = fixture.streams[0]["rawBody"]
+                    result = (fixture.rows[-1]["data"]["result"] if provider == "copilot" else
+                              json.loads(fixture.rows[-1]["data"]["results"][0]["result"]))
+                    if field == "payload": result["payload"]["data"]["opaque"] = 1  # True is not JSON 1.
+                    else: result["content"] = "changed provider result"
+                    if provider == "anthropic": fixture.rows[-1]["data"]["results"][0]["result"] = json.dumps(result)
+                    self.sync(fixture)
+                    self.assertEqual(fixture.streams[0]["rawBody"], native_bytes)
+                    with self.assertRaises(RuntimeError): self.correlate(fixture, provider)
+
+    def test_read_without_matching_native_envelope_identity_or_complete_frame_is_rejected(self):
+        for kind in ("missing", "call-id", "tool-name", "session", "origin", "incomplete", "capture-error"):
+            with self.subTest(kind=kind):
+                fixture = self.fixture(read=True)
+                if kind == "missing": fixture.streams = []
+                elif kind in ("session", "origin"):
+                    fixture.streams[0]["url"] = fixture.streams[0]["url"].replace(
+                        "session-a" if kind == "session" else "49123", "session-b" if kind == "session" else "49124")
+                elif kind == "incomplete": fixture.streams[0]["rawBody"] = fixture.streams[0]["rawBody"].rstrip("\n")
+                elif kind == "capture-error": fixture.streams[0]["captureError"] = "unsupported CDP capture"
+                else:
+                    event = json.loads(fixture.streams[0]["rawBody"][6:])
+                    event["payload"]["toolCallId" if kind == "call-id" else "toolName"] = "another-native-identity"
+                    fixture.streams[0]["rawBody"] = "data: " + json.dumps(event) + "\n\n"
+                self.sync(fixture)
+                with self.assertRaises(RuntimeError): self.correlate(fixture)
+
     def test_anthropic_malformed_nonobject_and_double_encoded_results_are_rejected(self):
         for value in ("{broken", "null", '{"toolName":"sample_change","toolName":"duplicate"}', json.dumps("{}"), {}):
             with self.subTest(value=value):
@@ -184,6 +233,49 @@ class ProtocolCorrelationTests(unittest.TestCase):
                     fixture.rows[-1]["data"]["results"][0]["succeeded"] = False
                 self.sync(fixture)
                 with self.assertRaises(RuntimeError): self.correlate(fixture)
+
+
+class BrowserCaptureTests(unittest.TestCase):
+    def test_buffer_prefix_and_streaming_chunks_preserve_aborted_bytes_once(self):
+        # Exercise the actual capture helper with synthetic CDP notifications.
+        # This checks its byte boundary only, never a native browser journey.
+        source = Path(__file__).with_name("browser.mjs").read_text()
+        helper = source[source.index("async function captureNativeStreams("):source.index("function command(")]
+        script = r'''
+import assert from "node:assert/strict";
+const backend = "http://127.0.0.1:49123", handlers = new Map();
+let deliverPrefix;
+const cdp = { on: (kind, callback) => handlers.set(kind, callback), send: async kind => {
+  if (kind === "Network.enable") return {};
+  assert.equal(kind, "Network.streamResourceContent");
+  return new Promise(resolve => { deliverPrefix = resolve; });
+} };
+const context = {newCDPSession: async () => cdp};
+const diagnosticUrl = value => { const url = new URL(value); return url.origin + url.pathname; };
+''' + helper + r'''
+const capture = await captureNativeStreams({});
+const raw = Buffer.from('data: {"id":"unit","payload":{"opaque":"café"}}\n\n');
+const split = raw.indexOf(Buffer.from("é")) + 1;
+const event = {requestId:"r1", response:{url:backend+"/_elsa/agent/sessions/s1/stream",status:200,
+  headers:{"Content-Type":"text/event-stream",Authorization:"private-header-never-retained"}}};
+handlers.get("Network.responseReceived")(event);
+handlers.get("Network.responseReceived")({...event, requestId:"foreign",response:{...event.response,url:event.response.url.replace("49123","49124")}});
+handlers.get("Network.dataReceived")({requestId:"r1",data:raw.subarray(9,split).toString("base64")});
+deliverPrefix({bufferedData:raw.subarray(0,9).toString("base64")});
+await Promise.resolve();
+handlers.get("Network.dataReceived")({requestId:"r1",data:raw.subarray(split).toString("base64")});
+handlers.get("Network.loadingFailed")({requestId:"r1",errorText:"net::ERR_ABORTED",canceled:true});
+const rows = await capture();
+assert.equal(rows.length,1);
+assert.equal(rows[0].rawBody,raw.toString());
+assert.equal(rows[0].bufferedBytes+rows[0].streamedBytes,raw.length);
+assert.equal(rows[0].termination,"loadingFailed");
+assert.equal(rows[0].canceled,true);
+assert.equal(rows[0].captureError,null);
+assert.ok(!JSON.stringify(rows).includes("private-header-never-retained"));
+'''
+        result = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == "__main__":

@@ -49,6 +49,7 @@ const result = { journey: config.journey, provider: config.provider, evidenceCat
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ storageState: config.storageState, viewport: { width: 1920, height: 1080 } });
 const page = await context.newPage();
+const streamCapture = await captureNativeStreams(page);
 page.setDefaultTimeout(30000);
 const requests = [], owningWrites = [], pageErrors = [], consoleMessages = [], failedRequests = [];
 let owningDraftPath;
@@ -72,6 +73,55 @@ page.on("request", request => {
   requests.push({ url: request.url(), method: request.method(), body: request.postDataJSON() });
 });
 const dock = () => page.getByRole("region", { name: "Weaver assistant", exact: true });
+async function captureNativeStreams(target) {
+  // Observe the existing browser request only. A clone/second fetch would change
+  // stream consumption, and response.body() loses bytes when Studio aborts it.
+  const cdp = await context.newCDPSession(target);
+  const streams = new Map(), pending = [];
+  cdp.on("Network.responseReceived", event => {
+    const url = new URL(event.response.url);
+    if (url.origin !== backend || !/^\/_elsa\/agent\/sessions\/[^/]+\/stream$/.test(url.pathname)) return;
+    const contentType = Object.entries(event.response.headers).find(([key]) => key.toLowerCase() === "content-type")?.[1] ?? "";
+    const stream = { url: diagnosticUrl(url.href), status: event.response.status, contentType,
+      termination: "open", captureError: null, prefix: Buffer.alloc(0), chunks: [], streamedBytes: 0 };
+    streams.set(event.requestId, stream);
+    pending.push(cdp.send("Network.streamResourceContent", { requestId: event.requestId }).then(response => {
+      // CDP bufferedData ends precisely where dataReceived.data starts. Events
+      // can arrive before this promise resolves, so prepend this prefix once.
+      stream.prefix = Buffer.from(response.bufferedData, "base64");
+      if (stream.prefix.length + stream.streamedBytes > 8 * 1024 * 1024)
+        stream.captureError = "Native SSE capture exceeded its bounded evidence size.";
+    }).catch(error => { stream.captureError = error.message; }));
+  });
+  cdp.on("Network.dataReceived", event => {
+    const stream = streams.get(event.requestId);
+    if (!stream || !event.data || stream.captureError) return;
+    const bytes = Buffer.from(event.data, "base64");
+    stream.streamedBytes += bytes.length;
+    if (stream.prefix.length + stream.streamedBytes > 8 * 1024 * 1024) {
+      stream.captureError = "Native SSE capture exceeded its bounded evidence size.";
+      return;
+    }
+    stream.chunks.push(bytes);
+  });
+  cdp.on("Network.loadingFinished", event => {
+    const stream = streams.get(event.requestId);
+    if (stream) stream.termination = "loadingFinished";
+  });
+  cdp.on("Network.loadingFailed", event => {
+    const stream = streams.get(event.requestId);
+    if (stream) Object.assign(stream, { termination: "loadingFailed", errorText: event.errorText, canceled: event.canceled === true });
+  });
+  await cdp.send("Network.enable");
+  return async () => {
+    for (let settled = 0; settled < pending.length;) {
+      const batch = pending.slice(settled); settled = pending.length;
+      await Promise.all(batch);
+    }
+    return [...streams.values()].map(({ prefix, chunks, ...stream }) => ({ ...stream, bufferedBytes: prefix.length,
+      rawBody: Buffer.concat([prefix, ...chunks]).toString("utf8") }));
+  };
+}
 function command(toolName, args) {
   const value = { commandId: crypto.randomUUID(), toolName, arguments: args };
   const temporary = config.commandFile + "." + value.commandId;
@@ -259,7 +309,11 @@ async function resource() {
   const readMessage = responseFor("/messages");
   await page.getByRole("button", { name: "Read with Weaver", exact: true }).click();
   const read = await accepted(readMessage, "read-message");
-  await expect(dock().getByRole("region", { name: "Module results", exact: true }).getByTestId("acme-home-result")).toContainText("The owning resource reports");
+  const readResult = dock().getByRole("region", { name: "Module results", exact: true }).getByTestId("acme-home-result");
+  await expect(readResult).toContainText(`The owning resource reports ${before.value.visible ? "visible" : "hidden"}.`);
+  await expect(readResult.getByTestId("acme-home-result-revision")).toHaveText(before.value.revision);
+  result.evidence.push(retain("resource-read-rendering", { text: await readResult.innerText(),
+    revision: await readResult.getByTestId("acme-home-result-revision").textContent(), owner: before.receipt }));
   await expect(dock()).toHaveAttribute("aria-busy", "false");
   expect((await owner("owner-after-read", witness.ownerEndpoint)).value).toEqual(before.value);
   const next = !before.value.visible;
@@ -303,6 +357,9 @@ async function resource() {
   expect(after.value.visible).toBe(next);
   expect(after.value.revision).not.toBe(before.value.revision);
   expect(after.value.revision).toBe(receipt.after.revision);
+  const appliedResult = proposal.getByTestId("acme-home-result");
+  await expect(appliedResult).toContainText(`to ${after.value.visible ? "visible" : "hidden"}.`);
+  await expect(appliedResult.getByTestId("acme-home-result-revision")).toHaveText(after.value.revision);
   result.ownerAfter = after.receipt;
   const layoutAfter = await owner("layout-after", "/_elsa/studio/preferences/home-layout", { "X-Elsa-Studio-Host-Id": witness.hostId });
   expect(unrelated(layoutAfter.value)).toEqual(unrelated(layoutBefore.value));
@@ -683,6 +740,7 @@ try {
   try { await screenshot("failure"); } catch { /* Retain the original failure if the browser has gone away. */ }
 } finally {
   result.completedAt = new Date().toISOString();
+  result.evidence.push(retain("agent-streams", await streamCapture()));
   result.evidence.push(retain("agent-requests", requests));
   result.evidence.push(retain("owning-write-attempts", owningWrites));
   result.evidence.push(retain("browser-diagnostics", { consoleMessages, failedRequests }));

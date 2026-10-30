@@ -8,6 +8,7 @@ from __future__ import annotations
 import copy
 import json
 from pathlib import Path
+import re
 from urllib.parse import urlparse
 
 from agent_transport import _json as strict_json
@@ -85,12 +86,51 @@ def _same_json(left, right):
         right, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
+def _native_reads(output, requests):
+    """Read complete native SSE frames, including frames received before an abort.
+
+    CDP preserves the response bytes and transport termination independently. A
+    partial trailing frame is never treated as a native result.
+    """
+    path = output / "agent-streams.json"
+    if not path.is_file():
+        return []
+    sessions = set()
+    for request in requests:
+        url = urlparse(request["url"])
+        match = re.fullmatch(r"/_elsa/agent/sessions/([^/]+)/messages", url.path)
+        if match: sessions.add((url.scheme, url.netloc, match[1]))
+    results = []
+    for stream in strict_json(path.read_text()):
+        url = urlparse(stream["url"])
+        match = re.fullmatch(r"/_elsa/agent/sessions/([^/]+)/stream", url.path)
+        if (not match or (url.scheme, url.netloc, match[1]) not in sessions or stream.get("status") != 200
+                or stream.get("contentType", "").split(";", 1)[0].strip() != "text/event-stream"
+                or stream.get("captureError")):
+            continue
+        for frame in re.split(r"\r?\n\r?\n", stream["rawBody"])[:-1]:
+            data = "\n".join(line[5:].removeprefix(" ") for line in frame.splitlines() if line.startswith("data:"))
+            if not data: continue
+            try:
+                event = strict_json(data)
+            except (ValueError, TypeError):
+                check(False, "Malformed native SSE cannot prove a read result")
+            if (isinstance(event, dict) and event.get("kind") == "contributedResult"
+                    and event.get("resultKind") == "moduleResult" and event.get("error") is None
+                    and isinstance(event.get("id"), str) and event["id"] and isinstance(event.get("payload"), dict)):
+                results.append({"result": event["payload"], "sessionId": match[1], "eventId": event["id"],
+                                "termination": stream.get("termination"), "receipt": retained(path)})
+    return results
+
+
 def correlate_browser_protocol(transport, browser_output, provider, *, offset=0):
     """Match actual advertised calls/results, never model text or domain payload fields.
 
     Command IDs identify the generic fixture request. Native tool-call IDs identify
     owning results; they need not equal SDK call IDs. Copilot additionally supplies
     its native session identity. Anthropic supplies FunctionResult call correlation.
+    Reads require the unchanged full ContributedResult envelope captured from the
+    browser's native SSE response; a successful provider result alone is no proof.
     """
     check(provider in ("copilot", "anthropic"), "Unknown actual adapter")
     output = Path(browser_output)
@@ -103,6 +143,7 @@ def correlate_browser_protocol(transport, browser_output, provider, *, offset=0)
     sessions = {urlparse(item["url"]).path.split("/")[-2] for item in requests
                 if urlparse(item["url"]).path.endswith("/messages")}
     check(bool(sessions), "The browser did not send a native message")
+    native_reads = _native_reads(output, requests)
     # These are real accepted execute/ACK responses, not an expected domain model.
     accepted = []
     for path in output.glob("*.json"):
@@ -158,10 +199,16 @@ def correlate_browser_protocol(transport, browser_output, provider, *, offset=0)
             check(bool(matches) and all(_same_json(_normalized_result(value), _normalized_result(result)) for value in matches),
                   "Adapter continuation differs from the actual execute/ACK result")
         else:
-            check(result.get("succeeded") is True, "A refused read cannot qualify a positive journey")
+            matches = [item for item in native_reads if item["result"].get("toolCallId") == result["toolCallId"]
+                       and item["result"].get("toolName") == command["toolName"]
+                       and (provider != "copilot" or item["sessionId"] == offered[0]["sessionId"])]
+            check(len(matches) == 1 and _same_json(matches[0]["result"], result),
+                  "Adapter read differs from its actual native ContributedResult envelope")
         correlations.append({"commandId": command["commandId"], "toolName": command["toolName"],
                              "nativeToolCallId": result["toolCallId"], "actualAdvertisement": True,
                              "oneActualCall": True, "actualResultObserved": True})
+        if not result.get("receipt"):
+            correlations[-1]["nativeRead"] = {key: value for key, value in matches[0].items() if key != "result"}
     path = output / "adapter-correlation.json"
     check(not path.exists(), "Never overwrite an actual adapter correlation")
     private_json(path, {"provider": provider, "evidenceCategory": "deterministic-provider-protocol", "liveProvider": False,
