@@ -218,9 +218,8 @@ def main():
         wait(lambda: marker_path.exists(), bool, 'The real publisher did not reach its selected cut.', 60)
         marker = json.loads(marker_path.read_text()); publisher_id = marker['workflowExecutionId']; q.write_json(output / 'cut-marker.json', marker)
         at_cut = broadcast(publisher_id); q.write_json(output / 'cut-source.json', at_cut)
-        assist = None
+        primary = host, api; launch(False, assist=True); assist = host; host, api = primary
         if args.cut == 'after-resume':
-            primary = host, api; launch(False, assist=True); assist = host; host, api = primary
             initial_id = initial['model']['executionId']; initial_ids = {w['nativeWork']['workerExecutionId'] for w in initial['model']['payload']['work']}
             rearmed = wait(lambda: model(initial_id), lambda value: len(value['model']['payload'].get('nativeResults', [])) == 1 and
                 len({w['nativeWork']['workerExecutionId'] for w in value['model']['payload']['work']} - initial_ids) == 1,
