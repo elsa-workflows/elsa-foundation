@@ -7,11 +7,31 @@ import unittest
 from unittest.mock import patch
 
 from agent_transport import Response, AgentTransportError
-from journey_runtime import expect_error, same, BASE_GRANTS, browser_inputs
+from journey_runtime import expect_error, same, BASE_GRANTS, browser_inputs, JourneyRuntime
 from journeys import _unchanged, _seed_principals, qualify_distributions, _semantic_refusal
 
 
 class JourneyBoundariesTests(unittest.TestCase):
+    def test_controls_get_a_fresh_private_parent_without_changing_protocol_directory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            protocol = root / "prepared-protocol"
+            protocol.mkdir(mode=0o755)
+            protocol.chmod(0o755)
+            command = protocol / "command.json"
+            run = SimpleNamespace(root=root, profiles={"backend": {"commandFile": command}})
+            runtime = JourneyRuntime(run, "http://127.0.0.1:51001", "http://127.0.0.1:51002", {}, [])
+            self.assertEqual(root / "journeys" / "controls", runtime.controls)
+            self.assertEqual(0o700, runtime.controls.stat().st_mode & 0o777)
+            self.assertEqual(0o755, protocol.stat().st_mode & 0o777)
+            self.assertEqual(command, runtime.command_file)
+            for control in (runtime.gate_file, runtime.cas_control, runtime.cas_receipt):
+                self.assertEqual(runtime.controls, control.parent)
+                self.assertFalse(control.is_symlink())
+            self.assertEqual(0o600, runtime.gate_file.stat().st_mode & 0o777)
+            self.assertEqual("release", json.loads(runtime.gate_file.read_text())["state"])
+            self.assertFalse(runtime.cas_control.exists()); self.assertFalse(runtime.cas_receipt.exists())
+
     def test_browser_export_summary_cannot_copy_private_auth_or_config_paths(self):
         config = {"journey": "workflow", "provider": "copilot", "studioOrigin": "http://127.0.0.1:51001", "backendOrigin": "http://127.0.0.1:51002",
                   "storageState": "/private/auth-state.json", "bearer": "PRIVATE_CREDENTIAL", "commandFile": "/private/command.json",

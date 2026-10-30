@@ -100,9 +100,11 @@ class JourneyRuntime:
         self.root.mkdir(mode=0o700)
         self.native = NativeObservations(self.root / "native")
         self.command_file = self.run.profiles["backend"]["commandFile"]
-        self.gate_file = self.command_file.parent / "call-gate.json"
-        self.cas_control = self.command_file.parent / "write-rendezvous.json"
-        self.cas_receipt = self.command_file.parent / "write-rendezvous-receipt.json"
+        self.controls = self.root / "controls"
+        self.controls.mkdir(mode=0o700)
+        self.gate_file = self.controls / "call-gate.json"
+        self.cas_control = self.controls / "write-rendezvous.json"
+        self.cas_receipt = self.controls / "write-rendezvous-receipt.json"
         atomic_json(self.gate_file, {"commandId": "not-an-active-command", "epoch": str(uuid.uuid4()), "state": "release"})
 
     def output(self, name):
