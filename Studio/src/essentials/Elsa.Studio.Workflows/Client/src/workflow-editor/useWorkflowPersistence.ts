@@ -25,6 +25,10 @@ interface WorkflowPersistenceParams {
 export function useWorkflowPersistence({ context, draft, documentAdapter, autosaveEnabledByDefault = true, editDraft, setStatus, setError }: WorkflowPersistenceParams) {
   const [autosaveEnabled, setAutosaveEnabled] = useState(autosaveEnabledByDefault);
   const [autosavePaused, setAutosavePaused] = useState(false);
+  const reviewHoldRef = useRef(false);
+  const reviewHoldGenerationRef = useRef(0);
+  const [reviewHeld, setReviewHeld] = useState(false);
+  const holdForReview = useCallback((hold: boolean) => { const previous = reviewHoldRef.current; reviewHoldGenerationRef.current++; reviewHoldRef.current = hold; setReviewHeld(hold); return previous; }, []);
   const [saving, setSaving] = useState(false);
   const lastSavedDraftSignatureRef = useRef("");
   const saveRequestIdRef = useRef(0);
@@ -35,13 +39,19 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
   latestDraftRef.current = draft;
 
   const markSaved = useCallback((savedDraft: WorkflowDraft | null) => {
+    reviewHoldGenerationRef.current++;
+    reviewHoldRef.current = false; setReviewHeld(false);
     lastSavedDraftSignatureRef.current = savedDraft ? getDraftSignature(savedDraft) : "";
   }, []);
 
   const saveDraft = useCallback(async (draftSnapshot: WorkflowDraft, savedStatus: string) => {
+    // Capture when requested, before waiting in the queue. An old save cannot release a newer
+    // reviewed edit, even when that old request only starts after the new hold was acquired.
+    const requestedReviewGeneration = reviewHoldGenerationRef.current;
+    const requestedSignature = getDraftSignature(draftSnapshot);
     const queuedSave = async () => {
+      if (savedStatus === "Autosaved" && reviewHoldRef.current) return draftSnapshot;
       const requestId = ++saveRequestIdRef.current;
-      const requestedSignature = getDraftSignature(draftSnapshot);
       setError("");
       inFlightSavesRef.current += 1;
       setSaving(true);
@@ -49,6 +59,10 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
         const saved = await (documentAdapter?.save ?? updateDraft)(context, draftSnapshot);
         const savedSignature = getDraftSignature(saved);
         lastSavedDraftSignatureRef.current = savedSignature;
+        const live = latestDraftRef.current;
+        const coversLiveDraft = live?.id === draftSnapshot.id && live.definitionId === draftSnapshot.definitionId && getDraftSignature(live) === requestedSignature;
+        const coversReviewGeneration = requestedReviewGeneration === reviewHoldGenerationRef.current;
+        if (savedStatus !== "Autosaved" && coversLiveDraft && coversReviewGeneration) { reviewHoldRef.current = false; setReviewHeld(false); }
         // Reconcile the just-persisted draft: if the live draft still matches what we sent, adopt the
         // server copy wholesale; otherwise the author kept editing, so only fold in the fresh validation.
         editDraft(({ draft: current }) => {
@@ -57,7 +71,7 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
             ? saved
             : { ...current, validationErrors: saved.validationErrors };
         });
-        if (requestId === saveRequestIdRef.current) setStatus(savedStatus);
+        if (requestId === saveRequestIdRef.current && coversLiveDraft && coversReviewGeneration) setStatus(savedStatus);
         return saved;
       } catch (e) {
         if (requestId === saveRequestIdRef.current) {
@@ -81,24 +95,25 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
   const flushPendingSave = useCallback(async () => {
     const current = latestDraftRef.current;
     if (current && getDraftSignature(current) !== lastSavedDraftSignatureRef.current) {
-      await saveDraft(current, "Saved").catch(() => undefined);
+      await saveDraft(current, "Saved");
     }
     await saveQueueRef.current.catch(() => undefined);
   }, [saveDraft]);
 
   useEffect(() => {
-    if (!autosaveEnabled || autosavePaused || !draft) return;
+    if (!autosaveEnabled || autosavePaused || reviewHeld || !draft) return;
 
     const draftSignature = getDraftSignature(draft);
     if (draftSignature === lastSavedDraftSignatureRef.current) return;
 
     setStatus("Autosaving...");
     const timeoutId = window.setTimeout(() => {
+      if (reviewHoldRef.current) return;
       void saveDraft(draft, "Autosaved").catch(() => undefined);
     }, autosaveDelayMs);
 
     return () => window.clearTimeout(timeoutId);
-  }, [autosaveEnabled, autosavePaused, draft, saveDraft, setStatus]);
+  }, [autosaveEnabled, autosavePaused, reviewHeld, draft, saveDraft, setStatus]);
 
-  return { saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, autosavePaused, setAutosavePaused, markSaved };
+  return { holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, autosavePaused, setAutosavePaused, markSaved };
 }

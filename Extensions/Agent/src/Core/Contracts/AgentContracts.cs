@@ -16,6 +16,8 @@ public interface IAgentSessionService
 
     Task<AgentMessage?> FindLatestMessageAsync(string sessionId, AgentRole? role = null, CancellationToken cancellationToken = default);
 
+    Task SetMessageStatusAsync(string sessionId, string messageId, AgentMessageStatus status, CancellationToken cancellationToken = default);
+
     Task AddContextAsync(string sessionId, IReadOnlyCollection<AgentContextAttachment> attachments, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyCollection<AgentContextAttachment>> ListContextAsync(string sessionId, CancellationToken cancellationToken = default);
@@ -37,14 +39,16 @@ public interface IAgentContextSanitizer
 
 public interface IAgentContextProvider
 {
-    string ScopeKind { get; }
+    AgentContextProviderDescriptor Descriptor { get; }
 
-    ValueTask<IReadOnlyCollection<AgentContextAttachment>> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default);
+    string ScopeKind => Descriptor.ScopeKind;
+
+    ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default);
 }
 
 public interface IAgentContextCollector
 {
-    Task<AgentResult<IReadOnlyCollection<AgentContextAttachment>>> CollectAsync(AgentPolicy policy, AgentContextRequest request, CancellationToken cancellationToken = default);
+    Task<AgentResult<AgentContextContribution>> CollectAsync(AgentPolicy policy, AgentContextRequest request, CancellationToken cancellationToken = default);
 }
 
 public interface IAgentCapabilityProvider
@@ -60,6 +64,9 @@ public interface IAgentCapabilityCatalog
 public interface IAgentActionProposalExecutor
 {
     Task<AgentResult<AgentProposalExecutionResult>> ExecuteAsync(AgentActionProposal proposal, CancellationToken cancellationToken = default);
+
+    Task<AgentResult<AgentProposalExecutionResult>> CompleteClientAsync(AgentActionProposal proposal,
+        AgentClientAcknowledgement acknowledgement, CancellationToken cancellationToken = default);
 }
 
 public interface IAgentProposalService
@@ -73,6 +80,11 @@ public interface IAgentProposalService
     Task<AgentResult<AgentActionProposal>> DenyAsync(string proposalId, string actorId, string? reason, CancellationToken cancellationToken = default);
 
     Task<AgentResult<AgentProposalExecutionResult>> ExecuteAsync(string proposalId, string actorId, string? expectedRevision = null, CancellationToken cancellationToken = default);
+
+    Task<AgentResult<AgentProposalExecutionResult>> AcknowledgeAsync(string sessionId, string invocationId, string actorId,
+        AgentClientAcknowledgement acknowledgement, CancellationToken cancellationToken = default);
+
+    Task<AgentToolResult?> FindResultAsync(string proposalId, CancellationToken cancellationToken = default);
 }
 
 public interface IAgentStreamingService

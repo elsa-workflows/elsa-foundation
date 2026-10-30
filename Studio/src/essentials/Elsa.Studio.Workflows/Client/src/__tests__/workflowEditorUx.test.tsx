@@ -1,7 +1,7 @@
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { StudioAiContributionApi } from "@elsa-workflows/studio-sdk";
+import type { StudioAgentRegistry } from "@elsa-workflows/studio-sdk";
 import {
   describeWorkflowError,
   normalizeWorkflowError
@@ -522,14 +522,14 @@ describe("useAiProviderAvailability", () => {
     };
   }
 
-  function Probe({ ai }: { ai: StudioAiContributionApi }) {
+  function Probe({ ai }: { ai: StudioAgentRegistry }) {
     const available = useAiProviderAvailability(ai);
     return <span data-testid="value">{available ? "available" : "unavailable"}</span>;
   }
 
   it("reflects the current value and reacts to provider availability changes", () => {
     const providerAvailability = createAvailabilityStub(false);
-    const ai = { providerAvailability } as unknown as StudioAiContributionApi;
+    const ai = { providerAvailability } as unknown as StudioAgentRegistry;
 
     flushSync(() => root.render(<Probe ai={ai} />));
     expect(container.querySelector("[data-testid='value']")?.textContent).toBe("unavailable");

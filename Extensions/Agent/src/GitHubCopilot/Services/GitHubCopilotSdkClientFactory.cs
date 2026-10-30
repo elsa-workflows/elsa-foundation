@@ -83,7 +83,7 @@ internal sealed class GitHubCopilotSdkClient(CopilotClient client) : IGitHubCopi
             // Tools backed by an AIFunction are auto-invoked by the harness during the turn.
             config.Tools = request.CustomTools.Cast<AIFunctionDeclaration>().ToList();
         }
-        config.OnPermissionRequest = (_, _) => Task.FromResult(PermissionDecision.Reject("Elsa requires workflow, file, package, runtime, and external-service mutations to be proposed through Elsa-owned approval flows."));
+        config.OnPermissionRequest = (_, _) => Task.FromResult(PermissionDecision.Reject("Elsa requires mutations to be proposed through its own approval flow."));
 
         if (!string.IsNullOrWhiteSpace(request.SystemMessage))
         {

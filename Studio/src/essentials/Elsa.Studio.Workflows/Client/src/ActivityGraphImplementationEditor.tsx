@@ -478,6 +478,13 @@ export function ActivityGraphImplementationEditor({
     return placement.activityNode;
   }, [createPlacement, nodes.length]);
 
+  const enterChildSlot = useCallback((ownerNodeId: string, childSlot: ChildSlot, label: string) => {
+    const plan = planSlotNavigation(scopeFrames, owner, ownerNodeId, childSlot, label, catalogByVersion);
+    if (!plan) return;
+    setScopePath(plan.frames);
+    setSelectedNodeId(plan.selectedNodeId);
+  }, [catalogByVersion, owner, scopeFrames]);
+
   // The Activity Definition graph's answer to the workflow editor's drop routing: a graph with no root
   // yet adopts the first composition dropped on it, otherwise the activity appends to the open slot at
   // the cursor position.
@@ -498,16 +505,13 @@ export function ActivityGraphImplementationEditor({
       [...activities, next],
       position ? { nodeId: next.nodeId, x: position.x, y: position.y } : undefined
     );
-    setSelectedNodeId(next.nodeId);
+    if (slot.cardinality === "single" && activities.length === 0) {
+      enterChildSlot(owner.nodeId, { ...slot, activities: [next] }, slotCrumbLabel(nodeLabel(owner, catalogByVersion), slot));
+    } else {
+      setSelectedNodeId(next.nodeId);
+    }
     return next;
-  }, [activities, commitDocument, isBpmnSlot, placeBpmnActivity, readOnly, root.activityVersionId, root.nodeId, slot, updateOwnerActivities, value]);
-
-  const enterChildSlot = useCallback((ownerNodeId: string, childSlot: ChildSlot, label: string) => {
-    const plan = planSlotNavigation(scopeFrames, owner, ownerNodeId, childSlot, label, catalogByVersion);
-    if (!plan) return;
-    setScopePath(plan.frames);
-    setSelectedNodeId(plan.selectedNodeId);
-  }, [catalogByVersion, owner, scopeFrames]);
+  }, [activities, catalogByVersion, commitDocument, enterChildSlot, isBpmnSlot, owner, placeBpmnActivity, readOnly, root.activityVersionId, root.nodeId, slot, updateOwnerActivities, value]);
 
   // BPMN canvas nodes are elements, so a delete must expand to the activity the element binds, that
   // activity's nested activities, and the element ids of any BPMN scope inside it.
@@ -733,7 +737,7 @@ export function ActivityGraphImplementationEditor({
     shadowingWarnings: [],
     status: "ready" as const
   };
-  const replaceInspectedSlotActivity = (ownerNodeId: string, targetSlot: ReturnType<typeof getChildSlots>[number], activity: ActivityCatalogItem) => {
+  const replaceInspectedSlotActivity = (ownerNodeId: string, targetSlot: ChildSlot, label: string, activity: ActivityCatalogItem) => {
     const next = createActivityNode(activity, createNodeId(activity));
     const nextRoot = updateActivity(
       root,
@@ -742,7 +746,7 @@ export function ActivityGraphImplementationEditor({
       catalogByVersion
     );
     commitRoot(nextRoot);
-    setSelectedNodeId(next.nodeId);
+    enterChildSlot(ownerNodeId, { ...targetSlot, activities: [next] }, label);
   };
 
   const contributedPanelTabs = supportedPanels.map(panel => {
@@ -851,7 +855,7 @@ export function ActivityGraphImplementationEditor({
             onActiveTabChange={setActiveInspectorTabId}
             onSelectedActivityChange={updateSelected}
             onEnterSlot={(ownerNodeId, childSlot, label) => enterChildSlot(ownerNodeId, childSlot, label)}
-            onReplaceSlotActivity={(ownerNodeId, targetSlot, _label, activity) => replaceInspectedSlotActivity(ownerNodeId, targetSlot, activity)}
+            onReplaceSlotActivity={replaceInspectedSlotActivity}
           />}
         </>
       )
@@ -866,7 +870,15 @@ export function ActivityGraphImplementationEditor({
       clientX={interactions.connectMenu.clientX}
       clientY={interactions.connectMenu.clientY}
       activities={availableActivities}
-      onPick={interactions.onConnectMenuPick}
+      onPick={activity => {
+        // Empty single slots assign an activity; use the same descent as the cards and inspector.
+        if (slot?.cardinality === "single" && activities.length === 0 && interactions.connectMenu?.kind === "fromEmpty") {
+          interactions.setConnectMenu(null);
+          placeActivity(activity);
+        } else {
+          interactions.onConnectMenuPick(activity);
+        }
+      }}
       onClose={() => interactions.setConnectMenu(null)}
     />
   ) : null;

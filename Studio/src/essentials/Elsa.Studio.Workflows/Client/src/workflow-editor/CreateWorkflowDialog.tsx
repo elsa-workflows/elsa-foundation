@@ -3,7 +3,7 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { WorkflowTemplate } from "../workflowTemplates";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
-import type { StudioAiContributionApi, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
+import type { StudioAgentRegistry, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem } from "../workflowTypes";
 import { type CreateWorkflowDraft, type WorkflowMetadataSuggestion } from "./editorTypes";
 import { getCreateRootActivity, parseWorkflowMetadataSuggestion } from "./editorHelpers";
@@ -21,7 +21,7 @@ export function CreateWorkflowDialog({ context, title = "Create Workflow", submi
   catalogError?: string;
   creating: boolean;
   submitError?: string;
-  ai: StudioAiContributionApi;
+  ai: StudioAgentRegistry;
   suggestMetadataAction?: StudioAiPromptActionContribution | null;
   onChange(draft: CreateWorkflowDraft): void;
   onClose(): void;

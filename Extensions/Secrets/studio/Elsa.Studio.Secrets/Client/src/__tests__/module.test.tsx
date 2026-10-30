@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  createAiContributionApi,
+  createAgentRegistry,
   createContributionRegistry,
   createDashboardWidgetRegistry,
   createDialogController,
@@ -42,6 +42,7 @@ describe("secrets module", () => {
 
 function stubApi(): ElsaStudioModuleApi {
   const dashboardWidgets = createDashboardWidgetRegistry();
+  const agent = createAgentRegistry();
   return {
     host: {
       ...createEndpointContext("https://studio.example/"),
@@ -64,21 +65,13 @@ function stubApi(): ElsaStudioModuleApi {
     workflowRunInputEditors: createContributionRegistry({ slot: studioSlots.workflowRunInputEditors }),
     workflowTestStimulusEditors: createContributionRegistry({ slot: studioSlots.workflowTestStimulusEditors }),
     settingEditors: createContributionRegistry({ slot: studioSlots.settingEditors }),
-    agent: {
-      contextProviders: createContributionRegistry({ slot: studioSlots.agentContextProviders }),
-      promptStarters: createContributionRegistry({ slot: studioSlots.agentPromptStarters }),
-      capabilities: createContributionRegistry({ slot: studioSlots.agentCapabilities }),
-      actions: createContributionRegistry({ slot: studioSlots.agentActions }),
-      toolSlots: createContributionRegistry({ slot: studioSlots.agentToolSlots }),
-      toolContracts: createContributionRegistry({ slot: studioSlots.agentToolContracts }),
-      resultRenderers: createContributionRegistry({ slot: studioSlots.agentResultRenderers })
-    },
+    agent,
     workflowDesigner: {
       nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers }),
       toolboxItems: createContributionRegistry({ slot: studioSlots.workflowDesignerToolboxItems }),
       panels: createContributionRegistry({ slot: studioSlots.workflowDesignerPanels })
     },
-    ai: createAiContributionApi(),
+    ai: agent,
     dialogs: createDialogController().api,
     diagnostics: createContributionRegistry({ slot: studioSlots.diagnostics })
   };

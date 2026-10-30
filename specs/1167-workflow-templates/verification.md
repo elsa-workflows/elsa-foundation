@@ -11,7 +11,7 @@ hosts/databases and leaves existing development hosts untouched.
 | Shared persistence schema/migration whole suite | 501 passed, no skips |
 | Architecture whole suite after graph restore | 592 passed, no skips |
 | Generated solution filters | Fresh |
-| Workflows frontend whole suite | 198 files, 2678 tests passed |
+| Workflows frontend whole suite | 199 files, 2703 tests passed |
 | Workflows/browser TypeScript | Passed |
 | Changed-file ESLint / template CSS stylelint | Passed; existing autofocus and generation-ref advisory warnings |
 | Workflows production bundle | Passed without raising budgets |
@@ -30,8 +30,8 @@ fail; restoring it returns all four browser journeys to green. The delayed-Back
 regression also failed when Ctrl+Z bypassed the inert editor through its window
 listener; guarding that listener preserves declarations during the pending save.
 
-Production frontend output: entry 107.81 kB; stylesheet 169.36 kB; authenticated
-Definitions total 384.38 kB (384.50 budget); activity upgrades 375.50 kB (376.00 budget).
+Production frontend output: entry 110.65 kB; stylesheet 167.32 kB; authenticated
+Definitions total 385.01 kB (387.50 budget); activity upgrades 376.30 kB (379.00 budget).
 Heavy template management/editor surfaces stay deferred. Four provider Initial
 migrations were regenerated; local owned persistence execution is SQLite. Required
 CI supplies the provider matrix and whole-server build gates; pending checks are not
@@ -55,3 +55,13 @@ in the existing WorkflowsDesign family and adds its one encoded ContentJson colu
 to the expected inventory. No guard was removed, no EF model/schema change was
 needed, and all501 shared persistence tests plus128 Design EF tests pass locally.
 Fresh hosted checks are required on the repair commit.
+
+
+Main integration after the schema repair: merged main e81401851 (the landed
+Weaver contributions and Studio UX fixes). Resolve the editor conflict by retaining
+both the template document adapter and main's hold-for-review persistence controls;
+use the new StudioAgentRegistry / api.agent contract in the template route and fixture.
+Templates do not register a workflow-definition Weaver controller. The complete
+Workflows suite now passes2703 cases in199 files; all four template browser journeys
+and TypeScript checks pass. The combined production bundle passes main's existing
+budgets (385.01/387.50kB); this feature does not raise them.

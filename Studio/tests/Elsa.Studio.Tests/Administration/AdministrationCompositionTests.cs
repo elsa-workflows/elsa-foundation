@@ -74,6 +74,7 @@ public sealed class AdministrationCompositionTests
 internal sealed class AdministrationHost : IAsyncDisposable
 {
     private readonly bool _keepFiles;
+    private WebApplicationBuilder? _builder;
     private AdministrationHost(string? root, bool keepFiles)
     {
         Root = root ?? Directory.CreateTempSubdirectory("studio-admin-").FullName;
@@ -90,7 +91,7 @@ internal sealed class AdministrationHost : IAsyncDisposable
         var host = new AdministrationHost(root, keepFiles);
         try
         {
-            var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { ContentRootPath = host.Root, EnvironmentName = Environments.Production });
+            var builder = host._builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { ContentRootPath = host.Root, EnvironmentName = Environments.Production });
             builder.Logging.ClearProviders();
             builder.WebHost.UseTestServer();
             builder.Configuration.Sources.Clear();
@@ -159,6 +160,13 @@ internal sealed class AdministrationHost : IAsyncDisposable
         {
             try { await App.StopAsync(); }
             finally { await App.DisposeAsync(); }
+        }
+        else if (_builder is not null)
+        {
+            // Build transfers these resources to the application. A refused composition
+            // never makes that transfer, so the fixture must release both owners.
+            _builder.Configuration.Dispose();
+            (_builder.Environment.ContentRootFileProvider as IDisposable)?.Dispose();
         }
         if (!_keepFiles) Directory.Delete(Root, recursive: true);
     }

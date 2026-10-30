@@ -1,7 +1,7 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { StudioAgentRegistry, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import { WorkflowDefinitions } from "../workflow-editor/WorkflowDefinitions";
@@ -111,7 +111,7 @@ function render(contextValue: StudioEndpointContext, onOpen: (id: string) => voi
   document.body.appendChild(container);
   const root = createRoot(container);
   mounted = { root, container };
-  const ai = { promptActions: { list: () => [] }, dispatchPrompt: vi.fn() } as unknown as StudioAiContributionApi;
+  const ai = { promptActions: { list: () => [] }, dispatchPrompt: vi.fn() } as unknown as StudioAgentRegistry;
   function Harness() {
     const session = useWorkflowDefinitionBrowseSession(contextValue);
     return <WorkflowDefinitions context={contextValue} ai={ai} onOpen={onOpen} session={session} />;

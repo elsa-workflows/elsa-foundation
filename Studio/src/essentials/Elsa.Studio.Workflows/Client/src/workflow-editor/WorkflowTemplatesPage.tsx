@@ -104,7 +104,7 @@ export function WorkflowTemplatesPage(props: Props) {
 
 
 export function WorkflowTemplatesRoute({ api, navigate }: { api: ElsaStudioModuleApi; navigate(path: string): void }) {
-  return <WorkflowTemplatesPage key={`${api.backend.baseUrl}:${api.runtime.identity?.tenantId}:${api.runtime.identity?.subject}`} context={api.backend} ai={api.ai} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors.list()}
+  return <WorkflowTemplatesPage key={`${api.backend.baseUrl}:${api.runtime.identity?.tenantId}:${api.runtime.identity?.subject}`} context={api.backend} ai={api.agent} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors.list()}
     runInputEditors={api.workflowRunInputEditors?.list() ?? []} testStimulusEditors={api.workflowTestStimulusEditors?.list() ?? []}
     workflowDesignerPanels={api.workflowDesigner.panels.list()} navigate={navigate} />;
 }

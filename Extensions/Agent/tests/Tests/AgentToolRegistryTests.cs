@@ -1,6 +1,7 @@
 using Elsa.Agent.Core.Contracts;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
+using Elsa.Agent.Services;
 
 namespace Elsa.Agent.Tests;
 
@@ -11,19 +12,19 @@ namespace Elsa.Agent.Tests;
 public sealed class AgentToolRegistryTests
 {
     [Fact]
-    public void Distinct_tool_names_register_without_error()
+    public async Task Distinct_tool_names_register_without_error()
     {
-        var registry = new DefaultAgentToolRegistry([new EchoTool(), new ApplyChangeTool()]);
+        var registry = new DefaultAgentToolRegistry(new AgentTestToolsPublisher(new EchoTool(), new ApplyChangeTool()));
 
-        Assert.Equal(2, registry.Tools.Count);
+        Assert.Equal(2, (await registry.ListAsync()).Count);
     }
 
     [Fact]
-    public void Case_insensitive_duplicate_tool_names_fail_fast_and_name_the_offender()
+    public async Task Case_insensitive_duplicate_tool_names_fail_fast_and_name_the_offender()
     {
         // The lookup comparer is OrdinalIgnoreCase, so names differing only by case are duplicates too.
-        var ex = Assert.Throws<InvalidOperationException>(() =>
-            new DefaultAgentToolRegistry([new EchoTool(), new UpperEchoTool()]));
+        var ex = await Assert.ThrowsAsync<AgentContributionException>(() =>
+            new DefaultAgentToolRegistry(new AgentTestToolsPublisher(new EchoTool(), new UpperEchoTool())).ListAsync());
 
         Assert.Contains("Duplicate agent tool name", ex.Message);
     }
@@ -39,9 +40,12 @@ public sealed class AgentToolRegistryTests
             AgentRisk.ReadOnly,
             "{}",
             [],
-            []);
+            []) { ModuleId = "test.module" };
 
-        public Task<AgentResult<AgentToolResult>> InvokeAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+        public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+            => Task.FromResult(AgentResult<AgentToolPreparation>.Success(AgentTestToolHelpers.Preparation(invocation, Descriptor)));
+
+        public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
             => Task.FromResult(AgentResult<AgentToolResult>.Success(new(invocation.ToolCallId, Descriptor.Name, true, "echo")));
     }
 }
