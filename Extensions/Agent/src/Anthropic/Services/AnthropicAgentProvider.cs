@@ -167,6 +167,8 @@ public sealed class AnthropicAgentProvider(
         var resourceData = context.Context.Where(attachment => attachment.Origin != AgentContextOrigin.InstalledGuidance).Select(attachment => new
         {
             attachment.Label, attachment.Source, attachment.Summary,
+            attachment.ModuleId, attachment.ContentType, attachment.SchemaVersion, attachment.Target,
+            origin = attachment.Origin.ToString(),
             content = CanIncludeContent(attachment) ? attachment.Content : null
         }).ToArray();
         if (resourceData.Length > 0)
@@ -258,6 +260,12 @@ public sealed class AnthropicAgentProvider(
                     .Append(" [").Append(attachment.Source).Append(']')
                     .Append(" sensitivity=").Append(attachment.Sensitivity)
                     .AppendLine();
+
+                builder.Append("  Metadata: ").AppendLine(JsonSerializer.Serialize(new
+                {
+                    attachment.ModuleId, attachment.ContentType, attachment.SchemaVersion, attachment.Target,
+                    origin = attachment.Origin.ToString()
+                }, JsonOptions));
 
                 if (!string.IsNullOrWhiteSpace(attachment.Summary))
                     builder.Append("  Summary: ").AppendLine(attachment.Summary);

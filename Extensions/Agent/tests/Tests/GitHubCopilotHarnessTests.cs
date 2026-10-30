@@ -105,10 +105,92 @@ public sealed class GitHubCopilotHarnessTests
         Assert.Empty(factory.Session.RegisteredTools);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Context_envelope_identity_and_provenance_reach_the_provider(bool changeOrigin)
+    {
+        var attachment = IndependentContext();
+        var changed = changeOrigin
+            ? attachment with { Origin = AgentContextOrigin.AuthoritativeRead }
+            : attachment with { Target = attachment.Target! with { ResourceId = "other-resource", Revision = "other-revision" } };
+
+        var originalPrompt = await ContextPrompt([attachment]);
+        var changedPrompt = await ContextPrompt([changed]);
+
+        Assert.NotEqual(originalPrompt, changedPrompt);
+        Assert.Contains("independent.module", originalPrompt);
+        Assert.Contains("\"schemaVersion\":\"7\"", originalPrompt);
+        Assert.Contains("envelope-only-resource", originalPrompt);
+        Assert.Contains("envelope-only-revision", originalPrompt);
+        Assert.Contains("ClientSnapshot", originalPrompt);
+        Assert.Contains(changeOrigin ? "AuthoritativeRead" : "other-resource", changedPrompt);
+        Assert.DoesNotContain("private-client-binding", originalPrompt);
+        Assert.DoesNotContain("private-authority-scope", originalPrompt);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Context_metadata_preserves_the_sensitive_content_gate(bool includeSensitive)
+    {
+        var sensitive = IndependentContext() with { Sensitivity = AgentContextSensitivity.Sensitive, Content = new { value = "SENSITIVE_CONTENT_ONLY" } };
+        var secret = IndependentContext() with { Id = "secret", Sensitivity = AgentContextSensitivity.Secret, Content = new { value = "SECRET_CONTENT_ONLY" } };
+
+        var prompt = await ContextPrompt([sensitive, secret], includeSensitive);
+
+        Assert.Contains("envelope-only-resource", prompt);
+        Assert.Equal(includeSensitive, prompt.Contains("SENSITIVE_CONTENT_ONLY", StringComparison.Ordinal));
+        Assert.DoesNotContain("SECRET_CONTENT_ONLY", prompt);
+        Assert.DoesNotContain("private-client-binding", prompt);
+        Assert.DoesNotContain("private-authority-scope", prompt);
+    }
+
+    [Fact]
+    public async Task Context_metadata_keeps_resource_data_distinct_from_installed_guidance()
+    {
+        var resource = IndependentContext() with { Label = "Untrusted resource", Content = new { instructions = "UNTRUSTED_RESOURCE_INSTRUCTION" } };
+        var guidance = IndependentContext() with { Id = "guidance", Label = "Trusted module", Target = null, Origin = AgentContextOrigin.InstalledGuidance, Content = new { instructions = "INSTALLED_MODULE_GUIDANCE" } };
+
+        var prompt = await ContextPrompt([resource, guidance]);
+
+        var resourceStart = prompt.IndexOf("Resource data: Untrusted resource", StringComparison.Ordinal);
+        var guidanceStart = prompt.IndexOf("Installed module guidance: Trusted module", StringComparison.Ordinal);
+        Assert.True(resourceStart >= 0 && guidanceStart > resourceStart);
+        var resourceSection = prompt[resourceStart..guidanceStart];
+        var guidanceSection = prompt[guidanceStart..];
+        Assert.Contains("UNTRUSTED_RESOURCE_INSTRUCTION", resourceSection);
+        Assert.Contains("ClientSnapshot", resourceSection);
+        Assert.DoesNotContain("INSTALLED_MODULE_GUIDANCE", resourceSection);
+        Assert.Contains("INSTALLED_MODULE_GUIDANCE", guidanceSection);
+        Assert.Contains("InstalledGuidance", guidanceSection);
+        Assert.DoesNotContain("UNTRUSTED_RESOURCE_INSTRUCTION", guidanceSection);
+        Assert.DoesNotContain("envelope-only-resource", guidanceSection);
+    }
+
+    private static AgentContextAttachment IndependentContext() => new("context", "independent.context", null, "Resource", "independent.context",
+        AgentContextSensitivity.Internal, "selection", "Bounded resource data.", new { value = "same-domain-content" }, new Dictionary<string, string>())
+    {
+        ModuleId = "independent.module", SchemaVersion = "7", Origin = AgentContextOrigin.ClientSnapshot,
+        Target = new("independent.module", "independent.resource", "envelope-only-resource", "envelope-only-revision"),
+        Client = new("private-client-binding", "private-generation"), AgentScopes = ["private-authority-scope"]
+    };
+
+    private static async Task<string> ContextPrompt(IReadOnlyCollection<AgentContextAttachment> attachments, bool includeSensitiveContextContent = false)
+    {
+        var provider = BuildProvider(out var factory, includeSensitiveContextContent);
+        var request = new AgentHarnessTurnRequest("session-1", "actor-1", [new(AgentRole.User, "Inspect")], attachments, [], AgentPolicy.Default);
+        await foreach (var _ in provider.RunTurnAsync(request)) { }
+        return Assert.IsType<string>(factory.Session.LastPrompt);
+    }
+
     private static GitHubCopilotAgentProvider BuildProvider(out FakeCopilotClientFactory factory, params IAgentTool[] tools)
+        => BuildProvider(out factory, false, tools);
+
+    private static GitHubCopilotAgentProvider BuildProvider(out FakeCopilotClientFactory factory, bool includeSensitiveContextContent, params IAgentTool[] tools)
     {
         factory = new FakeCopilotClientFactory();
-        var options = new GitHubCopilotAgentOptions { Enabled = true, GitHubToken = "test-token" };
+        var options = new GitHubCopilotAgentOptions { Enabled = true, GitHubToken = "test-token", IncludeSensitiveContextContent = includeSensitiveContextContent };
         IAgentTool[] registered = tools.Length == 0 ? [new EchoTool()] : tools;
         var capturedFactory = factory;
         var invoker = new AgentTestToolInvoker(async (invocation, policy) =>

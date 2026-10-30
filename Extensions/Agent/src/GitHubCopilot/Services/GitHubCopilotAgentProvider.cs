@@ -444,6 +444,12 @@ public sealed class GitHubCopilotAgentProvider(
                 .Append(" sensitivity=").Append(attachment.Sensitivity)
                 .AppendLine();
 
+            builder.Append("  Metadata: ").AppendLine(JsonSerializer.Serialize(new
+            {
+                attachment.ModuleId, attachment.ContentType, attachment.SchemaVersion, attachment.Target,
+                origin = attachment.Origin.ToString()
+            }, JsonOptions));
+
             if (!string.IsNullOrWhiteSpace(attachment.Summary))
                 builder.Append("  Summary: ").AppendLine(attachment.Summary);
 
