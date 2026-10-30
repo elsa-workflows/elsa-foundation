@@ -129,8 +129,19 @@ review found two blockers in the first version of this file; R-3 and R-5 carry t
   - resolve T's target slot; skip it when the slot's publication journal (`IPublicationRecordStore.ListBySlotAsync`)
     already holds a record of T in any status but `Failed` (active, retired, or in flight, which
     `CompleteInterruptedPublicationsStartupTask` finishes at Order 5);
-  - otherwise send `IRequestSender.Send(new PublishWorkflow(T))`.
+  - otherwise send `IRequestSender.Send(new PublishWorkflow(T, ExpectedPublicationId: <the slot's active publication
+    id read for the check, or null>, TenantId: <the operation scope's tenant>))`.
   Workflows publish after the import's own reusable publish phase.
+- **Tenant**: `PublishWorkflowRequestHandler` passes `PublishWorkflow.TenantId` to the compile request and stamps it on
+  the `WorkflowExecutableSourceReference` it creates (`BuildSourceReferenceAsync`), and runtime start resolution
+  treats a null reference tenant as matching any scope (`WorkflowExecutableStartSourceResolver`). Everything else a
+  start writes carries the scope's tenant (R-3), so the publication must too. `PublishReconciledWorkflowVersions`
+  sends no tenant, which is why its call is not copied as is.
+- **Several nodes at once** (FR-011): two nodes can both find no record of T and both publish. If the first has
+  activated T by the time the second runs, the handler's same-artifact short-circuit answers "already published"
+  without a new publication (`PublishWorkflowRequestHandler.cs:135-145`). If both run before either activates, the
+  `ExpectedPublicationId` the second sends no longer matches the slot, so its request is refused with a conflict; the
+  task then reads the journal again and, when it now holds T, logs at debug and skips.
 - **Why the journal, not the input**: the input says nothing about what the operator did since.
   - A re-export that replaces v1 with v2 in the same file: v2 was never published, so it is published. Deciding by
     "is the active version in this start's input" would treat v1 as an operator's version and never publish v2.
