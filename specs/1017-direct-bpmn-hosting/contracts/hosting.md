@@ -58,6 +58,8 @@ Duration bindings use definition format4 with an explicit `timerBindings` invent
 
 ## Initial direct profile
 
+The draft signal binding uses definition format5 with explicit `nativeEventBindings` entries `{bindingId,executable}`. Every pin names a live published, closed native Event worker with a fixed matching name, `CanStartWorkflow=false` and no correlation filter. Only named signal intermediate catches, plain start/end and parallel gateways are admitted by this cut. No service/human/timer inventory is mixed into format5. Formats1–4 omit the new property and retain their wire/hashes. The existing exact native-work bridge supplies each model invocation/attempt address; opaque work frames2/5 remain unchanged. [Five actual recovery journeys](../evidence/events/signal-recovery/README.md) qualify two catches across direct/native-parent process loss and typed return. Delivery-time later-listener, rearm/pre-ACK retry and empty-cohort proofs remain required before this draft increment is delivered; T021 stays open. The native cohort contract is unchanged.
+
 The profile is independently versioned in immutable model material; never replace an existing admitted profile in place.
 
 | Construct/binding | Initial direct/RunBpmn profile |

@@ -1,0 +1,15 @@
+{
+  "stage": "publish",
+  "sourceRevision": "4a25c30ba198b03816930c1ea0e897b81ff5537d",
+  "type": "System.InvalidOperationException",
+  "processes": [
+    {
+      "processId": 96463,
+      "controllerProcessId": 96260,
+      "startedAtUtc": "2026-10-30T00:42:32.909141Z"
+    }
+  ],
+  "exits": [
+    137
+  ]
+}
