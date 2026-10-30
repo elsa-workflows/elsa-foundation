@@ -27,6 +27,10 @@ public interface IActivityStructureHandler
     /// </summary>
     Type? AuthoredPayloadType => null;
 
+    /// <summary>
+    /// Projects child slots and any structure-owned invocation outcome declarations. Generic publishing
+    /// consumes the outcome projections without inspecting this handler's authored payload.
+    /// </summary>
     IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity);
 
     /// <summary>
