@@ -103,6 +103,8 @@ converts and finds nothing to write. No target beyond "the JTest corpus (36 work
 | A-2 | Fixtures are copied from `Fixtures/` into the test's folder at start instead of duplicated under `Fixtures/Reconciliation/`. There is no separate plain fixture: `caller` and `http-hello` are plain workflows. | No duplicate fixture files. |
 | A-3 | `http-endpoint.json` sets the WriteHttpResponse content type. An imported WriteHttpResponse without one faults at run time with `VF-ACT-006: Required result projection 'ContentType' was null`, although the converter README says an unset content type is inferred as Elsa 3 did. | A converter or runtime defect outside this spec; reported separately. |
 | A-4 | The project also references `Elsa.Workflows.Publishing`. | `PublicationActivationException`, which the publisher catches by code for a concurrent publication (R-6), lives there. |
+| A-5 | The US3 refusal fixtures are generated in the test from the existing fixtures (a reusable with `Elsa.StateMachine`, its caller, a document with no root) instead of files under `Fixtures/Reconciliation/Refusals/`; `reusable-sets-variable.json` is used as it is. | The change from the base fixture stays visible next to the assertion. |
+| A-6 | A plan error fails the start only when it names no plan item. The plan's diagnostics repeat every item's errors, and those are skipped per item. | Found by the US3 test: a document with no root is an item error (`ELS3-REUSABLE-INVALID-SOURCE`), not a plan-level one. |
 
 ## Project Structure
 

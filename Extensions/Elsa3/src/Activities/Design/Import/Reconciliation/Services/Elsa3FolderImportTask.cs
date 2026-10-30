@@ -69,7 +69,11 @@ internal sealed class Elsa3FolderImportTask(
             inputs.Select(input => input.Definition).ToArray());
 
         var plan = await importer.AnalyzeAsync(collection, cancellationToken);
-        if (plan.Diagnostics.FirstOrDefault(diagnostic => diagnostic.IsError) is { } planError)
+        // The plan repeats its items' errors, which the selection skips per item; an error that names no item cannot be
+        // attributed, so it fails the start.
+        var itemIds = plan.Items.Select(item => item.SourceVersionId).ToHashSet(StringComparer.Ordinal);
+        if (plan.Diagnostics.FirstOrDefault(diagnostic =>
+                diagnostic.IsError && !itemIds.Contains(diagnostic.Metadata.GetValueOrDefault("SourceVersionId") ?? string.Empty)) is { } planError)
             throw new Elsa3ReconciliationFailedException(
                 $"The Elsa 3 import of '{_options.SourceId}' was refused: {Elsa3ImportSelection.Cause(planError.Message, planError.Guidance)} ({planError.Code})");
 
@@ -154,7 +158,11 @@ internal sealed class Elsa3FolderImportTask(
         return null;
     }
 
-    private static Dictionary<string, (string Code, string Cause)> Locate(ReusableActivityImportValidationException exception, IReadOnlyList<string> selected)
+    /// <summary>
+    /// The selected item each error diagnostic names, by its <c>SourceVersionId</c> metadata or else its source-version
+    /// path segment; empty when any error names no selected item, because then the refusal cannot be attributed.
+    /// </summary>
+    internal static Dictionary<string, (string Code, string Cause)> Locate(ReusableActivityImportValidationException exception, IReadOnlyList<string> selected)
     {
         var selectedIds = selected.ToHashSet(StringComparer.Ordinal);
         var located = new Dictionary<string, (string, string)>(StringComparer.Ordinal);
