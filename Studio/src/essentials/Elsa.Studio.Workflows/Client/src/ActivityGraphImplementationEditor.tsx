@@ -21,6 +21,7 @@ import {
   planSlotNavigation,
   replaceSlotActivities,
   resolveScope,
+  resolveScopeFrames,
   syncCanvasToScope,
   slotCrumbLabel,
   updateActivity,
@@ -303,8 +304,7 @@ export function ActivityGraphImplementationEditor({
   const sidePanelLayout = useSidePanelLayout(activityGraphSidePanelStorageKeys, { palettePresent: true });
 
   const buildModel = useCallback((documentRoot: ActivityNode, layout: ReturnType<typeof activityGraphLayoutToDesign>) => {
-    const documentScope = resolveScope(documentRoot, scopePath, catalogByVersion)
-      ?? resolveScope(documentRoot, [], catalogByVersion);
+    const documentScope = resolveScope(documentRoot, resolveScopeFrames(documentRoot, scopePath, catalogByVersion), catalogByVersion);
     if (!documentScope) return { nodes: [], edges: [] };
     const { owner: documentOwner, slot: documentSlot } = documentScope;
     const documentOwnerItem = catalogByVersion.get(documentOwner.activityVersionId);
@@ -327,8 +327,7 @@ export function ActivityGraphImplementationEditor({
     options?: GraphCanvasCommitOptions
   ) => {
     const documentRoot = activityGraphDocumentAdapter.readRoot(document);
-    const documentScope = resolveScope(documentRoot, scopePath, catalogByVersion)
-      ?? resolveScope(documentRoot, [], catalogByVersion);
+    const documentScope = resolveScope(documentRoot, resolveScopeFrames(documentRoot, scopePath, catalogByVersion), catalogByVersion);
     if (!documentScope) return document;
     const { owner: documentOwner, slot: documentSlot } = documentScope;
     const documentOwnerItem = catalogByVersion.get(documentOwner.activityVersionId);
@@ -372,7 +371,8 @@ export function ActivityGraphImplementationEditor({
   const { nodes, edges, setNodes, setEdges, commitCanvas, commitDocument, undo, redo, canUndo, canRedo } = canvas;
   const payload = normalizePayload(value.payload);
   const root = activityGraphDocumentAdapter.readRoot(value);
-  const scope = resolveScope(root, scopePath, catalogByVersion) ?? resolveScope(root, [], catalogByVersion);
+  const scopeFrames = resolveScopeFrames(root, scopePath, catalogByVersion);
+  const scope = resolveScope(root, scopeFrames, catalogByVersion);
   const owner = scope?.owner ?? root;
   const ownerCatalogItem = catalogByVersion.get(owner.activityVersionId);
   const ownerSupported = supportsActivityNode(owner, ownerCatalogItem);
@@ -383,7 +383,6 @@ export function ActivityGraphImplementationEditor({
   // the root-composition chooser.
   const inlineSteps = authorsInline(themeLayout, isBpmnSlot);
   const activities = slot?.activities ?? emptyActivities;
-  const scopeFrames = scopePath;
   // A BPMN canvas selects ELEMENTS, whose id is the elementId rather than an activity node id. An
   // activity-bearing element resolves to the activity it binds so the ordinary inspector applies; a
   // pure structure element (event/gateway) binds nothing and leaves the scope owner inspected.
@@ -433,8 +432,7 @@ export function ActivityGraphImplementationEditor({
   const commitRoot = useCallback((nextRoot: ActivityNode, pinned?: PinnedGraphNodePosition) => {
     const currentLayout = activityGraphDocumentAdapter.readLayout(value);
     const reconciledLayout = reconcileGraphLayout(nextRoot, catalogByVersion, currentLayout, pinned);
-    const currentScope = resolveScope(nextRoot, scopePath, catalogByVersion)
-      ?? resolveScope(nextRoot, [], catalogByVersion);
+    const currentScope = resolveScope(nextRoot, resolveScopeFrames(nextRoot, scopePath, catalogByVersion), catalogByVersion);
     const nextLayout = currentScope?.slot.mode === "sequence"
       ? reconciledLayout.filter(record => currentLayout.some(current => current.nodeId === record.nodeId))
       : reconciledLayout;
@@ -624,23 +622,32 @@ export function ActivityGraphImplementationEditor({
   useEffect(() => {
     const pending = pendingDiagnosticFocusRef.current;
     if (!pending || !editorRef.current) return;
-    const target = pending.target === "root"
-      ? editorRef.current.querySelector<HTMLElement>("[data-graph-root-location]")
-      : [...editorRef.current.querySelectorAll<HTMLElement>("[data-graph-node-id], .wf-sequence-step[data-id]")]
-        .find(element => element.dataset.graphNodeId === pending.target || element.dataset.id === pending.target);
-    pendingDiagnosticFocusRef.current = null;
-    if (!target) {
-      pending.complete(unsupportedGraphFocus());
-      return;
-    }
-    target.focus();
-    target.scrollIntoView?.({ block: "center", inline: "center" });
-    pending.complete(document.activeElement === target
-      ? {
-          kind: "focused",
-          announcement: "Focused the provider-owned Activity Graph location. Use Return to diagnostic to restore the diagnostics context."
-        }
-      : unsupportedGraphFocus());
+    // Scope navigation rebuilds the canvas asynchronously. Observe its DOM mirror rather than
+    // reporting an unsupported location before React Flow has mounted the newly addressed node.
+    const editor = editorRef.current;
+    const complete = (result: StudioActivityDiagnosticFocusResult) => {
+      if (pendingDiagnosticFocusRef.current !== pending) return;
+      pendingDiagnosticFocusRef.current = null;
+      observer.disconnect();
+      window.clearTimeout(timeout);
+      pending.complete(result);
+    };
+    const focus = () => {
+      const target = pending.target === "root"
+        ? editor.querySelector<HTMLElement>("[data-graph-root-location]")
+        : [...editor.querySelectorAll<HTMLElement>("[data-graph-node-id], .wf-sequence-step[data-id]")]
+          .find(element => element.dataset.graphNodeId === pending.target || element.dataset.id === pending.target);
+      if (!target) return;
+      target.focus();
+      if (document.activeElement !== target) return;
+      target.scrollIntoView?.({ block: "center", inline: "center" });
+      complete({ kind: "focused", announcement: "Focused the provider-owned Activity Graph location. Use Return to diagnostic to restore the diagnostics context." });
+    };
+    const observer = new MutationObserver(focus);
+    observer.observe(editor, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "tabindex"] });
+    const timeout = window.setTimeout(() => complete(unsupportedGraphFocus()), 2000);
+    focus();
+    return () => { observer.disconnect(); window.clearTimeout(timeout); };
   }, [diagnosticFocusVersion, scopePath, selectedNodeId]);
 
   useEffect(() => () => {
@@ -1392,10 +1399,9 @@ function supportsActivityGraphAuthoring(activity: ActivityCatalogItem) {
 
 function supportsActivityNode(node: ActivityNode, activity?: ActivityCatalogItem) {
   const slots = getChildSlots(node, activity);
-  // The host can address one current slot through ScopeFrames. Multiple structural slots are
-  // supported when they all use the ordered Sequence model; graph/BPMN multi-slot projection still
-  // needs a dedicated host surface.
-  return slots.length <= 1 || slots.every(slot => slot.mode === "sequence");
+  // Generic and ordered slots each have an existing independent canvas. Multiple graph/BPMN slots
+  // still need a projection because their edges/elements belong to the owner structure.
+  return slots.length <= 1 || slots.every(slot => slot.mode === "generic" || slot.mode === "sequence");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

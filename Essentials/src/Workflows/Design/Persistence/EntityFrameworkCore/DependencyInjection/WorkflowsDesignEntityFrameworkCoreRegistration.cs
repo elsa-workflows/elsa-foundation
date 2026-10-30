@@ -49,6 +49,7 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         services.AddSingleton(options);
         addContext(services, options);
         services.TryAddScoped<IDesignAtomicWriter, EfDesignAtomicWriter>();
+        services.AddScoped<IWorkflowTemplateStore, EfWorkflowTemplateStore>();
         services.TryAddScoped<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
         services.TryAddScoped<IWorkflowDefinitionDraftFactory, WorkflowDefinitionDraftFactory>();
         services.TryAddScoped<IWorkflowDefinitionVersionFactory, WorkflowDefinitionVersionFactory>();
@@ -111,6 +112,7 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         typeof(WorkflowsDesignSqlServerDbContext),
         typeof(WorkflowsDesignPostgreSqlDbContext),
         typeof(WorkflowsDesignMySqlDbContext),
+        typeof(IWorkflowTemplateStore),
         typeof(IDesignAtomicWriter),
         typeof(IWorkflowDefinitionLookup),
         typeof(EfWorkflowDefinitionStore),

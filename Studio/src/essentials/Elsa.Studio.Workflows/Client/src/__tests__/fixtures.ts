@@ -90,6 +90,33 @@ export const forEachActivity: ActivityCatalogItem = {
   }]
 };
 
+// Mirrors If's generic Then/Else ActivityChildSlot metadata.
+export const ifActivity: ActivityCatalogItem = {
+  ...writeLine,
+  activityVersionId: "activity-if-v1",
+  activityTypeKey: "Elsa.Activities.ControlFlow.If.Activities.If",
+  category: "Control Flow",
+  displayName: "If",
+  designFacets: [{
+    kind: "elsa.if.structure", schemaVersion: "1.0.0",
+    payload: {
+      mode: "generic", supportsScopedVariables: false,
+      slots: [
+        { name: "If.Then", property: "then", displayName: "Then", cardinality: "single" },
+        { name: "If.Else", property: "else", displayName: "Else", cardinality: "single" }
+      ],
+      initialPayload: { then: null, else: null }
+    }
+  }]
+};
+
+export function ifNode(nodeId: string, then: ActivityNode | null = null, otherwise: ActivityNode | null = null): ActivityNode {
+  return {
+    nodeId, activityVersionId: ifActivity.activityVersionId, inputs: [], outputs: [],
+    structure: { kind: "elsa.if.structure", schemaVersion: "1.0.0", payload: { then, else: otherwise } }
+  };
+}
+
 export const whileActivity: ActivityCatalogItem = {
   ...writeLine,
   activityVersionId: "activity-while-v1",

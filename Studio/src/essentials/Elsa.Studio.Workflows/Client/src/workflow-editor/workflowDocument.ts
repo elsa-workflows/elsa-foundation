@@ -60,7 +60,7 @@ export type WorkflowDraftRecipe = (state: WorkflowDocumentState) => WorkflowDraf
 export type WorkflowDocumentAction =
   | { type: "draftComparedAndReplacedByBatch"; transactionId: string; definitionId: string; expectedRevision: string; expectedSelection: string | null; draft: WorkflowDraft; selectedNodeId: string | null }
 
-  // Wholesale draft load: initial load, post-promote reload, JSON apply, and undo/redo restore. Resets
+  // Wholesale draft load: initial load, post-promote reload and JSON apply. Resets
   // scope + selection but leaves testRun/publishedArtifact (they self-invalidate against the new draft).
   | { type: "draftLoaded"; draft: WorkflowDraft | null }
   // Weaver batch apply/undo replaces the whole design, so scope, selection, the pending test run and the
@@ -147,7 +147,7 @@ export function useWorkflowDocument() {
     compareAndReplaceDraftByBatch(transactionId: string, definitionId: string, expectedRevision: string, expectedSelection: string | null, draft: WorkflowDraft, selectedNodeId: string | null) {
       dispatch({ type: "draftComparedAndReplacedByBatch", transactionId, definitionId, expectedRevision, expectedSelection, draft, selectedNodeId });
     },
-    // Load a freshly fetched / applied draft (or clear it). Used by load(), JSON apply, and undo/redo.
+    // Load a freshly fetched / applied draft (or clear it). Used by load() and JSON apply.
     loadDraft(draft: WorkflowDraft | null) {
       dispatch({ type: "draftLoaded", draft });
     },

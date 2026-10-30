@@ -27,12 +27,12 @@ const media = (matches: Record<string, boolean>) => (query: string) => ({ matche
 describe("appearance model", () => {
   it("defaults to the configured theme, system mode and theme navigation", () => {
     expect(readAppearancePreferences(memoryStorage())).toEqual(defaultAppearancePreferences);
-    expect(defaultAppearancePreferences).toEqual({ themeId: null, mode: "system", navigation: "theme" });
+    expect(defaultAppearancePreferences).toEqual({ themeId: null, workspaceStyle: null, colorSchemeId: null, mode: "system", navigation: "theme" });
   });
 
   it("reads the existing storage keys so earlier choices survive", () => {
     const storage = memoryStorage({ "elsa-studio-theme": "drift", "elsa-studio-theme-mode": "dim", "elsa-studio-nav-mode": "top" });
-    expect(readAppearancePreferences(storage)).toEqual({ themeId: "drift", mode: "dim", navigation: "top" });
+    expect(readAppearancePreferences(storage)).toEqual({ themeId: "drift", workspaceStyle: null, colorSchemeId: null, mode: "dim", navigation: "top" });
   });
 
   it("ignores unknown stored values", () => {
@@ -50,9 +50,11 @@ describe("appearance model", () => {
   });
 
   it("reset removes every listed appearance and chrome key and returns the defaults", () => {
-    expect(appearanceResetStorageKeys).toHaveLength(8);
+    expect(appearanceResetStorageKeys).toHaveLength(10);
     expect([...appearanceResetStorageKeys]).toEqual([
       appearanceStorageKeys.themeId,
+      appearanceStorageKeys.workspaceStyle,
+      appearanceStorageKeys.colorSchemeId,
       appearanceStorageKeys.mode,
       appearanceStorageKeys.navigation,
       appearanceChromeStorageKeys.sidebarCollapsed,

@@ -180,6 +180,19 @@ internal static class DesignEntityConfigurations
         b.Property(x => x.LastModifiedAt).IsConcurrencyToken();
     }
 
+    public static void ConfigureTemplate(EntityTypeBuilder<WorkflowTemplateEntity> b)
+    {
+        ConfigureTable(b, "elsa_workflow_templates");
+        b.HasKey(Stores.EfDesignSupport.ScopeKeyProperty, nameof(WorkflowTemplateEntity.Id));
+        b.Property(row => row.Id).HasMaxLength(64);
+        b.Property(row => row.TenantId).HasMaxLength(128);
+        b.Property(row => row.Name).HasMaxLength(2048).IsRequired();
+        b.Property(row => row.Description).HasMaxLength(2048);
+        b.Property(row => row.Revision).HasMaxLength(32).IsRequired().IsConcurrencyToken();
+        b.Property(row => row.ContentJson).IsRequired();
+        b.Ignore(row => row.RowNumber);
+    }
+
     public static void ConfigureOperation(EntityTypeBuilder<DesignOperationEntity> b)
     {
         ConfigureTable(b, WorkflowsDesignEfModule.OperationTable);

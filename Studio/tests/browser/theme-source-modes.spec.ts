@@ -22,9 +22,9 @@ for (const themesMode of ["BuiltInsOnly", "DirectoryOnly", "AddToBuiltIns"] as c
     await expect(page.getByTestId("selectable-ids")).toHaveText(JSON.stringify(expected));
     await expect(page.getByTestId("current-theme")).toHaveText(themesMode === "DirectoryOnly" ? directory.id : "classic");
     await page.getByRole("button", { name: "Select theme", exact: true }).click();
-    await expect(page.getByRole("menuitem", { name: "Directory Theme", exact: true })).toHaveCount(themesMode === "BuiltInsOnly" ? 0 : 1);
-    await expect(page.getByRole("menuitem", { name: "Managed Theme", exact: true })).toHaveCount(themesMode === "AddToBuiltIns" ? 1 : 0);
-    await expect(page.getByRole("menuitem", { name: "Classic", exact: true })).toHaveCount(themesMode === "DirectoryOnly" ? 0 : 1);
+    await expect(page.getByRole("menuitemradio", { name: "Directory Theme", exact: true })).toHaveCount(themesMode === "BuiltInsOnly" ? 0 : 1);
+    await expect(page.getByRole("menuitemradio", { name: "Managed Theme", exact: true })).toHaveCount(themesMode === "AddToBuiltIns" ? 1 : 0);
+    await expect(page.getByRole("menuitemradio", { name: "Classic", exact: true })).toHaveCount(themesMode === "DirectoryOnly" ? 0 : 1);
   });
 }
 
@@ -35,7 +35,7 @@ test("empty DirectoryOnly explains unavailable appearance selection without losi
   await page.goto("/theme-source-modes.html?view=appearance");
   await expect(page.getByTestId("source-mode")).toHaveText("DirectoryOnly");
   await expect(page.getByTestId("selectable-ids")).toHaveText("[]");
-  await expect(page.getByText("No themes are available for selection.")).toBeVisible();
+  await expect(page.getByText("No themes are available for selection.").first()).toBeVisible();
   await expect(page.getByRole("radiogroup", { name: "Theme", exact: true })).toHaveCount(0);
   const appearance = page.getByRole("region", { name: "Appearance" });
   await expect(appearance.getByRole("radiogroup", { name: "Colour mode" })).toBeVisible();

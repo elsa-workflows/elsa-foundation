@@ -151,13 +151,12 @@ export interface CanvasScope {
   slot: ChildSlot;
 }
 
-// A ScopeFrame {ownerNodeId, slotId, label} means: descend into the container activity `ownerNodeId`
-// (which must live in *some* slot of the CURRENT owner), then view THAT container's slot with id
-// `slotId`. Intermediate frames only descend; the *last* frame's `slotId` names the slot the canvas
-// renders. This makes non-primary slots (e.g. a ForEach body or a Switch case) addressable, and
-// matches what workflowDocument.enterSlot / InspectorPanel emit: enterSlot(owner, slotId) records
-// {ownerNodeId: owner.nodeId, slotId: <owner's own slot id>}.
+// Legacy frames descend into a child, then select that owner's slot. A leading root frame selects
+// a declared slot on the root without descending. Empty paths still select the primary root slot.
+// Frames are in-memory navigation state and do not change persisted activity graphs.
 export interface ScopeFrame {
+  /** A leading selector for a declared root slot; absent on legacy child-descent frames. */
+  kind?: "root";
   ownerNodeId: string;
   slotId: string;
   label: string;
@@ -172,7 +171,11 @@ export function resolveScopeOwner(root: ActivityNode | null | undefined, frames:
   if (!root) return null;
 
   let owner = root;
-  for (const frame of frames) {
+  for (const [index, frame] of frames.entries()) {
+    if (frame.kind === "root") {
+      if (index !== 0 || frame.ownerNodeId !== root.nodeId || !getChildSlots(root, catalog).some(slot => slot.id === frame.slotId)) return null;
+      continue;
+    }
     const nextOwner = findChildInAnySlot(owner, frame.ownerNodeId, catalog);
     if (!nextOwner) return null;
     owner = nextOwner;
@@ -276,13 +279,10 @@ export function findNodeScopePath(
   if (!located) return null;
   const { hops, targetSlot } = located;
 
-  // A direct child of the root: every frame descends INTO a child (the root is the implicit starting
-  // owner and never appears as a frame's ownerNodeId), so only the root's primary slot is reachable —
-  // the empty path lands it via resolveScope's slots[0] fallback. A node in the root's non-primary
-  // slot has no navigable path; treat it as not found.
-  if (hops.length === 0) {
-    return targetSlot.id === getChildSlots(root, catalog)[0]?.id ? [] : null;
-  }
+  const rootSlot = hops[0]?.slot ?? targetSlot;
+  const secondaryRootSlot = rootSlot.id !== getChildSlots(root, catalog)[0]?.id;
+  const rootFrame: ScopeFrame = { kind: "root", ownerNodeId: root.nodeId, slotId: rootSlot.id, label: slotCrumbLabel(labelFor(root), rootSlot) };
+  if (hops.length === 0) return secondaryRootSlot ? [rootFrame] : [];
 
   // Replay the slot entries a user would perform along the chain, consuming hops greedily: an entry
   // that descends THROUGH its single container child consumes TWO hops and emits the hidden owner
@@ -290,8 +290,22 @@ export function findNodeScopePath(
   // and emits one visible frame. planSlotNavigation descends one level per entry, so a frame is hidden
   // only as the first half of its own pair — a chained descend-through further down must not blank the
   // previous pair's visible crumb.
-  const frames: ScopeFrame[] = [];
-  for (let index = 0; index < hops.length;) {
+  const frames: ScopeFrame[] = secondaryRootSlot ? [rootFrame] : [];
+  // Match manual entry when a single root slot descends through its container child.
+  let startIndex = 0;
+  if (resolveDescendThroughChild(rootSlot, catalog)) {
+    const viewedSlot = hops[1]?.slot ?? targetSlot;
+    if (secondaryRootSlot) rootFrame.label = "";
+    frames.push({
+      ownerNodeId: hops[0].child.nodeId,
+      slotId: viewedSlot.id,
+      label: viewedSlot.id === getChildSlots(hops[0].child, catalog)[0]?.id
+        ? slotCrumbLabel(labelFor(root), rootSlot)
+        : slotCrumbLabel(labelFor(hops[0].child), viewedSlot)
+    });
+    startIndex = 1;
+  }
+  for (let index = startIndex; index < hops.length;) {
     const hop = hops[index];
     const nextHop = hops[index + 1];
     // Each visible frame views the slot the chain continues through; the last frame views the slot
@@ -329,10 +343,8 @@ export interface SlotNavigationPlan {
   selectedNodeId: string | null;
 }
 
-// Computes the frame path for entering `slot` on the activity `ownerNodeId`, given the live `frames`
-// (whose resolved owner is `scopeOwner`). Returns null when the slot has no addressable path (a
-// non-primary slot of the root scope owner — every frame descends INTO a child, so the root's own
-// non-primary slots are unreachable; see findNodeScopePath).
+// Computes the frame path for entering a slot on an activity in the current scope. Root slots are
+// checked against declared metadata; secondary root slots use a leading root selector.
 //
 // Policy:
 // - A single-cardinality slot whose only child is itself a canvas container (primary slot in
@@ -355,14 +367,15 @@ export function planSlotNavigation(
   const descend = resolveDescendThroughChild(slot, catalog);
   const ownerIsScopeOwner = scopeOwner?.nodeId === ownerNodeId;
 
-  if (ownerIsScopeOwner && frames.length === 0) {
-    // The root scope owner. Its primary slot IS the root canvas (frames=[]); other slots are not
-    // addressable as frames.
-    if (scopeOwner && getChildSlots(scopeOwner, catalog)[0]?.id !== slot.id) return null;
+  const ownerIsRoot = ownerIsScopeOwner && (frames.length === 0 || frames.length === 1 && frames[0].kind === "root");
+  if (ownerIsRoot) {
+    const slots = getChildSlots(scopeOwner, catalog);
+    if (!slots.some(candidate => candidate.id === slot.id)) return null;
+    const rootFrames: ScopeFrame[] = slots[0]?.id === slot.id ? [] : [{ kind: "root", ownerNodeId, slotId: slot.id, label: descend ? "" : label }];
     if (descend) {
-      return { frames: [{ ownerNodeId: descend.child.nodeId, slotId: descend.childPrimary.id, label }], selectedNodeId: null };
+      return { frames: [...rootFrames, { ownerNodeId: descend.child.nodeId, slotId: descend.childPrimary.id, label }], selectedNodeId: null };
     }
-    return { frames: [], selectedNodeId: child?.nodeId ?? null };
+    return { frames: rootFrames, selectedNodeId: child?.nodeId ?? null };
   }
 
   const base = ownerIsScopeOwner ? frames.slice(0, -1) : frames;
@@ -406,6 +419,22 @@ export function resolveScope(root: ActivityNode | null | undefined, frames: Scop
   if (!slot) return null;
 
   return { owner, slot };
+}
+
+// History may remove the container currently being viewed. Keep its nearest surviving slot active
+// instead of redirecting an edit to the primary root slot. The original path may be retained for redo.
+export function resolveScopeFrames(root: ActivityNode | null | undefined, frames: ScopeFrame[], catalog?: ActivityCatalogLookup): ScopeFrame[] {
+  for (let length = frames.length; length > 0; length--) {
+    const path = frames.slice(0, length);
+    const scope = resolveScope(root, path, catalog);
+    if (!scope) continue;
+    if (!path.at(-1)!.label) {
+      const item = resolveCatalogItem(scope.owner, catalog);
+      path[length - 1] = { ...path[length - 1], label: slotCrumbLabel(item ? getActivityDisplay(item) : scope.owner.nodeId, scope.slot) };
+    }
+    return path;
+  }
+  return [];
 }
 
 // Finds the child node `nodeId` in whichever of `owner`'s slots contains it, along with that slot (so a
@@ -698,15 +727,20 @@ function updateScopeAtFrames(
   root: ActivityNode,
   frames: ScopeFrame[],
   catalog: ActivityCatalogLookup,
-  apply: (owner: ActivityNode) => ActivityNode
+  apply: (owner: ActivityNode) => ActivityNode,
+  atRoot = true
 ): ActivityNode {
   if (frames.length === 0) return apply(root);
 
   const [frame, ...rest] = frames;
+  if (frame.kind === "root") {
+    if (!atRoot || frame.ownerNodeId !== root.nodeId || !getChildSlots(root, catalog).some(slot => slot.id === frame.slotId)) return root;
+    return updateScopeAtFrames(root, rest, catalog, apply, false);
+  }
   const located = locateChildSlot(root, frame.ownerNodeId, catalog);
   if (!located) return root;
 
-  const updatedChild = updateScopeAtFrames(located.child, rest, catalog, apply);
+  const updatedChild = updateScopeAtFrames(located.child, rest, catalog, apply, false);
   if (updatedChild === located.child) return root;
 
   const updatedActivities = located.slot.activities.map(activity =>

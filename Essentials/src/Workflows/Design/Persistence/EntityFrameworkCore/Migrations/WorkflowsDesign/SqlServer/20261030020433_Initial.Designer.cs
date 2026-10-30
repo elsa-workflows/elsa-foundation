@@ -3,15 +3,16 @@ using System;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.WorkflowsDesign.MySql
+namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.WorkflowsDesign.SqlServer
 {
-    [DbContext(typeof(WorkflowsDesignMySqlDbContext))]
-    [Migration("20260928040709_Initial")]
+    [DbContext(typeof(WorkflowsDesignSqlServerDbContext))]
+    [Migration("20261030020433_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -20,9 +21,9 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "10.0.10")
-                .HasAnnotation("Relational:MaxIdentifierLength", 64);
+                .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
-            modelBuilder.HasAnnotation("MySQL:Charset", "utf8mb4");
+            // SqlServerModelBuilderExtensions.UseIdentityColumns omitted: the module stays provider-free.
 
             modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfDatabaseIdentityRow", b =>
                 {
@@ -32,12 +33,12 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     b.Property<string>("DatabaseIdentity")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.HasKey("Id");
 
@@ -50,37 +51,36 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("Family")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("DatabaseIdentity")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("FinalizedVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("FinishHistoryJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("FinishJson")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("HistoryJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("HoldsJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("IntentJson")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
@@ -89,7 +89,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.HasKey("Family");
 
@@ -102,80 +102,71 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(65)
-                        .HasColumnType("varchar(65)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(65)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("IdLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<DateTimeOffset?>("DeletedAt")
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("DeletedReason")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Description")
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("DescriptionSearchKey")
                         .HasMaxLength(1792)
-                        .HasColumnType("varchar(1792)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(1792)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("Id")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("IdSearchKey")
                         .IsRequired()
                         .HasMaxLength(896)
-                        .HasColumnType("varchar(896)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(896)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<bool>("IsSourceOwned")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("bit");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .IsConcurrencyToken()
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("NameSearchKey")
                         .HasMaxLength(1792)
-                        .HasColumnType("varchar(1792)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(1792)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
 
@@ -192,61 +183,54 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(65)
-                        .HasColumnType("varchar(65)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(65)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("IdLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("Id")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("SourceVersionId")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("StateSource")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("WorkflowDefinitionId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("WorkflowDefinitionIdLookupHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
 
@@ -261,61 +245,55 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(65)
-                        .HasColumnType("varchar(65)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(65)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("IdLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("ActivityPresentationJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("Id")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .IsConcurrencyToken()
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("RecordsJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("WorkflowDefinitionDraftId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("WorkflowDefinitionDraftIdLookupHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
 
@@ -331,76 +309,68 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(65)
-                        .HasColumnType("varchar(65)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(65)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("IdLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("DefinitionId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("DefinitionIdLookupHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("Id")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .IsConcurrencyToken()
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("SemVerSortKey")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<DateTimeOffset?>("SourceCreatedAt")
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("SourceDraftId")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("StateSource")
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("Version")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
 
@@ -417,61 +387,55 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(65)
-                        .HasColumnType("varchar(65)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(65)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("IdLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("ActivityPresentationJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("Id")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<DateTimeOffset>("LastModifiedAt")
                         .IsConcurrencyToken()
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("RecordsJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("TenantId")
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("WorkflowDefinitionVersionId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("WorkflowDefinitionVersionIdLookupHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("ScopeKey", "IdLookupHash");
 
@@ -487,74 +451,122 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                 {
                     b.Property<string>("ScopeKey")
                         .HasMaxLength(65)
-                        .HasColumnType("varchar(65)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(65)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("OperationKindLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("OperationKeyLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("varchar(64)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("datetimeoffset");
 
                     b.Property<string>("OperationKey")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("OperationKind")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("RequestFingerprint")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("ResultFingerprint")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("ResultJson")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("varchar(32)");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("TenantId")
                         .IsRequired()
                         .HasMaxLength(128)
-                        .HasColumnType("varchar(128)")
-                        .UseCollation("utf8mb4_0900_bin")
-                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("ScopeKey", "OperationKindLookupHash", "OperationKeyLookupHash");
 
                     b.HasIndex("SchemaVersion");
 
                     b.ToTable("elsa_design_operations", (string)null);
+                });
+
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowTemplateEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("nvarchar(65)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("nvarchar(2048)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("Revision")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("elsa_workflow_templates", (string)null);
                 });
 
             modelBuilder.Entity("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinitionDraft", b =>

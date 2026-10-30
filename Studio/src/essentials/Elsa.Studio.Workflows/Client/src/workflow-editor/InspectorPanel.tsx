@@ -202,6 +202,7 @@ export function InspectorPanel({
   const propertiesPanel = intrinsicDescriptor ? (
     <IntrinsicInspector
       intrinsic={intrinsicDescriptor}
+      readOnly={readOnly}
       context={context}
       draftId={draftId}
       expressionTooling={expressionTooling}
@@ -224,6 +225,7 @@ export function InspectorPanel({
     />
   ) : (
     <ActivityPropertiesPanel
+      readOnly={readOnly}
       context={context}
       draftId={draftId}
       expressionTooling={expressionTooling}

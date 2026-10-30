@@ -17,6 +17,7 @@ export interface WorkflowToolbarActionGroup {
 
 interface WorkflowEditorToolbarProps {
   name: string;
+  templateMode?: boolean;
   status: string;
   saving: boolean;
   busy: boolean;
@@ -79,12 +80,12 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
   return (
     <header className="wf-editor-top wf-editor-toolbar">
       <div className="wf-editor-identity">
-        <button type="button" className="wf-link-button" onClick={props.onBack}>Definitions</button>
+        <button type="button" className="wf-link-button" onClick={props.onBack}>{props.templateMode ? "Templates" : "Definitions"}</button>
         <ChevronRight size={14} aria-hidden="true" />
         <div className="wf-editor-heading">
           <div className="wf-editor-title">
             <strong title={props.name}>{props.name}</strong>
-            <span className="wf-chip">Draft</span>
+            <span className="wf-chip">{props.templateMode ? "Template" : "Draft"}</span>
           </div>
         </div>
       </div>
@@ -103,8 +104,8 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
           <button type="button" className="wf-icon-button" aria-label="Auto-layout" title="Auto-layout the canvas" disabled={!props.canAutoLayout} onClick={props.onAutoLayout}><Network size={16} /></button>
         </div>
         <button type="button" className="wf-icon-button wf-save-button" title="Save workflow" disabled={props.busy} onClick={props.onSave}><Save size={15} aria-hidden="true" /><span className="wf-toolbar-sr-only">Save</span></button>
-        <PublishActionButton busy={props.busy} saving={props.saving} onPublish={props.onPublish} />
-        <button type="button" className="wf-run-button" disabled={!props.canRun} title={props.runTitle} onClick={props.onRun}><Play size={15} aria-hidden="true" /> Test Run</button>
+        {!props.templateMode ? <PublishActionButton busy={props.busy} saving={props.saving} onPublish={props.onPublish} /> : null}
+        {!props.templateMode ? <button type="button" className="wf-run-button" disabled={!props.canRun} title={props.runTitle} onClick={props.onRun}><Play size={15} aria-hidden="true" /> Test Run</button> : null}
         <button
           ref={triggerRef}
           type="button"

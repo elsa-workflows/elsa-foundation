@@ -1,3 +1,4 @@
+import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
 import { activityPaletteNotice, getActivityPaletteContext, isActivityOfferedInContext } from "../graph-authoring/activityPaletteContext";
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Boxes, Code2, Download, ListTree, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
@@ -15,6 +16,8 @@ import {
   normalizeActivityStructures,
   planSlotNavigation,
   replaceSlotActivities,
+  resolveScope,
+  resolveScopeFrames,
   slotCrumbLabel,
   updateActivity,
   type ChildSlot
@@ -127,6 +130,8 @@ import {
 import { createLazyExpressionToolingClient } from "../expression-tooling/lazyExpressionToolingClient";
 import type { ExpressionToolingCacheIdentity } from "../expression-tooling/expressionToolingClient";
 
+const SaveWorkflowTemplateDialog = React.lazy(() => import("./SaveWorkflowTemplateDialog").then(module => ({ default: module.SaveWorkflowTemplateDialog })));
+
 const ActivityVersionChangeDialog = React.lazy(() =>
   import("./ActivityVersionChangeDialog").then(module => ({ default: module.ActivityVersionChangeDialog })));
 const HttpTestRequestDialog = React.lazy(() =>
@@ -139,6 +144,7 @@ import type { WorkflowAgentController } from "../workflowAgent";
 export function WorkflowEditor({
   context,
   definitionId,
+  documentAdapter,
   ai,
   weaver,
   propertyEditors,
@@ -153,6 +159,7 @@ export function WorkflowEditor({
 }: {
   context: StudioEndpointContext;
   definitionId: string;
+  documentAdapter?: WorkflowEditorDocumentAdapter;
   ai: StudioAgentRegistry;
   weaver?: WorkflowAgentController;
   propertyEditors: StudioActivityPropertyEditorContribution[];
@@ -165,6 +172,14 @@ export function WorkflowEditor({
   autosaveEnabledByDefault?: boolean;
   onBack(): void;
 }) {
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  const [templateNavigationPending, setTemplateNavigationPending] = useState(false);
+  const [templatesAvailable, setTemplatesAvailable] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void import("../workflowTemplates").then(module => module.workflowTemplatesPath(context)).then(path => { if (active) setTemplatesAvailable(!!path); }).catch(() => { if (active) setTemplatesAvailable(false); });
+    return () => { active = false; };
+  }, [context]);
   const expressionEditorSessionScope = useId();
   const ownedExpressionTooling = useMemo(
     () => expressionToolingIdentity
@@ -217,11 +232,22 @@ export function WorkflowEditor({
     recommendation?: RecommendedActivityDefinition | null;
   } | null>(null);
 
-  const { resetHistory, undo, redo, canUndoNow, canRedoNow } = useDraftHistory({ draft: editableDraft, restoreDraft: editableDoc.loadDraft });
+  const historyCatalog = useRef<ActivityCatalogItem[]>([]);
+  const restoreHistoryDraft = useCallback((snapshot: WorkflowDraft) => {
+    const root = snapshot.state.rootActivity;
+    let path = resolveScopeFrames(root, editableDoc.state.frames, historyCatalog.current);
+    const scope = resolveScope(root, path, historyCatalog.current);
+    if (scope?.slot.cardinality === "single") {
+      path = planSlotNavigation(path, scope.owner, scope.owner.nodeId, scope.slot, slotCrumbLabel(scope.owner.nodeId, scope.slot), historyCatalog.current)?.frames ?? path;
+    }
+    editableDoc.editDraft(() => snapshot);
+    editableDoc.navigateToScope(path);
+  }, [editableDoc]);
+  const { resetHistory, undo, redo, canUndoNow, canRedoNow } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft });
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
   // in dedicated hooks; `markSaved`/`reload` let the loader seed the save baseline and reload after promote.
-  const { holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, setAutosavePaused, markSaved } = useWorkflowPersistence({ context, draft: editableDraft, autosaveEnabledByDefault, editDraft: editableDoc.editDraft, setStatus, setError });
+  const { holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, setAutosavePaused, markSaved } = useWorkflowPersistence({ context, documentAdapter, draft: editableDraft, autosaveEnabledByDefault, editDraft: editableDoc.editDraft, setStatus, setError });
   const {
     details,
     setDetails,
@@ -235,7 +261,8 @@ export function WorkflowEditor({
     descriptorStatus,
     reload,
     reloadExpressionDescriptors
-  } = useWorkflowEditorData({ context, definitionId, resetHistory, loadDraft: editableDoc.loadDraft, markSaved, setError });
+  } = useWorkflowEditorData({ context, definitionId, documentAdapter, resetHistory, loadDraft: editableDoc.loadDraft, markSaved, setError });
+  historyCatalog.current = catalog;
   const retryLoad = useCallback(() => {
     void reload().catch(e => setError(describeWorkflowError(e, "Could not load the workflow editor.")));
   }, [reload, setError]);
@@ -243,7 +270,7 @@ export function WorkflowEditor({
   const { draft, frames, selectedNodeId } = editorDoc.state;
   const { loadDraft, editDraft, editDraftAndSelect, select, navigateToScope, resetToRoot, startTestRun, setPublishedArtifact } = editorDoc;
   // Debounced metadata saves still belong to the editable definition.
-  const { updateDefinitionMeta: updateEditableDefinitionMeta } = useDefinitionMetadata({ context, details, setDetails, setStatus });
+  const { updateDefinitionMeta: updateEditableDefinitionMeta, flushDefinitionMeta } = useDefinitionMetadata({ context, documentAdapter, details, setDetails, setStatus });
   const updateDefinitionMeta: typeof updateEditableDefinitionMeta = (...args) => { if (editorDoc.canEdit()) updateEditableDefinitionMeta(...args); };
 
   // Resolve the current scope + selection (designer mode, selected activity, descriptor/availability,
@@ -320,7 +347,7 @@ export function WorkflowEditor({
   // Draft validation surface (#453): fetch server-derived validations after the draft settles (when the
   // backend advertises the relation), and combine them with the draft's reconciled errors and
   // designer-side structural checks so the editor panel agrees with the promotion gate.
-  const draftValidations = useDraftValidations({ context, draft });
+  const draftValidations = useDraftValidations({ context, draft, enabled: !documentAdapter });
 
   // Executable-artifact export (#493, foundation #1304): available only when the workflow has a
   // published version and the server advertises the export relation, so a runtime-less or older server
@@ -669,7 +696,7 @@ export function WorkflowEditor({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (canvasView !== "designer" || editorDoc.pinned) return;
+      if (templateNavigationPending || canvasView !== "designer" || editorDoc.pinned) return;
       if (!(event.metaKey || event.ctrlKey)) return;
       const clipboardShortcut = matchActivityClipboardShortcut(event);
       if (clipboardShortcut === "copy") {
@@ -701,12 +728,12 @@ export function WorkflowEditor({
 
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [canvasView, copySelectedActivities, duplicateSelectedActivities, editorDoc.pinned, pasteCopiedActivities, undo, redo]);
+  }, [templateNavigationPending, canvasView, copySelectedActivities, duplicateSelectedActivities, editorDoc.pinned, pasteCopiedActivities, undo, redo]);
 
   // Enter a slot from the inspector list or a canvas slot badge, along the planned frame path: a slot
   // holding a single canvas container is descended THROUGH (the canvas shows the container's contents),
   // a slot holding a single leaf lands with the leaf selected, and slots of the current scope owner
-  // retarget the last frame. A null plan (non-primary slot of the root owner) is not navigable.
+  // retarget the last frame. A null plan means the root slot is no longer declared.
   const enterSlotScope = useCallback((ownerNodeId: string, slot: ChildSlot, label: string) => {
     const plan = planSlotNavigation(frames, scopeOwner, ownerNodeId, slot, label, catalogByVersion);
     if (plan) navigateToScope(plan.frames, plan.selectedNodeId);
@@ -1062,10 +1089,21 @@ export function WorkflowEditor({
   // The inspected node is either a canvas node (labelled by its node data) or the scope owner, which
   // has no node on its own canvas — fall back to its catalog display name.
   const presentationByNodeId = indexActivityPresentation(draft.activityPresentation);
-  const visibleFrames = frames.map(frame => {
-    const owner = findActivityNode(draft.state.rootActivity, frame.ownerNodeId, catalogByVersion);
+  const visibleFrames = frames.map((frame, index) => {
+    if (!frame.label) return frame;
+    // A hidden selector and its following primary container frame represent one slot entry. Keep
+    // that crumb named after the entered slot while resolving live presentation labels.
+    const frameOwner = findActivityNode(draft.state.rootActivity, frame.ownerNodeId, catalogByVersion);
+    const viewedPrimary = frameOwner && getChildSlots(frameOwner, catalogByVersion)[0]?.id === frame.slotId;
+    const previous = frames[index - 1];
+    const rootPrimary = draft.state.rootActivity ? getChildSlots(draft.state.rootActivity, catalogByVersion)[0] : undefined;
+    const labelFrame = viewedPrimary && previous?.label === "" ? previous
+      : viewedPrimary && index === 0 && rootPrimary?.cardinality === "single" && rootPrimary.activities[0]?.nodeId === frame.ownerNodeId
+        ? { ownerNodeId: draft.state.rootActivity!.nodeId, slotId: rootPrimary.id }
+        : frame;
+    const owner = findActivityNode(draft.state.rootActivity, labelFrame.ownerNodeId, catalogByVersion);
     const slot = owner
-      ? getChildSlots(owner, catalogByVersion).find(candidate => candidate.id === frame.slotId)
+      ? getChildSlots(owner, catalogByVersion).find(candidate => candidate.id === labelFrame.slotId)
       : undefined;
     const catalogItem = owner ? catalogByVersion.get(owner.activityVersionId) : undefined;
     return owner && slot
@@ -1265,7 +1303,7 @@ export function WorkflowEditor({
       )
     },
     ...contributedPanelTabs.filter(tab => tab.side === "right")
-  ].sort(compareWorkflowPanelTabs);
+  ].filter(tab => !documentAdapter || !["runtime", "test-drive", "artifacts"].includes(tab.id)).sort(compareWorkflowPanelTabs);
   const activeLeftPanel = leftPanelTabs.find(tab => tab.id === activeLeftPanelId) ?? leftPanelTabs[0];
   const activeRightPanel = rightPanelTabs.find(tab => tab.id === activeRightPanelId) ?? rightPanelTabs[0];
   const canvasViewTabs: WorkflowEditorPanelTab[] = [
@@ -1275,8 +1313,9 @@ export function WorkflowEditor({
   ];
 
   return (
-    <section ref={editorRootRef} className="wf-editor" data-studio-workflow-editor="">
+    <section ref={editorRootRef} className="wf-editor" data-studio-workflow-editor="" inert={templateNavigationPending} aria-busy={templateNavigationPending}>
       <WorkflowEditorToolbar
+        templateMode={!!documentAdapter}
         name={details.definition.name}
         status={visibleStatus}
         saving={saving}
@@ -1289,8 +1328,16 @@ export function WorkflowEditor({
         onUndo={() => { if (!editorDoc.pinned) undo(); }}
         onRedo={() => { if (!editorDoc.pinned) redo(); }}
         onAutoLayout={autoLayout}
-        onBack={onBack}
-        onSave={() => void save()}
+        onBack={() => {
+          if (!documentAdapter || !editableDraft) { onBack(); return; }
+          if (templateNavigationPending) return;
+          setTemplateNavigationPending(true);
+          setStatus("Saving…");
+          void flushDefinitionMeta().then(async saved => {
+            if (saved) { await saveDraft(editableDraft, "Saved"); onBack(); }
+          }).catch(() => undefined).finally(() => setTemplateNavigationPending(false));
+        }}
+        onSave={() => { if (documentAdapter) void flushDefinitionMeta().then(saved => { if (saved) void save(); }); else void save(); }}
         onPublish={mode => void preparePublication(mode)}
         onRun={() => void run()}
         canRun={canRunTest}
@@ -1314,7 +1361,8 @@ export function WorkflowEditor({
           <button type="button" onClick={restoration.dismiss}>Dismiss</button>
           {restoration.message ? <span role="status">{restoration.message}</span> : null}
         </div> : null}
-        moreActions={[
+        moreActions={documentAdapter ? [{ label: "Document", actions: [{ label: "Save a copy", icon: <Boxes size={15} />, onSelect: () => setSaveTemplateOpen(true) }, { label: "Export JSON", icon: <Download size={15} />, onSelect: exportJson }] }] : [
+          ...(templatesAvailable ? [{ label: "Templates", actions: [{ label: "Save as template", icon: <Boxes size={15} />, disabled: busy, onSelect: () => setSaveTemplateOpen(true) }] }] : []),
           {
             label: "Weaver",
             actions: [
@@ -1381,6 +1429,7 @@ export function WorkflowEditor({
         />
       ) : null}
 
+      {saveTemplateOpen ? <React.Suspense fallback={<p role="status">Loading template dialog…</p>}><SaveWorkflowTemplateDialog context={context} draft={draft} name={details.definition.name + (documentAdapter ? " copy" : "")} description={details.definition.description} onClose={() => setSaveTemplateOpen(false)} /></React.Suspense> : null}
       {error ? (
         <WorkflowAlert
           error={error}
