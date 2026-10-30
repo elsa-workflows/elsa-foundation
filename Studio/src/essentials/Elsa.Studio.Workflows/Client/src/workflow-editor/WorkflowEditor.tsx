@@ -679,7 +679,7 @@ export function WorkflowEditor({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (canvasView !== "designer" || editorDoc.pinned) return;
+      if (templateNavigationPending || canvasView !== "designer" || editorDoc.pinned) return;
       if (!(event.metaKey || event.ctrlKey)) return;
       const clipboardShortcut = matchActivityClipboardShortcut(event);
       if (clipboardShortcut === "copy") {
@@ -711,7 +711,7 @@ export function WorkflowEditor({
 
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [canvasView, copySelectedActivities, duplicateSelectedActivities, editorDoc.pinned, pasteCopiedActivities, undo, redo]);
+  }, [templateNavigationPending, canvasView, copySelectedActivities, duplicateSelectedActivities, editorDoc.pinned, pasteCopiedActivities, undo, redo]);
 
   // Enter a slot from the inspector list or a canvas slot badge, along the planned frame path: a slot
   // holding a single canvas container is descended THROUGH (the canvas shows the container's contents),
