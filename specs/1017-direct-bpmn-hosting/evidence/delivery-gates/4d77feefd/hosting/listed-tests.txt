@@ -1,0 +1,30 @@
+Test run for /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.Hosting.Tests.dll (.NETCoreApp,Version=v10.0)
+The following Tests are available:
+    Elsa.Activities.Bpmn.Hosting.Tests.DirectBpmnWorkbenchTests.Direct_service_work_uses_the_real_coalescing_host_and_returns_its_native_completion
+    Elsa.Activities.Bpmn.Hosting.Tests.DirectBpmnWorkbenchTests.Authenticated_direct_execution_waits_restarts_resumes_and_completes_in_the_real_host
+    Elsa.Activities.Bpmn.Hosting.Tests.DurationTimerWorkbenchTests.A_duration_boundary_keeps_the_first_decision_through_process_loss_and_late_input(timerFirst: False)
+    Elsa.Activities.Bpmn.Hosting.Tests.DurationTimerWorkbenchTests.A_duration_boundary_keeps_the_first_decision_through_process_loss_and_late_input(timerFirst: True)
+    Elsa.Activities.Bpmn.Hosting.Tests.LegacyBroadcastUpgradeTests.Actual_saved_broadcast_cuts_recover_their_exact_recipients_and_retire_normally
+    Elsa.Activities.Bpmn.Hosting.Tests.LegacyCalledAcknowledgmentUpgradeTests.Actual_accepted_called_results_recover_acknowledgment_without_repeating_the_caller
+    Elsa.Activities.Bpmn.Hosting.Tests.LegacyControlsUpgradeTests.Actual_called_controls_and_compensation_recover_original_streams_and_continue_once
+    Elsa.Activities.Bpmn.Hosting.Tests.LegacyMultiInstanceUpgradeTests.Actual_partial_multi_instance_calls_preserve_iterations_and_finish_after_restart
+    Elsa.Activities.Bpmn.Hosting.Tests.LegacyNativeParentUpgradeTests.Actual_pending_native_parent_faults_recover_with_their_original_composite_projection
+    Elsa.Activities.Bpmn.Hosting.Tests.LegacyNativeParentUpgradeTests.Actual_native_fault_and_cancel_terminals_preserve_their_projection_after_upgrade_and_restart
+    Elsa.Activities.Bpmn.Hosting.Tests.LegacyPartialForkUpgradeTests.Actual_legacy_partial_forks_upgrade_and_finish_through_production_commands
+    Elsa.Activities.Bpmn.Hosting.Tests.OwnedWorkbenchTests.Actual_native_execution_and_pin_survive_an_owned_host_restart
+    Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnAdmissionCancellationTests.A_real_parent_cancel_before_model_admission_recovers_without_starting_semantics
+    Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnWorkbenchTests.A_real_native_RunBpmn_wait_restarts_and_consumes_the_same_model_lifecycle(parent: "Root", cancel: False)
+    Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnWorkbenchTests.A_real_native_RunBpmn_wait_restarts_and_consumes_the_same_model_lifecycle(parent: "Sequence", cancel: False)
+    Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnWorkbenchTests.A_real_native_RunBpmn_wait_restarts_and_consumes_the_same_model_lifecycle(parent: "Flowchart", cancel: False)
+    Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnWorkbenchTests.A_real_native_RunBpmn_wait_restarts_and_consumes_the_same_model_lifecycle(parent: "CompensationScope", cancel: False)
+    Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnWorkbenchTests.A_real_native_RunBpmn_wait_restarts_and_consumes_the_same_model_lifecycle(parent: "Root", cancel: True)
+    Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnWorkbenchTests.A_real_native_RunBpmn_wait_restarts_and_consumes_the_same_model_lifecycle(parent: "Sequence", cancel: True)
+    Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnWorkbenchTests.A_real_native_RunBpmn_wait_restarts_and_consumes_the_same_model_lifecycle(parent: "Flowchart", cancel: True)
+    Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnWorkbenchTests.A_real_native_RunBpmn_wait_restarts_and_consumes_the_same_model_lifecycle(parent: "CompensationScope", cancel: True)
+    Elsa.Activities.Bpmn.Hosting.Tests.RuntimeOnlyParallelBpmnTests.Partial_fork_recovers_and_joins_in_the_actual_host_without_design_storage
+    Elsa.Activities.Bpmn.Hosting.Tests.SignalCancellationWorkbenchTests.Cancelling_one_actual_Event_worker_retires_the_model_and_settles_its_sibling
+    Elsa.Activities.Bpmn.Hosting.Tests.SignalWorkbenchTests.Two_model_signal_catches_restart_and_complete_through_real_Event_workers(parent: "Direct")
+    Elsa.Activities.Bpmn.Hosting.Tests.SignalWorkbenchTests.Two_model_signal_catches_restart_and_complete_through_real_Event_workers(parent: "Root")
+    Elsa.Activities.Bpmn.Hosting.Tests.SignalWorkbenchTests.Two_model_signal_catches_restart_and_complete_through_real_Event_workers(parent: "Sequence")
+    Elsa.Activities.Bpmn.Hosting.Tests.SignalWorkbenchTests.Two_model_signal_catches_restart_and_complete_through_real_Event_workers(parent: "Flowchart")
+    Elsa.Activities.Bpmn.Hosting.Tests.SignalWorkbenchTests.Two_model_signal_catches_restart_and_complete_through_real_Event_workers(parent: "CompensationScope")

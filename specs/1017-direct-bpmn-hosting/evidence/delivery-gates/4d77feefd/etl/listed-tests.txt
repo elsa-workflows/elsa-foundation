@@ -1,0 +1,1011 @@
+Test run for /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Etl/tests/Tests/bin/Release/net10.0/Elsa.Etl.Tests.dll (.NETCoreApp,Version=v10.0)
+The following Tests are available:
+    Elsa.Etl.Tests.CsvRecordReaderTests.Parses_bom_quotes_escaped_quotes_multiline_fields_and_line_endings
+    Elsa.Etl.Tests.CsvRecordReaderTests.Empty_file_blank_record_and_trailing_delimiter_have_distinct_shapes
+    Elsa.Etl.Tests.CsvRecordReaderTests.Enforces_raw_record_byte_limit_at_the_exact_boundary
+    Elsa.Etl.Tests.CsvRecordReaderTests.Enforces_field_limit_before_accepting_an_additional_field
+    Elsa.Etl.Tests.CsvRecordReaderTests.Rejects_invalid_quote_framing_without_exposing_record_text(csv: "a\"b\n")
+    Elsa.Etl.Tests.CsvRecordReaderTests.Rejects_invalid_quote_framing_without_exposing_record_text(csv: "\"a\"x\n")
+    Elsa.Etl.Tests.CsvRecordReaderTests.Rejects_invalid_quote_framing_without_exposing_record_text(csv: "\"unfinished")
+    Elsa.Etl.Tests.CsvRecordReaderTests.Rejects_bare_carriage_return_outside_a_quoted_field
+    Elsa.Etl.Tests.CsvRecordReaderTests.Rejects_invalid_utf8_even_when_multibyte_sequence_is_split_across_reads
+    Elsa.Etl.Tests.CsvRecordReaderTests.Accepts_valid_multibyte_utf8_across_short_reads_and_leaves_stream_open
+    Elsa.Etl.Tests.CsvRecordReaderTests.Tracks_exact_byte_offsets_across_bom_multibyte_quoted_newlines_crlf_and_eof
+    Elsa.Etl.Tests.CsvRecordReaderTests.Uses_only_the_configured_fixed_size_read_buffer
+    Elsa.Etl.Tests.CsvRecordReaderTests.Wraps_source_read_failures_with_safe_classification_and_original_exception
+    Elsa.Etl.Tests.CsvRecordReaderTests.Propagates_cancellation_and_keeps_stream_owned_by_caller
+    Elsa.Etl.Tests.CsvRecordReaderTests.Reports_a_framing_error_after_prior_records_with_the_current_logical_ordinal
+    Elsa.Etl.Tests.EtlApiCompositionTests.Independently_configured_api_owners_keep_their_own_cursor_keys_in_both_registration_orders
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Compile_returns_a_versioned_artifact_for_a_valid_finite_pipeline
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Input_collection_mutations_after_compile_do_not_change_the_artifact_snapshot
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Content_hash_tracks_pipeline_behavior_but_artifact_id_disambiguates_provenance
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Compile_rejects_missing_definition_identity(definitionId: "", version: 1, code: "definition.id.required")
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Compile_rejects_missing_definition_identity(definitionId: "../private", version: 1, code: "definition.id.invalid")
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Compile_rejects_missing_definition_identity(definitionId: "résumé", version: 1, code: "definition.id.invalid")
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Compile_rejects_missing_definition_identity(definitionId: "orders", version: 0, code: "definition.version.invalid")
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Compile_rejects_missing_definition_identity(definitionId: "orders", version: -1, code: "definition.version.invalid")
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Compile_rejects_non_alias_binding_values_without_echoing_them(alias: "../private.csv")
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Compile_rejects_non_alias_binding_values_without_echoing_them(alias: "C:\\data\\input.csv")
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Compile_rejects_non_alias_binding_values_without_echoing_them(alias: "résumé")
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Compile_rejects_non_alias_binding_values_without_echoing_them(alias: "bad alias")
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Compile_rejects_aliases_longer_than_128_ascii_characters
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Compile_rejects_definition_identifiers_longer_than_256_characters
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Compile_validates_unique_ordinal_schema_names_required_lookup_keys_and_matching_types
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Compile_requires_a_unique_nonempty_mapping_of_declared_fields
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Compile_accepts_typed_filter_literals_and_null_for_an_optional_mapped_field
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Compile_rejects_filters_that_do_not_resolve_or_have_incompatible_literals
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Compile_enforces_positive_finite_budgets_and_cross_limit_relationships
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Compile_measures_the_complete_artifact_envelope_at_the_exact_configured_boundary
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Diagnostics_are_bounded_and_never_echo_authored_values
+    Elsa.Etl.Tests.EtlArtifactCompilerTests.Compile_rejects_oversized_input_before_writing_the_artifact_and_keeps_diagnostics_safe
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Compile_snapshots_each_source_and_destination_combination(csvSource: False, fileDestination: False)
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Compile_snapshots_each_source_and_destination_combination(csvSource: False, fileDestination: True)
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Compile_snapshots_each_source_and_destination_combination(csvSource: True, fileDestination: False)
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Compile_snapshots_each_source_and_destination_combination(csvSource: True, fileDestination: True)
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Main_and_error_routes_can_use_different_delivery_kinds
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Optional_lookup_can_supply_a_typed_mapping_and_filter
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Definition_identity_is_validated(id: "../orders", version: 1, code: "definition.id.invalid")
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Definition_identity_is_validated(id: "", version: 1, code: "definition.id.required")
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Definition_identity_is_validated(id: "orders", version: 0, code: "definition.version.invalid")
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Invalid_json_pointer_is_rejected_without_echoing_it(pointer: "records")
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Invalid_json_pointer_is_rejected_without_echoing_it(pointer: "/records/~")
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Invalid_json_pointer_is_rejected_without_echoing_it(pointer: "/records/~2")
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Invalid_json_pointer_is_rejected_without_echoing_it(pointer: "#/records")
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Valid_pointer_syntax_is_accepted(pointer: "")
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Valid_pointer_syntax_is_accepted(pointer: "/records/~0/~1")
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Valid_pointer_syntax_is_accepted(pointer: "/a%20b")
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Token_parameter_names_are_literals_for_future_URI_encoding(parameter: "cursor")
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Token_parameter_names_are_literals_for_future_URI_encoding(parameter: "page[token]")
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Token_parameter_names_are_literals_for_future_URI_encoding(parameter: "next token")
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Invalid_variants_aliases_and_pagination_are_refused
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Finite_limits_and_enclosing_budgets_are_validated
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Continuation_limit_obeys_the_persisted_metadata_ceiling
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Oversized_input_and_mapping_are_rejected_with_bounded_diagnostics
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Compilation_snapshots_mutable_collections_and_disambiguates_provenance
+    Elsa.Etl.Tests.EtlArtifactCompilerV2Tests.Built_in_feature_registers_both_capabilities_on_one_scoped_compiler
+    Elsa.Etl.Tests.EtlArtifactTests.Serialized_artifact_preserves_the_format_version_for_runtime_compatibility_checks
+    Elsa.Etl.Tests.EtlArtifactTests.Deserialization_rejects_a_missing_saved_format_version
+    Elsa.Etl.Tests.EtlArtifactTests.Pipeline_reader_rejects_unknown_fields_and_numeric_enum_values
+    Elsa.Etl.Tests.EtlArtifactTests.Typed_pipeline_hash_is_repeatable_and_matches_its_compact_json_bytes
+    Elsa.Etl.Tests.EtlArtifactTests.Artifact_retains_its_pipeline_document_after_the_source_document_is_disposed
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Http_pipeline_round_trips_as_canonical_typed_json
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Reader_defaults_retained_metadata_budget_when_v2_http_property_is_absent
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Nondefault_retained_metadata_budget_is_serialized_and_round_trips
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Csv_source_optional_lookup_and_mixed_routes_round_trip
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Http_pagination_variants_round_trip(kind: "singlePage")
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Http_pagination_variants_round_trip(kind: "nextLink")
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Http_source_can_use_jsonl_main_and_http_error_routes
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Reader_accepts_discriminators_after_other_properties_and_writer_restores_canonical_order
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Reader_rejects_unknown_fields_at_root_and_nested_levels
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Reader_requires_root_and_shared_mapping_members_but_lookup_is_optional
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Reader_rejects_explicit_null_required_members_and_collection_entries
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Writer_rejects_null_required_members_and_collection_entries
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Reader_requires_all_filter_members_and_rejects_invalid_filter_fields_as_json_errors
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Reader_rejects_unrecognized_source_destination_and_pagination_kinds
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Reader_rejects_unknown_enum_values_numeric_values_and_wrong_enum_case
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Reader_rejects_duplicate_properties_recursively
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Writer_rejects_duplicate_properties_inside_a_filter_literal
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Reader_rejects_null_oversized_and_over_depth_documents_before_typed_read
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Writer_bounds_actual_encoded_bytes_for_ascii_and_escaped_strings
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Writer_rejects_when_actual_serialized_bytes_exceed_the_limit
+    Elsa.Etl.Tests.EtlArtifactV2JsonTests.Writer_rejects_over_depth_filter_literals
+    Elsa.Etl.Tests.EtlAttemptBudgetTests.Replaced_attempt_keeps_its_allowances_until_its_actual_task_unwinds
+    Elsa.Etl.Tests.EtlAttemptBudgetTests.Each_logical_dimension_independently_prevents_over_admission(records: 10, input: 0, lookup: 0, output: 0)
+    Elsa.Etl.Tests.EtlAttemptBudgetTests.Each_logical_dimension_independently_prevents_over_admission(records: 0, input: 100, lookup: 0, output: 0)
+    Elsa.Etl.Tests.EtlAttemptBudgetTests.Each_logical_dimension_independently_prevents_over_admission(records: 0, input: 0, lookup: 200, output: 0)
+    Elsa.Etl.Tests.EtlAttemptBudgetTests.Each_logical_dimension_independently_prevents_over_admission(records: 0, input: 0, lookup: 0, output: 300)
+    Elsa.Etl.Tests.EtlAttemptBudgetTests.A_cancelled_waiter_does_not_consume_or_release_capacity
+    Elsa.Etl.Tests.EtlAttemptBudgetTests.An_impossible_charge_is_refused_instead_of_waiting_forever
+    Elsa.Etl.Tests.EtlBatchBuilderTests.Builds_a_canonical_batch_with_exact_utf8_charge_and_row_identity
+    Elsa.Etl.Tests.EtlBatchBuilderTests.Reads_a_nonzero_partition_from_global_offsets_after_bom_and_multiline_records
+    Elsa.Etl.Tests.EtlBatchBuilderTests.Measures_json_escaping_in_the_canonical_byte_charge
+    Elsa.Etl.Tests.EtlBatchBuilderTests.Stops_at_the_record_limit_and_marks_the_partition_end_without_an_empty_batch
+    Elsa.Etl.Tests.EtlBatchBuilderTests.Rejects_one_row_that_cannot_fit_the_canonical_input_limit_without_a_batch
+    Elsa.Etl.Tests.EtlBatchBuilderTests.Rebuilds_a_saved_range_with_the_same_measurement_and_refuses_a_changed_identity
+    Elsa.Etl.Tests.EtlBatchBuilderTests.Refuses_a_corrupted_source_or_index_before_returning_rows(corruptSource: True)
+    Elsa.Etl.Tests.EtlBatchBuilderTests.Refuses_a_corrupted_source_or_index_before_returning_rows(corruptSource: False)
+    Elsa.Etl.Tests.EtlBatchBuilderTests.Rejects_index_slots_with_inconsistent_offsets_even_if_the_index_hash_matches
+    Elsa.Etl.Tests.EtlBatchProcessorTests.Processes_rows_once_and_publishes_deterministic_main_and_error_routes
+    Elsa.Etl.Tests.EtlBatchProcessorTests.Accepts_routes_that_exactly_fit_the_combined_output_byte_budget
+    Elsa.Etl.Tests.EtlBatchProcessorTests.Omits_optional_error_field_and_source_values_from_the_safe_error_route
+    Elsa.Etl.Tests.EtlBatchProcessorTests.Refuses_when_the_combined_routes_exceed_the_batch_output_budget_before_publishing
+    Elsa.Etl.Tests.EtlBatchProcessorTests.Replays_identical_effects_at_the_same_keys_and_reports_conflicting_content
+    Elsa.Etl.Tests.EtlBatchProcessorTests.Uses_the_output_revision_retained_by_admission_after_the_current_alias_moves
+    Elsa.Etl.Tests.EtlBatchProcessorTests.Honors_cancellation_before_processing_without_publishing_chunks
+    Elsa.Etl.Tests.EtlBatchProcessorTests.Missing_pinned_output_revision_is_classified_as_a_fault
+    Elsa.Etl.Tests.EtlBindingCatalogTests.Binding_pages_use_ordinal_alias_role_boundaries_and_only_return_safe_current_scope_metadata
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_acceptance_uses_reserved_metadata_when_dispatch_fills_the_run_budget
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_batch_reservation_respects_independent_acceptance_metadata_budget(exactFit: False)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_batch_reservation_respects_independent_acceptance_metadata_budget(exactFit: True)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Legacy_zero_acceptance_reserve_is_topped_up_on_output_replay
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Legacy_output_replay_refuses_acceptance_reserve_top_up_without_headroom_atomically
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Legacy_http_begin_refuses_when_acceptance_reserve_and_attempt_metadata_do_not_fit
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Published_file_route_allows_remaining_http_retry_to_defer_its_partition
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Accepted_connector_history_corruption_cannot_be_claimed(defect: "ordinal")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Accepted_connector_history_corruption_cannot_be_claimed(defect: "page-sequence")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Accepted_connector_history_corruption_cannot_be_claimed(defect: "counts")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Accepted_connector_history_corruption_cannot_be_claimed(defect: "receipt")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Accepted_connector_history_corruption_cannot_be_claimed(defect: "page-count")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_acceptance_migration_backfills_http_sequence_and_preserves_prior_state
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_acceptance_migration_refuses_unclassifiable_legacy_descriptors
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_acceptance_migration_enforces_nonnegative_counts_output_dependencies_and_indexes
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_acceptance_migration_model_matches_the_runtime_snapshot
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Mixed_route_acceptance_requires_exact_file_publication_and_http_ack_and_settles_once
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_partial_and_full_page_batches_recover_and_final_fully_filtered_acceptance_terminalizes
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Expiry_after_acceptance_save_rolls_back_progress_and_automatic_terminal
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Final_rejected_http_page_acceptance_publishes_business_error_terminal
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_batch_identity_binds_source_range_scope_and_destination_revision
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_batch_recovery_refuses_corrupt_or_unlinked_responsibility(defect: "descriptor")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_batch_recovery_refuses_corrupt_or_unlinked_responsibility(defect: "count")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_batch_recovery_refuses_corrupt_or_unlinked_responsibility(defect: "metadata")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_batch_recovery_refuses_corrupt_or_unlinked_responsibility(defect: "unlinked")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_batch_recovery_refuses_corrupt_or_unlinked_responsibility(defect: "settled")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_batch_recovery_refuses_corrupt_or_unlinked_responsibility(defect: "position")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_batch_replay_requires_unexpired_authority_without_refunding_owed_work
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_claim_prioritizes_recovering_owed_work_over_new_partitions
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_batch_migration_preserves_http_chain_and_enforces_owed_batch_pointer
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_batch_reservation_is_stable_replayable_and_owned_after_reacquisition
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_batch_reservation_requires_a_valid_range_at_the_current_page(defect: "no-page")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_batch_reservation_requires_a_valid_range_at_the_current_page(defect: "wrong-type")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_batch_reservation_requires_a_valid_range_at_the_current_page(defect: "wrong-sequence")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_batch_reservation_requires_a_valid_range_at_the_current_page(defect: "wrong-request")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_batch_reservation_requires_a_valid_range_at_the_current_page(defect: "wrong-content")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_batch_reservation_requires_a_valid_range_at_the_current_page(defect: "wrong-start")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_batch_reservation_requires_a_valid_range_at_the_current_page(defect: "wrong-end")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_batch_reservation_requires_a_valid_range_at_the_current_page(defect: "zero-bytes")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_batch_reservation_requires_a_valid_range_at_the_current_page(defect: "invalid-hash")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_batch_reservation_requires_a_valid_range_at_the_current_page(defect: "wrong-id")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_batch_reservation_requires_a_valid_range_at_the_current_page(defect: "stale-position")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_batch_reservation_enforces_run_wide_outstanding_quotas(quota: "records")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_batch_reservation_enforces_run_wide_outstanding_quotas(quota: "bytes")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_batch_metadata_budget_refusal_does_not_persist_the_reservation
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_batch_reservation_expiry_after_save_rolls_back_the_reservation
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Cancellation_preserves_an_owed_http_batch_and_refuses_further_reservations
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Csv_v2_file_range_can_be_reserved_and_recovered_as_the_same_owed_batch
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Cancellation_that_commits_first_refuses_late_http_ack_acceptance_and_source_progress
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Final_http_acceptance_that_commits_first_cannot_be_overwritten_by_cancellation
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Cancellation_that_commits_before_final_http_acceptance_preserves_ready_owed_batch_and_journal
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_store_rejects_continuation_policy_above_supported_ceiling
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_store_accepts_continuation_policy_at_supported_ceiling
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_http_delivery_migration_preserves_retained_batch_output_and_foreign_keys
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_http_delivery_migration_enforces_delivery_pair_output_dependency_and_retry_time
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_http_delivery_migration_model_matches_the_runtime_snapshot
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_delivery_begin_persists_a_permit_before_transport_and_replays_a_lost_reply
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Expired_http_attempt_is_recorded_as_unknown_before_retrying_with_the_same_effect
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_delivery_begin_rolls_back_if_lease_expires_after_save
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_delivery_begin_refuses_stale_or_cancelled_ownership_without_retaining_an_attempt(state: "stale")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_delivery_begin_refuses_stale_or_cancelled_ownership_without_retaining_an_attempt(state: "cancelled")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_delivery_recovers_partial_route_ack_and_retry_after_across_reopened_stores
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_delivery_rejects_a_receipt_for_another_effect_without_changing_retained_work
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_delivery_completion_replays_identical_receipt_and_refuses_conflicting_receipt_after_store_reopen
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_delivery_metadata_budget_refusal_is_atomic
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_delivery_receipt_fits_reserved_metadata_at_the_run_budget(retryableResponse: False)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_delivery_receipt_fits_reserved_metadata_at_the_run_budget(retryableResponse: True)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Corrupt_http_delivery_metadata_cannot_be_recovered(defect: "json")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Corrupt_http_delivery_metadata_cannot_be_recovered(defect: "digest")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Timely_http_success_receipt_reconciles_after_deadline_and_survives_store_reopen
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Cancellation_that_commits_before_a_timely_http_receipt_is_reconciled_preserves_terminal_state
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_page_attachment_is_immutable_idempotent_and_position_guarded
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_page_attachment_rejects_invalid_metadata_without_retaining_it(defect: "bytes")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_page_attachment_rejects_invalid_metadata_without_retaining_it(defect: "records")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_page_attachment_rejects_invalid_metadata_without_retaining_it(defect: "request-hash")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_page_attachment_rejects_invalid_metadata_without_retaining_it(defect: "body-hash")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_page_attachment_rejects_invalid_metadata_without_retaining_it(defect: "empty-continuation")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_page_attachment_rejects_continuation_that_cannot_be_advanced(defect: "continuation-loop")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_page_attachment_rejects_continuation_that_cannot_be_advanced(defect: "page-bound")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_page_attachment_rejects_continuation_that_cannot_be_advanced(defect: "single-page")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_page_attachment_rejects_continuation_that_cannot_be_advanced(defect: "continuation-bound")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Empty_http_pages_advance_without_accepting_records_and_success_waits_for_exhaustion
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Advancing_nonempty_http_page_conflicts
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_page_retention_budget_counts_prior_empty_pages
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_page_retention_aggregates_shards_and_remains_isolated_by_scope
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.New_http_partition_lease_recovers_the_retained_page
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_page_attachment_rejects_stale_owner_and_expiry_during_save_rolls_back
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Empty_http_page_advance_expiring_during_save_rolls_back
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Cancelled_connector_rejects_http_page_attachment_and_advance_as_terminal
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_request_ledger_and_metadata_counters_match_persisted_utf8_documents_and_replays
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Tiny_metadata_limit_refuses_preparation_without_persisting_partition_or_request_rows
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Begin_refuses_source_reservation_when_only_prepared_metadata_fits
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_metadata_budget_is_shared_across_shards
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Historical_http_fetch_journal_is_not_released_for_a_later_page_reservation
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Request_ledger_keys_cannot_be_rewritten_after_a_page_references_them
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Hot_http_transitions_use_bounded_indexed_lookups_after_history_grows(operation: "renew")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Hot_http_transitions_use_bounded_indexed_lookups_after_history_grows(operation: "release")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Hot_http_transitions_use_bounded_indexed_lookups_after_history_grows(operation: "attach")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Hot_http_transitions_use_bounded_indexed_lookups_after_history_grows(operation: "advance")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Expired_http_page_attachment_rolls_back_metadata_and_ledger_accounting
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Expired_http_page_advance_rolls_back_new_request_and_metadata_accounting
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_effect_identity_binds_batch_route_destination_and_exact_payload
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_output_migration_preserves_reserved_batch_rows_and_foreign_keys
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_output_migration_enforces_output_plan_and_byte_constraints
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_output_migration_model_matches_the_runtime_snapshot
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Output_processor_retains_transformed_bodies_and_records_only_verified_route_delivery(responseStatus: 204, corruptRetainedBody: False)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Output_processor_retains_transformed_bodies_and_records_only_verified_route_delivery(responseStatus: 202, corruptRetainedBody: False)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Output_processor_retains_transformed_bodies_and_records_only_verified_route_delivery(responseStatus: 204, corruptRetainedBody: True)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_output_plan_is_stable_across_replay_and_partition_recovery
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_connector_output_recovers_with_its_retained_page_and_batch
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Fully_filtered_connector_output_retains_a_bodyless_plan
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_output_store_rejects_invalid_output_plans_atomically(defect: "algebra")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_output_store_rejects_invalid_output_plans_atomically(defect: "missing-main")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_output_store_rejects_invalid_output_plans_atomically(defect: "kind")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_output_store_rejects_invalid_output_plans_atomically(defect: "effect")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_output_store_rejects_invalid_output_plans_atomically(defect: "route-count")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_output_store_rejects_invalid_output_plans_atomically(defect: "body-length")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_output_store_refuses_a_stale_or_terminal_lease(state: "stale")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_output_store_refuses_a_stale_or_terminal_lease(state: "cancelled")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_output_store_rolls_back_when_lease_expires_after_save
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_output_body_budget_is_run_wide_and_replay_does_not_charge_it_twice
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_batch_output_budget_counts_both_route_bodies_together
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_output_plan_metadata_is_charged_to_the_retained_metadata_quota
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_corrupt_output_plan_digest_or_accounting_is_rejected_on_recovery(defect: "plan")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_corrupt_output_plan_digest_or_accounting_is_rejected_on_recovery(defect: "digest")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_corrupt_output_plan_digest_or_accounting_is_rejected_on_recovery(defect: "accounting")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_corrupt_output_plan_digest_or_accounting_is_rejected_on_recovery(defect: "null-plan")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_page_history_prevents_return_to_an_earlier_request
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Corrupt_older_page_json_cannot_remove_request_membership_and_fresh_claim_refuses_run
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Two_maximum_continuations_fit_the_retained_position_and_recover(escapedBase64: False)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Two_maximum_continuations_fit_the_retained_position_and_recover(escapedBase64: True)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Corrupt_http_page_history_cannot_authorize_progress(defect: "missing")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Corrupt_http_page_history_cannot_authorize_progress(defect: "page-json")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Corrupt_http_page_history_cannot_authorize_progress(defect: "byte-length")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Corrupt_http_page_history_cannot_authorize_progress(defect: "request-hash")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Corrupt_http_page_history_cannot_authorize_progress(defect: "false-exhaustion")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_and_file_capabilities_share_the_same_scoped_provider
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_transition_expiring_during_save_rolls_back(transition: "prepare")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_transition_expiring_during_save_rolls_back(transition: "claim")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_transition_expiring_during_save_rolls_back(transition: "renew")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_transition_expiring_during_save_rolls_back(transition: "release")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_corrupt_partition_cannot_be_claimed_or_settle_success(corruption: "unknown")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_corrupt_partition_cannot_be_claimed_or_settle_success(corruption: "completed")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_corrupt_partition_cannot_be_claimed_or_settle_success(corruption: "missing")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_corrupt_partition_cannot_be_claimed_or_settle_success(corruption: "null-request")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_retained_input_overcount_is_rejected
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_cancel_retains_work_and_disallows_new_claims_and_renewals
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_invalid_admission_creates_neither_run_nor_marker(defect: "kind")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_invalid_admission_creates_neither_run_nor_marker(defect: "shards")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_invalid_admission_creates_neither_run_nor_marker(defect: "pages")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Database_request_chain_constraints_reject_incomplete_history(defect: "delete-page")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Database_request_chain_constraints_reject_incomplete_history(defect: "change-next-request")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Database_request_chain_constraints_reject_incomplete_history(defect: "delete-request")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Database_request_chain_constraints_reject_incomplete_history(defect: "null-predecessor")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_inspection_is_scoped_and_pages_partitions_in_ascending_bounded_order
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_inspection_tracks_retry_publication_acknowledgement_and_settled_effect_counts_once
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_inspection_reads_the_existing_request_for_an_exhausted_final_http_page
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_inspection_does_not_count_retained_effects_when_cancellation_preserves_owed_work
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_inspection_rejects_effect_kind_columns_that_disagree_with_retained_output
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_inspection_effect_migration_backfills_route_kinds_without_rewriting_retained_output
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_admission_snapshots_pins_and_replays_only_the_same_revision
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Legacy_preparation_skips_connector_runs_and_legacy_commit_cannot_consume_connector_lease
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Preadmission_refusal_cannot_terminalize_an_admitted_connector_run
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Http_partitions_keep_distinct_shards_and_expired_replacement_invalidates_failure_authority
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Csv_preparation_without_lookup_creates_typed_file_ranges_for_mixed_destinations
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Empty_csv_preparation_can_settle_shared_terminal_success
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Invalid_connector_prepared_input_leaves_no_durable_readiness_or_partitions(failure: "hash")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Invalid_connector_prepared_input_leaves_no_durable_readiness_or_partitions(failure: "reference")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Invalid_connector_prepared_input_leaves_no_durable_readiness_or_partitions(failure: "limit")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Invalid_connector_prepared_input_leaves_no_durable_readiness_or_partitions(failure: "index")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_source_fetch_migration_preserves_legacy_history_and_claims_its_continuation
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Connector_source_fetch_migration_rejects_inconsistent_pairs_and_negative_reservations
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_recovery_closes_uncertain_attempt_and_captures_its_exact_permit_without_attaching_page
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_reservation_is_aggregate_and_capture_releases_unused_capacity_for_another_partition
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_begin_lease_expiry_during_save_rolls_back_journal_and_capacity_reservation
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Captured_source_progress_capacity_transfers_to_acceptance_without_a_second_charge
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_reservation_covers_large_opaque_continuations(shape: "ascii")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_reservation_covers_large_opaque_continuations(shape: "escaped-base64")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_reservation_covers_large_opaque_continuations(shape: "surrogate-pairs")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_dispatch_budget_is_checked_before_returning_a_permit(exactFit: False, invalidReceipt: False)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_dispatch_budget_is_checked_before_returning_a_permit(exactFit: True, invalidReceipt: False)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_dispatch_budget_is_checked_before_returning_a_permit(exactFit: True, invalidReceipt: True)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_permit_reserves_capacity_before_dispatch_and_capture_is_required_for_attachment
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Timely_invalid_200_receipt_survives_late_store_reconciliation_and_journal_round_trip
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_waiting_survives_store_recreation_and_does_not_block_another_partition
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Terminal_run_rejects_source_operations_without_changing_journal_or_accounting(succeeded: False)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Terminal_run_rejects_source_operations_without_changing_journal_or_accounting(succeeded: True)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_acquisition_fetches_real_pages_and_retains_empty_page_continuation
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_acquisition_normalizes_relative_next_link_and_reopens_original_page_bytes
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_acquisition_recovers_manifest_published_before_SQL_capture_without_another_GET
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_recovery_uses_changed_response_only_when_original_manifest_was_never_published(published: False)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_recovery_uses_changed_response_only_when_original_manifest_was_never_published(published: True)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_acquisition_never_refetches_missing_or_corrupt_attached_page(defect: "missing-body")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_acquisition_never_refetches_missing_or_corrupt_attached_page(defect: "corrupt-body")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_acquisition_never_refetches_missing_or_corrupt_attached_page(defect: "missing-manifest")
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_acquisition_cannot_dispatch_again_after_durable_empty_page_exhaustion
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_acquisition_persists_delay_and_another_shard_can_progress
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_acquisition_records_invalid_JSON_as_a_deterministic_failure
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_acquisition_records_disallowed_next_link_without_sending_to_it
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Source_acquisition_late_owner_leaves_published_page_for_current_owner_without_refetch
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Runtime_module_migrates_only_its_tables_and_registers_no_design_services
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Admission_is_idempotent_scoped_and_cancellation_tombstone_binds_the_result_address
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Final_batch_acceptance_and_cancellation_settle_once_in_either_store_order(acceptanceWins: True)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Final_batch_acceptance_and_cancellation_settle_once_in_either_store_order(acceptanceWins: False)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Concurrent_final_batch_acceptance_and_cancellation_serialize_real_transactions(acceptanceWins: True)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Concurrent_final_batch_acceptance_and_cancellation_serialize_real_transactions(acceptanceWins: False)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Reopened_runtime_refuses_a_saved_artifact_with_an_unknown_format
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Reopened_runtime_refuses_a_prepared_descriptor_with_an_unknown_format
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Partition_claims_reserve_before_dispatch_reuse_owed_work_and_fence_released_attempts
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Outstanding_byte_budget_blocks_before_dispatch_without_charging_or_moving_cursor_and_recovers_after_acceptance
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Expired_delivery_claim_is_fenced_until_consumer_proof_settles_once
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Last_acceptance_atomically_completes_with_business_error_and_manifest_pages_are_ordered
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Empty_source_is_terminalized_with_outbox_during_preparation
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Unscoped_partition_claim_selects_only_a_runnable_run_in_the_exact_scope
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Preparation_refuses_snapshots_that_do_not_match_the_pinned_source_hash
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Preparation_persists_the_real_one_based_nonempty_partition_plan
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Preparation_lease_expiry_requires_a_new_fence_and_reject_admission_is_durable
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Admission_refusal_cannot_terminalize_an_already_pinned_invocation_and_persisted_json_is_bounded
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Composite_run_views_never_mix_run_and_terminal_states(listRuns: False)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Composite_run_views_never_mix_run_and_terminal_states(listRuns: True)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.New_admission_builds_its_composite_view_before_committing_the_admission
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Acceptance_snapshots_bounded_effects_before_database_queries
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Reused_context_refuses_old_acceptance_after_another_context_takes_over(probeOtherOperations: False)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Reused_context_refuses_old_acceptance_after_another_context_takes_over(probeOtherOperations: True)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Renewal_and_release_follow_ownership_while_reservation_still_requires_the_current_cursor
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Settled_replay_refuses_changed_counters_or_duplicate_route_substitution(duplicateRoute: True)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Settled_replay_refuses_changed_counters_or_duplicate_route_substitution(duplicateRoute: False)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Nonempty_work_cannot_claim_zero_input_or_output_bytes(zeroInput: True)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Nonempty_work_cannot_claim_zero_input_or_output_bytes(zeroInput: False)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Persisted_invocation_preserves_opaque_scope_code_units_without_JSON_replacement
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Persisted_invocation_preserves_opaque_run_and_address_code_units(addressIdentity: False)
+    Elsa.Etl.Tests.EtlRuntimeStoreTests.Persisted_invocation_preserves_opaque_run_and_address_code_units(addressIdentity: True)
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Connector_admission_uses_runtime_validation_and_retains_refusal_for_delivery(lowerHostCeiling: False, expectedCode: "etl.binding-unavailable")
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Connector_admission_uses_runtime_validation_and_retains_refusal_for_delivery(lowerHostCeiling: True, expectedCode: "etl.executable.limits-exceeded")
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Unknown_artifact_format_is_refused_without_persisting_a_terminal_result
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.V2_cancel_before_admission_persists_a_replayable_terminal_envelope_and_outbox
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.V2_admission_refusal_persists_its_terminal_envelope_and_rejects_changed_replays
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Shared_worker_executes_connector_routes_lookup_and_paging(csvSource: False, httpMain: False, httpErrors: False)
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Shared_worker_executes_connector_routes_lookup_and_paging(csvSource: False, httpMain: True, httpErrors: True)
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Shared_worker_executes_connector_routes_lookup_and_paging(csvSource: True, httpMain: True, httpErrors: True)
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Shared_worker_executes_connector_routes_lookup_and_paging(csvSource: False, httpMain: True, httpErrors: False)
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Connector_capability_remains_optional_for_a_file_only_provider
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Http_only_worker_yields_a_retry_slot_and_runs_another_shard_before_retrying
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Fully_filtered_connector_batch_advances_without_dispatching_an_output
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Worker_settles_irreducible_output_retention_limit_before_any_post
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Real_preparation_retains_capacity_until_its_heartbeat_has_unwound
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Real_replaced_attempt_retains_capacity_through_cancellation_and_cleanup_then_successor_owns_its_permit
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Actual_replacement_worker_refuses_conflicting_published_effect_without_advancing_cursor
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Worker_acknowledges_terminal_delivery_only_after_adapter_returns_proof
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Worker_leaves_delivery_owed_until_adapter_returns_a_disposition
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Worker_does_not_claim_delivery_when_no_adapter_is_configured
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Admission_service_resolves_trusted_bindings_and_reuses_the_first_pinned_revisions
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Real_shell_starts_the_worker_and_awaits_its_unwind_when_disposed
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Two_hosts_execute_a_published_artifact_and_reopen_accepted_output_without_design_services
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Empty_input_settles_and_has_no_partition_or_output_work
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Preparation_errors_with_long_authored_field_names_still_settle_a_bounded_result
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Missing_host_binding_is_a_durable_refusal_and_cancel_before_admission_stays_cancelled
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Pending_terminal_outbox_is_discovered_after_restart_without_file_binding_scopes
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Claim_next_delivery_refuses_an_outbox_whose_invocation_scope_does_not_match_its_row
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Claim_next_delivery_skips_corrupt_earliest_scope_without_mutating_it
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Claim_delivery_rejects_retained_invocation_with_mismatched_run_id(useGlobalClaim: False)
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Claim_delivery_rejects_retained_invocation_with_mismatched_run_id(useGlobalClaim: True)
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Http_attempt_replacement_keeps_capacity_through_cancellation_and_reuses_the_published_page_once
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Source_authentication_is_resolved_again_for_a_durable_retry_and_rotation_reaches_the_wire
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Destination_authentication_is_resolved_again_for_a_durable_retry_with_stable_pin_effect_and_body
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Revocation_or_connection_settings_drift_before_retry_refuses_send_without_fallback(direction: "source", change: "revoked")
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Revocation_or_connection_settings_drift_before_retry_refuses_send_without_fallback(direction: "source", change: "settings-drift")
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Revocation_or_connection_settings_drift_before_retry_refuses_send_without_fallback(direction: "destination", change: "revoked")
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Revocation_or_connection_settings_drift_before_retry_refuses_send_without_fallback(direction: "destination", change: "settings-drift")
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Http_worker_diagnostics_and_error_route_omit_values_observed_on_the_wire
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Two_http_worker_processes_recover_each_durable_boundary(boundaryName: "BeforeCapture")
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Two_http_worker_processes_recover_each_durable_boundary(boundaryName: "AfterReservation")
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Two_http_worker_processes_recover_each_durable_boundary(boundaryName: "AfterMainAcknowledgement")
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Two_http_worker_processes_recover_each_durable_boundary(boundaryName: "AfterErrorAcknowledgement")
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Two_http_worker_processes_recover_each_durable_boundary(boundaryName: "BeforeAcceptance")
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Two_http_worker_processes_retry_error_route_after_main_ack_without_early_dispatch_or_double_accounting
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Two_http_worker_processes_honor_source_retry_after_before_capturing_the_page
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Two_http_worker_processes_replay_a_lost_response_with_stable_body_and_effect(deduplicatingReceiver: True)
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Two_http_worker_processes_replay_a_lost_response_with_stable_body_and_effect(deduplicatingReceiver: False)
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Actual_worker_interrupted_before_reservation_rebuilds_the_same_descriptor_without_owed_quota
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Actual_worker_interrupted_after_acceptance_commit_resumes_at_the_next_batch
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Terminal_materialization_replays_both_routes_in_manifest_order_and_ignores_unaccepted_orphans
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Missing_or_corrupt_accepted_chunk_refuses_materialization_without_publishing_a_route(corrupt: False)
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Missing_or_corrupt_accepted_chunk_refuses_materialization_without_publishing_a_route(corrupt: True)
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Empty_terminal_run_materializes_no_route_files
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Active_run_cannot_be_materialized
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Removed_pinned_output_revision_refuses_materialization_instead_of_using_current_alias
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Cancelled_run_materializes_only_prior_accepted_output_and_marks_it_partial
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Conflicting_effect_fault_materializes_prior_accepted_output_as_partial
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Cancellation_before_admission_has_no_materialized_files_or_fabricated_binding
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Unknown_or_other_scope_run_cannot_be_materialized(otherScope: False)
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Unknown_or_other_scope_run_cannot_be_materialized(otherScope: True)
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.A_changed_materialized_file_is_refused_and_never_overwritten_on_replay
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Two_real_worker_processes_hold_distinct_nonempty_partitions_and_second_recovers_after_predecessor_exit
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Actual_worker_lost_during_result_delivery_reclaims_the_same_owed_payload_without_consumption
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Actual_worker_interrupted_mid_staged_write_recovers_without_accepting_partial_content(snapshot: True)
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Actual_worker_interrupted_mid_staged_write_recovers_without_accepting_partial_content(snapshot: False)
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Two_real_worker_processes_recover_a_published_unaccepted_effect_after_predecessor_exit
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Claimed_partition_execution_refuses_an_unknown_saved_format_without_progress(format: "artifact")
+    Elsa.Etl.Tests.EtlRuntimeJourneyTests.Claimed_partition_execution_refuses_an_unknown_saved_format_without_progress(format: "prepared")
+    Elsa.Etl.Tests.EtlConnectorBindingPublicationTests.Anonymous_scoped_bindings_publish_without_connections_services(tenant: "tenant-a")
+    Elsa.Etl.Tests.EtlConnectorBindingPublicationTests.Anonymous_scoped_bindings_publish_without_connections_services(tenant: null)
+    Elsa.Etl.Tests.EtlConnectorBindingPublicationTests.Authenticated_null_tenant_alias_cannot_validate_or_publish_with_an_available_anonymous_catalog
+    Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Runtime_feature_resolves_v2_reader_without_design_services_and_reads_compiled_artifact
+    Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Reader_refuses_http_policy_above_independent_host_ceiling
+    Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Reader_enforces_positive_host_and_authored_metadata_budgets_independently_of_input_budget
+    Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Runtime_options_reject_non_positive_host_metadata_budget(maxRetainedMetadataBytes: 0)
+    Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Runtime_options_reject_non_positive_host_metadata_budget(maxRetainedMetadataBytes: -1)
+    Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Reader_rejects_non_positive_authored_metadata_budget(maxRetainedMetadataBytes: 0)
+    Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Reader_rejects_non_positive_authored_metadata_budget(maxRetainedMetadataBytes: -1)
+    Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Reader_accepts_old_v2_http_document_without_rewriting_its_hash_or_bytes
+    Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Host_and_executable_readers_enforce_the_supported_continuation_ceiling
+    Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Reader_refuses_artifact_batch_limits_above_live_host_capacity
+    Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Pipeline_without_lookup_does_not_consume_or_require_lookup_capacity
+    Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Reader_refuses_forged_semantic_mapping_or_filter(invalidFilter: False)
+    Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Reader_refuses_forged_semantic_mapping_or_filter(invalidFilter: True)
+    Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Reader_requires_canonical_pipeline_json_even_when_hash_and_identity_match
+    Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Reader_verifies_content_hash_and_artifact_identity
+    Elsa.Etl.Tests.EtlConnectorExecutableReaderTests.Reader_checks_raw_pipeline_size_before_typed_deserialization
+    Elsa.Etl.Tests.EtlConnectorInputBatchBuilderTests.Csv_batches_split_at_the_record_limit_and_read_a_bom_header_from_the_prepared_index
+    Elsa.Etl.Tests.EtlConnectorInputBatchBuilderTests.Reopening_reports_a_bounded_csv_header_diagnostic_without_leaking_open_streams
+    Elsa.Etl.Tests.EtlConnectorInputBatchBuilderTests.Reopening_rejects_a_corrupt_retained_lookup_as_snapshot_integrity_failure
+    Elsa.Etl.Tests.EtlConnectorInputBatchBuilderTests.Http_page_splits_by_record_and_canonical_byte_limits_and_rebuilds_the_exact_range
+    Elsa.Etl.Tests.EtlConnectorInputBatchBuilderTests.Opening_a_builder_snapshots_http_shard_ids_from_the_admission
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_api_rejects_incoherent_custom_inspection_instead_of_presenting_false_progress(defect: "empty-records")
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_api_rejects_incoherent_custom_inspection_instead_of_presenting_false_progress(defect: "empty-bytes")
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_api_rejects_incoherent_custom_inspection_instead_of_presenting_false_progress(defect: "unretained-effect")
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_api_rejects_incoherent_custom_inspection_instead_of_presenting_false_progress(defect: "too-many-effects")
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_api_rejects_incoherent_custom_inspection_instead_of_presenting_false_progress(defect: "file-retry")
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_api_rejects_incoherent_custom_inspection_instead_of_presenting_false_progress(defect: "unknown-page-offset")
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_api_rejects_incoherent_custom_inspection_instead_of_presenting_false_progress(defect: "source-acknowledgement")
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_api_rejects_incoherent_custom_inspection_instead_of_presenting_false_progress(defect: "missing-retry-time")
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_api_rejects_incoherent_custom_inspection_instead_of_presenting_false_progress(defect: "unexpected-retry-time")
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_api_rejects_incoherent_custom_inspection_instead_of_presenting_false_progress(defect: "unknown-phase")
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_api_rejects_incoherent_custom_inspection_instead_of_presenting_false_progress(defect: "retry-at-deadline")
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_api_rejects_incoherent_custom_inspection_instead_of_presenting_false_progress(defect: "retry-after-deadline")
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_api_rejects_incoherent_custom_inspection_instead_of_presenting_false_progress(defect: "acknowledged-without-journal")
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_api_rejects_incoherent_custom_inspection_instead_of_presenting_false_progress(defect: "acknowledged-but-waiting")
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_api_rejects_incoherent_custom_inspection_instead_of_presenting_false_progress(defect: "retained-but-acknowledged")
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_api_rejects_incoherent_custom_inspection_instead_of_presenting_false_progress(defect: "captured-wrong-status")
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_runtime_only_api_pages_scoped_progress_and_exposes_retry_metadata_without_request_identity
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_inspection_absence_is_explicit_while_legacy_file_detail_remains_available
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_csv_inspection_retains_real_file_ranges_and_optional_lookup_absence
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_api_distinguishes_captured_input_and_acknowledged_outputs_from_accepted_progress
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Connector_rejection_before_admission_keeps_terminal_diagnostics_visible_without_invented_progress
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Runtime_run_paging_preserves_encoded_identity_order_across_small_and_large_pages
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Runtime_only_http_api_pages_scoped_run_and_partition_views_without_exposing_runtime_identity
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Runtime_api_and_ef_store_shell_closure_does_not_activate_etl_execution_tasks_or_design
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Runtime_http_cancel_requires_its_permission_uses_persisted_invocation_and_preserves_terminal_success
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Runtime_http_requires_normalized_identity_and_scoped_persistence_and_reports_missing_provider_distinct_from_empty
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Runtime_detail_retains_distinct_input_identities_before_and_after_preparation
+    Elsa.Etl.Tests.EtlRuntimeApiHttpTests.Legacy_runtime_operations_keep_old_routes_and_report_connector_inspection_unavailable
+    Elsa.Etl.Tests.EtlConnectorOutputBudgetTests.Legacy_default_pipeline_json_retains_its_bytes_and_artifact_hash
+    Elsa.Etl.Tests.EtlConnectorOutputBudgetTests.Compiler_accepts_and_serializes_explicit_retained_output_budget
+    Elsa.Etl.Tests.EtlConnectorOutputBudgetTests.Compiler_and_store_codec_reject_nonpositive_retained_output_budget(budget: 0)
+    Elsa.Etl.Tests.EtlConnectorOutputBudgetTests.Compiler_and_store_codec_reject_nonpositive_retained_output_budget(budget: -1)
+    Elsa.Etl.Tests.EtlConnectorOutputBudgetTests.Store_codec_rejects_a_canonical_null_document
+    Elsa.Etl.Tests.EtlConnectorOutputBudgetTests.Runtime_options_apply_host_ceiling_and_reader_enforces_authored_output_budget
+    Elsa.Etl.Tests.EtlConnectorOutputBudgetTests.Host_options_and_runtime_reader_reject_nonpositive_output_budgets(budget: 0)
+    Elsa.Etl.Tests.EtlConnectorOutputBudgetTests.Host_options_and_runtime_reader_reject_nonpositive_output_budgets(budget: -1)
+    Elsa.Etl.Tests.EtlConnectorOutputBudgetTests.Store_codec_rejects_nonpositive_output_batch_budget(budget: 0)
+    Elsa.Etl.Tests.EtlConnectorOutputBudgetTests.Store_codec_rejects_nonpositive_output_batch_budget(budget: -1)
+    Elsa.Etl.Tests.EtlConnectorTransformTests.Http_json_typed_records_transform_without_a_synthetic_lookup_or_csv_record
+    Elsa.Etl.Tests.EtlConnectorTransformTests.V2_optional_nulls_are_serialized_and_filters_return_zero_bytes
+    Elsa.Etl.Tests.EtlConnectorTransformTests.V2_lookup_joins_typed_rows_and_maps_fields_from_both_origins
+    Elsa.Etl.Tests.EtlConnectorTransformTests.V2_transform_rejects_required_nulls_wrong_clr_scalar_types_and_missing_required_fields_safely
+    Elsa.Etl.Tests.EtlConnectorTransformTests.V2_typed_scalar_validation_and_serialization_keep_decimal_and_boolean_types
+    Elsa.Etl.Tests.EtlConnectorTransformTests.V2_semantics_requires_both_lookup_key_fields_to_be_required
+    Elsa.Etl.Tests.EtlConnectorTransformTests.V2_semantic_validation_rejects_unmapped_fields_and_incompatible_filter_literals
+    Elsa.Etl.Tests.EtlConnectorTransformTests.V2_lookup_requires_matching_typed_keys_and_a_prepared_snapshot
+    Elsa.Etl.Tests.EtlConnectorTransformTests.V2_output_budget_is_enforced_before_returning_a_partial_row
+    Elsa.Etl.Tests.EtlConnectorTransformTests.V2_and_v1_file_transformers_preserve_the_compact_jsonl_output_shape
+    Elsa.Etl.Tests.EtlCursorCodecTests.Encode_and_decode_round_trip_every_cursor_field_without_exposing_the_key
+    Elsa.Etl.Tests.EtlCursorCodecTests.Constructor_requires_at_least_32_utf8_signing_key_bytes
+    Elsa.Etl.Tests.EtlCursorCodecTests.Decode_rejects_payload_and_signature_tampering_and_wrong_keys
+    Elsa.Etl.Tests.EtlCursorCodecTests.Decode_rejects_malformed_token_envelopes(token: "")
+    Elsa.Etl.Tests.EtlCursorCodecTests.Decode_rejects_malformed_token_envelopes(token: ".")
+    Elsa.Etl.Tests.EtlCursorCodecTests.Decode_rejects_malformed_token_envelopes(token: "abc")
+    Elsa.Etl.Tests.EtlCursorCodecTests.Decode_rejects_malformed_token_envelopes(token: ".abc")
+    Elsa.Etl.Tests.EtlCursorCodecTests.Decode_rejects_malformed_token_envelopes(token: "abc.")
+    Elsa.Etl.Tests.EtlCursorCodecTests.Decode_rejects_malformed_token_envelopes(token: "abc.def.ghi")
+    Elsa.Etl.Tests.EtlCursorCodecTests.Decode_rejects_malformed_token_envelopes(token: "abc.def=")
+    Elsa.Etl.Tests.EtlCursorCodecTests.Decode_rejects_malformed_token_envelopes(token: "abc.def+")
+    Elsa.Etl.Tests.EtlCursorCodecTests.Decode_rejects_tokens_over_the_length_limit
+    Elsa.Etl.Tests.EtlCursorCodecTests.Decode_rejects_unknown_fields_noncanonical_json_and_invalid_states_even_with_valid_signatures
+    Elsa.Etl.Tests.EtlCursorCodecTests.Encode_rejects_unknown_kinds_invalid_hashes_and_out_of_bound_values
+    Elsa.Etl.Tests.EtlCursorCodecTests.Authoring_cursor_payload_remains_unchanged_when_runtime_boundary_is_absent
+    Elsa.Etl.Tests.EtlDefinitionCatalogTests.Definition_pages_use_stable_hash_cursors_and_preserve_opaque_ids
+    Elsa.Etl.Tests.EtlDefinitionCatalogTests.Definition_pages_keep_tenant_partition_and_definition_identity_case_sensitive
+    Elsa.Etl.Tests.EtlDefinitionCatalogTests.Definition_and_version_page_sizes_are_hard_bounded
+    Elsa.Etl.Tests.EtlDefinitionCatalogTests.Version_pages_are_ascending_after_exclusive_and_keep_the_supplied_ceiling
+    Elsa.Etl.Tests.EtlDefinitionCatalogTests.Definition_listing_rejects_corrupt_metadata(corruption: "schema")
+    Elsa.Etl.Tests.EtlDefinitionCatalogTests.Definition_listing_rejects_corrupt_metadata(corruption: "scope")
+    Elsa.Etl.Tests.EtlDefinitionCatalogTests.Definition_listing_rejects_corrupt_metadata(corruption: "definition-key")
+    Elsa.Etl.Tests.EtlDefinitionCatalogTests.Definition_listing_rejects_corrupt_metadata(corruption: "revision")
+    Elsa.Etl.Tests.EtlDefinitionCatalogTests.Definition_listing_rejects_corrupt_metadata(corruption: "timestamp")
+    Elsa.Etl.Tests.EtlDefinitionCatalogTests.Version_listing_rejects_corrupt_metadata(corruption: "scope")
+    Elsa.Etl.Tests.EtlDefinitionCatalogTests.Version_listing_rejects_corrupt_metadata(corruption: "definition-key")
+    Elsa.Etl.Tests.EtlDefinitionCatalogTests.Version_listing_rejects_corrupt_metadata(corruption: "content-hash")
+    Elsa.Etl.Tests.EtlDefinitionCatalogTests.Version_listing_rejects_corrupt_metadata(corruption: "envelope-hash")
+    Elsa.Etl.Tests.EtlDefinitionCatalogTests.Version_listing_rejects_corrupt_metadata(corruption: "timestamp")
+    Elsa.Etl.Tests.EtlDefinitionStoreTests.Fresh_schema_persists_draft_and_published_artifact_after_reopen
+    Elsa.Etl.Tests.EtlDefinitionStoreTests.Draft_updates_and_publication_use_optimistic_revision_checks
+    Elsa.Etl.Tests.EtlDefinitionStoreTests.Draft_and_publication_reads_are_isolated_by_tenant_and_partition
+    Elsa.Etl.Tests.EtlDefinitionStoreTests.Published_artifacts_remain_immutable_and_exact_retries_converge
+    Elsa.Etl.Tests.EtlDefinitionStoreTests.Publish_recompiles_and_rejects_invalid_or_forged_artifacts
+    Elsa.Etl.Tests.EtlDefinitionStoreTests.Revision_and_publication_version_ceiling_conflict_without_overflow
+    Elsa.Etl.Tests.EtlDefinitionStoreTests.Unrelated_publication_storage_failure_remains_visible_and_rolls_back_the_version
+    Elsa.Etl.Tests.EtlDefinitionStoreTests.Oversized_forged_artifact_is_refused_without_publishing_or_advancing_the_draft
+    Elsa.Etl.Tests.EtlDefinitionStoreV2Tests.V2_draft_and_publication_survive_reopen_with_exact_identity_and_catalog_format
+    Elsa.Etl.Tests.EtlDefinitionStoreV2Tests.V2_updates_are_scoped_and_revisioned_and_publication_replay_survives_a_later_edit
+    Elsa.Etl.Tests.EtlDefinitionStoreV2Tests.Default_v2_draft_and_published_artifact_preserve_pipeline_bytes_and_hashes
+    Elsa.Etl.Tests.EtlDefinitionStoreV2Tests.Explicit_v1_to_v2_upgrade_preserves_old_publication_and_refuses_implicit_downgrade
+    Elsa.Etl.Tests.EtlDefinitionStoreV2Tests.Missing_v2_compiler_or_forged_artifact_cannot_publish_or_advance_version
+    Elsa.Etl.Tests.EtlDefinitionStoreV2Tests.Persisted_format_mismatch_and_unknown_format_are_not_silently_reinterpreted
+    Elsa.Etl.Tests.EtlDefinitionStoreV2Tests.Oversized_v2_draft_is_rejected_before_json_materialization(character: 'x')
+    Elsa.Etl.Tests.EtlDefinitionStoreV2Tests.Oversized_v2_draft_is_rejected_before_json_materialization(character: '界')
+    Elsa.Etl.Tests.EtlDefinitionStoreV2Tests.Actual_pre_v2_design_database_migrates_without_rewriting_original_artifact_bytes
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Validation_reports_role_and_scope_specific_unavailable_binding_diagnostics_without_a_hash
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Missing_binding_catalog_is_provider_unavailable_during_validation_and_new_publication
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Publish_rechecks_binding_approval_but_immutable_replay_does_not_depend_on_current_catalog
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Http_authoring_flow_compiles_publishes_and_replays_the_validated_version_after_a_later_draft_edit
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Publish_rejects_a_hash_mismatch_and_stale_unpublished_validation_without_creating_a_version
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Concurrent_identical_publish_requests_converge_to_published_and_replay
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Permission_and_trusted_scope_are_enforced_before_data_is_created_or_disclosed
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Missing_design_store_or_catalog_returns_provider_unavailable_instead_of_an_empty_result
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Definition_cursor_is_signed_and_bound_to_scope_and_limit
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Version_cursor_keeps_its_initial_high_water_mark_when_a_new_publication_arrives
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Binding_catalog_returns_only_safe_scoped_alias_roles_and_distinguishes_missing_from_empty
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Malformed_json_is_rejected_without_creating_a_definition
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Identical_publish_replays_when_another_request_commits_between_immutable_and_draft_reads
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Connector_api_accepts_discriminator_orders_and_preserves_omitted_budget_defaults(kindLast: False)
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Connector_api_accepts_discriminator_orders_and_preserves_omitted_budget_defaults(kindLast: True)
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Connector_api_preserves_explicit_zero_budgets_for_validation
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Connector_api_rejects_unknown_pipeline_members
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Connector_catalog_is_scoped_and_exposes_only_safe_alias_role_and_kind
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Connector_publication_rechecks_approval_and_exact_replay_does_not_resolve_again
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Missing_v1_version_history_is_not_found_without_the_optional_v2_store
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Connector_api_returns_safe_refusal_for_null_tenant_and_unavailable_optional_resolver
+    Elsa.Etl.Tests.EtlDesignApiHttpTests.Versioned_lists_keep_mixed_v1_v2_history_on_the_matching_api_surface
+    Elsa.Etl.Tests.EtlDesignHostTests.Host_auto_migrates_then_reopens_under_validate_and_reads_the_published_artifact
+    Elsa.Etl.Tests.EtlDesignHostTests.Normal_host_registration_publishes_and_reopens_connector_definitions
+    Elsa.Etl.Tests.EtlExecutableReaderTests.Reader_accepts_an_artifact_created_by_the_design_compiler
+    Elsa.Etl.Tests.EtlExecutableReaderTests.Reader_refuses_an_artifact_envelope_with_an_unknown_saved_format
+    Elsa.Etl.Tests.EtlExecutableReaderTests.Reader_rejects_a_noncanonical_pipeline_even_when_its_content_hash_matches
+    Elsa.Etl.Tests.EtlExecutableReaderTests.Reader_checks_raw_pipeline_size_before_typed_deserialization
+    Elsa.Etl.Tests.EtlExecutableReaderTests.Reader_enforces_the_complete_artifact_envelope_limit
+    Elsa.Etl.Tests.EtlExecutableReaderTests.Reader_rejects_pipeline_limits_that_exceed_host_capacity
+    Elsa.Etl.Tests.EtlExecutableReaderTests.Reader_rejects_lookup_cardinality_above_the_host_lookup_ceiling
+    Elsa.Etl.Tests.EtlExecutableReaderTests.Reader_caps_lookup_cells_before_materializing_a_wide_sparse_lookup
+    Elsa.Etl.Tests.EtlExecutableReaderTests.Reader_rejects_a_forged_unknown_mapping_field
+    Elsa.Etl.Tests.EtlExecutableReaderTests.Reader_rejects_a_forged_filter_literal_with_the_wrong_type
+    Elsa.Etl.Tests.EtlExecutableReaderTests.Runtime_feature_accepts_null_tenant_scope_without_registering_design_services
+    Elsa.Etl.Tests.EtlExecutableReaderTests.Runtime_feature_requires_an_absolute_snapshot_root
+    Elsa.Etl.Tests.EtlExecutableReaderTests.Runtime_feature_requires_an_explicit_persistence_partition
+    Elsa.Etl.Tests.EtlFilePreparationTests.Snapshots_the_admitted_revision_after_the_current_alias_moves_forward
+    Elsa.Etl.Tests.EtlFilePreparationTests.Refuses_a_removed_admitted_revision_instead_of_falling_back_to_current
+    Elsa.Etl.Tests.EtlFilePreparationTests.Rejects_changed_host_bytes_before_publishing_a_snapshot
+    Elsa.Etl.Tests.EtlFilePreparationTests.Enforces_snapshot_and_lookup_byte_limits_before_retaining_files
+    Elsa.Etl.Tests.EtlFilePreparationTests.Prepares_reordered_headers_lookup_values_and_two_balanced_partitions
+    Elsa.Etl.Tests.EtlFilePreparationTests.Duplicate_typed_lookup_keys_fail_before_source_index_publication
+    Elsa.Etl.Tests.EtlFilePreparationTests.Lookup_record_limit_is_enforced_before_adding_an_extra_row
+    Elsa.Etl.Tests.EtlFilePreparationTests.Invalid_typed_lookup_value_fails_preparation_before_index_publication
+    Elsa.Etl.Tests.EtlFilePreparationTests.Malformed_source_tail_produces_no_runnable_partitions_or_index_chunk
+    Elsa.Etl.Tests.EtlFilePreparationTests.Empty_source_has_a_safe_missing_header_result_and_no_index
+    Elsa.Etl.Tests.EtlFilePreparationTests.Header_only_source_has_zero_actual_partitions
+    Elsa.Etl.Tests.EtlFilePreparationTests.Preparation_reopens_retained_snapshots_and_verifies_them_again
+    Elsa.Etl.Tests.EtlFilePreparationTests.Preparation_rejects_a_corrupted_lookup_snapshot_before_index_publication
+    Elsa.Etl.Tests.EtlFilePreparationTests.Defers_source_value_conversion_errors_until_row_execution
+    Elsa.Etl.Tests.EtlFilePreparationTests.Reports_binding_read_failures_as_faults_without_exposing_paths
+    Elsa.Etl.Tests.EtlFilePreparationTests.Reports_index_storage_failure_as_a_fault
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Only_the_documented_success_statuses_acknowledge(statusCode: 200)
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Only_the_documented_success_statuses_acknowledge(statusCode: 201)
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Only_the_documented_success_statuses_acknowledge(statusCode: 204)
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Accepted_but_unacknowledged_and_permanent_statuses_fail(statusCode: 202)
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Accepted_but_unacknowledged_and_permanent_statuses_fail(statusCode: 203)
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Accepted_but_unacknowledged_and_permanent_statuses_fail(statusCode: 302)
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Accepted_but_unacknowledged_and_permanent_statuses_fail(statusCode: 400)
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Accepted_but_unacknowledged_and_permanent_statuses_fail(statusCode: 401)
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Accepted_but_unacknowledged_and_permanent_statuses_fail(statusCode: 404)
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Accepted_but_unacknowledged_and_permanent_statuses_fail(statusCode: 501)
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Transient_statuses_schedule_the_first_exponential_delay(statusCode: 408)
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Transient_statuses_schedule_the_first_exponential_delay(statusCode: 429)
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Transient_statuses_schedule_the_first_exponential_delay(statusCode: 500)
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Transient_statuses_schedule_the_first_exponential_delay(statusCode: 502)
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Transient_statuses_schedule_the_first_exponential_delay(statusCode: 503)
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Transient_statuses_schedule_the_first_exponential_delay(statusCode: 504)
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Exponential_backoff_stops_at_the_configured_cap
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Uncertain_outcome_uses_exponential_backoff_and_honors_a_later_retry_after
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Retry_after_at_the_deadline_exhausts_without_an_early_retry
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Reaching_the_attempt_limit_fails_without_a_new_wait
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Begin_replays_only_the_current_live_permit_and_completion_is_idempotent
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Replaced_old_request_conflicts_even_after_terminal_state_but_a_new_id_replays
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.A_replacement_fence_records_uncertainty_before_a_new_request_can_start
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Waiting_expires_at_the_deadline_and_each_request_timeout_is_clamped_to_it
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Deadline_and_retry_expiry_near_datetimeoffset_max_do_not_overflow
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Completion_after_request_expiry_is_rejected_but_uncertainty_can_be_recorded
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Timely_success_receipt_can_be_reconciled_after_the_attempt_and_run_deadline
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Timely_transient_receipt_reconciled_after_request_expiry_uses_reconciliation_time_for_backoff
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Timely_transient_receipt_reconciled_after_the_run_deadline_cannot_schedule_another_attempt
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Response_receipt_must_be_utc_and_inside_the_physical_attempt(defect: "before-start")
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Response_receipt_must_be_utc_and_inside_the_physical_attempt(defect: "at-expiry")
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Response_receipt_must_be_utc_and_inside_the_physical_attempt(defect: "future")
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Response_receipt_must_be_utc_and_inside_the_physical_attempt(defect: "non-utc")
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.A_receipt_timestamp_without_a_response_and_tampered_journal_receipts_are_rejected
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Deadline_prevents_acknowledgement_even_when_the_response_is_successful
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Every_returned_attempt_journal_is_read_only_and_malformed_journals_are_rejected
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Completion_with_an_attempt_from_another_effect_conflicts_without_corrupting_state
+    Elsa.Etl.Tests.EtlHttpDeliveryTransitionTests.Invalid_begin_arguments_return_invalid_without_throwing
+    Elsa.Etl.Tests.EtlHttpPageCacheTests.Reopens_verified_raw_page_and_keeps_body_descriptor_distinct_from_manifest
+    Elsa.Etl.Tests.EtlHttpPageCacheTests.Malformed_page_publishes_neither_body_nor_manifest
+    Elsa.Etl.Tests.EtlHttpPageCacheTests.Exact_page_byte_boundary_is_accepted_and_the_next_byte_is_refused_before_publication
+    Elsa.Etl.Tests.EtlHttpPageCacheTests.A_changed_body_for_an_existing_request_is_a_conflict_and_keeps_the_original
+    Elsa.Etl.Tests.EtlHttpPageCacheTests.Identical_body_from_a_later_attempt_converges_to_original_provenance
+    Elsa.Etl.Tests.EtlHttpPageCacheTests.A_body_without_its_manifest_is_not_a_recoverable_page
+    Elsa.Etl.Tests.EtlHttpPageCacheTests.Corrupted_raw_payload_is_refused_without_exposing_bytes_or_root
+    Elsa.Etl.Tests.EtlHttpPageCacheTests.Manifest_identity_mismatch_is_corruption
+    Elsa.Etl.Tests.EtlHttpPageCacheTests.Manifest_provenance_mutation_with_valid_timestamp_is_corruption
+    Elsa.Etl.Tests.EtlHttpPageCacheTests.Oversized_payload_is_rejected_before_read_allocation
+    Elsa.Etl.Tests.EtlHttpPageCacheTests.Missing_manifest_is_absent_but_missing_body_and_unavailable_root_are_failures
+    Elsa.Etl.Tests.EtlHttpPageCacheTests.Scope_and_source_revision_separate_request_page_identities
+    Elsa.Etl.Tests.EtlHttpPageCacheTests.Constructor_snapshots_shards_and_requests_must_match_the_partition_pin
+    Elsa.Etl.Tests.EtlHttpRequestBuilderTests.Token_request_replaces_only_its_named_query_parameter_and_escapes_the_opaque_value
+    Elsa.Etl.Tests.EtlHttpRequestBuilderTests.Token_request_refuses_ambiguous_duplicate_encoded_parameter_names
+    Elsa.Etl.Tests.EtlHttpRequestBuilderTests.Token_request_decodes_raw_plus_as_space_but_preserves_encoded_literal_plus
+    Elsa.Etl.Tests.EtlHttpRequestBuilderTests.Token_request_refuses_duplicate_form_decoded_plus_and_percent_encoded_names
+    Elsa.Etl.Tests.EtlHttpRequestBuilderTests.Token_request_appends_its_parameter_when_the_seed_does_not_have_it
+    Elsa.Etl.Tests.EtlHttpRequestBuilderTests.Relative_next_links_resolve_against_each_current_page_and_store_canonical_absolute_uris
+    Elsa.Etl.Tests.EtlHttpRequestBuilderTests.Next_links_cannot_escape_the_pinned_origin_and_exact_path_policy(nextLink: "https://other.example/api/v1/next")
+    Elsa.Etl.Tests.EtlHttpRequestBuilderTests.Next_links_cannot_escape_the_pinned_origin_and_exact_path_policy(nextLink: "../outside")
+    Elsa.Etl.Tests.EtlHttpRequestBuilderTests.Next_links_cannot_escape_the_pinned_origin_and_exact_path_policy(nextLink: "https://source.example/api/v1/items/child")
+    Elsa.Etl.Tests.EtlHttpRequestBuilderTests.Next_link_byte_limit_applies_after_absolute_uri_normalization
+    Elsa.Etl.Tests.EtlHttpRequestBuilderTests.Next_link_equivalent_to_current_seed_is_rejected_before_it_can_create_a_sentinel_page
+    Elsa.Etl.Tests.EtlHttpRequestBuilderTests.Later_next_link_back_to_the_shard_seed_is_rejected_before_a_duplicate_request
+    Elsa.Etl.Tests.EtlHttpRequestBuilderTests.Token_continuation_matching_existing_seed_cursor_is_rejected_before_a_duplicate_request
+    Elsa.Etl.Tests.EtlHttpRequestBuilderTests.Token_continuation_matching_current_request_is_rejected_as_a_cycle
+    Elsa.Etl.Tests.EtlHttpRequestBuilderTests.Page_cache_stores_raw_json_but_recomputes_normalized_next_link_on_reopen
+    Elsa.Etl.Tests.EtlHttpRequestBuilderTests.Invalid_next_link_does_not_publish_cache_objects
+    Elsa.Etl.Tests.EtlHttpRequestBuilderTests.Cache_builder_must_match_the_admitted_source_policy_and_shard_pin
+    Elsa.Etl.Tests.EtlHttpRetryPolicyTests.Policy_and_attempt_identity_validation_reject_out_of_contract_values
+    Elsa.Etl.Tests.EtlHttpRetryPolicyTests.Deadline_overflow_is_refused_and_expiry_is_clamped_to_the_deadline
+    Elsa.Etl.Tests.EtlHttpRetryPolicyTests.Retry_time_uses_capped_backoff_and_only_a_later_retry_after
+    Elsa.Etl.Tests.EtlHttpRetryPolicyTests.Retryability_is_limited_to_uncertain_and_documented_transient_statuses(statusCode: null, expected: True)
+    Elsa.Etl.Tests.EtlHttpRetryPolicyTests.Retryability_is_limited_to_uncertain_and_documented_transient_statuses(statusCode: 408, expected: True)
+    Elsa.Etl.Tests.EtlHttpRetryPolicyTests.Retryability_is_limited_to_uncertain_and_documented_transient_statuses(statusCode: 429, expected: True)
+    Elsa.Etl.Tests.EtlHttpRetryPolicyTests.Retryability_is_limited_to_uncertain_and_documented_transient_statuses(statusCode: 500, expected: True)
+    Elsa.Etl.Tests.EtlHttpRetryPolicyTests.Retryability_is_limited_to_uncertain_and_documented_transient_statuses(statusCode: 502, expected: True)
+    Elsa.Etl.Tests.EtlHttpRetryPolicyTests.Retryability_is_limited_to_uncertain_and_documented_transient_statuses(statusCode: 503, expected: True)
+    Elsa.Etl.Tests.EtlHttpRetryPolicyTests.Retryability_is_limited_to_uncertain_and_documented_transient_statuses(statusCode: 504, expected: True)
+    Elsa.Etl.Tests.EtlHttpRetryPolicyTests.Retryability_is_limited_to_uncertain_and_documented_transient_statuses(statusCode: 400, expected: False)
+    Elsa.Etl.Tests.EtlHttpRetryPolicyTests.Retryability_is_limited_to_uncertain_and_documented_transient_statuses(statusCode: 501, expected: False)
+    Elsa.Etl.Tests.EtlHttpRetryPolicyTests.Retryability_is_limited_to_uncertain_and_documented_transient_statuses(statusCode: 599, expected: False)
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Completion_applies_only_the_source_fetch_status_rules(statusCode: 408, expectedPhase: Waiting, expectedFailure: None)
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Completion_applies_only_the_source_fetch_status_rules(statusCode: 429, expectedPhase: Waiting, expectedFailure: None)
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Completion_applies_only_the_source_fetch_status_rules(statusCode: 500, expectedPhase: Waiting, expectedFailure: None)
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Completion_applies_only_the_source_fetch_status_rules(statusCode: 502, expectedPhase: Waiting, expectedFailure: None)
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Completion_applies_only_the_source_fetch_status_rules(statusCode: 503, expectedPhase: Waiting, expectedFailure: None)
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Completion_applies_only_the_source_fetch_status_rules(statusCode: 504, expectedPhase: Waiting, expectedFailure: None)
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Completion_applies_only_the_source_fetch_status_rules(statusCode: 201, expectedPhase: Failed, expectedFailure: ResponseRejected)
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Completion_applies_only_the_source_fetch_status_rules(statusCode: 202, expectedPhase: Failed, expectedFailure: ResponseRejected)
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Completion_applies_only_the_source_fetch_status_rules(statusCode: 204, expectedPhase: Failed, expectedFailure: ResponseRejected)
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Completion_applies_only_the_source_fetch_status_rules(statusCode: 206, expectedPhase: Failed, expectedFailure: ResponseRejected)
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Completion_applies_only_the_source_fetch_status_rules(statusCode: 302, expectedPhase: Failed, expectedFailure: ResponseRejected)
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Completion_applies_only_the_source_fetch_status_rules(statusCode: 400, expectedPhase: Failed, expectedFailure: ResponseRejected)
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Completion_applies_only_the_source_fetch_status_rules(statusCode: 501, expectedPhase: Failed, expectedFailure: ResponseRejected)
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.A_bare_success_is_refused_and_invalid_200_is_terminal
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Timely_invalid_200_receipt_can_be_reconciled_after_attempt_and_source_deadlines
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Invalid_200_receipts_outside_the_complete_response_window_are_refused(kind: "future")
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Invalid_200_receipts_outside_the_complete_response_window_are_refused(kind: "before-attempt")
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Invalid_200_receipts_outside_the_complete_response_window_are_refused(kind: "attempt-expiry")
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Invalid_200_receipts_outside_the_complete_response_window_are_refused(kind: "source-deadline")
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Invalid_200_receipts_outside_the_complete_response_window_are_refused(kind: "non-utc")
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Legacy_invalid_200_without_receipt_time_still_expires_at_the_attempt_deadline
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Replaced_uncertain_attempt_can_capture_after_later_failure_without_rewriting_history
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Capture_requires_an_in_window_response_and_replays_only_an_identical_receipt
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Same_request_hash_cannot_remap_a_page_sequence
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Completed_definite_failure_cannot_be_replaced_by_a_page_capture
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Unknown_response_closes_as_uncertain_and_uses_the_shared_retry_delay
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Attempt_and_deadline_bounds_fail_without_allocating_an_extra_retry
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Malformed_journal_expiry_and_retry_time_are_rejected
+    Elsa.Etl.Tests.EtlHttpSourceFetchTransitionTests.Applied_capture_and_deadline_failure_snapshot_caller_attempt_collections
+    Elsa.Etl.Tests.EtlHttpTransportTests.Fetch_retains_a_complete_200_body_and_uses_utc_receive_time
+    Elsa.Etl.Tests.EtlHttpTransportTests.Fetch_marks_oversized_200_as_invalid_and_keeps_other_statuses_as_metadata
+    Elsa.Etl.Tests.EtlHttpTransportTests.Fetch_parses_retry_after_http_date_as_exact_utc_time
+    Elsa.Etl.Tests.EtlHttpTransportTests.Fetch_attempt_deadline_returns_uncertainty_without_a_response_receipt
+    Elsa.Etl.Tests.EtlHttpTransportTests.Caller_cancellation_after_server_receives_request_is_propagated
+    Elsa.Etl.Tests.EtlHttpTransportTests.Requests_do_not_follow_redirects_or_reuse_cookies_between_attempts
+    Elsa.Etl.Tests.EtlHttpTransportTests.Delivery_posts_the_retained_bytes_with_effect_id_and_returns_only_response_metadata
+    Elsa.Etl.Tests.EtlHttpTransportTests.Registered_custom_authenticator_can_add_bounded_header_and_query_fields
+    Elsa.Etl.Tests.EtlHttpTransportTests.Authenticator_cannot_shadow_authored_query_or_replace_idempotency_header
+    Elsa.Etl.Tests.EtlHttpTransportTests.Authenticator_cannot_change_authority_or_path_before_send
+    Elsa.Etl.Tests.EtlHttpTransportTests.Authenticator_cannot_replace_retained_request_body_before_send
+    Elsa.Etl.Tests.EtlHttpTransportTests.Caller_cancellation_during_post_auth_body_verification_is_preserved
+    Elsa.Etl.Tests.EtlHttpTransportTests.Http_diagnostics_omit_request_credentials_and_response_values_but_retain_platform_origin_and_path(scheme: "Bearer")
+    Elsa.Etl.Tests.EtlHttpTransportTests.Http_diagnostics_omit_request_credentials_and_response_values_but_retain_platform_origin_and_path(scheme: "Basic")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Reads_typed_rows_with_absolute_indices_and_raw_record_byte_counts
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Reads_strict_int64_decimal_boolean_and_optional_null_or_missing_values
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Required_missing_and_null_fields_produce_safe_row_errors
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Ill_typed_and_out_of_range_scalars_are_row_errors_without_coercion(rawValue: "9223372036854775808", type: Int64)
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Ill_typed_and_out_of_range_scalars_are_row_errors_without_coercion(rawValue: "1.0", type: Int64)
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Ill_typed_and_out_of_range_scalars_are_row_errors_without_coercion(rawValue: "1e1000", type: Decimal)
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Ill_typed_and_out_of_range_scalars_are_row_errors_without_coercion(rawValue: "\"17\"", type: Int64)
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Ill_typed_and_out_of_range_scalars_are_row_errors_without_coercion(rawValue: "{\"nested\":1}", type: String)
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Decimal_parser_preserves_exact_representable_values(rawValue: "79228162514264337593543950335", expected: "79228162514264337593543950335")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Decimal_parser_preserves_exact_representable_values(rawValue: "-79228162514264337593543950335", expected: "-79228162514264337593543950335")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Decimal_parser_preserves_exact_representable_values(rawValue: "1e-28", expected: "1e-28")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Decimal_parser_preserves_exact_representable_values(rawValue: "0.0000000000000000000000000001", expected: "1e-28")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Decimal_parser_preserves_exact_representable_values(rawValue: "1.2300e2", expected: "123")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Decimal_parser_preserves_exact_representable_values(rawValue: "1000e-3", expected: "1")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Decimal_parser_preserves_exact_representable_values(rawValue: "792281625142643375935439503350e-1", expected: "79228162514264337593543950335")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Decimal_parser_accepts_negative_zero_and_equivalent_forms_with_many_trailing_zeroes
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Decimal_parser_rejects_underflow_rounding_and_values_outside_decimal_range(rawValue: "1e-29")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Decimal_parser_rejects_underflow_rounding_and_values_outside_decimal_range(rawValue: "79228162514264337593543950335.1")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Decimal_parser_rejects_underflow_rounding_and_values_outside_decimal_range(rawValue: "79228162514264337593543950336")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Decimal_parser_rejects_underflow_rounding_and_values_outside_decimal_range(rawValue: "1.234567890123456789012345678901")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Decimal_parser_rejects_underflow_rounding_and_values_outside_decimal_range(rawValue: "0.10000000000000000000000000001")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Decimal_parser_saturates_extreme_exponents_without_overflow_or_expansion
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Decimal_values_written_by_the_platform_round_trip_at_every_supported_scale
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Missing_selected_field_and_oversized_record_are_rejected_individually
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Declared_pointer_selects_scalar_fields_from_any_record_shape(record: "17", pointer: "")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Declared_pointer_selects_scalar_fields_from_any_record_shape(record: "[17]", pointer: "/0")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Declared_pointer_selects_scalar_fields_from_any_record_shape(record: "{\"value\":[17]}", pointer: "/value/0")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Accepts_exact_page_and_record_byte_limits_and_refuses_the_next_byte
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Refuses_record_count_above_the_page_limit_before_returning_rows
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Enforces_json_depth_at_the_configured_boundary
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Rejects_duplicate_properties_at_any_depth_including_metadata(json: "{\"kind\":\"one\",\"kind\":\"two\",\"records\":[]}")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Rejects_duplicate_properties_at_any_depth_including_metadata(json: "{\"records\":[{\"id\":1,\"name\":\"Ada\",\"metadat"···)
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Empty_page_is_not_eof_without_consulting_its_continuation(json: "{\"records\":[],\"next\":null}", continuation: null)
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Empty_page_is_not_eof_without_consulting_its_continuation(json: "{\"records\":[],\"next\":\"\"}", continuation: null)
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Empty_page_is_not_eof_without_consulting_its_continuation(json: "{\"records\":[]}", continuation: null)
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Empty_page_is_not_eof_without_consulting_its_continuation(json: "{\"records\":[],\"next\":\"c2\"}", continuation: "c2")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Token_continuation_accepts_scalar_text_without_coercing_structures(json: "{\"records\":[],\"next\":7}", continuation: "7")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Token_continuation_accepts_scalar_text_without_coercing_structures(json: "{\"records\":[],\"next\":false}", continuation: "false")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Token_continuation_accepts_scalar_text_without_coercing_structures(json: "{\"records\":[],\"next\":\"token\"}", continuation: "token")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Next_link_continuation_requires_a_string_and_continuation_is_bounded
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Continuation_policy_is_capped_by_the_persisted_metadata_bound
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Single_page_profile_does_not_read_a_continuation_selector
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Invalid_json_and_non_array_record_selectors_are_refused_with_safe_codes
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Invalid_utf8_anywhere_in_the_page_is_refused_without_exposing_input(template: "{\"records\":[{\"id\":1,\"name\":\"TEXT\"}]}")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Invalid_utf8_anywhere_in_the_page_is_refused_without_exposing_input(template: "{\"records\":[],\"ignored\":\"TEXT\"}")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Invalid_utf8_anywhere_in_the_page_is_refused_without_exposing_input(template: "{\"records\":[],\"TEXT\":0}")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Invalid_escaped_unicode_returns_a_safe_page_diagnostic(json: "{\"records\":[{\"id\":1,\"name\":\"\\uD800\"}]}")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Invalid_escaped_unicode_returns_a_safe_page_diagnostic(json: "{\"records\":[],\"next\":\"\\uD800\"}")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Invalid_escaped_unicode_returns_a_safe_page_diagnostic(json: "{\"records\":[],\"\\uD800\":0}")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Invalid_escaped_unicode_returns_a_safe_page_diagnostic(json: "{\"records\":[],\"ignored\":\"\\uD800\"}")
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Valid_unicode_and_escaped_property_names_preserve_values_and_byte_limits
+    Elsa.Etl.Tests.EtlJsonPageReaderTests.Absolute_indices_accept_the_last_representable_position_but_never_wrap
+    Elsa.Etl.Tests.EtlJsonPointerTests.Resolves_rfc6901_escaped_slash_and_tilde_segments
+    Elsa.Etl.Tests.EtlJsonPointerTests.Empty_pointer_resolves_the_document_root
+    Elsa.Etl.Tests.EtlJsonPointerTests.Resolves_canonical_array_indices_and_rejects_leading_zeroes
+    Elsa.Etl.Tests.EtlJsonPointerTests.Distinguishes_missing_property_from_present_null_value
+    Elsa.Etl.Tests.EtlJsonPointerTests.Rejects_non_pointer_paths_and_invalid_escape_sequences(pointer: "relative")
+    Elsa.Etl.Tests.EtlJsonPointerTests.Rejects_non_pointer_paths_and_invalid_escape_sequences(pointer: "/bad~")
+    Elsa.Etl.Tests.EtlJsonPointerTests.Rejects_non_pointer_paths_and_invalid_escape_sequences(pointer: "/bad~2")
+    Elsa.Etl.Tests.EtlJsonPointerTests.Rejects_non_pointer_paths_and_invalid_escape_sequences(pointer: "/bad~~0")
+    Elsa.Etl.Tests.EtlJsonTransformTests.Decoded_json_preserves_embedded_csv_characters_through_mapping
+    Elsa.Etl.Tests.EtlJsonTransformTests.Nonempty_decoded_page_can_filter_to_no_output_without_becoming_end_of_input
+    Elsa.Etl.Tests.EtlJsonTransformTests.Decoded_json_joins_a_real_csv_lookup_by_typed_key
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.Suspension_alone_does_not_admit_until_the_real_bookmark_is_committed(resumeTarget: null)
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.Suspension_alone_does_not_admit_until_the_real_bookmark_is_committed(resumeTarget: "resume-opaque-placement-4d21")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.A_changed_bookmark_address_cannot_create_an_admission_intent(field: "workflow")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.A_changed_bookmark_address_cannot_create_an_admission_intent(field: "activity")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.A_changed_bookmark_address_cannot_create_an_admission_intent(field: "node")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.A_changed_bookmark_address_cannot_create_an_admission_intent(field: "bookmark")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.A_changed_bookmark_address_cannot_create_an_admission_intent(field: "resume")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.A_changed_bookmark_address_cannot_create_an_admission_intent(field: "stimulus-type")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.A_changed_bookmark_address_cannot_create_an_admission_intent(field: "stimulus-hash")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.Cancellation_before_bookmark_creation_freezes_the_actual_registration_address(wholeParent: False)
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.Cancellation_before_bookmark_creation_freezes_the_actual_registration_address(wholeParent: True)
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.Cancellation_uses_the_checkpoint_snapshot_even_if_the_store_still_has_an_older_attempt
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.Native_private_state_preserves_the_explicit_null_tenant_opaque_partition_and_frozen_target(resumeTarget: null)
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.Native_private_state_preserves_the_explicit_null_tenant_opaque_partition_and_frozen_target(resumeTarget: "resume-opaque-placement-4d21")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.Cancellation_after_typed_claim_uses_the_consumed_receipt_even_after_payload_retirement(retired: False, resumeTarget: null)
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.Cancellation_after_typed_claim_uses_the_consumed_receipt_even_after_payload_retirement(retired: True, resumeTarget: null)
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.Cancellation_after_typed_claim_uses_the_consumed_receipt_even_after_payload_retirement(retired: False, resumeTarget: "resume-opaque-placement-4d21")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.Cancellation_after_typed_claim_uses_the_consumed_receipt_even_after_payload_retirement(retired: True, resumeTarget: "resume-opaque-placement-4d21")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.A_legacy_direct_request_without_the_target_field_retains_its_composed_address
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.A_placed_wait_rejects_a_registration_that_does_not_match_its_frozen_target(target: "node-1:etl-completed")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.A_placed_wait_rejects_a_registration_that_does_not_match_its_frozen_target(target: "other-opaque-target")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.Bookmark_checkpoint_rejects_a_registration_with_changed_typed_delivery_identity(field: "invocation")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.Bookmark_checkpoint_rejects_a_registration_with_changed_typed_delivery_identity(field: "registration-id")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.Bookmark_checkpoint_rejects_a_registration_with_changed_typed_delivery_identity(field: "payload-alias")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.Bookmark_checkpoint_rejects_a_registration_with_changed_typed_delivery_identity(field: "payload-schema")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.Bookmark_checkpoint_rejects_a_registration_with_changed_typed_delivery_identity(field: "stimulus-type")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.Bookmark_checkpoint_rejects_a_registration_with_changed_typed_delivery_identity(field: "stimulus-hash")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.Bookmark_checkpoint_rejects_a_registration_with_changed_typed_delivery_identity(field: "deduplication")
+    Elsa.Etl.Tests.EtlNativeCheckpointTests.A_missing_registration_without_a_consumed_receipt_cannot_be_reconstructed
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Published_RunEtl_resumes_its_composite_before_the_following_sibling(compositeKind: Sequence)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Published_RunEtl_resumes_its_composite_before_the_following_sibling(compositeKind: Flowchart)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Published_RunEtl_resumes_its_composite_before_the_following_sibling(compositeKind: CompensationScope)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Published_RunEtl_resumes_its_composite_before_the_following_sibling(compositeKind: CompensationAfterFault)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Published_ETL_terminal_outcome_obeys_the_surrounding_composite(compositeKind: Sequence, outcome: BusinessError)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Published_ETL_terminal_outcome_obeys_the_surrounding_composite(compositeKind: Flowchart, outcome: BusinessError)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Published_ETL_terminal_outcome_obeys_the_surrounding_composite(compositeKind: CompensationScope, outcome: BusinessError)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Published_ETL_terminal_outcome_obeys_the_surrounding_composite(compositeKind: Sequence, outcome: Faulted)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Published_ETL_terminal_outcome_obeys_the_surrounding_composite(compositeKind: Flowchart, outcome: Faulted)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Published_ETL_terminal_outcome_obeys_the_surrounding_composite(compositeKind: CompensationScope, outcome: Faulted)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Published_ETL_terminal_outcome_obeys_the_surrounding_composite(compositeKind: Sequence, outcome: Cancelled)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Published_ETL_terminal_outcome_obeys_the_surrounding_composite(compositeKind: Flowchart, outcome: Cancelled)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Published_ETL_terminal_outcome_obeys_the_surrounding_composite(compositeKind: CompensationScope, outcome: Cancelled)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Placed_composite_returns_ETL_completion_to_its_outer_sequence(compositeKind: Sequence)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Placed_composite_returns_ETL_completion_to_its_outer_sequence(compositeKind: Flowchart)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Placed_composite_returns_ETL_completion_to_its_outer_sequence(compositeKind: CompensationScope)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_cancellation_settles_ETL_and_retires_its_wait(compositeKind: Sequence, subtree: False)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_cancellation_settles_ETL_and_retires_its_wait(compositeKind: Sequence, subtree: True)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_cancellation_settles_ETL_and_retires_its_wait(compositeKind: Flowchart, subtree: False)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_cancellation_settles_ETL_and_retires_its_wait(compositeKind: Flowchart, subtree: True)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_cancellation_settles_ETL_and_retires_its_wait(compositeKind: CompensationScope, subtree: False)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_cancellation_settles_ETL_and_retires_its_wait(compositeKind: CompensationScope, subtree: True)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_cancellation_before_admission_cannot_be_resurrected_by_a_delayed_start(compositeKind: Sequence, subtree: False)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_cancellation_before_admission_cannot_be_resurrected_by_a_delayed_start(compositeKind: Sequence, subtree: True)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_cancellation_before_admission_cannot_be_resurrected_by_a_delayed_start(compositeKind: Flowchart, subtree: False)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_cancellation_before_admission_cannot_be_resurrected_by_a_delayed_start(compositeKind: Flowchart, subtree: True)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_cancellation_before_admission_cannot_be_resurrected_by_a_delayed_start(compositeKind: CompensationScope, subtree: False)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_cancellation_before_admission_cannot_be_resurrected_by_a_delayed_start(compositeKind: CompensationScope, subtree: True)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_HTTP_cancellation_retires_the_wait_and_refuses_late_receipts(composite: Sequence, subtree: False, boundary: BeforeWorker)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_HTTP_cancellation_retires_the_wait_and_refuses_late_receipts(composite: Sequence, subtree: False, boundary: SourceCapture)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_HTTP_cancellation_retires_the_wait_and_refuses_late_receipts(composite: Sequence, subtree: False, boundary: DestinationAcknowledgement)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_HTTP_cancellation_retires_the_wait_and_refuses_late_receipts(composite: Sequence, subtree: True, boundary: BeforeWorker)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_HTTP_cancellation_retires_the_wait_and_refuses_late_receipts(composite: Sequence, subtree: True, boundary: SourceCapture)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_HTTP_cancellation_retires_the_wait_and_refuses_late_receipts(composite: Sequence, subtree: True, boundary: DestinationAcknowledgement)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_HTTP_cancellation_retires_the_wait_and_refuses_late_receipts(composite: Flowchart, subtree: False, boundary: BeforeWorker)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_HTTP_cancellation_retires_the_wait_and_refuses_late_receipts(composite: Flowchart, subtree: False, boundary: SourceCapture)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_HTTP_cancellation_retires_the_wait_and_refuses_late_receipts(composite: Flowchart, subtree: False, boundary: DestinationAcknowledgement)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_HTTP_cancellation_retires_the_wait_and_refuses_late_receipts(composite: Flowchart, subtree: True, boundary: BeforeWorker)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_HTTP_cancellation_retires_the_wait_and_refuses_late_receipts(composite: Flowchart, subtree: True, boundary: SourceCapture)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Native_HTTP_cancellation_retires_the_wait_and_refuses_late_receipts(composite: Flowchart, subtree: True, boundary: DestinationAcknowledgement)
+    Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Missing_binding_refusal_resumes_and_acknowledges_the_native_wait
+    Elsa.Etl.Tests.EtlNativeResultDeliveryTests.Mailbox_dispatch_status_alone_never_acknowledges_the_durable_result(status: Dispatched)
+    Elsa.Etl.Tests.EtlNativeResultDeliveryTests.Mailbox_dispatch_status_alone_never_acknowledges_the_durable_result(status: Deferred)
+    Elsa.Etl.Tests.EtlNativeResultDeliveryTests.Mailbox_dispatch_status_alone_never_acknowledges_the_durable_result(status: Duplicate)
+    Elsa.Etl.Tests.EtlNativeResultDeliveryTests.Mailbox_dispatch_status_alone_never_acknowledges_the_durable_result(status: NotFound)
+    Elsa.Etl.Tests.EtlNativeResultDeliveryTests.Consumed_typed_receipt_and_absent_bookmark_prove_delivery
+    Elsa.Etl.Tests.EtlNativeResultDeliveryTests.Preexisting_matching_consumed_receipt_proves_duplicate_delivery_without_dispatch
+    Elsa.Etl.Tests.EtlNativeResultDeliveryTests.Preexisting_consumed_receipt_for_another_registration_leaves_delivery_owed
+    Elsa.Etl.Tests.EtlNativeResultDeliveryTests.Terminal_native_state_proves_delivery_without_dispatch(terminalState: "parent")
+    Elsa.Etl.Tests.EtlNativeResultDeliveryTests.Terminal_native_state_proves_delivery_without_dispatch(terminalState: "activity")
+    Elsa.Etl.Tests.EtlNativeResultDeliveryTests.Missing_parent_or_suspended_activity_without_bookmark_leaves_delivery_owed(missing: "parent")
+    Elsa.Etl.Tests.EtlNativeResultDeliveryTests.Missing_parent_or_suspended_activity_without_bookmark_leaves_delivery_owed(missing: "bookmark")
+    Elsa.Etl.Tests.EtlNativeResultDeliveryTests.A_mismatched_live_bookmark_is_refused_before_dispatch
+    Elsa.Etl.Tests.EtlNativeResultDeliveryTests.A_forged_delivery_payload_hash_is_refused_without_settling_the_outbox
+    Elsa.Etl.Tests.EtlNativeResultDeliveryTests.Dispatch_carries_the_frozen_typed_address_and_binds_to_the_native_partition
+    Elsa.Etl.Tests.EtlNativeResultDeliveryTests.Lost_start_intent_ack_replays_from_the_exact_run_after_native_history_was_removed
+    Elsa.Etl.Tests.EtlPublishedWorkflowJourneyTests.Published_parent_keeps_its_ETL_version_after_edit_and_runs_without_design_services(flowchart: False, httpSource: False)
+    Elsa.Etl.Tests.EtlPublishedWorkflowJourneyTests.Published_parent_keeps_its_ETL_version_after_edit_and_runs_without_design_services(flowchart: True, httpSource: False)
+    Elsa.Etl.Tests.EtlPublishedWorkflowJourneyTests.Published_parent_keeps_its_ETL_version_after_edit_and_runs_without_design_services(flowchart: False, httpSource: True)
+    Elsa.Etl.Tests.EtlPublishedWorkflowJourneyTests.Published_parent_keeps_its_ETL_version_after_edit_and_runs_without_design_services(flowchart: True, httpSource: True)
+    Elsa.Etl.Tests.EtlRowTransformerTests.Header_map_accepts_schema_fields_in_a_different_order
+    Elsa.Etl.Tests.EtlRowTransformerTests.Header_map_rejects_duplicates_missing_fields_extra_fields_case_mismatch_and_nonzero_ordinal
+    Elsa.Etl.Tests.EtlRowTransformerTests.Transforms_typed_source_and_lookup_values_to_compact_ordered_jsonl
+    Elsa.Etl.Tests.EtlRowTransformerTests.Filters_use_mapped_output_names_and_can_return_without_serializing
+    Elsa.Etl.Tests.EtlRowTransformerTests.String_filters_use_exact_ordinal_comparison
+    Elsa.Etl.Tests.EtlRowTransformerTests.Typed_row_helper_parses_lookup_values_and_maps_optional_empty_to_null
+    Elsa.Etl.Tests.EtlRowTransformerTests.Decimal_values_use_dot_decimal_independently_of_current_culture
+    Elsa.Etl.Tests.EtlRowTransformerTests.Required_blank_value_returns_safe_rejection_with_field_and_code
+    Elsa.Etl.Tests.EtlRowTransformerTests.Typed_row_helper_rejects_overflow_and_non_invariant_or_noncanonical_values(type: Int64, value: "9223372036854775808")
+    Elsa.Etl.Tests.EtlRowTransformerTests.Typed_row_helper_rejects_overflow_and_non_invariant_or_noncanonical_values(type: Decimal, value: "1,25")
+    Elsa.Etl.Tests.EtlRowTransformerTests.Typed_row_helper_rejects_overflow_and_non_invariant_or_noncanonical_values(type: Decimal, value: "1e3")
+    Elsa.Etl.Tests.EtlRowTransformerTests.Typed_row_helper_rejects_overflow_and_non_invariant_or_noncanonical_values(type: Boolean, value: " true ")
+    Elsa.Etl.Tests.EtlRowTransformerTests.Typed_row_helper_rejects_overflow_and_non_invariant_or_noncanonical_values(type: Boolean, value: "yes")
+    Elsa.Etl.Tests.EtlRowTransformerTests.Rejects_a_blank_or_missing_lookup_key_separately_from_row_conversion
+    Elsa.Etl.Tests.EtlRowTransformerTests.String_lookup_keys_use_exact_ordinal_match
+    Elsa.Etl.Tests.EtlRowTransformerTests.String_lookup_keys_preserve_nonempty_whitespace_and_match_exactly
+    Elsa.Etl.Tests.EtlRowTransformerTests.Lookup_parse_helper_rejects_invalid_typed_values_before_the_run_starts
+    Elsa.Etl.Tests.EtlRowTransformerTests.Enforces_output_limit_before_json_expansion_and_counts_the_line_feed
+    Elsa.Etl.Tests.EtlRowTransformerTests.Rejects_json_string_expansion_before_output_buffer_growth_exceeds_the_remaining_budget
+    Elsa.Etl.Tests.EtlRowTransformerTests.Does_not_treat_the_header_record_as_a_source_data_row
+    Elsa.Etl.Tests.EtlRowTransformerTests.Rejects_source_record_shape_mismatch_without_exposing_values
+    Elsa.Etl.Tests.EtlRowTransformerTests.Rejects_filter_literals_that_disagree_with_the_mapped_output_type
+    Elsa.Etl.Tests.EtlRuntimeIdentityTests.Artifact_identity_keeps_the_existing_v1_published_encoding
+    Elsa.Etl.Tests.EtlRuntimeIdentityTests.Scope_key_preserves_null_named_and_opaque_tenants
+    Elsa.Etl.Tests.EtlRuntimeIdentityTests.Invocation_framing_preserves_opaque_scope_and_address_identity
+    Elsa.Etl.Tests.EtlRuntimeIdentityTests.Distinct_opaque_UTF16_code_units_cannot_collapse_to_one_execution_identity
+    Elsa.Etl.Tests.EtlRuntimeIdentityTests.Batch_identity_is_stable_across_culture_and_tracks_range_input_and_destination
+    Elsa.Etl.Tests.EtlRuntimeIdentityTests.Output_key_matches_the_file_publisher_and_routes_are_distinct
+    Elsa.Etl.Tests.EtlRuntimeJsonTests.Write_and_read_preserve_opaque_utf16_code_units
+    Elsa.Etl.Tests.EtlRuntimeJsonTests.JsonElement_round_trip_survives_ordinary_state_serialization
+    Elsa.Etl.Tests.EtlRuntimeJsonTests.Write_preserves_the_existing_ef_v1_wire_shape
+    Elsa.Etl.Tests.EtlRuntimeJsonTests.Read_rejects_unknown_members_and_noncanonical_string_values
+    Elsa.Etl.Tests.EtlRuntimeJsonTests.Read_rejects_numeric_enum_values
+    Elsa.Etl.Tests.EtlRuntimeJsonTests.Read_enforces_byte_bounds_for_strings_and_elements
+    Elsa.Etl.Tests.EtlScopeCompatibilityTests.Null_tenant_draft_and_publication_roundtrip_without_colliding_with_named_tenants
+    Elsa.Etl.Tests.EtlScopeCompatibilityTests.Scope_and_host_file_binding_equality_preserve_null_as_its_own_tenant_address
+    Elsa.Etl.Tests.EtlV1CompatibilityFixtureTests.Retained_v1_published_artifact_and_native_workflow_keep_their_original_identity
+    Elsa.Etl.Tests.EtlV1CompatibilityFixtureTests.Runtime_artifact_store_reads_the_retained_native_publication_without_design_services
+    Elsa.Etl.Tests.EtlV1CompatibilityFixtureTests.Runtime_store_migrates_and_accepts_the_retained_owed_effect_without_retargeting_binding_handles
+    Elsa.Etl.Tests.EtlV2ArtifactIdentityTests.Persisted_invocation_keeps_default_v2_pipeline_bytes_and_hash
+    Elsa.Etl.Tests.EtlWorkflowPublicationTests.Selection_token_is_canonical_and_round_trips_the_full_artifact_identity
+    Elsa.Etl.Tests.EtlWorkflowPublicationTests.Selection_token_rejects_noncanonical_or_invalid_values(token: "etl1:orders:01:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"···)
+    Elsa.Etl.Tests.EtlWorkflowPublicationTests.Selection_token_rejects_noncanonical_or_invalid_values(token: "etl1:orders:1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"···)
+    Elsa.Etl.Tests.EtlWorkflowPublicationTests.Selection_token_rejects_noncanonical_or_invalid_values(token: "etl1:orders:1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"···)
+    Elsa.Etl.Tests.EtlWorkflowPublicationTests.Selection_token_rejects_noncanonical_or_invalid_values(token: "etl1:bad:id:1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"···)
+    Elsa.Etl.Tests.EtlWorkflowPublicationTests.Selection_literal_hashes_into_the_parent_executable_identity
+    Elsa.Etl.Tests.EtlWorkflowPublicationTests.Compilation_source_embeds_the_exact_scoped_published_artifact_without_workflow_dependency_edges
+    Elsa.Etl.Tests.EtlWorkflowPublicationTests.Compilation_source_pins_v2_artifact_under_the_existing_key_and_native_reader_validates_it
+    Elsa.Etl.Tests.EtlWorkflowPublicationTests.Compilation_source_and_native_reader_preserve_default_v2_artifact_hash_and_bytes_at_the_artifact_limit
+    Elsa.Etl.Tests.EtlWorkflowPublicationTests.Native_pin_reader_rejects_wrong_version_hash_and_noncanonical_v2_documents
+    Elsa.Etl.Tests.EtlWorkflowPublicationTests.Native_pin_reader_rejects_default_shape_with_missing_required_property_or_other_noncanonical_bytes
+    Elsa.Etl.Tests.EtlWorkflowPublicationTests.V1_only_compiler_composition_refuses_v2_pinning_with_a_safe_explicit_error
+    Elsa.Etl.Tests.EtlWorkflowPublicationTests.Compilation_source_rejects_a_published_version_whose_hash_differs_from_the_hashed_selection
+    Elsa.Etl.Tests.EtlWorkflowPublicationTests.Compilation_source_refuses_dynamic_selection_before_reading_the_design_store
+    Elsa.Etl.Tests.FileChunkStoreTests.Connector_publication_key_matches_real_immutable_file_publication
+    Elsa.Etl.Tests.FileChunkStoreTests.Publishes_complete_hashed_chunk_and_replays_without_overwriting
+    Elsa.Etl.Tests.FileChunkStoreTests.A_conflicting_effect_cannot_replace_the_original_chunk
+    Elsa.Etl.Tests.FileChunkStoreTests.Staged_data_is_invisible_until_writer_finishes_and_midwrite_failure_leaves_no_final_chunk
+    Elsa.Etl.Tests.FileChunkStoreTests.Checks_output_byte_budget_before_each_write_and_does_not_publish_partial_data
+    Elsa.Etl.Tests.FileChunkStoreTests.Concurrent_identical_writers_converge_and_conflicting_writers_have_one_winner(round: 0)
+    Elsa.Etl.Tests.FileChunkStoreTests.Concurrent_identical_writers_converge_and_conflicting_writers_have_one_winner(round: 1)
+    Elsa.Etl.Tests.FileChunkStoreTests.Concurrent_identical_writers_converge_and_conflicting_writers_have_one_winner(round: 2)
+    Elsa.Etl.Tests.FileChunkStoreTests.Concurrent_identical_writers_converge_and_conflicting_writers_have_one_winner(round: 3)
+    Elsa.Etl.Tests.FileChunkStoreTests.Cancellation_unwinds_its_writer_and_cleans_only_its_staging_file
+    Elsa.Etl.Tests.FileChunkStoreTests.Existing_oversized_or_corrupted_chunk_is_refused_without_reading_unbounded_content
+    Elsa.Etl.Tests.HostConnectorBindingsTests.Real_runtime_composition_resolves_mixed_kinds_without_exposing_http_to_v1
+    Elsa.Etl.Tests.HostConnectorBindingsTests.Current_alias_role_collisions_are_refused_during_host_composition
+    Elsa.Etl.Tests.HostConnectorBindingsTests.Composed_registry_snapshots_mutable_options_and_enforces_shard_ceiling
+    Elsa.Etl.Tests.HostConnectorBindingsTests.Wrong_connector_kind_is_not_approved_by_a_matching_alias_and_role
+    Elsa.Etl.Tests.HostFileBindingsTests.Pins_original_output_revision_when_current_alias_is_retargeted
+    Elsa.Etl.Tests.HostFileBindingsTests.Input_revisions_have_expected_content_identity_and_open_only_in_their_own_scope
+    Elsa.Etl.Tests.HostFileBindingsTests.Authored_paths_cannot_become_aliases(alias: "../path")
+    Elsa.Etl.Tests.HostFileBindingsTests.Authored_paths_cannot_become_aliases(alias: "/absolute")
+    Elsa.Etl.Tests.HostFileBindingsTests.Authored_paths_cannot_become_aliases(alias: "C:\\source")
+    Elsa.Etl.Tests.HostFileBindingsTests.Authored_paths_cannot_become_aliases(alias: "with space")
+    Elsa.Etl.Tests.HostFileBindingsTests.Refuses_mutable_inputs_missing_digests_or_nonatomic_outputs
+    Elsa.Etl.Tests.HostFileBindingsTests.Listings_are_scope_filtered_and_contain_only_safe_alias_and_role_metadata
+    Elsa.Etl.Tests.HostFileBindingsTests.Duplicate_current_aliases_or_revision_identities_are_refused
+    Elsa.Etl.Tests.HostHttpBindingsTests.Registry_snapshots_mutable_options_and_source_shards
+    Elsa.Etl.Tests.HostHttpBindingsTests.Source_seed_must_match_the_pinned_origin_and_exact_path_policy
+    Elsa.Etl.Tests.HostHttpBindingsTests.Explicit_path_allowlist_does_not_expand_to_include_endpoint_or_source_seed
+    Elsa.Etl.Tests.HostHttpBindingsTests.Retained_revision_resolves_exactly_after_current_alias_moves
+    Elsa.Etl.Tests.HostHttpBindingsTests.Duplicate_current_revisions_and_shard_role_mismatches_are_refused
+    Elsa.Etl.Tests.HostHttpBindingsTests.Authenticated_binding_requires_an_explicit_tenant_before_resolving_connection
+    Elsa.Etl.Tests.HostHttpBindingsTests.Exact_pin_rejects_changed_nonsecret_connection_settings_and_disposes_resolution
+    Elsa.Etl.Tests.HostHttpBindingsTests.Exact_pin_rejects_drift_in_additional_public_connection_settings
+    Elsa.Etl.Tests.HostHttpBindingsTests.Sensitive_scheme_fields_cannot_be_smuggled_into_public_settings
+    Elsa.Etl.Tests.HostHttpBindingsTests.Secret_rotation_does_not_change_pin_or_read_secret_during_resolution
+    Elsa.Etl.Tests.HostHttpBindingsTests.Unsafe_resolved_connection_metadata_is_refused_and_disposed(failure: "wrong-tenant")
+    Elsa.Etl.Tests.HostHttpBindingsTests.Unsafe_resolved_connection_metadata_is_refused_and_disposed(failure: "wrong-type")
+    Elsa.Etl.Tests.HostHttpBindingsTests.Unsafe_resolved_connection_metadata_is_refused_and_disposed(failure: "wrong-owner")
+    Elsa.Etl.Tests.HostHttpBindingsTests.Unsafe_resolved_connection_metadata_is_refused_and_disposed(failure: "not-ready")
+    Elsa.Etl.Tests.HostHttpBindingsTests.Unsafe_resolved_connection_metadata_is_refused_and_disposed(failure: "unsupported-scheme")
+    Elsa.Etl.Tests.HostHttpBindingsTests.Unsafe_resolved_connection_metadata_is_refused_and_disposed(failure: "host-not-allowed")
+    Elsa.Etl.Tests.HostHttpBindingsTests.Authentication_scheme_must_have_exactly_one_registered_authenticator
+    Elsa.Etl.Tests.HostHttpBindingsTests.Connection_disposal_errors_are_redacted
+    Elsa.Etl.Tests.HostHttpBindingsTests.Resolver_cancellation_is_only_propagated_when_attempt_token_was_cancelled
+    Elsa.Etl.Tests.HostHttpBindingsTests.Already_cancelled_attempt_cannot_resolve_anonymous_binding
+    Elsa.Etl.Tests.HostHttpBindingsTests.Cancellation_after_a_resolver_ignores_the_token_disposes_its_connection
+    Elsa.Etl.Tests.HostHttpBindingsTests.Output_idempotency_header_cannot_replace_authentication_header
+    Elsa.Etl.Tests.HostHttpBindingsTests.Idempotency_header_cannot_control_transport(header: "Keep-Alive")
+    Elsa.Etl.Tests.HostHttpBindingsTests.Idempotency_header_cannot_control_transport(header: "TE")
+    Elsa.Etl.Tests.HostHttpBindingsTests.Idempotency_header_cannot_control_transport(header: "Trailer")
+    Elsa.Etl.Tests.HostHttpBindingsTests.Idempotency_header_cannot_control_transport(header: "Upgrade")
+    Elsa.Etl.Tests.HostHttpBindingsTests.Idempotency_header_cannot_control_transport(header: "host")
+    Elsa.Etl.Tests.HostHttpBindingsTests.Idempotency_header_cannot_control_transport(header: "cOnTeNt-LeNgTh")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Refuses_paths_and_origins_outside_exact_host_policy(request: "https://other.example/data")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Refuses_paths_and_origins_outside_exact_host_policy(request: "http://source.example/data")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Refuses_paths_and_origins_outside_exact_host_policy(request: "https://source.example:444/data")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Refuses_paths_and_origins_outside_exact_host_policy(request: "https://user@source.example/data")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Refuses_paths_and_origins_outside_exact_host_policy(request: "https://source.example/data#fragment")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Refuses_paths_and_origins_outside_exact_host_policy(request: "https://source.example/other")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Refuses_paths_and_origins_outside_exact_host_policy(request: "https://source.example/data/child")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Refuses_paths_and_origins_outside_exact_host_policy(request: "https://source.example/data/../other")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Refuses_paths_and_origins_outside_exact_host_policy(request: "https://source.example/data/%2e%2e/other")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Refuses_paths_and_origins_outside_exact_host_policy(request: "https://source.example/data%2fchild")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Refuses_paths_and_origins_outside_exact_host_policy(request: "https://source.example/data%5cchild")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Refuses_paths_and_origins_outside_exact_host_policy(request: "https://source.example/data%252fchild")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Refuses_paths_and_origins_outside_exact_host_policy(request: "https://source.example/data%25%32%66child")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Refuses_paths_and_origins_outside_exact_host_policy(request: "https://source.example/data%0a")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Allows_canonical_exact_paths_and_query_only_continuations(value: "?cursor=opaque%2Fvalue", expected: "https://source.example/data?cursor=opaque%2Fvalue")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Allows_canonical_exact_paths_and_query_only_continuations(value: "./data?cursor=2", expected: "https://source.example/data?cursor=2")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Allows_canonical_exact_paths_and_query_only_continuations(value: "https://SOURCE.example:443/ignored/../data", expected: "https://source.example/data")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Relative_resolution_does_not_discard_policy_relevant_syntax(value: "https://source.example/data\\child")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Relative_resolution_does_not_discard_policy_relevant_syntax(value: " https://source.example/data")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Relative_resolution_does_not_discard_policy_relevant_syntax(value: "https://source.example/data\n")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Relative_resolution_does_not_discard_policy_relevant_syntax(value: "//other.example/data")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Relative_resolution_does_not_discard_policy_relevant_syntax(value: "../other")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Exact_allowlist_is_snapshotted_and_http_requires_explicit_host_opt_in
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Host_path_entries_cannot_change_origin_or_embed_query_policy(path: "https://other.example/data")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Host_path_entries_cannot_change_origin_or_embed_query_policy(path: "//other.example/data")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Host_path_entries_cannot_change_origin_or_embed_query_policy(path: "/data?query=1")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Host_path_entries_cannot_change_origin_or_embed_query_policy(path: "/data#fragment")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Host_path_entries_cannot_change_origin_or_embed_query_policy(path: "/data%2fchild")
+    Elsa.Etl.Tests.HttpEndpointPolicyTests.Explicit_literal_percent_path_is_allowed_without_a_second_escape_sequence
+    Elsa.Etl.Tests.RunEtlActivityTests.Activation_uses_the_executable_pin_and_trusted_scope_to_suspend_with_one_typed_wait
+    Elsa.Etl.Tests.RunEtlActivityTests.Activation_refuses_an_absent_or_incorrectly_owned_resume_target(change: "missing")
+    Elsa.Etl.Tests.RunEtlActivityTests.Activation_refuses_an_absent_or_incorrectly_owned_resume_target(change: "foreign-node")
+    Elsa.Etl.Tests.RunEtlActivityTests.Activation_refuses_an_absent_or_incorrectly_owned_resume_target(change: "wrong-handler")
+    Elsa.Etl.Tests.RunEtlActivityTests.Activation_refuses_a_pin_or_hydrated_value_that_is_not_the_hashed_literal(replacedPin: False)
+    Elsa.Etl.Tests.RunEtlActivityTests.Activation_refuses_a_pin_or_hydrated_value_that_is_not_the_hashed_literal(replacedPin: True)
+    Elsa.Etl.Tests.RunEtlActivityTests.A_durable_cancelled_result_uses_the_normal_native_cancellation_transition
+    Elsa.Etl.Tests.RunEtlActivityTests.Resume_refuses_changed_or_unsupported_result_and_saved_state_before_returning_an_outcome(change: "registration")
+    Elsa.Etl.Tests.RunEtlActivityTests.Resume_refuses_changed_or_unsupported_result_and_saved_state_before_returning_an_outcome(change: "node")
+    Elsa.Etl.Tests.RunEtlActivityTests.Resume_refuses_changed_or_unsupported_result_and_saved_state_before_returning_an_outcome(change: "provider")
+    Elsa.Etl.Tests.RunEtlActivityTests.Resume_refuses_changed_or_unsupported_result_and_saved_state_before_returning_an_outcome(change: "counts")
+    Elsa.Etl.Tests.RunEtlActivityTests.Resume_refuses_changed_or_unsupported_result_and_saved_state_before_returning_an_outcome(change: "state-format")
+    Elsa.Etl.Tests.RunEtlActivityTests.Resume_refuses_changed_or_unsupported_result_and_saved_state_before_returning_an_outcome(change: "completion-format")
