@@ -16,7 +16,7 @@ namespace Elsa.Activities.Http.Activities;
 [RefusesSecretBinding(nameof(ContentType), SecretBindingRefusalReason.EchoedToOutput)]
 [Activity(Icon = "Reply")]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
-[Version("1.1.0")]
+[Version("1.2.0")]
 public sealed class WriteHttpResponse : Activity<HttpResponseInstruction>
 {
     /// <summary>The HTTP status code to return. Values less than one default to 200.</summary>

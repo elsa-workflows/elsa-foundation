@@ -16,4 +16,4 @@ public sealed record HttpResponseInstruction(
     [property: Output(Key = "StatusCode", Path = "statusCode")] int StatusCode,
     [property: Output(Key = "Headers", Path = "headers")] IDictionary<string, string[]> Headers,
     [property: Output(Key = "Body", Path = "body", IsRequired = false)] JsonElement? Body,
-    [property: Output(Key = "ContentType", Path = "contentType")] string? ContentType);
+    [property: Output(Key = "ContentType", Path = "contentType", IsRequired = false)] string? ContentType);
