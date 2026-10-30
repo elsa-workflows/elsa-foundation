@@ -38,6 +38,8 @@ public sealed class BpmnNativeEventBindingTests
 
     [Theory]
     [InlineData("correct")]
+    [InlineData("published-key")]
+    [InlineData("absent-correlation")]
     [InlineData("null-correlation")]
     [InlineData("blank-correlation")]
     public void A_fixed_midflow_Event_is_a_broadcast_worker(string variant) =>
@@ -64,9 +66,12 @@ public sealed class BpmnNativeEventBindingTests
         var bindings = values.ToDictionary(item => item.Key, item => new RuntimeInputBinding(item.Key, new ValueTypeDescriptor("String"),
             ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
             ValueEnvelope.Inline(new ValueTypeDescriptor("String"), JsonSerializer.SerializeToElement(item.Value), ValueProtectionPolicy.InstanceInline)));
+        if (variant == "absent-correlation") bindings["CorrelationId"] = new("CorrelationId", new ValueTypeDescriptor("String"),
+            ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
+            new ValueEnvelope(new ValueTypeDescriptor("String"), ValuePresence.Absent, null, null, ValueProtectionPolicy.InstanceInline));
         if (variant == "expression-name") bindings["EventName"] = new("EventName", new ValueTypeDescriptor("String"),
             ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Expression, expression: new("CSharp", "\"release\""));
-        return new("event", "event", variant == "wrong-type" ? typeof(WriteLine).FullName! : typeof(Event).FullName!, "1.0.0", "test/clr",
+        return new("event", "event", variant == "wrong-type" ? typeof(WriteLine).FullName! : variant is "published-key" or "absent-correlation" ? Event.ActivityType : typeof(Event).FullName!, "1.0.0", "test/clr",
             JsonSerializer.SerializeToElement(new { type = "clr" }), bindings, new Dictionary<string, string>());
     }
 }

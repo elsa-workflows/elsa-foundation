@@ -14,6 +14,7 @@ public sealed partial class BpmnDirectExecutionTests
     [InlineData(null)]
     [InlineData("message")]
     [InlineData("blank-name")]
+    [InlineData("padded-name")]
     [InlineData("extra-filter")]
     [InlineData("missing-pin")]
     [InlineData("wrong-pin")]
@@ -29,7 +30,7 @@ public sealed partial class BpmnDirectExecutionTests
 
     private static RuntimeModelMaterial SignalMaterial(string? variant = null)
     {
-        var properties = new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = variant == "blank-name" ? " " : "release" };
+        var properties = new Dictionary<string, string> { [BpmnEventDefinitionProperties.Name] = variant == "blank-name" ? " " : variant == "padded-name" ? " release " : "release" };
         if (variant == "extra-filter") properties["correlation"] = "order-1";
         var process = new BpmnProcessDefinition("signals", Elements:
             [new("start", BpmnElementTypes.StartEvent), new("fork", BpmnElementTypes.ParallelGateway),

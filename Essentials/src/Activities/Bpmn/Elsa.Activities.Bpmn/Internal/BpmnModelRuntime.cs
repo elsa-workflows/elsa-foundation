@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Bpmn.Model;
+using Elsa.Primitives.Models;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -296,12 +297,10 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
 
     internal static void ValidateEventWorker(ExecutableNode root, string name)
     {
-        if (root.ActivityType != "Elsa.Activities.Primitives.Activities.Event" || root.ChildSlots.Count != 0 ||
+        if (root.ActivityType is not ("Elsa.Event" or "Elsa.Activities.Primitives.Activities.Event") || root.ChildSlots.Count != 0 || root.IntrinsicKind is not null ||
             !Literal("EventName", out var eventName) || eventName.ValueKind != JsonValueKind.String || eventName.GetString() != name ||
             !Literal("CanStartWorkflow", out var canStart) || canStart.ValueKind != JsonValueKind.False ||
-            root.InputBindings.TryGetValue("CorrelationId", out var correlation) &&
-                (correlation.Source != RuntimeInputBindingSource.Literal || correlation.LiteralValue is not { } value ||
-                    value.ValueKind != JsonValueKind.Null && (value.ValueKind != JsonValueKind.String || !string.IsNullOrWhiteSpace(value.GetString()))))
+            !IsUncorrelated())
             throw new BpmnModelValidationException("A signal catch requires a closed native Event worker with the same fixed name, CanStartWorkflow=false and no correlation filter.");
 
         bool Literal(string key, out JsonElement value)
@@ -312,6 +311,11 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
             value = literal;
             return true;
         }
+
+        bool IsUncorrelated() => !root.InputBindings.TryGetValue("CorrelationId", out var correlation) ||
+            correlation.Source == RuntimeInputBindingSource.Literal && (correlation.Literal?.Presence == ValuePresence.Absent ||
+                correlation.LiteralValue is { } value && (value.ValueKind == JsonValueKind.Null ||
+                    value.ValueKind == JsonValueKind.String && string.IsNullOrWhiteSpace(value.GetString())));
     }
     private static void InputId(string value)
     {

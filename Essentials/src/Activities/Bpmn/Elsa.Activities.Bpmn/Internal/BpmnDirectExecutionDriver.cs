@@ -390,7 +390,7 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
 
     private static bool IsSignalCatch(BpmnElement element, BpmnModelDefinition definition) =>
         element.EventDefinitions.Count == 1 && element.EventDefinitions.Single() is { Type: BpmnEventDefinitionTypes.Signal } signal &&
-        signal.Properties.Count == 1 && signal.Properties.TryGetValue(BpmnEventDefinitionProperties.Name, out var name) && !string.IsNullOrWhiteSpace(name) &&
+        signal.Properties.Count == 1 && signal.Properties.TryGetValue(BpmnEventDefinitionProperties.Name, out var name) && !string.IsNullOrWhiteSpace(name) && name == name.Trim() &&
         definition.NativeEventBindings?.Any(binding => binding.BindingId == element.BindingRef) == true;
 
     private static bool IsDurationBoundary(BpmnElement element, BpmnProcessDefinition process, BpmnModelDefinition definition)
