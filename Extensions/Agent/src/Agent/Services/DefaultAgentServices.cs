@@ -56,8 +56,9 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink) : I
 
     public async Task<AgentMessage> AddMessageAsync(string sessionId, AgentMessageCreateRequest request, CancellationToken cancellationToken = default)
     {
-        if (!_sessions.ContainsKey(sessionId))
+        if (!_sessions.TryGetValue(sessionId, out var session))
             throw new InvalidOperationException($"Agent session '{sessionId}' was not found.");
+        sessionId = session.Id;
 
         var message = new AgentMessage(
             NewId(),

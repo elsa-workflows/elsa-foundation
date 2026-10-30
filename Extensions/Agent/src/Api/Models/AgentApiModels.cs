@@ -423,14 +423,14 @@ public static class AgentApiMapping
         _ => status.ToString().ToLowerInvariant()
     };
 
-    private static AgentContextSensitivity ParseSensitivity(string sensitivity) => sensitivity.Trim().ToLowerInvariant() switch
+    private static AgentContextSensitivity ParseSensitivity(string sensitivity) => sensitivity?.Trim().ToLowerInvariant() switch
     {
         "public" => AgentContextSensitivity.Public,
         "internal" => AgentContextSensitivity.Internal,
         "confidential" => AgentContextSensitivity.Sensitive,
         "sensitive" => AgentContextSensitivity.Sensitive,
-        "secret-redacted" => AgentContextSensitivity.SecretRedacted,
+        "secret-redacted" or "secretredacted" => AgentContextSensitivity.Secret,
         "secret" => AgentContextSensitivity.Secret,
-        _ => AgentContextSensitivity.Internal
+        _ => AgentContextSensitivity.Secret
     };
 }

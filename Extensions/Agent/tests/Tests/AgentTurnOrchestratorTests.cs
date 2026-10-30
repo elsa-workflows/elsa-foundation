@@ -4,11 +4,97 @@ using Elsa.Agent.Extensions;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using System.Text.Json;
 
 namespace Elsa.Agent.Tests;
 
 public sealed class AgentTurnOrchestratorTests
 {
+    [Fact]
+    public async Task Case_variant_session_urls_share_one_foreground_lease()
+    {
+        using var root = Build(new DeterministicAgentProvider(), [new EchoTool()]);
+        using var scope = root.CreateScope();
+        var sessions = scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
+        var streaming = scope.ServiceProvider.GetRequiredService<IAgentStreamingService>();
+        var session = await CreateSessionAsync(sessions, DeterministicAgentProvider.Id);
+        await PostAsync(sessions, session.Id, "read state");
+        var alias = SwapCase(session.Id);
+        Assert.NotEqual(session.Id, alias);
+        await using var first = streaming.StreamAsync(alias).GetAsyncEnumerator();
+        Assert.True(await first.MoveNextAsync());
+        Assert.Equal(AgentStreamEventKind.Started, first.Current.Kind);
+
+        var second = await Collect(streaming.StreamAsync(session.Id));
+        Assert.Equal("agent.turn.busy", Assert.Single(second).Error?.Code);
+    }
+
+    [Fact]
+    public async Task A_pause_started_through_a_session_alias_resumes_through_its_canonical_identity()
+    {
+        using var root = Build(new DeterministicAgentProvider(), [new ApplyChangeTool()]);
+        using var scope = root.CreateScope();
+        var sessions = scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
+        var streaming = scope.ServiceProvider.GetRequiredService<IAgentStreamingService>();
+        var proposals = scope.ServiceProvider.GetRequiredService<IAgentProposalService>();
+        var states = scope.ServiceProvider.GetRequiredService<IAgentTurnStateStore>();
+        var session = await CreateSessionAsync(sessions, DeterministicAgentProvider.Id);
+        await PostAsync(sessions, session.Id, "mutate the resource");
+        var alias = SwapCase(session.Id);
+        Assert.NotEqual(session.Id, alias);
+        var first = await Collect(streaming.StreamAsync(alias));
+        var proposal = Assert.IsType<AgentActionProposal>(Assert.Single(first, x => x.Kind == AgentStreamEventKind.ProposalCreated).Payload);
+        Assert.NotNull(states.Find(session.Id));
+        Assert.Null(states.Find(alias));
+        Assert.True((await proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
+        var result = await proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision);
+        Assert.True(result.Succeeded);
+
+        var resumed = await Collect(streaming.StreamAsync(session.Id));
+        Assert.Contains(resumed, x => x.Kind == AgentStreamEventKind.MessageDelta && x.Content!.Contains(result.Value!.ToolResult!.Content));
+        Assert.Equal(AgentStreamEventKind.Completed, resumed[^1].Kind);
+        Assert.Null(states.Find(session.Id));
+    }
+
+    [Fact]
+    public async Task Reconnect_after_an_expired_client_dispatch_reports_uncertainty_and_releases_the_pause()
+    {
+        var clock = new TurnTestClock();
+        var tool = new PendingClientTool();
+        using var root = AgentTestServices.Create(services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<TimeProvider>(clock));
+            services.AddSingleton<IAgentProvider, DeterministicAgentProvider>();
+            services.AddSingleton<IAgentTool>(tool);
+        });
+        using var scope = root.CreateScope();
+        var sessions = scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
+        var streaming = scope.ServiceProvider.GetRequiredService<IAgentStreamingService>();
+        var proposals = scope.ServiceProvider.GetRequiredService<IAgentProposalService>();
+        var states = scope.ServiceProvider.GetRequiredService<IAgentTurnStateStore>();
+        var session = await CreateSessionAsync(sessions, DeterministicAgentProvider.Id);
+        var attachment = new AgentContextAttachment("client-snapshot", "test", "resource-1", "Local resource", "test.snapshot", AgentContextSensitivity.Internal,
+            "selection", "Local resource snapshot", new { revision = "revision-1" }, new Dictionary<string, string>())
+        { ModuleId = tool.Descriptor.ModuleId, Target = tool.Target, Client = tool.Binding, Origin = AgentContextOrigin.ClientSnapshot };
+        await sessions.AddMessageAsync(session.Id, new(AgentRole.User, "mutate the resource", AgentMessageStatus.Pending, null, [attachment.Id], [attachment]) { Client = tool.Binding });
+        var first = await Collect(streaming.StreamAsync(session.Id));
+        var proposal = Assert.IsType<AgentActionProposal>(Assert.Single(first, x => x.Kind == AgentStreamEventKind.ProposalCreated).Payload);
+        Assert.True((await proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
+        var dispatch = await proposals.ExecuteAsync(proposal.Id, session.ActorId, proposal.BaseRevision);
+        Assert.Equal("awaiting-client", dispatch.Value?.Status);
+        Assert.False(dispatch.Value!.Executed);
+        clock.Advance(TimeSpan.FromMinutes(6));
+
+        var resumed = await Collect(streaming.StreamAsync(session.Id));
+        Assert.Contains(resumed, x => x.Kind == AgentStreamEventKind.MessageDelta && x.Content!.Contains("uncertain", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(resumed, x => x.Error?.Code == "agent.turn.awaiting_review");
+        Assert.Equal(AgentActionProposalStatus.Uncertain, (await proposals.FindAsync(proposal.Id))!.Status);
+        Assert.Null(states.Find(session.Id));
+        Assert.Equal(0, tool.ServerExecutions);
+        await PostAsync(sessions, session.Id, "a new explicit request");
+    }
+
     [Fact]
     public async Task Read_only_tool_runs_inline_and_result_feeds_back_into_a_final_answer()
     {
@@ -207,6 +293,35 @@ public sealed class AgentTurnOrchestratorTests
         await foreach (var item in events)
             result.Add(item);
         return result;
+    }
+
+    private static string SwapCase(string value) => new(value.Select(x => char.IsUpper(x) ? char.ToLowerInvariant(x) : char.ToUpperInvariant(x)).ToArray());
+
+    private sealed class TurnTestClock : TimeProvider
+    {
+        private DateTimeOffset _now = DateTimeOffset.UtcNow;
+        public override DateTimeOffset GetUtcNow() => _now;
+        public void Advance(TimeSpan amount) => _now += amount;
+    }
+
+    private sealed class PendingClientTool : IAgentTool, IAgentClientTool
+    {
+        public AgentResourceTarget Target { get; } = new("test.expiry", "test.local-resource", "resource-1", "revision-1");
+        public AgentClientBinding Binding { get; } = new("client-1", "generation-1");
+        public int ServerExecutions { get; private set; }
+        public AgentToolDescriptor Descriptor { get; } = new(DeterministicAgentProvider.MutatingToolName, "Edit local resource", "Reviewed local change.",
+            AgentToolMutability.Mutating, AgentRisk.ReviewRequired, "{}", [], [])
+        { ModuleId = "test.expiry", ExecutionLocation = AgentExecutionLocation.ClientWorkingState, ResultType = "test.local-change", ResultSchemaVersion = "1" };
+        public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
+            => Task.FromResult(AgentResult<AgentToolPreparation>.Success(new(Target, JsonSerializer.SerializeToElement(invocation.Arguments), AgentRisk.ReviewRequired,
+                new("test.local-change", "1", JsonSerializer.SerializeToElement(new { summary = "Edit local resource" })), true) { Client = Binding }));
+        public Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default)
+        {
+            ServerExecutions++;
+            return Task.FromResult(AgentResult<AgentToolResult>.Failure("test.client_only", "This tool must not execute on the server."));
+        }
+        public Task<AgentResult<AgentToolResult>> CompleteAsync(AgentPreparedToolInvocation invocation, AgentClientAcknowledgement acknowledgement, CancellationToken cancellationToken = default)
+            => Task.FromResult(AgentResult<AgentToolResult>.Failure("test.no_receipt", "No client receipt was supplied in this scenario."));
     }
 
     private sealed class SteeringProbeProvider : IAgentProvider

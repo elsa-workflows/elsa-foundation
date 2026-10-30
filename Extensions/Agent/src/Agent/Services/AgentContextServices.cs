@@ -45,13 +45,17 @@ internal sealed class DefaultAgentContextSanitizer : IAgentContextSanitizer
         return ValueTask.FromResult<IReadOnlyCollection<AgentContextAttachment>>(attachments.Select(x => x.Sensitivity == AgentContextSensitivity.Secret
             ? x with
             {
+                Id = AgentProviderPrimitives.NewId(),
                 Sensitivity = AgentContextSensitivity.SecretRedacted,
                 Content = null,
                 SourceId = null,
                 Label = "Redacted context",
                 Summary = "Secret context was redacted before provider use.",
                 References = new Dictionary<string, string>(),
-                Target = null
+                Target = null,
+                Client = null,
+                AgentScopes = [],
+                Scope = "redacted"
             }
             : x).ToList());
     }
@@ -73,6 +77,8 @@ internal sealed class DefaultAgentContextCollector(
         await events.Publish(collecting, cancellationToken);
         var diagnostics = collecting.Diagnostics.ToList();
         var sanitized = await sanitizer.SanitizeAsync(collecting.Attachments.ToList(), cancellationToken);
+        foreach (var attachment in sanitized.Where(x => x.Sensitivity == AgentContextSensitivity.SecretRedacted))
+            diagnostics.Add(new(attachment.ModuleId, "agent.context.redacted", "Secret context was redacted before provider use.", false));
         IReadOnlyCollection<AgentContextAttachment> attachments;
         try
         {

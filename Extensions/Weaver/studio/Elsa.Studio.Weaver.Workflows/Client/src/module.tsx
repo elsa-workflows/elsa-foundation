@@ -131,7 +131,7 @@ export function register(api: ElsaStudioModuleApi) {
   api.agent.resultRenderers.add({
     id: "weaver.workflows.workflow-proposal-renderer", moduleId: "Elsa.Studio.Workflows",
     displayName: "Workflow proposal", resultTypes: ["workflows.proposal"], schemaVersions: ["1"],
-    component: ({ result }: StudioAgentResultRendererProps) => <WorkflowProposalRenderer proposal={result as WorkflowProposalSummary} />
+    component: ({ result }: StudioAgentResultRendererProps) => <WorkflowProposalRenderer proposal={(isRecord(result) && isRecord(result.data) ? result.data : result) as WorkflowProposalSummary} />
   });
 }
 

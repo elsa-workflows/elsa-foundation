@@ -88,6 +88,9 @@ internal sealed class DefaultAgentTurnOrchestrator(
             yield return Error("agent.session.unavailable", "The session is missing or expired.", 404);
             yield break;
         }
+        // Session lookup accepts aliases for compatibility; all ownership/lifecycle state uses
+        // the stored identity so URL casing cannot create another foreground lease or pause.
+        sessionId = session.Id;
         var provider = providers.Active;
         if (provider is null)
         {
@@ -278,10 +281,13 @@ internal sealed class DefaultAgentTurnOrchestrator(
         {
             var source = messages.FirstOrDefault(x => x.Id == paused.SourceMessageId);
             if (source is null) return PreparedTurn.Fail(Error("agent.turn.source_missing", "The pending turn's source message is unavailable.", 409));
+            // Reading the result also advances an expired dispatched client request to explicit
+            // uncertainty. Do that before checking pending state, including on stream reconnect.
+            var storedResult = await proposals.FindResultAsync(paused.ProposalId, cancellationToken);
             var proposal = await proposals.FindAsync(paused.ProposalId, cancellationToken);
             if (proposal is null || proposal.Status is AgentActionProposalStatus.AwaitingApproval or AgentActionProposalStatus.Approved or AgentActionProposalStatus.Executing or AgentActionProposalStatus.AwaitingClient)
                 return PreparedTurn.Fail(Error("agent.turn.awaiting_review", "The original turn remains pending; resolve its proposal before continuing.", 409));
-            var result = await proposals.FindResultAsync(paused.ProposalId, cancellationToken)
+            var result = storedResult
                 ?? new AgentToolResult(paused.ToolCallId, paused.ToolName, false, $"The reviewed invocation has status {proposal.Status}; no applied result is available.");
             var history = Append(paused.History, new(AgentRole.Tool, JsonSerializer.Serialize(result, JsonOptions), result.ToolCallId, result.ToolName));
             return new(source, history, [result], 0, paused.Context, true, null);

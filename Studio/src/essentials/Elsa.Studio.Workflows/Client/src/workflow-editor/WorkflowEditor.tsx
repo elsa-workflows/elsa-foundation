@@ -237,7 +237,7 @@ export function WorkflowEditor({
   }, [reload, setError]);
   const editorDoc = usePinnedEditorDocument({ document: editableDoc, context, definitionId, catalog });
   const { draft, frames, selectedNodeId } = editorDoc.state;
-  const { loadDraft, replaceDraftByBatch, editDraft, editDraftAndSelect, select, navigateToScope, resetToRoot, startTestRun, setPublishedArtifact } = editorDoc;
+  const { loadDraft, editDraft, editDraftAndSelect, select, navigateToScope, resetToRoot, startTestRun, setPublishedArtifact } = editorDoc;
   // Debounced metadata saves still belong to the editable definition.
   const { updateDefinitionMeta: updateEditableDefinitionMeta } = useDefinitionMetadata({ context, details, setDetails, setStatus });
   const updateDefinitionMeta: typeof updateEditableDefinitionMeta = (...args) => { if (editorDoc.canEdit()) updateEditableDefinitionMeta(...args); };

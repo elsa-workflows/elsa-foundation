@@ -1,6 +1,7 @@
 import React, { Suspense } from "react";
 import { AlertTriangle, Check, Loader2, Play, X } from "lucide-react";
 import type { StudioAgentResultRendererContribution } from "../../sdk";
+import { AgentResultBoundary } from "./AgentResultBoundary";
 import type { AgentActionProposal } from "./agentTypes";
 
 export function AgentProposalReview({
@@ -53,7 +54,7 @@ export function AgentProposalReview({
             {proposal.audit ? <AuditDetails proposal={proposal} /> : null}
             {ResultRenderer ? (
               <div className="agent-proposal-result" aria-label={resultRenderer.displayName}>
-                <Suspense fallback={<p>Loading module result…</p>}><ResultRenderer proposal={proposal} resourceTarget={proposal.resourceTarget} result={proposal.result} resultType={proposal.resultType} preparedInvocation={proposal.preparedInvocation} toolResult={proposal.toolResult} /></Suspense>
+                <AgentResultBoundary key={`${resultRenderer.id}:${proposal.id}:${proposal.status}`} fallback={<GenericResultFallback proposal={proposal} />}><Suspense fallback={<div><p>Loading module presentation…</p><GenericResultFallback proposal={proposal} /></div>}><ResultRenderer proposal={proposal} resourceTarget={proposal.resourceTarget} result={proposal.result} resultType={proposal.resultType} preparedInvocation={proposal.preparedInvocation} toolResult={proposal.toolResult} /></Suspense></AgentResultBoundary>
               </div>
             ) : <GenericResultFallback proposal={proposal} />}
             {proposal.risks && proposal.risks.length > 0 ? (

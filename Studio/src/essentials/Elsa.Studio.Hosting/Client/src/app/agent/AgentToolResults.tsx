@@ -1,4 +1,5 @@
 import React, { Suspense } from "react";
+import { AgentResultBoundary } from "./AgentResultBoundary";
 import type { StudioAgentResultRendererContribution, StudioAgentToolResult } from "../../sdk";
 
 /** Displays module payloads opaquely through registered presentation, with a safe structured fallback. */
@@ -13,7 +14,7 @@ export function AgentToolResults({ results, renderers }: { results: StudioAgentT
     return <article key={result.toolCallId} data-succeeded={result.succeeded}><p>{result.content}</p>
       {result.receipt ? <div><small>{result.receipt.scope === "clientWorkingState" ? "Local working state" : "Persisted resource"}</small>
         <p>Observed target: {result.receipt.after.resourceId ?? result.receipt.after.resourceType} · revision {result.receipt.after.revision ?? "unversioned"}</p></div> : null}
-      {Component ? <Suspense fallback={<p>Loading module result…</p>}><Component {...props} /></Suspense> : payload ? <pre>{JSON.stringify(payload, null, 2)}</pre> : null}
+      {Component ? <AgentResultBoundary key={`${matches[0].id}:${result.toolCallId}`} fallback={<pre>{JSON.stringify(payload, null, 2)}</pre>}><Suspense fallback={<pre>{JSON.stringify(payload, null, 2)}</pre>}><Component {...props} /></Suspense></AgentResultBoundary> : payload ? <pre>{JSON.stringify(payload, null, 2)}</pre> : null}
     </article>;
   })}</section>;
 }

@@ -32,7 +32,13 @@ internal sealed class CollectAgentContext(IEnumerable<IAgentContextProvider> sou
                 if (!descriptor.SchemaVersions.Contains(attachment.SchemaVersion, StringComparer.Ordinal))
                     domainEvent.Diagnostics.Add(new(descriptor.Id, "agent.context.version_unsupported", "The installed module does not support this context schema version.", true));
                 else
-                    admittedInputs.Add(attachment with { Origin = AgentContextOrigin.ClientSnapshot, AgentScopes = [] });
+                    admittedInputs.Add(attachment with
+                    {
+                        Origin = AgentContextOrigin.ClientSnapshot,
+                        AgentScopes = [],
+                        // A caller's redaction claim is not evidence that its body is redacted.
+                        Sensitivity = attachment.Sensitivity == AgentContextSensitivity.SecretRedacted ? AgentContextSensitivity.Secret : attachment.Sensitivity
+                    });
             }
             var contribution = await source.CollectAsync(request with { CallerAttachments = admittedInputs }, cancellationToken);
             foreach (var diagnostic in contribution.Diagnostics)

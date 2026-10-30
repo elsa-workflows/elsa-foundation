@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Elsa.Agent.Core.Contracts;
+using Elsa.Agent.Workflows;
+using Microsoft.Extensions.DependencyInjection;
 using Elsa.Agent.Core.Models;
 using Elsa.Agent.Workflows.Models;
 using Elsa.Agent.Workflows.Services;
@@ -64,6 +66,83 @@ public sealed class WorkflowAgentTests
         Assert.Equal(2000, data.GetProperty("description").GetString()!.Length);
         Assert.DoesNotContain("secret-value", data.GetRawText());
         Assert.False((await new Elsa.Agent.Workflows.Tools.WorkflowReadGraphTool().PrepareAsync(new("call-1", "workflow_read_graph", "session-1", "actor-1", new Dictionary<string, object?>(), [admitted]))).Succeeded);
+    }
+
+    [Theory]
+    [InlineData("workflow.request", AgentContextSensitivity.Secret)]
+    [InlineData("workflow.definition", AgentContextSensitivity.Secret)]
+    [InlineData("workflow.request", AgentContextSensitivity.SecretRedacted)]
+    [InlineData("workflow.definition", AgentContextSensitivity.SecretRedacted)]
+    public async Task Real_collection_redacts_restricted_workflow_data_and_metadata_before_provider_use(string kind, AgentContextSensitivity sensitivity)
+    {
+        const string secret = "UNIQUE-WORKFLOW-SECRET-7319";
+        using var root = AgentTestServices.Create(services => new FoundationWorkflowsAgentFeature().ConfigureServices(services));
+        using var scope = root.CreateScope();
+        var caller = ClassifiedCaller(kind, sensitivity, secret);
+
+        var result = await scope.ServiceProvider.GetRequiredService<IAgentContextCollector>().CollectAsync(AgentPolicy.Default, Request(caller));
+
+        Assert.True(result.Succeeded, result.Error?.Message);
+        var providerBound = Assert.IsType<AgentContextContribution>(result.Value);
+        var admitted = Assert.Single(providerBound.Attachments, item => item.ContentType == kind);
+        Assert.Equal(AgentContextSensitivity.SecretRedacted, admitted.Sensitivity);
+        Assert.Null(admitted.Content);
+        Assert.Null(admitted.Target);
+        Assert.Null(admitted.Client);
+        Assert.Empty(admitted.AgentScopes);
+        Assert.Empty(admitted.References);
+        Assert.DoesNotContain(secret, JsonSerializer.Serialize(providerBound));
+        Assert.Single(providerBound.Attachments, item => item.Origin == AgentContextOrigin.InstalledGuidance);
+    }
+
+    [Theory]
+    [InlineData("workflow.request")]
+    [InlineData("workflow.definition")]
+    public async Task Real_collection_preserves_sensitive_classification_and_enforces_internal_host_ceiling(string kind)
+    {
+        using var root = AgentTestServices.Create(services => new FoundationWorkflowsAgentFeature().ConfigureServices(services));
+        using var scope = root.CreateScope();
+        var caller = ClassifiedCaller(kind, AgentContextSensitivity.Sensitive, "SENSITIVE-WORKFLOW-DATA-8642");
+
+        var result = await scope.ServiceProvider.GetRequiredService<IAgentContextCollector>().CollectAsync(
+            AgentPolicy.Default with { MaxContextSensitivity = AgentContextSensitivity.Internal }, Request(caller));
+
+        Assert.False(result.Succeeded);
+        var contribution = Assert.IsType<AgentContextContribution>(result.Value);
+        Assert.Equal(AgentContextSensitivity.Sensitive, Assert.Single(contribution.Attachments, item => item.ContentType == kind).Sensitivity);
+        Assert.Contains(contribution.Diagnostics, diagnostic => diagnostic.Code == "agent.context.sensitivity_denied" && diagnostic.Required);
+    }
+
+    [Theory]
+    [InlineData("workflow.request")]
+    [InlineData("workflow.definition")]
+    public async Task Workflow_admission_sets_internal_as_the_minimum_classification(string kind)
+    {
+        var caller = ClassifiedCaller(kind, AgentContextSensitivity.Public, "PUBLIC-WORKFLOW-DATA-3157");
+        var result = await ContextProvider().CollectAsync(Request(caller));
+        Assert.Equal(AgentContextSensitivity.Internal, Assert.Single(result.Attachments, item => item.ContentType == kind).Sensitivity);
+    }
+
+    private static AgentContextAttachment ClassifiedCaller(string kind, AgentContextSensitivity sensitivity, string marker)
+    {
+        var caller = Snapshot() with
+        {
+            Id = "caller-" + marker, SourceId = marker, Label = marker, Summary = marker, Sensitivity = sensitivity,
+            References = new Dictionary<string, string> { ["caller-reference"] = marker },
+            Client = new(marker, marker), Target = new(WorkflowAgentSnapshot.ModuleId, "workflow-definition", marker, marker)
+        };
+        return caller with
+        {
+            ContentType = kind,
+            Content = kind == "workflow.request"
+                ? JsonSerializer.SerializeToElement(new { requestKind = "workflow-definition", referenceId = marker, intent = marker, description = marker, name = marker, rootActivityVersionId = marker })
+                : JsonSerializer.SerializeToElement(new
+                {
+                    workflowDefinitionId = marker, draftId = marker, revision = marker, selectedNodeId = "node-1",
+                    activities = new[] { new { id = "node-1", type = "Elsa.WriteLine", displayName = marker } },
+                    connections = Array.Empty<object>(), positions = new[] { new { nodeId = "node-1", x = 10, y = 20 } }
+                })
+        };
     }
 
     [Fact]

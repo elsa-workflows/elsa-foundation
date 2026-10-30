@@ -193,6 +193,7 @@ public static class AgentApi
             await WriteAsync(context, AgentApiResponse<AgentMessageAcceptedResponse>.Failure(error), AgentJsonContext.Default.AgentApiResponseAgentMessageAcceptedResponse, error.StatusCode);
             return;
         }
+        sessionId = session!.Id;
         var evaluator = context.RequestServices.GetRequiredService<IAgentPolicyEvaluator>();
         var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(request, AgentJsonContext.Default.AgentMessageRequest)));
         if (!string.IsNullOrWhiteSpace(request.RequestId))
@@ -285,14 +286,14 @@ public static class AgentApi
         if (request is null)
             return;
         var sessionId = RouteValueOrFallback(context, "sessionId", request.SessionId);
-        var (_, error) = await AgentSessionAuthorization.AuthorizeAsync(context.RequestServices.GetRequiredService<IAgentSessionService>(), context.User, sessionId, context.RequestAborted);
+        var (session, error) = await AgentSessionAuthorization.AuthorizeAsync(context.RequestServices.GetRequiredService<IAgentSessionService>(), context.User, sessionId, context.RequestAborted);
         if (error is not null)
         {
             await WriteAsync(context, AgentApiResponse<AgentTurnCancelResponse>.Failure(error), AgentJsonContext.Default.AgentApiResponseAgentTurnCancelResponse, error.StatusCode);
             return;
         }
         var turnId = RouteValueOrFallback(context, "turnId", request.TurnId);
-        var cancelled = context.RequestServices.GetRequiredService<IAgentTurnRegistry>().Cancel(sessionId, turnId);
+        var cancelled = context.RequestServices.GetRequiredService<IAgentTurnRegistry>().Cancel(session!.Id, turnId);
         await WriteAsync(context, AgentApiResponse<AgentTurnCancelResponse>.Success(new(turnId, cancelled)), AgentJsonContext.Default.AgentApiResponseAgentTurnCancelResponse);
     }
 
@@ -422,7 +423,7 @@ public static class AgentApi
             await WriteAsync(context, AgentApiResponse<AgentProposalExecutionResult>.Failure(error), AgentJsonContext.Default.AgentApiResponseAgentProposalExecutionResult, error.StatusCode);
             return;
         }
-        var result = await context.RequestServices.GetRequiredService<IAgentProposalService>().AcknowledgeAsync(sessionId,
+        var result = await context.RequestServices.GetRequiredService<IAgentProposalService>().AcknowledgeAsync(session!.Id,
             RouteValue(context, "invocationId"), session!.ActorId, request, context.RequestAborted);
         await WriteAsync(context, result.Succeeded ? AgentApiResponse<AgentProposalExecutionResult>.Success(result.Value!) : AgentApiResponse<AgentProposalExecutionResult>.Failure(result.Error!),
             AgentJsonContext.Default.AgentApiResponseAgentProposalExecutionResult, result.Succeeded ? 200 : result.Error!.StatusCode);

@@ -183,11 +183,14 @@ internal sealed class NoteContextSource(NoteStore store, IAgentSessionService se
             if (caller.ContentType != NoteContract.ContextKind || caller.SchemaVersion != "1" || caller.Target is not { } supplied ||
                 supplied.ModuleId != target.ModuleId || supplied.ResourceType != target.ResourceType || supplied.ResourceId != target.ResourceId || supplied.Revision != target.Revision)
                 return new([], [new(Descriptor.Id, "weaver.note.context_stale", "The supplied note reference does not match the owning file's current revision.", true)]);
+        // Referenced resource data retains every caller restriction, even when the module rereads it.
+        var sensitivity = request.CallerAttachments.Select(caller => caller.Sensitivity == AgentContextSensitivity.SecretRedacted
+            ? AgentContextSensitivity.Secret : caller.Sensitivity).Append(AgentContextSensitivity.Internal).Max();
         var attachment = new AgentContextAttachment("weaver-journey:note:" + note.Revision, NoteContract.ContextKind, note.Id, "Owned qualification note", NoteContract.ContextKind,
-            AgentContextSensitivity.Internal, "resource", "The owning file supplied this note and revision.", JsonSerializer.SerializeToElement(note, NoteContract.Json), new Dictionary<string, string>())
+            sensitivity, "resource", "The owning file supplied this note and revision.", JsonSerializer.SerializeToElement(note, NoteContract.Json), new Dictionary<string, string>())
         { ModuleId = NoteContract.Module, SchemaVersion = "1", Target = target, Origin = AgentContextOrigin.AuthoritativeRead, AgentScopes = [NoteContract.Scope] };
         return new([attachment], request.CallerAttachments.Select(caller => new AgentContributionDiagnostic(
-            Descriptor.Id + ":" + caller.Id, "weaver.note.reference_admitted", "Admitted reference; canonical owning-resource read used.", false)).ToArray());
+            sensitivity >= AgentContextSensitivity.SecretRedacted ? Descriptor.Id : Descriptor.Id + ":" + caller.Id, "weaver.note.reference_admitted", "Admitted reference; canonical owning-resource read used.", false)).ToArray());
     }
 }
 

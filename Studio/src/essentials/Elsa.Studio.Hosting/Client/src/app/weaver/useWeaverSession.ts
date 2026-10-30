@@ -176,7 +176,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     });
     sessionIdRef.current = response.sessionId;
     setSessionId(response.sessionId);
-    setAttachments(current => mergeAttachments(collected, response.contextAttachments));
+    setAttachments(mergeAttachments(collected, response.contextAttachments));
     return response.sessionId;
   }, [agentClient, api.host.hostVersion, api.host.sdkVersion, mode, surface]);
 
@@ -271,17 +271,14 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     turnIdRef.current = null;
   }
 
-  // Autopilot ("full-auto") lets correlated callers apply a result without asking.
-  const isAutonomous = () => autoApplyModeRef.current === "full-auto";
-
   // Route a correlated turn's outcome back to the caller (e.g. the Create dialog) exactly once. Defaults
   // to the in-flight turn, but a superseded/errored turn can pass its own captured id (the ref may have
   // since moved on to a newer turn — in that case we publish without clearing the newer turn's id).
-  function publishTurnResult(status: "completed" | "cancelled" | "failed", text: string, requestId = turnRequestIdRef.current) {
+  const publishTurnResult = useCallback((status: "completed" | "cancelled" | "failed", text: string, requestId = turnRequestIdRef.current) => {
     if (!requestId) return;
     if (turnRequestIdRef.current === requestId) turnRequestIdRef.current = null;
-    api.agent.publishPromptResult({ requestId, status, text, autoApply: isAutonomous() });
-  }
+    api.agent.publishPromptResult({ requestId, status, text, autoApply: autoApplyModeRef.current === "full-auto" });
+  }, [api]);
 
   const startTurn = useCallback(async (request: StudioAgentPromptRequest) => {
     const { message, requestId } = request;
@@ -334,7 +331,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
       setMessages(current => [...current, { id: `error-${current.length}`, role: "error", content: getAgentErrorMessage(e), status: "failed" }]);
       finishTurn();
     }
-  }, [agentClient, api, capabilities, ensureSession, handleStreamEvent, mode, subscribeStream, surface]);
+  }, [agentClient, api, capabilities, ensureSession, handleStreamEvent, mode, publishTurnResult, subscribeStream, surface]);
 
   const steer = useCallback(async (message: string) => {
     const id = `followup-${Date.now()}-${Math.random()}`;
@@ -387,7 +384,7 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
     setMessages(current => current.map(message => message.status === "streaming" ? { ...message, status: "cancelled" } : message));
     publishTurnResult("cancelled", "");
     finishTurn();
-  }, [agentClient]);
+  }, [agentClient, publishTurnResult]);
 
   const removeFollowup = useCallback((id: string) => setFollowups(current => current.filter(item => item.id !== id)), []);
 

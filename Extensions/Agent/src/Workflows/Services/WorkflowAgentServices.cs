@@ -61,7 +61,7 @@ public sealed class DefaultWorkflowAgentContextProvider(
                 continue;
             }
             attachments.Add(new($"workflow:{snapshot!.Target.ResourceId}:{snapshot.Target.Revision}", "workflow.definition",
-                snapshot.Target.ResourceId, "Open workflow working state", "workflow.definition", AgentContextSensitivity.Internal,
+                snapshot.Target.ResourceId, "Open workflow working state", "workflow.definition", AdmittedSensitivity(caller.Sensitivity),
                 "selection", $"Workflow '{snapshot.Target.ResourceId}' at revision '{snapshot.Target.Revision}' contains {snapshot.Graph.Activities.Count} activity summaries.",
                 snapshot.Content, new Dictionary<string, string> { ["workflowDefinitionId"] = snapshot.Target.ResourceId!, ["revision"] = snapshot.Target.Revision! })
             {
@@ -78,6 +78,11 @@ public sealed class DefaultWorkflowAgentContextProvider(
         });
         return ValueTask.FromResult(new AgentContextContribution(attachments, diagnostics));
     }
+
+    // A caller classification can restrict module-owned data; it cannot certify prior redaction.
+    private static AgentContextSensitivity AdmittedSensitivity(AgentContextSensitivity caller) =>
+        caller == AgentContextSensitivity.SecretRedacted ? AgentContextSensitivity.Secret :
+        caller < AgentContextSensitivity.Internal ? AgentContextSensitivity.Internal : caller;
 
     private static bool TryAdmitRequest(AgentContextAttachment caller, out AgentContextAttachment? admitted)
     {
@@ -101,7 +106,7 @@ public sealed class DefaultWorkflowAgentContextProvider(
             description = Field(content, "description", 2000), rootActivityVersionId = Field(content, "rootActivityVersionId", 256)
         });
         admitted = new($"workflow:request:{caller.Id}", "workflow.request", reference, "Workflow request context", "workflow.request",
-            AgentContextSensitivity.Internal, "request", "Module-admitted workflow request and reference metadata; this does not identify live working state.", data,
+            AdmittedSensitivity(caller.Sensitivity), "request", "Module-admitted workflow request and reference metadata; this does not identify live working state.", data,
             new Dictionary<string, string>())
         { ModuleId = WorkflowAgentSnapshot.ModuleId, SchemaVersion = "1", Origin = AgentContextOrigin.ClientSnapshot, Target = null, Client = null, AgentScopes = [] };
         return true;

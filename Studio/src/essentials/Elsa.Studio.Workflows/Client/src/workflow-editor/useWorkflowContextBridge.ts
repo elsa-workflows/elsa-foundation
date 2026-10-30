@@ -54,7 +54,11 @@ export function useWorkflowContextBridge({
     [draft]
   );
 
-  const generation = useMemo(() => globalThis.crypto?.randomUUID?.() ?? `generation-${Date.now()}-${Math.random()}`, [details?.definition?.id, selectedNodeId]);
+  const selectionKey = JSON.stringify([details?.definition?.id, selectedNodeId]);
+  const generation = useMemo(() => {
+    void selectionKey; // A new originating selection creates a new lifetime even when the draft is unchanged.
+    return globalThis.crypto?.randomUUID?.() ?? `generation-${Date.now()}-${Math.random()}`;
+  }, [selectionKey]);
   const authorized = useRef(true);
   useEffect(() => {
     const end = () => { authorized.current = false; if (controller) controller.snapshot = null; };

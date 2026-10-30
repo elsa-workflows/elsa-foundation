@@ -394,8 +394,7 @@ html[data-theme-material] .weaver-mode-option:focus-visible {
 }
 
 html[data-theme-material] .weaver-message-body,
-html[data-theme-material] .agent-proposal,
-html[data-theme-material] .agent-workflow-batch {
+html[data-theme-material] .agent-proposal {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-panel-bg);
   background-size: var(--studio-material-panel-bg-size);
