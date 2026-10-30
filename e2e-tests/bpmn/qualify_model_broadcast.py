@@ -5,7 +5,6 @@ Uses the existing test-only production-port observer, then standard recovery hos
 Only this controller's owned processes and isolated stores are stopped or captured.
 """
 import argparse
-import base64
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -17,7 +16,6 @@ from pathlib import Path
 import re
 import shutil
 import signal
-import sqlite3
 import subprocess
 import tempfile
 import time
@@ -244,12 +242,9 @@ def main():
         executor.shutdown(wait=True)
         launch(False)
         def delivery_hint():
-            # Scheduling hint only: the checked provider below must validate the completed original source/cohort.
-            with sqlite3.connect((root / 'runtime.db').as_uri() + '?mode=ro', uri=True, timeout=3) as connection:
-                connection.execute('PRAGMA query_only=ON')
-                row = connection.execute('SELECT Status FROM elsa_runtime_post_commit_outbox WHERE ScopeKey=? AND OutboxItemId=?',
-                    tuple(base64.b64encode(value.encode('utf-16le')).decode() for value in ('default', marker['sourceOutboxItemId']))).fetchone()
-                return row is not None and row[0] == 2
+            # Progress only: the closed checked snapshot below must still validate the original source/cohort.
+            observed = read('--read-post-commit-source', root / 'runtime.db', marker['sourceOutboxItemId'])
+            return observed['readOnly'] is True and observed['source']['status'] == 2
         wait(delivery_hint, bool, 'The original durable publisher did not finish its actual retry.', 240)
         def ready(identity, value):
             if value['queuedModelInputs'] or any(s['status'] != 2 for s in value['sources']): return False

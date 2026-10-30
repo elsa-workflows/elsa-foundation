@@ -19,6 +19,26 @@ using Microsoft.Extensions.DependencyInjection;
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 try
 {
+    if (args.Length == 3 && args[0] == "--read-post-commit-source")
+    {
+        var livePath = Path.GetFullPath(args[1]);
+        var liveServices = new ServiceCollection();
+        liveServices.AddWorkflowRuntime();
+        liveServices.AddSingleton<IPersistenceAccessContextAccessor>(new ScopedAccess(new("default")));
+        liveServices.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
+        {
+            Provider = "Sqlite", ConnectionString = new SqliteConnectionStringBuilder
+                { DataSource = livePath, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString(),
+            Pooling = false, CacheWorkflowExecutables = false,
+            RecoveryContinuationSigningKey = new string('r', 32), HierarchyCursorSigningKey = new string('r', 32)
+        });
+        await using var liveProvider = liveServices.BuildServiceProvider();
+        await using var liveScope = liveProvider.CreateAsyncScope();
+        var liveSource = await liveScope.ServiceProvider.GetRequiredService<IPostCommitOutboxLookupStore>().FindDurableAsync(args[2])
+            ?? throw new InvalidDataException("The original delivery source is absent.");
+        Console.WriteLine(JsonSerializer.Serialize(new { ReadOnly = true, Source = liveSource }, json));
+        return 0;
+    }
     if (args.Length == 4 && args[0] == "--read-bpmn-native" || args.Length is 4 or 5 && args[0] == "--read-bpmn-embedding" ||
         args.Length == 3 && args[0] is "--read-bpmn-retirement" or "--read-bpmn-direct")
     {
