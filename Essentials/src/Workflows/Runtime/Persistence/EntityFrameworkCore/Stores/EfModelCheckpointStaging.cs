@@ -51,10 +51,11 @@ internal static class EfModelCheckpointStaging
                 throw new InvalidOperationException("A model decision cannot change its execution authority or pinned material.");
             if (retainsState && RuntimeArtifactJson.Serialize(current) != RuntimeArtifactJson.Serialize(state))
                 throw new InvalidOperationException("A retained-state input cannot change the committed model state.");
-            if (!retainsState && (current.Lifecycle == RuntimeModelLifecycle.TerminalSettled ||
-                current.Lifecycle == RuntimeModelLifecycle.TerminalPendingSettlement &&
+            // A model may discover physical responsibility retained by an older prematurely settled writer.
+            // Only terminal bookkeeping can change: the semantic result remains immutable, never Running.
+            if (!retainsState && (current.Lifecycle is RuntimeModelLifecycle.TerminalSettled or RuntimeModelLifecycle.TerminalPendingSettlement) &&
                 (state.Lifecycle is not (RuntimeModelLifecycle.TerminalPendingSettlement or RuntimeModelLifecycle.TerminalSettled) ||
-                 !JsonElement.DeepEquals(current.TerminalResult!.Value, state.TerminalResult!.Value))))
+                 !JsonElement.DeepEquals(current.TerminalResult!.Value, state.TerminalResult!.Value)))
                 throw new InvalidOperationException("A terminal model execution cannot resume semantic progression or replace its result.");
         }
 

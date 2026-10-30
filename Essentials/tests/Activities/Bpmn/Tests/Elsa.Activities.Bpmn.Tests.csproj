@@ -10,6 +10,8 @@
     <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/pipeline/pending-cancellation/native-terminal/native-cancel/pending-elsa.sqlite.gz" Link="Fixtures/ActualIndependentNativeCancellation.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/embedding/human-native-recovery/root-complete/waiting-checked.json" Link="Fixtures/ActualHumanEmbedding.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/pipeline/technical-fault-native-recovery/legacy-model-v2.json" Link="Fixtures/ActualNativeModelV2.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-3/correctness/legacy-checkpoint/concurrent-terminal.sqlite.gz" Link="Fixtures/ActualConcurrentFault.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-3/correctness/legacy-checkpoint/concurrent-admitted-terminal.sqlite.gz" Link="Fixtures/ActualConcurrentAdmittedFault.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />

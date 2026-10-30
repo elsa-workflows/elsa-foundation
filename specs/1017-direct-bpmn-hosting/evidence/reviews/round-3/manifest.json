@@ -136,6 +136,30 @@
       "path": "standards/report.md",
       "bytes": 8233,
       "sha256": "2a3efc783f1d582a2fcca64eb0ea77bbb0424c238b32025a1287aa31579c6820"
+    },
+    {
+      "path": "correctness/legacy-checkpoint/admitted-backup-receipt.json",
+      "bytes": 188,
+      "sha256": "ab1939ee73aabb3f1ea3499be8d8f37133ba36a74eccdb5d7f27f4d6b021baee"
+    },
+    {
+      "path": "correctness/legacy-checkpoint/admitted-old-writer-Program.cs",
+      "bytes": 7559,
+      "sha256": "205bd6862b4566a0c4a8fdda6b316933a8df6471438223b4bb6365f15af02fc4"
+    },
+    {
+      "path": "correctness/legacy-checkpoint/admitted-old-writer.log.gz",
+      "bytes": 4480,
+      "sha256": "add779188c1d78de082b22adf5c5b0a0bda60ed50f74fb96523cdfdf7ece710b"
+    },
+    {
+      "path": "correctness/legacy-checkpoint/concurrent-admitted-terminal.sqlite.gz",
+      "bytes": 74301,
+      "sha256": "ae0027de22b16b04912106623724207d493879fc96f195e61e87a42af9a1d683"
     }
-  ]
+  ],
+  "additionalOldWriterCapture": {
+    "executingSource": "e3ec219fcc3a93c949d2669fc585bd1e79152abe",
+    "purpose": "Normally admitted second worker with original result owed; preserved old writer, no state seeding."
+  }
 }

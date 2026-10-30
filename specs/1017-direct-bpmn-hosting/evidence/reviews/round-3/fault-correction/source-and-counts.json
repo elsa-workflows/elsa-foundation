@@ -1,0 +1,32 @@
+{
+  "baseBeforeCorrection": "eef92c613",
+  "productionSources": [
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnDirectExecutionDriver.cs",
+      "gitBlob": "bc38ebe611edac43aad6f5daed3ef6c589db4a7e",
+      "sha256": "78ca3aec25f0013fee66268694bd44545326a1b37999354db06ecf6c95622f42"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnNativeWorkBoundary.cs",
+      "gitBlob": "1b2c970fda96a4e517c22bd80dd5c0fbe83c72fa",
+      "sha256": "7e840ca6cda149544dcde6d6d7b15aed5b22f5e5abd0dd931eed491bcbee6cd2"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnNativeWorkDelivery.cs",
+      "gitBlob": "6d923fbc4f9524602ee52fa825a127262353fcc2",
+      "sha256": "04dd8fcee09f31dd5678de69674e6bb6bc0d1e1750579edb5bb3ac767278b8bf"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfModelCheckpointStaging.cs",
+      "gitBlob": "cc6ec5db3fa96d952e9644038548f585ffc8e58c",
+      "sha256": "a29afc6ad3b7483449ef067e0067af8841b9f0ff0499e1d1efa167e3155b1778"
+    }
+  ],
+  "bpmnPassed": 473,
+  "runtimeEfPassed": 1788,
+  "skipped": 0,
+  "frozenBaselineAssetsUnchanged": 104,
+  "originalStoreRecoveryCases": 2,
+  "newDeliveryOrders": 2,
+  "qualificationLimit": "Worktree source in this commit; not yet clean-commit Release/HTTP-host/Studio/provider/final-CI qualification."
+}

@@ -272,6 +272,37 @@ public sealed class EfRuntimeModelCheckpointTests
             null, [], [], [], [], [], postCommitOutbox: admission.StateChanges.PostCommitOutbox) };
     }
 
+    [Fact]
+    public async Task Correcting_a_premature_settlement_header_retains_the_exact_terminal_result_and_never_reopens_progression()
+    {
+        await using var database = await CreateDatabaseAsync();
+        await using (var context = database.Open())
+            await Store(context).CommitAsync(Commit(1, RuntimeModelLifecycle.TerminalSettled), Immediate);
+        await using (var context = database.Open())
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() => Store(context).CommitAsync(Commit(2), Immediate).AsTask());
+            var commit = Commit(2, RuntimeModelLifecycle.TerminalPendingSettlement);
+            var state = commit.ModelState!.State;
+            var replacement = new RuntimeModelExecutionState(state.FormatVersion, state.Scope, state.ExecutionId, state.TenantId,
+                state.Protocol, state.Executable, state.MaterialIncarnationId, state.Revision, state.Lifecycle, state.Authority,
+                state.CreatedAt, state.UpdatedAt, state.Payload, JsonSerializer.SerializeToElement(new { outcome = "replaced" }));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => Store(context).CommitAsync(commit with
+                { ModelState = new(commit.ModelState.ExpectedRevision, replacement, commit.ModelState.Input) }, Immediate).AsTask());
+        }
+        await using (var context = database.Open())
+            await Store(context).CommitAsync(Commit(2, RuntimeModelLifecycle.TerminalPendingSettlement), Immediate);
+        await using (var restarted = database.Open())
+        {
+            Assert.Equal(RuntimeModelLifecycle.TerminalPendingSettlement, (await Reader(restarted).FindAsync("execution"))!.Lifecycle);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => Store(restarted).CommitAsync(Commit(3), Immediate).AsTask());
+        }
+        await using (var context = database.Open())
+            await Store(context).CommitAsync(Commit(3, RuntimeModelLifecycle.TerminalSettled), Immediate);
+        await using var final = database.Open();
+        Assert.Equal(RuntimeModelLifecycle.TerminalSettled, (await Reader(final).FindAsync("execution"))!.Lifecycle);
+        Assert.Equal("completed", (await Reader(final).FindAsync("execution"))!.TerminalResult!.Value.GetProperty("outcome").GetString());
+    }
+
     [Theory]
     [InlineData(RuntimeModelLifecycle.Running)]
     [InlineData(RuntimeModelLifecycle.TerminalSettled)]

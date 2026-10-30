@@ -151,7 +151,14 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         }
         else if (command.InputKind is "cancel-embedded" or "cancel")
         {
-            if (current?.TerminalResult is not null) rejection = "execution-terminal";
+            if (current?.TerminalResult is { } finished)
+            {
+                // Older format2/5 decisions could declare a fault settled while retaining owed starts.
+                // Cancellation settles that physical responsibility; it cannot replace the semantic fault.
+                if (finished.GetProperty("status").GetString() == "Faulted" && document.Work.Any(work => work.NativeWork is not null))
+                    document = CancelRemainingWork(document, commitId, command.InputId, timedFrame, policyFrame, faulted: true);
+                else rejection = "execution-terminal";
+            }
             else
             {
                 cancelled = true;
@@ -209,6 +216,10 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             completion = timer is not null ? new(timer.InvocationId, timer.AttemptId) : nativeResult is null ? Completion(command.Payload) :
                 new(nativeResult.Origin.InvocationId, nativeResult.Origin.AttemptId);
             var work = document.Work.SingleOrDefault(item => item.InvocationId == completion.InvocationId && item.AttemptId == completion.AttemptId);
+            if (nativeResult is not null && work?.NativeWork is not null &&
+                current!.TerminalResult?.GetProperty("status").GetString() == "Faulted")
+                // An actual result can be the recovery trigger when an older fault left an already admitted worker.
+                document = CancelRemainingWork(document, commitId, command.InputId, timedFrame, policyFrame, faulted: true);
             if (nativeResult is not null && document.Cancellations?.SingleOrDefault(item => !item.Settled && nativeResult.Origin.IsEquivalentTo(item.Origin)) is { } cancellation)
             {
                 // The semantic cancellation is final. Record the worker's actual terminal truth only for settlement.
@@ -291,13 +302,17 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             {
                 lifecycle = RuntimeModelLifecycle.TerminalSettled;
                 terminal = JsonSerializer.SerializeToElement(new { status = "Faulted", fault.Code, fault.Message, fault.ErrorCode }, Web);
+                document = CancelRemainingWork(document, commitId, command.InputId, timedFrame, policyFrame, faulted: true);
             }
         }
         if (terminal is not null && document.NativeParent is not null && rejection is null)
             lifecycle = command.InputKind == "native-parent-settled" ? RuntimeModelLifecycle.TerminalSettled : RuntimeModelLifecycle.TerminalPendingSettlement;
         if (document.Cancellations?.Any(item => !item.Settled) == true)
             lifecycle = RuntimeModelLifecycle.TerminalPendingSettlement;
-        else if (settledCancellation && document.NativeParent is null)
+        else if (settledCancellation && (document.NativeParent is null || document.FormatVersion == 14 &&
+            await Embedding.ParentProofAsync(BpmnEmbeddingBoundary.Read(new RunBpmnState(1, document.NativeParent.Invocation)), cancellationToken)))
+            // An older prematurely settled frame can already have delivered its parent result.
+            // Preserve the exact physical consumption/terminal proof rather than owing an unreachable second ACK.
             lifecycle = RuntimeModelLifecycle.TerminalSettled;
         else if (timedFrame && terminal is null)
             lifecycle = document.Failures?.Any(failure => failure.Status == "Open") == true ? RuntimeModelLifecycle.WaitingIncident : RuntimeModelLifecycle.Running;
@@ -327,7 +342,7 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             intents.AddRange((document.Cancellations ?? []).Where(item =>
                 current is null || Read(current).Cancellations?.Any(old => old.Origin.IsEquivalentTo(item.Origin)) != true).Select(item => new RuntimePostCommitIntent(
                 BpmnNativeWorkBoundary.CancellationIntentId(item.Origin), executionId, BpmnNativeWorkBoundary.CancelKind,
-                now, null, BpmnNativeWorkBoundary.CancellationIntentId(item.Origin), JsonSerializer.SerializeToElement(item, Web))));
+                now, null, BpmnNativeWorkBoundary.CancellationIntentId(item.Origin), JsonSerializer.SerializeToElement(item with { Settled = false, NotAdmitted = false }, Web))));
         if (rejection is null && current?.TerminalResult is null && terminal is not null && document.NativeParent is { } nativeParent)
         {
             var intent = "bpmn-native-parent:" + BpmnModelIdentity.Create(executionId);
@@ -341,7 +356,7 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         if (!accepted.Succeeded) throw new BpmnModelValidationException($"BPMN execution '{executionId}' did not commit input '{command.InputId}': {accepted.FailureCode}.");
     }
 
-    private static Document CancelRemainingWork(Document document, string commitId, string inputId, bool timedFrame, bool policyFrame)
+    private static Document CancelRemainingWork(Document document, string commitId, string inputId, bool timedFrame, bool policyFrame, bool faulted = false)
     {
         var cancellations = document.Work.Where(item => item.NativeWork is not null &&
             document.NativeResults?.Any(result => result.Origin.IsEquivalentTo(item.NativeWork)) != true).Select(item =>
@@ -350,8 +365,12 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             return new BpmnNativeWorkCancellation(origin, RuntimePostCommitOutboxItems.OutboxItemId(commitId,
                 BpmnNativeWorkBoundary.CancellationIntentId(origin)));
         }).ToArray();
-        return document with { Work = [], FormatVersion = cancellations.Length > 0
-                ? timedFrame ? document.FormatVersion : policyFrame ? document.NativeParent is null ? 9 : 10 : document.NativeParent is null ? 4 : 6 : document.FormatVersion,
+        var format = document.FormatVersion;
+        if (cancellations.Length > 0 && !timedFrame)
+            format = policyFrame ? document.NativeParent is null ? 9 : 10
+                : faulted ? document.NativeParent is null ? 13 : 14
+                : document.NativeParent is null ? 4 : 6;
+        return document with { Work = [], FormatVersion = format,
             Cancellations = cancellations.Length > 0 ? cancellations : document.Cancellations,
             Failures = document.Failures?.Select(failure => failure.Status == "Open"
                 ? failure with { Status = "Retired", ResolutionInputId = inputId } : failure).ToArray() };
@@ -459,15 +478,18 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                 !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(invocation.Model.Executable, state.Executable)) throw BpmnEmbeddingJson.Invalid();
         }
         var cancelled = state.TerminalResult is { } terminal && terminal.TryGetProperty("status", out var status) && status.GetString() == "Cancelled";
+        var faulted = state.TerminalResult is { } fault && fault.TryGetProperty("status", out var faultStatus) && faultStatus.GetString() == "Faulted";
+        var faultSettlement = result.FormatVersion is 13 or 14;
+        // Formats 13/14 retain a final fault while settling residual format2/5 native starts.
         // Formats 1-6 keep their original wire. Policy-bearing work uses 7/8 (cancel obligations 9/10),
         // so an older driver refuses rather than discarding a retained failure or physical attempt budget.
         var timedFrame = result.FormatVersion is 11 or 12;
         var policyFrame = result.FormatVersion is 7 or 8 or 9 or 10 or 11 or 12;
-        if (result.FormatVersion is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10 or 11 or 12) ||
-            (result.FormatVersion is 3 or 5 or 6 or 8 or 10 or 12) != (result.NativeParent is not null) ||
-            !timedFrame && (result.FormatVersion is 4 or 6 or 9 or 10) != (result.Cancellations is not null) ||
-            policyFrame != (result.Failures is not null) ||
-            result.Cancellations is not null && (!timedFrame && !cancelled || result.Cancellations.Count == 0 ||
+        if (result.FormatVersion is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10 or 11 or 12 or 13 or 14) ||
+            (result.FormatVersion is 3 or 5 or 6 or 8 or 10 or 12 or 14) != (result.NativeParent is not null) ||
+            !timedFrame && (result.FormatVersion is 4 or 6 or 9 or 10 or 13 or 14) != (result.Cancellations is not null) ||
+            policyFrame != (result.Failures is not null) || faultSettlement && (!faulted || result.Work.Count != 0) ||
+            result.Cancellations is not null && (!timedFrame && !cancelled && !faultSettlement || result.Cancellations.Count == 0 ||
                 (result.Cancellations.Any(item => !item.Settled) ? state.Lifecycle != RuntimeModelLifecycle.TerminalPendingSettlement :
                     result.NativeParent is null && state.Lifecycle != RuntimeModelLifecycle.TerminalSettled) ||
                 result.Cancellations.Select(item => item.Origin.InvocationId).Distinct(StringComparer.Ordinal).Count() != result.Cancellations.Count ||
@@ -479,7 +501,7 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                     item.NotAdmitted && (!item.Settled || result.NativeResults?.Any(value => item.Origin.IsEquivalentTo(value.Origin)) == true) ||
                     item.Settled && !item.NotAdmitted && result.NativeResults?.Any(value => item.Origin.IsEquivalentTo(value.Origin)) != true ||
                     result.Work.Any(work => item.Origin.IsEquivalentTo(work.NativeWork)))) ||
-            (cancelled ? result.Work.Count != 0 : result.Work.Count != result.State.ActiveWork.Count) ||
+            (cancelled || faulted && result.Work.Count == 0 ? result.Work.Count != 0 : result.Work.Count != result.State.ActiveWork.Count) ||
             result.Work.Select(item => item.InvocationId).Distinct(StringComparer.Ordinal).Count() != result.Work.Count ||
             result.Work.Select(item => item.TokenId).Distinct(StringComparer.Ordinal).Count() != result.Work.Count ||
             result.Work.Any(item => !result.State.ActiveWork.Any(active => active.TokenId == item.TokenId &&

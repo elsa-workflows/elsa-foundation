@@ -74,6 +74,20 @@ internal sealed class BpmnNativeWorkDelivery(BpmnNativeWorkBoundary boundary, IW
                     cancelled.Model.ExecutionId, source, cancellationToken);
                 throw Pending("bpmn.native-start.retirement-pending", "The exact cancelled native start awaits model retirement consumption.");
             }
+            var retainedModel = await reader.FindAsync(origin.ExecutionId, cancellationToken);
+            if (retainedModel is not null && origin.MatchesModel(retainedModel) &&
+                retainedModel.TerminalResult?.GetProperty("status").GetString() == "Faulted" &&
+                BpmnDirectExecutionDriver.Read(retainedModel).Work.Any(work => origin.IsEquivalentTo(work.NativeWork)))
+            {
+                // Recover the original accepted start through the ordinary model decision queue.
+                // Its source stays owed until cancellation and positive retirement/result consumption settle it.
+                var cleanup = new RuntimeModelExecutionCommand(retainedModel.Executable, retainedModel.MaterialIncarnationId,
+                    "settle-faulted-work:" + BpmnModelIdentity.Create(retainedModel.ExecutionId), "cancel",
+                    JsonSerializer.SerializeToElement(new { reason = "Settle native work retained by the final model fault." }, BpmnNativeWorkBoundary.Web),
+                    retainedModel.Authority, retainedModel.TenantId);
+                await QueueModelAsync(cleanup, retainedModel.ExecutionId, source, cancellationToken);
+                throw Pending("bpmn.native-start.fault-settlement-pending", "The faulted model's original native work remains owed until its cancellation decision.");
+            }
             var model = await boundary.RequireLiveAsync(origin, cancellationToken);
             var identity = BpmnNativeWorkBoundary.WorkerIdentity(origin.Scope, origin.ExecutionId, origin.InvocationId, origin.AttemptId, origin.WorkerExecutable);
             if (identity.WorkflowExecutionId != origin.WorkerExecutionId)

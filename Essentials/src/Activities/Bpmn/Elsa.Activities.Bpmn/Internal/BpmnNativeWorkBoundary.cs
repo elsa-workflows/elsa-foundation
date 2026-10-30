@@ -166,7 +166,7 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
         access.Current.EnsureTenantScope(model.TenantId);
         var document = BpmnDirectExecutionDriver.Read(model);
         var retained = document.Cancellations?.SingleOrDefault(item => origin.IsEquivalentTo(item.Origin));
-        if (!origin.MatchesModel(model) || document.FormatVersion is not (11 or 12) && model.TerminalResult?.GetProperty("status").GetString() != "Cancelled" ||
+        if (!origin.MatchesModel(model) || document.FormatVersion is not (11 or 12 or 13 or 14) && model.TerminalResult?.GetProperty("status").GetString() != "Cancelled" ||
             source.Scope != origin.Scope || source.Intent.WorkflowExecutionId != origin.ExecutionId ||
             cancellation.SourceOutboxItemId != source.SourceOutboxItemId || cancellation.Settled ||
             retained is null || retained.SourceOutboxItemId != cancellation.SourceOutboxItemId ||
@@ -195,7 +195,7 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
         if (cancellation is null) return null;
         var source = await PhysicalLookup.FindDurableAsync(cancellation.SourceOutboxItemId, cancellationToken)
             ?? throw Unavailable("The model's committed cancellation source is unavailable.");
-        if (document.FormatVersion is not (11 or 12) && model.TerminalResult?.GetProperty("status").GetString() != "Cancelled" || source.StimulusDeliverySourceScope != origin.Scope ||
+        if (document.FormatVersion is not (11 or 12 or 13 or 14) && model.TerminalResult?.GetProperty("status").GetString() != "Cancelled" || source.StimulusDeliverySourceScope != origin.Scope ||
             source.Intent.Kind != CancelKind || source.Intent.WorkflowExecutionId != model.ExecutionId ||
             source.Intent.IntentId != CancellationIntentId(origin) || source.Intent.Payload is not { } payload ||
             !JsonElement.DeepEquals(payload, JsonSerializer.SerializeToElement(cancellation with { Settled = false, NotAdmitted = false }, Web)))
