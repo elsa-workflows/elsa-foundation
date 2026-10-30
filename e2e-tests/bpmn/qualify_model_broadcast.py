@@ -36,6 +36,12 @@ def wait(action, complete, message, seconds=180):
     raise TimeoutError(message)
 
 
+class ObservationUnavailable(RuntimeError):
+    def __init__(self, operation, failure_type):
+        self.operation = operation; self.failure_type = failure_type
+        super().__init__('The actual read-only observer refused ' + operation + ': ' + failure_type)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--workbench-assembly', required=True, type=Path)
@@ -63,7 +69,7 @@ def main():
     features['WorkflowsRuntimeEntityFrameworkCore']['ConnectionString'] = 'Data Source=runtime.db;Pooling=False'
     for name in ('ActivitiesDesignEntityFrameworkCore', 'WorkflowsDesignEntityFrameworkCore', 'WorkflowsPublishingEntityFrameworkCore'):
         features[name]['ConnectionString'] = 'Data Source=design.db;Pooling=False'
-    processes = []; exits = []; children = []; logs = []; snapshots = {}; host = None; api = None; models = []; observations = 0
+    processes = []; exits = []; children = []; logs = []; snapshots = {}; host = None; api = None; models = []; observations = 0; observer_unavailable = []
     event = 'actual-model-broadcast-' + args.cut
 
     def owned(child):
@@ -105,7 +111,22 @@ def main():
                 raise
         wait(healthy, bool, 'The owned host did not become ready.'); api.login('admin', 'Password123!')
 
-    def read(*arguments): return json.loads(subprocess.check_output(['dotnet', str(reader), *map(str, arguments)], text=True, timeout=30))
+    def read(*arguments):
+        result = subprocess.run(['dotnet', str(reader), *map(str, arguments)], text=True, capture_output=True, timeout=30)
+        value = json.loads(result.stdout)
+        if result.returncode: raise ObservationUnavailable(str(arguments[0]), value.get('failureType', 'UnclassifiedObserverFailure'))
+        return value
+    def observe_snapshot(action, label):
+        for attempt in range(1, 4):
+            try:
+                with frozen(): return action(attempt)
+            except ObservationUnavailable as error:
+                observer_unavailable.append({'operation': error.operation, 'failureType': error.failure_type, 'label': label,
+                    'attempt': attempt, 'observedAtUtc': datetime.now(timezone.utc).isoformat(), 'sourceStateEdited': False})
+                q.write_json(output / 'observer-unavailable.json', observer_unavailable)
+                if error.failure_type != 'SqliteException' or attempt == 3: raise
+                # All hosts have resumed: let an in-flight real transaction release its lock before a new complete read.
+                time.sleep(.1)
     def model(identity): return read('--read-bpmn-direct', root / 'runtime.db', identity)
     @contextmanager
     def frozen():
@@ -121,18 +142,25 @@ def main():
             for child in stopped: owned(child); os.kill(child.pid, signal.SIGCONT)
     def broadcast(publisher):
         nonlocal observations
-        observations += 1; path = root / ('source-' + str(observations) + '.sqlite')
-        with frozen(): read('--backup-sqlite', root / 'runtime.db', path)
+        def backup(attempt):
+            nonlocal observations
+            observations += 1; path = root / ('source-' + str(observations) + '.sqlite')
+            read('--backup-sqlite', root / 'runtime.db', path); return path
+        path = observe_snapshot(backup, 'source-observation')
         return read('--find-publisher-source', path, q.digest(path), 'default', publisher)
 
     def capture(label):
-        with frozen():
-            result = {}
+        def backup(attempt):
+            rows = []
             for store in ('runtime', 'design'):
-                raw = root / (label + '-' + store + '.sqlite'); backup = read('--backup-sqlite', root / (store + '.db'), raw)
-                path = output / (label + '-' + store + '.sqlite.gz'); path.write_bytes(gzip.compress(raw.read_bytes()))
-                result[store] = {'file': path.name, 'databaseSha256': q.digest(raw), 'gzipSha256': q.digest(path), 'observer': backup}
-            snapshots[label] = result
+                raw = root / (label + '-' + str(attempt) + '-' + store + '.sqlite')
+                rows.append((store, raw, read('--backup-sqlite', root / (store + '.db'), raw)))
+            return rows
+        rows = observe_snapshot(backup, label); result = {}
+        for store, raw, receipt in rows:
+            path = output / (label + '-' + store + '.sqlite.gz'); path.write_bytes(gzip.compress(raw.read_bytes()))
+            result[store] = {'file': path.name, 'databaseSha256': q.digest(raw), 'gzipSha256': q.digest(path), 'observer': receipt}
+        snapshots[label] = result
 
     def native_node(identity, kind, inputs): return q.node(identity, api.activity(kind), inputs)
     def publish(name, node):
@@ -206,7 +234,9 @@ def main():
         current = before_source['source']; deadline = re.sub(r'\.(\d{1,7})(?=[+-])', lambda m: '.' + m[1].ljust(6, '0')[:6], current['deliveryVisibleAfter'].replace('Z', '+00:00'))
         if current['status'] != 'Delivering' or current['deliveringOwnerId'] != marker['ownerId'] or current['deliveryFencingToken'] != marker['fencingToken'] or datetime.now(timezone.utc) >= datetime.fromisoformat(deadline):
             raise ValueError('The original source claim did not remain fresh and unacknowledged through the actual crash cut.')
-        capture('pending'); stop(host); stop(assist)
+        capture('pending'); pending_at = datetime.now(timezone.utc).isoformat()
+        if datetime.now(timezone.utc) >= datetime.fromisoformat(deadline): raise ValueError('The source lease expired during the actual pending capture.')
+        stop(host); stop(assist)
         try: submitted = pending.result(timeout=5)
         except (OSError, TimeoutError, urllib.error.URLError): submitted = None
         executor.shutdown(wait=True)
@@ -240,6 +270,7 @@ def main():
             'publication': publication, 'workerPublication': worker, 'publisherPublication': publisher, 'publisherExecutionId': publisher_id,
             'submitted': submitted, 'modelExecutionIds': models, 'products': products, 'processes': processes, 'exits': exits, 'snapshots': snapshots,
             'ownedHosts': len(processes), 'separateStandardConsumerBeforeCrash': assist is not None,
+            'pendingCapturedAtUtc': pending_at, 'observerUnavailable': observer_unavailable,
             'stateSeeded': False, 'clockEdited': False, 'standardRecoveryHosts': True, 'retainedLoopWaitsAreIntentional': looping})
         print(json.dumps({'sourceRevision': source, 'cut': args.cut, 'models': len(models), 'wholeStores': 6, 'ownedHosts': len(processes)}))
     except Exception as error:
