@@ -37,7 +37,7 @@ using Elsa.Etl.Workflows.Runtime;
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 try
 {
-    if (args.Length is not (4 or 6) || args[0] is not ("--enqueue-start" or "--enqueue-checkpoint" or "--drain-checkpoint" or "--cancel-model" or "--retry-held-model" or "--cancel-held-model" or "--consume-native-result" or "--consume-native-success" or "--create-auth-probe-users" or "--probe-obsolete-result" or "--retire-and-sweep") ||
+    if (args.Length is not (4 or 6) || args[0] is not ("--enqueue-start" or "--enqueue-checkpoint" or "--drain-checkpoint" or "--cancel-model" or "--retry-held-model" or "--cancel-held-model" or "--consume-native-result" or "--probe-pending-native-cancel" or "--consume-native-success" or "--create-auth-probe-users" or "--probe-obsolete-result" or "--retire-and-sweep") ||
         args.Length == 6 && args[4] != (args[0] == "--consume-native-success" ? "--parent-return-stage" : "--gate"))
         throw new ArgumentException("Select an owned enqueue/drain/cancel operation, content root, model id, nonce and optional --gate directory.");
     var heldRace = args[0] is "--retry-held-model" or "--cancel-held-model";
@@ -47,7 +47,8 @@ try
     var obsolete = args[0] == "--probe-obsolete-result";
     if (obsolete && args.Length != 4) throw new ArgumentException("Obsolete-result controls use the normal model mailbox without a proposal gate.");
     var success = args[0] == "--consume-native-success";
-    var consume = success || args[0] == "--consume-native-result";
+    var pendingCancellation = args[0] == "--probe-pending-native-cancel";
+    var consume = success || pendingCancellation || args[0] == "--consume-native-result";
     if (consume && !success && args.Length != 4) throw new ArgumentException("Consumption uses the original production delivery path without a validation gate.");
     var parentReturnStage = success && args.Length == 6 ? args[5] : null;
     if (success && parentReturnStage is not ("pending" or "consumed" or "settled"))
@@ -201,6 +202,34 @@ try
         var steps = new List<object>();
         var processor = sdk.GetRequiredService<IRuntimePostCommitOutboxProcessor>();
         var lookup = sdk.GetRequiredService<IPostCommitOutboxLookupStore>();
+        if (pendingCancellation)
+        {
+            var pendingWorker = await workflows.FindAsync(origin.WorkerExecutionId);
+            var pending = await sdk.GetRequiredService<IRuntimePostCommitOutboxStore>()
+                .GetDeliverableAsync(new(DateTimeOffset.UtcNow, 20, origin.WorkerExecutionId));
+            var prematureSource = pending.Single(item => item.Intent.Kind == "Elsa.Bpmn.NativeWorkResult.v1");
+            var pendingEtlCancel = pending.Single(item => item.Intent.Kind == "Elsa.Etl.Cancel.v1");
+            if (model.Lifecycle != RuntimeModelLifecycle.Running || model.Revision != 1 || pendingWorker?.Status != WorkflowExecutionStatus.Cancelled ||
+                pendingEtlCancel.Status != RuntimePostCommitOutboxStatus.Pending ||
+                model.Payload.TryGetProperty("cancellations", out var cancellations) && cancellations.ValueKind != JsonValueKind.Null && cancellations.GetArrayLength() != 0)
+                throw new InvalidOperationException("The inverse-order probe requires independent native cancellation with downstream ETL still pending.");
+            var delivery = await processor.ProcessAsync(new(1, origin.WorkerExecutionId, "Elsa.Bpmn.NativeWorkResult.v1"));
+            var deferredModel = await models.FindAsync(model.ExecutionId);
+            var prematureReceipt = await models.FindInputAsync(model.ExecutionId, origin.ResultInputId);
+            var deferredQueue = (await queue.ListAsync(new(model.ExecutionId))).Items;
+            var retainedCancel = await lookup.FindDurableAsync(pendingEtlCancel.OutboxItemId);
+            var retainedResult = await lookup.FindDurableAsync(prematureSource.OutboxItemId);
+            if (delivery.AttemptedCount != 1 || delivery.DeliveredCount != 0 || prematureReceipt is not null || deferredQueue.Count != 0 ||
+                retainedCancel?.Status != RuntimePostCommitOutboxStatus.Pending || retainedResult?.Status != RuntimePostCommitOutboxStatus.FailedRetryable ||
+                !JsonElement.DeepEquals(JsonSerializer.SerializeToElement(model, json), JsonSerializer.SerializeToElement(deferredModel, json)))
+                throw new InvalidOperationException("An independently cancelled worker settled or queued its result before ETL cancellation.");
+            Console.WriteLine(JsonSerializer.Serialize(new { operation = args[0], startedAtUtc = started, completedAtUtc = DateTimeOffset.UtcNow,
+                disposition = "Deferred", origin, before = model, deferredModel, pendingWorker, delivery, prematureReceipt, deferredQueue, pendingEtlCancel = retainedCancel,
+                prematureSource = retainedResult, products = new[] { Product(typeof(ActivitiesBpmnHostingFeature).Assembly),
+                    Product(typeof(RuntimeEntityFrameworkCoreOptions).Assembly), Product(typeof(EtlRuntimeFeature).Assembly),
+                    Product(typeof(EtlRuntimeEntityFrameworkCoreFeature).Assembly), Product(typeof(EtlWorkflowsRuntimeFeature).Assembly) } }, json));
+            return 0;
+        }
         async Task<object> Drain(string execution)
         {
             var id = "owned-consumption:" + Guid.NewGuid().ToString("N");

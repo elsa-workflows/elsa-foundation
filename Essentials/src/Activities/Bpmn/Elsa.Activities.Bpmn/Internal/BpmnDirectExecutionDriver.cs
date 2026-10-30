@@ -30,7 +30,11 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
     public ValueTask ValidateMaterialAsync(RuntimeModelMaterial material, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _ = Graph(material);
+        try { _ = Graph(material); }
+        catch (JsonException exception)
+        {
+            throw new BpmnModelValidationException($"BPMN material '{material.Identity.ArtifactId}' has invalid definition JSON.", exception);
+        }
         if (material.Profile == BpmnModelProtocol.NativeWorkProfile) NativeWork.EnsureQualified();
         return ValueTask.CompletedTask;
     }
@@ -39,7 +43,8 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
     {
         if (context.Command.InputKind == "start" && context.State is null && !options.AdmitNewExecutions)
             throw new RuntimeSchedulerWorkUnavailableException("bpmn.admission-disabled", "New BPMN execution admission is disabled.");
-        await ValidateShapeAndReplayAsync(context, cancellationToken);
+        try { await ValidateShapeAndReplayAsync(context, cancellationToken); }
+        catch (JsonException exception) { throw InvalidCommandJson(context, exception); }
     }
 
     private async ValueTask ValidateShapeAndReplayAsync(RuntimeModelExecutionContext context, CancellationToken cancellationToken)
@@ -93,6 +98,16 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
     }
 
     public async ValueTask ExecuteAsync(RuntimeModelExecutionContext context, CancellationToken cancellationToken = default)
+    {
+        try { await ExecuteCoreAsync(context, cancellationToken); }
+        catch (JsonException exception) { throw InvalidCommandJson(context, exception); }
+    }
+
+    private static BpmnModelValidationException InvalidCommandJson(RuntimeModelExecutionContext context, JsonException exception) =>
+        new($"BPMN execution '{context.WorkItem.WorkflowExecutionId}', input '{context.Command.InputId}' ({context.Command.InputKind}) " +
+            $"has invalid owned JSON for material '{context.Material.Identity.ArtifactId}'.", exception);
+
+    private async ValueTask ExecuteCoreAsync(RuntimeModelExecutionContext context, CancellationToken cancellationToken)
     {
         var command = context.Command;
         var executionId = context.WorkItem.WorkflowExecutionId;
@@ -149,12 +164,12 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             completion = new(retry.InvocationId, retry.FailedAttemptId);
             var failure = document.Failures?.SingleOrDefault(item => item.IncidentId == retry.IncidentId);
             var work = document.Work.SingleOrDefault(item => item.InvocationId == retry.InvocationId && item.AttemptId == retry.FailedAttemptId);
-            var policy = work is null ? null : definition.ServiceBindings?.Single(item => item.BindingId == work.BindingId).FaultPolicy;
             if (current!.TerminalResult is not null) rejection = "execution-terminal";
             else if (!policyFrame) rejection = "retry-not-enabled";
             else if (current.Lifecycle != RuntimeModelLifecycle.WaitingIncident || failure is not { Status: "Open" } || work is null ||
                 failure.InvocationId != retry.InvocationId || failure.FailedAttemptId != retry.FailedAttemptId) rejection = "incident-not-current";
-            else if (policy?.Disposition != BpmnServiceFaultDisposition.HoldForRetry || failure.MaxAttempts != policy.MaxAttempts) rejection = "retry-not-enabled";
+            else if (definition.ServiceBindings?.SingleOrDefault(item => item.BindingId == work.BindingId)?.FaultPolicy is not
+                { Disposition: BpmnServiceFaultDisposition.HoldForRetry } policy || failure.MaxAttempts != policy.MaxAttempts) rejection = "retry-not-enabled";
             else if (work.AttemptNumber >= policy.MaxAttempts) rejection = "attempt-budget-exhausted";
             else
             {
@@ -416,6 +431,15 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
     }
 
     internal static Document Read(RuntimeModelExecutionState state)
+    {
+        try { return ReadCore(state); }
+        catch (JsonException exception)
+        {
+            throw new BpmnModelValidationException($"BPMN execution '{state.ExecutionId}' has invalid persisted model JSON.", exception);
+        }
+    }
+
+    private static Document ReadCore(RuntimeModelExecutionState state)
     {
         var result = state.Payload.Deserialize<Document>(Web) ?? throw new BpmnModelValidationException("BPMN model state is missing.");
         if (result.NativeParent is { } parent)

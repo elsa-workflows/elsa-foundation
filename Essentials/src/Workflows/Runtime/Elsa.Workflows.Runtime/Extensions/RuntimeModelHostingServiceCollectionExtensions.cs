@@ -1,6 +1,7 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Core.Extensions;
 using Elsa.Tasks.Core;
+using Elsa.Workflows.Runtime.Core.Events;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;

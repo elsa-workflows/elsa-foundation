@@ -81,6 +81,7 @@ def main():
     parser.add_argument("--admission-race-order", choices=("cancel-first", "admit-first"), help="Gate an unchanged actual proposal before its provider transaction, commit the competitor, then cold-recover both writers' obligations.")
     parser.add_argument("--pending-cancellation-crash", action="store_true", help="With model/native cancellation, kill a second real host while its cancellation/result deliveries remain owed.")
     parser.add_argument("--consumed-before-ack-crash", action="store_true", help="With pending cancellation, use the production SDK to consume the result before killing the host with source ACK still owed.")
+    parser.add_argument("--native-result-before-etl-cancel", action="store_true", help="Attempt the independent cancelled-worker result while actual ETL cancellation is still pending, then cold-recover both original sources.")
     parser.add_argument("--pending-parent-result-crash", action="store_true", help="With whole-native-parent cancellation, consume the actual worker result through the production SDK, then kill a second host while parent settlement is still owed.")
     parser.add_argument("--successful-parent-result-crash", choices=("pending","consumed","settled"), help="After actual ETL success, capture a second process loss before native parent consumption, after consumption, or after model settlement while source ACK remains owed.")
     outcome_group = parser.add_mutually_exclusive_group()
@@ -114,7 +115,7 @@ def main():
         parser.error("A business-error boundary requires --parent BpmnModel and a business-error or technical-fault journey.")
     caught_business_error=args.business_error and args.business_error_boundary=='matching'
     if cancelling and args.parent != "BpmnModel":parser.error("Cancellation currently qualifies the direct BPMN/native RunEtl root only.")
-    if args.embedded_parent and (args.parent!='BpmnModel' or args.model_cancel_before_admission or args.pending_cancellation_crash):
+    if args.embedded_parent and (args.parent!='BpmnModel' or args.model_cancel_before_admission or args.pending_cancellation_crash and not args.native_result_before_etl_cancel):
         parser.error("Embedding requires --parent BpmnModel and the normal admitted-worker recovery journey.")
     if args.native_parent_cancel and not args.embedded_parent:parser.error("Native parent cancellation requires --embedded-parent.")
     if args.pending_parent_result_crash and (not args.native_parent_cancel or args.dispatcher_assembly is None):
@@ -129,6 +130,9 @@ def main():
         parser.error("A pending cancellation crash requires --model-cancel or --native-cancel.")
     if args.consumed_before_ack_crash and (not args.pending_cancellation_crash or args.dispatcher_assembly is None):
         parser.error("The consumed-before-ACK cut requires --pending-cancellation-crash and --dispatcher-assembly.")
+    if args.native_result_before_etl_cancel and (not args.native_cancel or not args.pending_cancellation_crash or
+            args.dispatcher_assembly is None or args.consumed_before_ack_crash):
+        parser.error("Inverse native-result delivery requires --native-cancel --pending-cancellation-crash --dispatcher-assembly, separately from pre-ACK consumption.")
     source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
     if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"], cwd=REPO, text=True).strip():
         raise ValueError("Commit the journey source before recording exact-source evidence.")
@@ -1089,6 +1093,20 @@ def main():
                         any(x["inputKind"]=="native-result" for x in pending_checked["inputs"]) or pending_wire!=before_wire):
                     raise ValueError("The actual cancellation/result source was not still owed at the second process-loss cut.")
                 consumed_evidence={}
+                if args.native_result_before_etl_cancel:
+                    dispatcher=args.dispatcher_assembly.resolve(strict=True);nonce=uuid.uuid4().hex
+                    q.write_json(root/"owned-bpmn-recovery.json",{"schemaVersion":1,"controllerProcessId":os.getpid(),"modelExecutionId":model_execution,"nonce":nonce})
+                    sdk=start(["dotnet",str(dispatcher),"--probe-pending-native-cancel",str(root),model_execution,nonce],"inverse-cancel-sdk")
+                    sdk_log=root/f"inverse-cancel-sdk-{len(processes)-1}.log";sdk.wait(timeout=90)
+                    probe=json.loads(sdk_log.read_text());q.write_json(output/"sdk-inverse-cancel.json",probe)
+                    if sdk.returncode!=0 or probe["disposition"]!="Deferred" or any(source not in p["informationalVersion"] for p in probe["products"]):
+                        raise ValueError("The actual inverse-order cancellation was not deferred: "+sdk_log.read_text())
+                    deferred_stores=snapshots("deferred")
+                    deferred_checked=json.loads(subprocess.check_output(["dotnet",str(reader),"--read-bpmn-retirement",str(root/"elsa.db"),model_execution],text=True,timeout=30))
+                    q.write_json(output/"deferred-checked.json",deferred_checked)
+                    if deferred_checked["model"]!=pending_checked["model"] or deferred_checked["queuedModelInputs"] or any(x["inputKind"]=="native-result"for x in deferred_checked["inputs"]):
+                        raise ValueError("The premature cancelled-worker result changed model state or retained an accepted input.")
+                    consumed_evidence={"nativeResultBeforeEtlCancel":True,"deferredStores":deferred_stores,"dispatcherSha256":q.digest(dispatcher)}
                 if args.consumed_before_ack_crash:
                     dispatcher=args.dispatcher_assembly.resolve(strict=True);nonce=uuid.uuid4().hex
                     q.write_json(root/"owned-bpmn-recovery.json",{"schemaVersion":1,"controllerProcessId":os.getpid(),"modelExecutionId":model_execution,"nonce":nonce})

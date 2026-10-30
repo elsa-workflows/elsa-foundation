@@ -48,12 +48,12 @@ public class ActivitiesBpmnHostingFeature : IShellFeature
         services.TryAddSingleton(new BpmnModelHostingOptions(AdmitNewExecutions));
         services.TryAddScoped<IBpmnModelRuntime, BpmnModelRuntime>();
         services.AddSingleton<IShellInitializer>(new BpmnModelHostingRegistrationInitializer(services));
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeExecutionProtocolContributor, BpmnProtocolContributor>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeExecutionProtocolSource, BpmnProtocolSource>());
     }
 
-    private sealed class BpmnProtocolContributor : IRuntimeExecutionProtocolContributor
+    private sealed class BpmnProtocolSource : IRuntimeExecutionProtocolSource
     {
-        public BpmnProtocolContributor() { }
+        public BpmnProtocolSource() { }
         public IEnumerable<RuntimeExecutionProtocolRegistration> GetProtocols() =>
             [new(new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), typeof(BpmnDirectExecutionDriver))
                 { InputKinds = ["start", "complete-human", "cancel", "retry-service", "native-result", "native-start-retired", "timer-elapsed", "start-embedded", "cancel-embedded", "native-parent-settled"] }];

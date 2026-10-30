@@ -1,0 +1,251 @@
+[
+  {
+    "path": "/health/ready",
+    "request": null,
+    "status": 503,
+    "response": {
+      "status": "starting",
+      "shell": "default",
+      "code": "shell_activation_pending"
+    }
+  },
+  {
+    "path": "/health/ready",
+    "request": null,
+    "status": 503,
+    "response": {
+      "status": "starting",
+      "shell": "default",
+      "code": "shell_activation_pending"
+    }
+  },
+  {
+    "path": "/health/ready",
+    "request": null,
+    "status": 503,
+    "response": {
+      "status": "starting",
+      "shell": "default",
+      "code": "shell_activation_pending"
+    }
+  },
+  {
+    "path": "/health/ready",
+    "request": null,
+    "status": 503,
+    "response": {
+      "status": "starting",
+      "shell": "default",
+      "code": "shell_activation_pending"
+    }
+  },
+  {
+    "path": "/health/ready",
+    "request": null,
+    "status": 503,
+    "response": {
+      "status": "starting",
+      "shell": "default",
+      "code": "shell_activation_pending"
+    }
+  },
+  {
+    "path": "/health/ready",
+    "request": null,
+    "status": 503,
+    "response": {
+      "status": "starting",
+      "shell": "default",
+      "code": "shell_activation_pending"
+    }
+  },
+  {
+    "path": "/health/ready",
+    "request": null,
+    "status": 503,
+    "response": {
+      "status": "starting",
+      "shell": "default",
+      "code": "shell_activation_pending"
+    }
+  },
+  {
+    "path": "/health/ready",
+    "request": null,
+    "status": 200,
+    "response": {
+      "status": "ready",
+      "shell": "default",
+      "generation": 1,
+      "durationMs": 1418.2785
+    }
+  },
+  {
+    "path": "/bpmn/artifacts",
+    "request": {
+      "requestId": "publish-human-empty",
+      "definition": {
+        "formatVersion": 4,
+        "humanBindings": [
+          "review-work"
+        ],
+        "serviceBindings": [],
+        "timerBindings": [
+          "timeout-work"
+        ],
+        "process": {
+          "processId": "retry-human-empty-services",
+          "elements": [
+            {
+              "elementId": "start",
+              "elementType": "startEvent"
+            },
+            {
+              "elementId": "review",
+              "elementType": "userTask",
+              "bindingRef": "review-work"
+            },
+            {
+              "elementId": "timeout",
+              "elementType": "boundaryEvent",
+              "bindingRef": "timeout-work",
+              "attachedToRef": "review",
+              "cancelActivity": true,
+              "eventDefinitions": [
+                {
+                  "type": "timer",
+                  "properties": {
+                    "interval": "PT1H"
+                  }
+                }
+              ]
+            },
+            {
+              "elementId": "done",
+              "elementType": "endEvent"
+            },
+            {
+              "elementId": "timed-out",
+              "elementType": "endEvent"
+            }
+          ],
+          "sequenceFlows": [
+            {
+              "flowId": "start-review",
+              "sourceRef": "start",
+              "targetRef": "review"
+            },
+            {
+              "flowId": "review-done",
+              "sourceRef": "review",
+              "targetRef": "done"
+            },
+            {
+              "flowId": "timeout-end",
+              "sourceRef": "timeout",
+              "targetRef": "timed-out"
+            }
+          ]
+        }
+      }
+    },
+    "status": 200,
+    "response": {
+      "executable": {
+        "artifactId": "sha256:c76f4631430558fe384feecd26b89855a65a273d71d20c67f0b9b8ed508892bd",
+        "definitionId": "bpmn-model:sha256:c76f4631430558fe384feecd26b89855a65a273d71d20c67f0b9b8ed508892bd",
+        "definitionVersionId": "sha256:c76f4631430558fe384feecd26b89855a65a273d71d20c67f0b9b8ed508892bd",
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:c76f4631430558fe384feecd26b89855a65a273d71d20c67f0b9b8ed508892bd"
+      },
+      "incarnationId": "61980656e5c7428f9d21b93691e636c7",
+      "sourceReferenceId": "bpmn-source:348aa3d7568e018f019c34754056f36445f4c14145306867782e3fc12c1cd594",
+      "profile": "foundation-native-work-v1"
+    }
+  },
+  {
+    "path": "/bpmn/executions",
+    "request": {
+      "requestId": "start-human-empty",
+      "sourceReferenceId": "bpmn-source:348aa3d7568e018f019c34754056f36445f4c14145306867782e3fc12c1cd594"
+    },
+    "status": 201,
+    "response": {
+      "executionId": "bpmn:ff32e1b1d0839abc30238d45b796ced92b14fe7cb12541bb3bf02cdf69e9d9bd",
+      "inputId": "start-human-empty",
+      "replay": false,
+      "pending": false,
+      "result": {
+        "status": "Accepted",
+        "code": null,
+        "revision": 1,
+        "lifecycle": "Running"
+      }
+    }
+  },
+  {
+    "path": "/bpmn/executions/bpmn:ff32e1b1d0839abc30238d45b796ced92b14fe7cb12541bb3bf02cdf69e9d9bd/work",
+    "request": null,
+    "status": 200,
+    "response": {
+      "items": [
+        {
+          "elementId": "review",
+          "bindingId": "review-work",
+          "tokenId": "token:4",
+          "iterationId": null,
+          "invocationId": "bpmn-work:ea5f0af98107ac5cf5379572ba53739c97714fa42a46284322abe3e316583e2b",
+          "attemptId": "attempt:5d67f7593e54f90ad09805ad0a23d0e0106ea2f55865a20ae2cee562fcb49ad8"
+        }
+      ],
+      "nextContinuationToken": null
+    }
+  },
+  {
+    "path": "/bpmn/executions/bpmn:ff32e1b1d0839abc30238d45b796ced92b14fe7cb12541bb3bf02cdf69e9d9bd/retry-service",
+    "request": {
+      "requestId": "invalid-retry",
+      "incidentId": "nonexistent-incident",
+      "invocationId": "bpmn-work:ea5f0af98107ac5cf5379572ba53739c97714fa42a46284322abe3e316583e2b",
+      "failedAttemptId": "attempt:5d67f7593e54f90ad09805ad0a23d0e0106ea2f55865a20ae2cee562fcb49ad8"
+    },
+    "status": 202,
+    "response": {
+      "executionId": "bpmn:ff32e1b1d0839abc30238d45b796ced92b14fe7cb12541bb3bf02cdf69e9d9bd",
+      "inputId": "invalid-retry",
+      "replay": false,
+      "pending": true,
+      "result": null
+    }
+  },
+  {
+    "path": "/bpmn/executions/bpmn:ff32e1b1d0839abc30238d45b796ced92b14fe7cb12541bb3bf02cdf69e9d9bd/work/bpmn-work:ea5f0af98107ac5cf5379572ba53739c97714fa42a46284322abe3e316583e2b/complete",
+    "request": {
+      "requestId": "normal-complete",
+      "attemptId": "attempt:5d67f7593e54f90ad09805ad0a23d0e0106ea2f55865a20ae2cee562fcb49ad8"
+    },
+    "status": 202,
+    "response": {
+      "executionId": "bpmn:ff32e1b1d0839abc30238d45b796ced92b14fe7cb12541bb3bf02cdf69e9d9bd",
+      "inputId": "normal-complete",
+      "replay": false,
+      "pending": true,
+      "result": null
+    }
+  },
+  {
+    "path": "/bpmn/executions/bpmn:ff32e1b1d0839abc30238d45b796ced92b14fe7cb12541bb3bf02cdf69e9d9bd/cancel",
+    "request": {
+      "requestId": "normal-cancel",
+      "reason": "ordinary cancellation after invalid retry"
+    },
+    "status": 202,
+    "response": {
+      "executionId": "bpmn:ff32e1b1d0839abc30238d45b796ced92b14fe7cb12541bb3bf02cdf69e9d9bd",
+      "inputId": "normal-cancel",
+      "replay": false,
+      "pending": true,
+      "result": null
+    }
+  }
+]

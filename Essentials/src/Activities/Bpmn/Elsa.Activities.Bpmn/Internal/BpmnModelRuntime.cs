@@ -28,6 +28,16 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
     public async ValueTask<BpmnPublishedModel> PublishAsync(BpmnModelDefinition definition, string requestId, BpmnModelCaller caller,
         CancellationToken cancellationToken = default)
     {
+        try { return await PublishCoreAsync(definition, requestId, caller, cancellationToken); }
+        catch (JsonException exception)
+        {
+            throw new BpmnModelValidationException($"BPMN publication '{requestId}' has invalid definition JSON.", exception);
+        }
+    }
+
+    private async ValueTask<BpmnPublishedModel> PublishCoreAsync(BpmnModelDefinition definition, string requestId, BpmnModelCaller caller,
+        CancellationToken cancellationToken)
+    {
         Scope(caller); InputId(requestId);
         if (!materials.SupportsModelMaterial || !sources.CanWriteRootReferences(materials))
             throw new NotSupportedException("The selected artifact/source providers cannot publish model material safely.");

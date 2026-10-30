@@ -2,6 +2,8 @@
 
 This maps spec1017 and #2898 to actual product journeys and the limits of their source-bound receipts. Runtime qualification now includes the [affected-main repeat atd7ee22b16](main-adoption/d7ee22b16/README.md):32 hosting tests,594 Architecture tests, all six legacy upgrade families, paired partial forks and both actual Studio families pass. The earlier checked-provider refusal is resolved by observing actual source acknowledgement before the fixture stops its host; its guard is unchanged. T042's preview magnitude decision, complete-PR review and required CI remain open. This index is not a clean PR-review or merge gate. No earlier pass is relabelled as a current-head pass. #2907 and program #2892 remain open.
 
+Complete-PR round1/6 found two additional runtime gaps: an invalid service retry can block human work, and independent native cancellation can settle BPMN before pending downstream ETL cancellation. [Retained red diagnostics and all five findings](reviews/round-1/README.md). FR011/013/014 and affected SC003/command acceptance are reopened until fixes and actual recovery verification. The passes above retain their original coverage; they do not prove these scenarios. Three standards corrections and changed-source gates also remain open.
+
 ## Inputs, implementation and verification boundary
 
 The [frozen baseline](baseline/manifest.json) retains104 assets and22 actual whole-store inputs captured before affected writer changes. The authoring fingerprint remains `41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92`. Captured native/BPMN checkpoints, bindings, pins, layout and original publisher/recipient cuts are the upgrade inputs; synthetic fixtures are controls.

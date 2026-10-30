@@ -2,26 +2,21 @@ using System.Collections.Frozen;
 using Elsa.Events.Core.Contracts;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Events;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Services.Executions;
 
-/// <summary>Named Sequential contribution event; model modules contribute through the contributor contract.</summary>
-internal sealed class RuntimeExecutionProtocolsInitializing : IEvent
-{
-    public ICollection<RuntimeExecutionProtocolRegistration> Registrations { get; } = [];
-}
-
-internal sealed class RegisterRuntimeExecutionProtocols(IEnumerable<IRuntimeExecutionProtocolContributor> contributors)
+internal sealed class RegisterRuntimeExecutionProtocols(IEnumerable<IRuntimeExecutionProtocolSource> sources)
     : IEventHandler<RuntimeExecutionProtocolsInitializing>
 {
     public Task Handle(RuntimeExecutionProtocolsInitializing domainEvent, CancellationToken cancellationToken)
     {
-        foreach (var contributor in contributors)
+        foreach (var source in sources)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            foreach (var registration in contributor.GetProtocols()) domainEvent.Registrations.Add(registration);
+            foreach (var registration in source.GetProtocols()) domainEvent.Registrations.Add(registration);
         }
         return Task.CompletedTask;
     }

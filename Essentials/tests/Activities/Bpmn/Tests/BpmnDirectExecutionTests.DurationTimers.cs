@@ -126,7 +126,7 @@ public sealed partial class BpmnDirectExecutionTests
         Assert.Equal(JsonSerializer.Serialize(before, Web), JsonSerializer.Serialize(await reader.FindAsync("direct-execution"), Web));
     }
 
-    private static RuntimeModelMaterial TimedHumanMaterial(string duration = "PT5S")
+    private static RuntimeModelMaterial TimedHumanMaterial(string duration = "PT5S", bool emptyServiceInventory = false)
     {
         var process = new BpmnProcessDefinition("timed-human", Elements:
             [new("start", BpmnElementTypes.StartEvent), new("review", BpmnElementTypes.UserTask, bindingRef: "review-work"),
@@ -134,7 +134,7 @@ public sealed partial class BpmnDirectExecutionTests
                     eventDefinitions: [new(BpmnEventDefinitionTypes.Timer, new Dictionary<string,string> { [BpmnEventDefinitionProperties.Interval] = duration })]),
                 new("done", BpmnElementTypes.EndEvent), new("timed-out", BpmnElementTypes.EndEvent)],
             SequenceFlows: [new("start-review", "start", "review"), new("review-done", "review", "done"), new("timeout-end", "timeout", "timed-out")]);
-        var definition = new BpmnModelDefinition(4, JsonSerializer.SerializeToElement(process, Web), ["review-work"], null, ["timeout-work"]);
+        var definition = new BpmnModelDefinition(4, JsonSerializer.SerializeToElement(process, Web), ["review-work"], emptyServiceInventory ? [] : null, ["timeout-work"]);
         var pin = new WorkflowExecutableIdentity("timed-artifact", "timed-definition", "timed-version", "1.0.0", "pending");
         var material = new RuntimeModelMaterial(1, pin, new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), BpmnModelProtocol.NativeWorkProfile,
             JsonSerializer.SerializeToElement(definition, Web), new(1, []), [], [], []);

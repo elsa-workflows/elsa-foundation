@@ -104,8 +104,8 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
             context.Command.InputId != ResultInputId(origin) || !result.Status.IsTerminal())
             throw new BpmnModelValidationException("The native result does not address this exact model invocation.");
         await ValidateRetainedResultAsync(state, result, cancellationToken);
-        if (BpmnDirectExecutionDriver.Read(state).Cancellations?.Any(item => !item.Settled && origin.IsEquivalentTo(item.Origin)) == true)
-            await RequireCancellationSettlementAsync(result, cancellationToken);
+        // Worker-origin cancellation owes the same downstream settlement as model-origin cancellation.
+        await RequireCancellationSettlementAsync(result, cancellationToken);
     }
 
     internal async ValueTask ValidateRetainedResultAsync(RuntimeModelExecutionState state, BpmnNativeWorkResult result,

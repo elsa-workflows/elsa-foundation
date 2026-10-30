@@ -4,6 +4,8 @@ using Elsa.Workflows.Runtime.Core.Models;
 namespace Elsa.Activities.Bpmn.Core;
 
 /// <summary>Supported model publication, execution and human-work commands used by the BPMN API.</summary>
+/// <remarks>Invalid owned definition, input or persisted model JSON raises <see cref="BpmnModelValidationException"/>
+/// with material/execution context and the original JSON exception as its inner cause. Transport parsing is separate.</remarks>
 public interface IBpmnModelRuntime
 {
     ValueTask<BpmnPublishedModel> PublishAsync(BpmnModelDefinition definition, string requestId, BpmnModelCaller caller, CancellationToken cancellationToken = default);

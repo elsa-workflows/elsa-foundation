@@ -10,8 +10,8 @@ public interface IRuntimeExecutionProtocolDriver
     ValueTask ExecuteAsync(RuntimeModelExecutionContext context, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Contributes protocol registrations to the single startup initialization aggregator.</summary>
-public interface IRuntimeExecutionProtocolContributor
+/// <summary>Returns protocol registrations to the single startup initialization aggregator.</summary>
+public interface IRuntimeExecutionProtocolSource
 {
     IEnumerable<RuntimeExecutionProtocolRegistration> GetProtocols();
 }

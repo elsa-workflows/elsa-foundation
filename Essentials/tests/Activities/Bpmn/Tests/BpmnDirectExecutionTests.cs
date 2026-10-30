@@ -190,7 +190,7 @@ public sealed partial class BpmnDirectExecutionTests : IDisposable
     {
         await Assert.ThrowsAsync<InvalidOperationException>(() => OpenAsync(configure: services =>
         {
-            if (invalid == "duplicate-protocol") services.AddSingleton<IRuntimeExecutionProtocolContributor, DuplicateProtocol>();
+            if (invalid == "duplicate-protocol") services.AddSingleton<IRuntimeExecutionProtocolSource, DuplicateProtocol>();
             else if (invalid == "duplicate-driver") services.AddScoped<BpmnDirectExecutionDriver>();
             else
             {
@@ -243,7 +243,7 @@ public sealed partial class BpmnDirectExecutionTests : IDisposable
         }
     }
 
-    private sealed class DuplicateProtocol : IRuntimeExecutionProtocolContributor
+    private sealed class DuplicateProtocol : IRuntimeExecutionProtocolSource
     {
         public IEnumerable<RuntimeExecutionProtocolRegistration> GetProtocols() =>
             [new(new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), typeof(BpmnDirectExecutionDriver)) { InputKinds = ["start"] }];

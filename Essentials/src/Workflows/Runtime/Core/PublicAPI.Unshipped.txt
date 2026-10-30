@@ -9333,8 +9333,8 @@ Elsa.Workflows.Runtime.Core.Models.WorkflowExecutionCommandKind.ExecuteModel = 2
 Elsa.Workflows.Runtime.Core.Contracts.IWorkflowSchedulerWorkQueue.SupportsClaimValidation.get -> bool
 Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkClaimRequest.ValidateBeforeClaim.get -> System.Func<Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkItem!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>?
 Elsa.Workflows.Runtime.Core.Models.RuntimeSchedulerWorkClaimRequest.ValidateBeforeClaim.init -> void
-Elsa.Workflows.Runtime.Core.Contracts.IRuntimeExecutionProtocolContributor
-Elsa.Workflows.Runtime.Core.Contracts.IRuntimeExecutionProtocolContributor.GetProtocols() -> System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocolRegistration!>!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeExecutionProtocolSource
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeExecutionProtocolSource.GetProtocols() -> System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocolRegistration!>!
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeExecutionProtocolDriver
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeExecutionProtocolDriver.ExecuteAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeExecutionProtocolDriver.ValidateMaterialAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeModelMaterial! material, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
@@ -9412,3 +9412,6 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.MatchesModel(Els
 Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.ResultIntentKind.get -> string!
 static Elsa.Workflows.Runtime.Core.Models.RuntimeModelExecutionCommand.CreateSchedulerWorkItemId(string! inputId) -> string!
 Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.ResultInputId.get -> string!
+Elsa.Workflows.Runtime.Core.Events.RuntimeExecutionProtocolsInitializing
+Elsa.Workflows.Runtime.Core.Events.RuntimeExecutionProtocolsInitializing.RuntimeExecutionProtocolsInitializing() -> void
+Elsa.Workflows.Runtime.Core.Events.RuntimeExecutionProtocolsInitializing.Registrations.get -> System.Collections.Generic.ICollection<Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocolRegistration!>!
