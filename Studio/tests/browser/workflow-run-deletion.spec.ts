@@ -70,3 +70,13 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
     await expect(page.locator("output")).toHaveCount(0);
   });
 }
+
+test("selected run keeps its visual highlight", async ({ page }) => {
+  await page.goto("/workflow-run-deletion.html");
+  const row = page.getByRole("row", { name: /^Inspect workflow run quote-completed/ });
+  const background = await row.evaluate(element => getComputedStyle(element).background);
+  await row.getByRole("checkbox", { name: "Select workflow run quote-completed", exact: true }).check();
+  await expect(row).toHaveAttribute("aria-selected", "true");
+  await page.mouse.move(0, 0);
+  await expect.poll(() => row.evaluate(element => getComputedStyle(element).background)).not.toBe(background);
+});

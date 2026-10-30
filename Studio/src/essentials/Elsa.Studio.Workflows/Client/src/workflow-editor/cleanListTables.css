@@ -74,7 +74,24 @@
 .ad-designed-collection .ad-collection-row > span { min-width: 0; }
 .ad-designed-collection .ad-collection-row .ad-collection-activity { grid-column: auto; display: block; }
 .ad-designed-collection .ad-collection-activity strong { display: block; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.ad-designed-collection .ad-collection-state { flex-wrap: nowrap; white-space: nowrap; }
-.ad-designed-collection .ad-collection-state small { flex-basis: auto; }
 
 .ad-designed-collection .ad-collection-row > span::before { display: none; content: none; }
+
+.wf-grid.wf-instance-grid > .wf-grid-row[aria-selected="true"] {
+  background: var(--studio-accent-soft);
+}
+
+.ad-page.ad-designed-collection .ad-collection-state {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  white-space: normal;
+}
+
+.ad-page.ad-designed-collection .ad-collection-state small {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
