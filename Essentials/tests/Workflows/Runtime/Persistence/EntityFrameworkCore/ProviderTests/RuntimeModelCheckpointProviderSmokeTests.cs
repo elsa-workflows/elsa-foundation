@@ -32,6 +32,9 @@ public sealed class RuntimeModelCheckpointPostgreSqlSmokeTests(RuntimeBookmarksP
 
     [SkippableFact]
     public Task PostgreSql_model_checkpoint_fences_revisions_and_replay() => RuntimeModelCheckpointProviderSmoke.ConflictAsync(fixture, Open);
+
+    [SkippableFact]
+    public Task PostgreSql_terminal_cleanup_keeps_result_authority_and_current_fence() => RuntimeModelCheckpointProviderSmoke.SettlementAsync(fixture, Open);
 }
 
 [Collection(RuntimeBookmarksSqlServerFixture.CollectionName)]
@@ -47,6 +50,9 @@ public sealed class RuntimeModelCheckpointSqlServerSmokeTests(RuntimeBookmarksSq
 
     [SkippableFact]
     public Task SqlServer_model_checkpoint_fences_revisions_and_replay() => RuntimeModelCheckpointProviderSmoke.ConflictAsync(fixture, Open);
+
+    [SkippableFact]
+    public Task SqlServer_terminal_cleanup_keeps_result_authority_and_current_fence() => RuntimeModelCheckpointProviderSmoke.SettlementAsync(fixture, Open);
 }
 
 [Collection(RuntimeBookmarksMySqlFixture.CollectionName)]
@@ -62,6 +68,9 @@ public sealed class RuntimeModelCheckpointMySqlSmokeTests(RuntimeBookmarksMySqlF
 
     [SkippableFact]
     public Task MySql_model_checkpoint_fences_revisions_and_replay() => RuntimeModelCheckpointProviderSmoke.ConflictAsync(fixture, Open);
+
+    [SkippableFact]
+    public Task MySql_terminal_cleanup_keeps_result_authority_and_current_fence() => RuntimeModelCheckpointProviderSmoke.SettlementAsync(fixture, Open);
 }
 
 internal static class RuntimeModelCheckpointProviderSmoke
@@ -171,6 +180,49 @@ internal static class RuntimeModelCheckpointProviderSmoke
         Assert.Equal(2, (await Reader(restarted, access).FindAsync("execution"))!.Revision);
         Assert.Equal(2, await restarted.Set<RuntimeModelInputEntity>().CountAsync(row => row.ScopeKeyHash == access.Hash));
         Assert.Equal(2, await restarted.RuntimeCheckpointCommits.CountAsync(row => row.ScopeKeyHash == access.Hash));
+    }
+
+    public static async Task SettlementAsync(RuntimeBookmarksProviderFixture fixture, Func<string, IInterceptor[], RuntimeDbContext> open)
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "The native provider is unavailable.");
+        var access = new Access(new("model-settlement-" + Guid.NewGuid().ToString("N")));
+        var material = await PrepareAsync(fixture.ConnectionString, open, access);
+        RuntimeCheckpointCommit Cleanup(long revision, RuntimeModelLifecycle lifecycle, string outcome = "Faulted")
+        {
+            var commit = Commit(access, material, revision, waiting: "physical-cleanup");
+            var state = commit.ModelState!.State;
+            var terminal = lifecycle is RuntimeModelLifecycle.TerminalSettled or RuntimeModelLifecycle.TerminalPendingSettlement
+                ? JsonSerializer.SerializeToElement(new { status = outcome }) : (JsonElement?)null;
+            var proposed = new RuntimeModelExecutionState(state.FormatVersion, state.Scope, state.ExecutionId, state.TenantId, state.Protocol,
+                state.Executable, state.MaterialIncarnationId, state.Revision, lifecycle, state.Authority, state.CreatedAt, state.UpdatedAt, state.Payload, terminal);
+            return commit with { ModelState = new(commit.ModelState.ExpectedRevision, proposed, commit.ModelState.Input) };
+        }
+        await using (var context = open(fixture.ConnectionString, []))
+            await Store(context, access).CommitAsync(Cleanup(1, RuntimeModelLifecycle.TerminalSettled), Immediate);
+        await using (var context = open(fixture.ConnectionString, []))
+        {
+            await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(() => Store(context, access).CommitAsync(
+                Cleanup(2, RuntimeModelLifecycle.TerminalPendingSettlement) with { ExpectedFence = new("superseded-lease", "old-owner", 1) }, Immediate).AsTask());
+            await Assert.ThrowsAsync<InvalidOperationException>(() => Store(context, access).CommitAsync(Cleanup(2, RuntimeModelLifecycle.Running), Immediate).AsTask());
+            await Assert.ThrowsAsync<InvalidOperationException>(() => Store(context, access).CommitAsync(Cleanup(2, RuntimeModelLifecycle.TerminalPendingSettlement, "Completed"), Immediate).AsTask());
+            Assert.Equal(1, (await Reader(context, access).FindAsync("execution"))!.Revision);
+            Assert.Null(await Reader(context, access).FindInputAsync("execution", "input-2"));
+            await Store(context, access).CommitAsync(Cleanup(2, RuntimeModelLifecycle.TerminalPendingSettlement), Immediate);
+        }
+        await using (var restarted = open(fixture.ConnectionString, []))
+        {
+            var state = (await Reader(restarted, access).FindAsync("execution"))!;
+            Assert.Equal(RuntimeModelLifecycle.TerminalPendingSettlement, state.Lifecycle);
+            Assert.Equal("Faulted", state.TerminalResult!.Value.GetProperty("status").GetString());
+            Assert.True(WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(material.Identity, state.Executable));
+            await Store(restarted, access).CommitAsync(Cleanup(3, RuntimeModelLifecycle.TerminalSettled), Immediate);
+        }
+        await using var final = open(fixture.ConnectionString, []);
+        var settled = (await Reader(final, access).FindAsync("execution"))!;
+        Assert.Equal(3, settled.Revision); Assert.Equal(RuntimeModelLifecycle.TerminalSettled, settled.Lifecycle);
+        Assert.Equal("Faulted", settled.TerminalResult!.Value.GetProperty("status").GetString());
+        Assert.Equal(3, await final.Set<RuntimeModelInputEntity>().CountAsync(row => row.ScopeKeyHash == access.Hash));
+        Assert.Equal(3, await final.RuntimeCheckpointCommits.CountAsync(row => row.ScopeKeyHash == access.Hash));
     }
 
     private static async Task<RuntimeExecutionMaterial> PrepareAsync(string connection, Func<string, IInterceptor[], RuntimeDbContext> open, Access access)
