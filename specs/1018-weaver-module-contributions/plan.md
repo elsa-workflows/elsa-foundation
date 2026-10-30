@@ -48,7 +48,7 @@ specs/1018-weaver-module-contributions/
   contracts/contributions.md
 Extensions/Agent/src/
   Core/                          # contracts/events/thin bridges
-  Agent/Elsa.Agent.csproj         # new actual defaults and stable feature
+  Elsa.Agent/Elsa.Agent.csproj         # new actual defaults and stable feature
   Api/                           # generic API and acknowledgement transport
   Workflows/                     # workflow backend contribution
   GitHubCopilot/  Anthropic/      # existing generic provider adapters

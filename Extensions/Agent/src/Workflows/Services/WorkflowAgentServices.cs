@@ -30,7 +30,7 @@ public sealed class DefaultWorkflowAgentContextProvider(
 {
     public AgentContextProviderDescriptor Descriptor { get; } = new(
         "workflows.context", WorkflowAgentSnapshot.ModuleId, "workflow",
-        ["workflow.definition", "workflow.request", "workflow.guidance"], ["1"], ["workflow-definition"], Required: false);
+        ["workflow.definition", "workflow.request", "workflow.guidance"], ["1"], ["workflow-definition"]);
 
     public ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
     {

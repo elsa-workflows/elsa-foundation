@@ -4,7 +4,7 @@ Status: candidate design for #3437; #3438 package evidence precedes signature fr
 
 ## Default implementation and feature composition
 
-**Decision:** Move active defaults and `FoundationAgentAbstractionsFeature` from Core into new `Extensions/Agent/src/Agent/Elsa.Agent.csproj`. Preserve configured feature identity `FoundationAgentAbstractions`. API/provider/workflow features inherit the default feature and declare Type dependencies; base registration is idempotent. Move deterministic provider behavior into tests and remove all 16 Core implementation-shape exceptions after their types move.
+**Decision:** Move active defaults and `FoundationAgentAbstractionsFeature` from Core into new `Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj`. Preserve configured feature identity `FoundationAgentAbstractions`. API/provider/workflow features inherit the default feature and declare Type dependencies; base registration is idempotent. Move deterministic provider behavior into tests and remove all 16 Core implementation-shape exceptions after their types move.
 
 **Rationale:** Core currently contains orchestration, stores and implementations. A real implementation package permits normal Core rules and gives consumers a supported default. Singleton stores retain data records; scoped facades and executors use current authorization and scoped tools.
 

@@ -15,7 +15,7 @@ pnpm --dir Studio --filter @elsa-workflows/studio-workflows test
 pnpm --dir Studio --filter @elsa-workflows/studio-weaver-workflows test
 pnpm --dir Studio --filter @elsa-workflows/studio-sdk build
 pnpm --dir Studio --filter @elsa-workflows/studio-workflows typecheck
-pnpm --dir Studio exec playwright test tests/browser/weaver-contributions.spec.ts --workers=1
+pnpm --dir Studio exec playwright test --config tests/browser/playwright.weaver-composed.config.ts
 bash tools/architecture/restore-ci-project-graph.sh
 dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj
 dotnet run --project tools/maps/Elsa.Maps.Generator -- check
@@ -24,7 +24,9 @@ dotnet restore Elsa.Server.slnx --locked-mode
 git diff --check
 ```
 
-The browser filename is the planned fixture, created during implementation. A fixture alone does not replace a real composed Studio/backend run. Run affected build/lint/package checks required by changed projects and compare project/build evidence after the Core split; no blanket solution test run is implied.
+The browser configuration requires `ELSA_WEAVER_OWNED_URL`, `ELSA_WEAVER_WORKFLOW_ID` and `ELSA_WEAVER_ACTIVITY_ID` for an explicitly owned Studio and seeded workflow child. Set `ELSA_WEAVER_OWNED_BACKEND_URL` when the backend has a separate origin, `ELSA_WEAVER_OWNED_AUTH_STATE` to the private state from a fresh normal login, and `ELSA_WEAVER_OWNED_ARTIFACTS` to the owned evidence directory. It starts no hosts and rejects the developer host ports. Preserve decoded receipts and sanitized logs as review evidence; authentication state and raw traces remain private.
+
+Run affected build/lint/package checks required by changed projects and compare project/build evidence after the Core split; no blanket solution test run is implied. Source composition is candidate evidence. The independent package witness below remains a separate gate.
 
 ## Two positive journeys
 

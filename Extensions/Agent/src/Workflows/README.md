@@ -8,4 +8,4 @@ The owning Studio workflow module applies the approved change through its native
 
 ## Cross-domain contributions
 
-See [the module extension-point catalog](EXTENSION_POINTS.md) for its `IAgentContextProvider`, `IAgentCapabilityProvider`, `IAgentTool` and `IAgentClientTool` contributions, and [Agent foundation](../Agent/EXTENSION_POINTS.md) for their generic lifecycle.
+See [the module extension-point catalog](EXTENSION_POINTS.md) for its `IAgentContextProvider`, `IAgentCapabilityProvider`, `IAgentTool` and `IAgentClientTool` contributions, and [Agent foundation](../Elsa.Agent/EXTENSION_POINTS.md) for their generic lifecycle.

@@ -101,10 +101,9 @@ public sealed record AgentContextProviderDescriptor(
     string ScopeKind,
     IReadOnlyCollection<string> ContextKinds,
     IReadOnlyCollection<string> SchemaVersions,
-    IReadOnlyCollection<string> ResourceTypes,
-    bool Required);
+    IReadOnlyCollection<string> ResourceTypes);
 
-/// <summary>Expected source limitations are data; unexpected exceptions retain Sequential failure semantics.</summary>
+/// <summary>Expected source limitations are data. Required outcomes block this collection; unexpected exceptions retain Sequential failure semantics.</summary>
 public sealed record AgentContributionDiagnostic(string ContributorId, string Code, string Message, bool Required);
 
 public sealed record AgentContextContribution(

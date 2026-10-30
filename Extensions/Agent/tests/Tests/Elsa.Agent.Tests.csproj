@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Agent\Elsa.Agent.csproj" />
+    <ProjectReference Include="..\..\src\Elsa.Agent\Elsa.Agent.csproj" />
     <ProjectReference Include="..\..\..\..\Essentials\src\Events\Elsa.Events\Elsa.Events.csproj" />
     <ProjectReference Include="..\..\src\Core\Elsa.Agent.Core.csproj" />
     <ProjectReference Include="..\..\src\Anthropic\Elsa.Agent.Anthropic.csproj" />

@@ -107,7 +107,7 @@ public sealed class WorkflowAgentTests
     private sealed class ReadCountingContextSource : IAgentContextProvider
     {
         public int ReadCount { get; private set; }
-        public AgentContextProviderDescriptor Descriptor { get; } = new("probe.domain-read", "Probe.Module", "*", ["probe.context"], ["1"], [], false);
+        public AgentContextProviderDescriptor Descriptor { get; } = new("probe.domain-read", "Probe.Module", "*", ["probe.context"], ["1"], []);
         public ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
         {
             ReadCount++;

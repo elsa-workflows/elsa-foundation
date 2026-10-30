@@ -5,7 +5,7 @@ Domain: `Elsa.Agent.Workflows`
 
 ## Cross-domain contributions
 
-The module contributes to [Agent foundation](../Agent/EXTENSION_POINTS.md) through contracts in `Elsa.Agent.Core`.
+The module contributes to [Agent foundation](../Elsa.Agent/EXTENSION_POINTS.md) through contracts in `Elsa.Agent.Core`.
 
 - `IAgentContextProvider`: `DefaultWorkflowAgentContextProvider` admits `workflow.definition` schema `1` for exact `workflow-definition` targets. It whitelists bounded activity identities, connections and positions, stamps caller material as `ClientSnapshot`, and emits installed guidance separately. Property values, caller permission claims and arbitrary diagnostics are excluded. A separate `workflow.request` schema `1` admits only bounded intent/name/description/reference metadata with no target, client binding or tool scopes; it never supplies graph authority. Other workflow kinds and versions produce explicit diagnostics.
 - `IAgentCapabilityProvider`: `WorkflowAgentCapabilityProvider` declares explanation of the admitted graph and a reviewed position-change journey. It does not advertise runtime investigation, activity creation, save or publish.
