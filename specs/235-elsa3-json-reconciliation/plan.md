@@ -18,8 +18,9 @@ in-process (R-1):
   unless it is already active or a reusable it uses is unpublished (R-6).
 - **Report.** Log one warning per skipped item and one summary line per scope; strict mode fails the start.
 
-The import gains two additive result members so an unscoped apply reports its publications and committed workflow
-versions (data-model.md).
+The import gains an additive request member (the tenant to stamp on an unscoped apply) and two additive result
+members (the publications and the committed workflow versions); data-model.md. A scoped startup grant lets the activity
+publisher accept the persistence scope's tenant while the task publishes, and nowhere else (R-3).
 
 ## Technical Context
 
@@ -51,7 +52,8 @@ converts and finds nothing to write. No target beyond "the JTest corpus (36 work
 - Build and test only the touched projects, through the build-slot wrapper (shared machine).
 
 **Scale/Scope**:
-- 1 new project with about 6 types (feature, options, file reader, startup task, selection, workflow publisher).
+- 1 new project with about 8 types (feature, options, exception, file reader, startup task, selection, workflow
+  publisher, startup publishing grant).
 - 2 edited import files (apply result, importer).
 - Fixtures: 4 Elsa 3 definitions plus 2 for refusals.
 
@@ -62,19 +64,19 @@ converts and finds nothing to write. No target beyond "the JTest corpus (36 work
 
 | Gate | Status | Notes |
 |---|---|---|
-| §E2.7 Elsa 3 stays behind the import boundary | PASS | The feature is part of the import adapter (`Elsa3.Activities.Design.Import.*`). It is one-way: Elsa 3 definitions become Elsa 4 entities that run natively. Instance state stays refused. No Runtime project references Elsa 3. |
+| §E2.7 Elsa 3 stays behind the import boundary | PASS | The feature is part of the import adapter (`Elsa3.Activities.Design.Import.*`). It is one-way: Elsa 3 definitions become Elsa 4 entities that run natively; instance state is never imported. "One-time" holds per Elsa 3 version: each is imported once, and a later start finds it and writes nothing (R-9). No Runtime project references Elsa 3. |
 | §E2.2 Runtime takes no Design reference | PASS | No Runtime project changes. |
 | §E2.8 / Model X (provisional) | PASS | The feature writes through the import's commit, not the catalog reconcilers, and adds no per-pass mutating field. Versions are never deleted. |
 | §E2.6.1 executable-always-runs | PASS | Imported workflows publish through the normal publisher; a reusable that fails to publish keeps its callers unpublished rather than publishing a broken artifact (FR-009). |
 | §2.1 `.Core` purity / heavy packages | PASS | No `.Core` project changes. The new project is an implementation project. |
 | §2.2 paths follow the domain tree | PASS | `Extensions/Elsa3/src/Activities/Design/Import/Reconciliation/`, next to `Publishing/` and `Persistence/`. |
 | §2.5, §2.23.1 feature composes, services resolve | ACTION | A registration test for the feature; `FeatureCompositionTests` covers it. |
-| §2.6.2 replacement contracts | PASS | None added. R-3's fallback (a startup authorization context) would be a scoped override inside the task's own operation scope, decided by test. |
-| §2.17 duplication beats dependency | PASS | The twenty-line already-active check is copied from `PublishReconciledWorkflowVersions` (R-6). The options shape mirrors `JsonWorkflowReconciliationOptions` without referencing it. |
+| §2.6.2 replacement contracts | ACTION | One decoration of an existing single-implementation contract: `Elsa3StartupPublishingGrant` decorates `IActivityPublishingAuthorizationContext` (R-3). It delegates to the inner context unless the startup task set the scoped grant in its own operation scope. Registration test: the inner context is kept and still answers outside the grant. Reviewers: this touches publishing authorization, so it needs an architect's look. |
+| §2.17 duplication beats dependency | PASS | The slot check (`HasActivePublicationOf`, `ResolveTargetSlotName`, about thirty lines) is copied from `PublishReconciledWorkflowVersions` (R-6). The options shape mirrors `JsonWorkflowReconciliationOptions` without referencing it. |
 | §2.22 / §2.22.1 docs and extension points | ACTION | README and `EXTENSION_POINTS.md` for the new project (it consumes the import's contracts and adds a startup task); the Elsa 3 Mapping README and `docs/reference/elsa3-migration-readiness.md` gain the folder entry point. |
-| §2.23.3 visibility | PASS | Feature class public and not sealed; everything else internal. Additive public members on `ReusableActivityImportApplyResult`. |
-| §2.23.5 exception boundaries | PASS | Configuration errors at registration; file errors as a domain exception naming the path; strict mode as `Elsa3ReconciliationFailedException`. Per-item failures are diagnostics, not exceptions. |
-| §E6 naming | PASS | `Elsa3JsonReconciliationFeature`, `Elsa3JsonReconciliationOptions`, `Elsa3JsonReconciliationStartupTask`, `Elsa3JsonFileReader` (reads; not a `…Source`, which R4 reserves for return-on-request contracts), `Elsa3ImportSelection`, `ImportedWorkflowPublisher`. |
+| §2.23.3 visibility | PASS | Public: the feature class (not sealed), `Elsa3JsonReconciliationOptions` and its file option (the feature's `Options` property exposes them), `Elsa3ReconciliationFailedException`. Everything else internal. Additive public members on `ReusableActivityImportApplyRequest` and `ReusableActivityImportApplyResult`. |
+| §2.23.5 exception boundaries | PASS | Configuration errors at registration; file errors as a domain exception naming the path; strict mode and unattributed refusals as `Elsa3ReconciliationFailedException`. Per-item failures are diagnostics, not exceptions. |
+| §E6 naming | PASS | At most four components: `Elsa3JsonReconciliationFeature`, `Elsa3JsonReconciliationOptions`, `Elsa3FolderImportTask`, `Elsa3JsonFileReader` (reads; not a `…Source`, which R4 reserves for return-on-request contracts), `Elsa3ImportSelection`, `ImportedWorkflowPublisher`, `Elsa3StartupPublishingGrant`. The feature id keeps "Reconciliation" for continuity; the types say "Import", which is what they do (R-9). |
 | §E7 CI tiers | PASS | No new test project. |
 | Epic #3052 working agreement | PASS | This spec is defined (spec, plan, tasks) before implementation; it depends on no open D/A/S decision. |
 
@@ -84,10 +86,10 @@ converts and finds nothing to write. No target beyond "the JTest corpus (36 work
 |---|---|---|
 | D-1 | Import engine at start | R-1. No reconciliation source, no core change. |
 | D-2 | `[Order(4)]` startup task | R-2. After both reconciliation passes and the Git export. |
-| D-3 | One run per persistence scope | R-3. `IPersistenceScopeRunner`, importer resolved from the operation scope. |
+| D-3 | One run per persistence scope, with a startup grant | R-3. `IPersistenceScopeRunner`; every scoped service from the operation scope; the scope's tenant stamped on the unscoped apply; `Elsa3StartupPublishingGrant` lets the activity publisher accept that tenant inside that scope only. |
 | D-4 | Unscoped apply | R-4. No receipt; the commit is a no-op on unchanged input. |
-| D-5 | Narrowing selection | R-5. Input, analysis, then apply refusals; dependents removed transitively; bounded by the item count. |
-| D-6 | Workflow publishing | R-6. Newest version per definition; already-active skip; blocked when a reusable is unpublished. |
+| D-5 | Narrowing selection | R-5. Input, analysis, then apply refusals located by `SourceVersionId` metadata; dependents removed transitively; bounded by the item count. Credential and identity-collision refusals are not attributable and fail the start. |
+| D-6 | Workflow publishing | R-6. Newest version per definition; skip when already active, when the slot holds a version the import did not write, or when a reusable is unpublished. |
 | D-7 | New project | R-7. `Elsa3.Activities.Design.Import.Reconciliation`; tests in the existing integration test project. |
 | D-8 | Versions `{n}.0.0` | R-8. Converter revision deferred. |
 
@@ -112,8 +114,8 @@ specs/235-elsa3-json-reconciliation/
 ```text
 Extensions/Elsa3/src/Activities/Design/Import/
 ├── Elsa3.Activities.Design.Import/
-│   ├── Models/ReusableActivityImportPlan.cs              # ApplyResult: Publications, Workflows (additive)
-│   └── Services/ReusableActivityCollectionImporter.cs    # fill them
+│   ├── Models/ReusableActivityImportPlan.cs              # ApplyRequest: TenantId; ApplyResult: Publications, Workflows (additive)
+│   └── Services/ReusableActivityCollectionImporter.cs    # stamp TenantId when unscoped; fill the result members
 └── Reconciliation/                                       # new project Elsa3.Activities.Design.Import.Reconciliation
     ├── Elsa3.Activities.Design.Import.Reconciliation.csproj
     ├── Elsa3JsonReconciliationFeature.cs                 # feature, option validation, registrations
@@ -122,7 +124,9 @@ Extensions/Elsa3/src/Activities/Design/Import/
     ├── Services/Elsa3JsonFileReader.cs                   # files → input items
     ├── Services/Elsa3ImportSelection.cs                  # D-5 narrowing, skipped items
     ├── Services/ImportedWorkflowPublisher.cs             # D-6
-    ├── Services/Elsa3JsonReconciliationStartupTask.cs    # D-2, D-3, logging
+    ├── Services/Elsa3FolderImportTask.cs                 # D-2, D-3, D-5 apply loop, logging
+    ├── Services/Elsa3StartupPublishingGrant.cs           # D-3 decorator and scoped grant holder
+    ├── Models/Elsa3ReconciliationDiagnosticCodes.cs      # the two new codes
     ├── README.md
     └── EXTENSION_POINTS.md
 Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/
@@ -150,4 +154,5 @@ Elsa.Server.slnx                                          # add the project
 | Item | Why needed | Simpler alternative rejected because |
 |---|---|---|
 | Re-applying after a refused apply (D-5) | The apply is all or nothing; conversion and credential failures are found only inside it | A dry-run materialize would need a second, public engine path in the import |
-| Copied already-active check (D-6) | FR-011: a restart must not publish again | Sharing it means making a Publishing handler's internals public for one caller |
+| Copied slot check (D-6) | FR-011: a restart writes nothing; FR-008: never take back an operator's slot | Sharing it means making a Publishing handler's internals public for one caller |
+| Startup publishing grant (D-3) | The activity publisher authorizes by HTTP tenant claim only; at startup there is none | Widening the HTTP context for every non-request caller changes publishing authorization host-wide |

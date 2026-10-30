@@ -5,7 +5,7 @@ publishers. The types below are in-memory.
 
 ## Configuration
 
-`Elsa3JsonReconciliationOptions` (bound from the feature section, validated at registration):
+`Elsa3JsonReconciliationOptions` (public; bound from the feature section, validated at registration):
 
 | Member | Type | Rule |
 |---|---|---|
@@ -33,8 +33,15 @@ New codes (only where no existing code applies):
 | `ELS3-RECONCILE-DUPLICATE-INPUT` | The same definition id and version appear more than once in the input. |
 | `ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY` | A reusable this item uses was skipped or not published. |
 
-Every other skip carries the import's own code (`ELS3-*`, `VF-IMP-*`, `ELS3-MIGRATION-*`, the credential-literal
-rule's code).
+Every other skip carries the import's own code (`ELS3-*`, `VF-IMP-*`). Credential-literal and identity-collision
+refusals are not skips: the import does not attribute them to an item, so they fail the start (research R-5).
+
+## Startup publishing grant
+
+`Elsa3StartupPublishingGrant` decorates `IActivityPublishingAuthorizationContext` (scoped). A scoped holder in the same
+DI scope carries an optional granted tenant. While it is set (only by the startup task, inside the operation scope the
+persistence runner created for it), `TenantId` is that tenant and `CanAccessTenant(t)` is true for `null` and that
+tenant. Otherwise every call goes to the inner context unchanged.
 
 ## Import outcome
 
@@ -42,6 +49,11 @@ rule's code).
 workflow versions, skipped items, conversion warnings. Logged as the summary line (FR-014).
 
 ## Additive members on the import (FR-010)
+
+`ReusableActivityImportApplyRequest` gains `string? TenantId = null`. It is used only when `AccessScope` is null: the
+importer stamps it on the mutation's activity definitions, versions, authoring states, workflow definitions and
+versions, as the scoped branch stamps the access scope's tenant. The HTTP path always passes an access scope, so it is
+unchanged.
 
 `ReusableActivityImportApplyResult` gains:
 
@@ -59,7 +71,8 @@ Both default to `null`, so existing constructors and the HTTP response mapping a
 ```text
 read files → input items ─┬─ duplicates / instance state → skipped
                           └─ analyze (plan) ─┬─ blocking diagnostics (+ dependents) → skipped
-                                             └─ apply selection ─┬─ validation / credential refusal → skip located items (+ dependents), apply again
-                                                                 └─ committed + reusables published
-                                                                        └─ publish newest workflow versions (skip already active; skip if a reusable is unpublished)
+                                             └─ apply selection (tenant stamped, grant set) ─┬─ validation refusal → skip located items (+ dependents), apply again
+                                                                                             ├─ credential / collision refusal → fail the start
+                                                                                             └─ committed + reusables published
+                                                                                                    └─ publish newest workflow versions (skip: already active, slot held by another version, reusable unpublished)
 ```

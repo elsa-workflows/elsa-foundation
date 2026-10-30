@@ -59,7 +59,12 @@ Decisions (Joey Barten, 2026-10-30):
   `PublishReconciledWorkflowVersions` skips a version that already holds the active publication of its target slot.
   `Elsa3ImportActivitiesPublishing` (DependsOn `Elsa3ImportJsonActivities`, `WorkflowsPublishingApi`) supplies the
   reusable publisher.
-- **Instance state.** `Elsa3MigrationBoundary` refuses Elsa 3 instance state (`ELS3-MIGRATION-LIVE-INSTANCE-UNSUPPORTED`).
+- **Publishing authorization.** `ActivityDefinitionPublisher` checks each Design row's tenant against
+  `IActivityPublishingAuthorizationContext`, whose only implementation reads the HTTP user's tenant claim. Outside a
+  request it grants only rows without a tenant, so the import's reusable publication works today only from an HTTP
+  request.
+- **Instance state.** The import never reads Elsa 3 instance state; a document without a root activity is refused by
+  the converter.
 - **Elsa 4 JSON reconciliation** (`JsonWorkflowReconciliation`) fixes the configuration shape this feature copies:
   `SourceId` plus exactly one of `FilePath`, `Files`, `FolderPath`.
 
@@ -151,14 +156,17 @@ rest of the folder is imported and published. Repeat with the strict option and 
   the analyzer's diagnostic.
 - **Same definition id and version in two files**: both items are skipped with a duplicate-input diagnostic.
 - **Several Elsa 3 versions of one definition**: each is imported; the newest is published.
-- **Credential literals** in a converted node: that item and its dependents are skipped, using the collection import's
-  admission rule.
-- **Elsa 3 workflow instance state** in the input: refused through the existing migration boundary and reported.
+- **Credential literals** in a converted node: refused by the collection import's admission rule. The refusal does
+  not say which item it came from, so it fails the start with the rule's findings (FR-014).
+- **A document that is not a workflow definition** (for example exported instance state): it has no root activity,
+  so the converter refuses it and it is skipped like any conversion failure.
 - **File removed** from the folder: nothing is removed, retired or unpublished; documented.
 - **Configured folder missing, or a file not valid JSON**: startup fails with a configuration error naming the path;
   an empty folder is logged and is not an error (mirrors `JsonWorkflowReconciliation`).
-- **A changed workflow under an Elsa 3 version already imported**: refused by the import's identity checks and
-  reported as skipped; the stored version stays.
+- **A changed workflow under an Elsa 3 version already imported**: refused by the import's identity checks. The
+  refusal does not say which item it came from, so it fails the start; the stored version stays (FR-014).
+- **A workflow an operator published another version of** (in Studio): a later start does not publish the imported
+  version over it.
 - **Collection import composed in the same shell**: allowed; both use the same engine and identities, so an item
   imported by either is a no-op for the other.
 - **Several nodes starting at once**: each node runs the import; the commit is idempotent and retried on a write
@@ -175,13 +183,14 @@ rest of the folder is imported and published. Repeat with the strict option and 
 - **FR-002**: The feature MUST be configured with exactly one of `FilePath`, `Files` (ordered list) or `FolderPath`
   (top-level `*.json`, ordinal file-name order), plus a required `SourceId`, validated at registration as
   `JsonWorkflowReconciliation` does. `SourceId` names the input in logs.
-- **FR-003**: Each file MUST hold either one Elsa 3 workflow definition or an array of them, as the collection
-  upload accepts.
+- **FR-003**: Each file MUST hold either one Elsa 3 workflow definition or an array of them. The upload's size and
+  count limits do not apply: the files are host configuration, not a request.
 - **FR-004**: The startup task MUST run after the activity and workflow reconciliation tasks of the same start, so
   conversion resolves the host's built-in activities from the catalog.
 - **FR-005**: The feature MUST declare its dependencies on `Elsa3ImportActivitiesPublishing` and
-  `WorkflowsPublishing`, and composing it with its declared dependencies MUST be sufficient for the imported
-  activities and workflows to be published and runnable.
+  `WorkflowsPublishing`. Composing it with its declared dependencies and the import's persistence provider (today
+  `Elsa3ImportActivitiesEntityFrameworkCore`) MUST be sufficient for the imported activities and workflows to be
+  published and runnable.
 - **FR-006**: The task MUST import in every persistence scope the host supplies, as the import's other background
   work does; in a single-tenant host that is one scope.
 
@@ -191,12 +200,15 @@ rest of the folder is imported and published. Repeat with the strict option and 
   analysis, conversion, admission, identities, versions (`{n}.0.0`) and reusable publication (spec 246) as the HTTP
   import.
 - **FR-008**: After the commit, the task MUST publish the newest imported version of each imported workflow and
-  wrapper with `PublishWorkflow`, after the reusables it uses are published, skipping a version that already holds the
-  active publication of its target slot.
+  wrapper with `PublishWorkflow`, after the reusables it uses are published. It MUST skip a version that already holds
+  the active publication of its target slot, and MUST NOT publish over an active publication of a version the import
+  did not write.
+- **FR-008a**: The task MUST publish the reusables within the persistence scope's tenant without widening what any
+  other caller of the activity publisher may access.
 - **FR-009**: A workflow whose reusable dependency was not published MUST NOT be published, and MUST be reported
   with that dependency as its cause.
 - **FR-010**: The collection import's observable behaviour (endpoints, persisted rows, ids, versions, receipts) MUST
-  NOT change. Additive members on its in-process result types are allowed.
+  NOT change. Additive members on its in-process request and result types are allowed.
 
 **Restart**
 
@@ -207,22 +219,24 @@ rest of the folder is imported and published. Repeat with the strict option and 
 
 - **FR-013**: An Elsa 3 workflow that cannot be imported MUST be skipped together with every workflow and reusable
   workflow that depends on it, transitively. Causes include: blocking analysis diagnostics (cycle, missing reference,
-  start trigger or intrinsic in a reusable), conversion failure, credential literal, duplicate input, instance state
-  and identity collision.
+  start trigger or intrinsic in a reusable), conversion failure (including a document that is not a workflow
+  definition), duplicate input and a reusable that was not published.
 - **FR-014**: Each skipped item MUST be logged as one structured warning carrying a stable diagnostic code, the
   source file, the Elsa 3 definition id and version, and the cause; a dependent's cause MUST name the item it depends
   on. Conversion warnings (`ELS3-BEHAVIOUR-*`) of imported items MUST be logged too. Each start MUST log one summary
-  line per persistence scope with imported-activity, imported-workflow, published-workflow and skipped counts.
+  line per persistence scope with imported-activity, imported-workflow, published-workflow and skipped counts. A
+  refusal the import does not attribute to an item (a credential literal, an identity collision) MUST fail the start
+  with the import's message and guidance; nothing is committed in that scope.
 - **FR-015**: An option `FailOnUnconvertible` (default `false`) MUST make any skipped item fail startup with an error
-  listing the skipped items. An item skipped before the commit MUST fail startup before anything is committed; a
-  publication refused after the commit fails startup after it.
+  listing the skipped items. An item skipped before the commit MUST fail startup before anything is committed in that
+  persistence scope; a publication refused after the commit fails startup after it.
 
 **Removal and boundary**
 
 - **FR-016**: Removing a file MUST NOT delete, retire or unpublish anything; the feature documentation MUST say so.
 - **FR-017**: The feature MUST NOT add a tenant option.
-- **FR-018**: Elsa 3 workflow instances stay out of scope; instance state MUST be refused through the existing
-  migration boundary.
+- **FR-018**: Elsa 3 workflow instances stay out of scope: a document that is not a workflow definition MUST be
+  skipped (FR-013), never imported.
 
 ### Key Entities
 

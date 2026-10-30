@@ -6,7 +6,9 @@
 |---|---|
 | Feature id | `Elsa3JsonReconciliation` |
 | DependsOn | `Elsa3ImportActivitiesPublishing`, `WorkflowsPublishing` (transitively `Elsa3ImportJsonActivities`, `Elsa3Mapping`, `WorkflowsPublishingApi`) |
-| Startup task | `Elsa3JsonReconciliationStartupTask`, `[Order(4)]` |
+| Also compose | the import's persistence provider, today `Elsa3ImportActivitiesEntityFrameworkCore` |
+| Startup task | `Elsa3FolderImportTask`, `[Order(4)]` |
+| Decorates | `IActivityPublishingAuthorizationContext` (scoped grant for the task's own operation scope) |
 | Endpoints | none |
 
 ## Configuration
@@ -28,7 +30,7 @@ start naming the path. An empty folder is logged and imports nothing.
 ## File format
 
 A file holds one Elsa 3 workflow definition (the Elsa 3 Studio export of one workflow) or a JSON array of them (the
-shape the collection upload accepts).
+shape the collection upload accepts). The upload's size and count limits do not apply.
 
 ## Logs
 
@@ -41,10 +43,16 @@ shape the collection upload accepts).
 ## Strict mode
 
 With `FailOnUnconvertible: true`, the start fails with `Elsa3ReconciliationFailedException`, listing the skipped
-items; items skipped before the commit fail it before anything is written.
+items; items skipped before the commit fail it before anything is written in that persistence scope.
+
+## Always fatal
+
+A credential-literal refusal and an identity collision (a changed workflow under an Elsa 3 version already imported)
+fail the start in either mode, with the import's message and guidance: the import does not attribute them to one item.
 
 ## Guarantees
 
 - Same engine as the HTTP collection import: identities, versions `{n}.0.0`, conversion rules and diagnostics.
 - A restart with the same input writes and publishes nothing.
+- A workflow slot an operator moved to another version is never taken back.
 - Removing a file removes nothing.
