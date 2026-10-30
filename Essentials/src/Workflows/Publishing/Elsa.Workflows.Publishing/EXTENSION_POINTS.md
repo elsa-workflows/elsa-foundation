@@ -158,6 +158,16 @@ A Publishing persistence package that backs the engine's authority state should:
 The supplied EF Core provider (`AddPublishingEntityFrameworkCore(...)`) composes these together with the API
 feature's `IActivityDraftTestRunStore`.
 
+That EF composition also registers `RebuildActivityUsageStartupTask` (`IStartupTask`, scoped,
+`[Order(6)]`). After catalog reconciliation it invokes
+`IActivityDependencyProjectionRebuildCoordinator` in a separate, explicitly privileged scope across
+tenants. Each shell start refreshes the derived usage snapshot from current activity and workflow
+drafts and versions, serialized by a per-shell distributed maintenance lock. Lock and rebuild failures
+are logged without failing shell activation; shutdown cancellation propagates and lock loss cancels the rebuild.
+A failed rebuild preserves the previous snapshot. With no snapshot, the dependency API returns
+`503 activity.dependency.unavailable` with recovery guidance, rather than claiming zero usages.
+Ordinary edits still follow the coordinator's snapshot semantics; this is not a live usage index.
+
 ## Executable compilation fan-in
 
 ### `IExecutableCompilationSource`

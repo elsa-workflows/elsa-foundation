@@ -86,6 +86,7 @@ order is not an override seam, and neither is `TaskStateManager`, which `TaskMan
 - `Elsa.Workflows.Design.Reconciliation` — `WorkflowsVersionReconcilerStartupTask` *(cross-domain; the same, #2187 and #2189)*
 - `Elsa.Workflows.Runtime.Reconciliation` — `WorkflowArtifactReconcilerStartupTask` *(cross-domain; `[SingleNodeTask]`, so each node reconciles its own mounted set in turn)*
 - `Elsa.Workflows.Design.Reconciliation.Git` — `GitWorkflowExportStartupTask` *(cross-domain; runs on every Writer node without a lock, because its fence is the fast-forward-only push, #2197)*
+- `Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore` — `RebuildActivityUsageStartupTask` *(cross-domain; order 6, refreshes derived usage after reconciliation; owns its per-shell maintenance lock and logs rebuild/lock failures without failing activation)*
 
 ### `IRecurringTask : ITask` *(Core — `Elsa.Tasks.Core`)*
 - **Kind:** Contributor, run on the schedule its `GetSchedule()` returns, an `ITaskSchedule` (`Elsa.Tasks.Core`).
