@@ -1104,8 +1104,11 @@ def main():
                     deferred_stores=snapshots("deferred")
                     deferred_checked=json.loads(subprocess.check_output(["dotnet",str(reader),"--read-bpmn-retirement",str(root/"elsa.db"),model_execution],text=True,timeout=30))
                     q.write_json(output/"deferred-checked.json",deferred_checked)
-                    if deferred_checked["model"]!=pending_checked["model"] or deferred_checked["queuedModelInputs"] or any(x["inputKind"]=="native-result"for x in deferred_checked["inputs"]):
-                        raise ValueError("The premature cancelled-worker result changed model state or retained an accepted input.")
+                    queued=deferred_checked["queuedModelInputs"]
+                    if (deferred_checked["model"]!=pending_checked["model"] or len(queued)!=1 or
+                            queued[0]["payload"]["inputId"]!=probe["origin"]["resultInputId"] or
+                            any(x["inputKind"]=="native-result"for x in deferred_checked["inputs"])):
+                        raise ValueError("The premature cancelled-worker result changed model state, lost its queued input or retained an accepted receipt.")
                     consumed_evidence={"nativeResultBeforeEtlCancel":True,"deferredStores":deferred_stores,"dispatcherSha256":q.digest(dispatcher)}
                 if args.consumed_before_ack_crash:
                     dispatcher=args.dispatcher_assembly.resolve(strict=True);nonce=uuid.uuid4().hex

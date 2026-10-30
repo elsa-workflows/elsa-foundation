@@ -214,17 +214,20 @@ try
                 model.Payload.TryGetProperty("cancellations", out var cancellations) && cancellations.ValueKind != JsonValueKind.Null && cancellations.GetArrayLength() != 0)
                 throw new InvalidOperationException("The inverse-order probe requires independent native cancellation with downstream ETL still pending.");
             var delivery = await processor.ProcessAsync(new(1, origin.WorkerExecutionId, "Elsa.Bpmn.NativeWorkResult.v1"));
+            var prematureDrain = await Drain(model.ExecutionId);
             var deferredModel = await models.FindAsync(model.ExecutionId);
             var prematureReceipt = await models.FindInputAsync(model.ExecutionId, origin.ResultInputId);
             var deferredQueue = (await queue.ListAsync(new(model.ExecutionId))).Items;
             var retainedCancel = await lookup.FindDurableAsync(pendingEtlCancel.OutboxItemId);
             var retainedResult = await lookup.FindDurableAsync(prematureSource.OutboxItemId);
-            if (delivery.AttemptedCount != 1 || delivery.DeliveredCount != 0 || prematureReceipt is not null || deferredQueue.Count != 0 ||
+            if (delivery.AttemptedCount != 1 || delivery.DeliveredCount != 0 || prematureReceipt is not null || deferredQueue.Count != 1 ||
+                deferredQueue.Single().CommandKind != WorkflowExecutionCommandKind.ExecuteModel ||
+                deferredQueue.Single().Payload?.Deserialize<RuntimeModelExecutionCommand>(json)?.InputId != origin.ResultInputId ||
                 retainedCancel?.Status != RuntimePostCommitOutboxStatus.Pending || retainedResult?.Status != RuntimePostCommitOutboxStatus.FailedRetryable ||
                 !JsonElement.DeepEquals(JsonSerializer.SerializeToElement(model, json), JsonSerializer.SerializeToElement(deferredModel, json)))
-                throw new InvalidOperationException("An independently cancelled worker settled or queued its result before ETL cancellation.");
+                throw new InvalidOperationException("An independently cancelled worker settled, lost or replaced its original queued result before ETL cancellation.");
             Console.WriteLine(JsonSerializer.Serialize(new { operation = args[0], startedAtUtc = started, completedAtUtc = DateTimeOffset.UtcNow,
-                disposition = "Deferred", origin, before = model, deferredModel, pendingWorker, delivery, prematureReceipt, deferredQueue, pendingEtlCancel = retainedCancel,
+                disposition = "Deferred", origin, before = model, deferredModel, pendingWorker, delivery, prematureDrain, prematureReceipt, deferredQueue, pendingEtlCancel = retainedCancel,
                 prematureSource = retainedResult, products = new[] { Product(typeof(ActivitiesBpmnHostingFeature).Assembly),
                     Product(typeof(RuntimeEntityFrameworkCoreOptions).Assembly), Product(typeof(EtlRuntimeFeature).Assembly),
                     Product(typeof(EtlRuntimeEntityFrameworkCoreFeature).Assembly), Product(typeof(EtlWorkflowsRuntimeFeature).Assembly) } }, json));
