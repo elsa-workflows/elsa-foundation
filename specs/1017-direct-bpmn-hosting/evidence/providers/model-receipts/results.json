@@ -1,0 +1,163 @@
+{
+  "sourceRevision": "937dacc691604893de7ac9be5101d9f1a3524c26",
+  "kind": "physical-provider-model-receipt-contract",
+  "requiresNativeProviders": true,
+  "externalConnectionStringsUsed": false,
+  "providers": [
+    {
+      "provider": "PostgreSql",
+      "exitCode": 0,
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~RuntimeModelReceiptPostgreSqlSmokeTests",
+        "--logger",
+        "trx;LogFileName=PostgreSql.trx",
+        "--results-directory",
+        "/tmp/elsa-2898-model-providers-937dacc69"
+      ],
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "1",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "executionId": "9dfe7bd6-c8e4-4d2c-81c2-c178442f9311",
+          "testId": "bb235226-1791-52e2-6c6b-d204186ae8c2",
+          "testName": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelReceiptPostgreSqlSmokeTests.PostgreSql_retained_model_receipt_compares_without_mutating_state",
+          "computerName": "Sipkes-Mac-Mini",
+          "duration": "00:00:01.1493041",
+          "startTime": "2026-10-30T04:47:21.5754010+01:00",
+          "endTime": "2026-10-30T04:47:22.7198760+01:00",
+          "testType": "13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b",
+          "outcome": "Passed",
+          "testListId": "8c84fa94-04c1-424b-9868-57a2d4851a1d",
+          "relativeResultsDirectory": "9dfe7bd6-c8e4-4d2c-81c2-c178442f9311"
+        }
+      ]
+    },
+    {
+      "provider": "SqlServer",
+      "exitCode": 0,
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+        "-c",
+        "Release",
+        "--no-build",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~RuntimeModelReceiptSqlServerSmokeTests",
+        "--logger",
+        "trx;LogFileName=SqlServer.trx",
+        "--results-directory",
+        "/tmp/elsa-2898-model-providers-937dacc69"
+      ],
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "1",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "executionId": "e0986af4-6fbd-40db-aaf1-276fba81c3fb",
+          "testId": "01eed9b5-6c55-7dec-695a-07e875ca7b76",
+          "testName": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelReceiptSqlServerSmokeTests.SqlServer_retained_model_receipt_compares_without_mutating_state",
+          "computerName": "Sipkes-Mac-Mini",
+          "duration": "00:00:01.4399612",
+          "startTime": "2026-10-30T04:47:31.9578580+01:00",
+          "endTime": "2026-10-30T04:47:33.3925770+01:00",
+          "testType": "13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b",
+          "outcome": "Passed",
+          "testListId": "8c84fa94-04c1-424b-9868-57a2d4851a1d",
+          "relativeResultsDirectory": "e0986af4-6fbd-40db-aaf1-276fba81c3fb"
+        }
+      ]
+    },
+    {
+      "provider": "MySql",
+      "exitCode": 0,
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+        "-c",
+        "Release",
+        "--no-build",
+        "--no-restore",
+        "--filter",
+        "FullyQualifiedName~RuntimeModelReceiptMySqlSmokeTests",
+        "--logger",
+        "trx;LogFileName=MySql.trx",
+        "--results-directory",
+        "/tmp/elsa-2898-model-providers-937dacc69"
+      ],
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "1",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "tests": [
+        {
+          "executionId": "d1073e6f-ce1e-470d-bc69-b8680e1020dd",
+          "testId": "ecc1392a-a36b-9525-8e54-41af2f959a0e",
+          "testName": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelReceiptMySqlSmokeTests.MySql_retained_model_receipt_compares_without_mutating_state",
+          "computerName": "Sipkes-Mac-Mini",
+          "duration": "00:00:03.0212078",
+          "startTime": "2026-10-30T04:47:41.8286920+01:00",
+          "endTime": "2026-10-30T04:47:44.8442100+01:00",
+          "testType": "13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b",
+          "outcome": "Passed",
+          "testListId": "8c84fa94-04c1-424b-9868-57a2d4851a1d",
+          "relativeResultsDirectory": "d1073e6f-ce1e-470d-bc69-b8680e1020dd"
+        }
+      ]
+    }
+  ]
+}
