@@ -16,5 +16,5 @@
 
 - [x] T007 Rebuild private fresh-DB Workbench; qualify five-second Delay, restart and scheduling e2e; retain evidence.
 - [x] T008 Run architecture/maps and required restore checks.
-- [ ] T009 Open draft PR; independent correctness, standards and acceptance review loop; repair concrete findings and repeat evidence.
+- [x] T009 Open draft PR; independent correctness, standards and acceptance review loop; repair concrete findings and repeat evidence.
 - [ ] T010 Mark ready, request external review, verify exact-head CI, merge under the applicable org protocol and verify resulting main.

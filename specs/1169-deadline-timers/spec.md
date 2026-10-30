@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3478-deadline-timers`
 **Created**: 2026-10-30
-**Status**: In progress
+**Status**: Implemented — delivered by PR #3481; terminal status takes effect on merge.
 **Input**: Owner instruction to open an issue for deadline-driven durable Delay scheduling and deliver it end to end. Issue [#3478](https://github.com/elsa-workflows/elsa-foundation/issues/3478). Program route: none/free-flow.
 
 ## User Scenarios & Testing
