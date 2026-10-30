@@ -112,7 +112,9 @@ that a loop item is frozen. Approving this amendment approves that change; `Scri
 exchange JSON (D-5). A host may opt in to exposing objects it explicitly registers, each a transient resource for that
 attempt (V7). The opt-in is a separate script profile (ADR 0083, for example `binding-readonly-interop-v1`), not a
 host switch on the default profile, so one profile name always means one behaviour and a published executable records
-which one it uses. General access to .NET types (Jint's `AllowClr`) is never offered.
+which one it uses. General access to .NET types (Jint's `AllowClr`) is a further, separately named profile that a
+host may select deliberately, for script activities only: never the default, and never in input-binding expressions,
+which stay read-only (D-3). This follows the platform principle: guardrails, not restrictions.
 
 **V11. A kind is a JSON shape, not a .NET type.** A variable's type is a kind from the alias registry (ADR 0035): a
 JSON representation plus validation. `DateOnly` is an ISO 8601 string, not the .NET struct with its methods. Workflow
