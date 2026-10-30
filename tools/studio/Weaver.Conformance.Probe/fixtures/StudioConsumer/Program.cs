@@ -70,6 +70,7 @@ try {
 }
 // The blocking native startup reconciliation must succeed under FailHost before readiness.
 // Actual add/remove/restore transitions use the protected reconciliation endpoint above.
+await registry.GetOrActivateAsync(shellName);
 Console.WriteLine("WEAVER_STUDIO_CONSUMER_READY");
 await app.WaitForShutdownAsync();
 
