@@ -113,7 +113,7 @@ function editorDraft(): WorkflowDraft {
     state: { variables: [], rootActivity: root, inputs: [], outputs: [] },
     layout: adaptivePorts ? [
       { nodeId: "write-one", x: 200, y: 80 },
-      { nodeId: "write-two", x: 200, y: 320 },
+      { nodeId: "write-two", x: adaptivePorts === "offset" ? 305 : 200, y: adaptivePorts === "offset" ? 430 : 320 },
       { nodeId: "write-three", x: 600, y: 80 }
     ] : [
       { nodeId: "write-one", x: 420, y: 180 },

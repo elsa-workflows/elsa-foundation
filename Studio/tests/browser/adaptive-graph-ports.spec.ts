@@ -67,6 +67,32 @@ test("named branches choose independent sides and labels follow the actual handl
   await page.screenshot({ path: testInfo.outputPath("branches.png") });
 });
 
+test("first measured placement chooses shorter sides before applying movement hysteresis", async ({ page }) => {
+  await page.goto("/?mode=activity-duplicate-editor&adaptive-ports=offset&theme=classic");
+  await side(source(page), "bottom");
+  await side(target(page), "top");
+  await page.reload();
+  await side(source(page), "bottom");
+  await side(target(page), "top");
+});
+
+test("top-facing outcome labels remain clear of selected-node tools at different zooms", async ({ page }, testInfo) => {
+  await page.goto("/?mode=activity-duplicate-editor&adaptive-ports=vertical&theme=classic");
+  await side(source(page), "bottom");
+  await drag(page, node(page, "write-one").locator(".wf-node-content"), 0, 350);
+  await side(source(page), "top");
+  const label = node(page, "write-one").locator('.wf-node-port-label[data-side="top"]');
+  const toolbar = page.locator(".wf-node-context-toolbar");
+  for (let zoom = 0; zoom < 3; zoom++) {
+    await expect.poll(async () => {
+      const a = (await label.boundingBox())!, b = (await toolbar.boundingBox())!;
+      return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+    }).toBe(false);
+    if (zoom < 2) await page.locator(".react-flow__controls-zoomin").click();
+  }
+  await page.screenshot({ path: testInfo.outputPath("top-outcome-tools.png") });
+});
+
 test("draws a new connection from an adaptive handle and retains its logical outcome", async ({ page }) => {
   await page.setViewportSize({ width: 1500, height: 950 });
   await page.goto("/?mode=activity-duplicate-editor&adaptive-ports=vertical&theme=classic");

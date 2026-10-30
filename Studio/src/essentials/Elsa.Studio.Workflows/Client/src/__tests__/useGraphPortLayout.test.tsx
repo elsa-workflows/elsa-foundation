@@ -67,4 +67,17 @@ describe("graph port store integration", () => {
     expect(result().sources[0].side).toBe("bottom");
     expect(updateInternals).toHaveBeenCalledWith("a");
   });
+
+  it("does not treat initial unmeasured or disconnected defaults as movement history", () => {
+    const a = n("a", 200, 80), b = n("b", 305, 430);
+    mount([{ ...a, measured: {} }, { ...b, measured: {} }], [edge("a", "b")]);
+    flushSync(() => store.getState().setNodes([a, { ...b, measured: {} }]));
+    expect(result().sources[0].side).toBe("right");
+    flushSync(() => store.getState().setNodes([a, b]));
+    expect(result().sources[0].side).toBe("bottom");
+    flushSync(() => store.getState().setEdges([]));
+    expect(result().sources[0].side).toBe("right");
+    flushSync(() => store.getState().setEdges([edge("a", "b")]));
+    expect(result().sources[0].side).toBe("bottom");
+  });
 });

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
-import { useStore, useUpdateNodeInternals, type InternalNode } from "@xyflow/react";
+import { Position, useStore, useUpdateNodeInternals, type InternalNode } from "@xyflow/react";
 import { layoutGraphPorts, type GraphPortLayout, type PortNodeRect } from "./graphPortLayout";
 
 function nodeRect(node?: InternalNode): PortNodeRect | undefined {
@@ -10,11 +10,11 @@ function nodeRect(node?: InternalNode): PortNodeRect | undefined {
 }
 
 /** Subscribe only to this node's connections; placement never enters saved graph data. */
-export function useGraphPortLayout(id: string, sourceIds: readonly string[], acceptsInbound: boolean): GraphPortLayout {
+export function useGraphPortLayout(id: string, sourceIds: readonly string[], acceptsInbound: boolean): GraphPortLayout & { toolbarOffset: number } {
   const previous = useRef<GraphPortLayout | undefined>(undefined);
   const updateNodeInternals = useUpdateNodeInternals();
   const measured = useStore(state => Boolean(nodeRect(state.nodeLookup.get(id))));
-  const layout = useStore(state => {
+  const snapshot = useStore(state => {
     const incoming: PortNodeRect[] = [];
     const outgoing = new Map<string, PortNodeRect[]>();
     for (const connection of state.connectionLookup.get(id)?.values() ?? []) {
@@ -28,13 +28,26 @@ export function useGraphPortLayout(id: string, sourceIds: readonly string[], acc
         if (portId !== undefined) outgoing.set(portId, [...(outgoing.get(portId) ?? []), peer]);
       }
     }
-    return layoutGraphPorts({ rect: nodeRect(state.nodeLookup.get(id)), sourceIds, acceptsInbound, incoming, outgoing, previous: previous.current });
+    const rect = nodeRect(state.nodeLookup.get(id));
+    const layout = layoutGraphPorts({ rect, sourceIds, acceptsInbound, incoming, outgoing, previous: previous.current });
+    // Unmeasured and disconnected defaults are not a geometry choice. Start hysteresis only
+    // after each handle has usable connected geometry, including when peers measure later.
+    const history: GraphPortLayout | undefined = rect ? {
+      target: incoming.length > 0 ? layout.target : undefined,
+      sources: layout.sources.filter(port => outgoing.has(port.id))
+    } : undefined;
+    return { layout, history };
   }, (left, right) => JSON.stringify(left) === JSON.stringify(right));
+  const { layout } = snapshot;
+  // Labels scale with the canvas; NodeToolbar stays at screen size. Clear the 18px pill and
+  // its 10px outside gap at the current zoom, plus the toolbar's usual 10px breathing room.
+  const toolbarOffset = useStore(state => layout.sources.some(port => port.side === Position.Top)
+    ? 28 * state.transform[2] + 10 : 10);
 
   useLayoutEffect(() => {
-    previous.current = layout;
+    previous.current = snapshot.history;
     // React Flow measures in the next animation frame, after the handles and card have moved.
     if (measured) updateNodeInternals(id);
-  }, [id, layout, measured, updateNodeInternals]);
-  return layout;
+  }, [id, snapshot, measured, updateNodeInternals]);
+  return { ...layout, toolbarOffset };
 }
