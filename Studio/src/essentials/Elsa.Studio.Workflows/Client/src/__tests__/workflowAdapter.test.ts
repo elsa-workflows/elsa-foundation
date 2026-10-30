@@ -406,6 +406,27 @@ describe("workflow adapter", () => {
       .toEqual(values.map((_, index) => [index === 0 ? "first-reordered-new" : `child-${index}`]).reverse());
   });
 
+  it("keeps empty, quoted and Default case labels distinct while retaining exact matches", () => {
+    const values = ["", '""', " ", '" "', "Default", '"Default"', "Approved"];
+    const item: ActivityCatalogItem = { ...writeLine, activityVersionId: "switch-labels", designFacets: [{
+      kind: "elsa.switch.structure", schemaVersion: "1.0.0", payload: {
+        mode: "generic", supportsScopedVariables: false,
+        slots: [{ name: "Switch.Case", property: "cases", displayName: "Cases", cardinality: "single",
+          collectionProperty: "cases", childProperty: "activity", labelProperty: "match", slotNameTemplate: "Switch.Case[{match}]" },
+        { name: "Switch.Default", property: "default", displayName: "Default", cardinality: "single" }],
+        initialPayload: { cases: [], default: null }
+      }
+    }] };
+    const root = createActivityNode(item, "switch");
+    root.structure!.payload.cases = values.map(match => ({ match, activity: null }));
+    const slots = getChildSlots(root, item);
+    expect(new Set(slots.map(slot => slot.label)).size).toBe(values.length + 1);
+    expect(slots.slice(0, -1).map(slot => slot.collectionItemLabel)).toEqual(values);
+    expect(slots.at(-1)!.label).toBe("Default");
+    expect(slots.find(slot => slot.collectionItemLabel === "Default")!.label).toBe('"Default"');
+    expect(slots.find(slot => slot.collectionItemLabel === "Approved")!.label).toBe("Approved");
+  });
+
   it("resolves explicit designer support for flowchart and sequence activities", () => {
     expect(getActivityDesignerSupport(createActivityNode(flowchartActivity, "flowchart"), flowchartActivity)).toBe("flowchart");
     expect(getActivityDesignerSupport(createActivityNode(sequenceActivity, "sequence"), sequenceActivity)).toBe("sequence");

@@ -86,6 +86,28 @@ for (const host of ["activity", "workflow"]) for (const composition of ["sequenc
   });
 }
 
+test("quoted case names stay distinct from each other and Default in navigation", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto("/?mode=activity-duplicate-editor&host=activity&composition=sequence&collection-slots=switch&theme=dark");
+  const values = ["", '""', "Default", '"Default"'];
+  await canvasAdd(page).click();
+  for (const [index, value] of values.entries()) {
+    if (index > 0) await cases(page).getByRole("button", { name: "Add case", exact: true }).click();
+    const input = cases(page).getByRole("textbox", { name: `Case ${index + 1} match`, exact: true });
+    await input.fill(value); await input.press("Enter");
+  }
+  const labels = await page.locator(".wf-sequence-slots").getByRole("button", { name: /^Open / })
+    .evaluateAll(elements => elements.map(element => element.getAttribute("aria-label")));
+  expect(new Set(labels).size).toBe(values.length + 1);
+  await expect(page.getByRole("button", { name: 'Choose "Default" activity', exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Choose Default activity", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: 'Open "Default", Empty', exact: true }).click();
+  await expect(page.getByRole("button", { name: 'Switch / "Default"', exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Root", exact: true }).click();
+  await page.getByRole("button", { name: "Open Default, Empty", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Switch / Default", exact: true })).toBeVisible();
+});
+
 test("Parallel's initially empty branches use the same editor", async ({ page }) => {
   await page.goto("/?mode=activity-duplicate-editor&host=activity&composition=sequence&collection-slots=parallel&theme=classic");
   await canvasAdd(page, "branch").click();

@@ -550,6 +550,7 @@ function readStructureDesignSlotDescriptor(value: unknown): StructureDesignSlotD
 }
 
 function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDesignFacet): ChildSlot[] {
+  const fixedLabels = new Set(facet.payload.slots.filter(slot => !slot.collectionProperty).map(slot => slot.displayName));
   return facet.payload.slots.flatMap(descriptor => {
     if (descriptor.collectionProperty && descriptor.childProperty) {
       // Capture the narrowed values into locals so the `string` narrowing survives into the
@@ -561,7 +562,7 @@ function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDe
       return collection.flatMap((item, index) => {
         if (!isRecord(item)) return [];
         const labelValue = descriptor.labelProperty ? item[descriptor.labelProperty] : undefined;
-        return [createChildSlot(structure.kind, descriptor, item[childProperty], facet.payload.mode, index, typeof labelValue === "string" ? labelValue : undefined)];
+        return [createChildSlot(structure.kind, descriptor, item[childProperty], facet.payload.mode, index, typeof labelValue === "string" ? labelValue : undefined, fixedLabels)];
       });
     }
 
@@ -575,7 +576,8 @@ function createChildSlot(
   value: unknown,
   mode: ChildSlot["mode"],
   collectionIndex?: number,
-  collectionItemLabel?: string
+  collectionItemLabel?: string,
+  fixedLabels?: ReadonlySet<string>
 ): ChildSlot {
   const collectionSuffix = collectionIndex === undefined
     ? ""
@@ -583,7 +585,7 @@ function createChildSlot(
 
   return {
     id: `${structureKind}:${descriptor.property}${collectionSuffix}`,
-    label: collectionIndex === undefined ? descriptor.displayName : formatCollectionSlotLabel(descriptor, collectionIndex, collectionItemLabel),
+    label: collectionIndex === undefined ? descriptor.displayName : formatCollectionSlotLabel(descriptor, collectionIndex, collectionItemLabel, fixedLabels),
     property: descriptor.property,
     cardinality: descriptor.cardinality,
     mode,
@@ -602,10 +604,11 @@ function readSlotActivities(value: unknown, cardinality: ChildSlot["cardinality"
   return isActivityNode(value) ? [value] : [];
 }
 
-function formatCollectionSlotLabel(descriptor: StructureDesignSlotDescriptor, index: number, labelValue?: string) {
+function formatCollectionSlotLabel(descriptor: StructureDesignSlotDescriptor, index: number, labelValue?: string, fixedLabels?: ReadonlySet<string>) {
   // The slot-name template identifies the runtime contract; authoring surfaces show the authored name.
-  // Quote empty/padded values so exact string matches remain distinguishable without changing them.
-  if (labelValue !== undefined) return labelValue === labelValue.trim() && labelValue.length > 0 ? labelValue : JSON.stringify(labelValue);
+  // Quote special values and fixed-slot collisions; escape literal quotes so the display stays unambiguous.
+  if (labelValue !== undefined) return labelValue === labelValue.trim() && labelValue.length > 0
+    && !labelValue.startsWith('"') && !fixedLabels?.has(labelValue) ? labelValue : JSON.stringify(labelValue);
   return `${descriptor.displayName} ${index + 1}`;
 }
 
