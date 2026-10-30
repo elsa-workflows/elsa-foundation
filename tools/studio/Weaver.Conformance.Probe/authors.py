@@ -81,7 +81,16 @@ def _closure(run, source, env):
         directory = cache / library["path"]
         archive_path = directory / (package_id.lower() + "." + version.lower() + ".nupkg")
         check(archive_path.resolve().is_relative_to(cache), "Author archive escapes its isolated cache")
-        check(base64.b64encode(hashlib.sha512(archive_path.read_bytes()).digest()).decode() == library["sha512"], "Cached NuGet content hash mismatch: " + identity)
+        # NuGet's graph uses the signature-independent contentHash from its extraction
+        # metadata. The .nupkg.sha512 sidecar hashes the actual downloaded archive,
+        # including its repository signature. Verify and retain both native identities.
+        # https://github.com/NuGet/Home/wiki/Nupkg-Metadata-File
+        hash_path = archive_path.with_suffix(archive_path.suffix + ".sha512")
+        metadata_path = directory / ".nupkg.metadata"
+        archive_hash = base64.b64encode(hashlib.sha512(archive_path.read_bytes()).digest()).decode()
+        check(archive_hash == hash_path.read_text().strip(), "Cached NuGet archive hash mismatch: " + identity)
+        metadata = json.loads(metadata_path.read_text())
+        check(metadata["contentHash"] == library["sha512"], "Cached NuGet content hash mismatch: " + identity)
         expected = candidates.get(package_id.lower())
         if expected:
             check(version == expected["version"] and sha(archive_path) == expected["sha256"], "Author restored a different candidate archive: " + identity)
@@ -89,7 +98,8 @@ def _closure(run, source, env):
                 for entry in archive.namelist():
                     if entry.startswith("lib/") and entry.endswith(".dll"):
                         check(hashlib.sha256(archive.read(entry)).hexdigest() == sha(directory / entry), "Cached candidate DLL differs from its archive")
-        cached.append({"identity": identity, "archive": _ref(archive_path), "sha512": library["sha512"]})
+        cached.append({"identity": identity, "archive": _ref(archive_path), "sha512": library["sha512"],
+                       "archiveSha512": archive_hash, "archiveHashSidecar": _ref(hash_path), "nugetMetadata": _ref(metadata_path)})
     return {"source": run.source, "status": "passed", "directory": str(source), "sourceReferences": [],
             "assets": _ref(assets_path), "lock": _ref(source / "packages.lock.json"),
             "packageFolders": [str(cache)], "cachedArchives": cached}
