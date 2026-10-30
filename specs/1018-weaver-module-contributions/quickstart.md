@@ -43,13 +43,14 @@ Run affected build/lint/package checks required by changed projects and compare 
 | Denied actor/tenant, malformed arguments, stale revision, missing executor | Explicit refusal, zero effects before dispatch/application |
 | Missing required context / optional source unavailable | Dependent action denied / visible partial context; unexpected exceptions and cancellation propagate |
 | Navigation, editor unmount, module removal or replaced selection before dispatch | Generation mismatch refuses; no replacement target or `active-draft` fallback |
-| Transaction committed then acknowledgement lost | Available receipt or explicit uncertainty; no false cancellation/zero-effect result or silent replay |
+| Transaction committed then acknowledgement response lost | Retain and retry the exact acknowledgement without rerunning the module effect, then drain the stored outcome; repeated transport failure exposes confirmation recovery and does not silently reopen a busy session |
 | Duplicate request/receipt, conflicting payload or late acknowledgement | Identical delivery coalesces; conflict diagnosed; accepted effect cannot execute again or reopen |
 | Changed permissions between review/application | Current backend policy denies before effects |
 | Older in-flight/queued/stale save completes after a reviewed edit | New hold and whole-change undo survive; no background write of the reviewed state; only a successful covering explicit save releases the hold |
 | Covering save fails during Publish | Real publication caller stops before preflight/promotion/publication, preserving the held draft and undo |
 | Renderer predicate or component throws | Owning structured preview/receipt and shared review controls remain usable |
-| Authoritative expired/stale execute refusal | Terminal proposal/error is shown; original caller fails once; retained outcome drains with no prompt/tool replay and the next prompt is accepted |
+| Authoritative terminal approval/denial/execute refusal, including expiry before approval | Terminal proposal/error is shown; original caller settles once; retained outcome drains with no prompt/tool replay and the next prompt is accepted; nonterminal revision conflicts remain reviewable |
+| Resource identity/revision/provenance supplied only in the admitted envelope | Both provider protocols preserve generic target/module/schema/origin metadata without interpreting domain content or exposing excluded sensitive content |
 | Duplicate identity, unsupported version, absent renderer/counterpart | Explicit admission/availability diagnostic and safe rendering or refused execution |
 | Instruction-shaped resource data or secret content | Data cannot grant authority; permitted/redacted/excluded context is explicit |
 

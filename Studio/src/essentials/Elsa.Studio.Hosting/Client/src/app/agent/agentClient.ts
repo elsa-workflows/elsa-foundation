@@ -1,4 +1,6 @@
-import { StudioHttpError, type StudioAgentPreparedInvocation, type StudioAgentToolResult, type StudioEndpointContext } from "../../sdk";
+// The transport uses the public SDK bundle; its error class must have the same runtime identity.
+import { StudioHttpError } from "@elsa-workflows/studio-sdk";
+import type { StudioAgentPreparedInvocation, StudioAgentToolResult, StudioEndpointContext } from "../../sdk";
 import type {
   AgentClientAcknowledgement,
   AgentActionProposal,
@@ -27,7 +29,7 @@ export interface AgentClient {
   cancelTurn(sessionId: string, turnId: string): Promise<void>;
 }
 
-/** An HTTP refusal with the authenticated server's authoritative terminal execution outcome. */
+/** An HTTP refusal with the authenticated server's authoritative terminal operation outcome. */
 export class AgentExecutionError extends StudioHttpError {
   constructor(status: number, message: string, public readonly code: string, public readonly terminalOutcome: AgentProposalDecisionResponse, payload: unknown) {
     super(status, message, null, payload);
@@ -37,6 +39,20 @@ export class AgentExecutionError extends StudioHttpError {
 
 export function createAgentClient(context: StudioEndpointContext): AgentClient {
   const deliveryIds = new WeakMap<AgentMessageRequest, string>();
+
+  async function postReviewedProposal<T>(proposalId: string, decision: "approve" | "deny" | "execute", request: Record<string, unknown>): Promise<T> {
+    let envelope: AgentApiResponse<T>;
+    try {
+      envelope = await context.http.postJson<AgentApiResponse<T>>(`/_elsa/agent/proposals/${encodeURIComponent(proposalId)}/${decision}`, request);
+    } catch (error) {
+      if (error instanceof StudioHttpError) throw terminalExecutionError(error.payload, proposalId, error.status) ?? error;
+      throw error;
+    }
+    const terminal = terminalExecutionError(envelope, proposalId);
+    if (terminal) throw terminal;
+    return unwrap(envelope);
+  }
+
   return {
     async bootstrap() {
       // A single agent harness is active server-side; the client never chooses among providers.
@@ -84,33 +100,24 @@ export function createAgentClient(context: StudioEndpointContext): AgentClient {
       };
     },
     async approveProposal(proposalId, request) {
-      return mapProposalDecision(unwrap(await context.http.postJson<AgentApiResponse<BackendAgentActionProposal>>(`/_elsa/agent/proposals/${encodeURIComponent(proposalId)}/approve`, {
+      return mapProposalDecision(await postReviewedProposal<BackendAgentActionProposal>(proposalId, "approve", {
         actorId: "studio",
         revision: request.revision,
         comment: request.comment
-      })));
+      }));
     },
     async denyProposal(proposalId, request) {
-      return mapProposalDecision(unwrap(await context.http.postJson<AgentApiResponse<BackendAgentActionProposal>>(`/_elsa/agent/proposals/${encodeURIComponent(proposalId)}/deny`, {
+      return mapProposalDecision(await postReviewedProposal<BackendAgentActionProposal>(proposalId, "deny", {
         actorId: "studio",
         revision: request.revision,
         comment: request.comment,
         reason: request.comment
-      })));
+      }));
     },
     async executeProposal(proposalId, request) {
-      let envelope: AgentApiResponse<BackendAgentProposalExecutionResult>;
-      try {
-        envelope = await context.http.postJson<AgentApiResponse<BackendAgentProposalExecutionResult>>(`/_elsa/agent/proposals/${encodeURIComponent(proposalId)}/execute`, {
-          actorId: "studio", revision: request.revision, comment: request.comment
-        });
-      } catch (error) {
-        if (error instanceof StudioHttpError) throw terminalExecutionError(error.payload, proposalId, error.status) ?? error;
-        throw error;
-      }
-      const terminal = terminalExecutionError(envelope, proposalId);
-      if (terminal) throw terminal;
-      return mapExecution(unwrap(envelope), proposalId);
+      return mapExecution(await postReviewedProposal<BackendAgentProposalExecutionResult>(proposalId, "execute", {
+        actorId: "studio", revision: request.revision, comment: request.comment
+      }), proposalId);
     },
     async acknowledgeClient(sessionId, invocationId, request) {
       const result = unwrap(await context.http.postJson<AgentApiResponse<BackendAgentProposalExecutionResult>>(

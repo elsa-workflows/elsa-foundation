@@ -3,11 +3,12 @@ import { createAgentClient } from "../agentClient";
 import { StudioHttpError, type StudioEndpointContext } from "../../../sdk";
 
 describe("agent client", () => {
-  it.each(["http", "wrapped"])("preserves authoritative terminal execution data on %s refusal", async transport => {
+  it.each((["approveProposal", "denyProposal", "executeProposal"] as const)
+    .flatMap(decision => ["http", "wrapped"].map(transport => ({ decision, transport }))))("preserves authoritative terminal $decision data on $transport refusal", async ({ decision, transport }) => {
     const context = stubContext();
     const envelope = { error: { code: "agent.proposal.expired", message: "The reviewed invocation expired.", statusCode: 409 }, data: { proposalId: "proposal", executed: false, status: "expired", resourceType: "sample", resourceId: "one", summary: "Nothing was applied.", clientInvocation: null, toolResult: null } };
     context.http.postJson = async <T>() => { if (transport === "http") throw new StudioHttpError(409, envelope.error.message, null, envelope); return envelope as T; };
-    await expect(createAgentClient(context).executeProposal("proposal", { revision: "r1" })).rejects.toMatchObject({ status: 409, code: "agent.proposal.expired", message: envelope.error.message, terminalOutcome: { proposalId: "proposal", approvalStatus: "expired", executed: false, toolResult: null } });
+    await expect(createAgentClient(context)[decision]("proposal", { revision: "r1" })).rejects.toMatchObject({ status: 409, code: "agent.proposal.expired", message: envelope.error.message, terminalOutcome: { proposalId: "proposal", approvalStatus: "expired", executed: false, toolResult: null } });
   });
 
   it.each([{ status: "approved", proposalId: "proposal" }, { status: "expired", proposalId: "another-proposal" }])("does not treat nonterminal or unrelated data as a terminal outcome: %j", async data => {
