@@ -66,12 +66,19 @@ review found two blockers in the first version of this file; R-3 and R-5 carry t
 
 ## R-4 Unscoped apply
 
-- **Decision**: Apply with `AccessScope = null`, no idempotency key, and `TenantId` from R-3.
+- **Decision**: Apply with `AccessScope = null`, no idempotency key, `TenantId` from R-3, and an additive
+  `OperationKey` that is new on every start (`elsa3-reconcile:{SourceId}:{start id}`).
 - **Rationale**: a scoped apply needs a current user (`Elsa3ImportScopeGuard.EnsureCurrent`) and writes a receipt per
   user. Unscoped, `Validate` needs neither (`ReusableActivityImportCommitRules.cs:17-41`), and the commit writes nothing
   when every row exists with the same content (`EfReusableActivityImportCommand.cs:144`; timestamps are deterministic,
-  materializer `:172-217`). The publish phase skips versions already published and works without a receipt (operation
-  key = plan id, importer `:166`).
+  materializer `:172-217`).
+- **Why a per-start operation key**: without a receipt the publish phase keys each publication
+  `elsa3-import:{planId}:{versionId}` (importer `:166`, phase `:104`), and the plan id depends only on the input
+  (analyzer `ComputePlanId`). `ActivityDefinitionPublisher.PublishReviewedAsync` stores a terminal receipt under that key
+  (`:208-249`, `:985-1008`, EF-persisted) and replays it on the next start (`:193-201`, `:947-971`). So a reusable refused
+  once, for a transient or since-fixed cause, would stay refused, with all its callers, until the input changed. A new
+  key per start avoids that. Re-publishing is safe: the phase checks for an existing publication first (`:74-81`), so a
+  version already published is reported `AlreadyPublished`.
 - **Consequence**: `ApplyAsync` drops the publication states when there is no receipt (importer `:167`). The apply
   result gains two additive members (data-model.md): the publication states and the committed workflow versions. The
   HTTP apply returns the receipt, not the apply result, so nothing leaks to the endpoints (FR-010).
@@ -80,9 +87,12 @@ review found two blockers in the first version of this file; R-3 and R-5 carry t
 
 - **Decision**: Narrow the selection in three steps. Each removes the failing items and, transitively, everything that
   depends on them (through the plan items' `Dependencies`).
-  1. **Input**: duplicate `(definition id, version)` across files.
+  1. **Input**: a blank source version `Id`; the same source version `Id` more than once; the same
+     `(definition id, version)` more than once. The analyzer drops duplicate and blank ids with a plan-level diagnostic
+     that names no item (`ReusableActivityCollectionAnalyzer.cs:27-37`), so they must be caught here to be reported.
   2. **Analysis**: items with an error diagnostic in the plan (cycle, missing reference, trigger or intrinsic in a
-     reusable, unsupported shape).
+     reusable, unsupported shape, and `InvalidSource` for a document with no root, analyzer `:73-81`). A plan-level
+     error diagnostic that names no item fails the start.
   3. **Apply**: when `ApplyAsync` throws `ReusableActivityImportValidationException`, locate each error diagnostic's
      item by its `metadata["SourceVersionId"]` (converter diagnostics, `Elsa3ConversionDiagnostics.cs:67-72`, and the
      mapping failure, `Elsa3DefinitionConverter.cs:247-256`), falling back to a `SourceVersion` path segment (cycle
@@ -93,29 +103,47 @@ review found two blockers in the first version of this file; R-3 and R-5 carry t
     (`CredentialLiteralFinding.cs:23-24`), which is not a sound basis for skipping.
   - Identity collision (a changed workflow under an Elsa 3 version already imported): the unscoped commit throws a
     plain `InvalidOperationException` from preflight (`EfReusableActivityImportCommand.cs:207-279`, `:943-944`).
-  - A validation error with no source version.
+  - Any other `InvalidOperationException` from the apply (for example no `Sequence` in the catalog, materializer
+    `:284`, or a rewrite mismatch, `:140`, `:146`), and a validation error with no source version. These are reported
+    as an unattributed refusal with the original message, never as a collision.
   Making these skippable needs a located diagnostic in the import; that is a follow-up, not this spec.
+- **A changed reusable whose earlier publication failed**: no catalog row exists yet, so the commit accepts it and
+  the publish phase returns `Refused` with its identity-collision code instead of throwing (phase `:71-72`,
+  `:151-157`). It is skipped with that code, and its callers are blocked (FR-009).
 - **Not a workflow definition** (for example an exported instance): the import never calls
-  `Elsa3MigrationBoundary.RejectLiveInstanceResume`. Such a document has no root, so the converter reports it
-  (`Elsa3DefinitionConverter.cs:30-32`) and it is skipped by step 3 like any conversion failure.
+  `Elsa3MigrationBoundary.RejectLiveInstanceResume`. Such a document has no root, so the analyzer reports it as
+  `InvalidSource` and it is skipped in step 2.
 - **Strict mode** (FR-015): a skip in step 1 or 2 fails the scope before any apply; the first refused apply in step 3
   fails it before its commit; a refused publication fails it after the publish step. The runner visits every scope and
-  throws an `AggregateException` when several fail (`PersistenceScopeRunner.cs:49-70`), so "nothing committed" holds per
+  throws an `AggregateException` when several fail (`PersistenceScopeRunner.cs:50-53`), so "nothing committed" holds per
   scope.
+- **What a failed start means**: `TaskManager` logs and rethrows (`:70-74`), and the shell's activation aborts, so the
+  shell never becomes Active: later startup tasks (Order 5), background and recurring tasks do not run, and
+  `/health/ready` stays unready.
 
 ## R-6 Publishing the imported workflows
 
-- **Decision**: For each workflow definition the import committed, take its newest imported version and:
+- **Decision**: **Each imported version is published at most once.** For each workflow definition in the input,
+  take its newest version in the input (T) and:
   - skip it when a reusable it depends on is not `Published` or `AlreadyPublished` (FR-009);
-  - skip it when the target slot already holds the active publication of that version (FR-011);
-  - skip it when the target slot holds an active publication of a version this import did not write (an operator
-    published another version in Studio): the import must not take the slot back;
-  - otherwise send `IRequestSender.Send(new PublishWorkflow(versionId))`.
+  - resolve T's target slot; skip it when the slot's publication journal (`IPublicationRecordStore.ListBySlotAsync`)
+    already holds a record of T in any status but `Failed` (active, retired, or in flight, which
+    `CompleteInterruptedPublicationsStartupTask` finishes at Order 5);
+  - otherwise send `IRequestSender.Send(new PublishWorkflow(T))`.
   Workflows publish after the import's own reusable publish phase.
-- **Rationale**: the same request `PublishReconciledWorkflowVersions` sends, with the same slot resolution. Its
-  `HasActivePublicationOf` and `ResolveTargetSlotName` (policy store, policy resolver, activation authority, record
-  store) are copied, about thirty lines, rather than shared (framework §2.17), because they are private to
-  `Elsa.Workflows.Publishing`. That handler guards against the same hijack (`PublishReconciledWorkflowVersions.cs:94-97`).
+- **Why the journal, not the input**: the input says nothing about what the operator did since.
+  - A re-export that replaces v1 with v2 in the same file: v2 was never published, so it is published. Deciding by
+    "is the active version in this start's input" would treat v1 as an operator's version and never publish v2.
+  - An operator rolls back to an older imported version, or publishes a Studio version: T was already published once,
+    so the import leaves the slot alone (FR-011, and the contract's "never taken back").
+  - A new Elsa 3 version arrives later: it was never published, so it is published over whatever is active. A new
+    source version supersedes; the README says so.
+  - A commit whose publish step was interrupted: T was never published, so the next start publishes it (FR-012).
+  - `ListBySlotAsync` is implemented by the EF store; `ListByDefinitionIdsAsync` is not (`EfPublicationRecordStore.cs:24`).
+- **Rationale for the request**: the same request `PublishReconciledWorkflowVersions` sends (`:110`), with the same
+  slot resolution. Its `ResolveTargetSlotName` and the slot lookup of `HasActivePublicationOf` (policy store, policy
+  resolver, activation authority; `:121-160`) are copied and adapted to return the slot, about thirty lines, rather
+  than shared (framework §2.17), because they are private to `Elsa.Workflows.Publishing`.
 - **Alternatives considered**: always send `PublishWorkflow`. It short-circuits an unchanged active artifact
   (`PublishWorkflowRequestHandler.cs:135-145`), but it saves the executable first (`:131`), so a restart would still
   write; and it would take back a slot an operator moved.

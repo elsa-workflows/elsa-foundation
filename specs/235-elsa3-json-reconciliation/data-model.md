@@ -50,10 +50,13 @@ workflow versions, skipped items, conversion warnings. Logged as the summary lin
 
 ## Additive members on the import (FR-010)
 
-`ReusableActivityImportApplyRequest` gains `string? TenantId = null`. It is used only when `AccessScope` is null: the
-importer stamps it on the mutation's activity definitions, versions, authoring states, workflow definitions and
-versions, as the scoped branch stamps the access scope's tenant. The HTTP path always passes an access scope, so it is
-unchanged.
+`ReusableActivityImportApplyRequest` gains two members, used only when `AccessScope` is null (the HTTP path always
+passes an access scope, so it is unchanged):
+
+| Member | Use |
+|---|---|
+| `string? TenantId = null` | Stamped on the mutation's activity definitions, versions, authoring states, workflow definitions and versions, as the scoped branch stamps the access scope's tenant. |
+| `string? OperationKey = null` | The publish phase's operation key instead of the plan id, so publication idempotency keys are new on every start (research R-4). |
 
 `ReusableActivityImportApplyResult` gains:
 
@@ -74,5 +77,5 @@ read files → input items ─┬─ duplicates / instance state → skipped
                                              └─ apply selection (tenant stamped, grant set) ─┬─ validation refusal → skip located items (+ dependents), apply again
                                                                                              ├─ credential / collision refusal → fail the start
                                                                                              └─ committed + reusables published
-                                                                                                    └─ publish newest workflow versions (skip: already active, slot held by another version, reusable unpublished)
+                                                                                                    └─ publish newest workflow versions (skip: already published once in its slot, reusable unpublished)
 ```

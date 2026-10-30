@@ -155,6 +155,8 @@ rest of the folder is imported and published. Repeat with the strict option and 
 - **Missing reference** to a reusable workflow not in the configured input: the referencing workflow is skipped with
   the analyzer's diagnostic.
 - **Same definition id and version in two files**: both items are skipped with a duplicate-input diagnostic.
+- **Startup fails** (strict mode, or a refusal not attributed to an item): the shell does not become ready, and
+  later startup, background and recurring tasks do not run.
 - **Several Elsa 3 versions of one definition**: each is imported; the newest is published.
 - **Credential literals** in a converted node: refused by the collection import's admission rule. The refusal does
   not say which item it came from, so it fails the start with the rule's findings (FR-014).
@@ -165,8 +167,12 @@ rest of the folder is imported and published. Repeat with the strict option and 
   an empty folder is logged and is not an error (mirrors `JsonWorkflowReconciliation`).
 - **A changed workflow under an Elsa 3 version already imported**: refused by the import's identity checks. The
   refusal does not say which item it came from, so it fails the start; the stored version stays (FR-014).
-- **A workflow an operator published another version of** (in Studio): a later start does not publish the imported
-  version over it.
+- **A workflow an operator published another version of** (in Studio, or a rollback to an older imported version):
+  a later start does not publish the imported version over it again. Only a new Elsa 3 version supersedes it.
+- **A re-export that replaces a file with a newer version**: the newer version is imported and published; the older
+  one stays as a retired version.
+- **A reusable whose publication failed** on an earlier start: the next start tries again.
+- **The same source version id twice, or a blank one**: skipped with a duplicate-input diagnostic.
 - **Collection import composed in the same shell**: allowed; both use the same engine and identities, so an item
   imported by either is a no-op for the other.
 - **Several nodes starting at once**: each node runs the import; the commit is idempotent and retried on a write
@@ -199,10 +205,10 @@ rest of the folder is imported and published. Repeat with the strict option and 
 - **FR-007**: The task MUST import through the collection import (`IReusableActivityCollectionImporter`): the same
   analysis, conversion, admission, identities, versions (`{n}.0.0`) and reusable publication (spec 246) as the HTTP
   import.
-- **FR-008**: After the commit, the task MUST publish the newest imported version of each imported workflow and
-  wrapper with `PublishWorkflow`, after the reusables it uses are published. It MUST skip a version that already holds
-  the active publication of its target slot, and MUST NOT publish over an active publication of a version the import
-  did not write.
+- **FR-008**: After the commit, the task MUST publish the newest version in the input of each imported workflow and
+  wrapper with `PublishWorkflow`, after the reusables it uses are published. Each version MUST be published at most
+  once: a version its target slot has already published (active, retired or in flight) is skipped, so a later start
+  never takes back a slot an operator moved. A newer Elsa 3 version, never published, is published.
 - **FR-008a**: The task MUST publish the reusables within the persistence scope's tenant without widening what any
   other caller of the activity publisher may access.
 - **FR-009**: A workflow whose reusable dependency was not published MUST NOT be published, and MUST be reported
@@ -213,7 +219,8 @@ rest of the folder is imported and published. Repeat with the strict option and 
 **Restart**
 
 - **FR-011**: A start with input that is already imported and published MUST write nothing and publish nothing.
-- **FR-012**: A start MUST publish what an earlier start committed but did not publish.
+- **FR-012**: A start MUST publish what an earlier start committed but did not publish, including a reusable whose
+  earlier publication was refused or failed.
 
 **Unconvertible input and diagnostics**
 

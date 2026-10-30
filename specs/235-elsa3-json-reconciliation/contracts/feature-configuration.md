@@ -54,5 +54,6 @@ fail the start in either mode, with the import's message and guidance: the impor
 
 - Same engine as the HTTP collection import: identities, versions `{n}.0.0`, conversion rules and diagnostics.
 - A restart with the same input writes and publishes nothing.
-- A workflow slot an operator moved to another version is never taken back.
+- Each imported workflow version is published at most once, so a slot an operator moved to another version is never
+  taken back. A new Elsa 3 version supersedes whatever is active.
 - Removing a file removes nothing.

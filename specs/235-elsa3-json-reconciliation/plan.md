@@ -10,15 +10,17 @@ A new shell feature, `Elsa3JsonReconciliation`, adds one startup task. On every 
 passes, it reads the configured Elsa 3 JSON files and, in each persistence scope, runs the existing collection import
 in-process (R-1):
 
-- **Select.** Leave out duplicates, instance state and items with blocking analysis diagnostics, with their
-  dependents (R-5).
-- **Apply.** Apply the selection without an access scope (R-4). When the apply refuses items, leave them and their
-  dependents out and apply again. The import publishes the reusables, dependencies first (spec 246).
-- **Publish workflows.** Publish the newest committed version of each workflow and wrapper with `PublishWorkflow`,
-  unless it is already active or a reusable it uses is unpublished (R-6).
+- **Select.** Leave out duplicate or blank source ids and items with blocking analysis diagnostics (a document with
+  no root among them), with their dependents (R-5).
+- **Apply.** Apply the selection without an access scope, with the scope's tenant and a per-start operation key
+  (R-4). When the apply refuses items, leave them and their dependents out and apply again. The import publishes the
+  reusables, dependencies first (spec 246).
+- **Publish workflows.** Publish the newest version in the input of each workflow and wrapper with `PublishWorkflow`,
+  unless its slot already published it once or a reusable it uses is unpublished (R-6).
 - **Report.** Log one warning per skipped item and one summary line per scope; strict mode fails the start.
 
-The import gains an additive request member (the tenant to stamp on an unscoped apply) and two additive result
+The import gains two additive request members (the tenant to stamp and the publish operation key, for an unscoped
+apply) and two additive result
 members (the publications and the committed workflow versions); data-model.md. A scoped startup grant lets the activity
 publisher accept the persistence scope's tenant while the task publishes, and nowhere else (R-3).
 
@@ -87,9 +89,9 @@ converts and finds nothing to write. No target beyond "the JTest corpus (36 work
 | D-1 | Import engine at start | R-1. No reconciliation source, no core change. |
 | D-2 | `[Order(4)]` startup task | R-2. After both reconciliation passes and the Git export. |
 | D-3 | One run per persistence scope, with a startup grant | R-3. `IPersistenceScopeRunner`; every scoped service from the operation scope; the scope's tenant stamped on the unscoped apply; `Elsa3StartupPublishingGrant` lets the activity publisher accept that tenant inside that scope only. |
-| D-4 | Unscoped apply | R-4. No receipt; the commit is a no-op on unchanged input. |
+| D-4 | Unscoped apply | R-4. No receipt; the commit is a no-op on unchanged input; a per-start operation key so a refused reusable is retried on the next start. |
 | D-5 | Narrowing selection | R-5. Input, analysis, then apply refusals located by `SourceVersionId` metadata; dependents removed transitively; bounded by the item count. Credential and identity-collision refusals are not attributable and fail the start. |
-| D-6 | Workflow publishing | R-6. Newest version per definition; skip when already active, when the slot holds a version the import did not write, or when a reusable is unpublished. |
+| D-6 | Workflow publishing | R-6. Newest version in the input per definition, published at most once: skip when its slot's journal already holds it (any status but Failed), or when a reusable is unpublished. |
 | D-7 | New project | R-7. `Elsa3.Activities.Design.Import.Reconciliation`; tests in the existing integration test project. |
 | D-8 | Versions `{n}.0.0` | R-8. Converter revision deferred. |
 
@@ -114,8 +116,8 @@ specs/235-elsa3-json-reconciliation/
 ```text
 Extensions/Elsa3/src/Activities/Design/Import/
 ├── Elsa3.Activities.Design.Import/
-│   ├── Models/ReusableActivityImportPlan.cs              # ApplyRequest: TenantId; ApplyResult: Publications, Workflows (additive)
-│   └── Services/ReusableActivityCollectionImporter.cs    # stamp TenantId when unscoped; fill the result members
+│   ├── Models/ReusableActivityImportPlan.cs              # ApplyRequest: TenantId, OperationKey; ApplyResult: Publications, Workflows (additive)
+│   └── Services/ReusableActivityCollectionImporter.cs    # unscoped: stamp TenantId, pass OperationKey to the phase; fill the result members
 └── Reconciliation/                                       # new project Elsa3.Activities.Design.Import.Reconciliation
     ├── Elsa3.Activities.Design.Import.Reconciliation.csproj
     ├── Elsa3JsonReconciliationFeature.cs                 # feature, option validation, registrations
@@ -154,5 +156,5 @@ Elsa.Server.slnx                                          # add the project
 | Item | Why needed | Simpler alternative rejected because |
 |---|---|---|
 | Re-applying after a refused apply (D-5) | The apply is all or nothing; conversion and credential failures are found only inside it | A dry-run materialize would need a second, public engine path in the import |
-| Copied slot check (D-6) | FR-011: a restart writes nothing; FR-008: never take back an operator's slot | Sharing it means making a Publishing handler's internals public for one caller |
+| Copied slot resolution (D-6) | FR-011: a restart writes nothing; FR-008: never take back an operator's slot | Sharing it means making a Publishing handler's internals public for one caller |
 | Startup publishing grant (D-3) | The activity publisher authorizes by HTTP tenant claim only; at startup there is none | Widening the HTTP context for every non-request caller changes publishing authorization host-wide |
