@@ -288,11 +288,11 @@ html[data-workspace-style][data-theme-appearance="high-contrast"] :is(.studio-bu
 /* Linen: the same modular workbench with soft edges and a quiet contrast in the chrome. */
 html[data-workspace-style="linen"] {
   --studio-canvas: color-mix(in srgb, var(--studio-panel) 60%, var(--studio-bg));
-  --studio-material-page-background: linear-gradient(130deg, color-mix(in srgb, var(--studio-accent) 3%, var(--studio-bg)), var(--studio-bg) 48%);
-  --studio-material-panel-background: linear-gradient(155deg, color-mix(in srgb, var(--studio-accent) 2%, var(--studio-panel)), var(--studio-panel) 60%);
+  --studio-workspace-page-background: linear-gradient(130deg, color-mix(in srgb, var(--studio-accent) 3%, var(--studio-bg)), var(--studio-bg) 48%);
+  --studio-workspace-panel-background: linear-gradient(155deg, color-mix(in srgb, var(--studio-accent) 2%, var(--studio-panel)), var(--studio-panel) 60%);
 }
 
-html[data-workspace-style="linen"] .studio-shell { background: var(--studio-material-page-background); }
+html[data-workspace-style="linen"] .studio-shell { background: var(--studio-workspace-page-background); }
 html[data-workspace-style="linen"] .sidebar {
   --sidebar: var(--studio-nav-bg);
   --sidebar-foreground: var(--studio-nav-text);
@@ -322,10 +322,10 @@ html[data-workspace-style="linen"] :is(.sidebar-environment, .sidebar-search) { 
 html[data-workspace-style="linen"] .main-frame { min-width: 0; background: transparent; }
 html[data-workspace-style="linen"] :is(.topbar, .content) { background: transparent; }
 html[data-workspace-style="linen"] .topbar { min-height: 58px; }
-html[data-workspace-style="linen"] :is(.settings-card, .settings-section-list) { background: var(--studio-material-panel-background); border: 1px solid var(--studio-edge-subtle); border-radius: var(--studio-radius-lg); padding: 24px; }
+html[data-workspace-style="linen"] :is(.settings-card, .settings-section-list) { background: var(--studio-workspace-panel-background); border: 1px solid var(--studio-edge-subtle); border-radius: var(--studio-radius-lg); padding: 24px; }
 html[data-workspace-style="linen"] :is(.settings-radio-card, .studio-input, .studio-select) { border-radius: var(--studio-radius); }
 html[data-workspace-style="linen"] .workspace-style-preview[data-style="linen"] i:first-child { background: var(--studio-nav-bg); }
-html[data-workspace-style="linen"][data-theme-appearance="high-contrast"] { --studio-material-page-background: var(--studio-bg); --studio-material-panel-background: var(--studio-panel); }
+html[data-workspace-style="linen"][data-theme-appearance="high-contrast"] { --studio-workspace-page-background: var(--studio-bg); --studio-workspace-panel-background: var(--studio-panel); }
 html[data-workspace-style="linen"][data-theme-appearance="high-contrast"] .sidebar { background: var(--studio-nav-bg); }
 @media (min-width: 1025px) {
   html[data-workspace-style="linen"] .studio-shell { grid-template-columns: 208px minmax(0, 1fr); }

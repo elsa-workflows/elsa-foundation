@@ -95,7 +95,7 @@ html:where([data-workspace-style])[data-theme-appearance="high-contrast"] .wf-no
   border-color: var(--studio-edge-control);
 }
 
-html[data-workspace-style="linen"] :is(.wf-palette, .wf-inspector) { background: var(--studio-material-panel-background, var(--studio-panel)); }
+html[data-workspace-style="linen"] :is(.wf-palette, .wf-inspector) { background: var(--studio-workspace-panel-background, var(--studio-panel)); }
 html[data-workspace-style="linen"] .wf-inspector { border-left: 1px solid var(--studio-edge-subtle); }
 html[data-workspace-style="linen"] .wf-palette { border-right: 1px solid var(--studio-edge-subtle); }
 html[data-workspace-style="linen"] .wf-canvas { background-color: var(--studio-canvas); }

@@ -327,7 +327,7 @@ never use work-area text on contrasting navigation. In light Linen the host deri
 palette's dark navigation roles; in other modes it uses the selected mode. A light-only custom palette
 uses its own pair. High contrast retains the explicit high-contrast pair.
 
-`--studio-material-page-background` and `--studio-material-panel-background` are background recipes,
+`--studio-workspace-page-background` and `--studio-workspace-panel-background` are workspace background recipes,
 which may contain subtle gradients. Use them only as `background`, with a solid role fallback; never
 pass a recipe to `color-mix()`, a border color or text color. Linen removes decorative gradients in High
 contrast and preserves visible focus. See [branding](branding.md) for host and module customization.
