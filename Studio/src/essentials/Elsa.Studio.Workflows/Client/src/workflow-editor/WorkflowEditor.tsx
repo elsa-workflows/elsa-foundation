@@ -225,7 +225,7 @@ export function WorkflowEditor({
     }
     editableDoc.editDraft(() => snapshot);
     editableDoc.navigateToScope(path);
-  }, [editableDoc.editDraft, editableDoc.navigateToScope, editableDoc.state.frames]);
+  }, [editableDoc]);
   const { resetHistory, undo, redo, canUndoNow, canRedoNow } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft });
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
