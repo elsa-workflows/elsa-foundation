@@ -16,6 +16,8 @@ import {
   normalizeActivityStructures,
   planSlotNavigation,
   replaceSlotActivities,
+  resolveScope,
+  resolveScopeFrames,
   slotCrumbLabel,
   updateActivity,
   type ChildSlot
@@ -230,7 +232,18 @@ export function WorkflowEditor({
     recommendation?: RecommendedActivityDefinition | null;
   } | null>(null);
 
-  const { resetHistory, undo, redo, canUndoNow, canRedoNow } = useDraftHistory({ draft: editableDraft, restoreDraft: editableDoc.loadDraft });
+  const historyCatalog = useRef<ActivityCatalogItem[]>([]);
+  const restoreHistoryDraft = useCallback((snapshot: WorkflowDraft) => {
+    const root = snapshot.state.rootActivity;
+    let path = resolveScopeFrames(root, editableDoc.state.frames, historyCatalog.current);
+    const scope = resolveScope(root, path, historyCatalog.current);
+    if (scope?.slot.cardinality === "single") {
+      path = planSlotNavigation(path, scope.owner, scope.owner.nodeId, scope.slot, slotCrumbLabel(scope.owner.nodeId, scope.slot), historyCatalog.current)?.frames ?? path;
+    }
+    editableDoc.editDraft(() => snapshot);
+    editableDoc.navigateToScope(path);
+  }, [editableDoc]);
+  const { resetHistory, undo, redo, canUndoNow, canRedoNow } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft });
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
   // in dedicated hooks; `markSaved`/`reload` let the loader seed the save baseline and reload after promote.
@@ -249,6 +262,7 @@ export function WorkflowEditor({
     reload,
     reloadExpressionDescriptors
   } = useWorkflowEditorData({ context, definitionId, documentAdapter, resetHistory, loadDraft: editableDoc.loadDraft, markSaved, setError });
+  historyCatalog.current = catalog;
   const retryLoad = useCallback(() => {
     void reload().catch(e => setError(describeWorkflowError(e, "Could not load the workflow editor.")));
   }, [reload, setError]);
@@ -719,7 +733,7 @@ export function WorkflowEditor({
   // Enter a slot from the inspector list or a canvas slot badge, along the planned frame path: a slot
   // holding a single canvas container is descended THROUGH (the canvas shows the container's contents),
   // a slot holding a single leaf lands with the leaf selected, and slots of the current scope owner
-  // retarget the last frame. A null plan (non-primary slot of the root owner) is not navigable.
+  // retarget the last frame. A null plan means the root slot is no longer declared.
   const enterSlotScope = useCallback((ownerNodeId: string, slot: ChildSlot, label: string) => {
     const plan = planSlotNavigation(frames, scopeOwner, ownerNodeId, slot, label, catalogByVersion);
     if (plan) navigateToScope(plan.frames, plan.selectedNodeId);
@@ -1075,10 +1089,21 @@ export function WorkflowEditor({
   // The inspected node is either a canvas node (labelled by its node data) or the scope owner, which
   // has no node on its own canvas — fall back to its catalog display name.
   const presentationByNodeId = indexActivityPresentation(draft.activityPresentation);
-  const visibleFrames = frames.map(frame => {
-    const owner = findActivityNode(draft.state.rootActivity, frame.ownerNodeId, catalogByVersion);
+  const visibleFrames = frames.map((frame, index) => {
+    if (!frame.label) return frame;
+    // A hidden selector and its following primary container frame represent one slot entry. Keep
+    // that crumb named after the entered slot while resolving live presentation labels.
+    const frameOwner = findActivityNode(draft.state.rootActivity, frame.ownerNodeId, catalogByVersion);
+    const viewedPrimary = frameOwner && getChildSlots(frameOwner, catalogByVersion)[0]?.id === frame.slotId;
+    const previous = frames[index - 1];
+    const rootPrimary = draft.state.rootActivity ? getChildSlots(draft.state.rootActivity, catalogByVersion)[0] : undefined;
+    const labelFrame = viewedPrimary && previous?.label === "" ? previous
+      : viewedPrimary && index === 0 && rootPrimary?.cardinality === "single" && rootPrimary.activities[0]?.nodeId === frame.ownerNodeId
+        ? { ownerNodeId: draft.state.rootActivity!.nodeId, slotId: rootPrimary.id }
+        : frame;
+    const owner = findActivityNode(draft.state.rootActivity, labelFrame.ownerNodeId, catalogByVersion);
     const slot = owner
-      ? getChildSlots(owner, catalogByVersion).find(candidate => candidate.id === frame.slotId)
+      ? getChildSlots(owner, catalogByVersion).find(candidate => candidate.id === labelFrame.slotId)
       : undefined;
     const catalogItem = owner ? catalogByVersion.get(owner.activityVersionId) : undefined;
     return owner && slot

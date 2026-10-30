@@ -15,7 +15,7 @@ import {
   getIncidentStackTrace,
   loadActiveIncidentActivitySummaries
 } from "../workflow-editor/WorkflowInstances";
-import type { ScopeFrame } from "../workflowAdapter";
+import { findNodeScopePath, type ScopeFrame } from "../workflowAdapter";
 import type {
   ActivityCatalogItem,
   ActivityNode,
@@ -29,7 +29,7 @@ import type {
 } from "../workflowTypes";
 import { bpmnStructureKind } from "../bpmn/bpmnTypes";
 import { buildExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
-import { bpmnActivity, flowchartActivity, flowchartNode, forEachActivity, forEachNode, leafNode, writeLine } from "./fixtures";
+import { ifActivity, ifNode, bpmnActivity, flowchartActivity, flowchartNode, forEachActivity, forEachNode, leafNode, writeLine } from "./fixtures";
 
 vi.mock("../api/runtime", async importOriginal => ({
   ...(await importOriginal<typeof import("../api/runtime")>()),
@@ -1471,6 +1471,19 @@ describe("buildInstanceCanvas", () => {
     expect(navigated).toHaveLength(1);
     return navigated[0];
   }
+
+  it("locates secondary root-slot evidence and renders its owning nested graph read-only", () => {
+    const root = ifNode("if-root", leafNode("sibling"), innerFlowchart);
+    const catalog = [...instanceCatalog, ifActivity];
+    const path = findNodeScopePath(root, "wl-2", node => node.nodeId, catalog)!;
+    expect(path).not.toBeNull();
+    const version = { ...definitionVersion, state: { rootActivity: root } };
+    const before = structuredClone(version);
+    const canvas = buildInstanceCanvas(version, catalog, instanceDetails([]), null, path, () => {});
+    expect(canvas.nodes.map(node => node.id).sort()).toEqual(["wl-1", "wl-2"]);
+    expect(canvas.nodes.every(node => node.draggable === false && node.deletable === false)).toBe(true);
+    expect(version).toEqual(before);
+  });
 
   it("descends through a single flowchart Body child on slot entry", () => {
     const frames = enterForEachBody();
