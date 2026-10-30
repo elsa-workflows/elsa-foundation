@@ -14,8 +14,10 @@
       "sha256": "7e79dd32dd6e3ea9157f84ea920205ea56acccdd598fd86b7538de31d2c0c9d2"
     },
     {
-      "path": "packages.lock.json",
-      "sha256": "60c523addebba39026a4239418acc12f1421005b6fb8d5420f44adfceb8c60f1"
+      "path": "packages.lock.json.gz",
+      "sha256": "635bfdcf1c3d754f22bdf2f6db15f20f122515742685640ee12f0dfc978cf6ff",
+      "decodedSha256": "60c523addebba39026a4239418acc12f1421005b6fb8d5420f44adfceb8c60f1",
+      "decodedBytes": 18255
     },
     {
       "path": "latest-input/Baseline.csproj.gz",
@@ -24,8 +26,10 @@
       "decodedBytes": 449
     },
     {
-      "path": "latest-input/packages.lock.json",
-      "sha256": "2ac7a910929d11a7dcf23c6223d5c517bbdc9bccb30ac0cdea67d44477dc9b1c"
+      "path": "latest-input/packages.lock.json.gz",
+      "sha256": "ca0beed46453ec9717d8318e30d8c45f31739fba267146acef920df67ea824ae",
+      "decodedSha256": "2ac7a910929d11a7dcf23c6223d5c517bbdc9bccb30ac0cdea67d44477dc9b1c",
+      "decodedBytes": 18257
     },
     {
       "path": "baseline-reference-map.json",

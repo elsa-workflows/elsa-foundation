@@ -17,3 +17,5 @@ Fresh reviewer checks include66 focused Runtime cases,259 ETL evidence controls,
 The separate [author binary API-shape audit](api-binary/README.md) passes against the three previously recorded previews and refreshed latest Core/Runtime previews, without suppressions or unresolved references. It does not clear the pending version-magnitude choice or change this review verdict.
 
 Spec returns to In progress; T041/T043/T044 reopen until corrections and affected actual qualification. The PR conversation remains the authoritative round counter. Existing owner magnitude/needs:decision, deferred GitGuardian39189012/scan, exact final required checks and protected/post-main delivery remain open. #2898/#2907/#2908/#2892 stay open/Partial; #3242 and Orleans/task-runner deferrals are unchanged.
+
+Subsequent corrections: [admission retention and owned delivery JSON](boundary-corrections/README.md) and [actual old final-fault work recovery](fault-recovery/README.md). All three findings have corrections; this does not change round 4's verdict. Main8b5f2b3d8 is adopted, and affected qualification remains due before round 5.
