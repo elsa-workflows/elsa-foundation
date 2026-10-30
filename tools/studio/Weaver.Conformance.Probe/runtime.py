@@ -109,11 +109,25 @@ def server(run, name, origin):
     marker = "WEAVER_" + name.upper() + "_CONSUMER_READY"
     assembly = root / profile["assembly"]
     command = [run.dotnet, str(assembly), "--contentRoot", str(root), "--urls", origin]
+    # Restore caches are producer inputs, not undeclared native runtime feeds. Each launch
+    # receives new empty caches; the explicit retained archive closure must suffice.
+    runtime_inputs = run.root / (name + "-runtime-inputs-" + str(time.time_ns()))
+    runtime_inputs.mkdir(mode=0o700)
+    runtime_env = dict(profile["env"])
+    for key in ("NUGET_FALLBACK_PACKAGES", "DOTNET_ADDITIONAL_DEPS", "DOTNET_SHARED_STORE"):
+        runtime_env.pop(key, None)
+    caches = {}
+    for key, folder in (("NUGET_PACKAGES", "packages"), ("NUGET_HTTP_CACHE_PATH", "http")):
+        cache = runtime_inputs / folder
+        cache.mkdir(mode=0o700)
+        runtime_env[key] = str(cache)
+        caches[key] = str(cache)
     with log.open("w") as stream:
-        process = subprocess.Popen(command, cwd=root, env=profile["env"], stdin=subprocess.DEVNULL,
+        process = subprocess.Popen(command, cwd=root, env=runtime_env, stdin=subprocess.DEVNULL,
                                    stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
     started = {"pid": process.pid, "command": command, "assemblySha256": sha(assembly), "origin": origin,
-               "contentRoot": str(root), "log": str(log), "startedAt": time.time()}
+               "contentRoot": str(root), "log": str(log), "startedAt": time.time(),
+               "runtimePackageCaches": caches}
     private_json(run.root / (name + "-process.json"), started)
     try:
         deadline = time.monotonic() + 120
@@ -127,6 +141,9 @@ def server(run, name, origin):
             check(time.monotonic() < deadline, "Owned consumer activation deadline elapsed: " + str(log))
             time.sleep(0.1)
         yield started
+        check(process.poll() is None, "Owned consumer exited before qualification completed: " + str(log))
+        check(not any(path.is_file() for folder in caches.values() for path in Path(folder).rglob("*")),
+              "Native runtime populated an undeclared NuGet cache instead of using its retained feed closure")
     finally:
         if process.poll() is None:
             process.terminate()
@@ -135,5 +152,7 @@ def server(run, name, origin):
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=10)
-        started.update(stoppedAt=time.time(), exitCode=process.returncode)
+        cache_files = {key: [str(path.relative_to(Path(folder))) for path in Path(folder).rglob("*") if path.is_file()]
+                       for key, folder in caches.items()}
+        started.update(stoppedAt=time.time(), exitCode=process.returncode, runtimeCacheFiles=cache_files)
         private_json(run.root / (name + "-process.json"), started)

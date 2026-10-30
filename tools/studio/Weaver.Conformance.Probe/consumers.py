@@ -43,6 +43,93 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2) + "\n")
 
 
+def _native_archive(run, item):
+    source = Path(item["path"]).resolve()
+    check(source.is_relative_to(run.root.resolve()) and source.is_file() and source.suffix.lower() == ".nupkg",
+          "Native archive input must be an explicitly retained package under the owned run root")
+    check(sha(source) == item["sha256"], "Native archive input hash differs from its retained receipt")
+    with zipfile.ZipFile(source) as archive:
+        specs = [entry for entry in archive.namelist() if entry.endswith(".nuspec")]
+        check(len(specs) == 1, "Native archive has no unique nuspec")
+        metadata = ET.fromstring(archive.read(specs[0]))
+    values = {node.tag.rsplit("}", 1)[-1]: node.text for node in metadata.iter()
+              if node.tag.rsplit("}", 1)[-1] in {"id", "version"}}
+    check(bool(values.get("id")) and bool(values.get("version")), "Native archive identity is incomplete")
+    identity = values["id"] + "/" + values["version"]
+    check(not item.get("identity") or item["identity"].casefold() == identity.casefold(), "Native archive nuspec identity differs from its retained receipt")
+    check(not item.get("id") or item["id"].casefold() == values["id"].casefold(), "Native archive package ID differs from its retained receipt")
+    check(not item.get("version") or item["version"] == values["version"], "Native archive package version differs from its retained receipt")
+    return source, identity, metadata
+
+
+def select_native_archives(run, name, roots, author_record):
+    """Select genuine runtime archives from one retained author's locked .NET 10 graph.
+
+    NuGet already resolved versions/framework compatibility. This helper checks actual
+    nuspec dependency IDs against that selected graph; it does not resolve ranges.
+    Only exact NuGet HostProvidedPackages stop traversal. Framework assembly sharing
+    does not satisfy a package dependency. No cache discovery or report writes occur.
+    """
+    check(author_record.get("status") == "passed" and author_record.get("source") == run.source,
+          "Runtime closure needs a passed author receipt for this source")
+    assets = author_record["assets"]
+    path = Path(assets["path"]).resolve()
+    check(path.is_relative_to(run.root.resolve()) and path.is_file() and sha(path) == assets["sha256"], "Author runtime closure assets are missing or changed")
+    graph = json.loads(path.read_text())
+    check(graph["libraries"] and all(item["type"] == "package" for item in graph["libraries"].values()), "Author runtime closure contains source references")
+    check("net10.0" in graph["targets"], "Runtime closure needs the author's actual net10.0 target")
+    target = {identity.casefold(): value for identity, value in graph["targets"]["net10.0"].items()}
+    versions = {identity.rsplit("/", 1)[0].casefold(): identity.rsplit("/", 1)[1] for identity in graph["libraries"]}
+    check(len(versions) == len(graph["libraries"]), "Author runtime graph has ambiguous package versions")
+    provided = {key.casefold(): version for key, version in run.profiles[name]["hostProvidedPackages"].items()}
+    pool = {}
+    for entry in author_record["cachedArchives"]:
+        identity = entry["identity"].casefold()
+        value = dict(entry["archive"], identity=entry["identity"])
+        check(identity not in pool or pool[identity]["sha256"] == value["sha256"], "Conflicting retained runtime archive identities")
+        pool[identity] = value
+    selected, visited = [], {}
+
+    def visit(item):
+        source, identity, metadata = _native_archive(run, item)
+        key = identity.casefold()
+        if key in visited:
+            check(visited[key] == item["sha256"], "Conflicting selected native archive identities")
+            return
+        visited[key] = item["sha256"]
+        package_id, version = identity.rsplit("/", 1)
+        check(package_id.casefold() not in provided, "A selected native root is already host-provided")
+        selected.append({"identity": identity, "path": str(source), "sha256": item["sha256"]})
+        dependencies = next((node for node in metadata.iter() if node.tag.rsplit("}", 1)[-1] == "dependencies"), None)
+        groups = [] if dependencies is None else [node for node in dependencies if node.tag.rsplit("}", 1)[-1] == "group"]
+        direct = set() if dependencies is None else {node.attrib["id"].casefold() for node in dependencies if node.tag.rsplit("}", 1)[-1] == "dependency"}
+        matching = [node for node in groups if node.attrib.get("targetFramework", "").casefold() == "net10.0"]
+        declared = direct | {node.attrib["id"].casefold() for group in groups for node in group if node.tag.rsplit("}", 1)[-1] == "dependency"}
+        if matching or not groups:
+            required = direct | {node.attrib["id"].casefold() for group in matching for node in group if node.tag.rsplit("}", 1)[-1] == "dependency"}
+            if key in target:
+                check(required == {dep.casefold() for dep in target[key].get("dependencies", {})}, "Nuspec dependency IDs differ from selected author target")
+        else:
+            check(key in target, "Native root has no supported framework group or selected author node")
+            required = {dep.casefold() for dep in target[key].get("dependencies", {})}
+            check(required.issubset(declared), "Selected author dependency is absent from real nuspec")
+        for dependency in sorted(required):
+            check(dependency in versions, "Native dependency is absent from the author's locked graph: " + dependency)
+            version = versions[dependency]
+            dependency_key = (dependency + "/" + version).casefold()
+            check(dependency_key in target, "Native dependency is absent from the selected net10.0 target: " + dependency_key)
+            if dependency in provided:
+                check(provided[dependency] == version, "Host-provided package version differs from selected author graph: " + dependency)
+                continue
+            check(dependency_key in pool, "Native dependency has no explicitly retained author archive: " + dependency_key)
+            visit(pool[dependency_key])
+
+    check(bool(roots), "At least one actual native root archive is required")
+    for root in roots:
+        visit(root)
+    return selected
+
+
 def stage_native_archives(run, name, archives):
     """Admit explicit retained archive inputs to an owned native feed; no runtime cache probing.
 
@@ -51,21 +138,12 @@ def stage_native_archives(run, name, archives):
     This does not reconcile, start a host, or write the run report.
     """
     profile = run.profiles[name]
+    check(profile["runtimeFeed"].resolve().is_relative_to(run.root.resolve()), "Native feed must remain under its owned run root")
     staged = profile.setdefault("runtimeArchiveInputs", [])
     for item in archives:
-        source = Path(item["path"]).resolve()
-        check(source.is_relative_to(run.root.resolve()) and source.is_file() and source.suffix.lower() == ".nupkg",
-              "Native archive input must be an explicitly retained package under the owned run root")
-        check(sha(source) == item["sha256"], "Native archive input hash differs from its retained receipt")
-        with zipfile.ZipFile(source) as archive:
-            specs = [entry for entry in archive.namelist() if entry.endswith(".nuspec")]
-            check(len(specs) == 1, "Native archive has no unique nuspec")
-            metadata = ET.fromstring(archive.read(specs[0]))
-            values = {node.tag.rsplit("}", 1)[-1]: node.text for node in metadata.iter()
-                      if node.tag.rsplit("}", 1)[-1] in {"id", "version"}}
-        check(bool(values.get("id")) and bool(values.get("version")), "Native archive identity is incomplete")
-        identity = values["id"] + "/" + values["version"]
-        check(not item.get("identity") or item["identity"] == identity, "Native archive nuspec identity differs from its retained receipt")
+        source, identity, _ = _native_archive(run, item)
+        check(not any(record["identity"].casefold() == identity.casefold() and record["sha256"] != item["sha256"] for record in staged),
+              "Native feed already contains different bytes for this package identity")
         destination = profile["runtimeFeed"] / source.name
         check(not destination.exists() or sha(destination) == item["sha256"], "Native feed already contains different bytes for this archive")
         if not destination.exists():
@@ -199,11 +277,13 @@ def capture_consumer_after(run):
 def prepare_consumers(run):
     """Restore, locked-restore, build and publish two external application-owned compositions.
 
-    Requires genuine product feed/SDK and the independently packed protocol fixture in run.feed.
+    Requires genuine product feed/SDK and the passed protocol author receipt including
+    its actual selected assets graph and explicitly retained cached archives.
     No application process is started and no resource package is referenced or staged at baseline.
     """
-    protocol = list(run.feed.glob("Acme.Weaver.ProtocolFixtures.*.nupkg"))
-    check(len(protocol) == 1, "Supply exactly one independently packed generic protocol fixture before preparing consumers")
+    protocol_author = run.report.get("authors", {}).get("protocol", {})
+    check(protocol_author.get("status") == "passed", "Supply a passed independently packed protocol author receipt before preparing consumers")
+    protocol = protocol_author["packed"]["package"]
     # A failed real restore/build remains intact. Retrying never overwrites its sources, cache or logs.
     attempt = 1
     while (run.root / ("backend" + ("" if attempt == 1 else "-attempt-" + str(attempt)) + "-consumer")).exists():
@@ -277,14 +357,16 @@ def prepare_consumers(run):
         profile = {"source": source, "consumerDirectory": source, "published": published, "project": project,
                    "assembly": project.stem + ".dll", "env": env, "audit": audit,
                    "runtimeFeed": published / "runtime-feed", "nativeStore": published / "native-store",
-                   "appsettings": published / "appsettings.json", "shells": published / "shells.json"}
+                   "appsettings": published / "appsettings.json", "shells": published / "shells.json",
+                   "hostProvidedPackages": {package: identities[package] for package in shared}}
         if name == "backend":
             profile.update(commandFile=published / "protocol/command.json",
                            traceFiles={provider: published / ("protocol/" + provider + ".jsonl") for provider in PROTOCOL_FEATURES})
             write_json(profile["commandFile"], {"commandId": "baseline-readiness", "toolName": "baseline-no-tool", "arguments": {}})
         run.profiles[name] = profile
         if name == "backend":
-            stage_native_archives(run, name, [{"path": str(protocol[0]), "sha256": sha(protocol[0])}])
+            selected = select_native_archives(run, name, [protocol], protocol_author)
+            stage_native_archives(run, name, selected)
         check(not audit.read_text().strip(), "Consumer invoked frontend tools")
         lock = source / "packages.lock.json"
         check(lock.is_file(), "Consumer did not retain its lock file")
@@ -292,6 +374,7 @@ def prepare_consumers(run):
             "assets": {"path": str(assets), "sha256": sha(assets)}, "lock": {"path": str(lock), "sha256": sha(lock)},
             "frontendInvocations": 0, "frontendAudit": {"path": str(audit), "sha256": sha(audit)}, "sourceReferences": [],
             "candidatePackages": candidates, "hostProvidedPackages": {package: identities[package] for package in shared},
+            "runtimeArchiveInputs": list(profile.get("runtimeArchiveInputs", [])),
             "frameworkSharedAssemblies": ["Microsoft.Extensions.DependencyInjection.Abstractions"],
             "consumerDirectory": str(source), "publishedDirectory": str(published)}
         attempt_record["profiles"][name].update(status="published", published=str(published))
