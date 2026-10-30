@@ -1,3 +1,4 @@
+import { getStudioBranding } from "./runtime";
 import React, { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
@@ -615,17 +616,18 @@ export function ShellFrame({
     };
   }, [dismissTopMoreTools, moreToolsExpanded, topNav]);
 
+  const branding = getStudioBranding();
   return (
     <div className={navCollapsed && !topNav ? "studio-shell sidebar-collapsed" : "studio-shell"}>
       <aside className="sidebar">
         <div className="sidebar-top">
           <a className="brand" href="/" onClick={event => { event.preventDefault(); navigateFromMainNavigation("/"); }}>
             <span className="brand-mark" aria-hidden="true">
-              <img src={elsaLogo} alt="" />
+              <img src={branding.logoUrl ?? elsaLogo} alt="" onError={event => { event.currentTarget.onerror = null; event.currentTarget.src = elsaLogo; }} />
             </span>
             <span className="nav-label">
-              <strong>Elsa Studio</strong>
-              <small>Foundation</small>
+              <strong>{branding.productName}</strong>
+              <small>{branding.subtitle}</small>
             </span>
           </a>
           <button
@@ -795,12 +797,12 @@ export function ShellFrame({
           </div>
           <div className="topbar-actions">
             {assistantAction}
-            <a href="https://github.com/elsa-workflows/elsa-foundation-studio" aria-label="GitHub">
+            {branding.showHelpLink ? <a href={branding.helpUrl ?? "https://github.com/elsa-workflows/elsa-foundation"} aria-label={branding.helpUrl ? "Help" : "GitHub"}>
               <Github size={18} />
-            </a>
-            <a href="https://github.com/elsa-workflows/elsa-foundation-designer" aria-label="Designer source">
+            </a> : null}
+            {branding.showPrivacyLink ? <a href={branding.privacyUrl ?? "https://docs.elsaworkflows.io"} aria-label={branding.privacyUrl ? "Privacy" : "Documentation"}>
               <ExternalLink size={18} />
-            </a>
+            </a> : null}
             {themeAction}
             {accountAction}
           </div>
@@ -1526,6 +1528,16 @@ function getInitialBoolean(storageKey: string, fallback: boolean) {
 }
 
 export function App() {
+  useEffect(() => {
+    const branding = getStudioBranding();
+    document.title = branding.productName;
+    if (branding.faviconUrl) {
+      const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]') ?? document.createElement("link");
+      icon.rel = "icon";
+      icon.href = branding.faviconUrl;
+      document.head.append(icon);
+    }
+  }, []);
   // Create the auth manager once per shell instance: null means no provider is configured, so the shell
   // boots anonymously (no login, no bearer token). When configured, the same manager instance backs both
   // the session provider (via StudioAuthBoundary) and the authenticated HTTP client passed to AppContent.

@@ -70,10 +70,10 @@ const signatureModes = foundationThemeIds.flatMap(id =>
   allThemeModes.map(mode => [id, mode, getThemeModeDefinition(getTheme(id)!, mode)!] as const));
 
 describe("signature themes", () => {
-  it("are the built-in list, with Classic as the out-of-box default", () => {
+  it("are the built-in list, with Linen as the out-of-box default", () => {
     expect(builtInThemeDefinitions.map(theme => theme.id)).toEqual([...foundationThemeIds]);
-    expect(foundationThemeIds[0]).toBe("classic");
-    expect(normalizeThemeStore().defaultThemeId).toBe("classic");
+    expect(foundationThemeIds[0]).toBe("linen");
+    expect(normalizeThemeStore().defaultThemeId).toBe("linen");
     expect(getTheme("meridian")).toBeDefined();
   });
 
@@ -110,7 +110,7 @@ describe("signature themes", () => {
   });
 
   it("gives each signature theme its layout", () => {
-    expect(foundationThemeIds.map(id => getTheme(id)!.layout)).toEqual(["classic", "classic", "floating", "workbench", "editorial", "classic", "classic", "classic"]);
+    expect(foundationThemeIds.map(id => getTheme(id)!.layout)).toEqual(["classic", "classic", "classic", "floating", "workbench", "editorial", "classic", "classic", "classic"]);
   });
 
   it.each(foundationThemeIds)("%s high contrast is black-grounded with a bright accent", id => {
@@ -322,18 +322,18 @@ describe("ThemeProvider and ThemeSwitcher", () => {
       await vi.waitFor(() => expect(getJson).toHaveBeenCalled());
       await act(() => {});
 
-      expect(document.documentElement.getAttribute("data-theme")).toBe("classic");
+      expect(document.documentElement.getAttribute("data-theme")).toBe("linen");
       expect(localStorage.getItem("elsa-studio-theme")).toBe("two-mode");
     });
   });
 
-  it("renders Classic by default and applies its typography and shape", async () => {
+  it("uses the configured palette default with Linen typography and shape", async () => {
     await render();
     const html = document.documentElement;
 
-    expect(html.getAttribute("data-theme")).toBe("classic");
-    expect(html.style.getPropertyValue("--font-sans")).toContain("Geist Variable");
-    expect(html.style.getPropertyValue("--radius")).toBe("8px");
+    expect(html.getAttribute("data-theme")).toBe("linen");
+    expect(html.style.getPropertyValue("--font-sans")).toContain("Manrope");
+    expect(html.style.getPropertyValue("--radius")).toBe("11px");
   });
 
   it("keeps data-theme-mode as the colour scheme and exposes the exact mode as data-theme-appearance", async () => {

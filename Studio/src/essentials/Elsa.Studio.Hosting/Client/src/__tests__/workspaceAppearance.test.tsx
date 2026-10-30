@@ -117,7 +117,7 @@ describe("independent workspace appearance", () => {
     localStorage.setItem("elsa-studio-color-scheme", "custom-offline");
     await render({ http: { getJson: async () => { throw new Error("offline"); } } } as unknown as StudioEndpointContext);
     expect(localStorage.getItem("elsa-studio-color-scheme")).toBe("custom-offline");
-    expect(html().getAttribute("data-color-scheme")).toBe("classic");
+    expect(html().getAttribute("data-color-scheme")).toBe("linen");
   });
 
   it("clears a definitively removed palette so the base theme supplies its colors", async () => {
@@ -126,7 +126,7 @@ describe("independent workspace appearance", () => {
     await render({ http: { getJson: async () => normalizeThemeStore() } } as unknown as StudioEndpointContext);
     // Store reconciliation writes preferences before the follow-up render applies DOM colors.
     await vi.waitFor(() => {
-      expect(localStorage.getItem("elsa-studio-color-scheme")).toBeNull();
+      expect(localStorage.getItem("elsa-studio-color-scheme")).toBe("@theme");
       expect(html().getAttribute("data-theme")).toBe("drift");
       expect(html().getAttribute("data-color-scheme")).toBe("drift");
     });
@@ -142,7 +142,7 @@ describe("independent workspace appearance", () => {
     expect(localStorage.getItem("elsa-studio-workspace-style")).toBe("focus");
     expect(localStorage.getItem("elsa-studio-color-scheme")).toBe("meridian");
     await update(() => appearance.resetAppearance());
-    expect(html().getAttribute("data-theme")).toBe("classic");
+    expect(html().getAttribute("data-theme")).toBe("linen");
     expect(appearanceResetStorageKeys.every(key => localStorage.getItem(key) === null)).toBe(true);
   });
 

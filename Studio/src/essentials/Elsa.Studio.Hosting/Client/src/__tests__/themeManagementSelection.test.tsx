@@ -59,7 +59,7 @@ describe("theme management with an empty selectable default", () => {
     await update(() => deleteButton!.click());
 
     expect(remove).toHaveBeenCalledWith("/_elsa/theme-store/themes/managed-theme");
-    expect(container.querySelector(".theme-builder-detail h3")?.textContent).toBe("Classic");
+    expect(container.querySelector(".theme-builder-detail h3")?.textContent).toBe("Linen");
     expect(container.querySelectorAll(".theme-builder-list button.active")).toHaveLength(1);
     expect(container.textContent).not.toContain("Loading Theme Store definitions.");
     expect(container.textContent).toContain("Theme deleted.");

@@ -113,3 +113,21 @@ html[data-workspace-style][data-theme-appearance="high-contrast"] :is(.wf-grid-r
 @media (max-width: 600px) {
   html[data-workspace-style] .wf-definitions-list .wf-search { flex: 1 1 180px; margin-left: 0; }
 }
+
+html[data-workspace-style="linen"] .wf-grid {
+  overflow: hidden;
+  border: 1px solid var(--studio-edge-subtle);
+  border-radius: var(--studio-radius-lg);
+  background: var(--studio-panel);
+}
+html[data-workspace-style="linen"] .wf-editor { background: transparent; padding: 0 20px 16px; }
+html[data-workspace-style="linen"] .wf-editor-body {
+  border: 1px solid var(--studio-edge-subtle);
+  border-radius: var(--studio-radius-lg);
+  background: var(--studio-panel);
+  box-shadow: var(--studio-shadow-sm);
+  overflow: hidden;
+}
+@media (max-width: 600px) {
+  html[data-workspace-style="linen"] .wf-editor { padding: 0 6px 6px; }
+}

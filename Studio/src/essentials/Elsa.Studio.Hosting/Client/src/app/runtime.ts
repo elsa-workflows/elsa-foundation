@@ -1,6 +1,8 @@
 import type { AuthSession, StudioActivityDefinitionRuntimeSettings, StudioRuntimeSettings, StudioWorkflowRuntimeSettings } from "../sdk";
 
 export interface StudioRuntimeConfig {
+  branding?: StudioBrandingConfig;
+  appearance?: { workspaceStyle?: string; paletteId?: string; mode?: string; navigation?: string };
   backendBaseUrl?: string;
   hostId?: string;
   // The backend host management key is deliberately NOT part of the browser runtime config (ADR 0037 / #248): it is a
@@ -51,7 +53,7 @@ declare global {
 }
 
 export function getStudioRuntimeConfig(): StudioRuntimeConfig {
-  return window.__ELSA_STUDIO_RUNTIME__ ?? {};
+  return typeof window === "undefined" ? {} : window.__ELSA_STUDIO_RUNTIME__ ?? {};
 }
 
 export function getStudioRuntimeSettings(config: StudioRuntimeConfig, session?: AuthSession | null): StudioRuntimeSettings {
@@ -68,5 +70,35 @@ export function getStudioRuntimeSettings(config: StudioRuntimeConfig, session?: 
       widgetTimeoutMs: config.dashboard?.widgetTimeoutMs ?? 10_000,
       pinnedWidgetIds: config.dashboard?.pinnedWidgetIds ?? []
     }
+  };
+}
+
+/** Public presentation only; never put credentials in this object. */
+export interface StudioBrandingConfig {
+  productName?: string;
+  subtitle?: string;
+  logoUrl?: string;
+  faviconUrl?: string;
+  helpUrl?: string;
+  privacyUrl?: string;
+}
+
+export function safeBrandUrl(value: string | undefined): string | undefined {
+  if (!value || /[\\\s]/.test(value) || value.startsWith("//")) return undefined;
+  if (value.startsWith("/")) return value;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || (url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) ? value : undefined;
+  } catch { return undefined; }
+}
+
+export function getStudioBranding() {
+  const value = getStudioRuntimeConfig().branding;
+  return {
+    productName: value?.productName?.trim() || "Elsa Studio",
+    subtitle: value?.subtitle ?? "Workflow studio",
+    logoUrl: safeBrandUrl(value?.logoUrl), faviconUrl: safeBrandUrl(value?.faviconUrl),
+    helpUrl: safeBrandUrl(value?.helpUrl), privacyUrl: safeBrandUrl(value?.privacyUrl),
+    showHelpLink: value?.helpUrl !== "", showPrivacyLink: value?.privacyUrl !== ""
   };
 }
