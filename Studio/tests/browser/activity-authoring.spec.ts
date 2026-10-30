@@ -1,5 +1,51 @@
 import { expect, test } from "@playwright/test";
 
+for (const style of ["quiet", "focus", "open"]) for (const theme of ["light", "dark"]) {
+  test(`draft header has a clear title and secondary status (${style}, ${theme})`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1440, height: 950 });
+    await page.addInitScript(style => {
+      localStorage.setItem("elsa-studio-workspace-style", style);
+      localStorage.setItem("elsa-studio-color-scheme", "drift");
+    }, style);
+    await page.goto(`/?mode=activity-authoring&theme=${theme}`);
+    const title = page.getByRole("heading", { name: "Prepare order quote", exact: true });
+    const saved = page.locator(".ad-save-chip");
+    await expect(title).toBeVisible();
+    await expect(page.getByRole("complementary", { name: "Inspector panel", exact: true })).toBeVisible();
+    await expect(saved).toHaveText("Saved");
+    const titleBox = (await title.boundingBox())!;
+    const statusBox = (await saved.boundingBox())!;
+    expect(statusBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
+    const back = page.getByRole("button", { name: "Back to Activity Definition", exact: true });
+    await back.focus();
+    await expect(back).toBeFocused();
+    await title.click();
+    const publication = (await page.locator(".ad-publication-toolbar").boundingBox())!;
+    expect(publication.height).toBeLessThan(48);
+    await page.screenshot({ path: testInfo.outputPath("draft-header-desktop.png") });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    const longName = "Reusable activity with a deliberately long name for order processing and fulfilment";
+    await page.goto(`/?mode=activity-authoring&theme=${theme}&name=${encodeURIComponent(longName)}`);
+    const longTitle = page.getByRole("heading", { name: longName, exact: true });
+    await expect(longTitle).toBeVisible();
+    await expect(page.getByRole("complementary", { name: "Inspector panel", exact: true })).toBeVisible();
+    expect(await longTitle.evaluate(element => element.scrollWidth <= element.clientWidth && element.scrollHeight <= element.clientHeight)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    const toolbar = (await page.locator(".ad-draft-editor-toolbar").boundingBox())!;
+    const tabs = (await page.getByRole("tablist", { name: "Activity Definition authoring views" }).boundingBox())!;
+    expect(toolbar.y + toolbar.height).toBeLessThanOrEqual(tabs.y + 1);
+    for (const name of ["Review & publish", "Test Run", "Save now"]) {
+      const action = page.getByRole("button", { name, exact: true });
+      await expect(action).toBeVisible();
+      const box = (await action.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(391);
+    }
+    await page.screenshot({ path: testInfo.outputPath("draft-header-narrow.png") });
+  });
+}
+
 for (const theme of ["light", "dark"]) {
   test(`activity variables have a direct tab and share the root inspector editor (${theme})`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1440, height: 950 });

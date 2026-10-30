@@ -36,3 +36,15 @@ Independent PR review round 1 found two further defects: neutral button treatmen
 An additional ad hoc host-wide `tsc` probe fails on existing SDK resolution, asset/env declarations, agent diagnostics types, component barrel default export and React ref types. Those offending declarations are unchanged from main. The supported workspace typecheck and host Vite builds pass; the ad hoc probe is not reported as green.
 
 Rendered screenshots use the same Drift palette to make workspace differences comparable: [Quiet Studio](quiet-studio.jpg), [Focus Canvas](focus-canvas.jpg), [Open Studio](open-studio.jpg), and the [light list](open-list-light.jpg). The developer's running Studio host was not restarted. Exact PR revision, independent-review results and hosted CI state are recorded on the PR.
+
+## Draft editor header follow-up, 30 October
+
+Owner feedback identified the competing back label, uppercase Draft eyebrow, title and green save pill in the Activity Definition draft editor. The header now groups an accessible back arrow with the title and a secondary `Draft · Saved` line. Publication no longer reserves a blank feedback row; secondary actions share one row beneath publication on narrow screens. Long titles wrap instead of being truncated. Existing navigation locks, save failures/conflicts, publication and exact identities remain unchanged. Obsolete graph-only header rules were removed in favor of the owning authoring stylesheet.
+
+- The new rendered geometry regression fails on the original header: save status appears at y94.73 while the title ends at y118.30. It passes with the repaired hierarchy.
+- Complete Workflows suite: 2,673/2,673 across 197 files, no skips. Complete authoring browser spec: 12/12, including six new style/mode cases, desktop and narrow long titles, keyboard focus and visible action bounds. Existing variable, contract-editing and unavailable-capability journeys still pass.
+- Full workspace typecheck and lint pass (the same 56 existing warnings, no errors); Workflows production build and unchanged bundle budgets pass. Authenticated Definitions 383.39/384.50 kB; Activity upgrades 373.73/376.00 kB.
+- The .NET Studio host builds with zero warnings/errors; architecture graph restore and 592/592 architecture tests pass; generated solution filters are current.
+- The owned preview on port7031 was rebuilt and restarted. A fresh signed-in browser opened the owner's exact draft on the real backend without network or page errors; its title and `Draft · Saved` status were inspected. Only the owned preview was restarted. [Actual live header, Classic Dim](activity-draft-header-dim.png).
+
+Independent review of the updated head and its hosted checks are tracked on PR #3449. The separate baseline test-host repair remains PR #3460; pending gates are not reported as passed.
