@@ -38,3 +38,19 @@ for (const placement of ["root", "nested"] as const) {
     await expect(designer.locator(".wf-sequence-step")).toHaveCount(1);
   });
 }
+
+test("empty Activity Definition slots open containers chosen through Browse all", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto("/?mode=activity-duplicate-editor&host=activity&composition=sequence&slot-assignment=nested&theme=dark");
+  await page.getByRole("button", { name: "1. While", exact: true }).click();
+  await page.getByRole("tab", { name: "Slots", exact: true }).click();
+  await page.locator(".wf-slot-row > button").first().click();
+  await page.getByRole("button", { name: "Browse all activities…", exact: true }).click();
+  await page.getByRole("option", { name: /Sequence/ }).click();
+  const designer = page.getByRole("main", { name: "Activity Graph designer", exact: true });
+  await expect(designer.getByLabel("Sequence canvas", { exact: true })).toBeVisible();
+  await expect(designer.locator("[data-graph-node-id]")).toHaveCount(0);
+  await designer.getByRole("button", { name: "Add the first step", exact: true }).click();
+  await page.getByRole("option", { name: /Write Line/ }).click();
+  await expect(designer.locator(".wf-sequence-step")).toHaveCount(1);
+});

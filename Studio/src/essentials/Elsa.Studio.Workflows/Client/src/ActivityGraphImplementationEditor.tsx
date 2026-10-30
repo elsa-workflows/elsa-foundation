@@ -870,7 +870,15 @@ export function ActivityGraphImplementationEditor({
       clientX={interactions.connectMenu.clientX}
       clientY={interactions.connectMenu.clientY}
       activities={availableActivities}
-      onPick={interactions.onConnectMenuPick}
+      onPick={activity => {
+        // Empty single slots assign an activity; use the same descent as the cards and inspector.
+        if (slot?.cardinality === "single" && activities.length === 0 && interactions.connectMenu?.kind === "fromEmpty") {
+          interactions.setConnectMenu(null);
+          placeActivity(activity);
+        } else {
+          interactions.onConnectMenuPick(activity);
+        }
+      }}
       onClose={() => interactions.setConnectMenu(null)}
     />
   ) : null;

@@ -429,14 +429,19 @@ describe("ActivityGraphImplementationEditor single-activity slot navigation", ()
     expect(rendered.container.querySelectorAll("[data-graph-node-id]")).toHaveLength(1);
   });
 
-  it("opens the container picked from an empty nested slot", async () => {
+  it.each(["card", "browse"])("opens the container picked from an empty nested slot via %s", async route => {
     catalogItems = [whileActivity, sequenceActivity, leafCatalogItem()];
     const rendered = renderControlledDesigner(implementation(true));
     click(rendered.container.querySelector("[data-graph-node-id='while']")!);
     click([...rendered.container.querySelectorAll("[role='tab']")].find(tab => tab.textContent === "Slots")!);
     click(rendered.container.querySelector(".wf-slot-row button")!);
     const card = rendered.container.querySelector(".wf-slot-empty")!;
-    click([...card.querySelectorAll("button")].find(button => button.textContent?.includes("Sequence"))!);
+    if (route === "card") {
+      click([...card.querySelectorAll("button")].find(button => button.textContent?.includes("Sequence"))!);
+    } else {
+      click(buttonByText(card as HTMLElement, "Browse all activities…"));
+      pick(rendered.container, "Sequence");
+    }
     expect(rendered.container.querySelector(".ad-graph-scope-label")?.textContent).toContain("SequenceActivities");
     await vi.waitFor(() => expect(rendered.container.querySelectorAll("[data-graph-node-id]")).toHaveLength(0));
   });
