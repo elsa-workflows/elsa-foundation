@@ -1,0 +1,41 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>Elsa.Workflows.Publishing</id>
+    <version>4.0.36-preview</version>
+    <authors>Elsa Workflows</authors>
+    <license type="expression">MIT</license>
+    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
+    <projectUrl>https://github.com/elsa-workflows/elsa-foundation</projectUrl>
+    <description>Package Description</description>
+    <copyright>Copyright © Elsa Workflows</copyright>
+    <tags>elsa workflow workflows orchestration automation</tags>
+    <repository type="git" url="https://github.com/elsa-workflows/elsa-foundation.git" commit="0086c564b5036d1c8fbbedd93074ddf0e9d58ce8" />
+    <dependencies>
+      <group targetFramework="net10.0">
+        <dependency id="Elsa.Activities.Design.Core" version="[4.0.12-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="Elsa.Activities.Design.Persistence.Core" version="[4.0.12-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="Elsa.Activities.Runtime.Core" version="[4.0.24-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="Elsa.Events.Core" version="[4.0.14-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="Elsa.Locking.Core" version="[4.0.14-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="Elsa.Mediator.Core" version="[4.0.14-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="Elsa.Primitives" version="[4.0.14-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="Elsa.Workflows.Design.Core" version="[4.0.13-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="Elsa.Workflows.Design.Persistence.Core" version="[4.0.12-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="Elsa.Workflows.Design.Validations" version="[4.0.14-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="Elsa.Workflows.Publishing.Core" version="[4.0.17-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="Elsa.Workflows.Runtime.Core" version="[4.0.56-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="Elsa.Workflows.Runtime" version="[4.0.70-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="CShells.Abstractions" version="0.0.31" exclude="Build,Analyzers" />
+        <dependency id="Cronos" version="0.13.0" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Configuration" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Configuration.Abstractions" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.DependencyInjection" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.DependencyInjection.Abstractions" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging.Abstractions" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Options" version="10.0.10" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Primitives" version="10.0.10" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+  </metadata>
+</package>

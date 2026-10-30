@@ -1,0 +1,42 @@
+[
+  {
+    "package_id": "Elsa.Activities.Bpmn",
+    "version": "4.0.15-preview",
+    "commit": "4c79e36886672915a73ffe16f3587ffa0b9c2008",
+    "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.activities.bpmn/4.0.15-preview/elsa.activities.bpmn.4.0.15-preview.nupkg",
+    "sha256": "761fd29eb557645ccb6a62a1495b147c58b2345e552df50762cc1fb0a53d797c",
+    "bytes": 46659
+  },
+  {
+    "package_id": "Elsa.Activities.Bpmn.Interchange",
+    "version": "4.0.16-preview",
+    "commit": "438001406d980051584234e5d656eb8e6a67f47f",
+    "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.activities.bpmn.interchange/4.0.16-preview/elsa.activities.bpmn.interchange.4.0.16-preview.nupkg",
+    "sha256": "90065adf438f08da23de6adf1684c0d609b57d13273bab7c2f0df5f386dbb291",
+    "bytes": 76610
+  },
+  {
+    "package_id": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
+    "version": "4.0.24-preview",
+    "commit": "931123c7ed45aa896539d857c6227a267d08b28f",
+    "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.workflows.design.persistence.entityframeworkcore/4.0.24-preview/elsa.workflows.design.persistence.entityframeworkcore.4.0.24-preview.nupkg",
+    "sha256": "6ec0373d1d775d9ace50fc336bfdfef5dd49abfd03c2372f903c63417737782b",
+    "bytes": 120664
+  },
+  {
+    "package_id": "Elsa.Workflows.Publishing",
+    "version": "4.0.36-preview",
+    "commit": "0086c564b5036d1c8fbbedd93074ddf0e9d58ce8",
+    "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.workflows.publishing/4.0.36-preview/elsa.workflows.publishing.4.0.36-preview.nupkg",
+    "sha256": "3c4f87f90af8438b8aa482df4da42507160adeb6e3e6777470f9db77807877d6",
+    "bytes": 154183
+  },
+  {
+    "package_id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+    "version": "4.0.43-preview",
+    "commit": "0086c564b5036d1c8fbbedd93074ddf0e9d58ce8",
+    "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.workflows.runtime.persistence.entityframeworkcore/4.0.43-preview/elsa.workflows.runtime.persistence.entityframeworkcore.4.0.43-preview.nupkg",
+    "sha256": "7e5e1630450e20e36f09c57e9bbc7eac6e16da48975425cc029e678124f1dc3e",
+    "bytes": 592439
+  }
+]

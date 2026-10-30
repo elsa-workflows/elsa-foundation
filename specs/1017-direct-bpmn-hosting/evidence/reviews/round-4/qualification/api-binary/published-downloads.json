@@ -1,0 +1,26 @@
+{
+  "feedIndex": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/index.json",
+  "packages": [
+    {
+      "packageId": "elsa.workflows.runtime.core",
+      "version": "4.0.55-preview",
+      "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.workflows.runtime.core/4.0.55-preview/elsa.workflows.runtime.core.4.0.55-preview.nupkg",
+      "sha256": "ee43bda93df115354bd9bccd9869105196c7a3f391d9b01161006c34a4b96c72",
+      "bytes": 475892
+    },
+    {
+      "packageId": "elsa.workflows.runtime",
+      "version": "4.0.69-preview",
+      "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.workflows.runtime/4.0.69-preview/elsa.workflows.runtime.4.0.69-preview.nupkg",
+      "sha256": "4ca4455e45f80bc62ed3aa1db8dd8230afc03e175a986118cbc59cf3b1535f53",
+      "bytes": 697818
+    },
+    {
+      "packageId": "elsa.persistence.entityframework",
+      "version": "4.0.32-preview",
+      "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.persistence.entityframework/4.0.32-preview/elsa.persistence.entityframework.4.0.32-preview.nupkg",
+      "sha256": "d62d49b737040c7a02c43fb3eda49f4cd74557a049a166907a92c450fd0f40b8",
+      "bytes": 291553
+    }
+  ]
+}

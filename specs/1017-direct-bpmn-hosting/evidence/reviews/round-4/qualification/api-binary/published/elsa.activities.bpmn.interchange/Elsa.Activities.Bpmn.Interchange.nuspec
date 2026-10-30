@@ -1,0 +1,37 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>Elsa.Activities.Bpmn.Interchange</id>
+    <version>4.0.16-preview</version>
+    <authors>Elsa Workflows</authors>
+    <license type="expression">MIT</license>
+    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
+    <projectUrl>https://github.com/elsa-workflows/elsa-foundation</projectUrl>
+    <description>Package Description</description>
+    <copyright>Copyright © Elsa Workflows</copyright>
+    <tags>elsa workflow workflows orchestration automation</tags>
+    <repository type="git" url="https://github.com/elsa-workflows/elsa-foundation.git" commit="438001406d980051584234e5d656eb8e6a67f47f" />
+    <dependencies>
+      <group targetFramework="net10.0">
+        <dependency id="Elsa.Activities.Bpmn" version="[4.0.14-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="Elsa.Activities.Design.Core" version="[4.0.12-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="Elsa.Api.AspNetCore" version="[4.0.10-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="Elsa.Foundation.Identity.Core" version="[4.0.10-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="Elsa.Foundation.Identity" version="[4.0.15-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="Elsa.Workflows.Design.Core" version="[4.0.13-preview, 5.0.0)" exclude="Build,Analyzers" />
+        <dependency id="Bpmn.Interchange" version="0.5.0" exclude="Build,Analyzers" />
+        <dependency id="Bpmn.Model" version="0.5.0" exclude="Build,Analyzers" />
+        <dependency id="CShells.Abstractions" version="0.0.31" exclude="Build,Analyzers" />
+        <dependency id="CShells.AspNetCore.Abstractions" version="0.0.31" exclude="Build,Analyzers" />
+        <dependency id="NativeEndpoints" version="1.0.0-preview.6" exclude="Build,Analyzers" />
+        <dependency id="Bpmn.Semantics" version="0.5.0" exclude="Build,Analyzers" />
+        <dependency id="Cronos" version="0.13.0" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+    <frameworkReferences>
+      <group targetFramework="net10.0">
+        <frameworkReference name="Microsoft.AspNetCore.App" />
+      </group>
+    </frameworkReferences>
+  </metadata>
+</package>

@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-28
 
-**Status**: In progress — full-PR round4 retains three P2 findings: admission retention, owned timer JSON and actual old waiting-worker recovery. Corrections, affected qualification and delivery gates remain open.
+**Status**: In progress — all three round4 findings corrected; current Studio and binary API qualification pass. The current-main host matrix passes40/40. Frontend-only main integration, consolidation, round5 and existing delivery gates remain open.
 
 **Input**: Deliver existing [#2898](https://github.com/elsa-workflows/elsa-foundation/issues/2898) within [program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892), after verified #2735 adoption: direct and embedded BPMN hosting, restart and operational races, real recoverable pipeline invocation, and supported human-task/incident commands. Preserve authoring and saved executions. Broader operational and Studio acceptance remains [#2907](https://github.com/elsa-workflows/elsa-foundation/issues/2907).
 

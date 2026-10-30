@@ -1,0 +1,162 @@
+{
+  "kind": "all-changed-published-assembly-api-shapes",
+  "sourceRevision": "30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+  "assets": [
+    {
+      "path": "Baseline.csproj.gz",
+      "sha256": "bf6acb2f0be2ba45214d055412aebf7eeb7f833e569cada79e4401b4b0055af5",
+      "decodedSha256": "c9be6c6e513fb61ba3af5629264747ed8ed1544e9c64f0de800a1dda1c685dbb",
+      "decodedBytes": 784
+    },
+    {
+      "path": "Elsa.Activities.Bpmn.Interchange.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "decodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "decodedBytes": 0
+    },
+    {
+      "path": "Elsa.Activities.Bpmn.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "decodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "decodedBytes": 0
+    },
+    {
+      "path": "Elsa.Persistence.EntityFramework-4.0.32-preview.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "decodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "decodedBytes": 0
+    },
+    {
+      "path": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "decodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "decodedBytes": 0
+    },
+    {
+      "path": "Elsa.Workflows.Publishing.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "decodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "decodedBytes": 0
+    },
+    {
+      "path": "Elsa.Workflows.Runtime-4.0.69-preview.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "decodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "decodedBytes": 0
+    },
+    {
+      "path": "Elsa.Workflows.Runtime-4.0.70-preview.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "decodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "decodedBytes": 0
+    },
+    {
+      "path": "Elsa.Workflows.Runtime.Core-4.0.55-preview.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "decodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "decodedBytes": 0
+    },
+    {
+      "path": "Elsa.Workflows.Runtime.Core-4.0.56-preview.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "decodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "decodedBytes": 0
+    },
+    {
+      "path": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "decodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "decodedBytes": 0
+    },
+    {
+      "path": "NuGet.Config.gz",
+      "sha256": "0f604297157d41268c1124efb1170b1f1fcb36808a5da198060e152540e6326c",
+      "decodedSha256": "7e79dd32dd6e3ea9157f84ea920205ea56acccdd598fd86b7538de31d2c0c9d2",
+      "decodedBytes": 224
+    },
+    {
+      "path": "additional-comparisons.json",
+      "sha256": "6c9a0cd4fa736d8c32187481a0a7175cd6cf990dfb250477f0ec687b1c84f64a"
+    },
+    {
+      "path": "all-comparisons.json",
+      "sha256": "1619e377520a00c2018b11a2dbf216a2a206c7e9b7907824729cdf02ceb19330"
+    },
+    {
+      "path": "baseline-reference-map.json",
+      "sha256": "1cd1b886bb8b0ca303850613373bd5e5f5a6cafce3fd91a8aef7bc47f60b4964"
+    },
+    {
+      "path": "downloads.json",
+      "sha256": "6826f9406264575337a6c6bfa0d5f88f6d7be03c043056ee17c088f2d4cad5c5"
+    },
+    {
+      "path": "latest-baseline-reference-map.json",
+      "sha256": "23a218e09be60ce88f1395906a06b274b1fdb710d492f6e04cac6a9e7b6c954f"
+    },
+    {
+      "path": "latest-downloads.json",
+      "sha256": "9c2c48923ea6c416dc456bc3003bf7b382e416684a0be81aefd6f157c3833e14"
+    },
+    {
+      "path": "packages.lock.json.gz",
+      "sha256": "1dd38b5ccb0bd1ba05222d2ebdd50858c83c7653d61aba6e2f6a41e8ed71a0c9",
+      "decodedSha256": "1a089a08ad339eb796c314414058f03c7c5999cfc80a75086298fc833f747d23",
+      "decodedBytes": 33064
+    },
+    {
+      "path": "published/elsa.activities.bpmn/Elsa.Activities.Bpmn.nuspec",
+      "sha256": "48c197080534595a62f4c58845b4d5a0f5e26149ec74d9550504507fdc014145"
+    },
+    {
+      "path": "published/elsa.activities.bpmn.interchange/Elsa.Activities.Bpmn.Interchange.nuspec",
+      "sha256": "153c29c4c264fc6bb37d0ac2297079b600addf73d52d374507cab766293acef4"
+    },
+    {
+      "path": "published/elsa.workflows.design.persistence.entityframeworkcore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.nuspec",
+      "sha256": "c4e3825d82ba8efb59dbb8c1aaac4785f6144c1b3135aae68858c703611d075a"
+    },
+    {
+      "path": "published/elsa.workflows.publishing/Elsa.Workflows.Publishing.nuspec",
+      "sha256": "900870da9e1ee6f7c20d32c249bb6c7ac842413fdf49db80b2f6ab4f9f0b406d"
+    },
+    {
+      "path": "published/elsa.workflows.runtime.persistence.entityframeworkcore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.nuspec",
+      "sha256": "71a737f8859bf865603f8588610ee4efa0969ee86e801b3b02ec3b1d9247258a"
+    },
+    {
+      "path": "published-downloads.json",
+      "sha256": "ed92ba8bdaf6bf905be31466147409c5a90589acfec3e84711dace4f0a073165"
+    },
+    {
+      "path": "published-state-current.json",
+      "sha256": "209786d4e0cca0ab207c8e958ac0a49bc1108099f7d0769824b54dd20fb329fc"
+    },
+    {
+      "path": "restore-correct-feed.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "decodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "decodedBytes": 0
+    },
+    {
+      "path": "restore-expanded.log.gz",
+      "sha256": "8729009d4902189d5b292f3b921236984395600761816b582f1b936a97554e02",
+      "decodedSha256": "ee8c1f1c63c73046fc0975def9e29fc4fd1395ec5dd9d0638aeb298b7dab81a6",
+      "decodedBytes": 1024
+    },
+    {
+      "path": "restore.log.gz",
+      "sha256": "05b8616a311ab11c77ff970878009bff9752a33308518efd562b9fbf724215f5",
+      "decodedSha256": "102cf04a5b2ded8f80b48fd245e4436e6a39ac5c31bd383bfc8223719163df8b",
+      "decodedBytes": 388
+    },
+    {
+      "path": "tool-version",
+      "sha256": "c74985ac4e8492a82f2d75e9916059de5bb5bafb9c9c16ea0a17cf7dc4877b2d"
+    },
+    {
+      "path": "baseline-reference-map-additional.json",
+      "sha256": "e14158a365a89c6ed258f803bd4d462b28cd15e5c3a32a7bbbe9cbd197cc0bc0"
+    }
+  ]
+}

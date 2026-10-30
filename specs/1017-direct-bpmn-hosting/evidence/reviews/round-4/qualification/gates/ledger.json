@@ -1,0 +1,33 @@
+{
+  "sourceRevision": "30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+  "results": [
+    {
+      "name": "locked-restore",
+      "arguments": [
+        "dotnet",
+        "restore",
+        "Elsa.Server.slnx",
+        "--locked-mode",
+        "--nologo",
+        "--verbosity",
+        "quiet"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "studio-build",
+      "arguments": [
+        "dotnet",
+        "build",
+        "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "--nologo",
+        "--verbosity",
+        "quiet"
+      ],
+      "exitCode": 0
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "sourceRevision": "30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+  "oldWorkbenchSha256Before": "65ad2f7b9bb8f3256c0dacd903f9c1b58f78cacdc6260dacfb866aeae7a0924b",
+  "steps": [
+    {
+      "name": "isolated-workbench",
+      "arguments": [
+        "dotnet",
+        "build",
+        "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+        "-c",
+        "Release",
+        "-f",
+        "net10.0",
+        "--no-restore",
+        "--output",
+        "/tmp/elsa-2898-round4-repairs/current-main/workbench-bin",
+        "-p:ElsaBpmnRecoveryProbe=false",
+        "--nologo",
+        "--verbosity",
+        "quiet"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "isolated-reader",
+      "arguments": [
+        "dotnet",
+        "build",
+        "tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj",
+        "-c",
+        "Release",
+        "-f",
+        "net10.0",
+        "--no-restore",
+        "--output",
+        "/tmp/elsa-2898-round4-repairs/current-main/reader-bin",
+        "-p:ElsaBpmnRecoveryProbe=false",
+        "--nologo",
+        "--verbosity",
+        "quiet"
+      ],
+      "exitCode": 0
+    }
+  ],
+  "oldWorkbenchSha256After": "65ad2f7b9bb8f3256c0dacd903f9c1b58f78cacdc6260dacfb866aeae7a0924b"
+}
