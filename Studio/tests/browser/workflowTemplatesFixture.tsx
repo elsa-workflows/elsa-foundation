@@ -44,6 +44,8 @@ function context(): StudioEndpointContext {
     },
     requestJson: async (path: string, options: { body?: string }) => {
       if (path.startsWith("/design/workflows/templates/")) {
+        const delay = Number(localStorage.getItem("template-fixture-save-delay"));
+        if (delay) await new Promise(resolve => setTimeout(resolve, delay));
         if (localStorage.getItem("template-fixture-fail-saves")) throw new Error("Template save unavailable");
         const values = read(), index = values.findIndex(item => item.id === path.split("/").at(-1));
         const body = JSON.parse(options.body ?? "{}");

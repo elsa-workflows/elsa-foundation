@@ -167,6 +167,7 @@ export function WorkflowEditor({
   onBack(): void;
 }) {
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  const [templateNavigationPending, setTemplateNavigationPending] = useState(false);
   const [templatesAvailable, setTemplatesAvailable] = useState(false);
   useEffect(() => {
     let active = true;
@@ -1284,7 +1285,7 @@ export function WorkflowEditor({
   ];
 
   return (
-    <section ref={editorRootRef} className="wf-editor" data-studio-workflow-editor="">
+    <section ref={editorRootRef} className="wf-editor" data-studio-workflow-editor="" inert={templateNavigationPending} aria-busy={templateNavigationPending}>
       <WorkflowEditorToolbar
         templateMode={!!documentAdapter}
         name={details.definition.name}
@@ -1299,7 +1300,15 @@ export function WorkflowEditor({
         onUndo={() => { if (!editorDoc.pinned) undo(); }}
         onRedo={() => { if (!editorDoc.pinned) redo(); }}
         onAutoLayout={autoLayout}
-        onBack={() => { if (documentAdapter && editableDraft) void flushDefinitionMeta().then(async saved => { if (saved) { await saveDraft(editableDraft, "Saved"); onBack(); } }).catch(() => undefined); else onBack(); }}
+        onBack={() => {
+          if (!documentAdapter || !editableDraft) { onBack(); return; }
+          if (templateNavigationPending) return;
+          setTemplateNavigationPending(true);
+          setStatus("Saving…");
+          void flushDefinitionMeta().then(async saved => {
+            if (saved) { await saveDraft(editableDraft, "Saved"); onBack(); }
+          }).catch(() => undefined).finally(() => setTemplateNavigationPending(false));
+        }}
         onSave={() => { if (documentAdapter) void flushDefinitionMeta().then(saved => { if (saved) void save(); }); else void save(); }}
         onPublish={mode => void preparePublication(mode)}
         onRun={() => void run()}

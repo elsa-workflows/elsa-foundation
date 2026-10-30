@@ -24,6 +24,8 @@ All four whole projects ran without filters or skips.
 Mutation proof: removing the stale-revision guard makes the restart/stale-edit test
 fail; restoring it returns the EF suite to green. Removing the explicit template-port
 ownership guard makes the composition test fail; restoring it returns all 127 to green.
+Removing template Back persistence makes the rendered failed-save retention regression
+fail; restoring it returns all four browser journeys to green.
 
 Production frontend output: entry 107.80 kB; stylesheet 169.36 kB; authenticated
 Definitions total 384.36 kB (384.50 budget); activity upgrades 375.49 kB (376.00 budget).
