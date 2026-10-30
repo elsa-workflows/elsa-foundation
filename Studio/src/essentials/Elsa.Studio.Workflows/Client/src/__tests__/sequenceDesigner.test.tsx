@@ -42,7 +42,7 @@ describe("SequenceDesigner", () => {
     render([workflowNode("endpoint", "Write Line")]);
     expect(container.querySelector("button[title='Enable workflow start']")).toBeNull();
   });
-  it("renders ordered, readable cards with ordinals and implicit connectors", () => {
+  it("renders readable cards with accessible step positions and implicit connectors", () => {
     const { ref } = mount([
       workflowNode("first", "Start", { summary: "Runs first" }),
       workflowNode("second", "Write Line"),
@@ -50,7 +50,7 @@ describe("SequenceDesigner", () => {
     ]);
 
     expect(cardLabels()).toEqual(["Start", "Write Line", "Finish"]);
-    expect([...container.querySelectorAll(".wf-sequence-ordinal")].map(item => item.textContent)).toEqual(["1", "2", "3"]);
+    expect([...container.querySelectorAll(".wf-sequence-step")].map(item => item.getAttribute("aria-label"))).toEqual(["1. Start", "2. Write Line", "3. Finish"]);
     expect(container.querySelectorAll(".wf-sequence-connector")).toHaveLength(2);
     expect(container.querySelector(".wf-sequence-summary")?.textContent).toBe("Runs first");
     expect(container.querySelector(".wf-sequence-step[data-id='second']")?.getAttribute("data-graph-node-id")).toBe("second");
