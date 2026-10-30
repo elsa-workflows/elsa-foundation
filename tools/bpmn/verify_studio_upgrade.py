@@ -58,7 +58,7 @@ def xml_shape(path, old_label=None, new_label=None):
 
 def verify(path: Path):
     manifest = json.loads(path.read_text()); root = path.parent
-    if manifest.get("schemaVersion") != 1 or manifest.get("kind") != "actual-existing-studio-upgrade":
+    if manifest.get("schemaVersion") not in (1, 2) or manifest.get("kind") != "actual-existing-studio-upgrade":
         raise ValueError("Unknown actual Studio upgrade evidence.")
     source = manifest["sourceRevision"]
     if len(source) != 40 or any(character not in "0123456789abcdef" for character in source):
@@ -118,6 +118,8 @@ def verify(path: Path):
             raise ValueError("The Studio evidence lacks its distinct actual restart.")
         if len({item["controllerProcessId"] for item in process["processes"]}) != 1 or not process["browserAssets"]:
             raise ValueError("The owned Studio process or browser bundle provenance is absent.")
+        if manifest["schemaVersion"] == 2 and any(not item.get("started") or item.get("executable") != "dotnet" for item in process["processes"]):
+            raise ValueError("The provider-backed Studio capture lacks its owned process identities.")
         baseline_directory = "studio" if family == "original" else "multi-instance-and-studio"
         expected_inputs = {f"{baseline_directory}/{name}.sqlite.gz": original_assets[f"{baseline_directory}/{name}.sqlite.gz"] for name in ("runtime", "design")}
         if process["baselineAssets"] != expected_inputs: raise ValueError("The Studio process used a different coupled whole store.")
@@ -165,6 +167,11 @@ def verify(path: Path):
             original_run_observations += len(legacy)
             for name in ("runtime", "design"):
                 if directory + "/" + stores[name]["file"] not in declared: raise ValueError("An actual Studio whole store is undeclared.")
+                if manifest["schemaVersion"] == 2:
+                    snapshot = stores[name]; observer = snapshot.get("observer", {})
+                    if (snapshot.get("captureCut") != "same-owned-workbench-paused-across-provider-backups" or
+                            observer.get("readOnly") is not True or observer.get("snapshotSha256") != snapshot["databaseSha256"]):
+                        raise ValueError("The Studio snapshot lacks its quiesced read-only provider receipt.")
                 with q.checked_upgrade_snapshot(root, directory, stores[name]) as connection:
                     if name == "runtime":
                         current = materials(connection)

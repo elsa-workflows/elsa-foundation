@@ -17,11 +17,13 @@ EVIDENCE = studio.q.REPO / "specs/1017-direct-bpmn-hosting/evidence/studio"
 
 
 class ActualStudioUpgradeControls(unittest.TestCase):
+    evidence = EVIDENCE
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="elsa-studio-negative-")
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name) / "evidence"
-        shutil.copytree(EVIDENCE, self.root)
+        shutil.copytree(self.evidence, self.root)
 
     def rehash(self, relative):
         path = self.root / "manifest.json"; manifest = json.loads(path.read_text())
@@ -84,7 +86,9 @@ class ActualStudioUpgradeControls(unittest.TestCase):
             connection.commit()
         path.write_bytes(gzip.compress(raw.read_bytes()))
         def changed(process):
-            process["stages"]["finished"]["runtime"].update(databaseSha256=hashlib.sha256(raw.read_bytes()).hexdigest(), gzipSha256=studio.q.digest(path))
+            snapshot = process["stages"]["finished"]["runtime"]
+            snapshot.update(databaseSha256=hashlib.sha256(raw.read_bytes()).hexdigest(), gzipSha256=studio.q.digest(path))
+            if "observer" in snapshot: snapshot["observer"]["snapshotSha256"] = snapshot["databaseSha256"]
         self.rehash("original/finished-runtime.sqlite.gz"); self.change("original/process.json", changed)
         with self.assertRaisesRegex(ValueError, "physical Studio run lost"): self.verify()
 
@@ -98,7 +102,11 @@ class ActualStudioUpgradeControls(unittest.TestCase):
             connection.commit()
         path.write_bytes(gzip.compress(raw.read_bytes()))
         self.rehash("layout/finished-runtime.sqlite.gz")
-        self.change("layout/process.json", lambda process: process["stages"]["finished"]["runtime"].update(databaseSha256=hashlib.sha256(raw.read_bytes()).hexdigest(), gzipSha256=studio.q.digest(path)))
+        def changed(process):
+            snapshot = process["stages"]["finished"]["runtime"]
+            snapshot.update(databaseSha256=hashlib.sha256(raw.read_bytes()).hexdigest(), gzipSha256=studio.q.digest(path))
+            if "observer" in snapshot: snapshot["observer"]["snapshotSha256"] = snapshot["databaseSha256"]
+        self.change("layout/process.json", changed)
         with self.assertRaisesRegex(ValueError, "original material"): self.verify()
 
     def test_an_existing_but_undeclared_screenshot_is_rejected(self):
@@ -112,6 +120,22 @@ class ActualStudioUpgradeControls(unittest.TestCase):
         next(asset for asset in value["assets"] if asset["path"] == "layout/process.json.gz")["decodedSha256"] = "0" * 64
         studio.q.write_json(path, value)
         with self.assertRaisesRegex(ValueError, "decoded Studio process"): self.verify()
+
+
+class FinalActualStudioUpgradeControls(ActualStudioUpgradeControls):
+    evidence = EVIDENCE.parent / "final-compatibility/studio"
+
+    def test_rehashed_provider_snapshot_without_readonly_receipt_is_rejected(self):
+        self.change("original/process.json", lambda process: process["stages"]["recovered"]["runtime"]["observer"].update(readOnly=False))
+        with self.assertRaisesRegex(ValueError, "read-only provider receipt"): self.verify()
+
+    def test_rehashed_provider_snapshot_with_another_hash_is_rejected(self):
+        self.change("layout/process.json", lambda process: process["stages"]["finished"]["design"]["observer"].update(snapshotSha256="0" * 64))
+        with self.assertRaisesRegex(ValueError, "read-only provider receipt"): self.verify()
+
+    def test_rehashed_provider_snapshot_without_coupled_cut_is_rejected(self):
+        self.change("layout/process.json", lambda process: process["stages"]["restarted"]["runtime"].update(captureCut="unpaused"))
+        with self.assertRaisesRegex(ValueError, "read-only provider receipt"): self.verify()
 
 
 if __name__ == "__main__": unittest.main()

@@ -1,0 +1,138 @@
+{
+  "kind": "final-affected-runtime-legacy-and-existing-studio-qualification",
+  "legacySourceRevision": "de0e800384b91268827af674e195b1097455dd45",
+  "studioSourceRevision": "905b6a491d4372fda5c1b71607d1edbc37020c06",
+  "latestRuntimeChange": "c40881fd0209dd1f2e8765358c3afd3f007247ab",
+  "productionCoreAndEtlUnchangedSinceLatestRuntimeChange": true,
+  "legacyHostTests": {
+    "passed": 7,
+    "skipped": 0
+  },
+  "legacyPortableControls": {
+    "passed": 54,
+    "skipped": 0
+  },
+  "studioPortableControls": {
+    "passed": 23,
+    "skipped": 0
+  },
+  "legacyResults": {
+    "partial-forks": {
+      "actualLegacyExecutionsRecovered": 8,
+      "wholeStoresVerified": 2,
+      "frozenAuthoringPreserved": true,
+      "sourceRevision": "de0e800384b91268827af674e195b1097455dd45",
+      "allLegacyFamiliesRecovered": false,
+      "studioAcceptanceProved": false
+    },
+    "native-parents": {
+      "pendingParentRecoveries": 6,
+      "nativeParentOutcomesApplied": 4,
+      "terminalDispositionsWithoutParentConsumption": 2,
+      "retainedNativeTerminals": 12,
+      "wholeStoresVerified": 8,
+      "frozenAuthoringPreserved": true,
+      "sourceRevision": "de0e800384b91268827af674e195b1097455dd45",
+      "allLegacyFamiliesRecovered": false,
+      "studioAcceptanceProved": false
+    },
+    "called-ack": {
+      "actualCalledAcknowledgmentCutsRecovered": 2,
+      "wholeStoresVerified": 4,
+      "exactCommittedAcceptanceVerified": true,
+      "frozenAuthoringPreserved": true,
+      "sourceRevision": "de0e800384b91268827af674e195b1097455dd45",
+      "allLegacyFamiliesRecovered": false,
+      "studioAcceptanceProved": false,
+      "directModelSettlementProved": false
+    },
+    "broadcast": {
+      "actualBroadcastCutsRecovered": 4,
+      "wholeStoresVerified": 8,
+      "deliveryTimeMatchingPreserved": true,
+      "emptyAndRearmedDecisionsPreserved": true,
+      "frozenAuthoringPreserved": true,
+      "sourceRevision": "de0e800384b91268827af674e195b1097455dd45",
+      "allLegacyFamiliesRecovered": false,
+      "studioAcceptanceProved": false,
+      "directModelBroadcastProved": false
+    },
+    "controls": {
+      "actualEscalationCasesRecovered": 6,
+      "actualSameBindingSiblingPoliciesRecovered": 2,
+      "actualCompensationReplayRecovered": 1,
+      "managedWorkflowExecutions": 19,
+      "wholeStoresVerified": 6,
+      "frozenAuthoringPreserved": true,
+      "sourceRevision": "de0e800384b91268827af674e195b1097455dd45",
+      "allLegacyFamiliesRecovered": false,
+      "studioAcceptanceProved": false,
+      "directModelSettlementProved": false
+    },
+    "multi-instance": {
+      "actualMultiInstanceCasesRecovered": 4,
+      "nativeIterationsCompleted": 12,
+      "finalWorkflowExecutions": 16,
+      "wholeStoresVerified": 5,
+      "frozenAuthoringPreserved": true,
+      "sourceRevision": "de0e800384b91268827af674e195b1097455dd45",
+      "allLegacyFamiliesRecovered": false,
+      "studioAcceptanceProved": false,
+      "directModelMultiInstanceProved": false
+    }
+  },
+  "studioResults": {
+    "actualStudioFamiliesVerified": 2,
+    "completedNewRuns": 4,
+    "originalRunObservations": 9,
+    "wholeStoresVerified": 12,
+    "retainedNativeMaterialCounts": [
+      84,
+      92
+    ]
+  },
+  "totalWholeStoresVerified": 45,
+  "all22OriginalWholeStoreInputsAccountedFor": true,
+  "frozenBaselineAssetsUnchanged": 104,
+  "ownedListedLegacyHostsStopped": 41,
+  "ownedListedStudioHostsStopped": 6,
+  "scopeLimits": [
+    "Actual SQLite host and existing embedded BPMN Studio compatibility only; non-SQLite host upgrade is not inferred.",
+    "First-class direct-model Studio acceptance #2907 remains open.",
+    "Test Runs retain existing empty draft layout sidecar behavior; published-run layout is verified separately.",
+    "Development sign-in returned to the Workbench root; the owned Studio URL was explicitly reopened. Automatic return-URL support is not inferred.",
+    "Complete-PR review remains0 of6; required exact-head CI, GitGuardian and other acceptance/closeout gates remain open.",
+    "The first Studio host build overlapped the browser rebuild and refused its temporarily absent SDK asset. After pnpm completed the scoped host build passed0 warnings/0 errors; both raw logs are retained.",
+    "Initial verifier run did not supply four explicitly-required capture fixtures; all54 subsequently executed and passed. Initial Studio corrupt-store tests hit the added backup-hash guard earlier than intended; their observer hashes are now rehashed so the existing pin/material controls execute. No actual journey was rerun or relabelled."
+  ],
+  "originalWholeStoreInputs": {
+    "broadcast/after-cohort.sqlite.gz": "bb8882b6dbf8fdf13931a6f1242cad2fb8f70ea227a50dad1e8c021b06cdcbd2",
+    "broadcast/before-selection.sqlite.gz": "8ccf63b60cebef0ebfbd14bc97c4630a787f26c56b326af68849ab177ff2aad7",
+    "broadcast/empty-cohort.sqlite.gz": "8e18ffcc17a299b2849c7ed7e9b474eabc65fe6c0e97e411f425a888d9fc71fb",
+    "broadcast/after-resume.sqlite.gz": "02cf373992c357974de342bc7968b845c8ffb242c5901fb00ac9e86f348608ae",
+    "called-ack/notice-held.sqlite.gz": "e029f28f0a6ea83a2ac3f670483e93f14ad7b3bf0c7e86c709b7f76f1e74139b",
+    "called-ack/terminal-held.sqlite.gz": "66c51e4c5ae8be61891d7863f63da323f572813cba1c503ffb8242eaec43f08b",
+    "legacy-controls/runtime.sqlite.gz": "4ed41b1ccdc6192b1327cc5f71bcb84a703c72c18575bcffe3374d45ace01a8a",
+    "legacy-controls/design.sqlite.gz": "76610a34315adb8ed910475353cf7878424e265552d5808705d3e63e9b317ee6",
+    "multi-instance-and-studio/runtime.sqlite.gz": "3fcd6e38a968d05026a2c57a188f5d5c9d6fdbc313afd9ce19c82ad3e2b21416",
+    "multi-instance-and-studio/design.sqlite.gz": "0690408195251a99edf26be0c048d91821fbe974972dd2228f070dd5b2d01043",
+    "native-parents/runtime.sqlite.gz": "ebd8e9f73682d3b7dad027aac97c9ccbb7f45d4b5e06a2a2b4b2e3239ec30ffe",
+    "native-parents/design.sqlite.gz": "76db0531fa7f79fa9a729f0d2835f82837bcb3dead651b64bc05d05003da9d4a",
+    "native-parent-pending/sequence-durable.sqlite.gz": "6eb303ee628bf754e1afd5c21fb4686449e54c12855e64cb2e16e340cfa75d04",
+    "native-parent-pending/flowchart-durable.sqlite.gz": "b81875daa3b96370d8e9df874dcf0305d417990cbdca3d845bf94094823386d4",
+    "native-parent-pending/compensationscope-durable.sqlite.gz": "ef5f310dfde74a850ff834bdc82cdbfdbebf4050d7ddba6929b1c016dca21882",
+    "native-parent-pending/sequence-balanced.sqlite.gz": "a8116ebb8cd61e8d3fc221288d6c050a514b2b1218d2181340cadaef0fb5e2c5",
+    "native-parent-pending/flowchart-balanced.sqlite.gz": "ca4145c62ee5a371d033f9bba6b0b2435fa62ebebbd9c7b864817806f34edd86",
+    "native-parent-pending/compensationscope-balanced.sqlite.gz": "184819bdf2652180af09e9d79de6935f5a51a133597f8b32f9be83317fb52375",
+    "partial-forks/runtime.sqlite": "494db0de530ad83335c7ba5c9bb65b2fd2bff9f2ae3cd2cdef6dac8baa6fa5cb",
+    "partial-forks/design.sqlite": "73984412998c1f418f52b422e279402e2e9b01cd240c50d67dcb8efd5c306d6e",
+    "studio/runtime.sqlite.gz": "f5cc2045989ed1a7f9382586c1c661690d372e8520b69dd7c84c9a3be5de6ac2",
+    "studio/design.sqlite.gz": "ef63e7c4a921fa636c1dbb9f68264c4bc77c2b29a8fefc289c7de8e29548b113"
+  },
+  "verifierSources": {
+    "tools/bpmn/verify_studio_upgrade.py": "901bb84aa7973ea12b111ec225793234487f03f7fea0e940132b7d0df9fc8e8d",
+    "tools/bpmn/qualify-hosting.py": "96b0c5ff25cf2ee37d7931a5e7300dce6eb7c9a8c5e51159d71204e020533849",
+    "e2e-tests/bpmn/test_verify_studio_upgrade.py": "b2b933c857e208881c7064ae83370f1aad003905eed030b3170d486993731214",
+    "e2e-tests/bpmn/test_qualify_hosting.py": "e82e36baf1f0d7ea3b1380216c2e2067445cfb37d71904d57fc173d35d6da6aa"
+  }
+}

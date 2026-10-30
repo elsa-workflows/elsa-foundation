@@ -1,0 +1,59 @@
+test_actual_saved_callback_must_have_completed_text_status (test_qualify_hosting.ActualBroadcastUpgradeControls) ... ok
+test_already_accepted_callback_cannot_repeat_after_rehashing (test_qualify_hosting.ActualBroadcastUpgradeControls) ... ok
+test_delayed_first_delivery_cannot_omit_a_later_listener (test_qualify_hosting.ActualBroadcastUpgradeControls) ... ok
+test_empty_decision_cannot_be_dropped_after_rehashing (test_qualify_hosting.ActualBroadcastUpgradeControls) ... ok
+test_finished_physical_workflow_cannot_remain_running (test_qualify_hosting.ActualBroadcastUpgradeControls) ... ok
+test_rearmed_physical_wait_generation_must_survive (test_qualify_hosting.ActualBroadcastUpgradeControls) ... ok
+test_retry_cannot_expand_an_installed_cohort (test_qualify_hosting.ActualBroadcastUpgradeControls) ... ok
+test_source_must_be_physically_delivered_after_rehashing (test_qualify_hosting.ActualBroadcastUpgradeControls) ... ok
+test_acknowledged_source_must_be_physically_delivered_after_rehashing (test_qualify_hosting.ActualCalledAcknowledgmentUpgradeControls) ... ok
+test_changed_original_transport_is_refused_after_rehashing (test_qualify_hosting.ActualCalledAcknowledgmentUpgradeControls) ... ok
+test_dispatch_ack_cannot_replace_committed_caller_consumption (test_qualify_hosting.ActualCalledAcknowledgmentUpgradeControls) ... ok
+test_foreign_full_parent_pin_is_refused_after_rehashing (test_qualify_hosting.ActualCalledAcknowledgmentUpgradeControls) ... ok
+test_repeated_normal_successor_is_refused_after_rehashing (test_qualify_hosting.ActualCalledAcknowledgmentUpgradeControls) ... ok
+test_sender_success_without_checked_acceptance_is_refused (test_qualify_hosting.ActualCalledAcknowledgmentUpgradeControls) ... ok
+test_changed_actual_database_is_refused (test_qualify_hosting.ActualCaptureControls) ... skipped 'Actual captured bundle must be supplied explicitly'
+test_frozen_receipt_from_another_snapshot_is_refused_after_rehashing (test_qualify_hosting.ActualCaptureControls) ... skipped 'Actual captured bundle must be supplied explicitly'
+test_unbound_actual_database_cannot_be_omitted_from_the_manifest (test_qualify_hosting.ActualCaptureControls) ... skipped 'Actual captured bundle must be supplied explicitly'
+test_wrong_case_execution_is_refused_even_after_rehashing_the_receipt (test_qualify_hosting.ActualCaptureControls) ... skipped 'Actual captured bundle must be supplied explicitly'
+test_authored_failure_cannot_be_relabelled_success (test_qualify_hosting.ActualControlsUpgradeControls) ... ok
+test_compensation_cannot_reverse_its_original_replay_order (test_qualify_hosting.ActualControlsUpgradeControls) ... ok
+test_compressed_receipt_must_keep_its_declared_decoded_bytes (test_qualify_hosting.ActualControlsUpgradeControls) ... ok
+test_delivered_sender_does_not_replace_physical_inbox_acceptance (test_qualify_hosting.ActualControlsUpgradeControls) ... ok
+test_held_sibling_keeps_its_exact_physical_wait_generation (test_qualify_hosting.ActualControlsUpgradeControls) ... ok
+test_original_control_intent_cannot_change_after_rehashing (test_qualify_hosting.ActualControlsUpgradeControls) ... ok
+test_physical_compensation_state_must_match_its_checked_run (test_qualify_hosting.ActualControlsUpgradeControls) ... ok
+test_second_semantic_token_cannot_consume_its_sibling (test_qualify_hosting.ActualControlsUpgradeControls) ... ok
+test_sender_success_cannot_replace_checked_control_consumption (test_qualify_hosting.ActualControlsUpgradeControls) ... ok
+test_continuation_event_cannot_target_the_already_completed_child (test_qualify_hosting.ActualMultiInstanceUpgradeControls) ... ok
+test_delivered_mi_result_needs_physical_committed_inbox_acceptance (test_qualify_hosting.ActualMultiInstanceUpgradeControls) ... ok
+test_live_native_iteration_cannot_borrow_another_token (test_qualify_hosting.ActualMultiInstanceUpgradeControls) ... ok
+test_loop_counter_cannot_advance_without_its_exact_completed_children (test_qualify_hosting.ActualMultiInstanceUpgradeControls) ... ok
+test_new_iteration_must_keep_the_original_child_pin (test_qualify_hosting.ActualMultiInstanceUpgradeControls) ... ok
+test_original_completed_iteration_cannot_acquire_another_attempt (test_qualify_hosting.ActualMultiInstanceUpgradeControls) ... ok
+test_physical_loop_cannot_differ_from_the_checked_counters (test_qualify_hosting.ActualMultiInstanceUpgradeControls) ... ok
+test_remaining_iteration_keeps_its_exact_physical_wait (test_qualify_hosting.ActualMultiInstanceUpgradeControls) ... ok
+test_changed_committed_callback_intent_is_refused_after_rehashing (test_qualify_hosting.ActualNativeParentUpgradeControls) ... ok
+test_compensated_parent_cannot_be_relabelled_done_after_rehashing (test_qualify_hosting.ActualNativeParentUpgradeControls) ... ok
+test_foreign_complete_pin_is_refused_even_when_all_callback_copies_match (test_qualify_hosting.ActualNativeParentUpgradeControls) ... ok
+test_retained_terminal_cannot_be_revived_after_rehashing (test_qualify_hosting.ActualNativeParentUpgradeControls) ... ok
+test_saved_callback_must_be_physically_delivered_even_after_rehashing (test_qualify_hosting.ActualNativeParentUpgradeControls) ... ok
+test_sequence_terminal_disposition_cannot_be_called_parent_consumption (test_qualify_hosting.ActualNativeParentUpgradeControls) ... ok
+test_changed_original_executable_refuses_success_evidence_after_rehashing (test_qualify_hosting.ActualUpgradeControls) ... ok
+test_frozen_receipt_from_another_upgraded_store_is_refused_after_rehashing (test_qualify_hosting.ActualUpgradeControls) ... ok
+test_physical_nonterminal_state_refuses_completed_api_evidence_after_rehashing (test_qualify_hosting.ActualUpgradeControls) ... ok
+test_replaced_wait_identity_is_refused_after_rehashing (test_qualify_hosting.ActualUpgradeControls) ... ok
+test_unrelated_baseline_is_refused_after_rehashing (test_qualify_hosting.ActualUpgradeControls) ... ok
+test_api_view_cannot_substitute_another_execution_pin_or_mode (test_qualify_hosting.HostingCaptureTests) ... ok
+test_bundle_path_cannot_escape_via_parent_or_symlink (test_qualify_hosting.HostingCaptureTests) ... ok
+test_capture_resumes_its_exact_stopped_host_when_snapshot_fails (test_qualify_hosting.HostingCaptureTests) ... ok
+test_capture_url_refuses_remote_or_credential_bearing_target (test_qualify_hosting.HostingCaptureTests) ... ok
+test_missing_hashed_snapshot_cannot_be_reported_as_verified (test_qualify_hosting.HostingCaptureTests) ... ok
+test_owner_paths_allow_canonical_aliases_but_refuse_a_different_root (test_qualify_hosting.HostingCaptureTests) ... ok
+test_refused_owner_is_never_stopped (test_qualify_hosting.HostingCaptureTests) ... ok
+test_snapshot_includes_committed_wal_and_excludes_uncommitted_work (test_qualify_hosting.HostingCaptureTests) ... ok
+
+----------------------------------------------------------------------
+Ran 54 tests in 17.338s
+
+OK (skipped=4)

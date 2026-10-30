@@ -1,0 +1,68 @@
+[
+  {
+    "family": "original",
+    "role": "workbench",
+    "processId": 38114,
+    "controllerProcessId": 38109,
+    "started": "Fri Oct 30 05:39:45 2026",
+    "executable": "dotnet",
+    "assemblyName": "Elsa.Workbench.dll",
+    "assemblySha256": "24bae2398ce941d8ca353a682cb14c6ddfda57b3363d2d572802af685dae905a",
+    "visibleAfterControllerExit": false
+  },
+  {
+    "family": "original",
+    "role": "studio",
+    "processId": 38117,
+    "controllerProcessId": 38109,
+    "started": "Fri Oct 30 05:39:49 2026",
+    "executable": "dotnet",
+    "assemblyName": "Elsa.Studio.Web.dll",
+    "assemblySha256": "048a9c4c19c69616d12e5fc48a9a5cde709d2d946e33ba88be64f4846658c5b7",
+    "visibleAfterControllerExit": false
+  },
+  {
+    "family": "original",
+    "role": "workbench",
+    "processId": 38798,
+    "controllerProcessId": 38109,
+    "started": "Fri Oct 30 05:42:37 2026",
+    "executable": "dotnet",
+    "assemblyName": "Elsa.Workbench.dll",
+    "assemblySha256": "24bae2398ce941d8ca353a682cb14c6ddfda57b3363d2d572802af685dae905a",
+    "visibleAfterControllerExit": false
+  },
+  {
+    "family": "layout",
+    "role": "workbench",
+    "processId": 38897,
+    "controllerProcessId": 38882,
+    "started": "Fri Oct 30 05:43:10 2026",
+    "executable": "dotnet",
+    "assemblyName": "Elsa.Workbench.dll",
+    "assemblySha256": "24bae2398ce941d8ca353a682cb14c6ddfda57b3363d2d572802af685dae905a",
+    "visibleAfterControllerExit": false
+  },
+  {
+    "family": "layout",
+    "role": "studio",
+    "processId": 38909,
+    "controllerProcessId": 38882,
+    "started": "Fri Oct 30 05:43:13 2026",
+    "executable": "dotnet",
+    "assemblyName": "Elsa.Studio.Web.dll",
+    "assemblySha256": "048a9c4c19c69616d12e5fc48a9a5cde709d2d946e33ba88be64f4846658c5b7",
+    "visibleAfterControllerExit": false
+  },
+  {
+    "family": "layout",
+    "role": "workbench",
+    "processId": 39484,
+    "controllerProcessId": 38882,
+    "started": "Fri Oct 30 05:45:44 2026",
+    "executable": "dotnet",
+    "assemblyName": "Elsa.Workbench.dll",
+    "assemblySha256": "24bae2398ce941d8ca353a682cb14c6ddfda57b3363d2d572802af685dae905a",
+    "visibleAfterControllerExit": false
+  }
+]

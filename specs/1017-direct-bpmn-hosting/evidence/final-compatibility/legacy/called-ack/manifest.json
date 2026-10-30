@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-legacy-called-ack-upgrade",
+  "sourceRevision": "de0e800384b91268827af674e195b1097455dd45",
+  "baselineManifestSha256": "c2e5d9c8c2a001ff5141c2ca8eaaed097ec7c81d78d0180b6c7a4ecf5bed4153",
+  "baselineAssets": {
+    "called-ack/notice-held-api.json": "f8fba8f60e05636de6150a06182837b1ffc5d237979751fc68835e182629ff47",
+    "called-ack/notice-marker.json": "840c69a2ec3c8e61bfd33ac8eaaaed140b411ddf16493868fdd61fd76b2dc81b",
+    "called-ack/terminal-held-api.json": "15136a8433096364b5a9f6dbdd9fb6a6bbb823f582ad84531170b1a776828846",
+    "called-ack/terminal-marker.json": "388900086332b769a1a4e43f297476f58c1e5d2f57624240131d52b0a0814fc4",
+    "called-ack/notice-held.sqlite.gz": "e029f28f0a6ea83a2ac3f670483e93f14ad7b3bf0c7e86c709b7f76f1e74139b",
+    "called-ack/terminal-held.sqlite.gz": "66c51e4c5ae8be61891d7863f63da323f572813cba1c503ffb8242eaec43f08b"
+  },
+  "assets": [
+    {
+      "path": "legacy-called-ack/process.json",
+      "sha256": "c312376a6772d716d7b0b6474e1736dca5b8f5c433b2ccfc1a416ea35599ba01"
+    },
+    {
+      "path": "frozen-contract.json",
+      "sha256": "0f5e3267a49bd7f7a7f37be9f39c9960cc26b57819e04a9c13c7e0a973b188f3"
+    },
+    {
+      "path": "legacy-called-ack/notice-recovered.sqlite.gz",
+      "sha256": "a599204d644be5e8947b80722517a7c0b1dfac4d7b3c1ac2ef6a486262a87d5f"
+    },
+    {
+      "path": "legacy-called-ack/notice-finished.sqlite.gz",
+      "sha256": "7d34854e4dde09f08549ddffba2b306f2db565ac955e227c501a7a3884e91876"
+    },
+    {
+      "path": "legacy-called-ack/terminal-recovered.sqlite.gz",
+      "sha256": "edc45d1e60a1a8d773a75383992e1ffec2fc101f5141726046724397a3097170"
+    },
+    {
+      "path": "legacy-called-ack/terminal-finished.sqlite.gz",
+      "sha256": "3cb705bf129bd27bd9695f2a6400bc108aafd016e55d72e72410d5611d8256a8"
+    }
+  ]
+}

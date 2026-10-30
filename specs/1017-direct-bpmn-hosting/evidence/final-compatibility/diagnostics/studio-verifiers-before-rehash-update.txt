@@ -1,0 +1,52 @@
+test_an_existing_but_undeclared_screenshot_is_rejected (test_verify_studio_upgrade.ActualStudioUpgradeControls) ... ok
+test_both_actual_studio_journeys_and_all_twelve_stores_verify (test_verify_studio_upgrade.ActualStudioUpgradeControls) ... ok
+test_compressed_process_receipt_requires_its_original_decoded_hash (test_verify_studio_upgrade.ActualStudioUpgradeControls) ... ok
+test_rehashed_model_reclassification_of_native_material_is_rejected (test_verify_studio_upgrade.ActualStudioUpgradeControls) ... ok
+test_rehashed_native_binding_change_is_rejected (test_verify_studio_upgrade.ActualStudioUpgradeControls) ... ok
+test_rehashed_original_run_projection_change_is_rejected (test_verify_studio_upgrade.ActualStudioUpgradeControls) ... ok
+test_rehashed_physical_full_pin_change_is_rejected (test_verify_studio_upgrade.ActualStudioUpgradeControls) ... ok
+test_rehashed_saved_layout_change_is_rejected (test_verify_studio_upgrade.ActualStudioUpgradeControls) ... ok
+test_rehashed_test_run_cannot_be_called_a_published_run (test_verify_studio_upgrade.ActualStudioUpgradeControls) ... ok
+test_rehashed_xml_semantic_change_is_rejected (test_verify_studio_upgrade.ActualStudioUpgradeControls) ... ok
+test_an_existing_but_undeclared_screenshot_is_rejected (test_verify_studio_upgrade.FinalActualStudioUpgradeControls) ... ok
+test_both_actual_studio_journeys_and_all_twelve_stores_verify (test_verify_studio_upgrade.FinalActualStudioUpgradeControls) ... ok
+test_compressed_process_receipt_requires_its_original_decoded_hash (test_verify_studio_upgrade.FinalActualStudioUpgradeControls) ... ok
+test_rehashed_model_reclassification_of_native_material_is_rejected (test_verify_studio_upgrade.FinalActualStudioUpgradeControls) ... FAIL
+test_rehashed_native_binding_change_is_rejected (test_verify_studio_upgrade.FinalActualStudioUpgradeControls) ... ok
+test_rehashed_original_run_projection_change_is_rejected (test_verify_studio_upgrade.FinalActualStudioUpgradeControls) ... ok
+test_rehashed_physical_full_pin_change_is_rejected (test_verify_studio_upgrade.FinalActualStudioUpgradeControls) ... FAIL
+test_rehashed_provider_snapshot_with_another_hash_is_rejected (test_verify_studio_upgrade.FinalActualStudioUpgradeControls) ... ok
+test_rehashed_provider_snapshot_without_coupled_cut_is_rejected (test_verify_studio_upgrade.FinalActualStudioUpgradeControls) ... ok
+test_rehashed_provider_snapshot_without_readonly_receipt_is_rejected (test_verify_studio_upgrade.FinalActualStudioUpgradeControls) ... ok
+test_rehashed_saved_layout_change_is_rejected (test_verify_studio_upgrade.FinalActualStudioUpgradeControls) ... ok
+test_rehashed_test_run_cannot_be_called_a_published_run (test_verify_studio_upgrade.FinalActualStudioUpgradeControls) ... ok
+test_rehashed_xml_semantic_change_is_rejected (test_verify_studio_upgrade.FinalActualStudioUpgradeControls) ... ok
+
+======================================================================
+FAIL: test_rehashed_model_reclassification_of_native_material_is_rejected (test_verify_studio_upgrade.FinalActualStudioUpgradeControls)
+----------------------------------------------------------------------
+ValueError: The Studio snapshot lacks its quiesced read-only provider receipt.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/sipke/.codex/worktrees/f236/elsa-foundation/e2e-tests/bpmn/test_verify_studio_upgrade.py", line 104, in test_rehashed_model_reclassification_of_native_material_is_rejected
+    with self.assertRaisesRegex(ValueError, "original material"): self.verify()
+AssertionError: "original material" does not match "The Studio snapshot lacks its quiesced read-only provider receipt."
+
+======================================================================
+FAIL: test_rehashed_physical_full_pin_change_is_rejected (test_verify_studio_upgrade.FinalActualStudioUpgradeControls)
+----------------------------------------------------------------------
+ValueError: The Studio snapshot lacks its quiesced read-only provider receipt.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/sipke/.codex/worktrees/f236/elsa-foundation/e2e-tests/bpmn/test_verify_studio_upgrade.py", line 91, in test_rehashed_physical_full_pin_change_is_rejected
+    with self.assertRaisesRegex(ValueError, "physical Studio run lost"): self.verify()
+AssertionError: "physical Studio run lost" does not match "The Studio snapshot lacks its quiesced read-only provider receipt."
+
+----------------------------------------------------------------------
+Ran 23 tests in 5.789s
+
+FAILED (failures=2)
