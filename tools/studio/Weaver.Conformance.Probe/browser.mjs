@@ -122,6 +122,9 @@ async function workingDraft(name) {
     (async () => {
       // The nonmodal dock overlaps the pointer target; native keyboard activation preserves its proposal UI.
       await nativeEnter(name + "-menu", page.getByRole("button", { name: "More workflow actions", exact: true }), "More workflow actions");
+      const menu = page.getByRole("menu", { name: "More workflow actions", exact: true });
+      await expect(menu.getByRole("menuitemcheckbox", { name: /^Autosave\b/ })).toBeFocused();
+      result.evidence.push(retain(name + "-menu-focus", { control: "Autosave", initialFocusObserved: true }));
       await nativeEnter(name + "-export", page.getByRole("menuitem", { name: "Export JSON", exact: true }), "Export JSON");
     })()
   ]);
