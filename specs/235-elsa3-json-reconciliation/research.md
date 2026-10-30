@@ -168,6 +168,44 @@ review found two blockers in the first version of this file; R-3 and R-5 carry t
   for changed items and fails the start (R-5). JTest hosts run on fresh stores. A located collision diagnostic, or
   `N.R.0`, is what makes this skippable later.
 
+## R-10 Alignment with epic #3052 (checked 2026-10-30)
+
+Spec 235 checked against every decision (D-1 to D-13), analysis (A-1 to A-5), ADR draft (#3384, #3388, #3389, #3390,
+#3286, #3420, #3425, #3422, #3408, #3411, #3412) and planned spec (S-0 to S-11) on the board, and against the
+initiative process draft (#3413).
+
+**No conflict.** The goal statement names this spec as the second entry point of `IElsa3DefinitionConverter`.
+Running the import engine keeps one converter, so every converter decision applies to the folder path
+automatically: D-1/D-5 (time and GUID functions), D-4 (explicit outcomes), D-7 (`variables.X`), D-10/D-11 (null,
+undefined policy), D-12, D-13 (faithful or refuse), A-1 (`Object` retired, the date rule and its source time zone).
+Options those decisions put on the converter feature (D-11's undefined policy, the source time zone) are read from
+`Elsa3Mapping` by both paths; this feature adds none. ADR 0090/#3425 and S-7 lift #3023 for both paths at once.
+ADR 0092, ADR 0093, ADR 0048 (D-8, D-9) and the D-2 details are runtime semantics; this feature does not touch them.
+
+**Crooked once the board's specs land:**
+
+1. **Every converter change breaks a persistent host's restart.** S-0, S-2, S-3, S-4, S-7 and S-8 each change what
+   the converter emits for the same Elsa 3 input. With versions fixed at `{n}.0.0` (R-8), the next start re-converts,
+   gets different content under the same identity, and the import's collision check (`SameBinding`,
+   `JsonNode.DeepEquals` over the binding material, `EfReusableActivityImportCommand.cs:199-208`, `:525-542`) fails the
+   start (R-5). Deferring the converter revision was safe for one spec; with six converter-changing specs queued it is
+   not. The HTTP import has the same problem for re-imports.
+2. **S-9 (ADR 0091) can do the same without any converter change.** Keeping explicit nulls (P-8), raw `JsonElement`
+   passthrough and one encoder change serialized state text, and the import compares serialized material. S-9 intake
+   item 7 lists the Git canonical hash and the design-store fingerprints, but not the Elsa 3 import's binding material.
+3. **Approval route.** Under #3413, a spec in an initiative is approved when every approver in its approval plan
+   approves its PR, and production implementation needs the approved spec. Code Review alone does not approve it. The
+   spec also needs a row on the #3052 board. It depends on no pending ADR, so it can be approved now rather than
+   staying provisional.
+
+**Not on the board, so for architect review rather than an ADR:** the startup publishing grant (R-3) changes who the
+activity publisher accepts outside a request. No ADR covers publishing authorization today; the PR flags it.
+
+**Options for item 1** (decision for the approvers): (a) un-defer the converter revision, `{n}.{R}.0` on both paths
+with the golden test, and every converter-changing spec bumps R (pre-GA, ADR 0080 D4); (b) keep `{n}.0.0` and state
+that a persistent store is rebuilt after a converter upgrade until (a) lands, with S-0 to S-9 carrying that note.
+For item 2, add the import's binding material to S-9 intake item 7 either way.
+
 ## R-9 Names and §E2.7
 
 - **Names**: the feature id stays `Elsa3JsonReconciliation` (the spec's and issue's name, and what operators look for
