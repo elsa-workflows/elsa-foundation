@@ -185,7 +185,26 @@ public sealed class RunBpmnParallelWorkbenchTests
         async Task<JsonNode> Checked()
         {
             var value = await host.ReadEmbeddingAsync(modelId!, nativeId, directId);
-            Assert.True(JsonNode.DeepEquals(Normalize(value["model"]!), Normalize(value["directCounterpart"]!)), "The same accepted partial-fork inputs produced different released-interpreter states.");
+            var same = JsonNode.DeepEquals(Normalize(value["model"]!), Normalize(value["directCounterpart"]!));
+            if (!same && directory is not null)
+            {
+                var diagnostic = System.IO.Path.Combine("diagnostics", caseName);
+                var output = System.IO.Path.Combine(directory, diagnostic);
+                Directory.CreateDirectory(output);
+                await File.WriteAllTextAsync(System.IO.Path.Combine(output, "observed-checked.json"), value.ToJsonString(new() { WriteIndented = true }));
+                await host.StopAsync();
+                var closed = await host.ReadEmbeddingAsync(modelId!, nativeId, directId);
+                await File.WriteAllTextAsync(System.IO.Path.Combine(output, "closed-checked.json"), closed.ToJsonString(new() { WriteIndented = true }));
+                var stores = new[] { await host.SnapshotAsync("refused-runtime.sqlite.gz", diagnostic),
+                    await host.SnapshotAsync("refused-design.sqlite.gz", diagnostic, design: true) };
+                var receipt = new { sourceRevision = Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_SOURCE_REVISION"), parent,
+                    nativeExecutionId = nativeId, modelExecutionId = modelId, directCounterpartId = directId,
+                    published, publication, initial, commands, views, ownedProcesses, exitCode = host.LastStoppedExitCode, stores,
+                    binaries = host.DescribeBinaries(Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_SOURCE_REVISION"), includePublishing: true),
+                    executionStateEdited = false, claimEdited = false, clockEdited = false, qualifyingJourney = false };
+                await File.WriteAllTextAsync(System.IO.Path.Combine(output, "refused-case.json"), JsonSerializer.Serialize(receipt, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true }));
+            }
+            Assert.True(same, "The same accepted partial-fork inputs produced different released-interpreter states.");
             return value;
         }
         static JsonNode Normalize(JsonNode model)
