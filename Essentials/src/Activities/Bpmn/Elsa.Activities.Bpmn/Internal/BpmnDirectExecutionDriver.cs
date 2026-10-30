@@ -140,19 +140,7 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             else
             {
                 cancelled = true;
-                var cancellations = document.Work.Where(item => item.NativeWork is not null &&
-                    document.NativeResults?.Any(result => result.Origin.IsEquivalentTo(item.NativeWork)) != true).Select(item =>
-                {
-                    var origin = item.NativeWork!;
-                    var decision = "model-input:" + BpmnModelIdentity.Create(context.Scope.Value, executionId, command.InputId);
-                    return new BpmnNativeWorkCancellation(origin, RuntimePostCommitOutboxItems.OutboxItemId(decision,
-                        BpmnNativeWorkBoundary.CancellationIntentId(origin)));
-                }).ToArray();
-                document = document with { Work = [], FormatVersion = cancellations.Length > 0
-                        ? timedFrame ? document.FormatVersion : policyFrame ? document.NativeParent is null ? 9 : 10 : document.NativeParent is null ? 4 : 6 : document.FormatVersion,
-                    Cancellations = cancellations.Length > 0 ? cancellations : document.Cancellations,
-                    Failures = document.Failures?.Select(failure => failure.Status == "Open"
-                        ? failure with { Status = "Retired", ResolutionInputId = command.InputId } : failure).ToArray() };
+                document = CancelRemainingWork(document, commitId, command.InputId, timedFrame, policyFrame);
             }
         }
         else if (command.InputKind == "retry-service")
@@ -232,7 +220,7 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                         // Like native composite cancellation, the terminal execution header closes progression;
                         // keep the interpreter's last snapshot as history rather than inventing token operations.
                         cancelled = true;
-                        document = document with { Work = [] };
+                        document = CancelRemainingWork(document, commitId, command.InputId, timedFrame, policyFrame);
                     }
                     else if (nativeResult.Status == WorkflowExecutionStatus.Faulted || nativeResult.Completion?.OutcomeKey == "BusinessError")
                     {
@@ -336,6 +324,22 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         { ModelState = new(current?.Revision, state, receipt), ExpectedModelParentWait = current is null && !cancelled ? embedded?.Wait : null };
         var accepted = await committer.CommitAsync(commit, cancellationToken);
         if (!accepted.Succeeded) throw new BpmnModelValidationException($"BPMN execution '{executionId}' did not commit input '{command.InputId}': {accepted.FailureCode}.");
+    }
+
+    private static Document CancelRemainingWork(Document document, string commitId, string inputId, bool timedFrame, bool policyFrame)
+    {
+        var cancellations = document.Work.Where(item => item.NativeWork is not null &&
+            document.NativeResults?.Any(result => result.Origin.IsEquivalentTo(item.NativeWork)) != true).Select(item =>
+        {
+            var origin = item.NativeWork!;
+            return new BpmnNativeWorkCancellation(origin, RuntimePostCommitOutboxItems.OutboxItemId(commitId,
+                BpmnNativeWorkBoundary.CancellationIntentId(origin)));
+        }).ToArray();
+        return document with { Work = [], FormatVersion = cancellations.Length > 0
+                ? timedFrame ? document.FormatVersion : policyFrame ? document.NativeParent is null ? 9 : 10 : document.NativeParent is null ? 4 : 6 : document.FormatVersion,
+            Cancellations = cancellations.Length > 0 ? cancellations : document.Cancellations,
+            Failures = document.Failures?.Select(failure => failure.Status == "Open"
+                ? failure with { Status = "Retired", ResolutionInputId = inputId } : failure).ToArray() };
     }
 
     private static BpmnGraph Graph(RuntimeModelMaterial material)
