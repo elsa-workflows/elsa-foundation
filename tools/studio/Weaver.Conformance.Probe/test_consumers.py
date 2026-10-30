@@ -3,6 +3,7 @@ import copy
 import hashlib
 import json
 from pathlib import Path
+import secrets
 from types import SimpleNamespace
 import tempfile
 import unittest
@@ -66,7 +67,7 @@ class RuntimeClosureTests(unittest.TestCase):
                         "traceFiles": {"copilot": backend / "copilot.jsonl", "anthropic": backend / "anthropic.jsonl"}},
             "studio": {"published": studio}})
         options = dict(backend_url="http://127.0.0.1:18001", studio_url="http://127.0.0.1:18002",
-                       admin_username="private-fixture", admin_password="unit-fixture-only", enroll=True)
+                       admin_username="private-fixture", admin_password=secrets.token_urlsafe(24) + "!aA1", enroll=True)
         configure_runtime(run, **options)
         def signing_key():
             return json.loads((backend / "shells.json").read_text())["CShells"]["Shells"]["Authoring"]["Features"]["WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence"]["RecoveryContinuationSigningKey"]

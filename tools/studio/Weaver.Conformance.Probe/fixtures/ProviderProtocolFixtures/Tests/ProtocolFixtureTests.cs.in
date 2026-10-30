@@ -110,11 +110,14 @@ public sealed class ProtocolFixtureTests : IDisposable
         WriteCommand("c5", "arbitrary_function", "{}");
         using var services = AnthropicServices();
         using var client = services.GetRequiredService<IAnthropicChatClientFactory>().Create("unused", "fixture");
-        await Collect(client.GetStreamingResponseAsync([new(ChatRole.User, "{\"password\":\"do-not-retain\",\"unrelatedCanary\":\"visible-for-audit\"} Bearer abcdefghijklmnop")],
+        var passwordCanary = Guid.NewGuid().ToString("N");
+        var bearerCanary = Guid.NewGuid().ToString("N");
+        var prompt = JsonSerializer.Serialize(new { password = passwordCanary, unrelatedCanary = "visible-for-audit" }) + " Bearer " + bearerCanary;
+        await Collect(client.GetStreamingResponseAsync([new(ChatRole.User, prompt)],
             new ChatOptions { Tools = [new CapturingFunction()] }));
         var trace = File.ReadAllText(TraceFile);
-        Assert.DoesNotContain("do-not-retain", trace);
-        Assert.DoesNotContain("abcdefghijklmnop", trace);
+        Assert.DoesNotContain(passwordCanary, trace);
+        Assert.DoesNotContain(bearerCanary, trace);
         Assert.Contains("visible-for-audit", trace);
         Assert.Contains("deterministic-provider-protocol", trace);
     }
