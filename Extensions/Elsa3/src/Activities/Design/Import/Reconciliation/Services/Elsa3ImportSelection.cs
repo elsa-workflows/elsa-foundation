@@ -63,13 +63,15 @@ internal sealed class Elsa3ImportSelection
 
     /// <summary>
     /// Removes <paramref name="failing"/> and, transitively, every item of <paramref name="candidates"/> that depends on
-    /// one of them; returns what stays selected and a skip for each removed item.
+    /// one of them; returns what stays selected and a skip for each removed item. A dependent's cause says its reusable
+    /// workflow was <paramref name="missingTargetState"/>.
     /// </summary>
     public (IReadOnlyList<string> Selected, IReadOnlyList<Elsa3SkippedItem> Skipped) Exclude(
         ReusableActivityImportPlan plan,
         IReadOnlyDictionary<string, (string Code, string Cause)> failing,
         IReadOnlyDictionary<string, Elsa3InputItem> inputs,
-        IEnumerable<string> candidates)
+        IEnumerable<string> candidates,
+        string missingTargetState = "not imported")
     {
         var items = plan.Items.ToDictionary(item => item.SourceVersionId, StringComparer.Ordinal);
         var remaining = candidates.Where(items.ContainsKey).ToHashSet(StringComparer.Ordinal);
@@ -92,7 +94,7 @@ internal sealed class Elsa3ImportSelection
                 remaining.Remove(sourceVersionId);
                 blocked.Add(sourceVersionId);
                 skipped.Add(Skip(items[sourceVersionId], inputs, Elsa3ReconciliationDiagnosticCodes.BlockedByDependency,
-                    $"It uses reusable workflow '{dependency.TargetSourceDefinitionId}', which was not imported.", dependency.TargetSourceVersionId));
+                    $"It uses reusable workflow '{dependency.TargetSourceDefinitionId}', which was {missingTargetState}.", dependency.TargetSourceVersionId));
                 changed = true;
             }
         } while (changed);

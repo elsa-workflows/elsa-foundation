@@ -11,10 +11,10 @@ public sealed class Elsa3JsonReconciliationOptions
     public string? FilePath { get; set; }
 
     /// <summary>
-    /// An ordered set of JSON files, read in ascending <see cref="Elsa3JsonReconciliationFileOption.Order"/>. Mutually
+    /// An ordered set of JSON files, read in ascending <see cref="Elsa3JsonFileOption.Order"/>. Mutually
     /// exclusive with <see cref="FilePath"/> and <see cref="FolderPath"/>.
     /// </summary>
-    public IEnumerable<Elsa3JsonReconciliationFileOption> Files { get; set; } = [];
+    public IEnumerable<Elsa3JsonFileOption> Files { get; set; } = [];
 
     /// <summary>
     /// A directory scanned for <c>*.json</c> files, top level only, in ordinal file-name order. A missing folder fails
@@ -34,4 +34,4 @@ public sealed class Elsa3JsonReconciliationOptions
 }
 
 /// <summary>One file of <see cref="Elsa3JsonReconciliationOptions.Files"/>.</summary>
-public sealed record Elsa3JsonReconciliationFileOption(int Order, string FilePath);
+public sealed record Elsa3JsonFileOption(int Order, string FilePath);

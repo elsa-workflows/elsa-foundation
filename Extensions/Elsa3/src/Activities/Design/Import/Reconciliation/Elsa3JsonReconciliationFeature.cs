@@ -39,8 +39,8 @@ public class Elsa3JsonReconciliationFeature : IShellFeature
 
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(Options));
         services.TryAddSingleton(TimeProvider.System);
-        services.AddSingleton<Elsa3JsonFileReader>();
-        services.AddSingleton<Elsa3ImportSelection>();
+        services.AddScoped<Elsa3JsonFileReader>();
+        services.AddScoped<Elsa3ImportSelection>();
         services.AddScoped<ImportedWorkflowPublisher>();
         services.AddScoped<Elsa3StartupPublishingGrant>();
         Elsa3StartupPublishingAuthorization.Decorate(services);

@@ -30,6 +30,12 @@ public sealed class Elsa3JsonReconciliationRefusalTests : IDisposable
         var callerSkip = Assert.Single(host.Warnings.Entries, entry => entry.Contains("skipped broken-caller version 1", StringComparison.Ordinal));
         Assert.Contains("ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY", callerSkip, StringComparison.Ordinal);
         Assert.Contains("broken-caller.json", callerSkip, StringComparison.Ordinal);
+        Assert.Contains("reusable workflow 'broken'", callerSkip, StringComparison.Ordinal);
+
+        // A reusable that converts with a behaviour difference imports, and its warning is logged.
+        Assert.Contains(host.Warnings.Entries, entry => entry.StartsWith("Information", StringComparison.Ordinal) && entry.Contains("ELS3-BEHAVIOUR-", StringComparison.Ordinal));
+        // Reusables: approval and the behaviour-warning one. Workflows: caller, http-hello and both wrappers.
+        Assert.Contains(host.Warnings.Entries, entry => entry.Contains("2 reusable activities and 4 workflows in place; 4 workflows published by this start; 4 skipped", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -40,10 +46,17 @@ public sealed class Elsa3JsonReconciliationRefusalTests : IDisposable
         var database = host.DesignDatabase;
         var rows = await host.CountDesignRowsAsync();
 
-        var failure = await Assert.ThrowsAnyAsync<Exception>(() => host.RestartAsync(_folder.FullName, strict: true));
+        try
+        {
+            var failure = await Assert.ThrowsAnyAsync<Exception>(() => host.RestartAsync(_folder.FullName, strict: true));
 
-        Assert.Contains(Chain(failure), exception => exception is Elsa3ReconciliationFailedException && exception.Message.Contains("FailOnUnconvertible", StringComparison.Ordinal));
-        Assert.Equal(rows, await CountRowsAsync(host, database));
+            Assert.Contains(Chain(failure), exception => exception is Elsa3ReconciliationFailedException && exception.Message.Contains("FailOnUnconvertible", StringComparison.Ordinal));
+            Assert.Equal(rows, await CountRowsAsync(host, database));
+        }
+        finally
+        {
+            host.DeleteStores();
+        }
     }
 
     [Fact]
@@ -54,10 +67,17 @@ public sealed class Elsa3JsonReconciliationRefusalTests : IDisposable
         var rows = await host.CountDesignRowsAsync();
 
         File.WriteAllText(Path.Join(_folder.FullName, "http.json"), HttpHello("Changed without a new version").ToJsonString());
-        var failure = await Assert.ThrowsAnyAsync<Exception>(() => host.RestartAsync(_folder.FullName));
+        try
+        {
+            var failure = await Assert.ThrowsAnyAsync<Exception>(() => host.RestartAsync(_folder.FullName));
 
-        Assert.Contains(Chain(failure), exception => exception is Elsa3ReconciliationFailedException && exception.Message.Contains("names no single workflow", StringComparison.Ordinal));
-        Assert.Equal(rows, await CountRowsAsync(host, host.DesignDatabase));
+            Assert.Contains(Chain(failure), exception => exception is Elsa3ReconciliationFailedException && exception.Message.Contains("names no single workflow", StringComparison.Ordinal));
+            Assert.Equal(rows, await CountRowsAsync(host, host.DesignDatabase));
+        }
+        finally
+        {
+            host.DeleteStores();
+        }
     }
 
     /// <summary>
@@ -71,6 +91,7 @@ public sealed class Elsa3JsonReconciliationRefusalTests : IDisposable
         Copy("reusable-two-outcomes", "approval.json");
         Copy("http-endpoint", "http.json");
         Copy("reusable-sets-variable", "sets-variable.json");
+        Copy("reusable-with-behaviour-warning", "behaviour-warning.json");
 
         var broken = Fixture("reusable-two-outcomes");
         broken["id"] = "broken-v1";

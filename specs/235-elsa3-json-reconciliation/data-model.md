@@ -32,6 +32,7 @@ New codes (only where no existing code applies):
 |---|---|
 | `ELS3-RECONCILE-DUPLICATE-INPUT` | A blank source version id, the same source version id more than once, or the same definition id and version more than once in the input. |
 | `ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY` | A reusable this item uses was skipped or not published. |
+| `ELS3-RECONCILE-PUBLISH-FAILED` | The imported workflow could not be published; it stays imported and the next start tries again. |
 
 Every other skip carries the import's own code (`ELS3-*`, `VF-IMP-*`), including a reusable whose publication the
 publish phase returns as `Refused` with its identity-collision code (research R-5): that reusable is skipped and its
@@ -40,15 +41,15 @@ item: a credential-literal refusal and an identity collision thrown by the commi
 
 ## Startup publishing grant
 
-`Elsa3StartupPublishingGrant` decorates `IActivityPublishingAuthorizationContext` (scoped). A scoped holder in the same
-DI scope carries an optional granted tenant. While it is set (only by the startup task, inside the operation scope the
+`Elsa3StartupPublishingAuthorization` decorates `IActivityPublishingAuthorizationContext` (scoped). The scoped holder
+`Elsa3StartupPublishingGrant` in the same DI scope carries an optional granted tenant. While it is set (only by the startup task, inside the operation scope the
 persistence runner created for it), `TenantId` is that tenant and `CanAccessTenant(t)` is true for `null` and that
 tenant. Otherwise every call goes to the inner context unchanged.
 
 ## Import outcome
 
-`Elsa3ReconciliationOutcome` per persistence scope: imported activity versions, imported workflow versions, published
-workflow versions, skipped items, conversion warnings. Logged as the summary line (FR-014).
+Not a type: per persistence scope the task logs one summary line (FR-014) with the reusable activities in place,
+the workflows in place, the workflows this start published, and the skipped items.
 
 ## Additive members on the import (FR-010)
 

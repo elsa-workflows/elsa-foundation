@@ -30,7 +30,7 @@ public sealed class Elsa3JsonReconciliationFeatureTests
         {
             SourceId = "elsa3",
             FilePath = filePath ? "one.json" : null,
-            Files = files ? [new Elsa3JsonReconciliationFileOption(0, "two.json")] : [],
+            Files = files ? [new Elsa3JsonFileOption(0, "two.json")] : [],
             FolderPath = folderPath ? "elsa3" : null
         };
 

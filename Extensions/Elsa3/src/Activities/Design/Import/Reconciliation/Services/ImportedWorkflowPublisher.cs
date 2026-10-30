@@ -2,7 +2,6 @@ using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Core.Requests;
-using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa3.Activities.Design.Import.Models;
@@ -11,10 +10,15 @@ using Microsoft.Extensions.Logging;
 namespace Elsa3.Activities.Design.Import.Reconciliation.Services;
 
 /// <summary>What happened to one imported workflow definition's newest version.</summary>
-internal enum ImportedWorkflowPublication
+internal enum WorkflowPublicationStatus
 {
+    /// <summary>This start published it.</summary>
     Published,
-    AlreadyPublishedOnce,
+
+    /// <summary>Its target slot published it before (this start, another node, or an earlier start); left alone.</summary>
+    AlreadyPublished,
+
+    /// <summary>Publishing it failed; the failure is logged and the next start tries again.</summary>
     Failed
 }
 
@@ -32,12 +36,12 @@ internal sealed class ImportedWorkflowPublisher(
     TimeProvider timeProvider,
     ILogger<ImportedWorkflowPublisher> logger)
 {
-    public async Task<IReadOnlyDictionary<string, ImportedWorkflowPublication>> PublishAsync(
+    public async Task<IReadOnlyDictionary<string, WorkflowPublicationStatus>> PublishAsync(
         IEnumerable<ReusableActivityImportedWorkflowVersion> versions,
         string tenantId,
         CancellationToken cancellationToken)
     {
-        var results = new Dictionary<string, ImportedWorkflowPublication>(StringComparer.Ordinal);
+        var results = new Dictionary<string, WorkflowPublicationStatus>(StringComparer.Ordinal);
         foreach (var newest in versions
                      .GroupBy(version => version.WorkflowDefinitionId, StringComparer.Ordinal)
                      .Select(group => group.OrderByDescending(version => SemVer(version.Version)).First()))
@@ -45,7 +49,7 @@ internal sealed class ImportedWorkflowPublisher(
         return results;
     }
 
-    private async Task<ImportedWorkflowPublication> PublishOnceAsync(
+    private async Task<WorkflowPublicationStatus> PublishOnceAsync(
         ReusableActivityImportedWorkflowVersion version,
         string tenantId,
         CancellationToken cancellationToken)
@@ -54,25 +58,12 @@ internal sealed class ImportedWorkflowPublisher(
         {
             var slot = await FindTargetSlotAsync(version.WorkflowDefinitionId, version.WorkflowVersionId, cancellationToken);
             if (await WasPublishedAsync(slot, version.WorkflowVersionId, cancellationToken))
-                return ImportedWorkflowPublication.AlreadyPublishedOnce;
+                return WorkflowPublicationStatus.AlreadyPublished;
 
             await requestSender.Send(
                 new PublishWorkflow(version.WorkflowVersionId, ExpectedPublicationId: slot?.ActiveActivationId, TenantId: tenantId),
                 cancellationToken);
-            return ImportedWorkflowPublication.Published;
-        }
-        catch (Exception exception) when (IsConcurrentPublication(exception))
-        {
-            // Another node may have published the same version between the check and the request.
-            var slot = await FindTargetSlotAsync(version.WorkflowDefinitionId, version.WorkflowVersionId, cancellationToken);
-            if (await WasPublishedAsync(slot, version.WorkflowVersionId, cancellationToken))
-            {
-                logger.LogDebug("Imported workflow version {VersionId} was published by another node.", version.WorkflowVersionId);
-                return ImportedWorkflowPublication.AlreadyPublishedOnce;
-            }
-
-            LogFailed(version, exception);
-            return ImportedWorkflowPublication.Failed;
+            return WorkflowPublicationStatus.Published;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -80,8 +71,33 @@ internal sealed class ImportedWorkflowPublisher(
         }
         catch (Exception exception)
         {
-            LogFailed(version, exception);
-            return ImportedWorkflowPublication.Failed;
+            // Another node may have published the same version between the check and the request; its refusal can take
+            // several forms (an expected-publication mismatch, a slot revision conflict, an artifact the slot already
+            // serves), so the journal decides, not the exception type.
+            return await PublishedByAnotherNodeAsync(version, cancellationToken)
+                ? WorkflowPublicationStatus.AlreadyPublished
+                : Failed(version, exception);
+        }
+    }
+
+    private async Task<bool> PublishedByAnotherNodeAsync(ReusableActivityImportedWorkflowVersion version, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var slot = await FindTargetSlotAsync(version.WorkflowDefinitionId, version.WorkflowVersionId, cancellationToken);
+            if (!await WasPublishedAsync(slot, version.WorkflowVersionId, cancellationToken))
+                return false;
+            logger.LogDebug("Imported workflow version {VersionId} was published by another node.", version.WorkflowVersionId);
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogDebug(exception, "Re-reading the publication journal of {VersionId} failed.", version.WorkflowVersionId);
+            return false;
         }
     }
 
@@ -119,13 +135,6 @@ internal sealed class ImportedWorkflowPublisher(
         return await activationAuthority.FindAsync(definitionId, slotName, cancellationToken);
     }
 
-    private static bool IsConcurrentPublication(Exception exception) => exception switch
-    {
-        PublicationPolicyResolutionException { Code: PublicationFailureCodes.ExpectedPublicationMismatch } => true,
-        PublicationActivationException { Code: PublicationFailureCodes.SlotRevisionConflict or PublicationFailureCodes.ArtifactAlreadyServing } => true,
-        _ => false
-    };
-
     private static (int, int, int, string) SemVer(string version)
     {
         var core = version.Split('-', '+')[0].Split('.');
@@ -133,8 +142,11 @@ internal sealed class ImportedWorkflowPublisher(
         return (Part(core, 0), Part(core, 1), Part(core, 2), version);
     }
 
-    private void LogFailed(ReusableActivityImportedWorkflowVersion version, Exception exception) =>
+    private WorkflowPublicationStatus Failed(ReusableActivityImportedWorkflowVersion version, Exception exception)
+    {
         logger.LogWarning(exception,
             "Publishing imported workflow '{DefinitionId}' version {Version} failed: {Message}",
             version.WorkflowDefinitionId, version.Version, exception.Message);
+        return WorkflowPublicationStatus.Failed;
+    }
 }

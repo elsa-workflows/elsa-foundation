@@ -15,9 +15,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Elsa3.Activities.Design.Import\Elsa3.Activities.Design.Import.csproj" />
+    <!-- The feature depends on Elsa3ImportActivitiesPublishing; its package comes with this one. -->
+    <ProjectReference Include="..\Publishing\Elsa3.Activities.Design.Import.Publishing.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\Essentials\src\Workflows\Publishing\Core\Elsa.Workflows.Publishing.Core.csproj" />
-    <!-- PublicationActivationException: a concurrent node's publication is recognised by its code (spec 235 R-6). -->
-    <ProjectReference Include="..\..\..\..\..\..\..\Essentials\src\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
     <!-- The startup grant decorates the activity publisher's authorization context, which Publishing's API owns. -->
     <ProjectReference Include="..\..\..\..\..\..\..\Essentials\src\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\Essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />

@@ -1,7 +1,9 @@
 using System.Net;
 using System.Text;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa3.Activities.Design.Import.Integration.Tests.Support;
+using Elsa3.Activities.Design.Import.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -76,9 +78,33 @@ public sealed class Elsa3JsonReconciliationTests(FolderImportFixture fixture) : 
         Assert.NotNull(publication);
         var record = Assert.Single(records);
         Assert.Equal(publication.Value.Workflow.VersionId, record.WorkflowDefinitionVersionId);
-        Assert.NotEqual(
-            await Host.ReadAsync(services => WorkflowVersionIdAsync(services, "inner", "1.0.0")),
-            record.WorkflowDefinitionVersionId);
+        var v1 = await Host.ReadAsync(services => WorkflowVersionIdAsync(services, "inner", "1.0.0"));
+        var v2 = await Host.ReadAsync(services => WorkflowVersionIdAsync(services, "inner", "2.0.0"));
+        Assert.NotNull(v1);
+        Assert.Equal(v2, record.WorkflowDefinitionVersionId);
+    }
+
+    [Theory]
+    [InlineData("approval-v1")]
+    [InlineData("inner-v1")]
+    [InlineData("inner-v2")]
+    [InlineData("outer-v1")]
+    public async Task Each_reusable_is_a_published_graph_activity_at_its_elsa3_version(string sourceVersionId)
+    {
+        var versionId = ReusableActivityImportIdentity.Create("activity-version", sourceVersionId);
+
+        var version = await Host.ReadAsync(services => services.GetRequiredService<IActivityDefinitionLookup>().FindVersion(versionId));
+
+        Assert.NotNull(version);
+        Assert.Equal($"{sourceVersionId[^1]}.0.0", version.Version);
+    }
+
+    [Fact]
+    public void The_start_logs_one_summary_with_what_it_imported_and_published()
+    {
+        // Reusables: approval, inner v1 and v2, outer. Workflows: caller, http-hello and the wrappers approval, inner (v2), outer.
+        Assert.Contains(Host.Warnings.Entries, entry =>
+            entry.Contains("4 reusable activities and 5 workflows in place; 5 workflows published by this start; 0 skipped", StringComparison.Ordinal));
     }
 
     private static async Task<string?> WorkflowVersionIdAsync(IServiceProvider services, string definitionId, string version)

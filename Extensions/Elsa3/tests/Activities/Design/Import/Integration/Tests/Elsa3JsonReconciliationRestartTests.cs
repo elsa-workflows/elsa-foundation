@@ -34,11 +34,14 @@ public sealed class Elsa3JsonReconciliationRestartTests : IDisposable
         {
             var rows = await host.CountDesignRowsAsync();
             var records = await PublicationRecordsAsync(host, "caller", "approval", "http-hello");
+            Assert.Contains(host.Warnings.Entries, entry => entry.Contains("1 reusable activities and 3 workflows in place; 3 workflows published by this start; 0 skipped", StringComparison.Ordinal));
 
             host = await host.RestartAsync(_folder.FullName);
 
             Assert.Equal(rows, await host.CountDesignRowsAsync());
             Assert.Equal(records, await PublicationRecordsAsync(host, "caller", "approval", "http-hello"));
+            // The publish-once check, not only PublishWorkflow's own short-circuit, kept this start from publishing.
+            Assert.Contains(host.Warnings.Entries, entry => entry.Contains("1 reusable activities and 3 workflows in place; 0 workflows published by this start; 0 skipped", StringComparison.Ordinal));
         }
         finally
         {
@@ -123,11 +126,19 @@ public sealed class Elsa3JsonReconciliationRestartTests : IDisposable
         {
             Assert.Null(await host.ActivePublicationAsync("caller"));
             Assert.Contains(host.Warnings.Entries, entry => entry.Contains("ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY", StringComparison.Ordinal));
+            var firstKeys = host.Refusals.IdempotencyKeys.ToArray();
 
             host = await host.RestartAsync(_folder.FullName);
 
             var caller = await host.ActivePublicationAsync("caller");
             Assert.True(caller is not null, string.Join(" | ", host.Warnings.Entries));
+            // Each start publishes under its own operation key, so a terminal receipt of a refused publication cannot be
+            // replayed on the next start (research R-4).
+            var secondKeys = host.Refusals.IdempotencyKeys.ToArray();
+            Assert.NotEmpty(firstKeys);
+            Assert.NotEmpty(secondKeys);
+            Assert.All(firstKeys.Concat(secondKeys), key => Assert.StartsWith("elsa3-import:elsa3-reconcile:elsa3-test:", key, StringComparison.Ordinal));
+            Assert.Empty(firstKeys.Intersect(secondKeys, StringComparer.Ordinal));
             var run = await host.RunAsync(caller.Value.Workflow);
             Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
         }
@@ -154,7 +165,7 @@ public sealed class Elsa3JsonReconciliationRestartTests : IDisposable
             // Two nodes publish the same version at the same moment.
             var outcomes = await Task.WhenAll(PublishInScopeAsync(host, version), PublishInScopeAsync(host, version));
 
-            Assert.DoesNotContain(ImportedWorkflowPublication.Failed, outcomes);
+            Assert.DoesNotContain(WorkflowPublicationStatus.Failed, outcomes);
             var records = await host.PublicationRecordsAsync("http-hello");
             Assert.Single(records, record => record.WorkflowDefinitionVersionId == version.WorkflowVersionId && record.Status != PublicationStatus.Failed);
             Assert.Equal(before + 1, records.Count(record => record.Status != PublicationStatus.Failed));
@@ -165,7 +176,7 @@ public sealed class Elsa3JsonReconciliationRestartTests : IDisposable
         }
     }
 
-    private static async Task<ImportedWorkflowPublication> PublishInScopeAsync(Elsa3ImportHost host, ReusableActivityImportedWorkflowVersion version)
+    private static async Task<WorkflowPublicationStatus> PublishInScopeAsync(Elsa3ImportHost host, ReusableActivityImportedWorkflowVersion version)
     {
         await using var scope = await host.Shell.ServiceProvider.GetRequiredService<IPersistenceOperationScopeFactory>()
             .CreateAsync(new PersistenceScope(Elsa3ImportHost.TenantId));

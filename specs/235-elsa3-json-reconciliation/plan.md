@@ -73,7 +73,7 @@ converts and finds nothing to write. No target beyond "the JTest corpus (36 work
 | §2.1 `.Core` purity / heavy packages | PASS | No `.Core` project changes. The new project is an implementation project. |
 | §2.2 paths follow the domain tree | PASS | `Extensions/Elsa3/src/Activities/Design/Import/Reconciliation/`, next to `Publishing/` and `Persistence/`. |
 | §2.5, §2.23.1 feature composes, services resolve | ACTION | A registration test for the feature; `FeatureCompositionTests` covers it. |
-| §2.6.2 replacement contracts | ACTION | One decoration of an existing single-implementation contract: `Elsa3StartupPublishingGrant` decorates `IActivityPublishingAuthorizationContext` (R-3). It delegates to the inner context unless the startup task set the scoped grant in its own operation scope. Registration test: the inner context is kept and still answers outside the grant. Reviewers: this touches publishing authorization, so it needs an architect's look. |
+| §2.6.2 replacement contracts | ACTION | One decoration of an existing single-implementation contract: `Elsa3StartupPublishingAuthorization` decorates `IActivityPublishingAuthorizationContext` (R-3), reading the scoped `Elsa3StartupPublishingGrant`. A replacement registered after this feature removes the decorator, and startup reusable publications are then refused and reported as skips (A-9). It delegates to the inner context unless the startup task set the scoped grant in its own operation scope. Registration test: the inner context is kept and still answers outside the grant. Reviewers: this touches publishing authorization, so it needs an architect's look. |
 | §2.17 duplication beats dependency | PASS | The slot check (`HasActivePublicationOf`, `ResolveTargetSlotName`, about thirty lines) is copied from `PublishReconciledWorkflowVersions` (R-6). The options shape mirrors `JsonWorkflowReconciliationOptions` without referencing it. |
 | §2.22 / §2.22.1 docs and extension points | ACTION | README and `EXTENSION_POINTS.md` for the new project (it consumes the import's contracts and adds a startup task); the Elsa 3 Mapping README and `docs/reference/elsa3-migration-readiness.md` gain the folder entry point. |
 | §2.23.3 visibility | PASS | Public: the feature class (not sealed), `Elsa3JsonReconciliationOptions` and its file option (the feature's `Options` property exposes them), `Elsa3ReconciliationFailedException`. Everything else internal. Additive public members on `ReusableActivityImportApplyRequest` and `ReusableActivityImportApplyResult`. |
@@ -102,9 +102,13 @@ converts and finds nothing to write. No target beyond "the JTest corpus (36 work
 | A-1 | US1 already holds part of US3: the input rule (duplicate and blank ids), the analysis rule with dependents, the apply loop and the blocking of callers whose reusable was not published (T020–T022 in part). | One unconvertible workflow must not stop the demo folder from importing; US3 still adds its tests and strict-mode tests. |
 | A-2 | Fixtures are copied from `Fixtures/` into the test's folder at start instead of duplicated under `Fixtures/Reconciliation/`. There is no separate plain fixture: `caller` and `http-hello` are plain workflows. | No duplicate fixture files. |
 | A-3 | `http-endpoint.json` sets the WriteHttpResponse content type. An imported WriteHttpResponse without one faults at run time with `VF-ACT-006: Required result projection 'ContentType' was null`, although the converter README says an unset content type is inferred as Elsa 3 did. | A converter or runtime defect outside this spec; reported separately. |
-| A-4 | The project also references `Elsa.Workflows.Publishing`. | `PublicationActivationException`, which the publisher catches by code for a concurrent publication (R-6), lives there. |
+| A-4 | *(Superseded by A-8.)* The project also references `Elsa.Workflows.Publishing`. | `PublicationActivationException`, which the publisher catches by code for a concurrent publication (R-6), lives there. |
 | A-5 | The US3 refusal fixtures are generated in the test from the existing fixtures (a reusable with `Elsa.StateMachine`, its caller, a document with no root) instead of files under `Fixtures/Reconciliation/Refusals/`; `reusable-sets-variable.json` is used as it is. | The change from the base fixture stays visible next to the assertion. |
 | A-6 | A plan error fails the start only when it names no plan item. The plan's diagnostics repeat every item's errors, and those are skipped per item. | Found by the US3 test: a document with no root is an item error (`ELS3-REUSABLE-INVALID-SOURCE`), not a plan-level one. |
+| A-7 | **Review round 1.** A failed workflow publication is a skip with `ELS3-RECONCILE-PUBLISH-FAILED`, so strict mode fails on it. The summary line reports what is in place and what this start published. An unattributed validation refusal carries every diagnostic's code and guidance. A null entry in an array fails the read, naming the file. | FR-014, FR-015; a refused reusable's dependents are reported as "not published", not "not imported". |
+| A-8 | **No reference to `Elsa.Workflows.Publishing`** (framework §2.1). A concurrent node's publication is recognised by reading the slot journal again after any failed `PublishWorkflow`, not by the exception's type; a failure of that second read is a `Failed` outcome, never an escape. | Replaces A-4. One mechanism covers every refusal shape, and the implementation reference goes. |
+| A-9 | **Kept, for the architects:** the decorator lives in this project, which references `Elsa.Workflows.Publishing.Api` as the sibling `Import.Publishing` adapter does; and the default-slot resolution is copied from `PublishReconciledWorkflowVersions`. Both are listed under "Cross-domain contributions" in the README. Moving the contract to `Publishing.Core`, or adding a shared "default target slot" query there, changes another domain and is a follow-up. | Standards review findings 2–4; decided against a restructure in this unit. |
+| A-10 | Reader and selection are scoped, not singleton (framework §2.5.1). The project references `Elsa3.Activities.Design.Import.Publishing`, the package its `DependsOn` names. Type names: `Elsa3JsonFileOption`, `WorkflowPublicationStatus`. | Standards review findings 5, 7–9. |
 
 ## Project Structure
 
@@ -136,17 +140,21 @@ Extensions/Elsa3/src/Activities/Design/Import/
     ├── Exceptions/Elsa3ReconciliationFailedException.cs  # strict mode; invalid input file
     ├── Services/Elsa3JsonFileReader.cs                   # files → input items
     ├── Services/Elsa3ImportSelection.cs                  # D-5 narrowing, skipped items
-    ├── Services/ImportedWorkflowPublisher.cs             # D-6
+    ├── Services/ImportedWorkflowPublisher.cs             # D-6, A-8
     ├── Services/Elsa3FolderImportTask.cs                 # D-2, D-3, D-5 apply loop, logging
     ├── Services/Elsa3StartupPublishingGrant.cs           # D-3 decorator and scoped grant holder
     ├── Models/Elsa3ReconciliationDiagnosticCodes.cs      # the two new codes
     ├── README.md
     └── EXTENSION_POINTS.md
 Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/
-├── Elsa3JsonReconciliationTests.cs                       # US1–US3 host tests
+├── Elsa3JsonReconciliationTests.cs                       # US1 host tests
+├── Elsa3JsonReconciliationRestartTests.cs                # US2 host tests
+├── Elsa3JsonReconciliationRefusalTests.cs                # US3 host tests
 ├── Elsa3ImportSelectionTests.cs                          # D-5 unit tests
+├── Elsa3JsonFileReaderTests.cs                           # reader unit tests
+├── Elsa3StartupPublishingGrantTests.cs                   # grant and decorator
 ├── Elsa3JsonReconciliationFeatureTests.cs                # registration, options
-└── Fixtures/Reconciliation/*.json                        # plain, reusable, nested reusable, caller, refusals
+└── Fixtures/http-endpoint.json                           # the only new fixture (A-2, A-5)
 Extensions/Elsa3/src/Mapping/README.md                    # folder entry point
 docs/reference/elsa3-migration-readiness.md               # folder entry point
 Elsa.Server.slnx                                          # add the project

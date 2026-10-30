@@ -24,8 +24,9 @@
 ```
 
 Misconfiguration (no `SourceId`, not exactly one path option) fails shell activation at registration with an error
-naming the rule. A missing folder or file, or a file that is not an Elsa 3 definition or array of them, fails the
-start naming the path. An empty folder is logged and imports nothing.
+naming the rule. A missing folder or file, a file that is not valid JSON, a file whose root is neither an object nor an array, or an
+array with a null entry fails the start naming the path. A JSON object that is not a workflow definition (no root
+activity) is read, and the analysis skips it. An empty folder is logged and imports nothing.
 
 ## File format
 
@@ -37,8 +38,9 @@ shape the collection upload accepts). The upload's size and count limits do not 
 - One warning per skipped item: `{Code}`, `{SourceId}`, `{FilePath}`, `{DefinitionId}`, `{Version}`, `{Cause}`,
   `{BlockedBy}`.
 - One information line per conversion warning (`ELS3-BEHAVIOUR-*`) of an imported item.
-- One summary per persistence scope: `{SourceId}`, `{ImportedActivities}`, `{ImportedWorkflows}`,
-  `{PublishedWorkflows}`, `{Skipped}`.
+- One summary per persistence scope (Information): `{SourceId}`, `{Scope}`, `{Reusables}` and `{Workflows}` in place,
+  `{Published}` by this start, `{Skipped}`.
+- A workflow whose publication fails: warning, then a skip with `ELS3-RECONCILE-PUBLISH-FAILED`.
 
 ## Strict mode
 

@@ -236,7 +236,8 @@ rest of the folder is imported and published. Repeat with the strict option and 
 - **FR-014**: Each skipped item MUST be logged as one structured warning carrying a stable diagnostic code, the
   source file, the Elsa 3 definition id and version, and the cause; a dependent's cause MUST name the item it depends
   on. Conversion warnings (`ELS3-BEHAVIOUR-*`) of imported items MUST be logged too. Each start MUST log one summary
-  line per persistence scope with imported-activity, imported-workflow, published-workflow and skipped counts. A
+  line per persistence scope with the reusable activities and workflows in place, the workflows this start published,
+  and the skipped count. A workflow whose publication fails is reported as skipped with `ELS3-RECONCILE-PUBLISH-FAILED`. A
   refusal the import does not attribute to an item (a credential literal, an identity collision) MUST fail the start
   with the import's message and guidance; nothing is committed in that scope.
 - **FR-015**: An option `FailOnUnconvertible` (default `false`) MUST make any skipped item fail startup with an error

@@ -273,6 +273,14 @@
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
+      "elsa3.activities.design.import.publishing": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Workflows.Publishing.Api": "[4.0.0-dev, )",
+          "Elsa3.Activities.Design.Import": "[4.0.0-dev, )"
+        }
+      },
       "elsa3.models": {
         "type": "Project"
       },

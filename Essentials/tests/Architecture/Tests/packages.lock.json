@@ -2401,11 +2401,11 @@
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Mediator.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )",
-          "Elsa.Workflows.Publishing": "[4.0.0-dev, )",
           "Elsa.Workflows.Publishing.Api": "[4.0.0-dev, )",
           "Elsa.Workflows.Publishing.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
-          "Elsa3.Activities.Design.Import": "[4.0.0-dev, )"
+          "Elsa3.Activities.Design.Import": "[4.0.0-dev, )",
+          "Elsa3.Activities.Design.Import.Publishing": "[4.0.0-dev, )"
         }
       },
       "elsa3.mapping": {

@@ -95,19 +95,26 @@ internal sealed class Elsa3FolderImportTask(
                 state => state.SourceVersionId,
                 state => (state.ErrorCode ?? state.Status.ToString(), $"The reusable activity was not published ({state.Status}{(state.BlockedBy is null ? "" : $", blocked by '{state.BlockedBy}'")})."),
                 StringComparer.Ordinal);
-        var (publishable, publishSkips) = selection.Exclude(plan, refused, inputsById, result.AppliedSourceVersionIds);
+        var (publishable, publishSkips) = selection.Exclude(plan, refused, inputsById, result.AppliedSourceVersionIds, missingTargetState: "not published");
         skipped.AddRange(publishSkips);
 
         var publishableIds = publishable.ToHashSet(StringComparer.Ordinal);
         var workflows = (result.Workflows ?? []).Where(workflow => publishableIds.Contains(workflow.SourceVersionId)).ToArray();
-        // A workflow whose publication fails is logged by the publisher and stays imported; the next start tries again.
         var publications = await services.GetRequiredService<ImportedWorkflowPublisher>().PublishAsync(workflows, scope.Value, cancellationToken);
+        // A workflow whose publication fails stays imported, and the next start tries again (FR-012); it is reported as
+        // a skip, so strict mode fails on it (FR-015).
+        foreach (var sourceVersionId in publications.Where(entry => entry.Value == WorkflowPublicationStatus.Failed).Select(entry => entry.Key))
+        {
+            var item = plan.Items.First(candidate => candidate.SourceVersionId == sourceVersionId);
+            skipped.Add(new(Elsa3ReconciliationDiagnosticCodes.PublishFailed, inputsById[sourceVersionId].FilePath,
+                item.SourceDefinitionId, item.SourceVersion, "The imported workflow could not be published; the warning before this one says why."));
+        }
 
         foreach (var warning in result.Warnings ?? [])
             logger.LogInformation("Elsa 3 import '{SourceId}': {Code} {Message}", _options.SourceId, warning.Code, warning.Message);
 
-        var importedActivities = (result.Publications ?? []).Count;
-        LogSummary(scope, importedActivities, workflows.Length, publications.Count(entry => entry.Value == ImportedWorkflowPublication.Published), skipped);
+        var reusables = (result.Publications ?? []).Count(state => state.Status is ReusableActivityPublicationStatus.Published or ReusableActivityPublicationStatus.AlreadyPublished);
+        LogSummary(scope, reusables, publications.Count, publications.Count(entry => entry.Value == WorkflowPublicationStatus.Published), skipped);
         FailIfStrict(skipped, scope, logSkipped: false);
     }
 
@@ -149,8 +156,12 @@ internal sealed class Elsa3FolderImportTask(
             {
                 // A credential-literal refusal, an identity collision thrown by the commit, or a refusal that names no
                 // item: the import does not attribute it to one item, so it fails the start (research R-5).
+                var details = exception is ReusableActivityImportValidationException validation
+                    ? " " + string.Join(" ", validation.Diagnostics.Where(diagnostic => diagnostic.IsError)
+                        .Select(diagnostic => $"{diagnostic.Code}: {Elsa3ImportSelection.Cause(diagnostic.Message, diagnostic.Guidance)}"))
+                    : string.Empty;
                 throw new Elsa3ReconciliationFailedException(
-                    $"The Elsa 3 import of '{_options.SourceId}' was refused, and the refusal names no single workflow: {exception.Message}",
+                    $"The Elsa 3 import of '{_options.SourceId}' was refused, and the refusal names no single workflow: {exception.Message}{details}",
                     exception);
             }
         }
@@ -189,12 +200,15 @@ internal sealed class Elsa3FolderImportTask(
             + string.Join("; ", skipped.Select(item => $"{item.Code} {item.DefinitionId} v{item.Version} ({item.FilePath}): {item.Cause}")));
     }
 
-    private void LogSummary(PersistenceScope scope, int activities, int workflows, int published, IReadOnlyList<Elsa3SkippedItem> skipped)
+    /// <param name="reusables">Reusable activities that are published, by this start or earlier.</param>
+    /// <param name="workflows">Workflow definitions (wrappers included) whose newest imported version is publishable.</param>
+    /// <param name="published">Of those, the ones this start published.</param>
+    private void LogSummary(PersistenceScope scope, int reusables, int workflows, int published, IReadOnlyList<Elsa3SkippedItem> skipped)
     {
         LogSkipped(skipped);
         logger.LogInformation(
-            "Elsa 3 import '{SourceId}' in persistence scope '{Scope}': {ImportedActivities} reusable activities, {ImportedWorkflows} workflows imported; {PublishedWorkflows} workflows published; {Skipped} skipped.",
-            _options.SourceId, scope.Value, activities, workflows, published, skipped.Count);
+            "Elsa 3 import '{SourceId}' in persistence scope '{Scope}': {Reusables} reusable activities and {Workflows} workflows in place; {Published} workflows published by this start; {Skipped} skipped.",
+            _options.SourceId, scope.Value, reusables, workflows, published, skipped.Count);
     }
 
     private void LogSkipped(IEnumerable<Elsa3SkippedItem> skipped)

@@ -53,13 +53,16 @@ internal sealed class Elsa3JsonFileReader(ILogger<Elsa3JsonFileReader> logger)
         {
             await using var stream = File.OpenRead(path);
             using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-            return document.RootElement.ValueKind switch
+            Elsa3WorkflowDefinition?[] definitions = document.RootElement.ValueKind switch
             {
-                JsonValueKind.Array => document.RootElement.Deserialize<Elsa3WorkflowDefinition[]>(Json) ?? [],
-                JsonValueKind.Object => [document.RootElement.Deserialize<Elsa3WorkflowDefinition>(Json)!],
+                JsonValueKind.Array => document.RootElement.Deserialize<Elsa3WorkflowDefinition?[]>(Json) ?? [],
+                JsonValueKind.Object => [document.RootElement.Deserialize<Elsa3WorkflowDefinition>(Json)],
                 _ => throw new Elsa3ReconciliationFailedException(
                     $"The Elsa 3 import file '{path}' must hold one workflow definition or an array of them.")
             };
+            if (definitions.Any(definition => definition is null))
+                throw new Elsa3ReconciliationFailedException($"The Elsa 3 import file '{path}' holds a null entry where a workflow definition belongs.");
+            return definitions!;
         }
         catch (OperationCanceledException)
         {

@@ -10,6 +10,9 @@ internal static class Elsa3ReconciliationDiagnosticCodes
 
     /// <summary>A reusable workflow this item uses was skipped or not published.</summary>
     public const string BlockedByDependency = "ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY";
+
+    /// <summary>The imported workflow could not be published; it stays imported and the next start tries again.</summary>
+    public const string PublishFailed = "ELS3-RECONCILE-PUBLISH-FAILED";
 }
 
 /// <summary>An input item left out of the import, and why.</summary>

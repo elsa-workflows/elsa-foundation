@@ -168,6 +168,10 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     /// Stops this host and starts a new one on the same stores (the same SQLite files), composed as this one was, with the
     /// folder import of <paramref name="reconcileFolder"/> when given. This host is disposed; use the returned one.
     /// </summary>
+    /// <remarks>
+    /// When the new host fails to start, nobody owns the stores any more: a test that expects that failure reads them
+    /// through this host and then calls <see cref="DeleteStores"/>.
+    /// </remarks>
     public async Task<Elsa3ImportHost> RestartAsync(string? reconcileFolder = null, bool strict = false, bool refuseAllPublications = false)
     {
         _ownsRoot = false;
@@ -692,11 +696,18 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         return counts;
     }
 
+    /// <summary>Deletes the stores' folder, for a test whose restart failed (see <see cref="RestartAsync"/>).</summary>
+    public void DeleteStores() => DeleteQuietly(_root);
+
     public async ValueTask DisposeAsync()
     {
         try
         {
             Client.Dispose();
+            // Disposing the app leaves the shell's recurring tasks running against the stores. A host restarted on the
+            // same stores would then have the old shell's resumption pump re-drive its executions, a second owner that
+            // fences the first out (StaleToken). Stop them first.
+            await Shell.ServiceProvider.GetRequiredService<Elsa.Tasks.Core.ITaskManager>().StopExecutingRegisteredTasks();
             await _app.DisposeAsync();
         }
         finally
@@ -741,7 +752,10 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         private sealed class Logger(string category, System.Collections.Concurrent.ConcurrentQueue<string> entries) : ILogger
         {
             public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-            public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Warning;
+            // The folder import's summary and conversion-warning lines are Information; the tests assert them (spec 235).
+            public bool IsEnabled(LogLevel logLevel) =>
+                logLevel >= LogLevel.Warning
+                || (logLevel == LogLevel.Information && category.StartsWith("Elsa3.Activities.Design.Import.Reconciliation", StringComparison.Ordinal));
 
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
             {

@@ -12,7 +12,8 @@
    ```
 
 3. Start the host and wait for `GET /health/ready`.
-4. Check the log for the summary line (`Imported … activities, … workflows; published …; skipped …`) and for a
+4. Check the log for the summary line (`Elsa 3 import 'elsa3' in persistence scope 'default': … reusable activities and
+   … workflows in place; … workflows published by this start; … skipped.`) and for a
    warning per skipped workflow with its code and guidance.
 5. Open Studio: the reusable workflows are in the activity picker and the workflows are published under their
    Elsa 3 definition ids. Run one, or call its HTTP endpoint.
@@ -27,7 +28,7 @@ Validation scenarios (tests in `Extensions/Elsa3/tests/Activities/Design/Import/
 | Empty store, fixture folder → all imported and published; plain and caller run | US1 |
 | HTTP Endpoint workflow → trigger registered | US1 |
 | Second start → nothing written, nothing published | US2 |
-| New version added → only it is imported and published | US2 |
+| File replaced by a newer version → it is imported and published | US2 |
 | Commit without publication → next start publishes | US2 |
 | Unconvertible reusable + caller → both skipped, rest imported | US3 |
 | Strict mode → start fails, nothing committed | US3 |

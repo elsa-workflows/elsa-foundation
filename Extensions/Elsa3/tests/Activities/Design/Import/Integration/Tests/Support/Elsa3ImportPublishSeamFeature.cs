@@ -29,6 +29,9 @@ public sealed class PublishRefusals
     }
 
     public bool Refuses(string versionId) => _all || _versionIds.ContainsKey(versionId);
+
+    /// <summary>The idempotency key of every publish request the seam saw, in order (spec 235 research R-4).</summary>
+    public ConcurrentQueue<string> IdempotencyKeys { get; } = new();
 }
 
 /// <summary>
@@ -48,7 +51,13 @@ public sealed class Elsa3ImportPublishSeamFeature : IShellFeature
 
     private sealed class RefusingPublisher(IReusableActivityImportPublisher inner, PublishRefusals refusals) : IReusableActivityImportPublisher
     {
-        public ValueTask<ReusableActivityImportPublishOutcome> PublishAsync(ReusableActivityImportPublishRequest request, CancellationToken cancellationToken = default) =>
+        public ValueTask<ReusableActivityImportPublishOutcome> PublishAsync(ReusableActivityImportPublishRequest request, CancellationToken cancellationToken = default)
+        {
+            refusals.IdempotencyKeys.Enqueue(request.IdempotencyKey);
+            return Decide(request, cancellationToken);
+        }
+
+        private ValueTask<ReusableActivityImportPublishOutcome> Decide(ReusableActivityImportPublishRequest request, CancellationToken cancellationToken) =>
             refusals.Refuses(request.RequestedVersionId)
                 ? ValueTask.FromResult(ReusableActivityImportPublishOutcome.Refused(PublishRefusals.Code,
                 [

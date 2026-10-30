@@ -4,6 +4,9 @@ Feature `Elsa3JsonReconciliation` imports a folder (or files) of Elsa 3 workflow
 starts, and publishes them (spec 235). Export the workflows from Elsa 3 Studio, put the files in a folder, point the
 host at it and start it: no import call and no Studio step.
 
+It stays the one-way, one-time import of constitution §E2.7: each Elsa 3 version is imported once, a later start finds
+it and writes nothing, nothing is translated back, and Elsa 3 never runs.
+
 It runs the Elsa 3 collection import (`Elsa3ImportJsonActivities`) in-process, so the folder and the HTTP import
 convert the same way, with the same diagnostics, identities and versions:
 
@@ -47,9 +50,17 @@ built-in activities in the catalog. It runs on every node, once per persistence 
 4. Publishes the newest imported version of each workflow, once.
 
 Every workflow that uses a skipped reusable workflow, directly or through others, is skipped too
-(`ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY`, naming the reusable). Each skip is logged as a warning with its code, file,
-definition id, version and cause, each conversion warning (`ELS3-BEHAVIOUR-*`) as information, and every start ends
-with one summary line per persistence scope.
+(`ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY`, naming the reusable). A workflow whose publication fails stays imported and
+is reported (`ELS3-RECONCILE-PUBLISH-FAILED`); the next start tries again. Each skip is logged as a warning with its
+code, file, definition id, version and cause, each conversion warning (`ELS3-BEHAVIOUR-*`) as information, and every
+start ends with one information line per persistence scope:
+
+```text
+Elsa 3 import 'elsa3' in persistence scope 'default': 4 reusable activities and 5 workflows in place; 5 workflows published by this start; 0 skipped.
+```
+
+"In place" counts what is published now, by this start or an earlier one; a restart with unchanged input reports
+`0 workflows published by this start`.
 
 ## Restarts and changes
 
@@ -82,10 +93,20 @@ message and guidance.
 |---|---|
 | `ELS3-RECONCILE-DUPLICATE-INPUT` | A blank source version id, or the same source version id or definition id and version more than once in the input. |
 | `ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY` | A reusable workflow this workflow uses was skipped or not published. |
+| `ELS3-RECONCILE-PUBLISH-FAILED` | The imported workflow could not be published; it stays imported, and the next start tries again. |
 
 Every other skip carries the import's own code; see the
 [Elsa 3 mapping README](../../../../Mapping/README.md) and the
 [migration readiness guide](../../../../../../../docs/reference/elsa3-migration-readiness.md).
+
+## Cross-domain contributions
+
+- **Tasks:** one `IStartupTask` (`Elsa3FolderImportTask`, Order 4).
+- **Workflows Publishing API:** a decorator of `IActivityPublishingAuthorizationContext` (below).
+- **Workflows Publishing:** it sends `PublishWorkflow`, and reads the publication policy, slots and journal through
+  the Publishing and Runtime core contracts. Resolving a definition's default target slot is copied from
+  `PublishReconciledWorkflowVersions`, where it is private; a shared query in `Elsa.Workflows.Publishing.Core` would
+  remove the copy.
 
 ## Publishing authorization at startup
 
