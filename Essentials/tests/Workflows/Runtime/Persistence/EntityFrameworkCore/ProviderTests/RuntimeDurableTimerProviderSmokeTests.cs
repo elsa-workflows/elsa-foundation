@@ -92,6 +92,15 @@ internal static class RuntimeDurableTimerProviderSmoke
             initialClaim = Assert.Single(await claimStore.ClaimDueAsync(new RuntimeDurableTimerClaimRequest(
                 "worker-a", now, TimeSpan.FromMinutes(1), 1)));
             Assert.Equal(initialClaim.VisibleAfter, await claimStore.GetNextDueTimeAsync());
+
+            var seekStore = Store(restarted, $"{scope}-deadline-seek");
+            await seekStore.SaveAsync(Timer("seek", "leased", now.AddSeconds(5)));
+            await seekStore.SaveAsync(Timer("seek", "released", now.AddSeconds(30)));
+            var seekClaims = await seekStore.ClaimDueAsync(new("peer", now.AddSeconds(31), TimeSpan.FromMinutes(1), 2));
+            var released = Assert.Single(seekClaims, claim => claim.Timer.TimerId == "released");
+            Assert.True((await seekStore.ReleaseClaimAsync(released, now.AddSeconds(-1))).Succeeded);
+            await seekStore.SaveAsync(Timer("seek", "unclaimed", now.AddSeconds(6)));
+            Assert.Equal(now.AddSeconds(6), await seekStore.GetNextDueTimeAsync());
         }
 
         await using (var recovered = createContext(connectionString))

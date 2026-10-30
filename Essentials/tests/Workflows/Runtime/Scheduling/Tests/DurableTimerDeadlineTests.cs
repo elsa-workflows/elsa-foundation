@@ -101,6 +101,22 @@ public sealed class DurableTimerDeadlineTests
     }
 
     [Fact]
+    public void Later_and_duplicate_hints_keep_race_generation_without_rearming()
+    {
+        var wakeup = new DurableTimerWakeup();
+        var changes = 0;
+        wakeup.Changed += () => changes++;
+        wakeup.TimerScheduled(Now.AddSeconds(5));
+        var version = wakeup.Snapshot.Version;
+        wakeup.TimerScheduled(Now.AddSeconds(5));
+        wakeup.TimerScheduled(Now.AddSeconds(8));
+        Assert.Equal(1, changes);
+        Assert.True(wakeup.Snapshot.Version > version);
+        wakeup.Reconcile(version, Now.AddSeconds(9));
+        Assert.Equal(Now.AddSeconds(5), wakeup.Snapshot.Deadline);
+    }
+
+    [Fact]
     public async Task Notification_during_sweep_never_overlaps_and_disposal_waits_for_running_work()
     {
         var wakeup = new DurableTimerWakeup();

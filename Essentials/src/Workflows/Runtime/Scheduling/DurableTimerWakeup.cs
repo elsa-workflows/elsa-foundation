@@ -18,12 +18,15 @@ internal sealed class DurableTimerWakeup
 
     public void TimerScheduled(DateTimeOffset dueTime)
     {
+        bool changed;
         lock (_gate)
         {
             _version++;
-            _deadline = Earlier(_deadline, dueTime);
+            var deadline = Earlier(_deadline, dueTime);
+            changed = deadline != _deadline;
+            _deadline = deadline;
         }
-        Changed?.Invoke();
+        if (changed) Changed?.Invoke();
     }
 
     internal void Reconcile(long version, DateTimeOffset? deadline)

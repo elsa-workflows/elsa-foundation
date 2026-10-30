@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Data.Common;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -9,6 +10,7 @@ using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -17,6 +19,115 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class EfDurableTimerStoreTests
 {
+    [Fact]
+    public async Task Deadline_lookup_uses_one_index_seek_and_legacy_release_uses_bounded_seek_continuation()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var recorder = new DeadlineQueryRecorder();
+        await using var fixture = database.Open("seek", recorder);
+        var now = new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        await fixture.Store.SaveAsync(Timer("wf", "first", now.AddSeconds(5)));
+        await fixture.Store.SaveAsync(Timer("wf", "legacy-release", now.AddSeconds(30)));
+        await fixture.Store.SaveAsync(Timer("wf", "long-delay", now.AddMonths(1)));
+        recorder.Commands.Clear();
+        Assert.Equal(now.AddSeconds(5), await fixture.Store.GetNextDueTimeAsync());
+        Assert.Single(recorder.Commands);
+        await AssertSeekPlansAsync(fixture.Context, recorder.Commands);
+
+        var claims = await fixture.Store.ClaimDueAsync(new("peer", now.AddSeconds(31), TimeSpan.FromMinutes(1), 2));
+        Assert.True((await fixture.Store.ReleaseClaimAsync(Assert.Single(claims, x => x.Timer.TimerId == "legacy-release"), now.AddSeconds(-1))).Succeeded);
+        await fixture.Store.SaveAsync(Timer("wf", "next", now.AddSeconds(6)));
+        recorder.Commands.Clear();
+        Assert.Equal(now.AddSeconds(6), await fixture.Store.GetNextDueTimeAsync());
+        Assert.Equal(2, recorder.Commands.Count);
+        await AssertSeekPlansAsync(fixture.Context, recorder.Commands);
+    }
+
+    private static async Task AssertSeekPlansAsync(RuntimeDbContext context, IEnumerable<(string Sql, (string Name, object Value)[] Parameters)> commands)
+    {
+        foreach (var (sql, parameters) in commands)
+        {
+            await using var command = context.Database.GetDbConnection().CreateCommand();
+            command.CommandText = "EXPLAIN QUERY PLAN " + sql;
+            foreach (var (name, value) in parameters)
+            {
+                var parameter = command.CreateParameter();
+                parameter.ParameterName = name;
+                parameter.Value = value;
+                command.Parameters.Add(parameter);
+            }
+            await using var reader = await command.ExecuteReaderAsync();
+            var plan = new List<string>();
+            while (await reader.ReadAsync()) plan.Add(reader.GetString(3));
+            Assert.Contains(plan, row => row.Contains("ScopeKeyHash_ClaimOrderKey", StringComparison.Ordinal));
+            Assert.DoesNotContain(plan, row => row.Contains("TEMP B-TREE", StringComparison.Ordinal));
+        }
+    }
+
+    private sealed class DeadlineQueryRecorder : DbCommandInterceptor
+    {
+        public List<(string Sql, (string Name, object Value)[] Parameters)> Commands { get; } = [];
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            Commands.Add((command.CommandText, command.Parameters.Cast<DbParameter>().Select(x => (x.ParameterName, x.Value!)).ToArray()));
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    [Fact]
+    public async Task Exceptional_early_release_backlog_falls_back_without_unbounded_queries()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var recorder = new DeadlineQueryRecorder();
+        await using var fixture = database.Open("legacy-backlog", recorder);
+        var now = new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        for (var i = 0; i < 20; i++)
+            await fixture.Store.SaveAsync(Timer("wf", $"released-{i}", now.AddMonths(1)));
+        var claims = await fixture.Store.ClaimDueAsync(new("peer", now.AddMonths(2), TimeSpan.FromMinutes(1), 20));
+        foreach (var claim in claims)
+            Assert.True((await fixture.Store.ReleaseClaimAsync(claim, now)).Succeeded);
+        recorder.Commands.Clear();
+        Assert.Null(await fixture.Store.GetNextDueTimeAsync());
+        Assert.Equal(16, recorder.Commands.Count);
+        await AssertSeekPlansAsync(fixture.Context, recorder.Commands);
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Indexed_deadline_matches_memory_for_unclaimed_leased_and_released_rows(bool releaseBeforeDue)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var fixture = database.Open("mixed");
+        var memory = new InMemoryDurableTimerStore();
+        var now = new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        foreach (var store in new IDurableTimerStore[] { fixture.Store, memory })
+        {
+            await store.SaveAsync(Timer("wf", "leased", now.AddSeconds(5)));
+            await store.SaveAsync(Timer("wf", "backoff", now.AddSeconds(8)));
+            await store.SaveAsync(Timer("wf", "released", now.AddSeconds(30)));
+            await store.SaveAsync(Timer("wf", "long-delay", now.AddMonths(1)));
+            var claims = await store.ClaimDueAsync(new("owner", now.AddSeconds(31), TimeSpan.FromMinutes(1), 3));
+            var backedOff = Assert.Single(claims, x => x.Timer.TimerId == "backoff");
+            var released = Assert.Single(claims, x => x.Timer.TimerId == "released");
+            Assert.True((await store.ReleaseClaimAsync(backedOff, now.AddSeconds(12))).Succeeded);
+            Assert.True((await store.ReleaseClaimAsync(released, now.AddSeconds(releaseBeforeDue ? -1 : 35))).Succeeded);
+            await store.SaveAsync(Timer("wf", "unclaimed", now.AddSeconds(6)));
+        }
+        Assert.Equal(now.AddSeconds(6), await fixture.Store.GetNextDueTimeAsync());
+        Assert.Equal(await memory.GetNextDueTimeAsync(), await fixture.Store.GetNextDueTimeAsync());
+        await fixture.Store.DeleteAsync("wf", "unclaimed");
+        await memory.DeleteAsync("wf", "unclaimed");
+        Assert.Equal(now.AddSeconds(12), await fixture.Store.GetNextDueTimeAsync());
+        Assert.Equal(await memory.GetNextDueTimeAsync(), await fixture.Store.GetNextDueTimeAsync());
+        foreach (var store in new IDurableTimerStore[] { fixture.Store, memory })
+        {
+            var next = await store.GetNextDueTimeAsync();
+            var claim = Assert.Single(await store.ClaimDueAsync(new("next", next!.Value, TimeSpan.FromMinutes(1), 10)));
+            Assert.Equal("backoff", claim.Timer.TimerId);
+        }
+    }
+
     [Fact]
     public async Task Next_deadline_is_scoped_restart_durable_and_respects_claim_and_retry_visibility()
     {
@@ -329,7 +440,7 @@ public sealed class EfDurableTimerStoreTests
             return new TestDatabase(keeper, connectionString);
         }
 
-        public TestFixture Open(string scope) => new(connectionString, scope);
+        public TestFixture Open(string scope, DbCommandInterceptor? interceptor = null) => new(connectionString, scope, interceptor);
 
         public ValueTask DisposeAsync() => keeper.DisposeAsync();
     }
@@ -340,12 +451,13 @@ public sealed class EfDurableTimerStoreTests
         public RuntimeSqliteDbContext Context { get; }
         public EfDurableTimerStore Store { get; }
 
-        public TestFixture(string connectionString, string scope)
+        public TestFixture(string connectionString, string scope, DbCommandInterceptor? interceptor = null)
         {
             connection = new SqliteConnection(connectionString);
             connection.Open();
-            Context = new RuntimeSqliteDbContext(
-                new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
+            var options = new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection);
+            if (interceptor is not null) options.AddInterceptors(interceptor);
+            Context = new RuntimeSqliteDbContext(options.Options);
             var accessor = new Accessor(scope);
             var codec = new HmacRuntimeRecoveryContinuationCodec(
                 Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = new string('k', 32) }));
