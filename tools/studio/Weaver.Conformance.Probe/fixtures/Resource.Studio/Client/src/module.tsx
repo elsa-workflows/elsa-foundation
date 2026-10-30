@@ -77,12 +77,11 @@ export function register(api: ElsaStudioModuleApi) {
   }
 
   async function dispatch(toolName: string, args: Record<string, unknown>, label: string) {
-    const value = await refresh();
+    await refresh();
     const requestId = crypto.randomUUID();
     const request: StudioAgentPromptRequest = {
       message: JSON.stringify({ toolName, arguments: args }), mode: "enqueue", requestId,
-      source: { moduleId, actionId: toolName, label },
-      attachments: [attachment(value, `acme-home-request:${requestId}`)]
+      source: { moduleId, actionId: toolName, label }
     };
     api.agent.dispatchPrompt(request);
   }

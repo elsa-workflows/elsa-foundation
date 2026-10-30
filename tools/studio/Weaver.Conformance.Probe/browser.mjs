@@ -152,8 +152,10 @@ function responseFor(suffix) {
 }
 async function accepted(responsePromise, name) {
   const response = await responsePromise;
+  const rawBody = await response.text();
+  result.evidence.push(retain(name + "-http", { url: diagnosticUrl(response.url()), status: response.status(), rawBody }));
   need(response.ok(), name + " failed HTTP " + response.status());
-  const value = await response.json();
+  const value = JSON.parse(rawBody);
   result.evidence.push(retain(name, { url: response.url(), status: response.status(), request: response.request().postDataJSON(), response: value }));
   return { response, value };
 }
