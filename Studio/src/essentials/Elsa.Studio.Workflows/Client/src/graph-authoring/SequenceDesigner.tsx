@@ -280,7 +280,6 @@ function SequenceStep({
           <span className="wf-sequence-title-row">
             <span className="wf-sequence-title">{data.label}</span>
             {availabilityLabel ? <span className="wf-sequence-availability" role="img" aria-label={availabilityLabel}><AlertTriangle size={14} aria-hidden="true" /></span> : null}
-            <span className="wf-sequence-ordinal" aria-label={`Step ${index + 1}`}>{index + 1}</span>
           </span>
           <span className="wf-sequence-type">{data.category || activityType}</span>
           {summary ? <span className="wf-sequence-summary">{summary}</span> : null}

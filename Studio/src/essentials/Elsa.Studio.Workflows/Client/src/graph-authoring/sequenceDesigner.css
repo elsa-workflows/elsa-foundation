@@ -183,22 +183,6 @@ html[data-workspace-style][data-theme-appearance="high-contrast"] .wf-sequence-i
   white-space: nowrap;
 }
 
-.wf-sequence-ordinal {
-  display: inline-flex;
-  min-width: 1.25rem;
-  height: 1.25rem;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  padding-inline: .25rem;
-  border-radius: 999px;
-  color: var(--studio-text-muted);
-  background: var(--studio-surface-muted);
-  font-size: .6875rem;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-
 .wf-sequence-availability {
   display: inline-flex;
   flex: 0 0 auto;
