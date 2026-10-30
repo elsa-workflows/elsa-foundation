@@ -100,7 +100,29 @@ internal static class LegacyUpgradeInspection
         var output = process.StandardOutput.ReadToEndAsync(); var error = process.StandardError.ReadToEndAsync();
         try { using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30)); await process.WaitForExitAsync(limit.Token); }
         finally { if (!process.HasExited) { process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); } }
-        var text = await output; Assert.True(process.ExitCode == 0, "Actual checked provider refused: " + text + await error);
+        var text = await output; var failure = await error;
+        if (process.ExitCode != 0 && Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_EVIDENCE_DIRECTORY") is { } evidence)
+        {
+            var directory = Path.Combine(evidence, "diagnostics", "checked-refusal-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            var snapshot = await ExportSnapshotAsync(database, "refused.sqlite.gz", directory);
+            var inputs = new List<object>();
+            foreach (var argument in arguments.Where(File.Exists))
+            {
+                var name = inputs.Count + "-" + Path.GetFileName(argument);
+                var bytes = await File.ReadAllBytesAsync(argument);
+                await File.WriteAllBytesAsync(Path.Combine(directory, name), bytes);
+                inputs.Add(new { file = name, originalPath = argument, sha256 = Hash(bytes) });
+            }
+            await File.WriteAllTextAsync(Path.Combine(directory, "refusal.json"), System.Text.Json.JsonSerializer.Serialize(new
+            {
+                command, arguments, snapshot, inputs, process.ExitCode,
+                reader = new { file = reader, productVersion = FileVersionInfo.GetVersionInfo(reader).ProductVersion,
+                    sha256 = Hash(await File.ReadAllBytesAsync(reader)) },
+                standardOutput = text, standardError = failure, qualifyingObservation = false
+            }, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web) { WriteIndented = true }));
+        }
+        Assert.True(process.ExitCode == 0, "Actual checked provider refused: " + text + failure);
         var result = JsonNode.Parse(text)!; Assert.True(result["providerChecked"]!.GetValue<bool>()); Assert.True(result["readOnly"]!.GetValue<bool>());
         Assert.Equal(hash, result["snapshotSha256"]!.GetValue<string>()); Assert.Equal(hash, Hash(await File.ReadAllBytesAsync(database))); return result;
     }
