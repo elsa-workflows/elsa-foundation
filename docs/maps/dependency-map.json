@@ -10174,6 +10174,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Publishing",
+          "path": "Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Elsa.Workflows.Publishing.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Api",
           "path": "Essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj"
         },
