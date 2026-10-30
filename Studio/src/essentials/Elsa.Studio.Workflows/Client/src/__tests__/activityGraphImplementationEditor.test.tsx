@@ -508,6 +508,7 @@ describe("ActivityGraphImplementationEditor BPMN slots", () => {
     const onChange = vi.fn();
     const rendered = renderDesigner({ value: bpmnImplementationValue(), onChange });
 
+    click(rendered.container.querySelector(".wf-palette-category-toggle[data-category='BPMN']")!);
     click(buttonByText(rendered.container, "Exclusive gateway"));
 
     const payload = lastPayload(onChange);
@@ -563,9 +564,11 @@ describe("ActivityGraphImplementationEditor BPMN slots", () => {
     catalogItems = [bpmnCatalogItem(), flowchartCatalogItem(), leafCatalogItem()];
 
     const flowchart = renderDesigner({ value: flowchartImplementationValue(flowchartStructureKind) });
-    expect(flowchart.container.querySelector("[aria-label='BPMN shapes']")).toBeNull();
+    expect(flowchart.container.querySelector("[aria-label='Search activity palette']")).not.toBeNull();
+    expect(flowchart.container.querySelector("[data-element-id^='bpmn:']")).toBeNull();
 
     const locked = renderDesigner({ value: bpmnImplementationValue(), readOnly: true });
+    click(locked.container.querySelector(".wf-palette-category-toggle[data-category='BPMN']")!);
     expect(buttonByText(locked.container, "Exclusive gateway").disabled).toBe(true);
   });
 

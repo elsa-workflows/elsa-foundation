@@ -276,6 +276,12 @@
   cursor: default;
 }
 
+.wf-sequence-actions button[aria-pressed="true"] {
+  background: var(--studio-accent-soft);
+  color: var(--studio-accent);
+  border-color: var(--studio-accent);
+}
+
 .wf-sequence-insert {
   display: inline-flex;
   width: 1.5rem;

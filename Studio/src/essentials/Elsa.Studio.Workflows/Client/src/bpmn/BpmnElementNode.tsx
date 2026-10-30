@@ -20,7 +20,7 @@ export function BpmnElementNode({ data, selected }: NodeProps) {
 
   return (
     <div
-      className={["wf-bpmn-node", `wf-bpmn-${element.elementType}`, selected ? "selected" : "", nodeData.runtime ? "wf-bpmn-node-runtime" : "", nodeData.runtime?.hasBlockingIncident ? "faulted" : ""].filter(Boolean).join(" ")}
+      className={["wf-bpmn-node", selected ? "selected" : "", nodeData.runtime ? "wf-bpmn-node-runtime" : "", nodeData.runtime?.hasBlockingIncident ? "faulted" : ""].filter(Boolean).join(" ")}
       data-element-type={element.elementType}
       data-runtime-node-id={nodeData.runtimeNodeId ?? nodeData.boundActivity?.nodeId ?? element.elementId}
       title={typeLabel}

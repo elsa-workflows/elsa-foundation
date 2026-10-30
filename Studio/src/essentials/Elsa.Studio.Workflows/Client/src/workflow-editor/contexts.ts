@@ -19,6 +19,7 @@ export interface WorkflowNodeActions {
   addAfter(nodeId: string, portName: string, anchor: { clientX: number; clientY: number }): void;
   duplicate(nodeId: string): void;
   delete(nodeId: string): void;
+  setWorkflowStart?(nodeId: string, enabled: boolean): void;
 }
 
 export const WorkflowNodeActionsContext = React.createContext<WorkflowNodeActions | null>(null);

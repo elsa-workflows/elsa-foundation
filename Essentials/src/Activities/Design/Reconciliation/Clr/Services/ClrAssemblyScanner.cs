@@ -267,6 +267,20 @@ public sealed class ClrAssemblyScanner(
             facets.Add(new ActivityDesignFacet(kind, schemaVersion, JsonSerializer.SerializeToElement(payload, SerializerOptions)));
         }
 
+        var paletteAttribute = attributes.FirstOrDefault(attribute => attribute.AttributeType.FullName == typeof(ActivityPaletteAttribute).FullName);
+        if (paletteAttribute is not null)
+        {
+            var payload = new
+            {
+                ContainerModes = ReadNamedStringArrayArgument(paletteAttribute, nameof(ActivityPaletteAttribute.ContainerModes)),
+                SlotIds = ReadNamedStringArrayArgument(paletteAttribute, nameof(ActivityPaletteAttribute.SlotIds)),
+                AncestorActivityTypes = ReadNamedStringArrayArgument(paletteAttribute, nameof(ActivityPaletteAttribute.AncestorActivityTypes)),
+                ResourceKinds = ReadNamedStringArrayArgument(paletteAttribute, nameof(ActivityPaletteAttribute.ResourceKinds)),
+                Description = ReadNamedStringArgument(paletteAttribute, nameof(ActivityPaletteAttribute.Description))
+            };
+            facets.Add(new ActivityDesignFacet("elsa.activity-palette", "1", JsonSerializer.SerializeToElement(payload, SerializerOptions)));
+        }
+
         var outcomesFacet = BuildOutcomesFacet(type);
         if (outcomesFacet is not null)
             facets.Add(outcomesFacet);

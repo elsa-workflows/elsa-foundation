@@ -1,3 +1,4 @@
+import type { ActivityPaletteHints } from "./graph-authoring/activityPaletteContext";
 import type {
   StudioActivityDescriptor,
   StudioActivityInputOption,
@@ -216,6 +217,7 @@ export interface ActivityCatalogItem {
   inputs: unknown[];
   outputs: unknown[];
   designFacets?: unknown[];
+  paletteHints?: ActivityPaletteHints | null;
   available?: boolean;
   availabilityReason?: string | null;
   ports?: unknown[];

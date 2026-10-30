@@ -123,6 +123,16 @@ internal static class InMemoryReconcilerHarness
 
     private sealed class InMemoryRefreshVersionCommand(CatalogStore store) : IRefreshActivityDefinitionVersionCommand
     {
+        public Task RefreshPaletteHintsAsync(DesignOperationKey operationKey, ActivityDefinitionVersion version,
+            string? expectedOldFacetsSource, CancellationToken cancellationToken = default)
+        {
+            var persisted = store.Versions.Single(item => item.Id == version.Id);
+            persisted.DesignFacets = version.DesignFacets;
+            persisted.LastModifiedAt = DateTimeOffset.UtcNow;
+            version.LastModifiedAt = persisted.LastModifiedAt;
+            return Task.CompletedTask;
+        }
+
         public Task RefreshAsync(
             DesignOperationKey operationKey,
             ActivityDefinitionVersion version,
