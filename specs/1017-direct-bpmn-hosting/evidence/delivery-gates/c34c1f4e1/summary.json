@@ -1,0 +1,36 @@
+{
+  "sourceRevision": "c34c1f4e1f279c66598a5ab83a8c2cc05e9b4a72",
+  "counters": {
+    "total": "32",
+    "executed": "32",
+    "passed": "31",
+    "failed": "1",
+    "error": "0",
+    "timeout": "0",
+    "aborted": "0",
+    "inconclusive": "0",
+    "passedButRunAborted": "0",
+    "notRunnable": "0",
+    "notExecuted": "0",
+    "disconnected": "0",
+    "warning": "0",
+    "completed": "0",
+    "inProgress": "0",
+    "pending": "0"
+  },
+  "trxSha256": "36ac6300c4264608d1790e192ee53d999d101d0b8aad6029dbc4bbaf2272a8dd",
+  "nonPassed": [
+    {
+      "name": "Elsa.Activities.Bpmn.Hosting.Tests.LegacyCalledAcknowledgmentUpgradeTests.Actual_accepted_called_results_recover_acknowledgment_without_repeating_the_caller",
+      "outcome": "Failed"
+    }
+  ],
+  "qualifyingGate": false,
+  "failure": "The called-acknowledgment finished-stage checked provider returned ObservationUnavailable/InvalidDataException. No failed closed store was retained by that source; observer retention added in02a19e865. Investigation remains open.",
+  "machineLoadAtInvestigation": [
+    4.13,
+    4.1,
+    7.33
+  ],
+  "logicalCpus": 15
+}
