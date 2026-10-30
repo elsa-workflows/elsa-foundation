@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "b9cf52c181b79e3e79eef233f7d61cb0843f4da7",
+  "last_publish_commit": "e81401851b077a37f8e5c6f20e38fc1864a26705",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -118,29 +118,34 @@
       "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
     },
     {
+      "package_id": "Elsa.Agent",
+      "version": "4.0.0-preview",
+      "commit": "e81401851b077a37f8e5c6f20e38fc1864a26705"
+    },
+    {
       "package_id": "Elsa.Agent.Anthropic",
-      "version": "4.0.9-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.10-preview",
+      "commit": "e81401851b077a37f8e5c6f20e38fc1864a26705"
     },
     {
       "package_id": "Elsa.Agent.Api",
-      "version": "4.0.14-preview",
-      "commit": "6e677745bb828dcb1117379859068f8e735dac47"
+      "version": "4.0.15-preview",
+      "commit": "e81401851b077a37f8e5c6f20e38fc1864a26705"
     },
     {
       "package_id": "Elsa.Agent.Core",
-      "version": "4.0.9-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.10-preview",
+      "commit": "e81401851b077a37f8e5c6f20e38fc1864a26705"
     },
     {
       "package_id": "Elsa.Agent.GitHubCopilot",
-      "version": "4.0.9-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.10-preview",
+      "commit": "e81401851b077a37f8e5c6f20e38fc1864a26705"
     },
     {
       "package_id": "Elsa.Agent.Workflows",
-      "version": "4.0.9-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.10-preview",
+      "commit": "e81401851b077a37f8e5c6f20e38fc1864a26705"
     },
     {
       "package_id": "Elsa.Api.AspNetCore",
@@ -214,8 +219,8 @@
     },
     {
       "package_id": "Elsa.Connections.Workflows",
-      "version": "4.0.6-preview",
-      "commit": "474fac5c6ac1776ae6940fc6e5a3cdf926f7fc20"
+      "version": "4.0.7-preview",
+      "commit": "e81401851b077a37f8e5c6f20e38fc1864a26705"
     },
     {
       "package_id": "Elsa.Diagnostics.ConsoleLogStreaming",
