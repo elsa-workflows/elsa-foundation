@@ -76,6 +76,21 @@ function variable(alias: string, collectionKind = "Single") {
 }
 
 describe("argument row editor", () => {
+  it.each(["Single", "Array", "List", "HashSet"])("authors %s JSON defaults as raw JSON syntax without narrowing numeric tokens", kind => {
+    const onChange = vi.fn();
+    const container = render(<VariablesEditor items={[variable("System.Text.Json.JsonElement", kind)]}
+      typeOptions={[{ value: "System.Text.Json.JsonElement", label: "JSON" }]}
+      storageOptions={[]} editorForAlias={() => "json"} onChange={onChange} />);
+    const input = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Variable default value']")!;
+    expect(input).not.toBeNull();
+    const value = '{"Id":9007199254740993,"amount":1234567890.123456789012345}';
+    const json = kind === "Single" ? value : `[${value}]`;
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+    setter.call(input, json);
+    flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true })));
+    expect(onChange.mock.calls.at(-1)![0][0].default).toEqual({ value: json, expressionType: "Object" });
+  });
+
   it("offers activated storage compatible with each variable type and preserves an unavailable selection", async () => {
     const getJson = vi.fn(async (url: string) => {
       if (url === "/capabilities") return { capabilities: [{

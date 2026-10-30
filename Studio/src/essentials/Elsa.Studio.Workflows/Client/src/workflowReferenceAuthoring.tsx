@@ -2,6 +2,7 @@ import { createContext, useContext, type ReactNode } from "react";
 import type { ScopedVariableAnalysisStatus } from "./api/workflowDesign";
 import { describeCollectionType, formatTypeName } from "./activityProperties";
 import type { ArgumentType, VisibleVariableView, WorkflowDefinitionState, WorkflowInput } from "./workflowTypes";
+import { isJsonTypeName } from "./jsonType";
 
 interface WorkflowReferenceAuthoringState {
   workflowState: WorkflowDefinitionState;
@@ -44,13 +45,25 @@ export function useWorkflowReferenceAuthoring() {
   return useContext(WorkflowReferenceAuthoringContext);
 }
 
-export function isArgumentTypeCompatible(argumentType: ArgumentType, propertyTypeName: string) {
+export function isArgumentTypeCompatible(argumentType: ArgumentType, propertyTypeName: string, propertyCollectionKind?: string | null) {
   const propertyCollection = describeCollectionType(propertyTypeName);
+  const explicitCollection = propertyCollectionKind?.trim().toLowerCase();
+  const isCollection = explicitCollection ? explicitCollection !== "single" : !!propertyCollection;
   const propertyAlias = canonicalTypeAlias(propertyCollection?.elementTypeName ?? propertyTypeName);
   const argumentAlias = canonicalTypeAlias(argumentType.alias);
-  if (propertyAlias === "system.object") return true;
+  // A single JSON value can contain a scalar, object or whole collection. Binary and transient
+  // sources require an explicit adapter, just as they do in the backend conversion policy.
+  if (!isCollection && isJsonTypeName(stripTopLevelAssemblyQualifier(propertyTypeName))) {
+    return !!argumentAlias && argumentAlias !== "system.io.stream" && argumentAlias !== "stream"
+      && !(argumentAlias === "system.byte" && argumentType.collectionKind !== "Single");
+  }
+  if (propertyAlias === "system.object" && !isCollection) return true;
   if (!propertyAlias || !argumentAlias || propertyAlias !== argumentAlias) return false;
-  return propertyCollection ? argumentType.collectionKind !== "Single" : argumentType.collectionKind === "Single";
+  const targetKind = explicitCollection || (propertyCollection
+    ? /(?:^|[.:])HashSet`/i.test(propertyTypeName) ? "hashset" : "list"
+    : "single");
+  const sourceKind = argumentType.collectionKind.toLowerCase();
+  return sourceKind === targetKind || (["array", "list"].includes(sourceKind) && ["array", "list"].includes(targetKind));
 }
 
 export function formatArgumentType(type: ArgumentType) {
@@ -67,6 +80,7 @@ const clrPrimitiveAliases = new Set([
 function canonicalTypeAlias(typeName: string | null | undefined) {
   const unqualified = stripTopLevelAssemblyQualifier((typeName ?? "").trim().replace(/^global::/, ""));
   if (!unqualified) return "";
+  if (isJsonTypeName(unqualified)) return "system.text.json.jsonelement";
   const lower = unqualified.toLowerCase();
   const primitive = lower.startsWith("system.") ? lower.slice("system.".length) : lower;
   return clrPrimitiveAliases.has(primitive) ? `system.${primitive}` : lower;

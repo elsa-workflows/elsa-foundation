@@ -1,4 +1,6 @@
 using CShells.Features;
+using Elsa.Events.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Events;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Scheduling.Options;
@@ -53,6 +55,37 @@ public sealed class WorkflowsRuntimeSchedulingFeatureTests
         Assert.Equal(TimeSpan.FromMinutes(2), options.MaxBackoffInterval);
         Assert.Equal(42, options.MaxTimersPerTick);
         Assert.Equal(TimeSpan.FromSeconds(15), options.NotFoundGrace);
+    }
+
+    [Fact]
+    public async Task Feature_scheduler_and_hosted_pump_share_the_deadline_signal()
+    {
+        var services = new ServiceCollection();
+        var events = new CapturingPublisher();
+        services.AddSingleton<IDeferredEventPublisher>(events);
+        new WorkflowsRuntimeSchedulingFeature().ConfigureServices(services);
+        await using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var scheduler = scope.ServiceProvider.GetRequiredService<IDurableTimerScheduler>();
+        var wakeup = provider.GetRequiredService<DurableTimerWakeup>();
+        var due = DateTimeOffset.UtcNow.AddSeconds(5);
+        await scheduler.ScheduleAsync(new("timer", "workflow", "Delay", "timer", due, due.AddSeconds(-5)));
+        var notification = Assert.IsType<DurableTimerScheduled>(events.Last);
+        Assert.Equal(due, notification.DueTime);
+        Assert.Null(wakeup.Snapshot.Deadline);
+        await Assert.Single(scope.ServiceProvider.GetServices<IEventHandler<DurableTimerScheduled>>())
+            .Handle(notification, CancellationToken.None);
+        Assert.Equal(due, wakeup.Snapshot.Deadline);
+    }
+
+    private sealed class CapturingPublisher : IDeferredEventPublisher
+    {
+        public IEvent? Last { get; private set; }
+        public Task Publish(IEvent notification, CancellationToken cancellationToken = default)
+        {
+            Last = notification;
+            return Task.CompletedTask;
+        }
     }
 
     [Fact]

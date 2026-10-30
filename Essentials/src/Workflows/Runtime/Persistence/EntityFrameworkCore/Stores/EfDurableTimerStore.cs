@@ -23,9 +23,46 @@ public sealed class EfDurableTimerStore(
     IRuntimeRecoveryContinuationCodec continuationCodec) : IDurableTimerStore
 {
     private const string CursorPurpose = "ef-runtime-durable-timers-v1";
+    private const int MaxDeadlineCandidates = 16;
     private static readonly EfWriteRetry Transitions = new(EfWriteRetry.DefaultMaxAttempts, EfWriteConflict.Concurrency);
 
     public bool SupportsClaimTransitions => true;
+
+    public async ValueTask<DateTimeOffset?> GetNextDueTimeAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
+        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
+        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
+        var source = context.DurableTimers.AsNoTracking()
+            .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == scopeKey);
+        DateTimeOffset? earliest = null;
+        string? after = null;
+        for (var visited = 0; visited < MaxDeadlineCandidates; visited++)
+        {
+            var query = after is null ? source : source.Where(x => string.Compare(x.ClaimOrderKey, after) > 0);
+            var row = await query.OrderBy(x => x.ClaimOrderKey).FirstOrDefaultAsync(cancellationToken);
+            if (row is null)
+                return earliest;
+            var timer = ReadChecked(row, scope);
+            var available = row.VisibleAfterUtcTicks is { } visible
+                ? new DateTimeOffset(visible, TimeSpan.Zero) : timer.DueTime;
+            var eligible = available > timer.DueTime ? available : timer.DueTime;
+            if (earliest is null || eligible < earliest)
+                earliest = eligible;
+
+            // ClaimOrderKey begins with the visibility instant (or initial due time), making it an
+            // indexed lower bound on every remaining timer's eligibility. Ordinary rows settle in one
+            // seek. Older/custom releases may set visibility before due time; walk only those leading
+            // exceptions until the lower bound proves the minimum, without sorting future timers.
+            if (earliest <= available)
+                return earliest;
+            after = row.ClaimOrderKey;
+        }
+        // An exceptional legacy backlog must not turn deadline discovery into an unbounded sweep.
+        // Unknown is safe: the pump retains periodic recovery and ordinary bounded due claims.
+        return null;
+    }
 
     public async ValueTask<DurableTimer> SaveAsync(
         DurableTimer timer,

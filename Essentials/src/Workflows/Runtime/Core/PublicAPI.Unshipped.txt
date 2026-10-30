@@ -303,6 +303,7 @@ Elsa.Workflows.Runtime.Core.Contracts.IBookmarkStimulusLookup.FindAsync(Elsa.Wor
 Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerScheduler
 Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerScheduler.ScheduleAsync(Elsa.Workflows.Runtime.Core.Models.DurableTimer! timer, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.DurableTimer!>
 Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerStore
+Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerStore.GetNextDueTimeAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.DateTimeOffset?>
 Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerStore.ClaimDueAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDurableTimerClaimRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.RuntimeDurableTimerClaim!>!>
 Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerStore.CompleteClaimAsync(Elsa.Workflows.Runtime.Core.Models.RuntimeDurableTimerClaim! claim, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimeDurableTimerClaimTransitionResult!>
 Elsa.Workflows.Runtime.Core.Contracts.IDurableTimerStore.DeleteAsync(string! workflowExecutionId, string! timerId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
@@ -9415,3 +9416,6 @@ Elsa.Workflows.Runtime.Core.Models.RuntimeModelNativeWorkOrigin.ResultInputId.ge
 Elsa.Workflows.Runtime.Core.Events.RuntimeExecutionProtocolsInitializing
 Elsa.Workflows.Runtime.Core.Events.RuntimeExecutionProtocolsInitializing.RuntimeExecutionProtocolsInitializing() -> void
 Elsa.Workflows.Runtime.Core.Events.RuntimeExecutionProtocolsInitializing.Registrations.get -> System.Collections.Generic.ICollection<Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionProtocolRegistration!>!
+Elsa.Workflows.Runtime.Core.Events.DurableTimerScheduled
+Elsa.Workflows.Runtime.Core.Events.DurableTimerScheduled.DurableTimerScheduled(System.DateTimeOffset dueTime) -> void
+Elsa.Workflows.Runtime.Core.Events.DurableTimerScheduled.DueTime.get -> System.DateTimeOffset
