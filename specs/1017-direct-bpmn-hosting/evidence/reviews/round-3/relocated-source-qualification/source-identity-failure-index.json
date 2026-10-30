@@ -1,0 +1,73 @@
+{
+  "sourceRevision": "df053ce214c794e16685b0cfd15a890cabf7a0c5",
+  "wholeHostCounters": {
+    "total": "39",
+    "executed": "39",
+    "passed": "31",
+    "failed": "8",
+    "error": "0",
+    "timeout": "0",
+    "aborted": "0",
+    "inconclusive": "0",
+    "passedButRunAborted": "0",
+    "notRunnable": "0",
+    "notExecuted": "0",
+    "disconnected": "0",
+    "warning": "0",
+    "completed": "0",
+    "inProgress": "0",
+    "pending": "0"
+  },
+  "failures": [
+    {
+      "test": "Elsa.Activities.Bpmn.Hosting.Tests.LegacyMultiInstanceUpgradeTests.Actual_partial_multi_instance_calls_preserve_iterations_and_finish_after_restart",
+      "authorityConflicts": [
+        "actdef_Avkmp-RgbOj2C5P6KNTchSzfPkIEWp9zhiAOtZNpPz4"
+      ]
+    },
+    {
+      "test": "Elsa.Activities.Bpmn.Hosting.Tests.LegacyControlsUpgradeTests.Actual_called_controls_and_compensation_recover_original_streams_and_continue_once",
+      "authorityConflicts": [
+        "actdef_Avkmp-RgbOj2C5P6KNTchSzfPkIEWp9zhiAOtZNpPz4"
+      ]
+    },
+    {
+      "test": "Elsa.Activities.Bpmn.Hosting.Tests.SignalCancellationWorkbenchTests.Cancelling_one_actual_Event_worker_retires_the_model_and_settles_its_sibling",
+      "authorityConflicts": [
+        "actdef_Avkmp-RgbOj2C5P6KNTchSzfPkIEWp9zhiAOtZNpPz4"
+      ]
+    },
+    {
+      "test": "Elsa.Activities.Bpmn.Hosting.Tests.LegacyBroadcastUpgradeTests.Actual_saved_broadcast_cuts_recover_their_exact_recipients_and_retire_normally",
+      "authorityConflicts": [
+        "actdef_Avkmp-RgbOj2C5P6KNTchSzfPkIEWp9zhiAOtZNpPz4"
+      ]
+    },
+    {
+      "test": "Elsa.Activities.Bpmn.Hosting.Tests.LegacyNativeParentUpgradeTests.Actual_pending_native_parent_faults_recover_with_their_original_composite_projection",
+      "authorityConflicts": [
+        "actdef_Avkmp-RgbOj2C5P6KNTchSzfPkIEWp9zhiAOtZNpPz4"
+      ]
+    },
+    {
+      "test": "Elsa.Activities.Bpmn.Hosting.Tests.LegacyPartialForkUpgradeTests.Actual_legacy_partial_forks_upgrade_and_finish_through_production_commands",
+      "authorityConflicts": [
+        "actdef_Avkmp-RgbOj2C5P6KNTchSzfPkIEWp9zhiAOtZNpPz4"
+      ]
+    },
+    {
+      "test": "Elsa.Activities.Bpmn.Hosting.Tests.LegacyCalledAcknowledgmentUpgradeTests.Actual_accepted_called_results_recover_acknowledgment_without_repeating_the_caller",
+      "authorityConflicts": [
+        "actdef_Avkmp-RgbOj2C5P6KNTchSzfPkIEWp9zhiAOtZNpPz4"
+      ]
+    },
+    {
+      "test": "Elsa.Activities.Bpmn.Hosting.Tests.LegacyNativeParentUpgradeTests.Actual_native_fault_and_cancel_terminals_preserve_their_projection_after_upgrade_and_restart",
+      "authorityConflicts": [
+        "actdef_Avkmp-RgbOj2C5P6KNTchSzfPkIEWp9zhiAOtZNpPz4"
+      ]
+    }
+  ],
+  "productAuthorityGuardChanged": false,
+  "repair": "Carry captured logical ClrActivityReconciliation.Options.SourceId with deployment while using current FolderPath."
+}

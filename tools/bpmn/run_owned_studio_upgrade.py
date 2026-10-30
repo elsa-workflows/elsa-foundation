@@ -81,6 +81,19 @@ def main():
     for name in ("ActivitiesDesignEntityFrameworkCore", "WorkflowsDesignEntityFrameworkCore", "WorkflowsPublishingEntityFrameworkCore"):
         if name in features:
             features[name]["ConnectionString"] = "Data Source=design.db"
+    clr_source_binding = json.loads(subprocess.check_output(["dotnet", str(args.reader_assembly),
+        "--read-clr-source-identities", str(backend_root / "design.db")], text=True))
+    if clr_source_binding.get("readOnly") is not True:
+        raise ValueError("The captured CLR source identity observer is not read-only.")
+    source_ids = clr_source_binding["sourceIds"]
+    if source_ids and "ClrActivityReconciliation" in features:
+        if len(source_ids) != 1:
+            raise ValueError("Multiple captured CLR sources require explicit source-to-folder bindings.")
+        options = features["ClrActivityReconciliation"].setdefault("Options", {})
+        if options.get("SourceId") and options["SourceId"] != source_ids[0]:
+            raise ValueError("The configured CLR source identity differs from the captured catalog authority.")
+        options["SourceId"] = source_ids[0]
+        # Identity is opaque configuration; FolderPath continues to scan the current app directory.
     write_json(backend_root / "shells.json", shells)
     config = json.loads((backend_root / "appsettings.json").read_text())
     config["Cors"]["AllowedOrigins"] = [studio_url]
@@ -182,7 +195,7 @@ def main():
         ready(studio, studio_url)
         stages = {"recovered": observation("recovered")}
         write_json(output / "ready.json", {"family": args.family, "sourceRevision": source, "backendUrl": backend_url, "studioUrl": studio_url,
-            "privateRoot": str(root), "baselineAssets": inputs, "hostProducts": products, "studioProducts": studio_products, "processes": processes})
+            "privateRoot": str(root), "baselineAssets": inputs, "hostProducts": products, "studioProducts": studio_products, "clrSourceBinding": clr_source_binding, "processes": processes})
         print(json.dumps({"studioUrl": studio_url, "backendUrl": backend_url, "output": str(output)}), flush=True)
         while True:
             command = output / "command.json"
@@ -198,7 +211,7 @@ def main():
             elif action == "finish":
                 stages["finished"] = observation("finished")
                 write_json(output / "process.json", {"family": args.family, "sourceRevision": source, "baselineAssets": inputs,
-                    "hostProducts": products, "studioProducts": studio_products, "browserAssets": browser_assets, "processes": processes, "stages": stages,
+                    "hostProducts": products, "studioProducts": studio_products, "browserAssets": browser_assets, "clrSourceBinding": clr_source_binding, "processes": processes, "stages": stages,
                     "studioAssemblySha256": digest(args.studio_assembly), "controllerSha256": digest(Path(__file__))})
                 break
             else: raise ValueError("Unknown owned Studio command.")

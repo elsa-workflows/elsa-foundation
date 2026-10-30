@@ -1,0 +1,122 @@
+{
+  "executingProductionSource": "df053ce214c794e16685b0cfd15a890cabf7a0c5",
+  "wholeHostPassed": 39,
+  "skipped": 0,
+  "assets": [
+    {
+      "path": "README.md",
+      "bytes": 2962,
+      "sha256": "8ecf80722be89ac1d67224b46015234fb4cfa3a99b78698044be8d537be220d4"
+    },
+    {
+      "path": "initial-whole-host.log.gz",
+      "bytes": 3711,
+      "sha256": "01d11dbd0d069db503172b2e2f8b4cbadd9e094ce866fb386b97310c9664eded"
+    },
+    {
+      "path": "initial-whole-host.trx.gz",
+      "bytes": 71182,
+      "sha256": "63dcde57f2c0b8d5a0e6958c9641eec8ae0acb071c0b7c315b22f4b929ec5592"
+    },
+    {
+      "path": "isolated-original-source.log.gz",
+      "bytes": 5455,
+      "sha256": "b1aba6733b9ee2f36e7388dc014b1b16cad4d0958f162a3b00db5e9f024fe6a5"
+    },
+    {
+      "path": "isolated-original-source.trx.gz",
+      "bytes": 11028,
+      "sha256": "5a5cb1b8463f70c3cb6b2c4271149aa670d4e4cd0bbeb35875dc1d47d3c579a5"
+    },
+    {
+      "path": "isolated-preserved-source.log.gz",
+      "bytes": 3440,
+      "sha256": "2ec2684f7b676f1f33f0594d902449c5df980db83783996558ee03780ab0d96b"
+    },
+    {
+      "path": "isolated-preserved-source.trx.gz",
+      "bytes": 1278,
+      "sha256": "a0874d3160fa20777e53377abcdf9c2f057e15eb51eb95c095bb361151c38d25"
+    },
+    {
+      "path": "one-worker-cancel/after.json",
+      "bytes": 7735,
+      "sha256": "85a2342f7bb70a74ab7a21f8a6d4095550d4d3e0b6844e55c8d12c297b16d708"
+    },
+    {
+      "path": "one-worker-cancel/before.json",
+      "bytes": 838,
+      "sha256": "f87aa457b749a6c51a8bfdd0e7c578d798d8965c2af1f4b7962779e7e1c07bca"
+    },
+    {
+      "path": "one-worker-cancel/finished-design.sqlite.gz",
+      "bytes": 113206,
+      "sha256": "66b0c9799383293891e353bca0e1d4f682c44c24c5d4044d48d9fb959f848d9c"
+    },
+    {
+      "path": "one-worker-cancel/finished-runtime.sqlite.gz",
+      "bytes": 194955,
+      "sha256": "daffba3492bfea9cf47c7831e4053b41a90beff81d0734e3b3d0d1aa411db47b"
+    },
+    {
+      "path": "one-worker-cancel/process.json",
+      "bytes": 5735,
+      "sha256": "748c670d6eb31ba5208b1e80dab5a4788ca315cbcc15902f6055a7da2bce2e83"
+    },
+    {
+      "path": "one-worker-cancel/retained-design.sqlite.gz",
+      "bytes": 113206,
+      "sha256": "66b0c9799383293891e353bca0e1d4f682c44c24c5d4044d48d9fb959f848d9c"
+    },
+    {
+      "path": "one-worker-cancel/retained-runtime.sqlite.gz",
+      "bytes": 194670,
+      "sha256": "0c113de4595f4a66bbf4762f2e14770023d202927f718c7c84fc79e0d3f4902f"
+    },
+    {
+      "path": "one-worker-cancel/retained.json",
+      "bytes": 872,
+      "sha256": "0e5fd01113e8154eca99970c45a48e773f4795a42e196f76c6634f1688707b83"
+    },
+    {
+      "path": "one-worker-cancel/waiting-design.sqlite.gz",
+      "bytes": 113206,
+      "sha256": "66b0c9799383293891e353bca0e1d4f682c44c24c5d4044d48d9fb959f848d9c"
+    },
+    {
+      "path": "one-worker-cancel/waiting-runtime.sqlite.gz",
+      "bytes": 181566,
+      "sha256": "3e71c5a6617843144c24271234d50a991b7253920f65d279ff6c61bcd1531002"
+    },
+    {
+      "path": "source-binding-check.json",
+      "bytes": 593,
+      "sha256": "c8f4b841c0d303dd2e41f61d710e143a42edfb21a0bf19829420bffa32939d5c"
+    },
+    {
+      "path": "source-boundary.json",
+      "bytes": 1223,
+      "sha256": "64a2e95c2bd966551b7d01f0c61192ca3e0227611d6357c1d173f7be76ce969a"
+    },
+    {
+      "path": "source-identity-failure-index.json",
+      "bytes": 2858,
+      "sha256": "917ad02a49a603579fc33eb55892e46f97917d1c1436020c897a895453e28443"
+    },
+    {
+      "path": "studio-captured-source-identities.json",
+      "bytes": 362,
+      "sha256": "d959927b66a93f647622309e5a7f0f501e0af490ae61d04a34b5b9c03d1ffa3c"
+    },
+    {
+      "path": "whole-preserved-source.log.gz",
+      "bytes": 3436,
+      "sha256": "13ba1c88c79e078325fea5ac815ff9f2dcd2d5015759493f56c909554597c88e"
+    },
+    {
+      "path": "whole-preserved-source.trx.gz",
+      "bytes": 8129,
+      "sha256": "6ca6a9f729c7953d2d0aed5826d0fde30863a1f4a68d921970e6fe045641a004"
+    }
+  ]
+}

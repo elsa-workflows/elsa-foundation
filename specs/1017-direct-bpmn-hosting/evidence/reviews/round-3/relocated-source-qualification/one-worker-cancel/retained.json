@@ -1,0 +1,22 @@
+{
+  "executionId": "bpmn:544621739f8a063c30655c1d1e4e4718b5df061dc0885f7450df4577b1799063",
+  "revision": 3,
+  "status": "TerminalSettled",
+  "protocol": {
+    "key": "elsa.bpmn",
+    "version": 1
+  },
+  "executable": {
+    "artifactId": "sha256:390f9aa36d72ad35fedf052dcb34ca72c2ebfb1de4b61152defb03366cbc62a5",
+    "definitionId": "bpmn-model:sha256:390f9aa36d72ad35fedf052dcb34ca72c2ebfb1de4b61152defb03366cbc62a5",
+    "definitionVersionId": "sha256:390f9aa36d72ad35fedf052dcb34ca72c2ebfb1de4b61152defb03366cbc62a5",
+    "artifactVersion": "1.0.0",
+    "artifactHash": "sha256:390f9aa36d72ad35fedf052dcb34ca72c2ebfb1de4b61152defb03366cbc62a5"
+  },
+  "materialIncarnationId": "b45225ae706d425c8e070e0ff10289fc",
+  "createdAt": "2026-10-30T01:46:06.724369\u002B00:00",
+  "updatedAt": "2026-10-30T20:30:59.70333\u002B00:00",
+  "result": {
+    "status": "Cancelled"
+  }
+}

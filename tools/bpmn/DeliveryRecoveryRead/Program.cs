@@ -19,6 +19,33 @@ using Microsoft.Extensions.DependencyInjection;
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 try
 {
+    if (args.Length == 2 && args[0] == "--read-clr-source-identities")
+    {
+        // Configuration identity travels with a saved catalog; it is never a filesystem lookup.
+        var capturedCatalog = Path.GetFullPath(args[1]);
+        var identities = new HashSet<string>(StringComparer.Ordinal);
+        await using var sourceIdentityConnection = new SqliteConnection(new SqliteConnectionStringBuilder
+            { DataSource = capturedCatalog, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
+        await sourceIdentityConnection.OpenAsync();
+        await using var exists = sourceIdentityConnection.CreateCommand();
+        exists.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='elsa_activity_definition_authoring'";
+        if (Convert.ToInt64(await exists.ExecuteScalarAsync()) != 0)
+        {
+            await using var command = sourceIdentityConnection.CreateCommand();
+            command.CommandText = "SELECT ContentAuthority FROM elsa_activity_definition_authoring WHERE TenantId IS NULL";
+            await using var rows = await command.ExecuteReaderAsync();
+            while (await rows.ReadAsync())
+            {
+                using var authority = JsonDocument.Parse(rows.GetString(0)); var value = authority.RootElement;
+                if (value.GetProperty("kind").GetInt32() != 1 || value.GetProperty("authorityKey").GetString() != "elsa.clr-activity") continue;
+                var identity = value.GetProperty("sourceId").GetString();
+                if (string.IsNullOrWhiteSpace(identity)) throw new InvalidDataException("The captured CLR catalog has no source identity.");
+                identities.Add(identity);
+            }
+        }
+        Console.WriteLine(JsonSerializer.Serialize(new { readOnly = true, sourceIds = identities.Order(StringComparer.Ordinal).ToArray() }, json));
+        return 0;
+    }
     if (args.Length == 3 && args[0] == "--read-post-commit-source")
     {
         var livePath = Path.GetFullPath(args[1]);

@@ -77,6 +77,8 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
             features["WorkflowsRuntimeEntityFrameworkCore"]!["ConnectionString"] = "Data Source=runtime.db";
             foreach (var name in new[] { "ActivitiesDesignEntityFrameworkCore", "WorkflowsDesignEntityFrameworkCore", "WorkflowsPublishingEntityFrameworkCore" })
                 if (features[name] is { } selected) selected["ConnectionString"] = legacyCombinedStore ? "Data Source=runtime.db" : "Data Source=design.db";
+            if ((legacySnapshotDirectory is not null || legacyCombinedStore) && features["ClrActivityReconciliation"] is JsonObject clr)
+                await host.RestoreClrSourceIdentityAsync(clr);
             await File.WriteAllTextAsync(shellPath, shells.ToJsonString());
             await host.LaunchAsync();
             return host;
@@ -86,6 +88,32 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
             await host.DisposeAsync();
             throw;
         }
+    }
+
+    private async Task RestoreClrSourceIdentityAsync(JsonObject feature)
+    {
+        if (!File.Exists(DesignDatabase)) return;
+        var info = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
+            { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        foreach (var arg in new[] { ReaderAssemblyPath, "--read-clr-source-identities", DesignDatabase }) info.ArgumentList.Add(arg);
+        using var reader = Process.Start(info) ?? throw Failure("The captured CLR source identity reader did not start.");
+        var output = reader.StandardOutput.ReadToEndAsync(); var error = reader.StandardError.ReadToEndAsync();
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        try { await reader.WaitForExitAsync(limit.Token); }
+        catch { if (!reader.HasExited) { reader.Kill(entireProcessTree: true); await reader.WaitForExitAsync(); } throw; }
+        if (reader.ExitCode != 0) throw Failure("The captured CLR source identity could not be read: " + await error);
+        var identities = JsonNode.Parse(await output)!["sourceIds"]!.AsArray().Select(id => id!.GetValue<string>()).ToArray();
+        if (identities.Length == 0) return;
+        if (identities.Length != 1) throw Failure("Multiple captured CLR sources require an explicit source-to-folder binding.");
+        if (feature["Options"] is not JsonObject options)
+        {
+            options = new JsonObject(); feature["Options"] = options;
+        }
+        if (options["SourceId"] is { } configured && configured.GetValue<string>() != identities[0])
+            throw Failure("The configured CLR source identity differs from the captured catalog authority.");
+        // Preserve the logical authority without treating its path-shaped value as a filesystem location.
+        // FolderPath is independent and retains this host's normal current-build scan location.
+        options["SourceId"] = identities[0];
     }
 
     public async Task LoginAsync()

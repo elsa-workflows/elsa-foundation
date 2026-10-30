@@ -68,3 +68,7 @@ The [final affected-source repeat](evidence/final-compatibility/README.md) quali
 ## Delivery receipt
 
 One concise receipt maps FR-001–FR-022, SC-001–SC-006 and all #2898 criteria to committed assets/commands/results, explains provider/profile limits and lists remaining #2907/program obligations. Verify every recorded asset hash and relative link. Complete the independent full-PR loop within six rounds, green exact-head required checks and protected merge, then verify actual resulting main. Keep issue/PR/Project62 current and release only the completed specific claim.
+
+### Preserve the CLR source identity when relocating a saved catalog
+
+The saved catalog's configured `ClrActivityReconciliation.Options.SourceId` travels with the deployment. Its `FolderPath` selects the current assembly directory independently; a path-shaped historical source ID is an opaque identity, not a file dependency. The existing [options contract](../../Essentials/src/Activities/Design/Reconciliation/Clr/Options/ClrReconciliationOptions.cs) deliberately treats different default folders as different sources. The owned legacy/Studio controllers read the captured global CLR authority through `DeliveryRecoveryRead --read-clr-source-identities <closed-Design-store>` and carry its sole source ID as configuration. They refuse ambiguous sources or a conflicting explicit binding. They do not rewrite saved authority, versions, pins or authoring. Fresh deployments can choose an explicit stable source ID before their first publication.
