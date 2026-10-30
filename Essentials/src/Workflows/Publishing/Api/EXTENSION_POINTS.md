@@ -39,6 +39,10 @@ transport (the default reads `HttpContext`). The engine is authorization-free an
 default, so this contract and the activity-draft services that consume it are registered only by this API
 feature. A replacement must supply the same tenant/scope facts the activity-draft publish/test-run flow expects.
 
+Known decorator: `Elsa3JsonReconciliation` (spec 235) wraps the registered context so its startup task can publish
+imported Elsa 3 reusables in its persistence scope's tenant, inside its own operation scope only; every other call
+reaches the decorated context unchanged.
+
 ### Activity draft Test Runs
 
 - `IActivityDraftTestRunStore` owns one receipt per deterministic `(OperationScope, DraftId, IdempotencyKey)`

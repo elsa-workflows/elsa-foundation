@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-13 · **Revised**: 2026-10-30 (see *Revision 2026-10-30*)
 
-**Status**: Draft
+**Status**: Implemented
 
 **Tracking**: ADO 47607, #2707; part of epic #3052 (prerequisites #2705 and #2706 are done: specs 239 and 236)
 

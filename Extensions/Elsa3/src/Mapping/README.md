@@ -1,7 +1,9 @@
 # Elsa3.Mapping
 
 Converts Elsa 3 workflow definitions to Elsa 4 Design state. The single-definition import and the Elsa 3 collection
-import both use one converter, `IElsa3DefinitionConverter`. Start-time reconciliation (spec 235) builds on it. The
+import both use one converter, `IElsa3DefinitionConverter`. Start-time reconciliation (spec 235,
+[`Elsa3JsonReconciliation`](../Activities/Design/Import/Reconciliation/README.md)) runs the collection import on a
+folder of Elsa 3 exports at engine start, so it converts exactly as the collection import does. The
 decision record for every Elsa 3 member is
 [`specs/236-elsa3-activity-map/member-map.md`](../../../../specs/236-elsa3-activity-map/member-map.md); flowchart
 connections follow [`specs/239-elsa3-flowchart-connections`](../../../../specs/239-elsa3-flowchart-connections/spec.md).
