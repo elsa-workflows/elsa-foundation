@@ -34,7 +34,8 @@ public sealed record RuntimeCheckpointCommit(
     public void EnsureModelParentAdmissionShape()
     {
         if (ExpectedModelParentWait is not { } expected) return;
-        if (ModelState is not { ExpectedRevision: null, State.Lifecycle: RuntimeModelLifecycle.Running } model ||
+        // A first evaluation may already owe its terminal result to this same live parent wait.
+        if (ModelState is not { ExpectedRevision: null, State.Lifecycle: RuntimeModelLifecycle.Running or RuntimeModelLifecycle.TerminalPendingSettlement } model ||
             ExpectedFence is null || ExpectedModelExecution is not null || ExpectedBookmarkResume is not null ||
             expected.WorkflowExecutionId == WorkflowExecutionId || expected.RegistrationCapture is not { } capture ||
             capture.Scope.PersistenceScope != model.State.Scope || capture.Scope.TenantId != model.State.TenantId ||

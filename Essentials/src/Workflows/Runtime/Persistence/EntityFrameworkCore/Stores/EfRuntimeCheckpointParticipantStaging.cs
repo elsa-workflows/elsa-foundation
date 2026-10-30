@@ -35,7 +35,7 @@ internal static class EfRuntimeCheckpointParticipantStaging
             candidate.WorkflowExecutionIdHash == EfRuntimeOperationalStoreSupport.Hash(change.StateId) &&
             candidate.WorkflowExecutionId == EfRuntimeOperationalStoreSupport.Encode(change.StateId),
             cancellationToken);
-        var writeVersion = RuntimeNativeModelWorkWriteVersion.For(context, change.State, row?.SchemaVersion);
+        var writeVersion = ModelWorkWriteVersion.For(context, change.State, row?.SchemaVersion);
 
         if (row is null)
         {

@@ -1878,5 +1878,5 @@ virtual Elsa.Workflows.Runtime.Services.Claims.FencedClaimRenewal<TClaim>.Invoke
 ~override Elsa.Workflows.Runtime.Services.Values.RuntimeWorkflowIdentity.ToString() -> string
 static Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableDependencyGraph.ResolveMaterialClosure(System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!>! roots, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial!>! materials) -> System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial!>!
 Elsa.Workflows.Runtime.Services.Coalescing.CoalescingWorkflowSchedulerWorkQueue.SupportsClaimValidation.get -> bool
-Elsa.Workflows.Runtime.Extensions.RuntimeModelHostingServiceCollectionExtensions
-static Elsa.Workflows.Runtime.Extensions.RuntimeModelHostingServiceCollectionExtensions.AddRuntimeModelHosting(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+Elsa.Workflows.Runtime.Extensions.ModelHostingServiceCollectionExtensions
+static Elsa.Workflows.Runtime.Extensions.ModelHostingServiceCollectionExtensions.AddRuntimeModelHosting(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Text.Json;
+using Bpmn.Model;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Internal;
 using Elsa.Events.Core.Contracts;
@@ -15,6 +16,74 @@ namespace Elsa.Activities.Bpmn.Tests;
 
 public sealed partial class BpmnDirectExecutionTests
 {
+    [Fact]
+    public async Task Accepted_start_replays_after_publication_retirement_without_admitting_new_work()
+    {
+        await using var host = await OpenAsync();
+        await using var scope = await ScopeAsync(host);
+        var runtime = scope.ServiceProvider.GetRequiredService<IBpmnModelRuntime>();
+        var caller = new BpmnModelCaller("operator", null);
+        var definition = Material().Definition.Deserialize<BpmnModelDefinition>(Web)!;
+        var published = await runtime.PublishAsync(definition, "retained-publication", caller);
+        var started = await runtime.StartAsync(published.SourceReferenceId, "retained-start", null, caller);
+        Assert.True(await scope.ServiceProvider.GetRequiredService<IWorkflowExecutableSourceReferenceStore>()
+            .RetireAsync(published.SourceReferenceId, DateTimeOffset.UtcNow));
+        var replay = await runtime.StartAsync(published.SourceReferenceId, "retained-start", new Dictionary<string, JsonElement>(), caller);
+        Assert.True(replay.Replay);
+        Assert.False(replay.Pending);
+        Assert.Equal(started.ExecutionId, replay.ExecutionId);
+        Assert.Equal(started.Result!.Value.GetRawText(), replay.Result!.Value.GetRawText());
+        await Assert.ThrowsAsync<BpmnModelResourceMissingException>(() =>
+            runtime.StartAsync(published.SourceReferenceId, "fresh-start", null, caller).AsTask());
+        await Assert.ThrowsAsync<BpmnModelResourceMissingException>(() =>
+            runtime.StartAsync(published.SourceReferenceId, "retained-start", null, new("another-operator", null)).AsTask());
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(() =>
+            runtime.StartAsync("different-source", "retained-start", null, caller).AsTask());
+        await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(() => runtime.StartAsync(published.SourceReferenceId,
+            "retained-start", new Dictionary<string, JsonElement> { ["changed"] = JsonSerializer.SerializeToElement(true) }, caller).AsTask());
+        Assert.Equal(1, (await runtime.FindExecutionAsync(started.ExecutionId, caller))!.Revision);
+    }
+
+    [Fact]
+    public async Task Human_work_inspection_wraps_owned_persisted_JSON_with_execution_context()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var state = new RuntimeModelExecutionState(1, new("tenant-a"), "broken-work-execution", "tenant-a", new("elsa.bpmn", 1),
+            Material().Identity, "incarnation", 1, RuntimeModelLifecycle.Running, new("bpmn-runtime", "operator"), now, now,
+            JsonSerializer.SerializeToElement(new { formatVersion = 1, work = "invalid-shape" }), null);
+        var access = new InspectionAccess();
+        var runtime = new BpmnModelRuntime(null!, null!, null!, null!, null!, access, null!, TimeProvider.System, null!, states: new InspectionReader(state));
+        var error = await Assert.ThrowsAsync<BpmnModelValidationException>(() =>
+            runtime.ListWorkAsync(state.ExecutionId, new(), new("operator", "tenant-a")).AsTask());
+        Assert.IsAssignableFrom<JsonException>(error.InnerException);
+        Assert.Contains(state.ExecutionId, error.Message);
+    }
+
+    [Fact]
+    public async Task A_refused_construct_names_its_process_element_and_type()
+    {
+        await using var host = await OpenAsync();
+        await using var scope = await ScopeAsync(host);
+        var process = new BpmnProcessDefinition("approval-process", Elements:
+            [new("start", BpmnElementTypes.StartEvent), new("unsupported-call-42", BpmnElementTypes.CallActivity), new("end", BpmnElementTypes.EndEvent)],
+            SequenceFlows: [new("call", "start", "unsupported-call-42"), new("end", "unsupported-call-42", "end")]);
+        var error = await Assert.ThrowsAsync<BpmnModelValidationException>(() => scope.ServiceProvider.GetRequiredService<IBpmnModelRuntime>()
+            .PublishAsync(new(1, JsonSerializer.SerializeToElement(process, Web), []), "refused-profile", new("operator", null)).AsTask());
+        Assert.Contains("approval-process", error.Message);
+        Assert.Contains("unsupported-call-42", error.Message);
+        Assert.Contains(BpmnElementTypes.CallActivity, error.Message);
+    }
+
+    private sealed class InspectionAccess : IPersistenceAccessContextAccessor
+    { public PersistenceAccessContext Current { get; } = PersistenceAccessContext.Scoped(new("tenant-a")); }
+
+    private sealed class InspectionReader(RuntimeModelExecutionState state) : IRuntimeModelExecutionReader
+    {
+        public ValueTask<RuntimeModelExecutionState?> FindAsync(string executionId, CancellationToken cancellationToken = default) => ValueTask.FromResult<RuntimeModelExecutionState?>(state);
+        public ValueTask<RuntimeModelInputReceipt?> FindInputAsync(string executionId, string inputId, CancellationToken cancellationToken = default) => ValueTask.FromResult<RuntimeModelInputReceipt?>(null);
+        public ValueTask<RuntimeStorePage<RuntimeModelExecutionState>> ListPageAsync(RuntimeStorePageRequest request, CancellationToken cancellationToken = default) => ValueTask.FromResult(new RuntimeStorePage<RuntimeModelExecutionState>(request, [state], null));
+    }
+
     [Fact]
     public async Task An_external_observer_can_subscribe_to_the_public_Core_protocol_startup_event()
     {

@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Elsa.Workflows.Runtime.Extensions;
 
 /// <summary>Opt-in model dispatch through the existing runtime mailbox, scheduler and checkpoint authority.</summary>
-public static class RuntimeModelHostingServiceCollectionExtensions
+public static class ModelHostingServiceCollectionExtensions
 {
     /// <summary>Requires Events startup dispatch and qualified physical model/queue providers before admission.</summary>
     public static IServiceCollection AddRuntimeModelHosting(this IServiceCollection services)

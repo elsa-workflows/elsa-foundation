@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -22,8 +23,16 @@ internal sealed class EfRuntimeModelExecutionReader(RuntimeDbContext context, IP
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope(access);
         var id = CompositeId(scope, executionId);
-        var row = await context.Set<RuntimeModelExecutionEntity>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
-        return row is null ? null : Read(row, scope, executionId);
+        try
+        {
+            var row = await context.Set<RuntimeModelExecutionEntity>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+            return row is null ? null : Read(row, scope, executionId);
+        }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw Unavailable("reading execution", scope, executionId, null, exception);
+        }
     }
 
     public async ValueTask<RuntimeModelInputReceipt?> FindInputAsync(string executionId, string inputId, CancellationToken cancellationToken = default)
@@ -32,8 +41,16 @@ internal sealed class EfRuntimeModelExecutionReader(RuntimeDbContext context, IP
         cancellationToken.ThrowIfCancellationRequested();
         var scope = RequireScope(access);
         var id = CompositeId(scope, executionId, inputId);
-        var row = await context.Set<RuntimeModelInputEntity>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
-        return row is null ? null : Read(row, scope, executionId, inputId);
+        try
+        {
+            var row = await context.Set<RuntimeModelInputEntity>().AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+            return row is null ? null : Read(row, scope, executionId, inputId);
+        }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw Unavailable("reading input", scope, executionId, inputId, exception);
+        }
     }
 
     public async ValueTask<RuntimeStorePage<RuntimeModelExecutionState>> ListPageAsync(RuntimeStorePageRequest request,
@@ -55,16 +72,29 @@ internal sealed class EfRuntimeModelExecutionReader(RuntimeDbContext context, IP
             catch (Exception exception) when (exception is JsonException or FormatException or ArgumentException or InvalidDataException)
             { throw new ArgumentException("The model execution continuation does not match this scoped query.", nameof(request), exception); }
         }
-        var rows = context.Set<RuntimeModelExecutionEntity>().AsNoTracking()
-            .Where(x => x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope));
-        if (after is not null) rows = rows.Where(x => x.ExecutionIdOrderKey.CompareTo(after) > 0);
-        var page = await rows.OrderBy(x => x.ExecutionIdOrderKey).Take(request.Limit + 1).ToArrayAsync(cancellationToken);
-        var states = page.Take(request.Limit).Select(x => Read(x, scope, Decode(x.ExecutionId))).ToArray();
-        var next = page.Length > request.Limit
-            ? continuationCodec.Encode(CursorPurpose, Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new Cursor(1, Hash(scope), states[^1].ExecutionId, Order(states[^1].ExecutionId)))))
-            : null;
-        return new(request, states, next);
+        try
+        {
+            var rows = context.Set<RuntimeModelExecutionEntity>().AsNoTracking()
+                .Where(x => x.ScopeKeyHash == Hash(scope) && x.ScopeKey == Encode(scope));
+            if (after is not null) rows = rows.Where(x => x.ExecutionIdOrderKey.CompareTo(after) > 0);
+            var page = await rows.OrderBy(x => x.ExecutionIdOrderKey).Take(request.Limit + 1).ToArrayAsync(cancellationToken);
+            var states = page.Take(request.Limit).Select(x => Read(x, scope, Decode(x.ExecutionId))).ToArray();
+            var next = page.Length > request.Limit
+                ? continuationCodec.Encode(CursorPurpose, Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new Cursor(1, Hash(scope), states[^1].ExecutionId, Order(states[^1].ExecutionId)))))
+                : null;
+            return new(request, states, next);
+        }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw Unavailable("listing executions", scope, null, null, exception);
+        }
     }
+
+    private static RuntimeSchedulerWorkUnavailableException Unavailable(string operation, string scope, string? executionId,
+        string? inputId, Exception exception) => new("runtime.model-state-unavailable",
+        $"Model state {operation} failed in persistence scope '{scope}' for execution '{executionId ?? "<page>"}'" +
+        (inputId is null ? "." : $", input '{inputId}'."), exception);
 
     internal static RuntimeModelExecutionState Read(RuntimeModelExecutionEntity row, string scope, string executionId)
     {

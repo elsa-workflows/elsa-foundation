@@ -6,7 +6,7 @@ using static Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores.EfRun
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
-internal static class EfRuntimeModelCheckpointParticipantStaging
+internal static class EfModelCheckpointStaging
 {
     public static async ValueTask StageAdmissionAsync(RuntimeDbContext context, RuntimeModelExecutionState expected,
         string scope, CancellationToken cancellationToken)

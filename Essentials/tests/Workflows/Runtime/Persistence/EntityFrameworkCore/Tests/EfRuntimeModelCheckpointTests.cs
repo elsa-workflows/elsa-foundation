@@ -22,6 +22,32 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed class EfRuntimeModelCheckpointTests
 {
+    [Theory]
+    [InlineData("state")]
+    [InlineData("input")]
+    [InlineData("page")]
+    public async Task Model_read_provider_failures_retain_context_and_cancellation(string operation)
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var context = new RuntimeSqliteDbContext(new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connection).Options);
+        var reader = Reader(context);
+        async Task Read(CancellationToken token = default)
+        {
+            if (operation == "state") await reader.FindAsync("requested-execution", token);
+            else if (operation == "input") await reader.FindInputAsync("requested-execution", "requested-input", token);
+            else await reader.ListPageAsync(new(), token);
+        }
+        var error = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => Read());
+        Assert.IsType<SqliteException>(error.InnerException);
+        Assert.Contains("tenant-a", error.Message);
+        if (operation != "page") Assert.Contains("requested-execution", error.Message);
+        if (operation == "input") Assert.Contains("requested-input", error.Message);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Read(cancellation.Token));
+    }
+
     private static readonly DateTimeOffset Now = new(2026, 10, 28, 12, 0, 0, TimeSpan.Zero);
     private static readonly RuntimeExecutionProtocol Protocol = new("test.model", 1);
     private static readonly WorkflowExecutableIdentity Pin = CreatePin();

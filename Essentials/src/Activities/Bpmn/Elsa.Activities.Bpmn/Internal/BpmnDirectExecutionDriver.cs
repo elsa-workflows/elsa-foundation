@@ -375,7 +375,9 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                 WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(dependency.Executable, binding.Executable))))
             throw new BpmnModelValidationException("The native work inventory differs from the model's complete retained dependency pins.");
         var process = envelope.Process.Deserialize<BpmnProcessDefinition>(Strict) ?? throw new BpmnModelValidationException("BPMN process definition is missing.");
-        if (process.Variables.Count != 0 || process.IsTransaction || process.Elements.Any(item =>
+        if (process.Variables.Count != 0 || process.IsTransaction)
+            throw new BpmnModelValidationException($"BPMN process '{process.ProcessId}' has variables or transaction behavior outside its declared hosting profile.");
+        var unsupported = process.Elements.FirstOrDefault(item =>
                 (events ? item.ElementType is not (BpmnElementTypes.StartEvent or BpmnElementTypes.EndEvent or BpmnElementTypes.ParallelGateway or BpmnElementTypes.IntermediateCatchEvent) :
                     timed ? item.ElementType is not (BpmnElementTypes.StartEvent or BpmnElementTypes.EndEvent or BpmnElementTypes.ServiceTask or BpmnElementTypes.UserTask or BpmnElementTypes.ParallelGateway or BpmnElementTypes.BoundaryEvent) :
                     native ? item.ElementType is not (BpmnElementTypes.StartEvent or BpmnElementTypes.EndEvent or BpmnElementTypes.ServiceTask or BpmnElementTypes.BoundaryEvent) :
@@ -384,8 +386,9 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
                     item.ElementType == BpmnElementTypes.BoundaryEvent ? !native ||
                     !(IsCodedServiceErrorBoundary(item, process) || timed && IsDurationBoundary(item, process, envelope)) : item.EventDefinitions.Count != 0) ||
                 item.LoopCharacteristics is not null || item.IsForCompensation || item.TriggeredByEvent ||
-                item.ListenerBindingRef is not null || item.IsTransaction || item.Script is not null || item.Properties.Count != 0))
-            throw new BpmnModelValidationException("The BPMN definition contains elements or events outside its declared hosting profile.");
+                item.ListenerBindingRef is not null || item.IsTransaction || item.Script is not null || item.Properties.Count != 0);
+        if (unsupported is not null)
+            throw new BpmnModelValidationException($"BPMN process '{process.ProcessId}' element '{unsupported.ElementId}' of type '{unsupported.ElementType}' contains behavior outside its declared hosting profile.");
         if (native && !timed && !events && (envelope.HumanBindings.Count != 0 || envelope.ServiceBindings!.Count != 1 ||
             process.Elements.Count(item => item.ElementType == BpmnElementTypes.ServiceTask) != 1))
             throw new BpmnModelValidationException("The current native service profile requires one closed published native worker, plain start/end events and optional coded error boundaries.");

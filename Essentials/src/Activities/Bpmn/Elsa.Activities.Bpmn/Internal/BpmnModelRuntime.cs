@@ -82,6 +82,20 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         IReadOnlyDictionary<string, JsonElement>? inputs, BpmnModelCaller caller, CancellationToken cancellationToken = default)
     {
         var scope = Scope(caller); InputId(requestId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceReferenceId);
+        var execution = "bpmn:" + BpmnModelIdentity.Create(scope.Value, caller.TenantId ?? "", caller.ActorId, requestId);
+        var payload = JsonSerializer.SerializeToElement(new { inputs = inputs ?? new Dictionary<string, JsonElement>(), sourceReferenceId }, Web);
+        RuntimeModelExecutionCommand Command(WorkflowExecutableIdentity pin, string incarnation) =>
+            new(pin, incarnation, requestId, "start", payload, new("bpmn-runtime", caller.ActorId), caller.TenantId);
+        // Check the queue before the receipt so consumption between these reads still finds
+        // its committed outcome. Retirement prevents fresh admission, not accepted-work replay.
+        if (await PendingAsync(execution, requestId, caller, cancellationToken) is { } pending)
+            return await DispatchAsync(execution, Command(pending.Executable, pending.MaterialIncarnationId), caller, cancellationToken);
+        if (await States.FindInputAsync(execution, requestId, cancellationToken) is not null)
+        {
+            var retained = await FindExecutionAsync(execution, caller, cancellationToken) ?? throw new BpmnModelResourceMissingException();
+            return await DispatchAsync(execution, Command(retained.Executable, retained.MaterialIncarnationId), caller, cancellationToken);
+        }
         var source = await sources.FindAsync(sourceReferenceId, cancellationToken);
         if (source is null || source.SourceKind != SourceKind || source.TenantId != caller.TenantId || !source.IsLive(clock.GetUtcNow()))
             throw new BpmnModelResourceMissingException();
@@ -89,10 +103,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         if (material?.Model is null || material.Identity.DefinitionId != source.DefinitionId ||
             material.Identity.DefinitionVersionId != source.DefinitionVersionId || material.Identity.ArtifactVersion != source.ArtifactVersion)
             throw new BpmnModelValidationException("The selected source does not name available pinned model material.");
-        var execution = "bpmn:" + BpmnModelIdentity.Create(scope.Value, caller.TenantId ?? "", caller.ActorId, requestId);
-        var command = new RuntimeModelExecutionCommand(material.Identity, material.IncarnationId, requestId, "start",
-            JsonSerializer.SerializeToElement(new { inputs = inputs ?? new Dictionary<string, JsonElement>(), sourceReferenceId }, Web), new("bpmn-runtime", caller.ActorId), caller.TenantId);
-        return await DispatchAsync(execution, command, caller, cancellationToken);
+        return await DispatchAsync(execution, Command(material.Identity, material.IncarnationId), caller, cancellationToken);
     }
 
     public async ValueTask<RuntimeModelExecutionState?> FindExecutionAsync(string executionId, BpmnModelCaller caller,
@@ -119,7 +130,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
                 throw new ArgumentException("The work continuation belongs to a different execution snapshot.");
             after = cursor.After;
         }
-        var document = state.Payload.Deserialize<BpmnDirectExecutionDriver.Document>(Web) ?? throw new BpmnModelValidationException("BPMN state is missing.");
+        var document = BpmnDirectExecutionDriver.Read(state);
         var items = document.Work.Where(item => item.NativeWork is null && item.Timer is null).OrderBy(item => item.InvocationId, StringComparer.Ordinal)
             .Where(item => after is null || string.CompareOrdinal(item.InvocationId, after) > 0).Take(request.Limit + 1).ToArray();
         var more = items.Length > request.Limit;

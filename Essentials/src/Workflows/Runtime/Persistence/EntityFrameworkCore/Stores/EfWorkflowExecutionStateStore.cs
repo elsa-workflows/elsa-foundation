@@ -61,7 +61,7 @@ public sealed class EfWorkflowExecutionStateStore(
             await LockWorkflowExecutionForWriteAsync(context, scope, state.WorkflowExecutionId, cancellationToken);
             await EfExecutionLivenessStateStore.EnsureWorkflowExecutionNotDeletedAsync(context, scope, state.WorkflowExecutionId, cancellationToken);
             var row = await context.WorkflowExecutionStates.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
-            var writeVersion = RuntimeNativeModelWorkWriteVersion.For(context, state, row?.SchemaVersion);
+            var writeVersion = ModelWorkWriteVersion.For(context, state, row?.SchemaVersion);
             if (row is null && state.ModelWorkOrigin is not null)
                 throw new NotSupportedException("Model-owned native workers require initial admission through the conditional runtime checkpoint.");
             if (row is not null && state.ModelWorkOrigin is not null && state.Status.IsTerminal() &&

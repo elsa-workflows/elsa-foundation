@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
-internal static class RuntimeNativeModelWorkWriteVersion
+internal static class ModelWorkWriteVersion
 {
     public static string For(RuntimeDbContext context, WorkflowExecutionState state, string? storedVersion = null)
     {
