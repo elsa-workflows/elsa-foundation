@@ -141,3 +141,22 @@ for (const theme of ["light", "dark", "material"]) for (const width of [390, 144
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
   });
 }
+
+for (const theme of ["light", "dark"]) {
+  test(`workflow Properties uses the same add-variable button (${theme})`, async ({ page }) => {
+    await page.goto(`/?mode=activity-duplicate-editor&theme=${theme}`);
+    await page.getByRole("tab", { name: "Properties", exact: true }).click();
+    const variables = page.locator(".wf-properties-section").filter({ has: page.getByRole("heading", { name: "Variables", exact: true }) });
+    const add = variables.getByRole("button", { name: "Add variable", exact: true });
+    await expect(add).toBeVisible();
+    expect((await add.boundingBox())!.height).toBeGreaterThanOrEqual(30);
+    await add.focus();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(add).toBeFocused();
+    expect(await add.evaluate(element => getComputedStyle(element).outlineStyle)).toBe("solid");
+    await add.click();
+    await expect(variables.getByRole("textbox", { name: "Variable name", exact: true })).toHaveCount(1);
+    await page.screenshot({ path: `/tmp/workflow-argument-button-${theme}.png` });
+  });
+}
