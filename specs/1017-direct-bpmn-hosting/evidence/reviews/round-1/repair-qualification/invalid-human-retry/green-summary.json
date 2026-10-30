@@ -1,0 +1,12 @@
+{
+  "source": "7fc0217a4520216834125c9b94b3a851fb02841c",
+  "completionExecution": "bpmn:ff32e1b1d0839abc30238d45b796ced92b14fe7cb12541bb3bf02cdf69e9d9bd",
+  "cancellationExecution": "bpmn:55bab7ff22f7aac0cbc07ea4850835be21e6ed19678347475f57578f3d2cf3d8",
+  "completionRevision": 2,
+  "cancellationRevision": 2,
+  "retryRejectedDurably": true,
+  "bothFollowingCommandsAccepted": true,
+  "queuedInputs": 0,
+  "seededState": false,
+  "editedClock": false
+}

@@ -1,0 +1,37 @@
+[
+  {
+    "source": "0ce9a41dba03c4f362c4d386f14737823f33238a",
+    "case": "direct",
+    "wholeStores": 12,
+    "originalResultDeferredAndRecovered": true,
+    "embedded": false
+  },
+  {
+    "source": "0ce9a41dba03c4f362c4d386f14737823f33238a",
+    "case": "root",
+    "wholeStores": 12,
+    "originalResultDeferredAndRecovered": true,
+    "embedded": true
+  },
+  {
+    "source": "0ce9a41dba03c4f362c4d386f14737823f33238a",
+    "case": "sequence",
+    "wholeStores": 12,
+    "originalResultDeferredAndRecovered": true,
+    "embedded": true
+  },
+  {
+    "source": "0ce9a41dba03c4f362c4d386f14737823f33238a",
+    "case": "flowchart",
+    "wholeStores": 12,
+    "originalResultDeferredAndRecovered": true,
+    "embedded": true
+  },
+  {
+    "source": "0ce9a41dba03c4f362c4d386f14737823f33238a",
+    "case": "compensationscope",
+    "wholeStores": 12,
+    "originalResultDeferredAndRecovered": true,
+    "embedded": true
+  }
+]

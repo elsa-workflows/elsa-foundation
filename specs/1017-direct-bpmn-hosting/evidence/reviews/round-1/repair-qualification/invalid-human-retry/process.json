@@ -1,0 +1,16 @@
+{
+  "processId": 52057,
+  "controllerProcessId": 52041,
+  "command": [
+    "dotnet",
+    "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll",
+    "--contentRoot",
+    "/tmp/elsa-2898-review-1/fixed-7fc0217a4/retry-human/host",
+    "--urls",
+    "http://127.0.0.1:0"
+  ],
+  "startedAt": 1793361729.52045,
+  "exitCode": 0,
+  "stoppedAt": 1793361734.619294,
+  "baseAddress": "http://127.0.0.1:62795"
+}

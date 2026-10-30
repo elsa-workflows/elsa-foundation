@@ -1,0 +1,329 @@
+{
+  "readOnly": true,
+  "model": {
+    "formatVersion": 1,
+    "scope": {
+      "value": "default"
+    },
+    "executionId": "bpmn-embedded:afe5f05c5a22d78ea4f787bfbb0604eada468320fdd547d8ae598ea134bc7903",
+    "tenantId": "default",
+    "protocol": {
+      "key": "elsa.bpmn",
+      "version": 1
+    },
+    "executable": {
+      "artifactId": "sha256:f8ac88f0eb45b6012f1d2e21d74f59887c1ac7c2450c64c6992a63329e6d8238",
+      "definitionId": "bpmn-model:sha256:f8ac88f0eb45b6012f1d2e21d74f59887c1ac7c2450c64c6992a63329e6d8238",
+      "definitionVersionId": "sha256:f8ac88f0eb45b6012f1d2e21d74f59887c1ac7c2450c64c6992a63329e6d8238",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:f8ac88f0eb45b6012f1d2e21d74f59887c1ac7c2450c64c6992a63329e6d8238"
+    },
+    "materialIncarnationId": "5fe3e590b343421c8fd9677874ead83a",
+    "revision": 1,
+    "lifecycle": 0,
+    "authority": {
+      "systemIdentity": "runtime-api",
+      "rootInitiator": "runtime-api",
+      "metadata": {}
+    },
+    "createdAt": "2026-10-30T12:10:45.187966+00:00",
+    "updatedAt": "2026-10-30T12:10:45.187966+00:00",
+    "payload": {
+      "formatVersion": 5,
+      "state": {
+        "tokens": [
+          {
+            "tokenId": "token:4",
+            "atElementId": "service",
+            "flowId": "to-service",
+            "parentTokenId": "token:1",
+            "status": 1,
+            "producingWorkHandle": "bpmn-embedded:afe5f05c5a22d78ea4f787bfbb0604eada468320fdd547d8ae598ea134bc7903",
+            "iterationKey": null,
+            "kind": null,
+            "stoppedHandle": null
+          }
+        ],
+        "activeWork": [
+          {
+            "nodeId": "pipeline",
+            "elementId": "service",
+            "tokenId": "token:4",
+            "schedulingCause": "element:serviceTask",
+            "iterationId": null
+          }
+        ],
+        "diagnostics": [
+          {
+            "diagnosticId": "diag:2",
+            "kind": 0,
+            "message": "BPMN start event 'start' emitted the initial token.",
+            "elementId": "start",
+            "flowId": null,
+            "tokenId": "token:1",
+            "details": {}
+          },
+          {
+            "diagnosticId": "diag:5",
+            "kind": 0,
+            "message": "BPMN token 'token:4' arrived at element 'service' via flow 'to-service'.",
+            "elementId": "service",
+            "flowId": "to-service",
+            "tokenId": "token:4",
+            "details": {}
+          },
+          {
+            "diagnosticId": "diag:8",
+            "kind": 1,
+            "message": "BPMN element 'service' started work 'pipeline'.",
+            "elementId": "service",
+            "flowId": null,
+            "tokenId": "token:4",
+            "details": {}
+          }
+        ],
+        "sequence": 8,
+        "races": [],
+        "loops": [],
+        "compensables": [],
+        "compensationRuns": [],
+        "terminated": false,
+        "cancelling": false,
+        "pendingFault": null
+      },
+      "work": [
+        {
+          "elementId": "service",
+          "bindingId": "pipeline",
+          "tokenId": "token:4",
+          "iterationId": null,
+          "invocationId": "bpmn-work:c17f412b7ac4118c4d8ab4f650423f521d9b49af273e0c9384ae3691752cca0f",
+          "attemptId": "attempt:aa273ed36c050e6eb40a4c57c447f5c30922b82ccf1e0c57e83695a831a44725",
+          "nativeWork": {
+            "formatVersion": 1,
+            "scope": {
+              "value": "default"
+            },
+            "executionId": "bpmn-embedded:afe5f05c5a22d78ea4f787bfbb0604eada468320fdd547d8ae598ea134bc7903",
+            "protocol": {
+              "key": "elsa.bpmn",
+              "version": 1
+            },
+            "executable": {
+              "artifactId": "sha256:f8ac88f0eb45b6012f1d2e21d74f59887c1ac7c2450c64c6992a63329e6d8238",
+              "definitionId": "bpmn-model:sha256:f8ac88f0eb45b6012f1d2e21d74f59887c1ac7c2450c64c6992a63329e6d8238",
+              "definitionVersionId": "sha256:f8ac88f0eb45b6012f1d2e21d74f59887c1ac7c2450c64c6992a63329e6d8238",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:f8ac88f0eb45b6012f1d2e21d74f59887c1ac7c2450c64c6992a63329e6d8238"
+            },
+            "materialIncarnationId": "5fe3e590b343421c8fd9677874ead83a",
+            "bindingId": "pipeline",
+            "invocationId": "bpmn-work:c17f412b7ac4118c4d8ab4f650423f521d9b49af273e0c9384ae3691752cca0f",
+            "attemptId": "attempt:aa273ed36c050e6eb40a4c57c447f5c30922b82ccf1e0c57e83695a831a44725",
+            "workerExecutable": {
+              "artifactId": "artifact-22db261c4b21",
+              "definitionId": "14mEXIbBi0c",
+              "definitionVersionId": "14mEXIcS6fT",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:22db261c4b211820abe640e4558fc79e632966e34b3268bdc561c91a42597ae5"
+            },
+            "workerExecutionId": "wfexec:start:v1:2e75ae2fc2c820363f38027bce264659497c0a0aa2b5ecf4d99dd42b6d41d998",
+            "sourceOutboxItemId": "model-input:eeb8664f4d8149f850076e562ca15a5051042438051510311ccb0225cbaf27a1:bpmn-start-native:a7d81d6c316c560a05a370ec9e1823a6c29812f10222d903a9bfda7b8dadc9d0",
+            "sourceIntentId": "bpmn-start-native:a7d81d6c316c560a05a370ec9e1823a6c29812f10222d903a9bfda7b8dadc9d0",
+            "resultIntentKind": "Elsa.Bpmn.NativeWorkResult.v1",
+            "resultInputId": "native-result:af2d5c3816138443fe97ac351699278a564b9216f42532b347fb14810f21c766"
+          }
+        }
+      ],
+      "sourceReferenceId": null,
+      "nativeParent": {
+        "invocation": {
+          "formatVersion": 1,
+          "scope": {
+            "value": "u16:ZABlAGYAYQB1AGwAdAA="
+          },
+          "executionId": "u16:YgBwAG0AbgAtAGUAbQBiAGUAZABkAGUAZAA6AGEAZgBlADUAZgAwADUAYwA1AGEAMgAyAGQANwA4AGUAYQA0AGYANwA4ADcAYgBmAGIAYgAwADYAMAA0AGUAYQBkAGEANAA2ADgAMwAyADAAZgBkAGQANQA0ADcAZAA4AGEAZQA1ADkAOABlAGEAMQAzADQAYgBjADcAOQAwADMA",
+          "model": {
+            "sourceReferenceId": "u16:YgBwAG0AbgAtAHMAbwB1AHIAYwBlADoAMABhADEAMwA1ADcAMwBiAGUAYwA3ADYAYQBmAGQAYQAwADEAMwBlADIAZQA3ADYAYgAxADgAYgAwADUAOQAzADkAYwAzAGIANgA5ADUAMAA3AGMANwBhADMAZABkAGMAZQA0AGYANgA3ADAAOQAwAGQAYQAwADYANQBhADYAMwA=",
+            "executable": {
+              "artifactId": "u16:cwBoAGEAMgA1ADYAOgBmADgAYQBjADgAOABmADAAZQBiADQANQBiADYAMAAxADIAZgAxAGQAMgBlADIAMQBkADcANABmADUAOQA4ADgANwBjADEAYQBjADcAYwAyADQANQAwAGMANgA0AGMANgA5ADkAMgBhADYAMwAzADIAOQBlADYAZAA4ADIAMwA4AA==",
+              "definitionId": "u16:YgBwAG0AbgAtAG0AbwBkAGUAbAA6AHMAaABhADIANQA2ADoAZgA4AGEAYwA4ADgAZgAwAGUAYgA0ADUAYgA2ADAAMQAyAGYAMQBkADIAZQAyADEAZAA3ADQAZgA1ADkAOAA4ADcAYwAxAGEAYwA3AGMAMgA0ADUAMABjADYANABjADYAOQA5ADIAYQA2ADMAMwAyADkAZQA2AGQAOAAyADMAOAA=",
+              "definitionVersionId": "u16:cwBoAGEAMgA1ADYAOgBmADgAYQBjADgAOABmADAAZQBiADQANQBiADYAMAAxADIAZgAxAGQAMgBlADIAMQBkADcANABmADUAOQA4ADgANwBjADEAYQBjADcAYwAyADQANQAwAGMANgA0AGMANgA5ADkAMgBhADYAMwAzADIAOQBlADYAZAA4ADIAMwA4AA==",
+              "artifactVersion": "u16:MQAuADAALgAwAA==",
+              "artifactHash": "u16:cwBoAGEAMgA1ADYAOgBmADgAYQBjADgAOABmADAAZQBiADQANQBiADYAMAAxADIAZgAxAGQAMgBlADIAMQBkADcANABmADUAOQA4ADgANwBjADEAYQBjADcAYwAyADQANQAwAGMANgA0AGMANgA5ADkAMgBhADYAMwAzADIAOQBlADYAZAA4ADIAMwA4AA=="
+            },
+            "materialIncarnationId": "u16:NQBmAGUAMwBlADUAOQAwAGIAMwA0ADMANAAyADEAYwA4AGYAZAA5ADYANwA3ADgANwA0AGUAYQBkADgAMwBhAA=="
+          },
+          "nativeExecutable": {
+            "artifactId": "u16:YQByAHQAaQBmAGEAYwB0AC0AMgA0ADkAMABiAGIANgBiADkANwBhADYA",
+            "definitionId": "u16:MQA0AG0ARQBYAEsATQA1AFoANgBUAA==",
+            "definitionVersionId": "u16:MQA0AG0ARQBYAEsATQA2ADIASgBwAA==",
+            "artifactVersion": "u16:MQAuADAALgAwAA==",
+            "artifactHash": "u16:cwBoAGEAMgA1ADYAOgAyADQAOQAwAGIAYgA2AGIAOQA3AGEANgBiADcAYwA4ADkAMAA2ADEANwBjADEAMgA1ADIAMQBmAGMAZAAwADMAOAA5AGQANwBkADkAZAAwADIANQA4ADAANwBkADYAMQA1ADAAMQBiADEAMQBiADQANgBhAGQAYQBjADUAMwAwAA=="
+          },
+          "nativeExecutionId": "u16:MQA0AG0ARQBYAEsAYgBXADQASQA4AA==",
+          "nativeInvocationId": "u16:MQA0AG0ARQBYAEwAYgBrAE0ATABXAA==",
+          "nativeNodeId": "u16:cgB1AG4ALQBiAHAAbQBuAA==",
+          "resumeTargetId": "u16:cgB1AG4ALQBiAHAAbQBuADoAYgBwAG0AbgAtAG0AbwBkAGUAbAAtAGMAbwBtAHAAbABlAHQAZQBkAA==",
+          "registrationId": "u16:MQA0AG0ARQBYAEwAYgBrAE0ATABXADoAYQB0AHQAZQBtAHAAdAA6ADEAOgB0AHIAaQBnAGcAZQByADoAMQA=",
+          "nativeAttemptId": "u16:MQA0AG0ARQBYAEwAYgBrAE0ATABXADoAYQB0AHQAZQBtAHAAdAA6ADEA"
+        }
+      }
+    },
+    "terminalResult": null
+  },
+  "worker": {
+    "workflowExecutionId": "wfexec:start:v1:2e75ae2fc2c820363f38027bce264659497c0a0aa2b5ecf4d99dd42b6d41d998",
+    "pinnedExecutable": {
+      "artifactId": "artifact-22db261c4b21",
+      "definitionId": "14mEXIbBi0c",
+      "definitionVersionId": "14mEXIcS6fT",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:22db261c4b211820abe640e4558fc79e632966e34b3268bdc561c91a42597ae5"
+    },
+    "status": 1,
+    "subStatus": null,
+    "createdAt": "2026-10-30T12:10:45.465376+00:00",
+    "startedAt": "2026-10-30T12:10:45.465376+00:00",
+    "updatedAt": "2026-10-30T12:10:45.465969+00:00",
+    "completedAt": null,
+    "correlationId": null,
+    "parentWorkflowExecutionId": null,
+    "tenantId": "default",
+    "systemMetadata": {
+      "runtime.checkpointReason": "WorkflowStart",
+      "runtime.schedulerWorkItemId": "8e857dda155c3317:checkpoint:WorkflowStarted",
+      "runtime.persistenceMode": "Balanced"
+    },
+    "runKind": 2,
+    "pinnedSource": null,
+    "partition": {
+      "value": "default"
+    },
+    "authority": {
+      "systemIdentity": "runtime-api",
+      "rootInitiator": "runtime-api",
+      "metadata": {}
+    },
+    "modelWorkOrigin": {
+      "formatVersion": 1,
+      "scope": {
+        "value": "default"
+      },
+      "executionId": "bpmn-embedded:afe5f05c5a22d78ea4f787bfbb0604eada468320fdd547d8ae598ea134bc7903",
+      "protocol": {
+        "key": "elsa.bpmn",
+        "version": 1
+      },
+      "executable": {
+        "artifactId": "sha256:f8ac88f0eb45b6012f1d2e21d74f59887c1ac7c2450c64c6992a63329e6d8238",
+        "definitionId": "bpmn-model:sha256:f8ac88f0eb45b6012f1d2e21d74f59887c1ac7c2450c64c6992a63329e6d8238",
+        "definitionVersionId": "sha256:f8ac88f0eb45b6012f1d2e21d74f59887c1ac7c2450c64c6992a63329e6d8238",
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:f8ac88f0eb45b6012f1d2e21d74f59887c1ac7c2450c64c6992a63329e6d8238"
+      },
+      "materialIncarnationId": "5fe3e590b343421c8fd9677874ead83a",
+      "bindingId": "pipeline",
+      "invocationId": "bpmn-work:c17f412b7ac4118c4d8ab4f650423f521d9b49af273e0c9384ae3691752cca0f",
+      "attemptId": "attempt:aa273ed36c050e6eb40a4c57c447f5c30922b82ccf1e0c57e83695a831a44725",
+      "workerExecutable": {
+        "artifactId": "artifact-22db261c4b21",
+        "definitionId": "14mEXIbBi0c",
+        "definitionVersionId": "14mEXIcS6fT",
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:22db261c4b211820abe640e4558fc79e632966e34b3268bdc561c91a42597ae5"
+      },
+      "workerExecutionId": "wfexec:start:v1:2e75ae2fc2c820363f38027bce264659497c0a0aa2b5ecf4d99dd42b6d41d998",
+      "sourceOutboxItemId": "model-input:eeb8664f4d8149f850076e562ca15a5051042438051510311ccb0225cbaf27a1:bpmn-start-native:a7d81d6c316c560a05a370ec9e1823a6c29812f10222d903a9bfda7b8dadc9d0",
+      "sourceIntentId": "bpmn-start-native:a7d81d6c316c560a05a370ec9e1823a6c29812f10222d903a9bfda7b8dadc9d0",
+      "resultIntentKind": "Elsa.Bpmn.NativeWorkResult.v1",
+      "resultInputId": "native-result:af2d5c3816138443fe97ac351699278a564b9216f42532b347fb14810f21c766"
+    },
+    "dispatchNestingDepth": 0,
+    "rootVariableFrame": {
+      "frameId": "frame:root:wfexec:start:v1:2e75ae2fc2c820363f38027bce264659497c0a0aa2b5ecf4d99dd42b6d41d998:workflow",
+      "scopeId": "workflow",
+      "activationId": "wfexec:start:v1:2e75ae2fc2c820363f38027bce264659497c0a0aa2b5ecf4d99dd42b6d41d998",
+      "parentFrameId": null,
+      "kind": 0,
+      "values": {},
+      "revision": 0,
+      "status": 0
+    }
+  },
+  "startSource": {
+    "outboxItemId": "model-input:eeb8664f4d8149f850076e562ca15a5051042438051510311ccb0225cbaf27a1:bpmn-start-native:a7d81d6c316c560a05a370ec9e1823a6c29812f10222d903a9bfda7b8dadc9d0",
+    "intent": {
+      "intentId": "bpmn-start-native:a7d81d6c316c560a05a370ec9e1823a6c29812f10222d903a9bfda7b8dadc9d0",
+      "workflowExecutionId": "bpmn-embedded:afe5f05c5a22d78ea4f787bfbb0604eada468320fdd547d8ae598ea134bc7903",
+      "kind": "Elsa.Bpmn.StartNativeWork.v1",
+      "recordedAt": "2026-10-30T12:10:45.187966+00:00",
+      "activityExecutionId": null,
+      "idempotencyKey": "bpmn-start-native:a7d81d6c316c560a05a370ec9e1823a6c29812f10222d903a9bfda7b8dadc9d0",
+      "payload": {
+        "formatVersion": 1,
+        "scope": {
+          "value": "default"
+        },
+        "executionId": "bpmn-embedded:afe5f05c5a22d78ea4f787bfbb0604eada468320fdd547d8ae598ea134bc7903",
+        "protocol": {
+          "key": "elsa.bpmn",
+          "version": 1
+        },
+        "executable": {
+          "artifactId": "sha256:f8ac88f0eb45b6012f1d2e21d74f59887c1ac7c2450c64c6992a63329e6d8238",
+          "definitionId": "bpmn-model:sha256:f8ac88f0eb45b6012f1d2e21d74f59887c1ac7c2450c64c6992a63329e6d8238",
+          "definitionVersionId": "sha256:f8ac88f0eb45b6012f1d2e21d74f59887c1ac7c2450c64c6992a63329e6d8238",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:f8ac88f0eb45b6012f1d2e21d74f59887c1ac7c2450c64c6992a63329e6d8238"
+        },
+        "materialIncarnationId": "5fe3e590b343421c8fd9677874ead83a",
+        "bindingId": "pipeline",
+        "invocationId": "bpmn-work:c17f412b7ac4118c4d8ab4f650423f521d9b49af273e0c9384ae3691752cca0f",
+        "attemptId": "attempt:aa273ed36c050e6eb40a4c57c447f5c30922b82ccf1e0c57e83695a831a44725",
+        "workerExecutable": {
+          "artifactId": "artifact-22db261c4b21",
+          "definitionId": "14mEXIbBi0c",
+          "definitionVersionId": "14mEXIcS6fT",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:22db261c4b211820abe640e4558fc79e632966e34b3268bdc561c91a42597ae5"
+        },
+        "workerExecutionId": "wfexec:start:v1:2e75ae2fc2c820363f38027bce264659497c0a0aa2b5ecf4d99dd42b6d41d998",
+        "sourceOutboxItemId": "model-input:eeb8664f4d8149f850076e562ca15a5051042438051510311ccb0225cbaf27a1:bpmn-start-native:a7d81d6c316c560a05a370ec9e1823a6c29812f10222d903a9bfda7b8dadc9d0",
+        "sourceIntentId": "bpmn-start-native:a7d81d6c316c560a05a370ec9e1823a6c29812f10222d903a9bfda7b8dadc9d0",
+        "resultIntentKind": "Elsa.Bpmn.NativeWorkResult.v1",
+        "resultInputId": "native-result:af2d5c3816138443fe97ac351699278a564b9216f42532b347fb14810f21c766"
+      },
+      "metadata": {},
+      "dependsOnWaitRegistrationId": null,
+      "waitFailurePolicy": null,
+      "isWaitDependent": false,
+      "notBefore": null
+    },
+    "status": 2,
+    "recordedAt": "2026-10-30T12:10:45.187966+00:00",
+    "availableAt": null,
+    "retryPolicy": {
+      "maxAttempts": 0,
+      "delay": "00:00:01",
+      "retryUntilAcknowledged": true,
+      "metadata": {}
+    },
+    "deliveryAttemptCount": 1,
+    "deliveringOwnerId": null,
+    "deliveryStartedAt": null,
+    "deliveredAt": "2026-10-30T12:10:45.525555+00:00",
+    "lastFailureMessage": null,
+    "metadata": {
+      "runtime.delivery.firstAttemptedAt": "2026-10-30T12:10:45.4430530+00:00"
+    },
+    "deliveryFencingToken": 1,
+    "deliveryVisibleAfter": null,
+    "stimulusDeliverySourceScope": {
+      "value": "default"
+    },
+    "isTerminal": true
+  },
+  "resultSource": null,
+  "resultInput": null
+}

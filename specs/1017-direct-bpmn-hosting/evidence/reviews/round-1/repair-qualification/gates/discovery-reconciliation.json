@@ -1,0 +1,137 @@
+[
+  {
+    "project": "bpmn",
+    "executingSource": "7fc0217a4520216834125c9b94b3a851fb02841c",
+    "listed": 462,
+    "executed": 462,
+    "counters": {
+      "total": "462",
+      "executed": "462",
+      "passed": "462",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "runtimeTheoryExpansions": [],
+    "missingDiscoveries": [],
+    "unlistedExecutions": []
+  },
+  {
+    "project": "runtime",
+    "executingSource": "fe8e77ce9f2b7734fad717d85a3183be180b6614",
+    "listed": 3067,
+    "executed": 3078,
+    "counters": {
+      "total": "3078",
+      "executed": "3078",
+      "passed": "3078",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "runtimeTheoryExpansions": [
+      {
+        "test": "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident",
+        "listed": 1,
+        "executed": 2
+      },
+      {
+        "test": "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running",
+        "listed": 1,
+        "executed": 4
+      },
+      {
+        "test": "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches",
+        "listed": 1,
+        "executed": 8
+      }
+    ],
+    "missingDiscoveries": [],
+    "unlistedExecutions": []
+  },
+  {
+    "project": "architecture",
+    "executingSource": "fe8e77ce9f2b7734fad717d85a3183be180b6614",
+    "listed": 585,
+    "executed": 594,
+    "counters": {
+      "total": "594",
+      "executed": "594",
+      "passed": "594",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "runtimeTheoryExpansions": [
+      {
+        "test": "Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Canonical_domain_api_depends_on_capability_aggregation_and_registers_one_stable_declaration",
+        "listed": 1,
+        "executed": 5
+      },
+      {
+        "test": "Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_collectible_api_explorer_artifact_is_rejected",
+        "listed": 1,
+        "executed": 6
+      }
+    ],
+    "missingDiscoveries": [],
+    "unlistedExecutions": []
+  },
+  {
+    "project": "hosting",
+    "executingSource": "0ce9a41dba03c4f362c4d386f14737823f33238a",
+    "listed": 32,
+    "executed": 32,
+    "counters": {
+      "total": "32",
+      "executed": "32",
+      "passed": "32",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "runtimeTheoryExpansions": [],
+    "missingDiscoveries": [],
+    "unlistedExecutions": []
+  }
+]
