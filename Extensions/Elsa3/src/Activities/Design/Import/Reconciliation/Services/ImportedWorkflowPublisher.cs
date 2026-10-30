@@ -60,10 +60,12 @@ internal sealed class ImportedWorkflowPublisher(
             if (await WasPublishedAsync(slot, version.WorkflowVersionId, cancellationToken))
                 return WorkflowPublicationStatus.AlreadyPublished;
 
-            await requestSender.Send(
+            var published = await requestSender.Send(
                 new PublishWorkflow(version.WorkflowVersionId, ExpectedPublicationId: slot?.ActiveActivationId, TenantId: tenantId),
                 cancellationToken);
-            return WorkflowPublicationStatus.Published;
+            // When the slot already serves this artifact (another node got there first), PublishWorkflow answers with the
+            // existing publication instead of refusing.
+            return published.WasCreated ? WorkflowPublicationStatus.Published : WorkflowPublicationStatus.AlreadyPublished;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
