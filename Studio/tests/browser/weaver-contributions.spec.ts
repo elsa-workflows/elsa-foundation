@@ -235,6 +235,55 @@ test("Stop detaches a paused accepted-ACK conversation and the next prompt uses 
   } finally { release(); await page.unroute("**/client-invocations/*/acknowledgements"); }
 });
 
+test("a delayed successful Deny cannot replace a fresh module conversation or close its real proposal stream", async ({ page }, testInfo) => {
+  const before = await readNote(page.request); const streamURLs: string[] = [];
+  page.on("request", request => { if (request.method() === "GET" && request.url().endsWith("/stream")) streamURLs.push(request.url()); });
+  const old = await prepareNote(page, `Denied old conversation ${Date.now()}`); const oldStreamURL = old.messagesURL.replace(/\/messages$/, "/stream");
+  let releaseDeny!: () => void, denyArrived!: () => void, releaseFresh!: () => void, freshArrived!: () => void;
+  let denied: unknown, cancellation: unknown, freshMessagesURL: string | undefined, heldFreshStream = false;
+  const denyHeld = new Promise<void>(resolve => { denyArrived = resolve; }); const denyReleased = new Promise<void>(resolve => { releaseDeny = resolve; });
+  const freshHeld = new Promise<void>(resolve => { freshArrived = resolve; }); const freshReleased = new Promise<void>(resolve => { releaseFresh = resolve; });
+  await page.route("**/deny", async route => {
+    if (denied) { await route.continue(); return; }
+    const original = await route.fetch(); expect(original.ok()).toBe(true); denied = await original.json();
+    denyArrived(); await denyReleased; await route.fulfill({ response: original });
+  });
+  await page.route("**/_elsa/agent/sessions/*/stream", async route => {
+    if (route.request().url() === oldStreamURL) { await route.continue(); return; }
+    // The real backend prepares B before its original SSE response is delayed; no events are fabricated.
+    const original = await route.fetch(); expect(original.ok()).toBe(true); heldFreshStream = true;
+    freshArrived(); await freshReleased; await route.fulfill({ response: original });
+  });
+  try {
+    const deniedResponse = page.waitForResponse(response => response.url().endsWith("/deny") && response.request().method() === "POST");
+    await old.proposal.getByRole("button", { name: "Deny", exact: true }).click(); await denyHeld;
+    const cancelled = page.waitForResponse(response => response.url().endsWith("/cancel") && response.request().method() === "POST");
+    await old.dock.getByRole("button", { name: "Stop Weaver", exact: true }).click();
+    const cancelResponse = await cancelled; expect(cancelResponse.ok()).toBe(true); cancellation = await cancelResponse.json();
+    expect(cancellation).toMatchObject({ data: { cancelled: false } });
+    const value = `Fresh module conversation ${Date.now()}`; await page.getByLabel("New note value").fill(value);
+    const freshMessage = page.waitForResponse(response => response.url().endsWith("/messages") && response.request().method() === "POST");
+    await page.getByRole("button", { name: "Review note change", exact: true }).click();
+    const fresh = await freshMessage; expect(fresh.ok()).toBe(true); freshMessagesURL = fresh.url(); expect(freshMessagesURL).not.toBe(old.messagesURL);
+    expect(fresh.request().postDataJSON()).toMatchObject({ requestId: expect.any(String), source: { moduleId: "Weaver.Journey", actionId: "weaver.journey.propose" } });
+    await freshHeld; releaseDeny(); expect((await deniedResponse).ok()).toBe(true); await expect(old.proposal).toHaveAttribute("data-status", "denied");
+    releaseFresh(); const freshProposal = old.dock.locator(".agent-proposal").filter({ hasText: value });
+    await expect(freshProposal).toHaveAttribute("data-status", "awaiting-approval");
+    expect(streamURLs.filter(url => url === oldStreamURL)).toHaveLength(1); expect(await readNote(page.request)).toEqual(before);
+    const screenshot = testInfo.outputPath("late-deny-preserves-fresh-module-proposal.png"); await page.screenshot({ path: screenshot, fullPage: true });
+    await testInfo.attach("late-deny-preserves-fresh-module-proposal", { path: screenshot, contentType: "image/png" });
+    await page.unroute("**/_elsa/agent/sessions/*/stream");
+    const cleanup = page.waitForResponse(response => response.url().endsWith("/deny") && response.request().method() === "POST");
+    await freshProposal.getByRole("button", { name: "Deny", exact: true }).click(); expect((await cleanup).ok()).toBe(true);
+    await expect(freshProposal).toHaveAttribute("data-status", "denied"); await expect(old.dock).toHaveAttribute("aria-busy", "false");
+    expect(await readNote(page.request)).toEqual(before);
+  } finally {
+    releaseDeny(); releaseFresh();
+    await testInfo.attach("late-deny-generation-isolation", { body: JSON.stringify({ controlledRealResponseDelay: true, denied, cancellation, oldMessagesURL: old.messagesURL, freshMessagesURL, streamURLs, heldFreshStream, before, after: await readNote(page.request) }, null, 2), contentType: "application/json" });
+    await page.unroute("**/deny"); await page.unroute("**/_elsa/agent/sessions/*/stream");
+  }
+});
+
 test("genuine expiry before and after approval drains both retained outcomes without effects", async ({ page, context }, testInfo) => {
   test.setTimeout(8 * 60_000);
   const before = await readNote(page.request);

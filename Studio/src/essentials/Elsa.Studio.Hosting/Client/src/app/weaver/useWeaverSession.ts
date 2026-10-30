@@ -444,16 +444,20 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
   const runReviewedDecision = useCallback(async (action: "approveProposal" | "denyProposal" | "executeProposal", proposalId: string, revision: string | undefined, prepared?: AgentActionProposal["preparedInvocation"]) => {
     const generation = turnGenerationRef.current;
     const requestId = turnRequestIdRef.current;
+    const session = prepared?.sessionId ?? sessionIdRef.current;
+    if (prepared?.sessionId && prepared.sessionId !== sessionIdRef.current) {
+      updateProposal(proposalId, { disabledReason: "This conversation has stopped. Start a new request to review this operation." });
+      return null;
+    }
     try {
       return await agentClient[action](proposalId, { revision });
     } catch (error) {
       if (!(error instanceof AgentExecutionError)) throw error;
       const outcome = error.terminalOutcome;
       updateProposal(proposalId, { status: outcome.approvalStatus, toolResult: outcome.toolResult, result: outcome.toolResult?.payload, resultType: outcome.toolResult?.payload?.typeId, error: error.message });
-      if (generation === turnGenerationRef.current) {
+      if (generation === turnGenerationRef.current && session === sessionIdRef.current) {
         setError(error.message);
         publishTurnResult("failed", "", requestId);
-        const session = prepared?.sessionId ?? sessionIdRef.current;
         // Drain the retained failure through its ordinary outcome continuation, with no new prompt
         // and no effect replay. A refusal is never turned into an applied result.
         if (session) resumeFromOutcome(session);
@@ -469,11 +473,14 @@ export function useWeaverSession({ api, surface, client, subscribeStream = subsc
   }), [runReviewedDecision, updateProposal, withProposalDecision]);
 
   const denyProposal = useCallback((proposal: AgentActionProposal) => void withProposalDecision(proposal.id, async () => {
+    const generation = turnGenerationRef.current;
+    const requestId = turnRequestIdRef.current;
+    const session = proposal.preparedInvocation?.sessionId ?? sessionIdRef.current;
     const response = await runReviewedDecision("denyProposal", proposal.id, proposal.revision, proposal.preparedInvocation);
     if (!response) return;
     updateProposal(proposal.id, { status: response.approvalStatus });
-    publishTurnResult("cancelled", "");
-    const session = proposal.preparedInvocation?.sessionId ?? sessionIdRef.current;
+    if (!mountedRef.current || generation !== turnGenerationRef.current || session !== sessionIdRef.current) return;
+    publishTurnResult("cancelled", "", requestId);
     if (session) resumeFromOutcome(session);
     else finishTurn();
   }), [publishTurnResult, resumeFromOutcome, runReviewedDecision, updateProposal, withProposalDecision]);

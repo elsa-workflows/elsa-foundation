@@ -9,6 +9,57 @@ import type { AgentStreamEvent } from "../../agent/agentTypes";
 import { WeaverSurface } from "../WeaverSurface";
 
 describe("WeaverSurface", () => {
+  it.each(["deny", "approve"])("isolates a stopped conversation's late %s decision and historical actions from a fresh correlated request", async decision => {
+    const api = readyApi(); const client = readyClient(); const invocation = preparedInvocation(api);
+    invocation.executionLocation = "server"; invocation.client = null;
+    client.createSession = vi.fn<AgentClient["createSession"]>()
+      .mockResolvedValueOnce({ sessionId: "agt_1", status: "active", contextAttachments: [] })
+      .mockResolvedValue({ sessionId: "fresh-session", status: "active", contextAttachments: [] });
+    client.sendMessage = vi.fn<AgentClient["sendMessage"]>(async session => ({ messageId: session === "agt_1" ? "old-message" : "fresh-message", status: "pending", streamUrl: `/_elsa/agent/sessions/${session}/stream` }));
+    let deliverDenial!: (value: Awaited<ReturnType<AgentClient["denyProposal"]>>) => void;
+    client.denyProposal = client.approveProposal = vi.fn<AgentClient["denyProposal"]>(() => new Promise(resolve => { deliverDenial = resolve; }));
+    const results: unknown[] = []; api.agent.onPromptResult(value => results.push(value));
+    const streams: string[] = []; const freshClose = vi.fn(); let emitFresh!: (event: AgentStreamEvent) => void;
+    const subscribeStream: typeof import("../../agent/agentStream").subscribeAgentSessionStream = (_context, url, emit) => {
+      streams.push(url);
+      if (url.includes("fresh-session")) {
+        emitFresh = emit; emit({ type: "turn-started", turnId: "fresh-turn", maxSteps: 1 });
+        emit({ type: "message-started", messageId: "fresh-message", role: "assistant" });
+        return { close: freshClose };
+      }
+      if (streams.length === 1) {
+        emit({ type: "turn-started", turnId: "turn", maxSteps: 1 });
+        emit({ type: "proposal-created", proposalId: "proposal", messageId: "old-message", proposal: { title: "Original change", summary: "Review the original resource.", revision: "r1", resourceTarget: invocation.target!, preparedInvocation: invocation } });
+        emit({ type: "review-requested", messageId: "old-message" });
+      } else emit({ type: "message-completed", messageId: "old-message" });
+      return { close() {} };
+    };
+    const element = (id: string, requestId: string) => <WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id, requestId, message: id, source: { moduleId: "Sample", actionId: id } }} />;
+    const { container, rerender, unmount } = render(element("original", "original-request"));
+    try {
+      await flushPromises(); flushSync(() => buttonByText(container, decision === "deny" ? "Deny" : "Approve")!.click()); await flushPromises();
+      flushSync(() => buttonByText(container, "Stop")!.click()); await flushPromises();
+      rerender(element("fresh", "fresh-request")); await flushPromises();
+      expect(streams).toHaveLength(2);
+      const status = decision === "deny" ? "denied" : "approved";
+      deliverDenial({ proposalId: "proposal", approvalStatus: status }); await flushPromises();
+      expect(container.querySelector(`[data-status="${status}"]`)).toBeTruthy();
+      const finishFresh = async () => {
+        emitFresh({ type: "message-delta", messageId: "fresh-message", content: "Fresh answer." });
+        emitFresh({ type: "message-completed", messageId: "fresh-message" }); await flushPromises();
+      };
+      if (decision === "approve") { await finishFresh(); flushSync(() => buttonByText(container, "Apply")!.click()); await flushPromises(); }
+      expect(streams).toHaveLength(2); expect(freshClose).not.toHaveBeenCalled();
+      if (decision === "deny") {
+        expect(container.querySelector(".weaver-surface")?.getAttribute("aria-busy")).toBe("true");
+        expect(results).toEqual([expect.objectContaining({ requestId: "original-request", status: "cancelled" })]);
+        await finishFresh();
+      }
+      expect(results).toEqual([expect.objectContaining({ requestId: "original-request", status: "cancelled" }), expect.objectContaining({ requestId: "fresh-request", status: "completed", text: "Fresh answer." })]);
+      expect(client.executeProposal).not.toHaveBeenCalled();
+    } finally { unmount(); }
+  });
+
   it("starts a fresh conversation after Stop when the original accepted receipt leaves its session busy", async () => {
     const fixture = await pendingConfirmationFixture(false);
     fixture.client.createSession = vi.fn<AgentClient["createSession"]>(async () => ({ sessionId: "fresh-session", status: "active", contextAttachments: [] }));
@@ -547,6 +598,7 @@ function render(element: React.ReactElement) {
   flushSync(() => root.render(element));
   return {
     container,
+    rerender: (next: React.ReactElement) => flushSync(() => root.render(next)),
     unmount: () => {
       flushSync(() => root.unmount());
       container.remove();
