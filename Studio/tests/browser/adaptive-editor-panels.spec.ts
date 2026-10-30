@@ -45,6 +45,14 @@ for (const host of ["workflow", "activity"]) for (const style of ["legacy", "qui
     expect(hits.length).toBeGreaterThan(0);
     expect(hits.some(hit => hit.insideDialog)).toBe(true);
     expect(hits.every(hit => hit.covered)).toBe(true);
+    await dialog.getByRole("button", { name: "Text expression syntax", exact: true }).click();
+    const syntaxOption = page.getByRole("option", { name: "JavaScript", exact: true });
+    await expect(syntaxOption).toBeVisible();
+    expect(await syntaxOption.evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      return element.contains(document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2));
+    })).toBe(true);
+    await syntaxOption.click();
     await page.screenshot({ path: testInfo.outputPath("expanded-property-layering.png") });
     const editor = dialog.locator('.cm-content[contenteditable="true"]');
     await editor.press("End");

@@ -60,3 +60,17 @@ The expanded property editor was rendered inside its inspector row. In Focus Can
 - [Rendered Focus Canvas property editor fixture](activity-property-overlay-focus.png). The committed capture uses synthetic fixture data; the live check retains no authored expression in published evidence.
 
 The initial unhandled-Escape probe was corrected to focus the dialog's Close button before pressing Escape: the code editor intentionally consumes its own Escape shortcut. Eight older unit queries initially assumed that expanded content stayed within the property row's render container; they were reconciled to the scoped overlay owner without changing their behavioral assertions. Independent review and exact-head CI results are recorded on PR #3449.
+
+### Modal interaction corrections from review round 4
+
+Correctness review found that the initial portal escaped the inspector's disabled fieldset. Resource read-only state now flows explicitly through both normal and intrinsic inspectors into each property row, including its memo comparison. Portaled editors disable their contributed and native controls when a draft locks, while Close remains usable. The panel also rejects late editor callbacks using the current lock state. A new mounted regression fails without the lock propagation; removing the late-callback guard independently makes it fail as well.
+
+A further rendered probe showed that a nested syntax popup's default body portal put it below the newly lifted modal. `AnchoredPopover` now accepts an optional portal container; the property picker supplies its own dialog, preserving focus and layering. Its default destination stays undefined until a modal scope exists, avoiding extra closed-popover layout effects when an unscoped trigger first mounts. Existing popovers keep their body destination. A new host test covers the optional container, and all eight browser cases now hit-test and activate the nested menu as well as the modal.
+
+Final local evidence:
+- Workflows: **2,674/2,674**, 197 files, one worker. Host: **599/599**, 53 files. No skips or quarantines.
+- Complete adaptive-panel, expression-code-intelligence and dictionary browser specs: **27/27**.
+- Workspace types and full lint pass; the same 56 existing warnings remain. Both host bundles/vendor assets and the Workflows production build/budgets pass. Studio .NET host builds with zero warnings/errors; architecture **592/592** and generated filters pass.
+- Fresh live preview verification opened the actual Condition dialog and its syntax popup: handle positions hit the dialog/scrim and the popup option receives its own hit-test, with zero page/network errors. No expression was changed.
+
+The first post-correction Workflows runs exposed an async disclosure assertion while the absent popup destination changed from undefined to null as its ref mounted. The absent destination is now normalized, and the unchanged six-test options suite and complete serial Workflows suite pass. Those earlier failures remain in the review history; no assertion was relaxed or test skipped. Exact updated-head review and hosted checks remain recorded on the PR.
