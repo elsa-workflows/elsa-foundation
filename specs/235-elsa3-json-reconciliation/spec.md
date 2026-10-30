@@ -176,7 +176,8 @@ rest of the folder is imported and published. Repeat with the strict option and 
 - **Collection import composed in the same shell**: allowed; both use the same engine and identities, so an item
   imported by either is a no-op for the other.
 - **Several nodes starting at once**: each node runs the import; the commit is idempotent and retried on a write
-  conflict, so they converge on the rows one node writes.
+  conflict, so they converge on the rows one node writes. A workflow publication another node made first is
+  recognised and skipped (research R-6).
 
 ## Requirements *(mandatory)*
 
@@ -208,7 +209,8 @@ rest of the folder is imported and published. Repeat with the strict option and 
 - **FR-008**: After the commit, the task MUST publish the newest version in the input of each imported workflow and
   wrapper with `PublishWorkflow`, after the reusables it uses are published. Each version MUST be published at most
   once: a version its target slot has already published (active, retired or in flight) is skipped, so a later start
-  never takes back a slot an operator moved. A newer Elsa 3 version, never published, is published.
+  never takes back a slot an operator moved. A newer Elsa 3 version, never published, is published. Each publication
+  MUST carry the persistence scope's tenant, and a publication another node made first MUST be treated as done.
 - **FR-008a**: The task MUST publish the reusables within the persistence scope's tenant without widening what any
   other caller of the activity publisher may access.
 - **FR-009**: A workflow whose reusable dependency was not published MUST NOT be published, and MUST be reported

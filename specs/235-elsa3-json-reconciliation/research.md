@@ -168,6 +168,15 @@ review found two blockers in the first version of this file; R-3 and R-5 carry t
   for changed items and fails the start (R-5). Before Elsa 4 GA that store is rebuilt (R-10). JTest hosts run on fresh
   stores. The converter revision `N.R.0` is what lets stored data survive later.
 
+## R-9 Names and §E2.7
+
+- **Names**: the feature id stays `Elsa3JsonReconciliation` (the spec's and issue's name, and what operators look for
+  next to `JsonWorkflowReconciliation`). Its types say what it does, an import: `Elsa3FolderImportTask` (R1: four
+  components), `Elsa3JsonFileReader`, `Elsa3ImportSelection`, `ImportedWorkflowPublisher`, `Elsa3StartupPublishingGrant`.
+- **§E2.7 "one-way, one-time import"**: each Elsa 3 version is imported once; a later start finds it and writes
+  nothing (R-4). Running the check on every start is how a folder deployment stays declarative, as Model X does for
+  reconciliation. Nothing is translated back, and Elsa 3 never runs.
+
 ## R-10 Alignment with epic #3052 (checked 2026-10-30)
 
 Spec 235 checked against every decision (D-1 to D-13), analysis (A-1 to A-5), ADR draft (#3384, #3388, #3389, #3390,
@@ -206,12 +215,3 @@ to survive a converter or serialization change. Keep `{n}.0.0`. After a converte
 imported with an earlier converter rebuilds its store; the feature README says so. The converter revision
 (`{n}.{R}.0` with the golden test) is the follow-up for when stored data must survive, before Elsa 4 GA. Rejected for
 now: un-deferring it in this spec, which adds work that protects data nobody keeps yet.
-
-## R-9 Names and §E2.7
-
-- **Names**: the feature id stays `Elsa3JsonReconciliation` (the spec's and issue's name, and what operators look for
-  next to `JsonWorkflowReconciliation`). Its types say what it does, an import: `Elsa3FolderImportTask` (R1: four
-  components), `Elsa3JsonFileReader`, `Elsa3ImportSelection`, `ImportedWorkflowPublisher`, `Elsa3StartupPublishingGrant`.
-- **§E2.7 "one-way, one-time import"**: each Elsa 3 version is imported once; a later start finds it and writes
-  nothing (R-4). Running the check on every start is how a folder deployment stays declarative, as Model X does for
-  reconciliation. Nothing is translated back, and Elsa 3 never runs.
