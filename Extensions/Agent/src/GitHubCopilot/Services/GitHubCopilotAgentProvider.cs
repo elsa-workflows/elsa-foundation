@@ -126,8 +126,7 @@ public sealed class GitHubCopilotAgentProvider(
 
         var message = new AgentProviderMessage(request.SessionId, request.LatestUserMessage?.Content ?? string.Empty, request.Context);
 
-        // Side-band channel so proposals raised when a mutating tool is auto-invoked surface in the live stream
-        // alongside the SDK's own tool-execution events.
+        // Elsa tool dispatch supplies semantic outcomes; SDK function completion only describes transport.
         var output = Channel.CreateUnbounded<AgentStreamEvent>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
         var toolContext = new AgentToolAIFunctionContext(
             request.SessionId,
@@ -137,11 +136,12 @@ public sealed class GitHubCopilotAgentProvider(
             toolInvoker,
             proposal => output.Writer.TryWrite(new AgentStreamEvent(NewId(), AgentStreamEventKind.ProposalCreated, null, proposal.Id, null, DateTimeOffset.UtcNow, AgentResultKind.Proposal, proposal)))
         {
-            TenantId = request.TenantId, TurnId = request.TurnId, Client = request.Client, AllowMutations = !request.IsReceiptContinuation,
-            OnResult = result => output.Writer.TryWrite(new AgentStreamEvent(NewId(), AgentStreamEventKind.ContributedResult,
-                result.Content, null, null, DateTimeOffset.UtcNow, AgentResultKind.ModuleResult, result))
+            TenantId = request.TenantId, TurnId = request.TurnId, Client = request.Client, AllowMutations = !request.IsReceiptContinuation
         };
-        var aiFunctions = AgentToolAIFunctions.CreateAll(request.Tools.Where(_ => !request.IsReceiptContinuation), toolContext);
+        var aiFunctions = request.Tools.Where(_ => !request.IsReceiptContinuation)
+            .Select(tool => AgentToolAIFunctions.Create(tool, toolContext with
+            { Invoker = new ObservingToolInvoker(toolInvoker, tool.Descriptor, output.Writer) })).ToArray();
+        var customToolNames = aiFunctions.Select(tool => tool.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         await using var client = clientFactory.Create(BuildClientRequest(readiness));
         IGitHubCopilotSession? session = null;
@@ -188,7 +188,7 @@ public sealed class GitHubCopilotAgentProvider(
             var prompt = request.IsReceiptContinuation
                 ? BuildReceiptContinuationPrompt(request.PendingToolResults)
                 : BuildPrompt(message);
-            var pump = PumpTurnAsync(session, prompt, output.Writer, toolNames, cancellationToken);
+            var pump = PumpTurnAsync(session, prompt, output.Writer, toolNames, customToolNames, cancellationToken);
 
             await foreach (var item in output.Reader.ReadAllAsync(cancellationToken))
                 yield return item;
@@ -197,13 +197,14 @@ public sealed class GitHubCopilotAgentProvider(
         }
     }
 
-    private async Task PumpTurnAsync(IGitHubCopilotSession session, string prompt, ChannelWriter<AgentStreamEvent> writer, Dictionary<string, string> toolNames, CancellationToken cancellationToken)
+    private async Task PumpTurnAsync(IGitHubCopilotSession session, string prompt, ChannelWriter<AgentStreamEvent> writer,
+        Dictionary<string, string> toolNames, IReadOnlySet<string> customToolNames, CancellationToken cancellationToken)
     {
         try
         {
             await foreach (var raw in session.SendAsync(prompt, cancellationToken))
             {
-                var mapped = MapHarnessEvent(raw, toolNames);
+                var mapped = MapHarnessEvent(raw, toolNames, customToolNames);
                 if (mapped is not null)
                     writer.TryWrite(mapped);
             }
@@ -222,7 +223,7 @@ public sealed class GitHubCopilotAgentProvider(
         }
     }
 
-    private static AgentStreamEvent? MapHarnessEvent(GitHubCopilotStreamEvent raw, Dictionary<string, string> toolNames)
+    private static AgentStreamEvent? MapHarnessEvent(GitHubCopilotStreamEvent raw, Dictionary<string, string> toolNames, IReadOnlySet<string> customToolNames)
     {
         switch (raw.Kind)
         {
@@ -233,18 +234,44 @@ public sealed class GitHubCopilotAgentProvider(
                 var name = raw.ToolName ?? "tool";
                 if (!string.IsNullOrEmpty(raw.ToolCallId))
                     toolNames[raw.ToolCallId] = name;
+                if (customToolNames.Contains(name)) return null;
                 return new(NewId(), AgentStreamEventKind.ToolCallStarted, null, raw.ToolCallId, null, DateTimeOffset.UtcNow, null, new AgentToolCallRequest(raw.ToolCallId ?? NewId(), name, string.Empty, AgentRisk.ReadOnly, false));
             }
             case GitHubCopilotStreamEventKind.ToolExecutionCompleted:
             {
                 var name = raw.ToolCallId is not null && toolNames.TryGetValue(raw.ToolCallId, out var resolved) ? resolved : raw.ToolName ?? "tool";
                 var succeeded = raw.Success ?? string.IsNullOrEmpty(raw.ErrorMessage);
-                return new(NewId(), AgentStreamEventKind.ToolCallCompleted, null, raw.ToolCallId, null, DateTimeOffset.UtcNow, null, new AgentToolCallOutcome(raw.ToolCallId ?? string.Empty, name, succeeded, succeeded ? "Tool completed." : raw.ErrorMessage ?? "Tool failed."));
+                if (customToolNames.Contains(name) && succeeded) return null;
+                var summary = customToolNames.Contains(name)
+                    ? "Tool function transport failed: " + (raw.ErrorMessage ?? "SDK execution failed.")
+                    : succeeded ? "Tool completed." : raw.ErrorMessage ?? "Tool failed.";
+                return new(NewId(), AgentStreamEventKind.ToolCallCompleted, null, raw.ToolCallId, null, DateTimeOffset.UtcNow, null, new AgentToolCallOutcome(raw.ToolCallId ?? string.Empty, name, succeeded, summary));
             }
             case GitHubCopilotStreamEventKind.Error:
                 return Error(raw.ErrorCode ?? "agent.provider.github_copilot.sdk_error", raw.ErrorMessage ?? "GitHub Copilot stream failed.", 502);
             default:
                 return null;
+        }
+    }
+
+    // Each function closes over its own descriptor. Outcomes use invocation IDs, never name-based correlation.
+    private sealed class ObservingToolInvoker(IAgentToolInvoker inner, AgentToolDescriptor descriptor, ChannelWriter<AgentStreamEvent> writer) : IAgentToolInvoker
+    {
+        public async Task<AgentToolDispatch> DispatchAsync(AgentToolInvocation invocation, AgentPolicy policy, CancellationToken cancellationToken = default)
+        {
+            writer.TryWrite(new(NewId(), AgentStreamEventKind.ToolCallStarted, null, null, null, DateTimeOffset.UtcNow, null,
+                new AgentToolCallRequest(invocation.ToolCallId, invocation.ToolName, string.Empty, descriptor.Risk,
+                    descriptor.Mutability == AgentToolMutability.Mutating && policy.RequiresApprovalForMutations)));
+            var dispatch = await inner.DispatchAsync(invocation, policy, cancellationToken);
+            if (dispatch.Outcome != AgentToolDispatchOutcome.ProposalCreated)
+            {
+                // Match the ordinary orchestrator: refusal is a semantic result, not an SDK transport exception.
+                var result = dispatch.Result ?? new AgentToolResult(invocation.ToolCallId, invocation.ToolName, false, dispatch.Error?.Message ?? "Tool refused.");
+                writer.TryWrite(new(NewId(), AgentStreamEventKind.ToolCallCompleted, null, null, null, DateTimeOffset.UtcNow, null,
+                    new AgentToolCallOutcome(invocation.ToolCallId, invocation.ToolName, result.Succeeded, result.Content, result)));
+                writer.TryWrite(new(NewId(), AgentStreamEventKind.ContributedResult, result.Content, null, null, DateTimeOffset.UtcNow, AgentResultKind.ModuleResult, result));
+            }
+            return dispatch;
         }
     }
 
