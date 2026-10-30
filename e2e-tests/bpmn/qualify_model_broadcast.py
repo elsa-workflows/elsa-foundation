@@ -5,6 +5,7 @@ Uses the existing test-only production-port observer, then standard recovery hos
 Only this controller's owned processes and isolated stores are stopped or captured.
 """
 import argparse
+import base64
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -16,6 +17,7 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import sqlite3
 import subprocess
 import tempfile
 import time
@@ -241,8 +243,14 @@ def main():
         except (OSError, TimeoutError, urllib.error.URLError): submitted = None
         executor.shutdown(wait=True)
         launch(False)
-        finished_source = wait(lambda: broadcast(publisher_id), lambda value: value['source']['status'] == 'Delivered', 'The original durable publisher source did not recover.', 240)
-        q.write_json(output / 'finished-source.json', finished_source)
+        def delivery_hint():
+            # Scheduling hint only: the checked provider below must validate the completed original source/cohort.
+            with sqlite3.connect((root / 'runtime.db').as_uri() + '?mode=ro', uri=True, timeout=3) as connection:
+                connection.execute('PRAGMA query_only=ON')
+                row = connection.execute('SELECT Status FROM elsa_runtime_post_commit_outbox WHERE ScopeKey=? AND OutboxItemId=?',
+                    tuple(base64.b64encode(value.encode('utf-16le')).decode() for value in ('default', marker['sourceOutboxItemId']))).fetchone()
+                return row is not None and row[0] == 2
+        wait(delivery_hint, bool, 'The original durable publisher did not finish its actual retry.', 240)
         def ready(identity, value):
             if value['queuedModelInputs'] or any(s['status'] != 2 for s in value['sources']): return False
             if args.cut == 'before-selection': return value['model']['lifecycle'] == 3
@@ -250,6 +258,10 @@ def main():
             return True
         finished = {identity: wait(lambda: model(identity), lambda value: ready(identity, value), 'The actual model work did not settle.') for identity in models}
         q.write_json(output / 'finished-models.json', finished)
+        q.write_json(output / 'finished-native-waits.json', {identity: wait(lambda: native_waits(value), bool, 'The surviving model work did not reach real Event registrations.')
+            for identity, value in finished.items() if value['model']['lifecycle'] == 0})
+        finished_source = broadcast(publisher_id); q.write_json(output / 'finished-source.json', finished_source)
+        if finished_source['source']['status'] != 'Delivered': raise ValueError('The checked provider did not confirm original source completion.')
         if args.cut == 'before-selection':
             if len(finished_source['source']['snapshot']['resumes']) != 4 or any(v['model']['lifecycle'] != 3 for v in finished.values()): raise ValueError('Delivery-time matching omitted waits created after publisher commit.')
         elif args.cut == 'empty-cohort':
