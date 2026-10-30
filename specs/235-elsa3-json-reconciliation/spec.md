@@ -117,7 +117,8 @@ versions and publications.
 2. **Given** a store imported from a folder, **When** a new Elsa 3 version of one workflow is added to the folder and
    the host restarts, **Then** that version is imported and published, and nothing else changes.
 3. **Given** a start that stopped after the commit but before every publication, **When** the host starts again,
-   **Then** what is still unpublished is published.
+   **Then** each reusable still unpublished, and the newest committed version of each workflow that was never
+   published, is published.
 
 ---
 
@@ -144,7 +145,8 @@ rest of the folder is imported and published. Repeat with the strict option and 
 3. **Given** a reusable that its publisher refuses, **When** the host starts, **Then** the workflows that use it
    are not published and are reported with the reusable as their cause; the rest is published.
 4. **Given** the strict option is enabled and an item is unconvertible, **When** the host starts, **Then** startup
-   fails with an error listing the skipped items, and nothing has been committed.
+   fails with an error listing the skipped items, and nothing has been committed in the persistence scope that found
+   them (a scope the task ran earlier may already have committed, FR-015).
 
 ---
 
@@ -221,8 +223,9 @@ rest of the folder is imported and published. Repeat with the strict option and 
 **Restart**
 
 - **FR-011**: A start with input that is already imported and published MUST write nothing and publish nothing.
-- **FR-012**: A start MUST publish what an earlier start committed but did not publish, including a reusable whose
-  earlier publication was refused or failed.
+- **FR-012**: A start MUST publish what an earlier start committed but did not publish: every reusable still
+  unpublished, including one whose earlier publication was refused or failed, and, per workflow, the newest committed
+  version if it was never published (FR-008). Older committed workflow versions stay unpublished.
 
 **Unconvertible input and diagnostics**
 

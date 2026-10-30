@@ -30,11 +30,13 @@ New codes (only where no existing code applies):
 
 | Code | Cause |
 |---|---|
-| `ELS3-RECONCILE-DUPLICATE-INPUT` | The same definition id and version appear more than once in the input. |
+| `ELS3-RECONCILE-DUPLICATE-INPUT` | A blank source version id, the same source version id more than once, or the same definition id and version more than once in the input. |
 | `ELS3-RECONCILE-BLOCKED-BY-DEPENDENCY` | A reusable this item uses was skipped or not published. |
 
-Every other skip carries the import's own code (`ELS3-*`, `VF-IMP-*`). Credential-literal and identity-collision
-refusals are not skips: the import does not attribute them to an item, so they fail the start (research R-5).
+Every other skip carries the import's own code (`ELS3-*`, `VF-IMP-*`), including a reusable whose publication the
+publish phase returns as `Refused` with its identity-collision code (research R-5): that reusable is skipped and its
+dependents are blocked. Two refusals at apply time are not skips, because the import does not attribute them to an
+item: a credential-literal refusal and an identity collision thrown by the commit. They fail the start (research R-5).
 
 ## Startup publishing grant
 
