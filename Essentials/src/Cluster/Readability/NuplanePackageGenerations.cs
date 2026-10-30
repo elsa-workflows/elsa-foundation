@@ -7,6 +7,7 @@ using CShells.Lifecycle;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Persistence.Schema;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Nuplane.Loading;
@@ -20,6 +21,13 @@ namespace Elsa.Cluster.Readability;
 /// readability report and the EF activation guard to stop reading them, and when.
 /// </summary>
 /// <remarks>
+/// <para>
+/// When the root composes <see cref="IHostApplicationLifetime"/>, background readability publication waits for
+/// <see cref="IHostApplicationLifetime.ApplicationStarted"/>, coalescing earlier requests. Catalog subscriptions and
+/// conservative build pins remain immediate, and explicit replacement/retirement reads retain their caller's timing.
+/// This orders background work after host startup; concurrent runtime native admissions retain their existing
+/// fail-closed behavior. A standalone container without a host lifetime publishes as before.
+/// </para>
 /// <para>
 /// <b>Replaced for activation</b> starts with positive evidence from <see cref="IPackageAssemblyCatalog"/>:
 /// an assembly in a Nuplane-created load context is replaced when the active package set names another assembly of the
@@ -108,6 +116,7 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     private readonly SemaphoreSlim _replacementReads = new(1, 1);
 
     private readonly HostContainer _host = new();
+    private readonly Lock _hostBindingGate = new();
     private ILogger _logger = NullLogger.Instance;
 
     /// <summary>1 while a republish has been asked for and its loop has not yet taken it up.</summary>
@@ -126,6 +135,11 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     private int _stopped;
     private int _commitNotificationsAvailable;
 
+    // Background catalog reads wait for the root host's startup reconciliation to finish. Explicit reads and
+    // conservative build pins remain available during startup; this does not coordinate later native admissions.
+    private int _waitingForHostStart;
+    private CancellationTokenRegistration _hostStartedRegistration;
+
     private IServiceProvider? Host => _host.Root;
 
     /// <summary>
@@ -136,8 +150,27 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     public IShellLifecycleSubscriber BindTo(IServiceProvider host)
     {
         ArgumentNullException.ThrowIfNull(host);
-        if (_host.Bind(host))
+        lock (_hostBindingGate)
+        {
+            if (Host is not null)
+                return this;
+            // Pending event work must wait before the root becomes visible, including to another public binder.
+            Volatile.Write(ref _waitingForHostStart, 1);
+            _host.Bind(host);
             _logger = host.GetService<ILoggerFactory>()?.CreateLogger<NuplanePackageGenerations>() ?? NullLogger<NuplanePackageGenerations>.Instance;
+            if (host.GetService<IHostApplicationLifetime>() is { } lifetime)
+            {
+                // Register also invokes the callback for a host that has already started.
+                var registration = lifetime.ApplicationStarted.Register(static source =>
+                    ((NuplanePackageGenerations)source!).HostStarted(), this);
+                _hostStartedRegistration = registration;
+                // Disposal can race binding; neither ordering may retain a callback on the root lifetime.
+                if (Volatile.Read(ref _stopped) != 0)
+                    registration.Dispose();
+            }
+            else
+                HostStarted();
+        }
         return this;
     }
 
@@ -286,7 +319,10 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     internal void StopCatalogTracking()
     {
         if (Interlocked.Exchange(ref _stopped, 1) == 0)
-            _watchStop.Cancel();
+        {
+            try { _watchStop.Cancel(); }
+            finally { _hostStartedRegistration.Dispose(); }
+        }
     }
 
     internal void EnableCommitNotifications() => Volatile.Write(ref _commitNotificationsAvailable, 1);
@@ -538,7 +574,20 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
         if (Volatile.Read(ref _stopped) != 0)
             return;
         Volatile.Write(ref _publishRequested, 1);
-        if (Volatile.Read(ref _stopped) == 0 && Interlocked.CompareExchange(ref _publishing, 1, 0) == 0)
+        StartPublishingIfReady();
+    }
+
+    private void HostStarted()
+    {
+        Volatile.Write(ref _waitingForHostStart, 0);
+        StartPublishingIfReady();
+    }
+
+    private bool BackgroundPublishingReady => Volatile.Read(ref _stopped) == 0 && Volatile.Read(ref _waitingForHostStart) == 0;
+
+    private void StartPublishingIfReady()
+    {
+        if (BackgroundPublishingReady && Volatile.Read(ref _publishRequested) == 1 && Interlocked.CompareExchange(ref _publishing, 1, 0) == 0)
             _ = Task.Run(PublishWhileRequestedAsync);
     }
 
@@ -546,12 +595,12 @@ public sealed class NuplanePackageGenerations : ISupersededAssemblySource, IShel
     {
         do
         {
-            while (Volatile.Read(ref _stopped) == 0 && Interlocked.Exchange(ref _publishRequested, 0) == 1)
+            while (BackgroundPublishingReady && Interlocked.Exchange(ref _publishRequested, 0) == 1)
                 await PublishIfRetiredAsync();
             Volatile.Write(ref _publishing, 0);
         }
         // A request made after the last evaluation and before the loop stopped would otherwise wait for the next one.
-        while (Volatile.Read(ref _stopped) == 0 && Volatile.Read(ref _publishRequested) == 1 && Interlocked.CompareExchange(ref _publishing, 1, 0) == 0);
+        while (BackgroundPublishingReady && Volatile.Read(ref _publishRequested) == 1 && Interlocked.CompareExchange(ref _publishing, 1, 0) == 0);
     }
 
     /// <summary>
