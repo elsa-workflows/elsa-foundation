@@ -509,6 +509,62 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Migrations.Workf
                     b.ToTable("elsa_design_operations", (string)null);
                 });
 
+            modelBuilder.Entity("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities.WorkflowTemplateEntity", b =>
+                {
+                    b.Property<string>("ScopeKey")
+                        .HasMaxLength(65)
+                        .HasColumnType("character varying(65)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<string>("ContentJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .UseCollation("C");
+
+                    b.Property<DateTimeOffset>("LastModifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Revision")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .UseCollation("C");
+
+                    b.HasKey("ScopeKey", "Id");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.ToTable("elsa_workflow_templates", (string)null);
+                });
+
             modelBuilder.Entity("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinitionDraft", b =>
                 {
                     b.HasOne("Elsa.Workflows.Design.Persistence.Core.Entities.WorkflowDefinition", "WorkflowDefinition")

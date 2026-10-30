@@ -43,6 +43,12 @@ internal static class WorkflowsDesignJsonOptions
 }
 
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata)]
+[JsonSerializable(typeof(ListWorkflowTemplates))]
+[JsonSerializable(typeof(GetWorkflowTemplate))]
+[JsonSerializable(typeof(SaveWorkflowTemplate))]
+[JsonSerializable(typeof(DeleteWorkflowTemplate))]
+[JsonSerializable(typeof(WorkflowTemplateView))]
+[JsonSerializable(typeof(IReadOnlyCollection<WorkflowTemplateView>))]
 [JsonSerializable(typeof(AddDefinition))]
 [JsonSerializable(typeof(AddVersion))]
 [JsonSerializable(typeof(DeleteDefinition))]
