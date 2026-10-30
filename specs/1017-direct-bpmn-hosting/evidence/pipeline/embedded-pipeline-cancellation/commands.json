@@ -1,0 +1,89 @@
+{
+  "sourceRevision": "d3b103df0c5a96d5b9c4ae4bc679b360c8ff3337",
+  "cases": [
+    {
+      "parent": "Root",
+      "args": [
+        "python3",
+        "e2e-tests/etl/qualify_http_recovery.py",
+        "--parent",
+        "BpmnModel",
+        "--pipeline-cancel",
+        "--embedded-parent",
+        "Root",
+        "--workbench-assembly",
+        "Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll",
+        "--reader-assembly",
+        "tools/bpmn/DeliveryRecoveryRead/bin/Release/net10.0/DeliveryRecoveryRead.dll",
+        "--output",
+        "/tmp/elsa-2898-round3-fixes/etl-origin-d3b103df0/root/capture"
+      ],
+      "startedAtUtc": "2026-10-30T20:01:52.824550+00:00",
+      "exitCode": 0,
+      "verificationExitCode": 0
+    },
+    {
+      "parent": "Sequence",
+      "args": [
+        "python3",
+        "e2e-tests/etl/qualify_http_recovery.py",
+        "--parent",
+        "BpmnModel",
+        "--pipeline-cancel",
+        "--embedded-parent",
+        "Sequence",
+        "--workbench-assembly",
+        "Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll",
+        "--reader-assembly",
+        "tools/bpmn/DeliveryRecoveryRead/bin/Release/net10.0/DeliveryRecoveryRead.dll",
+        "--output",
+        "/tmp/elsa-2898-round3-fixes/etl-origin-d3b103df0/sequence/capture"
+      ],
+      "startedAtUtc": "2026-10-30T20:03:31.101849+00:00",
+      "exitCode": 0,
+      "verificationExitCode": 0
+    },
+    {
+      "parent": "Flowchart",
+      "args": [
+        "python3",
+        "e2e-tests/etl/qualify_http_recovery.py",
+        "--parent",
+        "BpmnModel",
+        "--pipeline-cancel",
+        "--embedded-parent",
+        "Flowchart",
+        "--workbench-assembly",
+        "Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll",
+        "--reader-assembly",
+        "tools/bpmn/DeliveryRecoveryRead/bin/Release/net10.0/DeliveryRecoveryRead.dll",
+        "--output",
+        "/tmp/elsa-2898-round3-fixes/etl-origin-d3b103df0/flowchart/capture"
+      ],
+      "startedAtUtc": "2026-10-30T20:05:08.946968+00:00",
+      "exitCode": 0,
+      "verificationExitCode": 0
+    },
+    {
+      "parent": "CompensationScope",
+      "args": [
+        "python3",
+        "e2e-tests/etl/qualify_http_recovery.py",
+        "--parent",
+        "BpmnModel",
+        "--pipeline-cancel",
+        "--embedded-parent",
+        "CompensationScope",
+        "--workbench-assembly",
+        "Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll",
+        "--reader-assembly",
+        "tools/bpmn/DeliveryRecoveryRead/bin/Release/net10.0/DeliveryRecoveryRead.dll",
+        "--output",
+        "/tmp/elsa-2898-round3-fixes/etl-origin-d3b103df0/compensationscope/capture"
+      ],
+      "startedAtUtc": "2026-10-30T20:06:47.065118+00:00",
+      "exitCode": 0,
+      "verificationExitCode": 0
+    }
+  ]
+}
