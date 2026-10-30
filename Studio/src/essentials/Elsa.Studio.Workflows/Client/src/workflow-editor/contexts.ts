@@ -1,5 +1,6 @@
 import React from "react";
 import type { ChildSlot } from "../workflowAdapter";
+import type { CollectionSlot } from "../collectionSlots";
 import type { WorkflowNodeAvailabilityLookup } from "./editorTypes";
 
 export interface WorkflowEdgeActions {
@@ -31,3 +32,6 @@ export const WorkflowNodeActionsContext = React.createContext<WorkflowNodeAction
 export type WorkflowSlotNavigation = (ownerNodeId: string, ownerLabel: string, slot: ChildSlot) => void;
 
 export const WorkflowSlotNavigationContext = React.createContext<WorkflowSlotNavigation | null>(null);
+
+export type CollectionSlotAction = (ownerNodeId: string, collection: CollectionSlot) => void;
+export const CollectionSlotActionsContext = React.createContext<CollectionSlotAction | null>(null);

@@ -15,6 +15,7 @@ import { WorkflowEditor } from "../../src/essentials/Elsa.Studio.Workflows/Clien
 import { WorkflowInstanceDetailsWorkbench } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
 import {
   bpmnActivity,
+  collectionActivity,
   flowchartActivity,
   flowchartNode,
   sequenceActivity,
@@ -36,6 +37,8 @@ import { activityGraphLayoutFromDesign } from "../../src/essentials/Elsa.Studio.
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 const adaptivePorts = new URLSearchParams(window.location.search).get("adaptive-ports");
+const collectionSlotsFixture = new URLSearchParams(window.location.search).get("collection-slots");
+const persistFixture = Boolean(adaptivePorts || collectionSlotsFixture);
 const adaptiveStorageKey = `adaptive-ports:${window.location.search}`;
 
 const writeLineCatalog: ActivityCatalogItem = {
@@ -121,6 +124,15 @@ function editorDraft(): WorkflowDraft {
       }));
     }
   }
+  if (collectionSlotsFixture) {
+    const activity = collectionActivity(collectionSlotsFixture === "parallel" ? "parallel" : "switch");
+    root.structure!.payload.activities = [createActivityNode(activity, "collection-owner")];
+    if (!sequence) root.structure!.payload.connections = [];
+    if (composition === "bpmn") {
+      root.structure!.payload.elements = [{ elementId: "collection-element", elementType: "task", childNodeId: "collection-owner" }];
+      root.structure!.payload.sequenceFlows = [];
+    }
+  }
   return {
     id: "draft-1",
     definitionId: "definition-1",
@@ -154,7 +166,7 @@ function sequenceRootActivity(): ActivityNode {
 }
 
 function activityGraphSequenceValue(): StudioActivityDefinitionImplementationEditorProps["value"] {
-  if (adaptivePorts) {
+  if (persistFixture) {
     const draft = editorDraft();
     return { payload: { rootActivity: draft.state.rootActivity, variables: [], outputMappings: [], outcomeMappings: [] }, layout: activityGraphLayoutFromDesign(draft.layout) };
   }
@@ -218,7 +230,7 @@ function ActivityDuplicateEditorFixtureContent() {
 }
 
 function ControlledActivityGraphFixture({ context }: { context: StudioEndpointContext }) {
-  const [value, setValue] = useState<StudioActivityDefinitionImplementationEditorProps["value"]>(() => adaptivePorts && sessionStorage.getItem(adaptiveStorageKey)
+  const [value, setValue] = useState<StudioActivityDefinitionImplementationEditorProps["value"]>(() => persistFixture && sessionStorage.getItem(adaptiveStorageKey)
     ? JSON.parse(sessionStorage.getItem(adaptiveStorageKey)!) : activityGraphSequenceValue());
   const readOnly = new URLSearchParams(window.location.search).has("read-only");
   const [diagnosticResult, setDiagnosticResult] = useState("");
@@ -237,14 +249,14 @@ function ControlledActivityGraphFixture({ context }: { context: StudioEndpointCo
     historyResetKey="draft-1:activity-sequence"
     value={value}
     readOnly={readOnly}
-    onChange={next => { setValue(next); if (adaptivePorts) sessionStorage.setItem(adaptiveStorageKey, JSON.stringify(next)); }}
+    onChange={next => { setValue(next); if (persistFixture) sessionStorage.setItem(adaptiveStorageKey, JSON.stringify(next)); }}
   />{rootSlots && readOnly ? <><button onClick={() => document.querySelector("[data-provider-diagnostic-focus-root]")!.dispatchEvent(new CustomEvent(activityGraphDiagnosticFocusEvent, {
     cancelable: true, detail: { location: { referenceKey: "else-leaf" }, complete: (result: { kind: string }) => setDiagnosticResult(result.kind) }
   }))}>Focus Else diagnostic</button><output data-testid="diagnostic-result">{diagnosticResult}</output></> : null}{slotAssignment || rootSlots ? <output hidden data-testid="activity-graph-payload">{JSON.stringify(value.payload)}</output> : null}</>;
 }
 
 export function createEditorContext(live?: { status: string; disconnected: boolean }): StudioEndpointContext {
-  let draft = adaptivePorts && new URLSearchParams(window.location.search).get("host") !== "activity" && sessionStorage.getItem(adaptiveStorageKey)
+  let draft = persistFixture && new URLSearchParams(window.location.search).get("host") !== "activity" && sessionStorage.getItem(adaptiveStorageKey)
     ? JSON.parse(sessionStorage.getItem(adaptiveStorageKey)!) as WorkflowDraft : editorDraft();
   const runCanvas = new URLSearchParams(window.location.search).get("run-canvas");
   const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");
@@ -253,7 +265,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
     { ...writeLineCatalog, activityVersionId: "decision-v1", activityTypeKey: "Elsa.BpmnDecision", displayName: "BPMN Decision", category: "BPMN", paletteHints: { containerModes: ["bpmn"], description: "BPMN Decision is intended for a gateway in a BPMN Process." } },
     { ...writeLineCatalog, activityVersionId: "complete-v1", activityTypeKey: "Elsa.Complete", displayName: "Complete", paletteHints: { resourceKinds: ["activity-definition-graph"] } }
   ] : [];
-  const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity, ...(slotAssignment ? [whileActivity] : []), ...(rootSlots ? [ifActivity] : []), ...paletteFixtures, ...(adaptivePorts ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : [])];
+  const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity, ...(slotAssignment ? [whileActivity] : []), ...(rootSlots ? [ifActivity] : []), ...paletteFixtures, ...(adaptivePorts || collectionSlotsFixture ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : []), ...(collectionSlotsFixture ? [collectionActivity(collectionSlotsFixture === "parallel" ? "parallel" : "switch")] : [])];
   const compiled = (node: ActivityNode): object => ({
     executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
     activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown",
@@ -312,7 +324,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
                 id: "elsa.api.workflow-design",
                 contractVersion: "1",
                 links: [{ rel: "workflow-definitions", href: "design/workflows/definitions" },
-                  ...(adaptivePorts ? [{ rel: "workflow-drafts", href: "design/workflows/drafts/{draftId}", templated: true }] : [])]
+                  ...(persistFixture ? [{ rel: "workflow-drafts", href: "design/workflows/drafts/{draftId}", templated: true }] : [])]
               },
               {
                 id: "elsa.api.activity-design",
@@ -399,7 +411,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
         return {};
       },
       putJson: async (_url: string, body: unknown) => {
-        if (adaptivePorts) {
+        if (persistFixture) {
           draft = { ...draft, ...body as object };
           sessionStorage.setItem(adaptiveStorageKey, JSON.stringify(draft));
         }

@@ -13,6 +13,7 @@ import { getActivityDisplay } from "./activityDisplay";
 import { indexActivityPresentation, resolveActivityLabel } from "./activityPresentation";
 import { getHttpEndpointResponseMode, type HttpEndpointResponseMode } from "./httpEndpointResponseMode";
 import type { ActivityIconTone, WorkflowNodeIcon } from "./activityIcons";
+import type { CollectionSlot } from "./collectionSlots";
 
 export { getActivityDisplay } from "./activityDisplay";
 export type { ActivityIconTone, WorkflowNodeIcon } from "./activityIcons";
@@ -45,6 +46,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   icon?: WorkflowNodeIcon;
   iconTone?: ActivityIconTone;
   childSlots: ChildSlot[];
+  collectionSlots?: CollectionSlot[];
   acceptsInbound: boolean;
   sourcePorts: WorkflowPortDescriptor[];
   suppressFlowPorts?: boolean;

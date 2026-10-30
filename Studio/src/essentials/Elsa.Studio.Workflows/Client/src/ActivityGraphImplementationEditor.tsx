@@ -92,6 +92,7 @@ import { compareWorkflowPanelTabs } from "./workflow-editor/PanelTabList";
 import { supportsScopedVariables, WORKFLOW_SCOPE_ID } from "./scopedVariables";
 import { getActivityGraphOutcomeMappingOptions, type ActivityGraphOutcomeChoice } from "./activityGraphOutcomeMappingOptions";
 import { SequenceDesigner } from "./graph-authoring/SequenceDesigner";
+import { addCollectionItem, getCollectionSlots, type CollectionSlot } from "./collectionSlots";
 export { getActivityGraphOutcomeMappingOptions } from "./activityGraphOutcomeMappingOptions";
 export type { ActivityGraphOutcomeChoice } from "./activityGraphOutcomeMappingOptions";
 
@@ -317,7 +318,10 @@ export function ActivityGraphImplementationEditor({
           edges: Edge[];
         }
       : buildCanvas({ owner: documentOwner, slot: documentSlot }, catalog, layout);
-    return { nodes: model.nodes, edges: model.edges as WorkflowEdge[] };
+    return { nodes: model.nodes.map(node => {
+      const activity = documentSlot.activities.find(candidate => candidate.nodeId === (node.data.runtimeNodeId ?? node.id));
+      return activity ? { ...node, data: { ...node.data, collectionSlots: getCollectionSlots(activity, catalogByVersion.get(activity.activityVersionId)) } } : node;
+    }), edges: model.edges as WorkflowEdge[] };
   }, [catalog, catalogByVersion, scopePath]);
 
   const applyModel = useCallback((
@@ -732,6 +736,17 @@ export function ActivityGraphImplementationEditor({
     const nextRoot = updateActivity(root, nextSelected.nodeId, () => nextSelected, catalogByVersion);
     commitRoot(nextRoot);
   };
+  const addCollectionSlotItem = (ownerNodeId: string, collection: CollectionSlot) => {
+    if (readOnly) return;
+    commitRoot(updateActivity(root, ownerNodeId, current => {
+      const live = getCollectionSlots(current, catalogByVersion.get(current.activityVersionId)).find(candidate => candidate.property === collection.property);
+      return live ? addCollectionItem(current, live) : current;
+    }, catalogByVersion));
+    setSelectedNodeId(nodes.find(node => node.id === ownerNodeId || (node.data as unknown as BpmnNodeData).boundActivity?.nodeId === ownerNodeId)?.id ?? ownerNodeId);
+    setActiveRightPanelId("inspector");
+    setActiveInspectorTabId("slots");
+    sidePanelLayout.setInspectorCollapsed(false);
+  };
   const inspectedNode = selected ?? owner;
   const inspectedCatalogItem = selected ? selectedCatalogItem : ownerCatalogItem;
   const inspectedDescriptor = inspectedCatalogItem ? toActivityDescriptor(inspectedCatalogItem) : null;
@@ -912,7 +927,7 @@ export function ActivityGraphImplementationEditor({
         />
         <div className="ad-graph-scope-label"><span>{ownerCatalogItem ? getActivityDisplay(ownerCatalogItem) : "Root"}</span><strong>{slot?.label ?? "Leaf implementation"}</strong><div className="wf-canvas-tools" role="group" aria-label="Activity Graph canvas tools"><button type="button" className="wf-icon-button" aria-label="Undo Activity Graph edit" onClick={undo} disabled={readOnly || !canUndo}><Undo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Redo Activity Graph edit" onClick={redo} disabled={readOnly || !canRedo}><Redo2 size={16} /></button><button type="button" className="wf-icon-button" aria-label="Auto-layout Activity Graph" onClick={interactions.autoLayout} disabled={readOnly || isSequenceSlot || !interactions.canAutoLayout}><Network size={16} /></button></div></div>
         {isSequenceSlot ? <SequenceDesigner
-          nodes={nodes}
+          nodes={nodes.filter(node => node.type !== "bpmnElement")}
           selectedNodeId={selectedNodeId}
           readOnly={readOnly}
           canvasRef={interactions.canvasRef}
@@ -925,6 +940,7 @@ export function ActivityGraphImplementationEditor({
           onMove={interactions.moveSequenceActivity}
           onDelete={deleteSequenceActivity}
           onDuplicate={duplicateSequenceActivity}
+          onAddCollectionItem={addCollectionSlotItem}
           onOpenSlot={(ownerNodeId, ownerLabel, childSlot) =>
             enterChildSlot(ownerNodeId, childSlot, slotCrumbLabel(ownerLabel, childSlot))}
         >
@@ -937,6 +953,7 @@ export function ActivityGraphImplementationEditor({
             onDrop: interactions.onCanvasDrop
           }}
           edgeActions={interactions.edgeActions}
+          collectionAction={readOnly ? null : addCollectionSlotItem}
           slotNavigation={(ownerNodeId, ownerLabel, childSlot) =>
             enterChildSlot(ownerNodeId, childSlot, slotCrumbLabel(ownerLabel, childSlot))}
           reactFlowProps={{
