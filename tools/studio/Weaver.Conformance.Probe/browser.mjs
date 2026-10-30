@@ -26,11 +26,18 @@ need(path.isAbsolute(config.storageState) && path.isAbsolute(config.commandFile)
 fs.mkdirSync(config.output, { recursive: true, mode: 0o700 });
 const digest = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
 const ref = file => ({ path: file, sha256: digest(fs.readFileSync(file)) });
-const secretKey = /^(authorization|password|apiKey|gitHubToken|runtimeConnectionToken|accessToken|refreshToken|cookie|set-cookie)$/i;
+const secretKey = /^(authorization|proxy-authorization|password|apiKey|gitHubToken|runtimeConnectionToken|accessToken|refreshToken|clientSecret|cookie|set-cookie)$/i;
 function redact(value) {
   if (Array.isArray(value)) return value.map(redact);
   if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, secretKey.test(key) ? "[redacted]" : redact(item)]));
-  return typeof value === "string" ? value.replace(/\bBearer\s+[^\s"\\]+/gi, "Bearer [redacted]").replace(/\bsk-(?:proj-|ant-)?[A-Za-z0-9_-]{12,}/g, "[redacted]") : value;
+  return typeof value === "string" ? value.replace(/\bBearer\s+[^\s"\\]+/gi, "Bearer [redacted]")
+    .replace(/\bsk-(?:proj-|ant-)?[A-Za-z0-9_-]{12,}/g, "[redacted]")
+    .replace(/("(?:authorization|proxy-authorization|password|apiKey|gitHubToken|runtimeConnectionToken|accessToken|refreshToken|clientSecret|cookie|set-cookie)"\s*:\s*)"(?:\\.|[^"\\])*"/gi, '$1"[redacted]"')
+    .replace(/\b((?:access[_-]?token|refresh[_-]?token|client[_-]?secret|password|api[_-]?key)=)[^\s&#"']+/gi, "$1[redacted]") : value;
+}
+function diagnosticUrl(value) {
+  try { const url = new URL(value); return url.origin + url.pathname; }
+  catch { return "[unavailable URL]"; }
 }
 function retain(name, value) {
   const file = path.join(config.output, name + ".json");
@@ -43,9 +50,19 @@ const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ storageState: config.storageState, viewport: { width: 1920, height: 1080 } });
 const page = await context.newPage();
 page.setDefaultTimeout(30000);
-const requests = [], owningWrites = [], pageErrors = [];
+const requests = [], owningWrites = [], pageErrors = [], consoleMessages = [], failedRequests = [];
 let owningDraftPath;
 page.on("pageerror", error => pageErrors.push(error.message));
+page.on("console", message => {
+  const location = message.location();
+  consoleMessages.push(redact({ type: message.type(), text: message.text(), location: {
+    url: diagnosticUrl(location.url), lineNumber: location.lineNumber, columnNumber: location.columnNumber
+  } }));
+});
+page.on("requestfailed", request => failedRequests.push(redact({
+  url: diagnosticUrl(request.url()), method: request.method(), resourceType: request.resourceType(),
+  errorText: request.failure()?.errorText
+})));
 page.on("request", request => {
   const url = new URL(request.url());
   if (url.origin === backend && owningDraftPath === url.pathname && ["PUT", "POST", "PATCH", "DELETE"].includes(request.method())) {
@@ -66,8 +83,10 @@ function command(toolName, args) {
 async function owner(name, endpoint, headers = {}) {
   need(endpoint.startsWith("/") && !endpoint.startsWith("//"), "Owner endpoint must be local to the verified backend.");
   const response = await page.request.get(backend + endpoint, { headers });
+  const rawBody = await response.text();
+  result.evidence.push(retain(name + "-http", { url: diagnosticUrl(response.url()), status: response.status(), rawBody }));
   need(response.status() === 200, "Owning resource read failed: " + response.status() + " " + endpoint);
-  const value = await response.json();
+  const value = JSON.parse(rawBody);
   const receipt = retain(name, { url: response.url(), status: response.status(), value });
   result.evidence.push(receipt);
   return { value, receipt };
@@ -77,12 +96,37 @@ async function screenshot(name) {
   await page.screenshot({ path: file, fullPage: true });
   result.evidence.push(ref(file));
 }
+async function failureDom() {
+  const html = await page.locator("html").evaluate(root => {
+    const copy = root.cloneNode(true);
+    copy.querySelectorAll("script, style, noscript, template").forEach(element => element.remove());
+    for (const element of [copy, ...copy.querySelectorAll("*")]) {
+      for (const attribute of [...element.attributes]) {
+        if (!/^(id|class|role|hidden|disabled|inert|open|type|title|name|tabindex|checked|aria-[\w-]+|data-testid|data-state|data-status|data-pending)$/.test(attribute.name))
+          element.removeAttribute(attribute.name);
+      }
+      if (element.tagName === "TEXTAREA") element.textContent = "[redacted input]";
+    }
+    return copy.outerHTML;
+  });
+  result.evidence.push(retain("failure-dom", { url: diagnosticUrl(page.url()), html }));
+}
+async function nativeEnter(name, locator, control) {
+  const interaction = { method: "keyboard", key: "Enter", control, completed: false };
+  try { await locator.press("Enter"); interaction.completed = true; }
+  finally { result.evidence.push(retain(name + "-interaction", interaction)); }
+}
 async function workingDraft(name) {
-  const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "More workflow actions", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Export JSON", exact: true }).click();
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    (async () => {
+      // The nonmodal dock overlaps the pointer target; native keyboard activation preserves its proposal UI.
+      await nativeEnter(name + "-menu", page.getByRole("button", { name: "More workflow actions", exact: true }), "More workflow actions");
+      await nativeEnter(name + "-export", page.getByRole("menuitem", { name: "Export JSON", exact: true }), "Export JSON");
+    })()
+  ]);
   const file = path.join(config.output, name + ".json");
-  await (await download).saveAs(file);
+  await download.saveAs(file);
   fs.chmodSync(file, 0o600);
   result.evidence.push(ref(file));
   const value = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -329,7 +373,7 @@ async function workflow() {
   expect(owningWrites).toEqual([]);
   const saved = page.waitForResponse(response => new URL(response.url()).origin === backend && response.request().method() === "PUT"
     && new URL(response.url()).pathname === owningDraftPath);
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await nativeEnter("explicit-save", page.getByRole("button", { name: "Save", exact: true }), "Save");
   const saveResponse = await saved;
   need(saveResponse.ok(), "Explicit native workflow Save failed.");
   result.evidence.push(retain("explicit-save", { status: saveResponse.status(), request: saveResponse.request().postDataJSON(), response: await saveResponse.json() }));
@@ -358,13 +402,17 @@ try {
   if (!result.expectedFailureObserved) result.status = "passed";
 } catch (error) {
   result.status = "failed";
-  result.failure = { type: error.name, message: error.message };
+  result.failure = redact({ type: error.name, message: error.message });
+  try { await failureDom(); } catch (diagnosticError) {
+    result.evidence.push(retain("failure-dom-unavailable", { type: diagnosticError.name, message: diagnosticError.message }));
+  }
   try { await screenshot("failure"); } catch { /* Retain the original failure if the browser has gone away. */ }
 } finally {
   result.completedAt = new Date().toISOString();
   result.evidence.push(retain("agent-requests", requests));
   result.evidence.push(retain("owning-write-attempts", owningWrites));
-  result.pageErrors = pageErrors;
+  result.evidence.push(retain("browser-diagnostics", { consoleMessages, failedRequests }));
+  result.pageErrors = redact(pageErrors);
   retain("observation", result);
   await context.close();
   await browser.close();
