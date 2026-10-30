@@ -105,7 +105,7 @@ def _restore(run, tag, source, env):
     return _closure(run, source, env)
 
 
-def _pack(run, tag, source, env, package_id, version):
+def _pack(run, tag, source, env, package_id, version, *, register=True):
     project = _project(source)
     path = run.feed / (package_id + "." + version + ".nupkg")
     check(not path.exists(), "Refuse to overwrite a retained module archive: " + str(path))
@@ -134,9 +134,10 @@ def _pack(run, tag, source, env, package_id, version):
             if name.endswith((".js", ".css", ".json", ".props", ".targets")):
                 contents = archive.read(name)
                 check(str(REPO).encode() not in contents and str(run.sdk).encode() not in contents, "Module archive embeds source/SDK paths")
-    run.module_packages[package_id] = metadata
-    run.report["modules"] = dict(run.module_packages)
-    run.save()
+    if register:
+        run.module_packages[package_id] = metadata
+        run.report["modules"] = dict(run.module_packages)
+        run.save()
     return {"package": metadata, "assembly": assembly, "builtDll": _ref(built_dll), "archiveEntry": entry, "browserAssets": assets}
 
 
@@ -244,3 +245,43 @@ def build_authors(run):
         check(json.dumps(run.packages, sort_keys=True) == product_snapshot, "Module metadata contaminated product package map")
         run.save()
     return run.module_packages
+
+
+def build_incompatible_studio(run):
+    """Compile a real unsupported-admission variant; never rewrite an existing archive.
+
+    Reuse only the independently compiled author's retained browser assets. The
+    variant gets its own NuGet version, cache, locks and compiled module attribute.
+    The normal archive/author records remain authoritative for restoration.
+    Native rejection and restored positives must still be observed by the driver.
+    """
+    original = run.report["authors"]["studio"]
+    check(original["status"] == "passed", "Build the actual SDK author before its incompatible variant")
+    check("incompatibleStudio" not in run.report["authors"], "Use a fresh run for the incompatible variant")
+    version = original["fixtureVersion"] + ".incompatible"
+    source = run.materialize("author-studio-incompatible", "Resource.Studio", {
+        "__FIXTURE_VERSION__": version, "__REQUIRED_SDK_VERSION__": "999.0.0"})
+    # These exact assets already passed external SDK typecheck/build/pack audits.
+    for entry, retained in original["packed"]["browserAssets"].items():
+        file = Path(retained["path"])
+        check(sha(file) == retained["sha256"], "Original authored browser asset changed")
+        relative = entry.removeprefix("staticwebassets/")
+        check(relative != entry and ".." not in Path(relative).parts, "Unexpected author browser archive entry")
+        target = source / "wwwroot" / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(file, target)
+    _configure(run, source)
+    env = _environment(run, "authors-studio-incompatible")
+    record = _restore(run, "authors-studio-incompatible", source, env)
+    normal_modules = json.dumps(run.module_packages, sort_keys=True)
+    packed = _pack(run, "authors-studio-incompatible", source, env, MODULE_IDS[2], version, register=False)
+    check(json.dumps(run.module_packages, sort_keys=True) == normal_modules, "Variant replaced the normal restoration archive")
+    check(packed["builtDll"]["sha256"] != original["packed"]["builtDll"]["sha256"], "Variant did not compile a distinct admission declaration")
+    check({key: value["sha256"] for key, value in packed["browserAssets"].items()} ==
+          {key: value["sha256"] for key, value in original["packed"]["browserAssets"].items()}, "Variant browser implementation differs")
+    record.update(status="passed", packed=packed, requiredSdkVersion="999.0.0", fixtureVersion=version,
+                  originalArchive=original["packed"]["package"], runtimeRejectionObserved=False)
+    record["receipt"] = _receipt(run, "studio-incompatible-author", record)
+    run.report["authors"]["incompatibleStudio"] = record
+    run.save()
+    return packed["package"]

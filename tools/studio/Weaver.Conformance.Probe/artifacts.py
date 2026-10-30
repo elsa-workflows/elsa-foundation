@@ -209,7 +209,7 @@ class ConformanceRun:
         source.mkdir()
         values = {"__PRODUCT_VERSION__": self.version, "__FIXTURE_VERSION__": "1.0.0-witness",
                   "__CSHELLS_VERSION__": self.pin("CShells.Abstractions"),
-                  "__SDK_TGZ__": str(self.sdk)}
+                  "__SDK_TGZ__": str(self.sdk), "__REQUIRED_SDK_VERSION__": "*"}
         values.update(replacements or {})
         template = FIXTURES / relative
         check(template.is_dir(), "Missing fixture producer: " + relative)
