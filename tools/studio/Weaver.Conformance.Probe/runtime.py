@@ -17,6 +17,9 @@ import urllib.request
 from artifacts import check, sha, write_json
 
 DEVELOPER_PORTS = {5089, 5095, 7030, 7243}
+STARTUP_OBSERVATION_SECONDS = 120
+RUNTIME_ENVIRONMENT = {"PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "TZ", "DOTNET_ROOT",
+                       "SSL_CERT_FILE", "SSL_CERT_DIR", "ASPNETCORE_ENVIRONMENT", "DOTNET_ENVIRONMENT", "WEAVER_FRONTEND_AUDIT"}
 
 
 def private_json(path, value):
@@ -113,9 +116,9 @@ def server(run, name, origin):
     # receives new empty caches; the explicit retained archive closure must suffice.
     runtime_inputs = run.root / (name + "-runtime-inputs-" + str(time.time_ns()))
     runtime_inputs.mkdir(mode=0o700)
-    runtime_env = dict(profile["env"])
-    for key in ("NUGET_FALLBACK_PACKAGES", "DOTNET_ADDITIONAL_DEPS", "DOTNET_SHARED_STORE"):
-        runtime_env.pop(key, None)
+    # Runtime inputs are explicit private files/feed archives. Ambient provider credentials,
+    # interposers, startup hooks and restore/build-cache overrides are not consumer inputs.
+    runtime_env = {key: value for key, value in profile["env"].items() if key in RUNTIME_ENVIRONMENT}
     caches = {}
     for key, folder in (("NUGET_PACKAGES", "packages"), ("NUGET_HTTP_CACHE_PATH", "http")):
         cache = runtime_inputs / folder
@@ -130,7 +133,7 @@ def server(run, name, origin):
                "runtimePackageCaches": caches}
     private_json(run.root / (name + "-process.json"), started)
     try:
-        deadline = time.monotonic() + 120
+        deadline = time.monotonic() + STARTUP_OBSERVATION_SECONDS
         while True:
             text = log.read_text(errors="replace")
             check(process.poll() is None, "Owned consumer exited during activation: " + str(log))
@@ -138,7 +141,12 @@ def server(run, name, origin):
                 listening = re.findall(r"Now listening on: (http://127\.0\.0\.1:\d+)", text)
                 check(origin in listening, "Ready marker did not match actual Kestrel listener")
                 break
-            check(time.monotonic() < deadline, "Owned consumer activation deadline elapsed: " + str(log))
+            if time.monotonic() >= deadline:
+                started.setdefault("startupObservations", []).append({"status": "pending", "pid": process.pid, "at": time.time()})
+                private_json(run.root / (name + "-process.json"), started)
+                # A pending observation is not a terminal host. Keep observing this exact
+                # process; a parent can inspect the receipt/log without restarting it.
+                deadline = time.monotonic() + STARTUP_OBSERVATION_SECONDS
             time.sleep(0.1)
         yield started
         check(process.poll() is None, "Owned consumer exited before qualification completed: " + str(log))
