@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "931123c7ed45aa896539d857c6227a267d08b28f",
+  "last_publish_commit": "184759ce53bc251ccc81b07ec3980d804ad8fd76",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -204,8 +204,8 @@
     },
     {
       "package_id": "Elsa.Connections.Api",
-      "version": "4.0.4-preview",
-      "commit": "474fac5c6ac1776ae6940fc6e5a3cdf926f7fc20"
+      "version": "4.0.5-preview",
+      "commit": "184759ce53bc251ccc81b07ec3980d804ad8fd76"
     },
     {
       "package_id": "Elsa.Connections.Core",
