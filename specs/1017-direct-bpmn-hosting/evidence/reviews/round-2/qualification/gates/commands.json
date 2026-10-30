@@ -1,0 +1,331 @@
+{
+  "sourceRevision": "e3ec219fcc3a93c949d2669fc585bd1e79152abe",
+  "results": [
+    {
+      "name": "bpmn",
+      "args": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+        "-c",
+        "Release",
+        "--logger",
+        "trx;LogFileName=bpmn.trx",
+        "--results-directory",
+        "/tmp/elsa-2898-round2-fixes/qualified-e3ec219fc/results",
+        "-p:RestoreLockedMode=true",
+        "--nologo",
+        "--verbosity",
+        "quiet"
+      ],
+      "startedAtUtc": "2026-10-30T15:42:46.534584+00:00",
+      "exitCode": 0,
+      "counters": {
+        "total": "465",
+        "executed": "465",
+        "passed": "465",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "name": "bpmn-discovery",
+      "args": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-build",
+        "--list-tests",
+        "--nologo",
+        "--verbosity",
+        "quiet"
+      ],
+      "startedAtUtc": "2026-10-30T15:43:07.934321+00:00",
+      "exitCode": 0
+    },
+    {
+      "name": "runtime",
+      "args": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "-c",
+        "Release",
+        "--logger",
+        "trx;LogFileName=runtime.trx",
+        "--results-directory",
+        "/tmp/elsa-2898-round2-fixes/qualified-e3ec219fc/results",
+        "-p:RestoreLockedMode=true",
+        "--nologo",
+        "--verbosity",
+        "quiet"
+      ],
+      "startedAtUtc": "2026-10-30T15:43:08.480783+00:00",
+      "exitCode": 0,
+      "counters": {
+        "total": "3078",
+        "executed": "3078",
+        "passed": "3078",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "name": "runtime-discovery",
+      "args": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-build",
+        "--list-tests",
+        "--nologo",
+        "--verbosity",
+        "quiet"
+      ],
+      "startedAtUtc": "2026-10-30T15:43:15.441435+00:00",
+      "exitCode": 0
+    },
+    {
+      "name": "hosting",
+      "args": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+        "-c",
+        "Release",
+        "--logger",
+        "trx;LogFileName=hosting.trx",
+        "--results-directory",
+        "/tmp/elsa-2898-round2-fixes/qualified-e3ec219fc/results",
+        "-p:RestoreLockedMode=true",
+        "--nologo",
+        "--verbosity",
+        "quiet",
+        "-p:ElsaBpmnRecoveryProbe=false"
+      ],
+      "startedAtUtc": "2026-10-30T15:43:16.234479+00:00",
+      "exitCode": 0,
+      "counters": {
+        "total": "37",
+        "executed": "37",
+        "passed": "37",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "name": "hosting-discovery",
+      "args": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-build",
+        "--list-tests",
+        "--nologo",
+        "--verbosity",
+        "quiet"
+      ],
+      "startedAtUtc": "2026-10-30T15:55:07.127392+00:00",
+      "exitCode": 0
+    },
+    {
+      "name": "docker-ready",
+      "args": [
+        "docker",
+        "info",
+        "--format",
+        "{{.ServerVersion}}"
+      ],
+      "startedAtUtc": "2026-10-30T15:55:07.634242+00:00",
+      "exitCode": 0
+    },
+    {
+      "name": "runtime-ef",
+      "args": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+        "-c",
+        "Release",
+        "--logger",
+        "trx;LogFileName=runtime-ef.trx",
+        "--results-directory",
+        "/tmp/elsa-2898-round2-fixes/qualified-e3ec219fc/results",
+        "-p:RestoreLockedMode=true",
+        "--nologo",
+        "--verbosity",
+        "quiet"
+      ],
+      "startedAtUtc": "2026-10-30T15:55:07.840126+00:00",
+      "exitCode": 0,
+      "counters": {
+        "total": "1782",
+        "executed": "1782",
+        "passed": "1782",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "name": "runtime-ef-discovery",
+      "args": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-build",
+        "--list-tests",
+        "--nologo",
+        "--verbosity",
+        "quiet"
+      ],
+      "startedAtUtc": "2026-10-30T15:57:02.212391+00:00",
+      "exitCode": 0
+    },
+    {
+      "name": "architecture-project-graph",
+      "args": [
+        "bash",
+        "tools/architecture/restore-ci-project-graph.sh"
+      ],
+      "startedAtUtc": "2026-10-30T15:57:02.962296+00:00",
+      "exitCode": 0
+    },
+    {
+      "name": "architecture",
+      "args": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+        "-c",
+        "Release",
+        "--logger",
+        "trx;LogFileName=architecture.trx",
+        "--results-directory",
+        "/tmp/elsa-2898-round2-fixes/qualified-e3ec219fc/results",
+        "-p:RestoreLockedMode=true",
+        "--nologo",
+        "--verbosity",
+        "quiet"
+      ],
+      "startedAtUtc": "2026-10-30T15:57:13.579064+00:00",
+      "exitCode": 0,
+      "counters": {
+        "total": "594",
+        "executed": "594",
+        "passed": "594",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "name": "architecture-discovery",
+      "args": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-build",
+        "--list-tests",
+        "--nologo",
+        "--verbosity",
+        "quiet"
+      ],
+      "startedAtUtc": "2026-10-30T15:57:53.105847+00:00",
+      "exitCode": 0
+    },
+    {
+      "name": "maps",
+      "args": [
+        "dotnet",
+        "run",
+        "--project",
+        "tools/maps/Elsa.Maps.Generator",
+        "-c",
+        "Release",
+        "--",
+        "check"
+      ],
+      "startedAtUtc": "2026-10-30T15:57:53.717252+00:00",
+      "exitCode": 0
+    },
+    {
+      "name": "tiers",
+      "args": [
+        "dotnet",
+        "run",
+        "--project",
+        "tools/maps/Elsa.Maps.Generator",
+        "-c",
+        "Release",
+        "--",
+        "test-tiers-check"
+      ],
+      "startedAtUtc": "2026-10-30T15:57:54.727159+00:00",
+      "exitCode": 0
+    }
+  ]
+}

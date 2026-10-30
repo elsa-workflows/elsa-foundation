@@ -1,0 +1,19 @@
+{
+  "args": [
+    "dotnet",
+    "run",
+    "--project",
+    "tools/versioning/Elsa.Versioning.Calculator",
+    "-c",
+    "Release",
+    "--",
+    "--record-ref",
+    "origin/publish-state",
+    "--commit",
+    "e3ec219fcc3a93c949d2669fc585bd1e79152abe",
+    "--output",
+    "/tmp/elsa-2898-round2-fixes/qualified-e3ec219fc/api/version-computation.json"
+  ],
+  "exitCode": 0,
+  "sourceRevision": "e3ec219fcc3a93c949d2669fc585bd1e79152abe"
+}
