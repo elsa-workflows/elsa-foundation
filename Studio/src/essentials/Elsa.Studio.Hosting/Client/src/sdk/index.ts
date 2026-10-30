@@ -2439,6 +2439,7 @@ function getProblemDetailsMessage(payload: Record<string, unknown>) {
     if (messages.length > 0) return messages.join(" ");
   }
 
+  if (typeof payload.error === "string" && payload.error.trim().length > 0) return payload.error;
   return null;
 }
 

@@ -540,6 +540,32 @@ describe("studio registry", () => {
     } satisfies Partial<StudioHttpError>);
   });
 
+  it.each([
+    [{ error: "Use a name without spaces." }, "Use a name without spaces."],
+    [{ error: { message: "Unrecognized shape" } }, "Request failed with 400."],
+    [{ error: "  " }, "Request failed with 400."],
+    [{ detail: "Problem detail", error: "Legacy error" }, "Problem detail"],
+    [{ errors: { name: ["Invalid name."] } }, "Invalid name."]
+  ])("reads a useful message from an API rejection %j", async (payload, message) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(payload), {
+      status: 400, headers: { "content-type": "application/json" }
+    })));
+    await expect(createEndpointContext("https://foundation.example/").http.postJson("/connections", {}))
+      .rejects.toMatchObject({ status: 400, message });
+  });
+
+  it.each([
+    ["", "application/json"],
+    ["{broken", "application/json"],
+    ["{}", "application/problem+json"]
+  ])("keeps a useful fallback for an unreadable or empty API error %j", async (body, contentType) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(body, {
+      status: 400, headers: { "content-type": contentType }
+    })));
+    await expect(createEndpointContext("https://foundation.example/").http.postJson("/connections", {}))
+      .rejects.toMatchObject({ status: 400, message: "Request failed with 400." });
+  });
+
   it("extracts validation errors from http failures", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(
       JSON.stringify({ errors: { Name: ["Name is required."] } }),

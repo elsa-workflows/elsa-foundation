@@ -33,6 +33,28 @@ public sealed class ConnectionsApiTests
 {
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
 
+    [Theory]
+    [InlineData("Backend API")]
+    [InlineData("api/key")]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Create_InvalidName_ReturnsFieldError_AndAllowsCorrection(string name)
+    {
+        await using var host = await StartHostAsync();
+        using var client = host.GetTestClient();
+        using var rejected = await client.SendAsync(Authed(HttpMethod.Post, "/connections", BearerBody(name, "invalid-name-secret-sentinel")));
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        var payload = await rejected.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(string.IsNullOrWhiteSpace(payload.GetProperty("error").GetString()));
+        Assert.False(string.IsNullOrWhiteSpace(payload.GetProperty("errors").GetProperty("name")[0].GetString()));
+        Assert.DoesNotContain("invalid-name-secret-sentinel", await rejected.Content.ReadAsStringAsync());
+
+        using var corrected = await client.SendAsync(Authed(HttpMethod.Post, "/connections", BearerBody("  Backend.API-1_test  ")));
+        Assert.Equal(HttpStatusCode.Created, corrected.StatusCode);
+        var metadata = await corrected.Content.ReadFromJsonAsync<ConnectionMetadata>(Json);
+        Assert.Equal("backend.api-1_test", metadata!.Name);
+    }
+
     [Fact]
     public async Task Create_MapsUnknownOwnerTo400_AndDuplicateNameTo409()
     {
