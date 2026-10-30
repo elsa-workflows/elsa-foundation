@@ -250,7 +250,13 @@ public static class ConnectionsApi
         {
             case ArgumentException argument:
                 await Results.Json(
-                    new { error = argument.Message },
+                    new
+                    {
+                        error = argument.Message,
+                        errors = argument.ParamName == "name"
+                            ? new Dictionary<string, string[]> { ["name"] = [argument.Message] }
+                            : null
+                    },
                     JsonOptions,
                     contentType: "application/json",
                     statusCode: StatusCodes.Status400BadRequest).ExecuteAsync(context);
