@@ -62,7 +62,10 @@ builder.Services.AddNuplane(builder.Configuration.GetSection("Nuplane"), nuplane
     nuplane.WithStateFile(state).UseCoordinatedPackageStore([new("default", "backend", state)], true);
     nuplane.Services.Configure<FeedResolutionOptions>(options => options.PackageInstallRoot = Path.Combine(contentRoot, "native-store", "installs"));
     nuplane.Services.Configure<LockFileOptions>(options => options.Path = Path.Combine(contentRoot, "native-store", "nuplane.lock.json"));
-    nuplane.Services.Configure<ReconciliationOptions>(options => options.EnableAutomaticReconciliation = false);
+    nuplane.Services.Configure<ReconciliationOptions>(options => {
+        options.EnableAutomaticReconciliation = false;
+        options.StartupFailurePolicy = StartupFailurePolicy.FailHost;
+    });
     nuplane.AddDirectoryFeed("weaver-backend", "runtime-feed", feed => { feed.Watch = false; feed.IncludeAll(); });
     nuplane.AutoloadPackages(builder.Configuration.GetSection("Nuplane:Loading"), loading => {
         foreach (var assembly in contracts) {
@@ -173,8 +176,8 @@ try {
     catch (Exception diagnosticFailure) { Console.Error.WriteLine("Owned startup diagnostic failed: " + diagnosticFailure.GetType().FullName); }
     throw;
 }
-var initial = await app.Services.GetRequiredService<INuplaneAdminOperations>().TriggerReconcileAsync(CancellationToken.None);
-if (initial.RunResult is not { IsDegraded: false }) throw new InvalidOperationException("Initial owned backend reconciliation failed.");
+// Nuplane's blocking startup service has already reconciled under FailHost. Later explicit
+// reconciliations belong to observed package transitions through the protected endpoint above.
 Console.WriteLine("WEAVER_BACKEND_CONSUMER_READY");
 await app.WaitForShutdownAsync();
 

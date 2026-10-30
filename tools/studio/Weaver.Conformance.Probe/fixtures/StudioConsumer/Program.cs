@@ -30,7 +30,10 @@ studio.AddElsaStudioNuplane(options => options.DirectoryFeedName = "weaver-studi
     nuplane.WithStateFile(state).UseCoordinatedPackageStore([new("default", "studio", state)], true);
     nuplane.Services.Configure<FeedResolutionOptions>(options => options.PackageInstallRoot = Path.Combine(contentRoot, "native-store", "installs"));
     nuplane.Services.Configure<LockFileOptions>(options => options.Path = Path.Combine(contentRoot, "native-store", "nuplane.lock.json"));
-    nuplane.Services.Configure<ReconciliationOptions>(options => options.EnableAutomaticReconciliation = false);
+    nuplane.Services.Configure<ReconciliationOptions>(options => {
+        options.EnableAutomaticReconciliation = false;
+        options.StartupFailurePolicy = StartupFailurePolicy.FailHost;
+    });
     nuplane.AddDirectoryFeed("weaver-studio", "runtime-feed", feed => { feed.Watch = false; feed.IncludeAll(); });
 });
 studio.Services.PostConfigure<NuplaneIntegrationOptions>(integration => {
@@ -65,8 +68,8 @@ try {
     catch (Exception diagnosticFailure) { Console.Error.WriteLine("Owned startup diagnostic failed: " + diagnosticFailure.GetType().FullName); }
     throw;
 }
-var initial = await app.Services.GetRequiredService<INuplaneAdminOperations>().TriggerReconcileAsync(CancellationToken.None);
-if (initial.RunResult is not { IsDegraded: false }) throw new InvalidOperationException("Initial owned Studio reconciliation failed.");
+// The blocking native startup reconciliation must succeed under FailHost before readiness.
+// Actual add/remove/restore transitions use the protected reconciliation endpoint above.
 Console.WriteLine("WEAVER_STUDIO_CONSUMER_READY");
 await app.WaitForShutdownAsync();
 

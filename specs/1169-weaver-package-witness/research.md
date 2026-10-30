@@ -8,6 +8,8 @@ The [two bounded 30 October diagnostics](https://github.com/elsa-workflows/elsa-
 
 The scoped correction queues background publication until the public host `ApplicationStarted` boundary, preserving installed subscriptions, conservative pins, direct schema reads and standalone service-provider behavior. It changes neither native lock policy nor the owning resource. Causal regression and normal ungated package-consumer verification precede the final distribution run. It does not promise serialization of later native operations; add/remove/restore and the remaining witness controls still test those boundaries.
 
+Consumer readiness uses Nuplane's real blocking startup reconciliation with explicit `StartupFailurePolicy.FailHost`. The fixture no longer starts a redundant second reconciliation immediately after `StartAsync`; actual package transitions retain their protected manual endpoint and must be observed separately. The two diagnostic failures occurred inside `StartAsync`, before that extra call, so removing it does not stand in for the readability correction. Health, authenticated serving generation and owning-resource observations remain required after native startup.
+
 ## Owning resource
 
 **Decision**: A separately authored widget's visibility in the explicit personal Home layout.
