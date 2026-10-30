@@ -421,6 +421,7 @@ public sealed class FeatureCompositionTests
                 ["JsonActivityReconciliation"] = new() { ["Options:SourceId"] = "composition", ["Options:FilePath"] = activities },
                 ["JsonWorkflowReconciliation"] = new() { ["Options:SourceId"] = "composition", ["Options:FolderPath"] = workflows },
                 ["JsonWorkflowArtifactReconciliation"] = new() { ["Options:SourceId"] = "composition", ["Options:FolderPath"] = workflows },
+                ["Elsa3JsonReconciliation"] = new() { ["Options:SourceId"] = "composition", ["Options:FolderPath"] = Directory.CreateDirectory(Path.Join(directory, "elsa3")).FullName },
                 ["FileSystemDistributedLocking"] = new() { ["LocksFolderPath"] = Path.Join(directory, "locks") },
                 ["EtlRuntime"] = new() { ["SnapshotRoot"] = Path.Join(directory, "etl-snapshots") },
                 // Medallion's providers connect when a lock is taken, not when they are constructed, and nothing takes one here.

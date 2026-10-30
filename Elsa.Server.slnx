@@ -47,6 +47,7 @@
   <Folder Name="/Extensions/Elsa3/src/Activities/Design/Import/">
     <Project Path="Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/Elsa3.Activities.Design.Import.csproj" />
     <Project Path="Extensions/Elsa3/src/Activities/Design/Import/Publishing/Elsa3.Activities.Design.Import.Publishing.csproj" />
+    <Project Path="Extensions/Elsa3/src/Activities/Design/Import/Reconciliation/Elsa3.Activities.Design.Import.Reconciliation.csproj" />
   </Folder>
   <Folder Name="/Extensions/Elsa3/src/Activities/Design/Import/Persistence/">
     <Project Path="Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />

@@ -175,15 +175,31 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     /// shell does not compose <c>Elsa3ImportActivitiesPublishing</c>; with <paramref name="withPublishSeam"/> it composes
     /// the test's publish seam around it (<see cref="Refusals"/>); with <paramref name="withScheduling"/> it composes the
     /// scheduling activities (Delay); with <paramref name="withHttp"/> the HTTP activities, whose endpoints listen under
-    /// <c>/workflows/http</c>.
+    /// <c>/workflows/http</c>. With <paramref name="reconcileFolder"/> the shell composes <c>Elsa3JsonReconciliation</c> on
+    /// that folder (spec 235), strict when <paramref name="strict"/>, so the folder is imported while the shell activates.
     /// </summary>
-    public static async Task<Elsa3ImportHost> StartAsync(bool withPublishing = true, bool withPublishSeam = false, bool withScheduling = false, bool withHttp = false)
+    public static async Task<Elsa3ImportHost> StartAsync(
+        bool withPublishing = true,
+        bool withPublishSeam = false,
+        bool withScheduling = false,
+        bool withHttp = false,
+        string? reconcileFolder = null,
+        bool strict = false)
     {
         var root = Directory.CreateTempSubdirectory("elsa3-import-");
         var warnings = new WarningLog();
         try
         {
-            var configuration = new ConfigurationBuilder().AddInMemoryCollection(ShellSettings(root.FullName, withPublishing, withPublishSeam, withScheduling, withHttp)).Build();
+            var settings = ShellSettings(root.FullName, withPublishing, withPublishSeam, withScheduling, withHttp);
+            if (reconcileFolder is not null)
+            {
+                var reconciliation = $"CShells:Shells:{ShellName}:Features:Elsa3JsonReconciliation:Options:";
+                settings[$"{reconciliation}SourceId"] = "elsa3-test";
+                settings[$"{reconciliation}FolderPath"] = reconcileFolder;
+                settings[$"{reconciliation}FailOnUnconvertible"] = strict ? "true" : "false";
+            }
+
+            var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
             builder.WebHost.UseTestServer();
             builder.Logging.ClearProviders();
@@ -243,6 +259,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
                     typeof(Elsa3ImportActivitiesFeature).Assembly,
                     typeof(Elsa3ImportActivitiesEntityFrameworkCoreFeature).Assembly,
                     typeof(Elsa3ImportActivitiesPublishingFeature).Assembly,
+                    typeof(Elsa3.Activities.Design.Import.Reconciliation.Elsa3JsonReconciliationFeature).Assembly,
                     typeof(Elsa3ImportPublishSeamFeature).Assembly)
                 .WithConfigurationProvider(configuration));
 
@@ -453,6 +470,35 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     {
         var published = await PostAsync($"publishing/workflows/{Uri.EscapeDataString(workflowVersionId)}/publish", new JsonObject());
         return new(workflowVersionId, Required(published, "artifactId"), Required(published, "sourceReferenceId"));
+    }
+
+    /// <summary>
+    /// The active publication of <paramref name="definitionId"/>'s default slot and its source reference, read in the
+    /// host's persistence scope; null when the slot has none.
+    /// </summary>
+    public async Task<(PublishedWorkflow Workflow, WorkflowExecutableSourceReference Reference)?> ActivePublicationAsync(string definitionId)
+    {
+        await using var scope = await Shell.ServiceProvider.GetRequiredService<IPersistenceOperationScopeFactory>()
+            .CreateAsync(new PersistenceScope(TenantId));
+        var services = scope.ServiceProvider;
+        var slot = await services.GetRequiredService<IWorkflowActivationAuthority>().FindAsync(definitionId, "default");
+        if (slot?.ActiveActivationId is not { } publicationId)
+            return null;
+        var record = await services.GetRequiredService<Elsa.Workflows.Publishing.Core.Contracts.IPublicationRecordStore>().FindAsync(publicationId);
+        if (record?.SourceReferenceId is not { } sourceReferenceId)
+            return null;
+        var reference = await services.GetRequiredService<IWorkflowExecutableSourceReferenceReader>().FindAsync(sourceReferenceId);
+        return reference is null ? null : (new PublishedWorkflow(record.WorkflowDefinitionVersionId, record.ArtifactId, sourceReferenceId), reference);
+    }
+
+    /// <summary>Every publication record of <paramref name="definitionId"/>'s default slot, read in the host's persistence scope.</summary>
+    public async Task<IReadOnlyCollection<Elsa.Workflows.Publishing.Core.Models.PublicationRecord>> PublicationRecordsAsync(string definitionId)
+    {
+        await using var scope = await Shell.ServiceProvider.GetRequiredService<IPersistenceOperationScopeFactory>()
+            .CreateAsync(new PersistenceScope(TenantId));
+        var services = scope.ServiceProvider;
+        var slot = await services.GetRequiredService<IWorkflowActivationAuthority>().FindAsync(definitionId, "default");
+        return slot is null ? [] : await services.GetRequiredService<Elsa.Workflows.Publishing.Core.Contracts.IPublicationRecordStore>().ListBySlotAsync(slot.SlotId);
     }
 
     /// <summary>Starts a published workflow with <paramref name="inputs"/> through the runtime API; returns its execution id.</summary>

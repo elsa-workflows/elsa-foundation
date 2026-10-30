@@ -95,6 +95,15 @@ converts and finds nothing to write. No target beyond "the JTest corpus (36 work
 | D-7 | New project | R-7. `Elsa3.Activities.Design.Import.Reconciliation`; tests in the existing integration test project. |
 | D-8 | Versions `{n}.0.0` | R-8. Converter revision deferred. |
 
+## Amendments during implementation (2026-10-30, US1)
+
+| # | Change | Why |
+|---|---|---|
+| A-1 | US1 already holds part of US3: the input rule (duplicate and blank ids), the analysis rule with dependents, the apply loop and the blocking of callers whose reusable was not published (T020–T022 in part). | One unconvertible workflow must not stop the demo folder from importing; US3 still adds its tests and strict-mode tests. |
+| A-2 | Fixtures are copied from `Fixtures/` into the test's folder at start instead of duplicated under `Fixtures/Reconciliation/`. There is no separate plain fixture: `caller` and `http-hello` are plain workflows. | No duplicate fixture files. |
+| A-3 | `http-endpoint.json` sets the WriteHttpResponse content type. An imported WriteHttpResponse without one faults at run time with `VF-ACT-006: Required result projection 'ContentType' was null`, although the converter README says an unset content type is inferred as Elsa 3 did. | A converter or runtime defect outside this spec; reported separately. |
+| A-4 | The project also references `Elsa.Workflows.Publishing`. | `PublicationActivationException`, which the publisher catches by code for a concurrent publication (R-6), lives there. |
+
 ## Project Structure
 
 ### Documentation (this feature)

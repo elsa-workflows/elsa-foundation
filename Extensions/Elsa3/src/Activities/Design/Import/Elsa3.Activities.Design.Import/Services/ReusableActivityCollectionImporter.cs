@@ -158,15 +158,40 @@ public sealed class ReusableActivityCollectionImporter(
                 IdempotencyKey = request.IdempotencyKey
             };
         }
+        else if (request.TenantId is not null)
+        {
+            // The import at engine start (spec 235) has no access scope; it stamps its persistence scope's tenant the
+            // same way, so the activity publisher authorizes the tenant the commit writes.
+            foreach (var activity in mutation.Activities)
+            {
+                activity.Definition.TenantId = request.TenantId;
+                activity.Version.TenantId = request.TenantId;
+                activity.AuthoringState.TenantId = request.TenantId;
+            }
+            foreach (var workflow in mutation.Workflows)
+            {
+                workflow.Definition.TenantId = request.TenantId;
+                workflow.Version.TenantId = request.TenantId;
+            }
+        }
         var committed = await command.CommitAsync(mutation, cancellationToken);
         var receipt = committed.Receipt;
+        IReadOnlyList<ReusableActivityPublicationState>? publications = null;
         if (publishPhase is not null && mutation.Activities.Count > 0)
         {
             // Publishing follows the commit and is resumable: a replayed commit publishes what is still missing.
-            var publications = await publishPhase.PublishAsync(mutation.Activities, receipt?.ReceiptId ?? mutation.PlanId, cancellationToken);
+            var operationKey = receipt?.ReceiptId ?? (request.AccessScope is null ? request.OperationKey : null) ?? mutation.PlanId;
+            publications = await publishPhase.PublishAsync(mutation.Activities, operationKey, cancellationToken);
             receipt = receipt is null ? null : receipt with { Publications = publications };
         }
-        return new(plan.PlanId, selection.Select(x => x.SourceVersionId).ToArray(), committed.NoOp, receipt, mutation.Warnings);
+        var workflows = mutation.Workflows
+            .Select(workflow => new ReusableActivityImportedWorkflowVersion(
+                workflow.SourceVersionId,
+                workflow.Definition.Id,
+                workflow.Version.Id,
+                workflow.Version.Version))
+            .ToArray();
+        return new(plan.PlanId, selection.Select(x => x.SourceVersionId).ToArray(), committed.NoOp, receipt, mutation.Warnings, publications, workflows);
     }
 
     /// <summary>
