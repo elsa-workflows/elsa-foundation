@@ -37,6 +37,7 @@ import type {
   StudioNavigationContribution,
   StudioNavigationPlacement,
   StudioNavigationSection,
+  StudioAgentPromptRequest,
   StudioPanelContribution
 } from "../sdk";
 import { isHomeRunDetailPath, recordHomeRunDetailOpened, requestStudioNavigation } from "../sdk";
@@ -84,10 +85,10 @@ import {
 } from "./settings/settingsSections";
 import { isDashboardPath, isNavigationItemActive } from "./navigation/active";
 import elsaLogo from "../assets/images/icon.png";
-import { AgentLauncher, createAgentClient, createWorkflowAgentContextProvider, type AgentSessionIndicatorSession, workflowAgentCapabilities, workflowPromptStarters } from "./agent";
 import { WeaverSurface } from "./weaver";
 import "./styles.css";
 import "./themes/workspaceStyles.css";
+import { AgentLauncher, createAgentClient, type AgentSessionIndicatorSession } from "./agent";
 import "./agent/agent.css";
 import "./weaver/weaver.css";
 
@@ -167,7 +168,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   const [themeCapabilities, setThemeCapabilities] = useState<ThemeStoreCapabilities>(defaultThemeStoreCapabilities);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [agentSessions, setAgentSessions] = useState<AgentSessionIndicatorSession[]>([]);
-  const [incomingPrompt, setIncomingPrompt] = useState<{ id: string; message: string; requestId?: string } | null>(null);
+  const [incomingPrompt, setIncomingPrompt] = useState<(StudioAgentPromptRequest & { id: string }) | null>(null);
   const acceptedPathRef = useRef(normalizePath(window.location.pathname));
   const acceptedLocationRef = useRef(currentRelativeLocation());
   const runtimeConfig = getStudioRuntimeConfig();
@@ -212,9 +213,9 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   // Cross-surface prompt dispatch (e.g. an "Explain this workflow" action) opens the Weaver dock and forwards the prompt.
   useEffect(() => {
     if (!api) return;
-    return api.ai.onPrompt(prompt => {
+    return api.agent.onPrompt(prompt => {
       setAssistantOpen(true);
-      setIncomingPrompt({ id: `prompt-${Date.now()}`, message: prompt.message, requestId: prompt.requestId });
+      setIncomingPrompt({ ...prompt, id: `prompt-${Date.now()}-${Math.random()}` });
     });
   }, [api]);
 
@@ -226,10 +227,10 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
     let disposed = false;
     void createAgentClient(api.backend).bootstrap()
       .then(result => {
-        if (!disposed) api.ai.providerAvailability.set(result.enabled && result.providerStatus !== "unavailable" && result.providerStatus !== "disabled");
+        if (!disposed) api.agent.providerAvailability.set(result.enabled && result.providerStatus !== "unavailable" && result.providerStatus !== "disabled");
       })
       .catch(() => {
-        if (!disposed) api.ai.providerAvailability.set(false);
+        if (!disposed) api.agent.providerAvailability.set(false);
       });
     return () => { disposed = true; };
   }, [api]);
@@ -322,7 +323,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
           hostVersion: manifest.hostVersion,
           sdkVersion: manifest.sdkVersion
         });
-        registerBuiltInAgentContributions(registry);
+        registerBuiltInContributions(registry);
 
         if (!disposed) {
           setApi(registry);
@@ -817,15 +818,8 @@ export function ShellFrame({
   );
 }
 
-function registerBuiltInAgentContributions(api: ElsaStudioModuleApi) {
+function registerBuiltInContributions(api: ElsaStudioModuleApi) {
   registerBuiltInPropertyEditors(api);
-  api.agent.contextProviders.add(createWorkflowAgentContextProvider());
-  for (const capability of workflowAgentCapabilities) {
-    api.agent.capabilities.add(capability);
-  }
-  for (const promptStarter of workflowPromptStarters) {
-    api.agent.promptStarters.add(promptStarter);
-  }
 }
 
 function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {

@@ -43,7 +43,7 @@ public static class NuplaneHostingExtensions
         var managementFile = Path.GetFullPath(options.ManagementFile, contentRoot);
         try
         {
-            ((IConfigurationBuilder)studio.Configuration).AddJsonFile(managementFile, optional: true, reloadOnChange: true);
+            ((IConfigurationBuilder)studio.Configuration).Add(new StudioJsonConfigurationSource(managementFile, optional: true));
         }
         catch (Exception error) when (error is IOException or FormatException or UnauthorizedAccessException)
         {

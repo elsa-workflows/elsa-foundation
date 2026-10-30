@@ -80,7 +80,10 @@ public enum AgentActionProposalStatus
     Expired,
     Executed,
     Failed,
-    Cancelled
+    Cancelled,
+    Executing,
+    AwaitingClient,
+    Uncertain
 }
 
 public enum AgentAuditEventKind
@@ -96,7 +99,7 @@ public enum AgentAuditEventKind
     ProposalFailed,
     FeedbackReceived,
     ProviderDiagnostic,
-    WorkflowAuthoringInteraction,
+    ModuleInteraction,
     ToolInvoked
 }
 
@@ -109,7 +112,7 @@ public enum AgentStreamEventKind
     Completed,
     Error,
     ClarificationRequested,
-    WorkflowGraphOperationBatchCreated,
+    ContributedResult,
     StepStarted,
     StepCompleted,
     ToolCallRequested,
@@ -124,7 +127,7 @@ public enum AgentResultKind
 {
     Message,
     Clarification,
-    WorkflowGraphOperationBatch,
+    ModuleResult,
     Proposal,
     Error
 }
@@ -184,7 +187,8 @@ public sealed record AgentPolicy(
         Enabled: true,
         ContextVisibility: true,
         AgentContextSensitivity.Sensitive,
-        ["workflow.definition", "workflow.instance", "workflow.execution", "workflow.diagnostics"],
+        // Wildcards apply only after an installed module admits the context kind/schema.
+        ["*"],
         // A new session opens on the safe "auto-apply low-risk" default, but the ceiling permits clients
         // to opt up to FullAuto ("Autopilot") — mutating tools run inline, risky edits still defer to review.
         AutonomyMode: AgentAutonomyMode.AutoReadOnly,
@@ -212,7 +216,10 @@ public sealed record AgentCapability(
     AgentRisk Risk,
     IReadOnlyCollection<string> Surfaces,
     IReadOnlyCollection<string> RequiredPermissions,
-    IReadOnlyCollection<string> ContextKinds);
+    IReadOnlyCollection<string> ContextKinds)
+{
+    public IReadOnlyCollection<string> Modes { get; init; } = [];
+}
 
 public sealed record AgentSession(
     string Id,
@@ -241,7 +248,14 @@ public sealed record AgentMessage(
     AgentError? Error,
     IReadOnlyCollection<string> ContextAttachmentIds,
     IReadOnlyCollection<string> ProposalIds,
-    IReadOnlyCollection<AgentContextAttachment> Context);
+    IReadOnlyCollection<AgentContextAttachment> Context)
+{
+    public string? RequestId { get; init; }
+    public AgentPromptSource? Source { get; init; }
+    public AgentClientBinding? Client { get; init; }
+    public string? PromptMode { get; init; }
+    public string? DeliveryFingerprint { get; init; }
+}
 
 public sealed record AgentContextAttachment(
     string Id,
@@ -253,7 +267,15 @@ public sealed record AgentContextAttachment(
     string Scope,
     string Summary,
     object? Content,
-    IReadOnlyDictionary<string, string> References);
+    IReadOnlyDictionary<string, string> References)
+{
+    public string ModuleId { get; init; } = string.Empty;
+    public string SchemaVersion { get; init; } = "1";
+    public AgentResourceTarget? Target { get; init; }
+    public AgentContextOrigin Origin { get; init; } = AgentContextOrigin.ResourceData;
+    public AgentClientBinding? Client { get; init; }
+    public IReadOnlyCollection<string> AgentScopes { get; init; } = [];
+}
 
 public sealed record AgentActionChange(
     string Path,
@@ -282,7 +304,14 @@ public sealed record AgentActionProposal(
     string? ApprovedBy,
     DateTimeOffset? ApprovedAt,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt)
+{
+    public AgentPreparedToolInvocation? PreparedInvocation { get; init; }
+    public AgentResourceTarget? ResourceTarget => PreparedInvocation?.Target;
+    public string? ResultRendererId { get; init; }
+    public AgentPayload? Result { get; init; }
+    public string? ResultType => Result?.TypeId ?? PreparedInvocation?.Preview.TypeId;
+}
 
 public sealed record AgentProposalExecutionResult(
     string ProposalId,
@@ -292,6 +321,9 @@ public sealed record AgentProposalExecutionResult(
     string Summary)
 {
     public string Message => Summary;
+    public string Status { get; init; } = "executed";
+    public AgentPreparedToolInvocation? ClientInvocation { get; init; }
+    public AgentToolResult? ToolResult { get; init; }
 }
 
 public sealed record AgentAuditEvent(
@@ -332,12 +364,24 @@ public sealed record AgentMessageCreateRequest(
     AgentMessageStatus Status,
     string? CapabilityId,
     IReadOnlyCollection<string> ContextAttachmentIds,
-    IReadOnlyCollection<AgentContextAttachment> Context);
+    IReadOnlyCollection<AgentContextAttachment> Context)
+{
+    public string? RequestId { get; init; }
+    public AgentPromptSource? Source { get; init; }
+    public AgentClientBinding? Client { get; init; }
+    public string? PromptMode { get; init; }
+    public string? DeliveryFingerprint { get; init; }
+}
 
 public sealed record AgentContextRequest(
     string SessionId,
     string ScopeKind,
-    IReadOnlyDictionary<string, string> Inputs);
+    IReadOnlyDictionary<string, string> Inputs)
+{
+    public AgentResourceTarget? Target { get; init; }
+    public IReadOnlyCollection<AgentContextAttachment> CallerAttachments { get; init; } = [];
+    public AgentClientBinding? Client { get; init; }
+}
 
 public sealed record AgentProviderSession(
     string Id,
@@ -363,7 +407,10 @@ public sealed record AgentStreamEvent(
 public sealed record AgentTurnMessage(AgentRole Role, string Content, string? ToolCallId = null, string? ToolName = null);
 
 /// <summary>The result of executing one tool, fed back to the provider on the next step.</summary>
-public sealed record AgentToolResult(string ToolCallId, string ToolName, bool Succeeded, string Content, object? Payload = null);
+public sealed record AgentToolResult(string ToolCallId, string ToolName, bool Succeeded, string Content, AgentPayload? Payload = null)
+{
+    public AgentEffectReceipt? Receipt { get; init; }
+}
 
 /// <summary>Payload for <see cref="AgentStreamEventKind.ToolCallRequested"/>: the provider asks the orchestrator to run a tool.</summary>
 public sealed record AgentToolCallRequest(string ToolCallId, string ToolName, string Arguments, AgentRisk Risk, bool RequiresApproval);

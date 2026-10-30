@@ -58,6 +58,7 @@ function disabledClient(): AgentClient {
     approveProposal: vi.fn(),
     denyProposal: vi.fn(),
     executeProposal: vi.fn(),
+    acknowledgeClient: vi.fn(),
     submitFeedback: vi.fn(),
     cancelTurn: vi.fn()
   };

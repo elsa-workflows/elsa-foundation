@@ -72,11 +72,17 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // labels to the shared adapter. Against the same workspace dependencies, the parent measured upgrades
 // at 375.22 kB and the corrected implementation measures 375.51 kB. Keep the existing heavy-surface
 // exclusion checks and give this shared code/CSS growth 0.5 kB of budget; no deferred surface moved eager.
+// Weaver module ownership (#3437) removes workflow context/registration/application knowledge from
+// the host and places the necessary native registration metadata here. First candidate measurements
+// were Definitions 388.67 kB / upgrades 379.78 kB. Deferring the native result renderer until review
+// and limiting affordances to the proved explain/layout journeys reduced these to 387.22 / 378.34 kB.
+// Add 3 kB to the previous 384.50 / 376.00 kB limits for this measured ownership cost; entry, stylesheet,
+// individual-chunk and heavy-surface guards are unchanged. The parent tree was not rebuilt separately.
 const budgets = {
   entryJavaScript: 127_500,
   stylesheet: 185_000,
-  definitionsLandingTotal: 384_500,
-  upgradeLandingTotal: 376_000,
+  definitionsLandingTotal: 387_500,
+  upgradeLandingTotal: 379_000,
   individualChunk: 500_000
 };
 

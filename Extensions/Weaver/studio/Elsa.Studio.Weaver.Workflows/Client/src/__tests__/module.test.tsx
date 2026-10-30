@@ -3,78 +3,43 @@ import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioEndpointCon
 import { getExecutableDetail, register } from "../module";
 
 describe("weaver workflows module", () => {
-  it("registers workflow AI context, prompt action, tool, and proposal contributions", () => {
-    const api = testApi();
-
-    register(api);
-
-    expect(api.ai.contextProviders.list().map(item => item.kind)).toEqual([
-      "workflow-definition",
-      "workflow-executable",
-      "workflow-instance"
-    ]);
-    expect(api.ai.promptActions.list().map(item => item.id)).toContain("weaver.workflows.suggest-create-metadata");
-    expect(api.ai.promptActions.list().map(item => item.id)).toContain("weaver.workflows.propose-update");
-    expect(api.ai.tools.list()).toEqual([
-      expect.objectContaining({ name: "workflow.definition.read", mutability: "read-only" }),
-      expect.objectContaining({ name: "get-executable-detail", mutability: "read-only" }),
-      expect.objectContaining({ name: "workflow.proposal.create", mutability: "proposal" })
-    ]);
-    expect(api.ai.proposalRenderers.list().map(item => item.kind)).toEqual(["WorkflowCreate", "WorkflowUpdate"]);
+  it("registers prompts and presentation on the canonical agent path", () => {
+    const api = testApi(); register(api);
+    expect(api.agent.promptActions.list().map(item => item.id)).toContain("weaver.workflows.propose-update");
+    expect(api.agent.resultRenderers.list().map(item => item.id)).toContain("weaver.workflows.workflow-proposal-renderer");
   });
 
   it("builds workflow definition prompts with attachments", () => {
     const api = testApi();
     register(api);
-    const action = api.ai.promptActions.list().find(item => item.id === "weaver.workflows.explain-definition");
+    const action = api.agent.promptActions.list().find(item => item.id === "weaver.workflows.explain-definition");
 
     const prompt = action?.createPrompt({ id: "definition-1", name: "Onboard customer" });
 
     expect(prompt).toMatchObject({
       mode: "enqueue",
-      attachments: [expect.objectContaining({ kind: "workflow-definition", referenceId: "definition-1" })]
+      attachments: [expect.objectContaining({ contentType: "workflow.request", sourceId: "definition-1" })]
     });
   });
 
   it("keeps the executable summary as the explain payload but directs Weaver to the detail tool", () => {
     const api = testApi();
     register(api);
-    const action = api.ai.promptActions.list().find(item => item.id === "weaver.workflows.explain-executable");
+    const action = api.agent.promptActions.list().find(item => item.id === "weaver.workflows.explain-executable");
 
     const summary = { artifactId: "artifact-1", artifactHash: "hash-1" };
     const prompt = action?.createPrompt(summary);
 
     expect(prompt?.message).toContain("get-executable-detail");
     expect(prompt?.attachments).toEqual([
-      expect.objectContaining({ kind: "workflow-executable", referenceId: "artifact-1", metadata: summary })
+      expect.objectContaining({ contentType: "workflow.request", sourceId: "artifact-1", content: { requestKind: "workflow-executable", referenceId: "artifact-1" } })
     ]);
   });
 
   describe("get-executable-detail tool", () => {
-    it("declares the workflow read permission and a schema requiring the artifact id", () => {
+    it("uses the authenticated endpoint context for executable reads", async () => {
       const api = testApi();
-      register(api);
-
-      const tool = api.ai.tools.list().find(item => item.name === "get-executable-detail");
-
-      expect(tool).toMatchObject({
-        mutability: "read-only",
-        dangerLevel: "low",
-        tenantBehavior: "tenant-scoped",
-        permissions: ["workflows:read"],
-        inputSchema: expect.objectContaining({ required: ["artifactId"] })
-      });
-      expect(tool?.execute).toBeTypeOf("function");
-    });
-
-    it("executes against the Runtime executable-detail capability via the module's endpoint context", async () => {
-      const api = testApi();
-      register(api);
-      const tool = api.ai.tools.list().find(item => item.name === "get-executable-detail");
-
-      const detail = await tool!.execute!({ artifactId: "artifact/1" });
-
-      expect(api.backend.http.getJson).toHaveBeenCalledWith("/capabilities");
+      const detail = await getExecutableDetail(api.backend, { artifactId: "artifact/1" });
       expect(api.backend.http.getJson).toHaveBeenCalledWith("/runtime/workflows/executables/artifact%2F1");
       expect(detail).toEqual({ artifactId: "artifact/1" });
     });
@@ -107,17 +72,7 @@ describe("weaver workflows module", () => {
 function testApi(): ElsaStudioModuleApi {
   return {
     backend: endpointContext(),
-    ai: {
-      contextProviders: registry(),
-      promptActions: registry(),
-      tools: registry(),
-      proposalRenderers: registry(),
-      surfaces: registry(),
-      dispatchPrompt: vi.fn(),
-      onPrompt: vi.fn(),
-      publishPromptResult: vi.fn(),
-      onPromptResult: vi.fn(() => () => {})
-    }
+    agent: { promptActions: registry(), resultRenderers: registry() }
   } as unknown as ElsaStudioModuleApi;
 }
 

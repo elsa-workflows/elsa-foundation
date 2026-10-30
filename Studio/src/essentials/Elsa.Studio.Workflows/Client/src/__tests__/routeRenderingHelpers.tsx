@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, vi } from "vitest";
+import { createAgentRegistry } from "@elsa-workflows/studio-sdk";
 import type { ElsaStudioModuleApi, StudioContributionRegistry, StudioSlotDefinition } from "@elsa-workflows/studio-sdk";
 import { register } from "../module";
 import { clearApiCapabilityCache } from "../api/capabilities";
@@ -119,6 +120,7 @@ function routeMatchesPath(routePath: string, path: string) {
 export function testApi(): ElsaStudioModuleApi {
   const navigation = registry();
   const routes = registry();
+  const agent = createAgentRegistry();
   return {
     backend: {
       baseUrl: "https://server.example/",
@@ -136,17 +138,8 @@ export function testApi(): ElsaStudioModuleApi {
     workflowDesigner: {
       panels: registry()
     },
-    ai: (() => {
-      const resultListeners = new Set<(result: unknown) => void>();
-      return {
-        promptActions: registry(),
-        providerAvailability: { get: () => true, set: vi.fn(), subscribe: (listener: (available: boolean) => void) => { listener(true); return () => {}; } },
-        dispatchPrompt: vi.fn(),
-        onPrompt: vi.fn(() => () => {}),
-        publishPromptResult: (result: unknown) => { for (const listener of resultListeners) listener(result); },
-        onPromptResult: (listener: (result: unknown) => void) => { resultListeners.add(listener); return () => resultListeners.delete(listener); }
-      };
-    })(),
+    agent,
+    ai: agent,
     dialogs: {
       confirm: vi.fn(async () => true),
       prompt: vi.fn(async () => null),

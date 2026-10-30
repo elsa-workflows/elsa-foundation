@@ -40,16 +40,12 @@ Known host-owned Slot IDs:
 - `studio.diagnostics.widgets`
 - `studio.weaver.context-providers`
 - `studio.weaver.prompt-starters`
+- `studio.weaver.prompt-actions`
 - `studio.weaver.capabilities`
 - `studio.weaver.actions`
 - `studio.weaver.tool-slots`
 - `studio.weaver.tool-contracts`
 - `studio.weaver.result-renderers`
-- `studio.ai.context-providers`
-- `studio.ai.prompt-actions`
-- `studio.ai.tools`
-- `studio.ai.proposal-renderers`
-- `studio.ai.surfaces`
 
 ## Activity icons
 
@@ -215,3 +211,34 @@ Use stable IDs, set `moduleId` when the contribution belongs to a module, scope
 `surfaces` narrowly, and include `requiredPermissions` for anything not available
 to every authenticated user. Mutating capabilities should use `review-required`,
 `destructive`, or `admin` risk and must be executed through backend proposals.
+
+## Weaver module participation (candidate)
+
+Register context, prompt actions, capabilities, tool contracts and result renderers through
+`api.agent`. `api.ai` remains a prompt-dispatch compatibility alias; its old contribution
+registries and `studio.ai.*` Slots have been removed. The SDK package re-exports the canonical
+host barrel, so package consumers receive these same declarations. This candidate is still
+subject to the independent #3438 package witness before signature freeze.
+
+Context providers return attachments with owner/schema/provenance and typed availability
+diagnostics. Caller attachments, request source, delivery mode and correlation survive prompt
+dispatch; installed backend sources admit and redact them. Client origin never grants authority.
+The existing array return form is accepted as an attachment collection without diagnostics.
+
+A backend-prepared client invocation carries frozen arguments, target/revision, approval digest,
+expiry and originating `{clientId,generationId}`. A module may provide `executeClient` on its
+existing tool-contract contribution. The generic runner calls it only after explicit review and
+backend pending acceptance. Resolve with an observed resource outcome, never merely after enqueueing
+an editor action. Matching duplicate delivery coalesces within this in-memory lifetime; post-dispatch
+loss yields uncertainty rather than replay. Backend acknowledgement validates the module result.
+
+Modules own live bindings, revision interpretation, validation, presentation and native undo.
+Resource targets now require `moduleId` and nullable `resourceId`/`revision`; mutations enforce the
+exact applicable identity and revision. Typed `{typeId,schemaVersion,data}` results pass through
+providers opaquely. Renderer selection predicates and components run inside presentation boundaries;
+structured evidence and common review controls remain usable after a contribution fails or its version
+is unsupported. Workflow snapshots/window events are no longer a host/SDK transport contract.
+Local working-state receipts do not mean save/publish; the native module holds automatic persistence
+until the reviewed changes are explicitly saved, published or undone. An older or queued save cannot
+release a newer hold: the successful explicit save must cover the current held snapshot and generation.
+A failed covering save preserves the hold/undo and stops publication before preflight or mutations.

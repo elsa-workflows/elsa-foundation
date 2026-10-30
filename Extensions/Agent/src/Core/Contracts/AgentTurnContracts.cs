@@ -15,13 +15,15 @@ public sealed class AgentTurnOptions
 public interface IAgentTurnRegistry
 {
     /// <summary>Registers a turn and returns a token that is cancelled when <see cref="Cancel"/> is called for it.</summary>
-    CancellationToken Register(string turnId);
+    CancellationToken Register(string sessionId, string turnId);
 
     /// <summary>Cancels a registered turn. Returns false if the turn id is unknown.</summary>
-    bool Cancel(string turnId);
+    bool Cancel(string sessionId, string turnId);
 
     /// <summary>Removes and disposes a turn's cancellation source.</summary>
-    void Unregister(string turnId);
+    void Unregister(string sessionId, string turnId);
+
+    bool IsActive(string sessionId);
 }
 
 /// <summary>State persisted when a turn pauses awaiting approval of a mutating tool, so it can resume after execution.</summary>
@@ -32,7 +34,12 @@ public sealed record AgentPausedTurn(
     string ToolCallId,
     string ToolName,
     IReadOnlyList<AgentTurnMessage> History,
-    int NextStepIndex);
+    int NextStepIndex)
+{
+    public string SourceMessageId { get; init; } = string.Empty;
+    public IReadOnlyCollection<AgentContextAttachment> Context { get; init; } = [];
+    public AgentClientBinding? Client { get; init; }
+}
 
 /// <summary>Stores paused-turn state keyed by session, enabling resume-after-approval.</summary>
 public interface IAgentTurnStateStore

@@ -38,12 +38,6 @@
 .ad-designed-collection .ad-advanced-filter-fields { display: grid; grid-template-columns: minmax(12rem, 1fr) minmax(8rem, .5fr); gap: .75rem; }
 .ad-designed-collection .ad-advanced-filter-fields label { display: grid; gap: .35rem; min-width: 0; color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 650; }
 
-.ad-designed-collection .ad-collection-head, .ad-designed-collection .ad-collection-row { grid-template-columns: minmax(15rem, 2fr) minmax(11rem, 1fr) minmax(8rem, .8fr); }
-.ad-designed-collection .ad-collection-row > span { min-width: 0; }
-.ad-designed-collection .ad-collection-row .ad-collection-activity { align-content: center; gap: .25rem; }
-.ad-designed-collection .ad-collection-activity > strong { font-weight: 750; }
-.ad-designed-collection .ad-collection-activity .ad-collection-description { display: -webkit-box; overflow: hidden; color: var(--studio-text-muted); font-family: var(--studio-font-ui); font-size: .9rem; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.ad-designed-collection .ad-collection-activity .ad-collection-category { color: var(--studio-text-muted); font-family: var(--studio-font-ui); font-size: var(--studio-label-size); }
 .ad-designed-collection .ad-collection-state { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
 .ad-designed-collection .ad-collection-state small { flex-basis: 100%; color: var(--studio-text-muted); font-family: var(--studio-font-ui); }
 .ad-designed-collection .ad-status-chip { display: inline-flex; width: fit-content; padding: .2rem .5rem; border-radius: 999px; font-size: var(--studio-label-size); font-weight: 700; }
@@ -63,7 +57,6 @@
 @media (max-width: 980px) {
   .ad-designed-collection .ad-collection-filters { grid-template-columns: minmax(0, 1fr) auto; }
   .ad-designed-collection .ad-search-field { grid-column: 1 / -1; }
-  .ad-designed-collection .ad-collection-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 600px) {
@@ -80,8 +73,6 @@
   .ad-designed-collection .ad-tools-disclosure[open] .ad-disclosure-panel { position: static; width: 100%; margin-top: .4rem; }
   .ad-designed-collection .ad-header-actions .ad-collection-disclosure { width: 100%; }
   .ad-designed-collection .ad-collection-disclosure > summary { width: 100%; }
-  .ad-designed-collection .ad-collection-row { grid-template-columns: 1fr; }
-  .ad-designed-collection .ad-collection-row > span:first-child { grid-column: auto; }
   .ad-designed-collection .ad-collection-empty > div { display: grid; width: 100%; }
   .ad-create-dialog { width: 100%; }
 }
