@@ -39,6 +39,17 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1440]) {
     await expect(refresh).toBeEnabled();
     expect(await geometry(elements)).toEqual(settled);
 
+    const statusSlot = toolbar.locator(".wf-attached-execution-status");
+    const confirmedSlot = await statusSlot.boundingBox();
+    await toolbar.getByRole("button", { name: "Pause following", exact: true }).click();
+    await expect(toolbar.locator(".wf-status-badge")).toBeHidden();
+    expect(await statusSlot.boundingBox()).toEqual(confirmedSlot);
+    await toolbar.getByRole("button", { name: "Follow execution", exact: true }).press("Enter");
+    await expect(toolbar.locator(".wf-status-badge")).toHaveText("Running");
+    await expect(refresh).toBeEnabled();
+    expect(await statusSlot.boundingBox()).toEqual(confirmedSlot);
+    expect(await geometry(elements)).toEqual(settled);
+
     await page.getByRole("button", { name: "Complete fixture execution", exact: true }).click();
     await expect(toolbar.locator(".wf-status-badge")).toHaveText("Completed", { timeout: 10000 });
     await expect(refresh).toBeEnabled();
