@@ -170,7 +170,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   const head = !effectiveVersionPrivacyFailure && !versionsQuery.error && !versionsQuery.isFetching
     ? versionsQuery.data?.items.find(item => item.version.versionId === detail.definition.headVersionId) : undefined;
   const canStartFromHead = canCreateDraft && activeDrafts?.length === 0 && head && isActionAllowed(head.actions, "clone-draft");
-  const editLabel = editableDraft ? "Continue editing draft" : canStartFromHead ? "Create draft from current version" : activeDrafts?.length === 0 && canCreateDraft && detail.definition.headVersionId === null ? "Create draft" : "Open drafts";
+  const editLabel = editableDraft ? "Edit draft" : canStartFromHead ? "Create draft from current version" : activeDrafts?.length === 0 && canCreateDraft && detail.definition.headVersionId === null ? "Create draft" : "Open drafts";
   const openEditor = (draftId: string) => onNavigate({ definitionId, section: "editor", draftId, versionId: null });
   const startEditing = async () => {
     if (detailQuery.error || startingDraft) return;
@@ -195,8 +195,26 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
 
   return <>
   <main className="ad-page ad-workbench" aria-labelledby="activity-definition-title">
-    <button type="button" className="ad-back" onClick={() => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null })}><ArrowLeft size={16} aria-hidden /> Activity Definitions</button>
-    <header className="ad-workbench-header"><div><span className="ad-kicker">{designOwned ? detail.definition.category || "Designed activity" : "Module activity"}</span><h1 id="activity-definition-title">{detail.definition.displayName}</h1>{detail.definition.description ? <p>{detail.definition.description}</p> : null}</div><div className="ad-header-actions">{designOwned ? <button type="button" className="ad-primary-action" disabled={startingDraft || Boolean(detailQuery.error) || (overview && draftsQuery.isPending)} onClick={() => void startEditing()}><Pencil size={16} aria-hidden />{startingDraft ? "Opening draft…" : editLabel}</button> : null}{canFork ? <button type="button" onClick={() => setForkDialogOpen(true)}>Fork recommended version</button> : null}<button type="button" onClick={() => { setPrivacyFailure(current => current?.definitionId === definitionId ? null : current); observeActivityDefinitions({ event: "refresh", surface: "workbench" }); void detailQuery.refetch(); }} disabled={detailQuery.isFetching}><RefreshCw size={16} aria-hidden /> {detailQuery.isFetching ? "Refreshing" : "Refresh"}</button></div></header>
+    <header className="ad-workbench-header ad-definition-header">
+      <nav className="ad-definition-navigation" aria-label="Activity definition navigation">
+        <button type="button" className="ad-back" onClick={() => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null })}>
+          <ArrowLeft size={14} aria-hidden /> Activity Definitions
+        </button>
+      </nav>
+      <div className="ad-definition-identity">
+        <h1 id="activity-definition-title">{detail.definition.displayName}</h1>
+        {detail.definition.description ? <p>{detail.definition.description}</p> : null}
+      </div>
+      <div className="ad-header-actions">
+        {designOwned ? <button type="button" className="ad-primary-action" disabled={startingDraft || Boolean(detailQuery.error) || (overview && draftsQuery.isPending)} onClick={() => void startEditing()}>
+          <Pencil size={16} aria-hidden />{startingDraft ? "Opening draft…" : editLabel}
+        </button> : null}
+        {canFork ? <button type="button" onClick={() => setForkDialogOpen(true)}>Fork recommended version</button> : null}
+        <button type="button" onClick={() => { setPrivacyFailure(current => current?.definitionId === definitionId ? null : current); observeActivityDefinitions({ event: "refresh", surface: "workbench" }); void detailQuery.refetch(); }} disabled={detailQuery.isFetching}>
+          <RefreshCw size={16} aria-hidden /> {detailQuery.isFetching ? "Refreshing" : "Refresh"}
+        </button>
+      </div>
+    </header>
     {detailQuery.isError ? <div className="ad-stale-warning" role="alert"><AlertTriangle size={18} aria-hidden /><div><strong>Refresh failed; showing retained definition evidence</strong><span>Retry before relying on lifecycle changes.</span></div></div> : null}
     {!designOwned ? <p className="ad-source-note">Provided by an installed module. Read-only in Studio.</p> : null}
     {startError ? <div className="ad-inline-error" role="alert">{startError}</div> : null}
@@ -220,6 +238,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
 
 function IdentityDetails({ detail, provider }: { detail: ActivityDefinitionManagementView; provider: string }) {
   return <dl className="ad-identity-strip">
+    {isActivityDefinitionEnumValue(detail.definition.contentAuthority.kind, "Design") && detail.definition.category ? <div><dt>Category</dt><dd>{detail.definition.category}</dd></div> : null}
     <div><dt>Activity Type Key</dt><dd><code>{detail.definition.activityTypeKey}</code></dd></div>
     <div><dt>Definition identity</dt><dd><code>{detail.definition.definitionId}</code></dd></div>
     <div><dt>Authority</dt><dd>{isActivityDefinitionEnumValue(detail.definition.contentAuthority.kind, "Design") ? "Design owned" : "Source owned"}</dd></div>
