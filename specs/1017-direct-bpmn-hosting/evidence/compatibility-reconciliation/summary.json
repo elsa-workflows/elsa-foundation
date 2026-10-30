@@ -1,0 +1,247 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "fae8dce0d5177e987ca50affde428eec03303219",
+  "publishStateRevision": "f49ff392871e217896efdbfe8c208f10cece7365",
+  "lastPublishCommit": "b9cf52c181b79e3e79eef233f7d61cb0843f4da7",
+  "trackedApis": [
+    {
+      "packageId": "Elsa.Workflows.Runtime.Core",
+      "baseline": {
+        "package_id": "Elsa.Workflows.Runtime.Core",
+        "version": "4.0.55-preview",
+        "commit": "438001406d980051584234e5d656eb8e6a67f47f"
+      },
+      "addedEntries": 177,
+      "removedEntries": 0,
+      "prAddedEntries": 177,
+      "prRemovedEntries": 0
+    },
+    {
+      "packageId": "Elsa.Workflows.Runtime",
+      "baseline": {
+        "package_id": "Elsa.Workflows.Runtime",
+        "version": "4.0.69-preview",
+        "commit": "e0cc6433ab675175570d2112fcfddbe1e2891a6b"
+      },
+      "addedEntries": 4,
+      "removedEntries": 0,
+      "prAddedEntries": 4,
+      "prRemovedEntries": 0
+    }
+  ],
+  "computedPackages": [
+    {
+      "package_id": "Elsa.Activities.Bpmn",
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj",
+      "line": "B",
+      "version": "4.0.16",
+      "affected": true,
+      "last_published": {
+        "version": "4.0.15-preview",
+        "commit": "4c79e36886672915a73ffe16f3587ffa0b9c2008"
+      },
+      "fingerprint": "sha256:2421106e64225dcaf34cbe474f3fcbb8bc972d2609f1f59434cb7e648a2ab32c",
+      "reasons": [
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Activities/RunBpmn.cs (added)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/ActivitiesBpmnHostingFeature.cs (added)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Contracts/IBpmnModelActivityRuntime.cs (added)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj (changed)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnDirectExecutionDriver.cs (added)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnDurationTimer.cs (added)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingBoundary.cs (added)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingCheckpointEnricher.cs (added)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingDelivery.cs (added)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingJson.cs (added)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingPinSource.cs (added)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEvaluationComponent.cs (added)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnModelActivityRuntime.cs (added)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnModelIdentity.cs (added)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnModelRuntime.cs (added)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnNativeWorkBoundary.cs (added)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnNativeWorkCheckpointEnricher.cs (added)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnNativeWorkDelivery.cs (added)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs (changed)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Models/RunBpmnState.cs (added)",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/packages.lock.json (changed)"
+      ]
+    },
+    {
+      "package_id": "Elsa.Activities.Bpmn.Api",
+      "path": "Essentials/src/Activities/Bpmn/Api/Elsa.Activities.Bpmn.Api.csproj",
+      "line": "B",
+      "version": "4.0.0",
+      "affected": true,
+      "last_published": null,
+      "fingerprint": "sha256:e03710dac8b5fe2db4c96ec19f26783d02eeaad3e253da089e831386ed27534b",
+      "reasons": [
+        "no last-published record: first publish of this package id"
+      ]
+    },
+    {
+      "package_id": "Elsa.Activities.Bpmn.Core",
+      "path": "Essentials/src/Activities/Bpmn/Core/Elsa.Activities.Bpmn.Core.csproj",
+      "line": "B",
+      "version": "4.0.0",
+      "affected": true,
+      "last_published": null,
+      "fingerprint": "sha256:8fe5663a239b40e4214f1917a68af16bef748fd749005e479062d4ccf6f61ed5",
+      "reasons": [
+        "no last-published record: first publish of this package id"
+      ]
+    },
+    {
+      "package_id": "Elsa.Activities.DispatchWorkflow.Runtime",
+      "path": "Essentials/src/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj",
+      "line": "B",
+      "version": "4.0.13",
+      "affected": false,
+      "last_published": {
+        "version": "4.0.13-preview",
+        "commit": "438001406d980051584234e5d656eb8e6a67f47f"
+      },
+      "fingerprint": "sha256:1f78c34e698fccb52a1c2cddc5de57a6168259d1e78dfe7fc0db09bf6266fac0",
+      "reasons": []
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime",
+      "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj",
+      "line": "B",
+      "version": "4.0.70",
+      "affected": true,
+      "last_published": {
+        "version": "4.0.69-preview",
+        "commit": "e0cc6433ab675175570d2112fcfddbe1e2891a6b"
+      },
+      "fingerprint": "sha256:79dc218389de4b5c8a254a84bc891190c80aa8f2b3bb744ee1dd16e89b98422e",
+      "reasons": [
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj (changed)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeModelHostingServiceCollectionExtensions.cs (added)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/PublicAPI.Unshipped.txt (changed)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimeCheckpointCommitValidator.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeCheckpointPersistencePolicy.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingWorkflowSchedulerWorkQueue.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/CachingWorkflowExecutableStore.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InvalidatingWorkflowExecutableStore.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableDependencyGraph.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableReferenceGarbageCollector.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableRootWriteLeaseManager.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/ModelProtocolWorkHandler.cs (added)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/RuntimeExecutionLeaseRunner.cs (added)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/RuntimeExecutionProtocolRegistry.cs (added)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/RuntimeExecutionProtocolRouter.cs (added)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/RuntimeExecutionProtocolSelector.cs (added)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/ScopedWorkflowExecutionCommandExecutor.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/WorkflowStartDispatcher.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/WorkHandlers/WorkflowCheckpointSchedulerWorkHandler.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/WorkHandlers/WorkflowStartSchedulerWorkHandler.cs (changed)"
+      ]
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Core",
+      "path": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj",
+      "line": "B",
+      "version": "4.0.56",
+      "affected": true,
+      "last_published": {
+        "version": "4.0.55-preview",
+        "commit": "438001406d980051584234e5d656eb8e6a67f47f"
+      },
+      "fingerprint": "sha256:3869020461a68a4860d8fd050c6724ddff14f2257e9dcb244146ed9cc7e43ecd",
+      "reasons": [
+        "Essentials/src/Workflows/Runtime/Core/Constants/RuntimeCheckpointNames.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimeCheckpointCommitStore.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimeExecutionProtocolDriver.cs (added)",
+        "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimeModelExecutionReader.cs (added)",
+        "Essentials/src/Workflows/Runtime/Core/Contracts/IWorkflowExecutableStore.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Core/Contracts/IWorkflowSchedulerWorkQueue.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommandPayload.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommit.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommitFingerprint.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Core/Models/RuntimeExecutionMaterial.cs (added)",
+        "Essentials/src/Workflows/Runtime/Core/Models/RuntimeModelExecutionCommand.cs (added)",
+        "Essentials/src/Workflows/Runtime/Core/Models/RuntimeModelExecutionState.cs (added)",
+        "Essentials/src/Workflows/Runtime/Core/Models/RuntimeModelNativeWorkOrigin.cs (added)",
+        "Essentials/src/Workflows/Runtime/Core/Models/RuntimeSchedulerWorkClaim.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutionCommand.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutionStartDispatch.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutionState.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Core/PublicAPI.Unshipped.txt (changed)"
+      ]
+    },
+    {
+      "package_id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj",
+      "line": "B",
+      "version": "4.0.43",
+      "affected": true,
+      "last_published": {
+        "version": "4.0.42-preview",
+        "commit": "438001406d980051584234e5d656eb8e6a67f47f"
+      },
+      "fingerprint": "sha256:8dd01cb02bbcf4a79ecda67fe823829631a59a5a3f71ac56094017b33f90cbde",
+      "reasons": [
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/AssemblyInfo.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Configuration/RuntimeArtifactEntityConfigurations.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Configuration/RuntimeModelEntityConfigurations.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/DependencyInjection/RuntimeCheckpointCommitEntityFrameworkCoreRegistration.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Entities/RuntimeArtifactEntities.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Entities/RuntimeModelEntities.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/MySql/20261028210821_ModelExecutionState.Designer.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/MySql/20261028210821_ModelExecutionState.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/MySql/20261028214341_ModelMaterialKind.Designer.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/MySql/20261028214341_ModelMaterialKind.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/MySql/RuntimeMySqlDbContextModelSnapshot.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/PostgreSql/20261028210822_ModelExecutionState.Designer.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/PostgreSql/20261028210822_ModelExecutionState.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/PostgreSql/20261028214343_ModelMaterialKind.Designer.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/PostgreSql/20261028214343_ModelMaterialKind.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/PostgreSql/RuntimePostgreSqlDbContextModelSnapshot.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/SqlServer/20261028210824_ModelExecutionState.Designer.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/SqlServer/20261028210824_ModelExecutionState.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/SqlServer/20261028214344_ModelMaterialKind.Designer.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/SqlServer/20261028214344_ModelMaterialKind.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/SqlServer/RuntimeSqlServerDbContextModelSnapshot.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/Sqlite/20261028210825_ModelExecutionState.Designer.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/Sqlite/20261028210825_ModelExecutionState.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/Sqlite/20261028214345_ModelMaterialKind.Designer.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/Sqlite/20261028214345_ModelMaterialKind.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/Sqlite/RuntimeSqliteDbContextModelSnapshot.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Properties/AssemblyInfo.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeDbContext.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeModelStateEfModule.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeModelWorkerUpcasters.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeSchedulerWorkEfModule.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeSchedulerWorkV1Upcaster.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeWorkflowExecutionEfModule.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointParticipantStaging.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeModelCheckpointParticipantStaging.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeModelExecutionReader.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfSchedulerWorkQueueStore.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableSourceReferenceStore.RootWrites.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutionStateStore.cs (changed)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/RuntimeNativeModelWorkWriteVersion.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/RuntimeSchedulerWorkWriteVersion.cs (added)",
+        "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/packages.lock.json (changed)"
+      ]
+    }
+  ],
+  "apiCompatBinaryComparisonExecuted": false,
+  "versionMagnitudeDecisionPending": true,
+  "stableElsaReleaseBaselinePresent": false,
+  "scopeLimits": [
+    "Manual tracked-entry and source comparison; no claim that an ApiCompat binary/magnitude gate ran.",
+    "Last-published record contains preview package baselines; owner clarification is needed for compatible additions under the current 4.0 preview line versus framework4.2 minor magnitude.",
+    "Version computation is read-only at the named source and frozen publish-state revision; it does not pack, publish or reserve future versions.",
+    "Later documentation edits do not change the compared public API; final package fingerprint/version computation remains a current-head delivery check."
+  ]
+}

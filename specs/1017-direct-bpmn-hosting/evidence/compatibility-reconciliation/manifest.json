@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "kind": "public-api-and-computed-version-reconciliation",
+  "sourceRevision": "fae8dce0d5177e987ca50affde428eec03303219",
+  "publishStateRevision": "f49ff392871e217896efdbfe8c208f10cece7365",
+  "assets": [
+    {
+      "path": "Elsa.Workflows.Runtime.Core.diff.txt",
+      "sha256": "5632cf0aaa8230caf8206f5413dde4f2cc0e5858f7d3d70da864d04f90b5b721"
+    },
+    {
+      "path": "Elsa.Workflows.Runtime.diff.txt",
+      "sha256": "6afd2ac7328aac3a823c87846d62f3da223cfc31324fcde49978211c1dc316e9"
+    },
+    {
+      "path": "published-versions.json",
+      "sha256": "7d948936d5594a2816d7854c2352c4d2e667cb8d38b361355cf9e1cddf3074ef"
+    },
+    {
+      "path": "summary.json",
+      "sha256": "0124e890bffa3a6d67a539f918d0d558e16594e3d6040681fe1505159e657bc0"
+    },
+    {
+      "path": "tracked-api-comparison.json",
+      "sha256": "2eba162347b631000675c55475dec419322be3d7adfcf4caa581cfc230910d7a"
+    },
+    {
+      "path": "version-computation.json",
+      "sha256": "a51cd3587581d67d222c75ba055b924b87727d50c60f2a4329a048487080ed1b"
+    }
+  ]
+}

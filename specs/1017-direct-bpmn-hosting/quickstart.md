@@ -1,6 +1,6 @@
 # Qualification sequence
 
-This is the reviewed implementation target, not a record of executed results. The hosting test project and portable runner below are created by the implementation tasks before use. Existing #2735 receipts keep their original source/version scopes.
+This is the reproduction and verification sequence for the implementation. Executed results live in source-bound receipts; commands here do not imply a pass. The [final affected legacy/Studio repeat](evidence/final-compatibility/README.md), [storage/provider gate](evidence/providers/model-storage/README.md) and [task evidence index](tasks.md) retain their executing sources and limits. Existing #2735 receipts keep their original source/version scopes.
 
 ## Prerequisites and process ownership
 
@@ -11,7 +11,7 @@ This is the reviewed implementation target, not a record of executed results. Th
 
 ## Gate A: capture before writer changes
 
-Implement `tools/bpmn/qualify-hosting.py` first as a portable runner over normal product publication/execution/inspection commands. Its `capture-baseline` phase accepts an owned baseline host/config manifest, creates uniquely named fixtures, parks real native/BPMN runs, takes consistent whole-store backups, and writes `specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json` with exact IDs, hashes and observations. Never edit execution state to produce a positive fixture.
+Gate A is complete in the frozen [baseline manifest](evidence/baseline/manifest.json): 104 original assets and 22 complete store inputs were captured before the affected writer changes. Do not regenerate those inputs with the new writer. `tools/bpmn/qualify-hosting.py capture-baseline` remains the original partial-fork capture workflow over normal publication/execution/inspection commands; the other actual capture families have their own retained producers and receipts. Never edit execution state to produce a positive fixture.
 
 Required capture families are defined by the affected writer map in the plan: partial fork/join/waits, all three native parents and terminal delivery, signal source/cohort/rearm/pre-ack cuts, and affected called-control/MI/compensation state. Capture actual Studio-published authored material/export/layout/pins. Baseline source and all asset hashes must verify before the first affected writer edit. Existing 0.5.0 production assemblies may supply the baseline only when their actual source and bytes are verified and labeled truthfully.
 
@@ -19,7 +19,7 @@ Run the runner's read-only `verify-capture` phase against whole backups; check s
 
 ## Focused implementation checks
 
-Run after the corresponding projects/tasks exist; no commands below have been claimed as passed by this plan:
+Run the affected whole projects through the build-slot wrapper and record the exact source, commands and executed/listed counts:
 
 ```sh
 dotnet test Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj
@@ -30,11 +30,13 @@ dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 dotnet run --project tools/maps/Elsa.Maps.Generator -- test-tiers-check
 ```
 
-Also run the actual touched Runtime, Runtime EF, DispatchWorkflow, ETL, API and serialization projects discovered from the changed-project map; record exact commands/results in the resulting receipt. Run genuine provider/migration/upgrade tests for all changed first-party EF paths. Add/use the explicitly selected incremental mode in the repository's `tools/ef` workflow; the current default regenerates/deletes Initial and must not be used against this retained Runtime baseline. No ad-hoc DDL, rewritten baseline IDs or unrelated global freeze.
+Also run the touched Runtime, Runtime EF, DispatchWorkflow, ETL, API and serialization projects discovered from the changed-project map; record exact commands/results in the resulting receipt. Run genuine provider/migration/upgrade tests for all changed first-party EF paths. Use the repository's explicit [incremental Runtime migration mode](../../tools/ef/README.md); its default Initial regeneration must not be used against the retained baseline. No ad-hoc DDL, rewritten baseline IDs or unrelated global freeze.
+
+The strict common-provider gate uses `ELSA_RUNTIME_PLACEMENT_EF_REQUIRE_NATIVE_PROVIDERS=1` and test-owned PostgreSQL/SQL Server/MySQL containers. Remove the three `ELSA_RUNTIME_BOOKMARKS_EF_*_TEST_CONNECTION_STRING` overrides before that run so it cannot select a shared database. [The retained matrix](evidence/providers/model-storage/README.md) records the exact commands: physical atomic checkpoint/receipt cases and fresh/additive migration fixtures are separate from actual old-engine host recovery. SQLite also migrates the whole actual frozen store.
 
 ## Actual host matrix
 
-The portable runner's `qualify` phase records normal API commands and persisted observations for these cases. Real-process integration tests supply deterministic barriers and actual process termination at the named cut; timing sleeps alone do not establish a cut.
+`Essentials/tests/Activities/Bpmn/Hosting/Tests/` and the journey-specific `e2e-tests/bpmn/qualify_*.py` controllers record normal API commands and persisted observations for these cases. There is no generic `qualify-hosting.py qualify` phase. Follow each receipt's actual producer, arguments and build identity. Real-process integration tests supply deterministic barriers and actual process termination at the named cut; timing sleeps alone do not establish a cut. Live SQLite reads/backups use the host's .NET provider; Python validators read only the resulting closed immutable evidence.
 
 | Family | Required observable result |
 |---|---|
@@ -61,7 +63,7 @@ The runner's `resume-upgrade` phase opens Gate A's actual backups on the changed
 
 Use the authorized browser harness against the owned Studio pair: open the actual saved definition, inspect retained authored payload and diagram, edit/save/export/publish, run it and inspect the exact resulting execution. Compare frozen authoring fingerprint `41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92` and explicit XML/layout boundaries. Save and inspect screenshots where they substantiate the journey. Preserve user tabs and hosts. This is existing Studio compatibility, not #2907 direct-model Studio acceptance.
 
-The [actual existing Studio upgrade receipt](evidence/studio/README.md) qualifies both captured versions, saved layout, Published Runs and Test Runs at its named source. `tools/bpmn/run_owned_studio_upgrade.py` owns a fresh pair over either actual store; `tools/bpmn/verify_studio_upgrade.py` verifies the retained inputs, browser observations and twelve upgraded whole stores. Repeat against final affected source under T041.
+The [final affected-source repeat](evidence/final-compatibility/README.md) qualifies both captured Studio versions, saved layout, Published Runs and Test Runs after the bridge/retry/signal changes. The [earlier Studio receipt](evidence/studio/README.md) retains its original source. Build the Studio browser workspace before Studio.Web so static-asset discovery cannot overlap frontend regeneration. `tools/bpmn/run_owned_studio_upgrade.py` owns a fresh pair over either actual store; `tools/bpmn/verify_studio_upgrade.py` verifies the retained inputs, browser observations and twelve upgraded whole stores. T041 is complete for its declared affected source; repeat any later change that invalidates those observations.
 
 ## Delivery receipt
 
