@@ -9,7 +9,7 @@
 .backends-list { width:100%; border-collapse:collapse; text-align:left; }
 .backends-list th { font-weight:500; color:var(--studio-text-muted); font-size:12px; }
 .backends-list th,.backends-list td { padding:15px 12px; border-bottom:1px solid var(--studio-border); overflow-wrap:anywhere; }
-.backend-name-link { display:block; background:none; border:0; padding:0; text-align:left; }
+.backend-name-link.studio-button { min-height:0; color:var(--studio-text); display:block; background:none; border:0; padding:0; text-align:left; }
 .backend-name-link:hover strong { text-decoration:underline; }
 .backend-name-link strong,.backend-name-link small { display:block; }
 .backend-name-link small { color:var(--studio-text-muted); margin-top:4px; }

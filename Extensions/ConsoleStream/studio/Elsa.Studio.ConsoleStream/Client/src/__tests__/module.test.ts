@@ -12,11 +12,17 @@ import {
   isConsoleStreamEndpointNotFoundError,
   isRecoverableConsoleStreamError,
   register,
+  resolveTargetUrl,
   type ConsoleEntry
 } from "../module";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 
 describe("console stream module", () => {
+  it("preserves full backend shell paths for the SignalR hub and keeps Studio root paths",()=>{
+    const context={baseUrl:"https://api.example/shell-b/",http:{getJson:async()=>({})}};
+    expect(resolveTargetUrl({id:"server",label:"Server",context,endpointPrefix:"/_elsa/server/diagnostics/console-logs"},"/_elsa/server/diagnostics/console-logs/hub")).toBe("https://api.example/shell-b/_elsa/server/diagnostics/console-logs/hub");
+    expect(resolveTargetUrl({id:"studio",label:"Studio",context,endpointPrefix:"/_elsa/studio/diagnostics/console-logs"},"/_elsa/studio/diagnostics/console-logs/hub")).toBe("https://api.example/_elsa/studio/diagnostics/console-logs/hub");
+  });
   it("registers navigation, route, and bottom panel contributions", () => {
     const navigation: unknown[] = [];
     const routes: unknown[] = [];

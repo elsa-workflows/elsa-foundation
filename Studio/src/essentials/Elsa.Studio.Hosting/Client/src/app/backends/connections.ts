@@ -210,7 +210,14 @@ export class BackendConnections {
     const id = query.get("backend") ?? (window.location.pathname === "/" ? sessionStorage.getItem(selectionKey) : null) ?? this.defaultId;
     const profile = this.snapshot.profiles.find(item => item.id === id);
     if (!profile) { this.update({loading:false,error:"The backend referenced by this link is unavailable. Choose a backend in Settings."}); return; }
-    try { const active = await this.prepare(profile); this.update({active,loading:false}); }
+    try {
+      const active = await this.prepare(profile);
+      // Resource hrefs must carry even a tab-restored selection before modules render.
+      const selectedUrl = new URL(window.location.href);
+      selectedUrl.searchParams.set("backend",profile.id);
+      window.history.replaceState(window.history.state,"",`${selectedUrl.pathname}${selectedUrl.search}${selectedUrl.hash}`);
+      this.update({active,loading:false});
+    }
     catch (error) {
       const active = new PreparedBackend(profile,null,anonymousAuthSession);
       active.discoveryError = connectionError(error);
@@ -291,10 +298,12 @@ export class BackendConnections {
     const profile = this.snapshot.profiles.find(item => item.id === id);
     if (!profile) throw new Error("This backend profile is unavailable.");
     if (profile.id === this.snapshot.active?.profile.id && !this.snapshot.active.disposed) {
-      await this.snapshot.active.refreshCapabilities();
-      window.dispatchEvent(new CustomEvent(studioBackendCapabilitiesChangedEvent,{detail:{key:this.snapshot.active.key}}));
-      this.update({active:this.snapshot.active});
-      return this.snapshot.active.capabilities!;
+      const active = this.snapshot.active;
+      try {return await active.refreshCapabilities();}
+      finally {
+        if (this.snapshot.active === active) this.update({active});
+        window.dispatchEvent(new CustomEvent(studioBackendCapabilitiesChangedEvent,{detail:{key:active.key,refreshed:true}}));
+      }
     }
     const candidate = await this.prepare(profile);
     const capabilities = candidate.capabilities!;

@@ -2,6 +2,7 @@ import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as signalR from "@microsoft/signalr";
 import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { resolveBackendPath } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
 
 type ConsoleHostId = "server" | "studio";
@@ -694,8 +695,8 @@ function createRecentPath(target: ConsoleTarget, sourceId: string | null) {
   return `${target.endpointPrefix}/recent?${query}`;
 }
 
-function resolveTargetUrl(target: ConsoleTarget, path: string) {
-  return new URL(path, target.context.baseUrl).toString();
+export function resolveTargetUrl(target: ConsoleTarget, path: string) {
+  return new URL(target.id === "server" ? resolveBackendPath(target.context.baseUrl,path) : path, target.context.baseUrl).toString();
 }
 
 function createConsoleEndpointNotFoundMessage(target: ConsoleTarget) {

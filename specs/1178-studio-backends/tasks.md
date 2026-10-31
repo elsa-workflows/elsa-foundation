@@ -30,10 +30,10 @@ Independent proof: exact-target settings/review/Apply and capability refresh.
 
 ## Qualification and delivery
 - [x] T015 Document configuration, persistence ownership, module requirements and package consumption in Hosting README/extension-point guidance.
-- [ ] T016 Run affected whole suites, typecheck/lint/build, locked restore, architecture/maps and regression bite proofs; record exact evidence on #3531/PR.
+- [x] T016 Run affected whole suites, typecheck/lint/build, locked restore, architecture/maps and regression bite proofs; record exact evidence on #3531/PR.
 - [ ] T017 Run composed browser, responsive and package/durable-provider qualification on the exact candidate; independently review/fix the diff.
 - [ ] T018 Open/review draft PR, qualify required hosted checks, merge and verify resulting main; update this spec's terminal status in the finishing PR.
 
 Dependencies: T002/T003 precede US1/US2; US2 lifetime precedes US3/US4 target integration; all stories precede final qualification. Independent reviews may run concurrently; implementation changes sharing SDK/App/module files remain sequential. Risk-based test cadence follows the plan; no universal TDD cadence is asserted.
 
-Implementation is complete. Final qualification and external delivery gates T016–T018 are recorded on issue #3531 and PR #3536; unchecked delivery gates are not a claim of completed review or merge.
+Implementation is complete. Final qualification and external delivery gates T017–T018 are recorded on issue #3531 and PR #3536; unchecked delivery gates are not a claim of completed review or merge.

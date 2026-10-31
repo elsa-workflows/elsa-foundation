@@ -51,3 +51,14 @@ for (const mode of ["light","dark"] as const) for (const width of [320,390,768,1
   await page.getByRole("tab",{name:"Capabilities",exact:true}).click();
   await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
 });
+
+test("failed active connection test removes previously advertised capabilities",async({page})=>{
+  await page.getByRole("button",{name:/^Authoring ·/}).last().click();
+  await page.getByRole("tab",{name:"Capabilities",exact:true}).click();
+  await expect(page.getByText("elsa.api.workflow-design",{exact:true})).toBeVisible();
+  await page.route("**/authoring/capabilities",route=>route.fulfill({status:403,json:{message:"Access denied"}}));
+  await page.getByRole("button",{name:"Test connection",exact:true}).click();
+  await expect(page.getByText("elsa.api.workflow-design",{exact:true})).toHaveCount(0);
+  await page.getByRole("tab",{name:"Connection",exact:true}).click();
+  await expect(page.getByText("Unavailable",{exact:true})).toBeVisible();
+});

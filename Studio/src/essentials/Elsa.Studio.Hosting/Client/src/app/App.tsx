@@ -264,7 +264,9 @@ function AppContent({ authManager,backendSession,connections }: { authManager: A
   const manifestQuery = useStudioManifest(shellContext.http);
   useEffect(() => {
     const refresh = (event:Event) => {
-      if ((event as CustomEvent<{key:string}>).detail?.key !== backendSession.key) return;
+      const detail = (event as CustomEvent<{key:string;refreshed?:boolean}>).detail;
+      if (detail?.key !== backendSession.key) return;
+      if (detail.refreshed) {setModuleRegistryRevision(value => value+1);return;}
       void backendSession.refreshCapabilities().catch(() => undefined).finally(() => setModuleRegistryRevision(value => value+1));
     };
     window.addEventListener(studioBackendCapabilitiesChangedEvent,refresh);

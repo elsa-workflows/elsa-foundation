@@ -3,6 +3,7 @@ import { BackendConnections, PreparedBackend, canonicalBackendUrl, validatePerso
 import {
   evaluateBackendRequirements, getBackendCapabilities, resolveBackendPath, qualifyStudioBackendPath, validateApiCapabilities,
   createEndpointContext, StudioHttpError, studioNavigationRequestedEvent,
+  studioBackendCapabilitiesChangedEvent,
   type AuthProviderManager, type AuthSession, type StudioBackendProfile, type StudioEndpointContext
 } from "../sdk";
 import { createStudioRegistry } from "../app/registry";
@@ -209,4 +210,27 @@ it("rejects a late old response when both backends use the same resource id",asy
   finish(response({id:"shared-id",name:"Backend A data"}));
   await expect(old).rejects.toMatchObject({name:"AbortError"});
   expect(current).toEqual({id:"shared-id",name:"Backend B data"});second.dispose();
+});
+
+it("notifies the shell when active Test connection clears stale capabilities",async()=>{
+  vi.stubGlobal("fetch",vi.fn().mockResolvedValueOnce(response(document)).mockResolvedValue(response({},403)));
+  const {connections}=controller();await connections.initialize();
+  const changed=vi.fn(), notified=vi.fn();
+  const unsubscribe=connections.subscribe(changed);
+  window.addEventListener(studioBackendCapabilitiesChangedEvent,notified);
+  try {
+    await expect(connections.inspect(a.id)).rejects.toMatchObject({status:403});
+    expect(changed).toHaveBeenCalled();expect(notified).toHaveBeenCalledOnce();
+    expect(connections.getSnapshot().active?.capabilities).toBeNull();
+  } finally {unsubscribe();window.removeEventListener(studioBackendCapabilitiesChangedEvent,notified);}
+});
+
+it("canonicalizes the tab-restored Home backend before resource links are rendered",async()=>{
+  sessionStorage.setItem("elsa.studio.backend.selection.v1",b.id);
+  window.history.replaceState({},"","/?filter=mine#overview");
+  vi.stubGlobal("fetch",vi.fn(async()=>response(document)));
+  const {connections}=controller();await connections.initialize();
+  expect(connections.getSnapshot().active?.profile.id).toBe(b.id);
+  expect(qualifyStudioBackendPath("/workflows/instances/shared-id")).toBe("/workflows/instances/shared-id?backend=b");
+  expect(window.location.search).toContain("filter=mine");expect(window.location.hash).toBe("#overview");
 });
