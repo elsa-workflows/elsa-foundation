@@ -1,12 +1,21 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed partial class StimulusDeliveryStoreTests
 {
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Durable_responsibility_lookup_excludes_only_the_exact_ordinal_result_kind(bool ef)
+    {
+        await using var harness = await Harness.Create(ef);
+        await harness.SavePending(Pending("case-distinct-kind", true, kind: "WORKER.RESULT"));
+        Assert.NotNull(await harness.Lookup.FindUndeliveredDurableAsync("publisher", "worker.result"));
+        Assert.Null(await harness.Lookup.FindUndeliveredDurableAsync("publisher", "WORKER.RESULT"));
+    }
+
     [Theory]
     [InlineData(false, RuntimePostCommitOutboxStatus.Pending)]
     [InlineData(true, RuntimePostCommitOutboxStatus.Pending)]

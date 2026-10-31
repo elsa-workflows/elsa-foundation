@@ -5,6 +5,8 @@
     <SnapshotReaderProject>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../../../../../../tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj'))</SnapshotReaderProject>
   </PropertyGroup>
   <ItemGroup>
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-9/correctness/prior-cancellation/deliver-worker-result.sqlite.gz"
+          Link="Fixtures/prior-scope-cancel/queued-result.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-7/pre-correction/natural-order/after-cancel-*.sqlite.gz;../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-7/pre-correction/natural-order/after-cancel-*-physical.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-7/pre-correction/natural-order/process.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-7/pre-correction/natural-order/cancel-response.json"
           Link="Fixtures/legacy-nested-cancel/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-6/corrections/inputs/*"

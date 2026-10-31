@@ -191,8 +191,10 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
         try
         {
+            var excludedHash = EfRuntimeOperationalStoreSupport.Hash(excludedIntentKind);
             var row = await Rows(scope, workflowExecutionId, null)
-                .Where(item => item.Status != (int)RuntimePostCommitOutboxStatus.Delivered && item.IntentKind != excludedIntentKind)
+                .Where(item => item.Status != (int)RuntimePostCommitOutboxStatus.Delivered &&
+                    (item.IntentKindHash != excludedHash || item.IntentKind != excludedIntentKind))
                 .OrderBy(item => item.Id).FirstOrDefaultAsync(cancellationToken);
             var source = row is null ? null : ReadChecked(row, scope);
             if (source is not null && (source.Intent.WorkflowExecutionId != workflowExecutionId || source.Intent.Kind == excludedIntentKind ||

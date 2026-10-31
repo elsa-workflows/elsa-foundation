@@ -178,11 +178,11 @@ internal sealed class OwnedWorkbench : IAsyncDisposable
         return binaries.Cast<object>().ToArray();
     }
 
-    internal async Task<JsonNode> ReadEmbeddingAsync(string model, string parent, string? directCounterpart = null)
+    internal async Task<JsonNode> ReadEmbeddingAsync(string model, string parent, string? directCounterpart = null, string? database = null)
     {
         var info = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
             { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-        foreach (var argument in new[] { ReaderAssemblyPath, "--read-bpmn-embedding", RuntimeDatabase, model, parent }) info.ArgumentList.Add(argument);
+        foreach (var argument in new[] { ReaderAssemblyPath, "--read-bpmn-embedding", database ?? RuntimeDatabase, model, parent }) info.ArgumentList.Add(argument);
         if (directCounterpart is not null) info.ArgumentList.Add(directCounterpart);
         using var reader = Process.Start(info) ?? throw Failure("The owned embedding reader did not start");
         var output = reader.StandardOutput.ReadToEndAsync(); var error = reader.StandardError.ReadToEndAsync();
