@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Bpmn.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
@@ -23,6 +24,56 @@ public sealed class BpmnStructureHandlerTests : IDisposable
     }
 
     public void Dispose() => _provider.Dispose();
+
+    [Theory]
+    [InlineData("\"set\"", "\"json\"")]
+    [InlineData("\"set\"", "2")]
+    [InlineData("0", "\"json\"")]
+    [InlineData("0", "2")]
+    public void AuthoredEnums_SupportStudioStringsAndExistingNumbers(string kind, string conversion)
+    {
+        using var document = JsonDocument.Parse($$"""
+            {
+              "activities": [{
+                "nodeId": "set-variable", "activityVersionId": "elsa.intrinsic.set@1",
+                "inputs": [{
+                  "referenceKey": "value", "value": { "value": 42, "expressionType": "Literal" },
+                  "conversion": { "mode": {{conversion}} }
+                }],
+                "outputs": [],
+                "intrinsic": {
+                  "kind": {{kind}}, "valueType": { "alias": "Int32" },
+                  "variable": { "referenceKey": "counter", "declaringScopeId": "process" }
+                }
+              }],
+              "variables": [{ "referenceKey": "counter", "name": "Counter", "type": { "alias": "Int32" } }]
+            }
+            """);
+        var activity = new ActivityNode("process", "bpmn-version", [], [],
+            new(BpmnProcessActivity.StructureKind, BpmnProcessActivity.StructureSchemaVersion, document.RootElement.Clone()));
+
+        // Both the variable-picker traversal and draft-admission traversal read this payload.
+        var service = new DefaultActivityStructureService([_handler]);
+        var visible = new ScopedVariableResolver(service).Resolve([], activity, 100).GetVisibleVariables("set-variable");
+        var variable = Assert.Single(visible);
+        Assert.Equal("process", variable.ScopeId);
+        Assert.Equal("counter", variable.Variable.ReferenceKey);
+        var slot = Assert.Single(_handler.ProjectChildren(activity));
+        AssertChild(Assert.Single(slot.Activities));
+
+        var updated = _handler.ReplaceChildren(activity, [slot]);
+        AssertChild(Assert.Single(Assert.Single(_handler.ProjectChildren(updated)).Activities));
+        var compiled = _handler.CompileExecutableStructure(updated);
+        Assert.Equal("counter", Assert.Single(compiled.Payload.Deserialize<BpmnStructure>(SerializerOptions)!.Variables).ReferenceKey);
+
+        static void AssertChild(ActivityNode child)
+        {
+            Assert.Equal(AuthoredWorkflowIntrinsicKind.Set, child.Intrinsic!.Kind);
+            Assert.Equal("counter", child.Intrinsic.Variable!.ReferenceKey);
+            Assert.Equal("process", child.Intrinsic.Variable.DeclaringScopeId);
+            Assert.Equal(AuthoredValueConversionMode.Json, Assert.Single(child.Inputs).Conversion!.Mode);
+        }
+    }
 
     [Fact]
     public void ReplaceChildren_PreservesCollaborationMetadata()

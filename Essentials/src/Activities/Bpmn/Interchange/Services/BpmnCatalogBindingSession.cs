@@ -12,7 +12,10 @@ namespace Elsa.Activities.Bpmn.Interchange.Services;
 /// <summary>One import's catalog inventory and exact reference resolution, without writing authoring state.</summary>
 internal sealed class BpmnCatalogBindingSession(IActivityDefinitionLookup catalog)
 {
-    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+    };
     private static readonly IReadOnlyDictionary<string, string> Profile = new Dictionary<string, string>
     {
         [BpmnDocumentImporter.DefaultBpmnProcessActivityVersionId] = "Elsa.Activities.Bpmn.Activities.BpmnProcess",
