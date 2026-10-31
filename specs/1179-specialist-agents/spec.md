@@ -254,4 +254,4 @@ specialist compositions. The [data model](data-model.md) will own their proposed
 - Weaver remains a separately configured assistant experience; user-defined specialists do not enable multiple assistant providers.
 - Model credentials and external access require an authorized existing connection or separately completed provisioning; no purchase is implied.
 - Support is finite and named in the plan. Unsupported combinations are visible; the product scope and Program A1–A15 are not reduced by a research limitation.
-- Detailed architecture remains draft until reviewed. Constitution §E2.8 versioning/Model X, §E2.9 and framework §2.24 retain their recorded provisional status; this work ratifies none of them.
+- The reviewed design is approved to implement; contract signatures remain proposed until their first implementing slice. Constitution §E2.8 versioning/Model X, §E2.9 and framework §2.24 retain their recorded provisional status; this work ratifies none of them.

@@ -1,10 +1,12 @@
 using System.Reflection;
+using System.Collections.ObjectModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
 
 namespace Elsa.Activities.Runtime.Services;
 
@@ -30,7 +32,10 @@ public sealed class ActivityInputHydrator
         foreach (var unknownKey in snapshot.Values.Keys.Except(contract.Inputs.Keys, StringComparer.Ordinal))
             throw new InvalidOperationException($"Pinned input '{unknownKey}' is not declared by activity contract '{contract.ActivityTypeKey}'.");
 
-        foreach (var input in contract.Inputs.Values)
+        if (contract.Inputs.Values.Any(input => input.IsStructureInput) && activity is not IRuntimeStructureInputConsumer)
+            throw new InvalidOperationException($"Activity '{activity.GetType().FullName}' requires '{nameof(IRuntimeStructureInputConsumer)}' for its structure-owned inputs.");
+
+        foreach (var input in contract.Inputs.Values.Where(input => !input.IsStructureInput))
         {
             if (!properties.TryGetValue(input.Key, out var property))
                 throw new InvalidOperationException($"Activity '{activity.GetType().FullName}' has no annotated input property for stable key '{input.Key}'.");
@@ -39,6 +44,13 @@ public sealed class ActivityInputHydrator
                 throw new InvalidOperationException($"Activity input '{input.Key}' is missing from the complete pinned snapshot.");
 
             property.SetValue(activity, Materialize(property, input, envelope));
+        }
+
+        if (activity is IRuntimeStructureInputConsumer consumer)
+        {
+            var values = snapshot.Values.Where(input => contract.Inputs[input.Key].IsStructureInput)
+                .ToDictionary(input => input.Key, input => input.Value, StringComparer.Ordinal);
+            consumer.BindStructureInputs(new ReadOnlyDictionary<string, ValueEnvelope>(values));
         }
     }
 

@@ -81,11 +81,13 @@ BPMN package coupling remains a production obligation. M1 must resolve the packa
 contract freeze, and M4 must implement/qualify it. Resulting-main qualification remains distinct from
 the merged research receipt.
 
-[M1 design leaf #3538](https://github.com/elsa-workflows/elsa-foundation/issues/3538) is preparing
-[spec 1179](../../specs/1179-specialist-agents/spec.md), its architecture/state/support/UX packet and
-ordered M2–M7 implementation tasks. The packet is draft design; neither the plan nor the wireframe
-establishes implemented product acceptance. One design implementation leaf proceeds alongside the
-research qualification lane.
+[M1 design leaf #3538](https://github.com/elsa-workflows/elsa-foundation/issues/3538) delivers
+[spec 1179](../../specs/1179-specialist-agents/spec.md), its reviewed architecture/state/support/UX
+packet and ordered M2–M7 tasks through [PR #3540](https://github.com/elsa-workflows/elsa-foundation/pull/3540).
+The design is approved to implement; neither the packet nor the illustrative wireframe establishes
+implemented product acceptance. Public signatures remain proposed until their first implementing slice.
+[M2 draft discovery #3541](https://github.com/elsa-workflows/elsa-foundation/issues/3541) is the next
+bounded implementation leaf, alongside the existing review/qualification lane.
 
 ## Completion
 

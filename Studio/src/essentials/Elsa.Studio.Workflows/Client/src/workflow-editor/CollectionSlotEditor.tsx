@@ -1,15 +1,16 @@
 import { useId, useState, type ReactNode } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import type { ActivityNode } from "../workflowTypes";
-import { addCollectionItem, collectionSlotItems, removeCollectionItem, renameCollectionItem, type CollectionSlot } from "../collectionSlots";
+import { addCollectionItem, collectionSlotItems, removeCollectionItem, renameCollectionItem, moveCollectionItem, setCollectionCondition, type CollectionSlot } from "../collectionSlots";
 import "./collectionSlotEditor.css";
 
-export function CollectionSlotEditor({ activity, collection, readOnly, onChange, renderBranch }: {
+export function CollectionSlotEditor({ activity, collection, readOnly, onChange, renderBranch, renderCondition }: {
   activity: ActivityNode;
   collection: CollectionSlot;
   readOnly?: boolean;
   onChange(activity: ActivityNode): void;
   renderBranch(index: number): ReactNode;
+  renderCondition?(item: Record<string, unknown>): ReactNode;
 }) {
   const items = collectionSlotItems(activity, collection);
   if (!items) return null;
@@ -20,11 +21,12 @@ export function CollectionSlotEditor({ activity, collection, readOnly, onChange,
         <h4>{collection.displayName}</h4>
         {!readOnly ? <button type="button" onClick={() => onChange(addCollectionItem(activity, collection))}><Plus size={14} /> Add {collection.itemName}</button> : null}
       </div>
+      {collection.conditionProperty ? <p className="wf-muted">Cases run in order. The first true condition wins; otherwise Default runs.</p> : null}
       {!items.length ? <p className="wf-muted">No {collection.displayName.toLowerCase()} yet.</p> : null}
       {items.map((item, index) => (
         <CollectionItemRow
-          key={index}
-          label={`${noun} ${index + 1} ${collection.labelProperty === "match" ? "match" : "name"}`}
+          key={collection.itemIdProperty ? item[collection.itemIdProperty] as string : index}
+          label={`${noun} ${index + 1} ${collection.conditionProperty ? "label" : collection.labelProperty === "match" ? "match" : "name"}`}
           item={item}
           value={item[collection.labelProperty] as string}
           readOnly={readOnly}
@@ -36,6 +38,19 @@ export function CollectionSlotEditor({ activity, collection, readOnly, onChange,
           }}
           removeLabel={`Remove ${collection.itemName} ${index + 1}`}
         >
+          {collection.conditionProperty && collection.itemIdProperty ? <>
+            {item[collection.conditionProperty] != null ? renderCondition?.(item) : <div className="wf-slot-collection-priority">
+              <p className="wf-muted">Matches Value against this case label.</p>
+              {!readOnly ? <button type="button" onClick={() => onChange(setCollectionCondition(activity, collection, item[collection.itemIdProperty!] as string,
+                { value: { expressionType: "Literal", value: false } }))}>Use condition</button> : null}
+            </div>}
+            {!readOnly ? <div className="wf-slot-collection-priority">
+              <button type="button" aria-label={`Move case ${index + 1} up`} disabled={index === 0}
+                onClick={() => onChange(moveCollectionItem(activity, collection, item[collection.itemIdProperty!] as string, -1))}><ArrowUp size={14} /> Move up</button>
+              <button type="button" aria-label={`Move case ${index + 1} down`} disabled={index === items.length - 1}
+                onClick={() => onChange(moveCollectionItem(activity, collection, item[collection.itemIdProperty!] as string, 1))}><ArrowDown size={14} /> Move down</button>
+            </div> : null}
+          </> : null}
           {renderBranch(index)}
         </CollectionItemRow>
       ))}
@@ -75,7 +90,7 @@ function CollectionItemRow({ label, item, value, readOnly, duplicate, onRename, 
           }} />
         {!readOnly ? <button type="button" className="wf-slot-collection-remove" aria-label={removeLabel} title={removeLabel} onClick={onRemove}><Trash2 size={14} /></button> : null}
       </div>
-      {error ? <p id={`${id}-error`} className="wf-slot-collection-error" role="alert">This value is already used. Each {label.endsWith("match") ? "case match" : "branch name"} must be unique.</p> : null}
+      {error ? <p id={`${id}-error`} className="wf-slot-collection-error" role="alert">This value is already used. Each {label.endsWith("match") ? "case match" : label.endsWith("label") ? "case label" : "branch name"} must be unique.</p> : null}
       {children}
     </div>
   );

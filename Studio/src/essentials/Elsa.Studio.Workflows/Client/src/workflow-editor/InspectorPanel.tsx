@@ -13,8 +13,10 @@ import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, Activity
 import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
 import type { ScopedVariableAnalysis } from "../api/workflowDesign";
 import { slotCrumbLabel, type ChildSlot } from "../workflowAdapter";
-import { getCollectionSlots } from "../collectionSlots";
+import { canUpgradeSwitch, getCollectionSlots, isPredicateOnlySwitch, upgradeSwitch } from "../collectionSlots";
 import { CollectionSlotEditor } from "./CollectionSlotEditor";
+import { CaseConditionEditor } from "./CaseConditionEditor";
+import { readStructureDesignFacet } from "../workflowAdapter";
 import { HttpEndpointResponseWarning } from "../HttpEndpointResponseWarning";
 import { withHttpEndpointResponseMode } from "../httpEndpointResponseMode";
 import { isHttpEndpointType } from "./httpTestRequest";
@@ -93,6 +95,8 @@ interface InspectorPanelProps {
   activeTabId?: ActivityInspectorTabId;
   onActiveTabChange?(tabId: ActivityInspectorTabId): void;
   onSelectedActivityChange(activity: ActivityNode): void;
+  /** Discrete collection operations end the previous property-edit history group. */
+  onSelectedStructureChange?(activity: ActivityNode): void;
   onSelectedPresentationChange?(presentation: Pick<ActivityPresentationRecord, "displayName" | "description">): void;
   onChangeReusableVersion?(activity: ActivityNode, version: ActivityDefinitionVersionView): void;
   onEnterSlot(ownerNodeId: string, slot: ChildSlot, label: string): void;
@@ -148,6 +152,7 @@ export function InspectorPanel({
   activeTabId,
   onActiveTabChange,
   onSelectedActivityChange,
+  onSelectedStructureChange,
   onSelectedPresentationChange,
   onChangeReusableVersion,
   onEnterSlot,
@@ -162,6 +167,10 @@ export function InspectorPanel({
   const selectedCatalogItem = catalogByVersion?.get(selectedNode?.activityVersionId ?? "")
     ?? catalog.find(item => item.activityVersionId === selectedNode?.activityVersionId);
   const collections = selectedNode ? getCollectionSlots(selectedNode, selectedCatalogItem) : [];
+  const switchUpgradeTarget = selectedNode?.structure?.kind === "elsa.switch.structure" && selectedNode.structure.schemaVersion === "1.0.0" ? catalog.find(item => {
+    const facet = readStructureDesignFacet(item);
+    return item.activityTypeKey === selectedCatalogItem?.activityTypeKey && facet?.kind === "elsa.switch.structure" && facet.schemaVersion === "2.0.0";
+  }) : undefined;
   const hasSlots = selectedSlots.length > 0 || collections.length > 0;
   const requestedTabId = activeTabId ?? localActiveTabId;
   const effectiveActiveTabId = resolveActivityInspectorTabId(requestedTabId, selectedSupportsScopedVariables, hasSlots);
@@ -208,6 +217,9 @@ export function InspectorPanel({
     catalogByVersion?.get(selectedNode.activityVersionId) ?? catalog.find(item => item.activityVersionId === selectedNode.activityVersionId)
   );
 
+  const predicateOnly = isPredicateOnlySwitch(selectedNode);
+  const inputDescriptor = predicateOnly && selectedDescriptor ? { ...selectedDescriptor,
+    inputs: selectedDescriptor.inputs.filter(input => (input.referenceKey ?? input.name) !== "Value") } : selectedDescriptor;
   const propertiesPanel = intrinsicDescriptor ? (
     <IntrinsicInspector
       intrinsic={intrinsicDescriptor}
@@ -218,7 +230,7 @@ export function InspectorPanel({
       expressionEditorSessionScope={expressionEditorSessionScope}
       workflowState={workflowState}
       activity={selectedNode}
-      descriptor={selectedDescriptor}
+      descriptor={inputDescriptor}
       editors={propertyEditors}
       expressionEditors={expressionEditors}
       expressionDescriptors={expressionDescriptors}
@@ -241,7 +253,7 @@ export function InspectorPanel({
       expressionEditorSessionScope={expressionEditorSessionScope}
       workflowState={workflowState}
       activity={selectedNode}
-      descriptor={selectedDescriptor}
+      descriptor={inputDescriptor}
       editors={propertyEditors}
       expressionEditors={expressionEditors}
       expressionDescriptors={expressionDescriptors}
@@ -337,6 +349,12 @@ export function InspectorPanel({
               onUseSync={() => onSelectedActivityChange(withHttpEndpointResponseMode(selectedNode, selectedCatalogItem, "Sync"))}
             />
           ) : null}
+          {switchUpgradeTarget ? <div className="wf-slot-collection-item">
+            <p className="wf-muted">Use a separate Boolean expression for each case. Existing matches and branches are preserved.</p>
+            {!canUpgradeSwitch(selectedNode) ? <p className="wf-muted" role="note">This Switch cannot be upgraded while Value uses an activation-only Secret reference or its cases have an unsupported shape. Replace the Secret Value binding or correct the case data first.</p> : null}
+            <button type="button" disabled={readOnly || !canUpgradeSwitch(selectedNode)} onClick={() => (onSelectedStructureChange ?? onSelectedActivityChange)(upgradeSwitch(selectedNode, switchUpgradeTarget))}>Upgrade to case conditions</button>
+          </div> : null}
+          {predicateOnly ? <p className="wf-muted">Set each case condition in the Slots tab.</p> : null}
           {propertiesPanel}
           {bpmnRoutingPanel}
         </StudioTabPanel>
@@ -375,7 +393,15 @@ export function InspectorPanel({
             <div className="wf-slot-list">
               {collections.map(collection => <CollectionSlotEditor
                 key={collection.property} activity={selectedNode} collection={collection} readOnly={readOnly}
-                onChange={next => { setSlotPicker(null); onSelectedActivityChange(next); }}
+                onChange={next => { setSlotPicker(null); (onSelectedStructureChange ?? onSelectedActivityChange)(next); }}
+                renderCondition={item => <CaseConditionEditor
+                  collection={collection} item={item} activity={selectedNode} readOnly={readOnly}
+                  context={context} draftId={draftId} expressionTooling={expressionTooling} expressionEditorSessionScope={expressionEditorSessionScope}
+                  workflowState={workflowState} editors={propertyEditors} expressionEditors={expressionEditors}
+                  expressionDescriptors={expressionDescriptors} expressionDescriptorStatus={expressionDescriptorStatus}
+                  descriptorStatus={descriptorStatus} onRetryDescriptors={onRetryExpressionDescriptors}
+                  visibleVariables={scopedVariableAnalysis.visibleVariables} scopeStatus={scopedVariableAnalysis.status} scopeRetry={scopedVariableAnalysis.retry}
+                  onChange={onSelectedActivityChange} />}
                 renderBranch={index => {
                   const slot = selectedSlots.find(candidate => candidate.collectionProperty === collection.property && candidate.collectionIndex === index);
                   return slot ? renderSlot(slot) : null;

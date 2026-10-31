@@ -248,7 +248,7 @@ export function WorkflowEditor({
     editableDoc.editDraft(() => snapshot);
     editableDoc.navigateToScope(path);
   }, [editableDoc]);
-  const { resetHistory, undo, redo, canUndoNow, canRedoNow } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft });
+  const { resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft });
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
   // in dedicated hooks; `markSaved`/`reload` let the loader seed the save baseline and reload after promote.
@@ -799,8 +799,14 @@ export function WorkflowEditor({
     });
   }, [catalogByVersion, editDraft]);
 
+  const updateSelectedStructure = useCallback((activity: ActivityNode) => {
+    flushPendingHistory();
+    updateSelectedActivity(activity);
+  }, [flushPendingHistory, updateSelectedActivity]);
+
   const addCollectionSlotItem = useCallback((ownerNodeId: string, collection: CollectionSlot) => {
     if (!canAddActivitiesToCanvas) return;
+    flushPendingHistory();
     editDraft(({ draft: current }) => current?.state.rootActivity ? {
       ...current,
       state: { ...current.state, rootActivity: updateActivity(current.state.rootActivity, ownerNodeId, owner => {
@@ -813,7 +819,7 @@ export function WorkflowEditor({
     setInspectorView("configuration");
     setActiveInspectorTabId("slots");
     setInspectorCollapsed(false);
-  }, [canAddActivitiesToCanvas, catalogByVersion, editDraft, nodes, select, setInspectorCollapsed]);
+  }, [flushPendingHistory, canAddActivitiesToCanvas, catalogByVersion, editDraft, nodes, select, setInspectorCollapsed]);
 
   const updateSelectedPresentation = useCallback((
     presentation: { displayName?: string | null; description?: string | null }
@@ -1290,6 +1296,7 @@ export function WorkflowEditor({
           activeTabId={activeInspectorTabId}
           onActiveTabChange={setActiveInspectorTabId}
           onSelectedActivityChange={updateSelectedActivity}
+          onSelectedStructureChange={updateSelectedStructure}
           onSelectedPresentationChange={updateSelectedPresentation}
           onChangeReusableVersion={openVersionChange}
           onEnterSlot={enterSlotScope}

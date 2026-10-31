@@ -11,6 +11,10 @@ namespace Elsa.Workflows.Design.Validations.Internal;
 /// </summary>
 public sealed class ActivityTreeWalker(IActivityStructureService activityStructureService)
 {
+    /// <summary>Returns inputs consumed by ordinary properties or the owning structure, excluding unused catalog arguments.</summary>
+    public IReadOnlyCollection<ArgumentState> EffectiveInputs(ActivityNode node) =>
+        activityStructureService.ProjectInputs(node).ApplyToInputs(node.Inputs);
+
     /// <summary>
     /// Yields every activity reachable from <paramref name="root"/> up to
     /// <paramref name="maxDepth"/>. Root is at depth 0; composed child activities are at depth

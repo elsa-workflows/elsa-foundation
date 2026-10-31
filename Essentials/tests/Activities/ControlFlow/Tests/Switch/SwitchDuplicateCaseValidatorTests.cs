@@ -87,7 +87,7 @@ public sealed class SwitchDuplicateCaseValidatorTests : IDisposable
     {
         var payload = JsonSerializer.SerializeToElement(new
         {
-            cases = matches.Select(match => new { match }).ToArray()
+            cases = matches.Select((match, index) => new { match, caseId = $"case-{index}" }).ToArray()
         }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
         return new ActivityNode(nodeId, $"activity-version-{nodeId}", [], [],
