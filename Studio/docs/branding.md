@@ -83,7 +83,7 @@ check the crop at desktop, tablet and 320px. Artwork is decorative (`alt=""`), s
 belong in real text. A failed image leaves readable copy on a solid surface and a usable form.
 
 Names/copy/URLs are encoded. Asset and resource URLs accept root-relative paths or HTTPS; HTTP loopback
-is available for local development. Executable/data/protocol-relative URLs are rejected. Serve SVG only
+is available for local development. Executable/data/protocol-relative URLs are rejected. Rejected configured Studio resource links are hidden; an omitted setting keeps the default product resource link. Serve SVG only
 from a trusted deployment source. Supply your own privacy/help endpoint if you configure a local link.
 Dark appearance follows the OS and high contrast removes the artwork; the form needs no JavaScript.
 External OIDC login pages remain owned and themed by their identity provider.

@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  CircleHelp,
   Ellipsis,
   ExternalLink,
   FileText,
@@ -26,6 +27,7 @@ import {
   RefreshCw,
   Search,
   Server,
+  Shield,
   Settings,
   SlidersHorizontal
 } from "lucide-react";
@@ -798,10 +800,10 @@ export function ShellFrame({
           <div className="topbar-actions">
             {assistantAction}
             {branding.showHelpLink ? <a href={branding.helpUrl ?? "https://github.com/elsa-workflows/elsa-foundation"} aria-label={branding.helpUrl ? "Help" : "GitHub"}>
-              <Github size={18} />
+              {branding.helpUrl ? <CircleHelp size={18} /> : <Github size={18} />}
             </a> : null}
             {branding.showPrivacyLink ? <a href={branding.privacyUrl ?? "https://docs.elsaworkflows.io"} aria-label={branding.privacyUrl ? "Privacy" : "Documentation"}>
-              <ExternalLink size={18} />
+              {branding.privacyUrl ? <Shield size={18} /> : <ExternalLink size={18} />}
             </a> : null}
             {themeAction}
             {accountAction}

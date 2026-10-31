@@ -99,6 +99,7 @@ export function getStudioBranding() {
     subtitle: value?.subtitle ?? "Workflow studio",
     logoUrl: safeBrandUrl(value?.logoUrl), faviconUrl: safeBrandUrl(value?.faviconUrl),
     helpUrl: safeBrandUrl(value?.helpUrl), privacyUrl: safeBrandUrl(value?.privacyUrl),
-    showHelpLink: value?.helpUrl !== "", showPrivacyLink: value?.privacyUrl !== ""
+    showHelpLink: value?.helpUrl === undefined || safeBrandUrl(value.helpUrl) !== undefined,
+    showPrivacyLink: value?.privacyUrl === undefined || safeBrandUrl(value.privacyUrl) !== undefined
   };
 }
