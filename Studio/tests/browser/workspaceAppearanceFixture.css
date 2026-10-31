@@ -1,5 +1,5 @@
 /* Only the reused editor fixture's outer wrapper needs sizing; production controls/styles are unchanged. */
-.content:has(> .activity-duplicate-editor) {
+:root .content:has(> .activity-duplicate-editor) {
   display: flex;
   padding: 0;
   overflow: hidden;

@@ -641,6 +641,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
                           </a>
                         ) : definition.name}
                       </strong>
+                      {definition.description ? <small className="wf-definition-description">{definition.description}</small> : null}
                     </span>
                     <span className="wf-definition-id wf-definition-primary-identifier" role="cell" onClick={event => event.stopPropagation()}>
                       {isCurrentData ? <CopyableIdentifier label="Definition ID" value={definition.id} /> : <span title={definition.id}>{definition.id}</span>}

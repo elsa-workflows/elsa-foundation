@@ -26,6 +26,14 @@ dark palette. Supply your dark theme variables after the defaults, as the
 [React host example](../examples/react-host/README.md) does. Code editor and workflow
 consumers additionally load those packages' public `style.css` exports.
 
+The public stylesheet includes the opt-in Minimal treatment. A standalone host can set
+`data-workspace-style="minimal"` on `<html>` and supply its complete palette. Public controls,
+collections and status chips then share the same density and fine dividers as Studio. Module-owned
+tables should consume the [collection and action roles](design-tokens.md#collection-and-action-roles)
+instead of overriding row borders, selection fills or primary actions with literal recipes.
+Keep owner-specific graph geometry, runtime state and permissions in the module; a presentation
+change must preserve those behaviors. Do not select behavior using palette IDs.
+
 ## A collection page
 
 This example searches an already loaded collection. A server-paged module should

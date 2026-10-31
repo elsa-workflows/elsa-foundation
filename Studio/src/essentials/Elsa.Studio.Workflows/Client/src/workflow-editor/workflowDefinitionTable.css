@@ -4,6 +4,13 @@
   min-width: 0;
 }
 
+.wf-definition-description { display: none; }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-description { display: block; color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid > .wf-grid-row { border-bottom-style: var(--studio-row-boundary-style); }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid > .wf-grid-row:hover { background: var(--studio-row-hover); }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid > .wf-grid-row[aria-selected="true"] { background: var(--studio-row-selected); box-shadow: inset 3px 0 0 var(--studio-selection-mark); }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-version .wf-status-badge { background: transparent; border-color: transparent; padding-inline: 0; }
+
 .wf-definitions-list > .wf-toolbar {
   flex-wrap: wrap;
   gap: 8px;

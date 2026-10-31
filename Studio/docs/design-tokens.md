@@ -98,15 +98,39 @@ draws with a literal width), it may guard on `html[data-theme-appearance="high-c
 
 ### Independent workspace style and color scheme
 
-Appearance offers optional `quiet`, `focus` and `open` workspace styles, independently of the
-selected color scheme and mode. Existing theme presets remain compatible; absent overrides
-retain their original typography, shape and layout. See [ADR 0023](adr/0023-separate-workspace-style-and-color-scheme.md).
+Appearance offers `linen`, `minimal`, `quiet`, `focus` and `open` workspace styles, independently
+of the selected color scheme and mode. A theme can declare optional `workspaceStyle` metadata
+as its default treatment. Without an explicit workspace override, its own font, radii and layout
+remain authoritative. Existing themes without metadata retain their original presentation. See [ADR 0023](adr/0023-separate-workspace-style-and-color-scheme.md).
 
 The host publishes optional `data-workspace-style` and informational `data-color-scheme`
 attributes. Modules may use the former for surface-owned composition treatment, alongside
 `data-theme-layout`. A color-scheme identity never selects component behavior. Explicit styles
 own typography, shape and elevation; the scheme supplies colors and supported mode variants.
 Navigation overrides still win over workspace defaults (left for Quiet/Focus, top for Open).
+
+Minimal is an opt-in treatment shared by Porcelain, Atelier and Graphite. It uses 28px page titles,
+14px body text, 12px labels, 36px controls, 56px minimum collection rows, 44px table headers and
+24px page gaps. Secondary row/section dividers are dotted; high contrast and forced colors use
+solid dividers. Focus indicators remain solid in every mode. Modules consume roles rather than
+checking palette IDs. The standalone public `styles.css` includes the treatment; a custom host
+can set `data-workspace-style="minimal"` on `<html>` with its own complete palette.
+
+### Collection and action roles
+
+| Token | Purpose |
+| --- | --- |
+| `--studio-control-height`, `--studio-row-height`, `--studio-table-header-height` | Shared control and collection density |
+| `--studio-page-gap` | Gap between page sections |
+| `--studio-row-boundary-style`, `--studio-section-boundary-style` | Secondary divider style; never use for a focus outline |
+| `--studio-row-hover`, `--studio-row-selected` | Neutral or palette-owned row surfaces |
+| `--studio-selection-mark` | Narrow selection marker or selected tab boundary |
+| `--studio-action-primary-bg`, `--studio-action-primary-fg` | Primary action pair; distinct from danger actions and status colors |
+| `--studio-field-border-width`, `--studio-field-padding`, `--studio-field-surface` | Optional field wrapper treatment; the input retains its own boundary |
+
+Defaults retain the existing component presentation. Avoid hard-coded `solid` on secondary row
+boundaries in module-owned collections: consume these roles so Minimal and accessibility modes
+can choose the correct treatment. See [branding](branding.md#minimal-studio-presets) for preset IDs.
 
 ## Layer 2 — the `--studio-*` semantic tokens (STABLE)
 

@@ -1,0 +1,74 @@
+/* Public, opt-in visual treatment. Modules retain their data, layout and interactions. */
+:root[data-workspace-style="minimal"] {
+  --studio-page-title-size: 28px;
+  --studio-title-weight: 600;
+  --studio-section-title-size: 17px;
+  --studio-body-size: 14px;
+  --studio-label-size: 12px;
+  --studio-control-height: 36px;
+  --studio-row-height: 56px;
+  --studio-table-header-height: 44px;
+  --studio-page-gap: 24px;
+  --studio-row-boundary-style: dotted;
+  --studio-section-boundary-style: dotted;
+  --studio-row-hover: color-mix(in srgb, var(--studio-text) 3%, var(--studio-surface));
+  --studio-row-selected: color-mix(in srgb, var(--studio-text) 6%, var(--studio-surface));
+  --studio-selection-mark: var(--ring);
+  --studio-action-primary-bg: var(--studio-text);
+  --studio-action-primary-fg: var(--studio-surface);
+  --studio-field-border-width: 0;
+  --studio-field-padding: 0;
+  --studio-field-surface: transparent;
+  --studio-edge-subtle: var(--border);
+  --studio-edge-control: var(--border);
+  --studio-focus: var(--ring);
+  --studio-canvas: var(--studio-bg);
+  --studio-panel: var(--studio-surface);
+  --studio-workspace-page-background: var(--studio-bg);
+  --studio-workspace-panel-background: var(--studio-surface);
+  --studio-shadow-sm: 0 2px 6px color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+:root[data-workspace-style="minimal"] .studio-page-header :is(h1, h2) { letter-spacing: -.025em; }
+:root[data-workspace-style="minimal"] .studio-page-header p { max-width: 70ch; }
+:root[data-workspace-style="minimal"] .studio-button { font-weight: 550; }
+:root[data-workspace-style="minimal"] .studio-button[data-variant="primary"] {
+  background: var(--studio-action-primary-bg);
+  border-color: var(--studio-action-primary-bg);
+  color: var(--studio-action-primary-fg);
+}
+:root[data-workspace-style="minimal"] .studio-button[data-variant="primary"]:hover:not(:disabled) { color: var(--studio-action-primary-fg); }
+:root[data-workspace-style="minimal"] .studio-button:hover:not(:disabled):not(.danger):not([data-variant="danger"]) { border-color: var(--studio-text-muted); }
+:root[data-workspace-style="minimal"] .studio-data-grid-header { min-height: var(--studio-table-header-height); }
+:root[data-workspace-style="minimal"] :is(.studio-table, .studio-collection-table) :is(strong, .studio-list-row-title) { font-weight: 600; }
+:root[data-workspace-style="minimal"] .studio-tabs button:is(.active, [aria-selected="true"]) { border-bottom-color: var(--studio-selection-mark); }
+:root[data-workspace-style="minimal"] .studio-empty-state { border-style: dotted; }
+:root[data-workspace-style="minimal"] .studio-inspector { padding: 20px; }
+:root[data-workspace-style="minimal"] .studio-status-chip {
+  gap: 6px;
+  padding: 2px 0;
+  border-color: transparent;
+  background: transparent;
+  font-size: var(--studio-label-size);
+  font-weight: 500;
+}
+:root[data-workspace-style="minimal"] .studio-status-chip::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+:root[data-workspace-style="minimal"][data-theme-appearance="high-contrast"] {
+  --studio-row-boundary-style: solid;
+  --studio-section-boundary-style: solid;
+  --studio-shadow-sm: none;
+}
+@media (forced-colors: active) {
+  :root[data-workspace-style="minimal"] {
+    --studio-row-boundary-style: solid;
+    --studio-section-boundary-style: solid;
+  }
+}
