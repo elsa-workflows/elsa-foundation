@@ -2,17 +2,18 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { definitionPageSizes } from "./constants";
 import { getTotalPages } from "./editorListHelpers";
 
-export function DefinitionPager({ page, pageSize, totalCount, itemCount, hasNextPage, onPageChange, onPageSizeChange }: {
+export function DefinitionPager({ page, pageSize, totalCount, itemCount, hasNextPage, usesCursorPaging = false, onPageChange, onPageSizeChange }: {
   page: number;
   pageSize: number;
   totalCount?: number;
   itemCount: number;
   hasNextPage?: boolean;
+  usesCursorPaging?: boolean;
   onPageChange(page: number): void;
   onPageSizeChange(pageSize: number): void;
 }) {
   const hasKnownTotal = typeof totalCount === "number";
-  const totalPages = hasKnownTotal ? getTotalPages(totalCount, pageSize) : null;
+  const totalPages = hasKnownTotal && !usesCursorPaging ? getTotalPages(totalCount, pageSize) : null;
   const isEmptyPage = itemCount === 0;
   const firstItem = isEmptyPage || (hasKnownTotal && totalCount === 0) ? 0 : ((page - 1) * pageSize) + 1;
   const lastItem = isEmptyPage ? 0 : hasKnownTotal ? Math.min(page * pageSize, totalCount) : firstItem + itemCount - 1;
@@ -20,7 +21,7 @@ export function DefinitionPager({ page, pageSize, totalCount, itemCount, hasNext
   return (
     <div className="wf-pagination" aria-label="Workflow definition pagination">
       <span className="wf-pagination-summary" aria-live="polite">
-        Showing {firstItem}-{lastItem}{hasKnownTotal ? ` of ${totalCount}` : ""}
+        {usesCursorPaging ? `Showing ${itemCount}${hasKnownTotal ? ` of ${totalCount} matching workflows` : " workflows"}` : `Showing ${firstItem}-${lastItem}${hasKnownTotal ? ` of ${totalCount}` : ""}`}
       </span>
       <label className="wf-page-size">
         Rows

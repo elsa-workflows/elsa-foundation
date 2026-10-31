@@ -300,6 +300,25 @@ public sealed partial class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public void Replacing_Ef_with_a_custom_backend_removes_its_observer_and_preserves_other_contributions()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IWorkflowTriggerIndexObserver, UnrelatedLibraryObserver>();
+        services.AddWorkflowsDesignEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = "Data Source=:memory:" });
+        var backend = DesignPersistenceBackend.Find(services)!;
+        backend.RemoveOwnedDescriptors(services);
+        services.AddSingleton<object>(new object());
+        DesignPersistenceBackend.Register(services, new("custom", [services.Single(item => item.ServiceType == typeof(object))]));
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var observer = Assert.Single(scope.ServiceProvider.GetServices<IWorkflowTriggerIndexObserver>());
+        Assert.IsType<UnrelatedLibraryObserver>(observer);
+        Assert.Null(scope.ServiceProvider.GetService<IWorkflowLibraryStore>());
+        Assert.Equal("custom", DesignPersistenceBackend.Find(services)!.Name);
+    }
+
+    [Fact]
     public async Task Library_concurrent_opposing_folder_moves_cannot_commit_a_cycle_even_when_the_lock_provider_does_not_serialize()
     {
         await using var database = new TemporarySqliteDatabase("workflow-library-concurrent-hierarchy");

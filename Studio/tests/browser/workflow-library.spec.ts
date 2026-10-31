@@ -138,7 +138,7 @@ test("browser Back restores the tagged query's cursor page and page size after t
   await page.goto(`/?mode=workflow-library&paging=history&tagFilters=${filters}`);
   await expect(page.getByRole("row", { name: "Open workflow definition Tagged workflow page 1", exact: true })).toBeVisible();
   await page.getByRole("combobox", { name: "Rows" }).selectOption("25");
-  await expect(page.locator(".wf-pagination-summary")).toHaveText("Showing 1-25 of 75");
+  await expect(page.locator(".wf-pagination-summary")).toHaveText("Showing 25 of 75 matching workflows");
   await page.getByRole("button", { name: "Next page", exact: true }).click();
   await expect(page.getByRole("row", { name: "Open workflow definition Tagged workflow page 2", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Next page", exact: true }).click();
@@ -146,11 +146,11 @@ test("browser Back restores the tagged query's cursor page and page size after t
   await page.getByRole("button", { name: "Favorites", exact: true }).click();
   await expect(page.getByRole("row", { name: "Open workflow definition Favorite workflow page 1", exact: true })).toBeVisible();
   await page.getByRole("combobox", { name: "Rows" }).selectOption("50");
-  await expect(page.locator(".wf-pagination-summary")).toHaveText("Showing 1-50 of 75");
+  await expect(page.locator(".wf-pagination-summary")).toHaveText("Showing 50 of 75 matching workflows");
   await page.goBack();
   await expect(page.getByRole("row", { name: "Open workflow definition Tagged workflow page 3", exact: true })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Rows" })).toHaveValue("25");
-  await expect(page.locator(".wf-pagination-summary")).toHaveText("Showing 51-75 of 75");
+  await expect(page.locator(".wf-pagination-summary")).toHaveText("Showing 25 of 75 matching workflows");
   const query = await page.evaluate(() => {
     const requests = (window as unknown as { workflowLibraryRequests: { method: string; url: string }[] }).workflowLibraryRequests;
     const url = requests.filter(request => request.method === "GET" && request.url.startsWith("/fixture/library/pages")).at(-1)!.url;
@@ -159,3 +159,24 @@ test("browser Back restores the tagged query's cursor page and page size after t
   expect(query).toMatchObject({ pageSize: "25", continuationToken: "tag-page-three", tagFilters: JSON.stringify([{ tagId: "critical", operator: "exists" }]) });
   expect(query.favoritesOnly).toBeUndefined();
 });
+
+for (const change of ["count-shrinks", "count-grows"] as const) {
+  test(`cursor paging follows the returned token when the live result ${change}`, async ({ page }) => {
+    await page.goto(`/?mode=workflow-library&paging=${change}`);
+    await page.getByRole("combobox", { name: "Rows" }).selectOption("50");
+    await expect(page.locator(".wf-pagination-summary")).toHaveText("Showing 50 of 150 matching workflows");
+    await page.getByRole("button", { name: "Next page", exact: true }).click();
+    await expect(page.getByRole("row", { name: "Open workflow definition Tagged workflow page 2", exact: true })).toBeVisible();
+    await expect(page.locator(".wf-page-controls")).not.toContainText("Page 2 of");
+    const next = page.getByRole("button", { name: "Next page", exact: true });
+    if (change === "count-shrinks") {
+      await expect(page.locator(".wf-pagination-summary")).toHaveText("Showing 50 of 100 matching workflows");
+      await expect(next).toBeEnabled(); await next.click();
+      await expect(page.getByRole("row", { name: "Open workflow definition Tagged workflow page 3", exact: true })).toBeVisible();
+      await expect(next).toBeDisabled();
+    } else {
+      await expect(page.locator(".wf-pagination-summary")).toHaveText("Showing 50 of 200 matching workflows");
+      await expect(next).toBeDisabled();
+    }
+  });
+}

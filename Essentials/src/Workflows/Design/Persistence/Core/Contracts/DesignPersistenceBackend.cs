@@ -36,12 +36,22 @@ public sealed class DesignPersistenceBackend
     };
 
     private readonly IReadOnlyList<ServiceDescriptor> descriptors;
+    private readonly IReadOnlySet<Type> exclusiveServiceTypes;
 
-    public DesignPersistenceBackend(string name, IEnumerable<ServiceDescriptor> descriptors)
+    public DesignPersistenceBackend(string name, IEnumerable<ServiceDescriptor> descriptors) : this(name, descriptors, [])
+    {
+    }
+
+    /// <summary>Owns exclusive backend registrations and exact additive contributions. Removing the
+    /// backend removes its contributions without claiming other registrations of their service types.</summary>
+    public DesignPersistenceBackend(string name, IEnumerable<ServiceDescriptor> descriptors, IEnumerable<ServiceDescriptor> contributions)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(descriptors);
-        this.descriptors = descriptors.ToArray();
+        ArgumentNullException.ThrowIfNull(contributions);
+        var exclusive = descriptors.ToArray();
+        exclusiveServiceTypes = exclusive.Select(descriptor => descriptor.ServiceType).ToHashSet();
+        this.descriptors = exclusive.Concat(contributions).Distinct().ToArray();
         if (this.descriptors.Count == 0)
             throw new ArgumentException("At least one owned design-persistence descriptor is required.", nameof(descriptors));
         Name = name;
@@ -111,7 +121,7 @@ public sealed class DesignPersistenceBackend
     private void EnsureOwnsRegisteredDescriptors(IServiceCollection services)
     {
         EnsureOwnedDescriptorsPresent(services);
-        foreach (var serviceType in descriptors.Select(descriptor => descriptor.ServiceType).Distinct())
+        foreach (var serviceType in exclusiveServiceTypes)
         {
             var registrations = services.Where(descriptor => descriptor.ServiceType == serviceType).ToArray();
             if (registrations.Any(registration => !descriptors.Contains(registration)))

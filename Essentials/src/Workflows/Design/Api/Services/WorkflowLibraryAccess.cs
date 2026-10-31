@@ -46,6 +46,7 @@ internal static class WorkflowLibraryAccess
 
     public static async ValueTask<WorkflowLibraryReadScope> ReadScopeAsync(HttpContext context, CancellationToken cancellationToken)
     {
+        ValidateWorkflowLibraryVisibilityPolicyStartupTask.Validate(context.RequestServices.GetRequiredService<IServiceCollection>());
         var policy = context.RequestServices.GetService<IWorkflowLibraryVisibilityPolicy>();
         if (policy is null)
         {
@@ -63,6 +64,19 @@ internal static class WorkflowLibraryAccess
             throw new WorkflowLibraryAuthorizationException("The host did not provide a valid bounded workflow library visibility scope.");
         // Snapshot a host-supplied mutable collection before it reaches cursor binding and SQL.
         return scope with { AllowedDefinitionIds = scope.AllowedDefinitionIds?.ToArray(), DeniedDefinitionIds = scope.DeniedDefinitionIds?.ToArray() };
+    }
+
+    public static async ValueTask RequireOrganizationReadAsync(HttpContext context, WorkflowOrganization organization, CancellationToken cancellationToken)
+    {
+        await RequireAsync(context, WorkflowDesignPermissions.Read, new WorkflowLibraryResource(DefinitionId: organization.DefinitionId), cancellationToken);
+        await RequireFolderReadAsync(context, organization.FolderBreadcrumb.Select(folder => folder.Id)
+            .Concat(organization.FolderId is { } folderId ? [folderId] : []), cancellationToken);
+    }
+
+    public static async ValueTask RequireFolderReadAsync(HttpContext context, IEnumerable<string> folderIds, CancellationToken cancellationToken)
+    {
+        foreach (var folderId in folderIds.Distinct(StringComparer.Ordinal))
+            await RequireAsync(context, WorkflowDesignPermissions.Read, new WorkflowLibraryResource(FolderId: folderId), cancellationToken);
     }
 
     public static void ValidateTargets(IReadOnlyList<string>? ids)

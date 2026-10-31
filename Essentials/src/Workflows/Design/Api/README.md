@@ -52,6 +52,10 @@ visibility for the current normalized principal. Without that integration the pa
 before reading the inventory, including when the handler is registered for another resource domain.
 Tenant/action-only hosts without resource handlers use the unrestricted tenant scope. The read scope
 never comes from a request or saved view; its revision/membership is bound into continuation tokens.
+The visibility policy is an optional single-implementation contract. Multiple registrations fail
+shell startup with a diagnostic rather than selecting the last registration. Definition details and
+organization responses also authorize the definition and every returned folder/ancestor; a denied
+resource produces HTTP 403 without returning its organization metadata.
 See the [visibility contract](EXTENSION_POINTS.md#overridable-contracts).
 
 See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) for persistence ports, structure handlers, and input-option providers. API clients should use the published HTTP contracts rather than implementation services.

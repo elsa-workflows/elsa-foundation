@@ -12,6 +12,7 @@ using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Tasks.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -285,6 +286,7 @@ public sealed class WorkflowLibraryApiContractTests
         var scope = new WorkflowLibraryReadScope("policy-r2", DeniedDefinitionIds: ["deniedBeta"]);
         await using var host = await StartAsync(probe, services =>
         {
+            services.RemoveAll<IWorkflowLibraryVisibilityPolicy>();
             services.AddSingleton<IWorkflowLibraryVisibilityPolicy>(new FixedVisibility(scope));
             services.AddSingleton<IPermissionResourceHandler, DeniedDefinitionPolicy>();
         });
@@ -320,10 +322,69 @@ public sealed class WorkflowLibraryApiContractTests
     public async Task A_malformed_host_visibility_scope_fails_before_the_store()
     {
         var probe = new LibraryProbe();
-        await using var host = await StartAsync(probe, services => services.AddSingleton<IWorkflowLibraryVisibilityPolicy>(new FixedVisibility(new(" "))));
+        await using var host = await StartAsync(probe, services =>
+        {
+            services.RemoveAll<IWorkflowLibraryVisibilityPolicy>();
+            services.AddSingleton<IWorkflowLibraryVisibilityPolicy>(new FixedVisibility(new(" ")));
+        });
         using var response = await SendAsync(host, "GET", "/design/workflows/definitions/page", "library-read");
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Null(probe.Query);
+    }
+
+    [Fact]
+    public async Task A_second_visibility_policy_cannot_override_a_restrictive_policy_or_query_the_inventory()
+    {
+        var probe = new LibraryProbe { CandidateIds = ["visibleAlpha", "deniedBeta"] };
+        await using var host = await StartAsync(probe, services =>
+        {
+            services.RemoveAll<IWorkflowLibraryVisibilityPolicy>();
+            services.AddSingleton<IWorkflowLibraryVisibilityPolicy>(new FixedVisibility(new("restrictive", DeniedDefinitionIds: ["deniedBeta"])));
+            services.AddSingleton<IWorkflowLibraryVisibilityPolicy>(new FixedVisibility(new("broader")));
+        });
+        var validator = Assert.Single(host.Services.GetServices<IStartupTask>(), task =>
+            task.GetType().Name == "ValidateWorkflowLibraryVisibilityPolicyStartupTask");
+        var startupException = await Assert.ThrowsAsync<InvalidOperationException>(() => validator.ExecuteAsync(CancellationToken.None));
+        Assert.Contains(nameof(IWorkflowLibraryVisibilityPolicy), startupException.Message, StringComparison.Ordinal);
+        Assert.Contains("multiple registrations", startupException.Message, StringComparison.Ordinal);
+        using var response = await SendAsync(host, "GET", "/design/workflows/definitions/page", "library-read");
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("totalCount", body);
+        Assert.DoesNotContain("deniedBeta", body);
+        Assert.Null(probe.Query);
+        Assert.Null(probe.ReadScope);
+    }
+
+    [Fact]
+    public async Task Definition_details_cannot_bypass_resource_scoped_library_read_permission()
+    {
+        var probe = new LibraryProbe();
+        await using var host = await StartAsync(probe, services => services.AddSingleton<IPermissionResourceHandler, DeniedDefinitionPolicy>());
+        using var response = await SendAsync(host, "GET", "/design/workflows/definitions/hidden", "library-read");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Null(host.Domain.LastReadDefinitionId);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("folderBreadcrumb", body);
+        Assert.DoesNotContain("critical", body);
+    }
+
+    [Theory]
+    [InlineData("GET", "/design/workflows/folders/invoices", null)]
+    [InlineData("GET", "/design/workflows/definitions/orders/organization", null)]
+    [InlineData("GET", "/design/workflows/definitions/page", null)]
+    [InlineData("GET", "/design/workflows/definitions/orders", null)]
+    [InlineData("PATCH", "/design/workflows/definitions/orders", "{\"name\":\"Renamed\"}")]
+    [InlineData("PUT", "/design/workflows/definitions/orders/organization", "{\"tags\":[],\"revision\":\"r2\"}")]
+    public async Task Nested_folder_metadata_requires_read_permission_on_every_returned_ancestor(string method, string path, string? input)
+    {
+        var probe = new LibraryProbe { IncludeHiddenFolder = true };
+        await using var host = await StartAsync(probe, services => services.AddSingleton<IPermissionResourceHandler, DeniedFolderPolicy>());
+        using var response = await SendAsync(host, method, path, "library-all", input);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("Secret finance root", body);
+        Assert.DoesNotContain("folderBreadcrumb", body);
     }
 
     [Fact]
@@ -435,6 +496,13 @@ public sealed class WorkflowLibraryApiContractTests
         public ValueTask<WorkflowLibraryReadScope> GetScopeAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default) => ValueTask.FromResult(scope);
     }
 
+    private sealed class DeniedFolderPolicy : IPermissionResourceHandler
+    {
+        public ValueTask<PermissionEvaluationResult?> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<PermissionEvaluationResult?>(context.Resource is WorkflowLibraryResource { FolderId: "finance" }
+                ? PermissionEvaluationResult.Denied() : null);
+    }
+
     private sealed class PublicationLookup(IReadOnlyDictionary<string, WorkflowDefinitionPublicationSummary> summaries) : IWorkflowDefinitionPublicationStateLookup
     {
         public IReadOnlyCollection<string>? RequestedIds;
@@ -460,13 +528,14 @@ public sealed class WorkflowLibraryApiContractTests
         public WorkflowTagBulkEdit? Bulk;
         public IReadOnlyList<string>? MovedIds;
         public IReadOnlyList<string>? RequestedVersionIds;
-        public bool CanShare, ConflictOnReplace, MissingTag, ListedTags;
+        public bool CanShare, ConflictOnReplace, MissingTag, ListedTags, IncludeHiddenFolder;
         public string PageDefinitionId = "orders";
         private static WorkflowFolder Folder => new("invoices", "finance", "Invoices", "INVOICES", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, "f1");
-        private static WorkflowOrganization Organization(string id) => new(id, "invoices", [Folder], [new("critical")], "r2");
+        private static WorkflowFolder HiddenFolder => new("finance", null, "Secret finance root", "SECRET FINANCE ROOT", DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, "f0");
+        private WorkflowOrganization Organization(string id) => new(id, "invoices", IncludeHiddenFolder ? [HiddenFolder, Folder] : [Folder], [new("critical")], "r2");
         private static WorkflowTag Tag => new("critical", "Critical", null, "marker", "single", false, "t1", []);
         public Task<WorkflowFolderPage> ListFoldersAsync(string? parentId, int pageSize = 50, string? continuationToken = null, CancellationToken cancellationToken = default) => Task.FromResult(new WorkflowFolderPage([Folder], null));
-        public Task<WorkflowFolderDetail?> GetFolderAsync(string id, CancellationToken cancellationToken = default) => Task.FromResult<WorkflowFolderDetail?>(new(Folder, []));
+        public Task<WorkflowFolderDetail?> GetFolderAsync(string id, CancellationToken cancellationToken = default) => Task.FromResult<WorkflowFolderDetail?>(new(Folder, IncludeHiddenFolder ? [HiddenFolder] : []));
         public Task<WorkflowFolder> CreateFolderAsync(string name, string? parentId, string actorId, CancellationToken cancellationToken = default) { Actor = actorId; FolderId = parentId; return Task.FromResult(Folder); }
         public Task RenameFolderAsync(string id, string name, string? revision, string actorId, CancellationToken cancellationToken = default) { FolderId = id; Revision = revision; Actor = actorId; return Task.CompletedTask; }
         public Task MoveFolderAsync(string id, string? parentId, string? revision, string actorId, CancellationToken cancellationToken = default) { FolderId = id; Revision = revision; Actor = actorId; return Task.CompletedTask; }

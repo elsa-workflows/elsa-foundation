@@ -14,7 +14,7 @@ The advertised bounded page route filters before paging and projects version/dra
 
 `WorkflowLibraryPublicationObserver` implements Runtime Core's `IWorkflowTriggerIndexObserver`. It handles only authority-refresh notifications that identify the affected logical definition, including triggerless workflows. While holding the organization fence it reads current activation slots through `IWorkflowActivationAuthority` and updates the library's published-membership projection. Delayed notifications therefore read current authority rather than replaying an old Boolean. The projection never changes manual organization revisions, authored state or publication authority. Ordinary pre-authority indexing notifications do not update it.
 
-Observer exceptions retain the existing activation-coordinator failure/recovery contract. A provider replacing this module must preserve this contribution if it advertises published-library queries. The projection is query metadata; serving authority remains Runtime's slot ledger. Runtime-only imported artifacts without a local definition are ignored.
+Observer exceptions retain the existing activation-coordinator failure/recovery contract. Backend ownership tracks this observer's exact additive descriptor: EF reconfiguration removes and rebinds it, and replacing EF with another backend removes it while preserving unrelated observers. A replacement provider supplies its own projection contribution if it advertises published-library queries. The projection is query metadata; serving authority remains Runtime's slot ledger. Runtime-only imported artifacts without a local definition are ignored.
 
 ## Schema and qualification
 

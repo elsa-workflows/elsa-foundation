@@ -79,13 +79,14 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // Add 3 kB to the previous 384.50 / 376.00 kB limits for this measured ownership cost; entry, stylesheet,
 // individual-chunk and heavy-surface guards are unchanged. The parent tree was not rebuilt separately.
 // Workflow library organization (#3500): the same installed dependencies measure the exact parent
-// Definitions landing at 387,066 bytes and this candidate at 398,685 bytes. Canonical query/access
-// boundaries and list integration justify a 400,000-byte limit; filters/editors/catalog remain deferred.
+// Definitions landing at 387,021 bytes on main d481d6a5 and this candidate at 400,753 bytes. Canonical query/access
+// boundaries, scoped cursor-history restoration and list integration justify a 402,000-byte limit;
+// filters/editors/catalog remain deferred.
 // Every other budget is unchanged, and those three new surfaces join the eager-regression guards.
 const budgets = {
   entryJavaScript: 127_500,
   stylesheet: 185_000,
-  definitionsLandingTotal: 400_000,
+  definitionsLandingTotal: 402_000,
   upgradeLandingTotal: 379_000,
   individualChunk: 500_000
 };

@@ -73,16 +73,16 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         // Capture the exact descriptors emitted by this registration, including the provider's
         // closed DbContextOptions descriptor. Tracking by service type would leave stale provider
         // options behind when an application intentionally switches EF providers.
+        var emitted = services.Skip(registrationStart).ToArray();
         DesignPersistenceBackend.Register(services, new DesignPersistenceBackend(
             DesignPersistenceBackend.EntityFramework,
-            services.Skip(registrationStart)
-                // Startup tasks and trigger-index observers are additive host services. Their
-                // idempotent descriptors stay registered across provider replacement; the library
-                // observer resolves the newly owned concrete store in its new scope. A backend
-                // must never claim exclusive ownership of either shared service type.
+            emitted
+                // The provider-neutral startup validator survives backend replacement. The EF
+                // observer is owned as an exact additive contribution and leaves with this backend.
                 .Where(descriptor => descriptor.ServiceType != typeof(IStartupTask) &&
                     descriptor.ServiceType != typeof(IWorkflowTriggerIndexObserver))
-                .ToArray()));
+                .ToArray(),
+            emitted.Where(descriptor => descriptor.ServiceType == typeof(IWorkflowTriggerIndexObserver))));
         return services;
     }
 

@@ -37,7 +37,9 @@ public sealed class FolderGetEndpoint(IWorkflowLibraryStore? store = null) : Api
     {
         var library = WorkflowLibraryAccess.Require(store);
         await WorkflowLibraryAccess.RequireAsync(HttpContext, WorkflowDesignPermissions.Read, new WorkflowLibraryResource(FolderId: request.FolderId), cancellationToken);
-        return await library.GetFolderAsync(request.FolderId, cancellationToken) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), request.FolderId);
+        var detail = await library.GetFolderAsync(request.FolderId, cancellationToken) ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowFolder), request.FolderId);
+        await WorkflowLibraryAccess.RequireFolderReadAsync(HttpContext, detail.Ancestors.Select(folder => folder.Id).Append(detail.Folder.Id), cancellationToken);
+        return detail;
     }
 }
 
@@ -139,7 +141,10 @@ public sealed class DefinitionPageEndpoint(IWorkflowLibraryStore? store = null,
         var readScope = await WorkflowLibraryAccess.ReadScopeAsync(HttpContext, cancellationToken);
         var page = await library.ListDefinitionsAsync(query, actor, readScope, cancellationToken);
         foreach (var item in page.Items)
+        {
             await WorkflowLibraryAccess.RequireAsync(HttpContext, WorkflowDesignPermissions.Read, new WorkflowLibraryResource(DefinitionId: item.Definition.Id), cancellationToken);
+            await WorkflowLibraryAccess.RequireOrganizationReadAsync(HttpContext, item.Organization, cancellationToken);
+        }
         var definitionIds = page.Items.Select(item => item.Definition.Id).ToArray();
         var publicationSummaries = publicationStateLookup is null || definitionIds.Length == 0
             ? null : await publicationStateLookup.ListByDefinitionIdsAsync(definitionIds, cancellationToken);
@@ -171,6 +176,7 @@ public sealed class OrganizationGetEndpoint(IWorkflowLibraryStore? store = null,
         await WorkflowLibraryAccess.RequireAsync(HttpContext, WorkflowDesignPermissions.Read, resource, cancellationToken);
         var organization = await library.GetOrganizationAsync(request.DefinitionId, cancellationToken)
             ?? throw EntityNotFoundException.ForEntity(typeof(WorkflowOrganization), request.DefinitionId);
+        await WorkflowLibraryAccess.RequireOrganizationReadAsync(HttpContext, organization, cancellationToken);
         var permissions = await WorkflowLibraryAccess.PermissionsAsync(HttpContext, resource, cancellationToken);
         var definition = definitions is null ? null : await definitions.FindByIdAsync(request.DefinitionId, cancellationToken);
         if (definition is null || definition.DeletedAt is not null)
@@ -191,8 +197,11 @@ public sealed class OrganizationReplaceEndpoint(IWorkflowLibraryStore? store = n
         var resource = new WorkflowLibraryResource(DefinitionId: request.DefinitionId);
         await WorkflowLibraryAccess.RequireAsync(HttpContext, WorkflowDesignPermissions.Read, resource, cancellationToken);
         await WorkflowLibraryAccess.RequireAsync(HttpContext, WorkflowDesignPermissions.AssignTags, resource, cancellationToken);
+        if (await library.GetOrganizationAsync(request.DefinitionId, cancellationToken) is { } current)
+            await WorkflowLibraryAccess.RequireOrganizationReadAsync(HttpContext, current, cancellationToken);
         var organization = await library.ReplaceTagsAsync(request.DefinitionId, request.Revision, request.Tags, actor!,
             request.OperationKey ?? Guid.NewGuid().ToString("N"), cancellationToken);
+        await WorkflowLibraryAccess.RequireOrganizationReadAsync(HttpContext, organization, cancellationToken);
         return WorkflowOrganizationView.From(organization, await WorkflowLibraryAccess.PermissionsAsync(HttpContext, resource, cancellationToken));
     }
 }

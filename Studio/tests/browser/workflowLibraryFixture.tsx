@@ -82,16 +82,20 @@ const context = { baseUrl: `${window.location.origin}/`, http: {
     }
     if (target.pathname === "/fixture/library/pages") {
       const query = target.searchParams;
-      if (parameters.get("paging") === "history") {
+      const paging = parameters.get("paging");
+      if (["history", "count-shrinks", "count-grows"].includes(paging ?? "")) {
         const cursor = query.get("continuationToken");
-        const page = cursor === "tag-page-three" ? 3 : cursor === "tag-page-two" ? 2 : 1;
+        const page = cursor === "tag-page-three" || cursor === "A100" ? 3 : cursor === "tag-page-two" || cursor === "A50" ? 2 : 1;
         const scope = query.get("favoritesOnly") === "true" ? "Favorite" : "Tagged";
         const items = Array.from({ length: Number(query.get("pageSize") ?? 10) }, (_, index) => ({
           ...definitions[0], id: `${scope.toLowerCase()}-${page}-${index}`,
           name: index === 0 ? `${scope} workflow page ${page}` : `${scope} workflow ${page}-${index}`,
           favorite: scope === "Favorite", tags: [{ tagId: "critical" }]
         }));
-        return { items, nextContinuationToken: page < 3 ? `tag-page-${page === 1 ? "two" : "three"}` : null, totalCount: 75, permissions };
+        const totalCount = paging === "history" ? 75 : page === 1 ? 150 : paging === "count-shrinks" ? 100 : 200;
+        const nextContinuationToken = paging === "history" ? page < 3 ? `tag-page-${page === 1 ? "two" : "three"}` : null
+          : page === 1 ? `A${query.get("pageSize") ?? 10}` : page === 2 && paging === "count-shrinks" ? "A100" : null;
+        return { items, nextContinuationToken, totalCount, permissions };
       }
       let matches = definitions.filter(definition => !definition.deletedAt);
       if (query.get("folderId")) matches = matches.filter(definition => definition.folderId === query.get("folderId"));

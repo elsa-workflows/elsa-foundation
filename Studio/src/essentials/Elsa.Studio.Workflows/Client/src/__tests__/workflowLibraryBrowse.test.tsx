@@ -137,4 +137,37 @@ describe("workflow library query boundaries", () => {
     expect(JSON.parse(restored.searchParams.get("tagFilters")!)).toEqual([{ tagId: "critical", operator: "exists" }]);
     await waitForText(container, `Tagged page ${invalidate ? 1 : 3}`);
   });
+
+  it.each([
+    { name: "shrinking count with another cursor", totalCount: 100, cursor: "A100" },
+    { name: "growing count without another cursor", totalCount: 200, cursor: null }
+  ])("uses cursor continuation rather than the $name", async ({ totalCount, cursor }) => {
+    const requests: URL[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (!url.pathname.endsWith("definition-pages")) return response({ items: [] });
+      requests.push(url);
+      const token = url.searchParams.get("continuationToken");
+      const page = token === "A100" ? 3 : token === "A50" ? 2 : 1;
+      const size = Number(url.searchParams.get("pageSize"));
+      const items = Array.from({ length: size }, (_, index) => definition({ id: `workflow-${page}-${index}`, name: `Cursor page ${page} workflow ${index + 1}` }));
+      return response({ items, totalCount: page === 1 ? 150 : totalCount,
+        nextContinuationToken: page === 1 ? `A${size}` : page === 2 ? cursor : null });
+    });
+    const { container } = await renderWorkflowRoute("/workflows/definitions", fetchMock, pagedDefinitionCapabilities());
+    await waitForText(container, "Cursor page 1 workflow 1");
+    await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "50");
+    await waitForCondition(() => expect(requests.at(-1)?.searchParams.get("pageSize")).toBe("50"));
+    await click(button(container, "Next")); await waitForText(container, "Cursor page 2 workflow 1");
+    const next = button(container, "Next") as HTMLButtonElement;
+    expect(next.disabled).toBe(!cursor);
+    expect(container.querySelector(".wf-pagination-summary")?.textContent).toContain(`of ${totalCount}`);
+    expect(container.querySelector(".wf-page-controls")?.textContent).not.toContain("Page 2 of");
+    const before = requests.length;
+    await click(next);
+    if (cursor) {
+      await waitForText(container, "Cursor page 3 workflow 1");
+      expect(requests.at(-1)?.searchParams.get("continuationToken")).toBe("A100");
+    } else expect(requests).toHaveLength(before);
+  });
 });

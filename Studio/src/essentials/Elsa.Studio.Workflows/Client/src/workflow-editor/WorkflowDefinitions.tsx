@@ -737,6 +737,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
           totalCount={hasKnownTotal || !usesCursorPaging ? totalCount : undefined}
           itemCount={definitions.length}
           hasNextPage={Boolean(continuationTokens[page + 1])}
+          usesCursorPaging={usesCursorPaging}
           onPageChange={changePage}
           onPageSizeChange={changePageSize}
         /> : null}
