@@ -17,7 +17,10 @@ const folderName = folderLayout ? "Customer operations and international support
 const folder: WorkflowFolder = { id: "finance", parentId: null, name: folderName, normalizedName: folderName.toUpperCase(), createdAt: date, lastModifiedAt: date, revision: "1" };
 const layoutFolders: WorkflowFolder[] = folderLayout ? [
   ...Array.from({ length: parameters.get("tall-folders") === "1" ? 8 : 0 }, (_, index) => ({ ...folder, id: `layout-${index}`, name: `Operations ${index + 1}`, normalizedName: `OPERATIONS ${index + 1}` })),
-  { ...folder, id: "layout-child", parentId: folder.id, name: "European customer onboarding and retention", normalizedName: "EUROPEAN CUSTOMER ONBOARDING AND RETENTION" }
+  ...Array.from({ length: parameters.get("deep-folders") === "1" ? 15 : 1 }, (_, index) => {
+    const name = index === 0 ? "European customer onboarding and retention" : `International support and retention level ${index + 2}`;
+    return { ...folder, id: index === 0 ? "layout-child" : `layout-depth-${index + 1}`, parentId: index === 0 ? folder.id : index === 1 ? "layout-child" : `layout-depth-${index}`, name, normalizedName: name.toUpperCase() };
+  })
 ] : [];
 const tags: WorkflowTag[] = [
   { id: "critical", name: "Critical", mode: "marker", cardinality: "single", deprecated: false, revision: "1", values: [] },

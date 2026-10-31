@@ -188,6 +188,39 @@ for (const item of presets) test(`${item.name} keeps long folder trees beside th
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
 
+test("the supported sixteen folder levels retain bounded labels and tree semantics", async ({ page }, testInfo) => {
+  await preset(page);
+  await view(page, "library", "&folder-layout=1&deep-folders=1");
+  const navigation = page.getByRole("complementary", { name: "Workflow folders", exact: true });
+  const id = (depth: number) => depth === 0 ? "finance" : depth === 1 ? "layout-child" : `layout-depth-${depth}`;
+  for (let depth = 0; depth < 15; depth++) {
+    const parent = navigation.locator(`[data-folder-id="${id(depth)}"]`);
+    await parent.focus();
+    await parent.press("ArrowRight");
+    await expect(navigation.locator(`[data-folder-id="${id(depth + 1)}"]`)).toBeVisible();
+  }
+  await expect(navigation.getByRole("treeitem")).toHaveCount(18);
+  const checkBounds = async (container: import("@playwright/test").Locator) => {
+    const boundary = await container.boundingBox();
+    for (const row of await container.locator(".wf-folder-tree-row").all()) {
+      const bounds = await row.boundingBox();
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(boundary!.x + boundary!.width);
+      expect(bounds!.height).toBeLessThanOrEqual(34);
+    }
+    for (const label of await container.locator(".wf-folder-tree-label").all()) {
+      await expect(label).toBeVisible();
+      expect((await label.boundingBox())!.width).toBeGreaterThanOrEqual(40);
+    }
+  };
+  await checkBounds(navigation);
+  await page.screenshot({ path: testInfo.outputPath("atelier-deep-folders-1440.png"), fullPage: true });
+  await page.setViewportSize({ width: 320, height: 960 });
+  await page.getByRole("button", { name: "Folders", exact: true }).click();
+  const drawer = page.getByRole("dialog", { name: "Workflow folders", exact: true });
+  await expect(drawer.getByRole("treeitem")).toHaveCount(18);
+  await checkBounds(drawer);
+});
+
 test("Linen keeps the library beside folders with contained table scrolling", async ({ page }) => {
   await preset(page);
   await page.getByRole("radiogroup", { name: "Workspace style", exact: true }).getByRole("radio", { name: "Linen", exact: true }).click();

@@ -468,6 +468,8 @@ function FolderTree(props: FolderTreeProps) {
   const folderRows = (items: WorkflowFolder[], level: number, parentId?: string): ReactNode => {
     const parentKey = workflowFolderTreeKey(parentId);
     const loading = loadingKeys.has(parentKey);
+    // Preserve room for controls and a truncated name even at the supported 16 levels.
+    const indentation = `clamp(0px, ${level * 14}px, calc(100% - 112px))`;
     return <>
       {items.map(folder => {
         const key = `folder:${folder.id}`;
@@ -494,7 +496,7 @@ function FolderTree(props: FolderTreeProps) {
               }
             }}
           >
-            <div className="wf-folder-tree-folder" style={{ paddingInlineStart: `${level * 14}px` }}>
+            <div className="wf-folder-tree-folder" style={{ paddingInlineStart: indentation }}>
               <button
                 type="button"
                 tabIndex={-1}
