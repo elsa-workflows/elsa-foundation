@@ -141,6 +141,34 @@ public sealed class SpecialistPublicationTests
         Assert.Equal("Write the supplied brief.", (await fixture.Templates.FindAsync(publication.TemplateId))!.Root.DescriptorPayload.GetProperty("instructions").GetString());
     }
 
+    [Theory]
+    [InlineData("model")]
+    [InlineData("schema")]
+    public async Task Model_and_schema_changes_have_causal_template_hash_controls(string axis)
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        Assert.Equal(ActivityPublicationReceiptStatus.Applied, (await fixture.PublishAsync()).Status);
+        var publication = (await fixture.Publications.FindAsync("copywriter-v1"))!;
+        var original = (await fixture.Templates.FindAsync(publication.TemplateId))!;
+        await fixture.CreateDraftAsync("unchanged", fixture.Manifest, "copywriter-v1");
+        var baselineDraft = (await ((IActivityDefinitionDraftStore)fixture.Stores).FindAsync("unchanged"))!;
+        var definition = await ((IActivityDefinitionStore)fixture.Stores).GetAsync("copywriter");
+        var baseline = await fixture.Compiler.CompileAsync(new(definition, baselineDraft, "copywriter-v1", "1.0.0", 0));
+        Assert.True(baseline.IsSuccessful, JsonSerializer.Serialize(baseline.Diagnostics));
+        Assert.Equal(original.TemplateHash, baseline.Template!.TemplateHash);
+        var changed = axis == "model"
+            ? fixture.Manifest with { Model = fixture.Manifest.Model with { ModelId = "another-model" } }
+            : fixture.Manifest with { ResultConstraints = new Dictionary<string, JsonElement> { ["article-key"] = Json("{\"minLength\":1}") } };
+        await fixture.CreateDraftAsync("changed", changed, "copywriter-v1");
+        var changedDraft = (await ((IActivityDefinitionDraftStore)fixture.Stores).FindAsync("changed"))!;
+        var compiled = await fixture.Compiler.CompileAsync(new(definition, changedDraft, "copywriter-v1", "1.0.0", 0));
+        Assert.True(compiled.IsSuccessful, JsonSerializer.Serialize(compiled.Diagnostics));
+        Assert.NotEqual(baseline.Template.TemplateHash, compiled.Template!.TemplateHash);
+        var retained = (await fixture.Templates.FindAsync(publication.TemplateId))!;
+        Assert.Equal(original.TemplateHash, retained.TemplateHash);
+        Assert.True(JsonElement.DeepEquals(original.Root.DescriptorPayload, retained.Root.DescriptorPayload));
+    }
+
     [Fact]
     public async Task Saving_after_review_invalidates_the_reviewed_request_and_publishes_nothing()
     {
