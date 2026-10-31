@@ -68,12 +68,12 @@ export function WeaverSurface({
   useEffect(() => () => onSessionIndicatorChange?.([]), [onSessionIndicatorChange]);
 
   useEffect(() => {
-    if (incomingPrompt && incomingPrompt.id !== lastPromptIdRef.current && session.ready) {
+    if (incomingPrompt && incomingPrompt.id !== lastPromptIdRef.current && session.bootstrap !== null) {
       lastPromptIdRef.current = incomingPrompt.id;
       onPromptConsumed?.(incomingPrompt.id);
       sendRef.current(incomingPrompt);
     }
-  }, [incomingPrompt, onPromptConsumed, session.ready]);
+  }, [incomingPrompt, onPromptConsumed, session.bootstrap, session.ready]);
 
   const composerDisabled = !session.ready || session.chatState === "awaiting-review" || session.chatState === "awaiting-confirmation";
 
