@@ -34,7 +34,8 @@ public sealed partial class ActivityInputSnapshotCheckpointTests
         await _activityStateStore.SaveAsync(state);
         var activities = new CountingActivities(_activityStateStore);
         var values = new CountingValues(_durableValueStateStore);
-        var materializer = new RuntimeActivityInputSnapshotMaterializer(activities, values, _workflowStateStore);
+        var workflows = new CountingWorkflows(_workflowStateStore);
+        var materializer = new RuntimeActivityInputSnapshotMaterializer(activities, values, workflows);
 
         var actual = await materializer.MaterializeAsync(executable, executable.RootActivity, state, _serviceProvider, Now, default);
         var expected = await new RuntimeActivityInputMaterializer().MaterializeSnapshotAsync(
@@ -44,6 +45,7 @@ public sealed partial class ActivityInputSnapshotCheckpointTests
         Assert.Equal(JsonSerializer.Serialize(expected), JsonSerializer.Serialize(actual));
         Assert.Equal(0, activities.Reads);
         Assert.Equal(0, values.Reads);
+        Assert.Equal(0, workflows.Reads);
     }
 
     [Theory]
@@ -52,8 +54,18 @@ public sealed partial class ActivityInputSnapshotCheckpointTests
     public async Task Custom_materializer_receives_live_context_even_when_contract_has_no_inputs(bool hasInput)
     {
         var executable = hasInput ? NewExecutable(("message", DurableLiteral("message", "hello"))) : NewExecutable();
+        executable = new WorkflowExecutable(executable.Identity, executable.RootActivity, executable.ResumeTargets, executable.CreatedAt,
+            executable.CompatibilityMetadata, executable.InputContract, executable.Dependencies, executable.RuntimeRequirements,
+            executable.StorageDriverRequirements, executable.IncidentStrategy, executable.PersistenceMode,
+            [new RuntimeVariableDeclaration("customer", "Customer", StringType, ValueProtectionPolicy.InstanceInline)]);
         var state = NewScheduledState();
-        await SaveWorkflowStateAsync(executable.Identity);
+        var workflow = await SaveWorkflowStateAsync(executable.Identity);
+        var root = new VariableFrameFactory().CreateRoot("wfexec-1", "workflow",
+            new Dictionary<string, ValueEnvelope> { ["customer"] = DurableLiteral("customer", "customer-42").Literal! });
+        await _workflowStateStore.SaveAsync(workflow with { RootVariableFrame = root });
+        foreach (var change in RuntimeWorkflowStateSeed.BuildSeedChanges("wfexec-1",
+                     new Dictionary<string, object?> { ["request"] = "request-42" }, Now, correlationId: "correlation-42"))
+            await _durableValueStateStore.SaveAsync(change.State);
         await _activityStateStore.SaveAsync(state);
         var custom = new ObservingMaterializer();
         using var services = new ServiceCollection().AddSingleton<IRuntimeActivityInputMaterializer>(custom).BuildServiceProvider();
@@ -66,6 +78,10 @@ public sealed partial class ActivityInputSnapshotCheckpointTests
         Assert.NotNull(custom.Context);
         Assert.Same(executable, custom.Context.Executable);
         Assert.Equal(state.InvocationId, Assert.Single(custom.Context.RuntimeView).InvocationId);
+        Assert.Equal("request-42", custom.Context.WorkflowInputEnvelopes["request"].InlineValue!.Value.GetString());
+        Assert.Equal("customer-42", custom.Context.VariableEnvelopes[new("workflow", "customer")].InlineValue!.Value.GetString());
+        Assert.Equal("customer-42", custom.Context.VisibleVariablesByName["Customer"].InlineValue!.Value.GetString());
+        Assert.Equal("correlation-42", custom.Context.CorrelationId);
         Assert.True(activities.Reads > 0);
         Assert.True(values.Reads > 0);
     }
@@ -169,6 +185,33 @@ public sealed partial class ActivityInputSnapshotCheckpointTests
         {
             Reads++;
             return inner.ListPageAsync(query, ct);
+        }
+    }
+
+    private sealed class CountingWorkflows(IWorkflowExecutionStateStore inner) : IWorkflowExecutionStateStore
+    {
+        public int Reads { get; private set; }
+        public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken ct = default) => inner.SaveAsync(state, ct);
+        public ValueTask<bool> DeleteAsync(string workflow, CancellationToken ct = default) => inner.DeleteAsync(workflow, ct);
+        public ValueTask<WorkflowExecutionState?> FindAsync(string workflow, CancellationToken ct = default)
+        {
+            Reads++;
+            return inner.FindAsync(workflow, ct);
+        }
+        public ValueTask<IReadOnlyCollection<WorkflowExecutionState>> ListAsync(CancellationToken ct = default)
+        {
+            Reads++;
+            return inner.ListAsync(ct);
+        }
+        public ValueTask<WorkflowExecutionStatePage> QueryPageAsync(WorkflowExecutionStatePageQuery query, CancellationToken ct = default)
+        {
+            Reads++;
+            return inner.QueryPageAsync(query, ct);
+        }
+        public ValueTask<IReadOnlyCollection<string>> ListPinnedExecutableArtifactIdsAsync(CancellationToken ct = default)
+        {
+            Reads++;
+            return inner.ListPinnedExecutableArtifactIdsAsync(ct);
         }
     }
 }

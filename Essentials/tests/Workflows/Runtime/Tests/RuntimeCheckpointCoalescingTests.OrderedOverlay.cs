@@ -6,7 +6,7 @@ namespace Elsa.Workflows.Runtime.Tests;
 public sealed partial class RuntimeCheckpointCoalescingTests
 {
     [Fact]
-    public void Large_overlay_page_has_a_linear_allocation_budget()
+    public async Task Large_overlay_page_has_a_linear_allocation_budget()
     {
         var (_, session, store) = CreateCountingActivityExecutionStateStore();
         var states = Enumerable.Range(0, 1024).Select(i => Activity($"activity-{i:D4}")).Reverse().ToArray();
@@ -17,7 +17,7 @@ public sealed partial class RuntimeCheckpointCoalescingTests
         var read = store.ListPageAsync(query);
         Assert.True(read.IsCompletedSuccessfully); // Counting provider is synchronous; no thread migration in this budget.
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        var page = read.Result;
+        var page = await read;
 
         Assert.Equal(states.Reverse().Take(500).Select(x => x.Execution.ActivityExecutionId), page.Items.Select(x => x.Execution.ActivityExecutionId));
         Assert.NotNull(page.NextContinuationToken);
