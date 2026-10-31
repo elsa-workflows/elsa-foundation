@@ -5674,6 +5674,11 @@ button.wf-reference-select {
   line-height: 1.35;
 }
 
+.wf-js-input-bindings {
+  display: grid;
+  gap: 5px;
+}
+
 .wf-property-row input[type="text"],
 .wf-property-row input[type="number"],
 .wf-property-row input[type="password"],

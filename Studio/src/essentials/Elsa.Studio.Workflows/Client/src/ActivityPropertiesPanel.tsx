@@ -1,4 +1,4 @@
-import { type KeyboardEvent as ReactKeyboardEvent, memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, lazy, memo, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Braces, Cable, Code2, KeyRound, Maximize2, SlidersHorizontal, Type, X, type LucideIcon } from "lucide-react";
 import { AdvancedSection, AnchoredPopover } from "@elsa-workflows/studio-ui";
@@ -89,6 +89,8 @@ const inlineSyntaxEditorIds = new Set([
 const inlineTextTypeNames = new Set(["string", "system.string", "text", "uri", "system.uri"]);
 // The built-in masked editor: the only editor a masked literal is given.
 const maskedPropertyEditorId = "studio.property.password";
+const WorkflowInputArgumentBindings = lazy(() => import("./workflowInputArgumentBindings"));
+
 export interface ActivityPropertiesPanelProps {
   context?: StudioEndpointContext;
   draftId?: string;
@@ -580,6 +582,11 @@ function PropertyRow({
   const valueMasked = !secretOnly && isMaskedInput(input) && !showsMaskedValue(editingMode);
   const value = getLiteralEditorValue(activity, input);
   const portableDefinition = wrapped ? readPortableExpressionDefinition(value, syntax) : null;
+  const workflowInputs = readWorkflowInputs(workflowState.inputs);
+  const hasWorkflowInputBinding = Object.values(portableDefinition?.parameters ?? {}).some(binding => {
+    const record = asRecord(binding);
+    return typeof record?.kind === "string" && record.kind.toLowerCase() === "workflowrequest";
+  });
   const editorValue = portableDefinition?.source ?? value;
   const expressionSource = valueMasked || secretOnly || editorValue == null ? "" : String(editorValue);
   const documentVersions = useRef(new Map<string, { source: string; version: number }>());
@@ -946,6 +953,9 @@ function PropertyRow({
   ) : dictionaryEditor ?? collectionEditor ?? contributedExpressionEditor ?? (editingMode === "literal"
     ? renderEditor(editor, effectiveInput, value, editorDisabled, context, setRaw, disclosureSignalKey, reportEditorValidation, reportEditorFallback)
     : <UnavailableExpressionEditor syntax={syntax} />);
+  const canEditWorkflowInputArguments = wrapped != null && !secretOnly && !valueMasked && editingMode === "text" &&
+    syntax.toLowerCase() === "javascript" && (workflowInputs.length > 0 || hasWorkflowInputBinding) &&
+    (value == null || typeof value !== "object" || portableDefinition != null);
   // A single session must never be mounted into two editor engines at once. While the dialog owns the
   // text document, unmount the compact surface; closing remounts it from the same URI-scoped session.
   const renderedValueEditor = expanded && editingMode === "text" ? null : valueEditor;
@@ -1033,6 +1043,19 @@ function PropertyRow({
           {renderExpressionDiagnostics(inlineDiagnostics)}
         </>
       )}
+      {canEditWorkflowInputArguments ? (
+        <Suspense fallback={null}>
+          <WorkflowInputArgumentBindings
+            inputs={workflowInputs}
+            value={value}
+            syntax={syntax}
+            activityInput={input}
+            wrapped={wrapped!}
+            disabled={readOnly}
+            onChange={next => onChange(writeInputValue(activity, input, next), input)}
+          />
+        </Suspense>
+      ) : null}
       {wrapped && !secretOnly && (conversionOpen || conversionAuthored) ? (
         <div id={conversionRegionId} className="wf-conversion-region">
           {conversionOpen ? (
@@ -1187,9 +1210,11 @@ function arePropertyRowPropsEqual(previous: PropertyRowProps, next: PropertyRowP
     previous.onChange !== next.onChange
   ) return false;
 
-  // Dynamic option providers and the active code editor intentionally observe workflow state. Inactive
-  // expression previews do not: their source and document identity are their only changing inputs.
-  if ((previous.toolingActive || readOptionsProvider(previous.input)) && previous.workflowState !== next.workflowState) {
+  // Input bindings, dynamic options and the active code editor observe workflow state; inactive previews do not.
+  if (previous.workflowState !== next.workflowState && (
+    previous.workflowState.inputs !== next.workflowState.inputs ||
+    previous.toolingActive || readOptionsProvider(previous.input)
+  )) {
     return false;
   }
 

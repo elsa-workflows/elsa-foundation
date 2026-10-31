@@ -146,6 +146,153 @@ function propertyLabels(container: HTMLElement) {
 }
 
 describe("activity property organization", () => {
+  it("binds a selected workflow input into JavaScript args and preserves the expression source", async () => {
+    const changes: ActivityNode[] = [];
+    const source = "`Started Order ID: ${args.OrderId}`";
+    const container = renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: {
+        typeName: "System.String",
+        expression: {
+          type: "JavaScript",
+          value: {
+            language: "JavaScript",
+            source,
+            resultType: { alias: "String", collectionKind: "Single" },
+            parameters: { Existing: { kind: "Literal", value: "preserve me" } },
+            options: {},
+            capabilityProfile: "binding-pure-v1"
+          }
+        }
+      } }),
+      workflowState: {
+        inputs: [{ referenceKey: "input-order", name: "OrderId", displayName: "Order ID" }]
+      },
+      onChange: next => changes.push(next)
+    });
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
+    const picker = container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")!;
+    expect(picker).not.toBeNull();
+    flushSync(() => {
+      picker.value = "OrderId";
+      picker.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const saved = (changes.at(-1)!.text as { expression: { value: Record<string, unknown> } }).expression.value;
+    expect(saved).toMatchObject({
+      language: "JavaScript",
+      source,
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: {
+        Existing: { kind: "Literal", value: "preserve me" },
+        OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" }
+      }
+    });
+    expect(container.textContent).toContain("args.OrderId");
+
+    const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId workflow input binding']")!;
+    flushSync(() => remove.click());
+    const removed = (changes.at(-1)!.text as { expression: { value: { source: string; parameters: Record<string, unknown> } } }).expression.value;
+    expect(removed).toMatchObject({
+      source,
+      parameters: { Existing: { kind: "Literal", value: "preserve me" } }
+    });
+    expect(Object.keys(removed.parameters)).toEqual(["Existing"]);
+  });
+
+  it("keeps a stale workflow input binding removable after the input is deleted", async () => {
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: {
+        typeName: "System.String",
+        expression: {
+          type: "JavaScript",
+          value: {
+            language: "JavaScript",
+            source: "args.OrderId",
+            resultType: { alias: "String", collectionKind: "Single" },
+            parameters: { OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" } },
+            options: {},
+            capabilityProfile: "binding-pure-v1"
+          }
+        }
+      } }),
+      workflowState: { inputs: [] },
+      onChange: next => changes.push(next)
+    });
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
+    const picker = container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")!;
+    expect(picker.disabled).toBe(true);
+    expect(container.textContent).toContain("OrderId (missing workflow input)");
+
+    const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId workflow input binding']")!;
+    flushSync(() => remove.click());
+    expect((changes.at(-1)!.text as { expression: { value: { parameters: unknown } } }).expression.value.parameters).toEqual({});
+    expect(container.querySelector(".wf-js-input-bindings select")).toBeNull();
+  });
+
+  it("lets authors remove a malformed workflow input binding with no member key", async () => {
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: {
+        typeName: "System.String",
+        expression: {
+          type: "JavaScript",
+          value: {
+            language: "JavaScript",
+            source: "args.OrderId",
+            resultType: { alias: "String", collectionKind: "Single" },
+            parameters: { OrderId: { kind: "WorkflowRequest" } },
+            options: {},
+            capabilityProfile: "binding-pure-v1"
+          }
+        }
+      } }),
+      workflowState: { inputs: [] },
+      onChange: next => changes.push(next)
+    });
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
+    expect(container.textContent).toContain("Unknown workflow input (invalid workflow input binding)");
+    const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove Unknown workflow input workflow input binding']")!;
+    flushSync(() => remove.click());
+    expect((changes.at(-1)!.text as { expression: { value: { parameters: unknown } } }).expression.value.parameters).toEqual({});
+  });
+
+  it("does not offer input bindings for malformed object-valued expressions", () => {
+    const container = renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: {
+        typeName: "System.String",
+        expression: { type: "JavaScript", value: { language: "JavaScript", source: "args.OrderId", parameters: {} } }
+      } }),
+      workflowState: { inputs: [{ referenceKey: "input-order", name: "OrderId", displayName: "Order ID" }] }
+    });
+
+    expect(container.querySelector(".wf-js-input-bindings")).toBeNull();
+  });
+
+  it("allows prototype-key workflow input names to be bound in the picker", async () => {
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: { typeName: "System.String", expression: { type: "JavaScript", value: "args.constructor" } } }),
+      workflowState: { inputs: [{ referenceKey: "input-constructor", name: "constructor", displayName: "constructor" }] },
+      onChange: next => changes.push(next)
+    });
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
+    const picker = container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")!;
+    expect(picker.querySelector<HTMLOptionElement>("option[value='constructor']")?.disabled).toBe(false);
+    flushSync(() => {
+      picker.value = "constructor";
+      picker.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const parameters = (changes.at(-1)!.text as { expression: { value: { parameters: Record<string, unknown> } } }).expression.value.parameters;
+    expect(Object.prototype.hasOwnProperty.call(parameters, "constructor")).toBe(true);
+    expect(parameters.constructor).toEqual({ kind: "WorkflowRequest", memberKey: "constructor" });
+  });
+
   it("locks an already expanded editor without disabling Close or accepting stale edits", () => {
     const changes: ActivityNode[] = [];
     let lateEdit: ((value: unknown) => void) | undefined;

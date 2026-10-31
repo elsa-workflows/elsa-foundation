@@ -21,10 +21,15 @@ import {
   withLiteralValue,
   withSyntax
 } from "../activityProperties";
+import {
+  readWorkflowInputExpressionArguments,
+  withWorkflowInputExpressionArgument,
+  withoutPortableExpressionParameter
+} from "../workflowInputArgumentBindings";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
 import { clearSecretOnlyInput, isMaskedInput, planInputSyntaxTransition, showsMaskedValue } from "../maskedInput";
 import { updateActivity } from "../workflowAdapter";
-import type { ActivityNode } from "../workflowTypes";
+import type { ActivityNode, WorkflowInput } from "../workflowTypes";
 
 const textDescriptor = {
   name: "Text",
@@ -35,6 +40,81 @@ const textDescriptor = {
 };
 
 describe("activity property values", () => {
+  it("exposes a selected workflow input as an explicit JavaScript argument and can remove it", () => {
+    const inputDefinition = withWorkflowInputExpressionArgument(
+      {
+        language: "JavaScript",
+        source: "`Started Order ID: ${args.OrderId}`",
+        resultType: { alias: "String", collectionKind: "Single" },
+        parameters: { Existing: { kind: "Literal", value: "preserve me" } },
+        options: { mode: "strict" },
+        capabilityProfile: "binding-pure-v1"
+      },
+      "JavaScript",
+      textDescriptor,
+      { referenceKey: "input-order", name: "OrderId", displayName: "Order ID" } as WorkflowInput
+    );
+
+    expect(inputDefinition).toMatchObject({
+      language: "JavaScript",
+      source: "`Started Order ID: ${args.OrderId}`",
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: {
+        Existing: { kind: "Literal", value: "preserve me" },
+        OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" }
+      },
+      options: { mode: "strict" },
+      capabilityProfile: "binding-pure-v1"
+    });
+    expect(readWorkflowInputExpressionArguments(inputDefinition, "JavaScript")).toEqual([
+      { argumentName: "OrderId", memberKey: "OrderId" }
+    ]);
+    expect(withoutPortableExpressionParameter(inputDefinition, "JavaScript", "OrderId")?.parameters).toEqual({
+      Existing: { kind: "Literal", value: "preserve me" }
+    });
+  });
+
+  it("refuses to replace a JavaScript argument already bound to another source", () => {
+    const definition = {
+      language: "JavaScript",
+      source: "args.OrderId",
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: { OrderId: { kind: "Literal", value: "manual" } },
+      options: {},
+      capabilityProfile: "binding-pure-v1"
+    };
+
+    expect(withWorkflowInputExpressionArgument(
+      definition,
+      "JavaScript",
+      textDescriptor,
+      { referenceKey: "input-order", name: "OrderId", displayName: "Order ID" } as WorkflowInput
+    )).toBeNull();
+  });
+
+  it.each(["constructor", "toString", "__proto__"])("binds an argument named %s without confusing it with an object prototype", name => {
+    const definition = withWorkflowInputExpressionArgument(
+      "args[\"input\"]",
+      "JavaScript",
+      textDescriptor,
+      { referenceKey: "input-prototype-name", name, displayName: name } as WorkflowInput
+    );
+
+    expect(definition).not.toBeNull();
+    expect(Object.prototype.hasOwnProperty.call(definition!.parameters, name)).toBe(true);
+    expect(definition!.parameters[name]).toEqual({ kind: "WorkflowRequest", memberKey: name });
+  });
+
+  it("does not convert a malformed object-valued expression into a string binding", () => {
+    const malformed = { language: "JavaScript", source: "args.OrderId", parameters: {} };
+    expect(withWorkflowInputExpressionArgument(
+      malformed,
+      "JavaScript",
+      textDescriptor,
+      { referenceKey: "input-order", name: "OrderId", displayName: "Order ID" } as WorkflowInput
+    )).toBeNull();
+  });
+
   it("reads missing wrapped inputs as empty literal values with the descriptor type", () => {
     expect(readWrappedInput(activity("write"), textDescriptor)).toEqual({
       typeName: "System.String",
