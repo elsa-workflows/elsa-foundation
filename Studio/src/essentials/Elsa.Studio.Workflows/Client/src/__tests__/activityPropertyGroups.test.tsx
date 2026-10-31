@@ -190,7 +190,7 @@ describe("activity property organization", () => {
     });
     expect(container.textContent).toContain("args.OrderId");
 
-    const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId workflow input binding']")!;
+    const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId binding']")!;
     flushSync(() => remove.click());
     const removed = (changes.at(-1)!.text as { expression: { value: { source: string; parameters: Record<string, unknown> } } }).expression.value;
     expect(removed).toMatchObject({
@@ -226,7 +226,7 @@ describe("activity property organization", () => {
     expect(picker.disabled).toBe(true);
     expect(container.textContent).toContain("OrderId (missing workflow input)");
 
-    const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId workflow input binding']")!;
+    const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId binding']")!;
     flushSync(() => remove.click());
     expect((changes.at(-1)!.text as { expression: { value: { parameters: unknown } } }).expression.value.parameters).toEqual({});
     expect(container.querySelector(".wf-js-input-bindings select")).toBeNull();
@@ -255,7 +255,7 @@ describe("activity property organization", () => {
 
     await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
     expect(container.textContent).toContain("Unknown workflow input (invalid workflow input binding)");
-    const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove Unknown workflow input workflow input binding']")!;
+    const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId binding']")!;
     flushSync(() => remove.click());
     expect((changes.at(-1)!.text as { expression: { value: { parameters: unknown } } }).expression.value.parameters).toEqual({});
   });

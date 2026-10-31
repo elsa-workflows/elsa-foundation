@@ -74,6 +74,21 @@ describe("activity property values", () => {
     });
   });
 
+  it.each([
+    ["System.String", "String"],
+    ["Contoso.Sales.Order, Contoso.Contracts", "Contoso.Sales.Order"],
+    ["system.string", "system.string"]
+  ])("keeps the portable result type alias canonical for descriptor type %s", (typeName, expectedAlias) => {
+    const definition = withWorkflowInputExpressionArgument(
+      "args.OrderId",
+      "JavaScript",
+      { ...textDescriptor, typeName } as StudioActivityInputDescriptor,
+      { referenceKey: "input-order", name: "OrderId", displayName: "Order ID" } as WorkflowInput
+    );
+
+    expect(definition?.resultType.alias).toBe(expectedAlias);
+  });
+
   it("refuses to replace a JavaScript argument already bound to another source", () => {
     const definition = {
       language: "JavaScript",

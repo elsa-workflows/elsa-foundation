@@ -62,7 +62,7 @@ function portableResultType(input: StudioActivityInputDescriptor): Record<string
     kind => kind.toLowerCase() === input.collectionKind?.toLowerCase()
   ) ?? "Single";
   const fullName = input.typeName.split(",", 1)[0]!.trim();
-  const alias = fullName.replace(/^System\.(String|Object|Boolean|Byte|SByte|Int16|UInt16|Int32|UInt32|Int64|UInt64|Single|Double|Decimal|Char|DateTime|DateTimeOffset|TimeSpan|Guid)$/i, "$1");
+  const alias = fullName.replace(/^System\.(String|Object|Boolean|Byte|SByte|Int16|UInt16|Int32|UInt32|Int64|UInt64|Single|Double|Decimal|Char|DateTime|DateTimeOffset|TimeSpan|Guid)$/, "$1");
   return { alias: alias || "Elsa.Any", collectionKind };
 }
 
@@ -121,7 +121,7 @@ export function WorkflowInputArgumentBindings({
                 <button
                   type="button"
                   className="wf-reference-toggle"
-                  aria-label={`Remove ${label} workflow input binding`}
+                  aria-label={`Remove ${binding.argumentName} binding`}
                   disabled={disabled}
                   onClick={() => {
                     const definition = withoutPortableExpressionParameter(value, syntax, binding.argumentName);
