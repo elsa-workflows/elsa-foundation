@@ -125,6 +125,11 @@ describe("studio module loader", () => {
     expect(styles).toEqual(["/module.css?studioModuleVersion=1.0.0"]);
   });
 
+  it("keeps content-hashed CSS URLs identical to Vite deferred imports", () => {
+    expect(addModuleVersion("/_content/Example/module-Ab_c12.css", "2.0.0")).toBe("/_content/Example/module-Ab_c12.css");
+    expect(addModuleVersion("/_content/Example/module.css", "2.0.0")).toContain("studioModuleVersion=2.0.0");
+  });
+
   it("does not duplicate existing module version query parameters", () => {
     expect(addModuleVersion("/module.js?studioModuleVersion=1.0.0", "1.0.1")).toBe("/module.js?studioModuleVersion=1.0.0");
   });

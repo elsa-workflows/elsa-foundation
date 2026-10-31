@@ -81,8 +81,9 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // Workflow library organization (#3500): include the controls that load automatically after
 // capability discovery, not only the route's static imports. The corrected closure initially
 // measured 422,373 bytes against parent main dec598d99's 387,191-byte legacy closure. Moving
-// React Flow and graph-only node/port/edge styles to their shared rendering boundary brings
-// the complete supported-host landing below the existing 402,000-byte limit. Controls stay
+// React Flow and graph-only node/port/edge styles to their shared rendering boundary, plus
+// the host/producer entry-style contract and native Vite deferred CSS loading, brings the
+// actual supported-host landing below the existing 402,000-byte limit. Controls stay
 // immediately visible; organization/catalog dialogs remain action-loaded. Canvas closure and
 // computed-style guards preserve authoring, Activity Definition, BPMN and read-only rendering.
 // All budget limits and the 16 deferred-entry guards remain unchanged.
@@ -180,6 +181,15 @@ for (const chunkName of deferredHeavySurfaces) {
 }
 
 const entryFiles = collectStaticFiles("src/module.tsx");
+// Verify the host's generated eager styles, rather than assuming the host follows Vite's manifest.
+const entryStyles = JSON.parse(await readFile(resolve(outputRoot, "entry-styles.json"), "utf8"));
+const expectedEntryStyles = [...entryFiles].filter(file => file.endsWith(".css"));
+if (entryStyles.version !== 1 || !Array.isArray(entryStyles.styles) ||
+    entryStyles.styles.length !== expectedEntryStyles.length ||
+    expectedEntryStyles.some(file => !entryStyles.styles.includes(file))) {
+  throw new Error("Host entry stylesheet contract differs from the measured entry closure.");
+}
+for (const file of entryStyles.styles) entryFiles.add(file);
 const definitionsLandingFiles = new Set(entryFiles);
 // Shared browse helpers can make Vite emit the route facade under a hashed manifest key.
 // Follow the emitted route chunk and all its static imports, keeping the same landing budget.

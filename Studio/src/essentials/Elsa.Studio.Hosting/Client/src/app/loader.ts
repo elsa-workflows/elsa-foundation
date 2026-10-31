@@ -66,6 +66,9 @@ function major(version: string): string {
 }
 
 export function addModuleVersion(asset: string, version: string): string {
+  // Hashed module CSS is immutable. Keep its exact URL aligned with Vite's deferred
+  // preload helper so opening a later route reuses the already loaded entry styles.
+  if (/\/module-[A-Za-z0-9_-]+\.css$/.test(asset)) return asset;
   if (!asset || !version || asset.includes("studioModuleVersion=")) {
     return asset;
   }

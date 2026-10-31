@@ -26,6 +26,23 @@ dark palette. Supply your dark theme variables after the defaults, as the
 [React host example](../examples/react-host/README.md) does. Code editor and workflow
 consumers additionally load those packages' public `style.css` exports.
 
+## Module stylesheet loading
+
+Use the shared `defineModuleConfig` for installed module builds. It emits an ESM
+`module.js`, content-hashed CSS and `entry-styles.json` (version 1 with an ordered
+`styles` array). The host loads only the entry's static CSS closure; Vite loads
+route and renderer CSS with their deferred chunks. Keep a renderer's stylesheet
+import at its rendering boundary to avoid downloading it on unrelated list pages.
+The build guard requires application-mode ESM output and `cssCodeSplit` so deferred
+CSS is loaded automatically. Preserve the generated contract and all emitted
+chunks/styles in the module's static web assets.
+
+An explicit empty `styles` array is valid. Invalid contracts disable that module
+with a diagnostic. Modules built before this contract retain the host's numbered
+`module.css`, `module2.css`, … fallback. New builds also retain these aliases for
+older hosts, which continue loading all styles eagerly. Content-hashed styles use
+their exact URLs so Vite can reuse entry styles when opening a deferred route.
+
 ## A collection page
 
 This example searches an already loaded collection. A server-paged module should
