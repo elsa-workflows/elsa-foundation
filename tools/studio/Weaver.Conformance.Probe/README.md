@@ -14,7 +14,7 @@ python3 tools/studio/Weaver.Conformance.Probe/qualify.py \
 
 The output must be outside the checkout and new. Producer/module-author steps need .NET 10, Python 3 and Node/pnpm; browser automation needs Chromium. Ordinary host restore/build/publish/run consumes prebuilt packages with frontend tools denied and audited. Nothing publishes remotely. Exact committed inputs, archives, locks, published bytes, native membership/generations and case evidence must agree; partial execution cannot count as success.
 
-Consumer recipes and validation boundaries are in [spec1171](../../../specs/1171-weaver-package-witness/plan.md). The [canonical contribution contract](../../../specs/1018-weaver-module-contributions/contracts/contributions.md) owns generic API meanings. This directory's `witness.json` contains external author/driver identities; product code must not depend on it.
+Consumer recipes and validation boundaries are in [spec1174](../../../specs/1174-weaver-package-witness/plan.md). The [canonical contribution contract](../../../specs/1018-weaver-module-contributions/contracts/contributions.md) owns generic API meanings. This directory's `witness.json` contains external author/driver identities; product code must not depend on it.
 
 Only verified owned processes/resources are used. Fixture credentials/auth state stay private; receipts and provider traces omit them. The aggregate preserves expected failing controls as failed children, with separate recognition of the intended cause. A missing/incompatible module, stale/denied operation or uncertain outcome cannot become fabricated success. Supported retention/recovery limits and deterministic/protocol/live evidence remain distinct.
 

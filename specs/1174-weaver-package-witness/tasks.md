@@ -6,7 +6,7 @@ One implementation leaf; parallel work within it may own distinct fixture files.
 
 ## Phase 1: Setup
 
-- [x] T001 Recheck #3438 claim/open PRs and completed #3437 dependency; maintain scoped records in specs/1171-weaver-package-witness/spec.md and tasks.md.
+- [x] T001 Recheck #3438 claim/open PRs and completed #3437 dependency; maintain scoped records in specs/1174-weaver-package-witness/spec.md and tasks.md.
 - [x] T002 Establish the qualifier's immutable identities, driver configuration and private/public evidence boundary in tools/studio/Weaver.Conformance.Probe/qualify.py and README.md.
 
 ## Phase 2: Foundation
@@ -55,13 +55,13 @@ Independent test: the reusable driver reproduces the final distribution evidence
 - [ ] T022 [US4] Test rejection of wrong-cause controls, mismatched identities and incomplete evidence in tools/studio/Weaver.Conformance.Probe/test_qualification.py; include these meaningful driver checks in the entry point.
 - [ ] T023 [US4] Add explicit runnable integration CI routing for the reusable complete package witness and retained reports in .github/workflows/weaver-conformance.yml; keep provider-protocol/live labels and no-publication permissions.
 - [ ] T024 [US4] Incorporate preview package/namespace/removed API migration and actual workflow subset in specs/1018-weaver-module-contributions/contracts/contributions.md, Extensions/Agent/src/Elsa.Agent/EXTENSION_POINTS.md, Extensions/Agent/src/Workflows/EXTENSION_POINTS.md and EXTENSION_POINTS.md; list external implementations and document author reproduction plus Cross-domain contributions in tools/studio/Weaver.Conformance.Probe/README.md.
-- [ ] T025 [US4] Repeat complete final-artifact proof, record demonstrated minimal contract acceptance and incorporate final evidence in specs/1171-weaver-package-witness/quickstart.md and the canonical contribution contract only after all witness controls pass.
+- [ ] T025 [US4] Repeat complete final-artifact proof, record demonstrated minimal contract acceptance and incorporate final evidence in specs/1174-weaver-package-witness/quickstart.md and the canonical contribution contract only after all witness controls pass.
 
 ## Phase 7: Review and integration
 
-- [ ] T026 Run relevant affected Agent/Hosting/Workflows suites, registration/architecture/API checks and frontend budgets; retain exact-head evidence linked from specs/1171-weaver-package-witness/tasks.md.
-- [ ] T027 Open the scoped draft PR for #3438, attach it, run independent review rounds to convergence (maximum six), satisfy exact reviewed-head CI and merge through authorized repository rules; update owning issue/Program/Project transitions and receipt links in specs/1171-weaver-package-witness/tasks.md.
-- [ ] T028 Verify resulting main through required CI and the real composed/distribution witness; reconcile #3438/M1 acceptance, native dependencies and Project statuses only after evidence, recording the final source/receipts in specs/1171-weaver-package-witness/tasks.md.
+- [ ] T026 Run relevant affected Agent/Hosting/Workflows suites, registration/architecture/API checks and frontend budgets; retain exact-head evidence linked from specs/1174-weaver-package-witness/tasks.md.
+- [ ] T027 Open the scoped draft PR for #3438, attach it, run independent review rounds to convergence (maximum six), satisfy exact reviewed-head CI and merge through authorized repository rules; update owning issue/Program/Project transitions and receipt links in specs/1174-weaver-package-witness/tasks.md.
+- [ ] T028 Verify resulting main through required CI and the real composed/distribution witness; reconcile #3438/M1 acceptance, native dependencies and Project statuses only after evidence, recording the final source/receipts in specs/1174-weaver-package-witness/tasks.md.
 
 ## Dependencies and parallel work
 
