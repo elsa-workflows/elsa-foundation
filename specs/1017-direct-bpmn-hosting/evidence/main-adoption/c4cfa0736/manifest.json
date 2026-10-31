@@ -874,14 +874,18 @@
       "bytes": 2366
     },
     {
-      "path": "api-latest/NuGet.Config",
-      "sha256": "7e79dd32dd6e3ea9157f84ea920205ea56acccdd598fd86b7538de31d2c0c9d2",
-      "bytes": 224
+      "path": "api-latest/NuGet.Config.gz",
+      "sha256": "0f604297157d41268c1124efb1170b1f1fcb36808a5da198060e152540e6326c",
+      "bytes": 153,
+      "decodedSha256": "7e79dd32dd6e3ea9157f84ea920205ea56acccdd598fd86b7538de31d2c0c9d2",
+      "decodedBytes": 224
     },
     {
-      "path": "api-latest/Restore.csproj",
-      "sha256": "65156b00f7bef98eacf387d1c815be6ece96b9341658f212da590ab42b6fbfc1",
-      "bytes": 562
+      "path": "api-latest/Restore.csproj.gz",
+      "sha256": "9c280cd98a19687adec7f2269a0b841ec012c8f3163b32c17da4e0dba29261de",
+      "bytes": 273,
+      "decodedSha256": "65156b00f7bef98eacf387d1c815be6ece96b9341658f212da590ab42b6fbfc1",
+      "decodedBytes": 562
     },
     {
       "path": "api-latest/downloads.json",
@@ -889,9 +893,11 @@
       "bytes": 1932
     },
     {
-      "path": "api-latest/packages.lock.json",
-      "sha256": "92c74de58c123e6668d202abe87dc514c985bb95e9c47a3ae91463cf4815cd1b",
-      "bytes": 22527
+      "path": "api-latest/packages.lock.json.gz",
+      "sha256": "8ed20211a165abc6b9cfaf0c6d6d60a9bd922b4df3755c5f84ecf7063f27dcc1",
+      "bytes": 4522,
+      "decodedSha256": "92c74de58c123e6668d202abe87dc514c985bb95e9c47a3ae91463cf4815cd1b",
+      "decodedBytes": 22527
     },
     {
       "path": "api-latest/reference-map.json",
