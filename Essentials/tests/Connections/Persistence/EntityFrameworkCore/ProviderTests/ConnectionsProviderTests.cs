@@ -67,6 +67,8 @@ internal static class ConnectionsProviderContract
             Assert.True(await repository.TryAddAsync(Document(tenant, "Mail", "shared")));
             Assert.False(await repository.TryAddAsync(Document(tenant, "MAIL", "must-not-appear")));
             Assert.True(await repository.TryAddAsync(Document(tenant.ToLowerInvariant(), "mail", "foreign")));
+            Assert.Null(await repository.FindAsync(tenant + " ", "mail"));
+            Assert.True(await repository.TryAddAsync(Document(tenant + " ", "mail", "padded-tenant")));
         }
         await using var firstScope = provider.CreateAsyncScope();
         await using var secondScope = provider.CreateAsyncScope();
@@ -78,6 +80,8 @@ internal static class ConnectionsProviderContract
         Assert.Equal("https://example.test", winner.Definition.Settings["endpoint"]);
         Assert.True(await first.IsSecretReferencedAsync(tenant, "SHARED"));
         Assert.False(await first.IsSecretReferencedAsync(tenant, "foreign"));
+        Assert.False(await first.IsSecretReferencedAsync(tenant, "padded-tenant"));
+        Assert.True(await first.IsSecretReferencedAsync(tenant + " ", "padded-tenant"));
         winner.State.Status = ConnectionStatuses.Revoked;
         winner.Definition.SecretFields["token"] = new() { SecretName = "winner" };
         await first.SaveAsync(winner);
@@ -90,12 +94,22 @@ internal static class ConnectionsProviderContract
         Assert.Equal(1, restored.State.Version);
         Assert.Equal(ConnectionStatuses.Revoked, restored.State.Status);
         Assert.Single(await second.ListAsync(tenant, new() { TypeName = "HTTP", AuthScheme = "BEARER", Search = "MAIL" }));
+        Assert.Empty(await second.ListAsync(tenant, new() { TypeName = "HTTP " }));
+        Assert.Empty(await second.ListAsync(tenant, new() { AuthScheme = "BEARER " }));
         Assert.False(await first.DeleteAsync(tenant, "mail", 0));
         Assert.True(await first.DeleteAsync(tenant, "mail", 1));
         Assert.False(await second.IsSecretReferencedAsync(tenant, "winner"));
         Assert.True(await second.IsSecretReferencedAsync(tenant.ToLowerInvariant(), "foreign"));
         await Assert.ThrowsAsync<ConnectionConflictException>(async () => await second.SaveAsync(restored));
         Assert.True(await second.DeleteAsync(tenant.ToLowerInvariant(), "mail"));
+        Assert.True(await second.DeleteAsync(tenant + " ", "mail"));
+        // Exercise the complete declared key sizes, including the reference PK on SQL Server.
+        var longestTenant = new string('T', 256);
+        var longestName = new string('n', 128);
+        Assert.True(await second.TryAddAsync(Document(longestTenant, longestName, "maximum-key-reference")));
+        Assert.NotNull(await second.FindAsync(longestTenant, longestName));
+        Assert.True(await second.IsSecretReferencedAsync(longestTenant, "maximum-key-reference"));
+        Assert.True(await second.DeleteAsync(longestTenant, longestName, 0));
     }
 
     private static ConnectionDocument Document(string tenant, string name, string secret) => new()

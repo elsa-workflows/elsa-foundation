@@ -20,9 +20,9 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
 
             modelBuilder.Entity("Elsa.Connections.Persistence.EntityFrameworkCore.Entities.ConnectionRecord", b =>
                 {
-                    b.Property<string>("TenantId")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
+                    b.Property<string>("TenantLookupKey")
+                        .HasMaxLength(257)
+                        .HasColumnType("character varying(257)")
                         .UseCollation("C");
 
                     b.Property<string>("NormalizedName")
@@ -55,6 +55,12 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
                         .HasColumnType("text")
                         .UseCollation("C");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .UseCollation("C");
+
                     b.Property<string>("TypeLookupKey")
                         .IsRequired()
                         .HasColumnType("text")
@@ -64,7 +70,7 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
                         .IsConcurrencyToken()
                         .HasColumnType("integer");
 
-                    b.HasKey("TenantId", "NormalizedName");
+                    b.HasKey("TenantLookupKey", "NormalizedName");
 
                     b.HasIndex("SchemaVersion");
 
@@ -73,9 +79,9 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
 
             modelBuilder.Entity("Elsa.Connections.Persistence.EntityFrameworkCore.Entities.ConnectionSecretReferenceRecord", b =>
                 {
-                    b.Property<string>("TenantId")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
+                    b.Property<string>("TenantLookupKey")
+                        .HasMaxLength(257)
+                        .HasColumnType("character varying(257)")
                         .UseCollation("C");
 
                     b.Property<string>("NormalizedName")
@@ -88,9 +94,17 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
                         .HasColumnType("character varying(64)")
                         .UseCollation("C");
 
-                    b.HasKey("TenantId", "NormalizedName", "SecretLookupHash");
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
 
-                    b.HasIndex("TenantId", "SecretLookupHash");
+                    b.HasKey("TenantLookupKey", "NormalizedName", "SecretLookupHash");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("TenantLookupKey", "SecretLookupHash");
 
                     b.ToTable("elsa_connection_secret_references", (string)null);
                 });
@@ -174,7 +188,7 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
                 {
                     b.HasOne("Elsa.Connections.Persistence.EntityFrameworkCore.Entities.ConnectionRecord", null)
                         .WithMany()
-                        .HasForeignKey("TenantId", "NormalizedName")
+                        .HasForeignKey("TenantLookupKey", "NormalizedName")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

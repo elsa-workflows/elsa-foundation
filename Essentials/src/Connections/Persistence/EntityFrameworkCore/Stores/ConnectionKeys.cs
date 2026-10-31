@@ -22,14 +22,18 @@ internal static class ConnectionKeys
         return Fold(name);
     }
 
-    public static void Tenant(string value)
+    public static string Tenant(string value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value);
         if (value.Length > 256) throw new ArgumentException("A tenant identity cannot exceed 256 characters.", nameof(value));
         _ = Fold(value); // Validate UTF-16 without changing the ordinal tenant identity.
+        // SQL Server pads string equality even under BIN2. A non-space terminator keeps
+        // meaningful trailing spaces inside an injective lookup key. The raw ID stays in the document.
+        return value + "|";
     }
 
     public static string Secret(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Fold(value))));
+    public static string Lookup(string value) => Fold(value) + "|";
 
     public static string Fold(string value)
     {

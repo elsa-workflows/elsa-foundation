@@ -73,7 +73,7 @@ def main():
                 visit(project.parent / edge.attrib["Include"].replace("\\", "/"))
 
         visit(producer / MODULE)
-        properties = ["-p:Version=" + args.version, "-p:SourceRevisionId=" + source]
+        properties = ["-p:Version=" + args.version, "-p:SourceRevisionId=" + source, "-m:1", "-nr:false"]
         run("producer-build", ["dotnet", "build", MODULE, "-c", "Release", *properties], producer)
         feed = out / "feed"
         feed.mkdir()
@@ -107,7 +107,7 @@ def main():
         run("consumer-restore", ["dotnet", "restore", "--use-lock-file", "--configfile", "NuGet.Config"], consumer, environment)
         environment["NUGET_PACKAGES"] = str(out / "locked-packages")
         run("consumer-locked", ["dotnet", "restore", "--locked-mode", "--configfile", "NuGet.Config"], consumer, environment)
-        run("consumer-build", ["dotnet", "build", "-c", "Release", "--no-restore"], consumer, environment)
+        run("consumer-build", ["dotnet", "build", "-c", "Release", "--no-restore", "-m:1", "-nr:false"], consumer, environment)
         assets = json.loads((consumer / "obj/project.assets.json").read_text())
         resolved = {identity.split("/")[0].lower(): identity.split("/")[1] for identity in assets["libraries"]}
         for package, version in consumer_pins.items():

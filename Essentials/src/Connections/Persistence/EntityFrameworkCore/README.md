@@ -49,15 +49,17 @@ repository for each concurrent operation.
 
 ## Repository behavior
 
-Tenant identity uses ordinal equality; connection names, secret-reference names and the type/scheme
+Tenant identity uses ordinal equality, including meaningful trailing spaces. A private terminated
+lookup projection prevents SQL Server's padded equality from collapsing those IDs; the raw tenant
+identity is preserved. Malformed UTF-16 is rejected before serialization. Connection names, secret-reference names and the type/scheme
 lookup projections use the frozen ordinal casing table. Its fingerprint is checked before deriving
 keys. Search operates on the stored folded name/display-name projections. List limits remain bounded.
 
 Insert retains the supplied version. Save compares that version atomically, increments the stored
 version and replaces references in one transaction. Conditional delete checks the version in the
 database and removes references in the same owned transaction, including with SQLite foreign keys
-disabled. Unsupported stored schemas refuse reads/reference checks
-and cannot be overwritten or deleted by an older host. Provider failures retain their cause in
+disabled. Unsupported document schemas refuse reads; unsupported reference schemas refuse reference
+inspection. An older host cannot replace or delete either kind of unreadable record. Provider failures retain their cause in
 `ConnectionStoreException`; cancellation propagates. The repository does not resolve the connection
 manager's separately tracked credential/unknown-commit recovery limits (#2855 and #3153).
 

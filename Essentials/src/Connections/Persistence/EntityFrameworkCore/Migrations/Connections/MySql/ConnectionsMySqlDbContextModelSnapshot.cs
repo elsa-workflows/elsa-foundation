@@ -22,9 +22,9 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
 
             modelBuilder.Entity("Elsa.Connections.Persistence.EntityFrameworkCore.Entities.ConnectionRecord", b =>
                 {
-                    b.Property<string>("TenantId")
-                        .HasMaxLength(256)
-                        .HasColumnType("varchar(256)")
+                    b.Property<string>("TenantLookupKey")
+                        .HasMaxLength(257)
+                        .HasColumnType("varchar(257)")
                         .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
@@ -63,6 +63,13 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
                         .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
                     b.Property<string>("TypeLookupKey")
                         .IsRequired()
                         .HasColumnType("longtext")
@@ -73,7 +80,7 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
                         .IsConcurrencyToken()
                         .HasColumnType("int");
 
-                    b.HasKey("TenantId", "NormalizedName");
+                    b.HasKey("TenantLookupKey", "NormalizedName");
 
                     b.HasIndex("SchemaVersion");
 
@@ -82,9 +89,9 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
 
             modelBuilder.Entity("Elsa.Connections.Persistence.EntityFrameworkCore.Entities.ConnectionSecretReferenceRecord", b =>
                 {
-                    b.Property<string>("TenantId")
-                        .HasMaxLength(256)
-                        .HasColumnType("varchar(256)")
+                    b.Property<string>("TenantLookupKey")
+                        .HasMaxLength(257)
+                        .HasColumnType("varchar(257)")
                         .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
@@ -100,9 +107,18 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
                         .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
-                    b.HasKey("TenantId", "NormalizedName", "SecretLookupHash");
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
-                    b.HasIndex("TenantId", "SecretLookupHash");
+                    b.HasKey("TenantLookupKey", "NormalizedName", "SecretLookupHash");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("TenantLookupKey", "SecretLookupHash");
 
                     b.ToTable("elsa_connection_secret_references", (string)null);
                 });
@@ -189,7 +205,7 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
                 {
                     b.HasOne("Elsa.Connections.Persistence.EntityFrameworkCore.Entities.ConnectionRecord", null)
                         .WithMany()
-                        .HasForeignKey("TenantId", "NormalizedName")
+                        .HasForeignKey("TenantLookupKey", "NormalizedName")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

@@ -2,63 +2,81 @@
 using Elsa.Connections.Persistence.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.Sqlite
+namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.SqlServer
 {
-    [DbContext(typeof(ConnectionsSqliteDbContext))]
-    [Migration("20261031224915_Initial")]
+    [DbContext(typeof(ConnectionsSqlServerDbContext))]
+    [Migration("20261031232325_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.10");
+            modelBuilder
+                .HasAnnotation("ProductVersion", "10.0.10")
+                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+
+            // SqlServerModelBuilderExtensions.UseIdentityColumns omitted: the module stays provider-free.
 
             modelBuilder.Entity("Elsa.Connections.Persistence.EntityFrameworkCore.Entities.ConnectionRecord", b =>
                 {
-                    b.Property<string>("TenantId")
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                    b.Property<string>("TenantLookupKey")
+                        .HasMaxLength(257)
+                        .HasColumnType("nvarchar(257)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("NormalizedName")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("DisplayNameSearchKey")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("NameSearchKey")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("Payload")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("SchemeLookupKey")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)")
+                        .UseCollation("Latin1_General_100_BIN2");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("TypeLookupKey")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<int>("Version")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
-                    b.HasKey("TenantId", "NormalizedName");
+                    b.HasKey("TenantLookupKey", "NormalizedName");
 
                     b.HasIndex("SchemaVersion");
 
@@ -67,21 +85,32 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
 
             modelBuilder.Entity("Elsa.Connections.Persistence.EntityFrameworkCore.Entities.ConnectionSecretReferenceRecord", b =>
                 {
-                    b.Property<string>("TenantId")
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                    b.Property<string>("TenantLookupKey")
+                        .HasMaxLength(257)
+                        .HasColumnType("nvarchar(257)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("NormalizedName")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("SecretLookupHash")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(64)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
-                    b.HasKey("TenantId", "NormalizedName", "SecretLookupHash");
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
-                    b.HasIndex("TenantId", "SecretLookupHash");
+                    b.HasKey("TenantLookupKey", "NormalizedName", "SecretLookupHash");
+
+                    b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("TenantLookupKey", "SecretLookupHash");
 
                     b.ToTable("elsa_connection_secret_references", (string)null);
                 });
@@ -89,17 +118,18 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
             modelBuilder.Entity("Elsa.Persistence.EntityFramework.SchemaFinalization.EfDatabaseIdentityRow", b =>
                 {
                     b.Property<int>("Id")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("DatabaseIdentity")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("Id");
 
@@ -112,44 +142,46 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
                 {
                     b.Property<string>("Family")
                         .HasMaxLength(128)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(128)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.Property<string>("DatabaseIdentity")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("FinalizedVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(32)");
 
                     b.Property<string>("FinishHistoryJson")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("FinishJson")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("HistoryJson")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("HoldsJson")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("IntentJson")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<long>("Revision")
                         .IsConcurrencyToken()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bigint");
 
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(32)")
+                        .UseCollation("Latin1_General_100_BIN2");
 
                     b.HasKey("Family");
 
@@ -162,7 +194,7 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
                 {
                     b.HasOne("Elsa.Connections.Persistence.EntityFrameworkCore.Entities.ConnectionRecord", null)
                         .WithMany()
-                        .HasForeignKey("TenantId", "NormalizedName")
+                        .HasForeignKey("TenantLookupKey", "NormalizedName")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

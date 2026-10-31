@@ -52,8 +52,9 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
                 name: "elsa_connections",
                 columns: table => new
                 {
-                    TenantId = table.Column<string>(type: "varchar(256)", maxLength: 256, nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantLookupKey = table.Column<string>(type: "varchar(257)", maxLength: 257, nullable: false, collation: "utf8mb4_0900_bin"),
                     NormalizedName = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantId = table.Column<string>(type: "varchar(256)", maxLength: 256, nullable: false, collation: "utf8mb4_0900_bin"),
                     NameSearchKey = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
                     DisplayNameSearchKey = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
                     TypeLookupKey = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
@@ -64,7 +65,7 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_elsa_connections", x => new { x.TenantId, x.NormalizedName });
+                    table.PrimaryKey("PK_elsa_connections", x => new { x.TenantLookupKey, x.NormalizedName });
                 })
                 .Annotation("MySQL:Charset", "utf8mb4");
 
@@ -72,18 +73,19 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
                 name: "elsa_connection_secret_references",
                 columns: table => new
                 {
-                    TenantId = table.Column<string>(type: "varchar(256)", maxLength: 256, nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantLookupKey = table.Column<string>(type: "varchar(257)", maxLength: 257, nullable: false, collation: "utf8mb4_0900_bin"),
                     NormalizedName = table.Column<string>(type: "varchar(128)", maxLength: 128, nullable: false, collation: "utf8mb4_0900_bin"),
-                    SecretLookupHash = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin")
+                    SecretLookupHash = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
+                    SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false, collation: "utf8mb4_0900_bin")
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_elsa_connection_secret_references", x => new { x.TenantId, x.NormalizedName, x.SecretLookupHash });
+                    table.PrimaryKey("PK_elsa_connection_secret_references", x => new { x.TenantLookupKey, x.NormalizedName, x.SecretLookupHash });
                     table.ForeignKey(
-                        name: "FK_elsa_connection_secret_references_elsa_connections_TenantId_~",
-                        columns: x => new { x.TenantId, x.NormalizedName },
+                        name: "FK_elsa_connection_secret_references_elsa_connections_TenantLoo~",
+                        columns: x => new { x.TenantLookupKey, x.NormalizedName },
                         principalTable: "elsa_connections",
-                        principalColumns: new[] { "TenantId", "NormalizedName" },
+                        principalColumns: new[] { "TenantLookupKey", "NormalizedName" },
                         onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySQL:Charset", "utf8mb4");
@@ -99,9 +101,14 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connection
                 column: "SchemaVersion");
 
             migrationBuilder.CreateIndex(
-                name: "IX_elsa_connection_secret_references_TenantId_SecretLookupHash",
+                name: "IX_elsa_connection_secret_references_SchemaVersion",
                 table: "elsa_connection_secret_references",
-                columns: new[] { "TenantId", "SecretLookupHash" });
+                column: "SchemaVersion");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_elsa_connection_secret_references_TenantLookupKey_SecretLook~",
+                table: "elsa_connection_secret_references",
+                columns: new[] { "TenantLookupKey", "SecretLookupHash" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_elsa_connections_SchemaVersion",

@@ -197,6 +197,7 @@
     {
       "project": "Essentials/tests/Connections/Persistence/EntityFrameworkCore/Tests/Elsa.Connections.Persistence.EntityFrameworkCore.Tests.csproj",
       "tier": "pr",
+      "trait": "child-process",
       "medianMinutes": 0.1
     },
     {

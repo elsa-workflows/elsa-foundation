@@ -63,11 +63,11 @@ internal sealed class EfConnectionRepository(DbContext context) : IConnectionRep
 
     public async ValueTask<ConnectionDocument?> FindAsync(string tenantId, string name, CancellationToken cancellationToken = default)
     {
-        ConnectionKeys.Tenant(tenantId);
+        var tenantKey = ConnectionKeys.Tenant(tenantId);
         var key = ConnectionKeys.Name(name);
         try
         {
-            var row = await Connections.AsNoTracking().SingleOrDefaultAsync(x => x.TenantId == tenantId && x.NormalizedName == key, cancellationToken);
+            var row = await Connections.AsNoTracking().SingleOrDefaultAsync(x => x.TenantLookupKey == tenantKey && x.NormalizedName == key, cancellationToken);
             return row is null ? null : Read(row);
         }
         catch (OperationCanceledException) { throw; }
@@ -77,16 +77,16 @@ internal sealed class EfConnectionRepository(DbContext context) : IConnectionRep
 
     public async ValueTask<IReadOnlyList<ConnectionDocument>> ListAsync(string tenantId, ConnectionQuery? query = null, CancellationToken cancellationToken = default)
     {
-        ConnectionKeys.Tenant(tenantId);
-        var rows = Connections.AsNoTracking().Where(x => x.TenantId == tenantId);
+        var tenantKey = ConnectionKeys.Tenant(tenantId);
+        var rows = Connections.AsNoTracking().Where(x => x.TenantLookupKey == tenantKey);
         if (query?.TypeName is { Length: > 0 } type)
         {
-            var key = ConnectionKeys.Fold(type);
+            var key = ConnectionKeys.Lookup(type);
             rows = rows.Where(x => x.TypeLookupKey == key);
         }
         if (query?.AuthScheme is { Length: > 0 } scheme)
         {
-            var key = ConnectionKeys.Fold(scheme);
+            var key = ConnectionKeys.Lookup(scheme);
             rows = rows.Where(x => x.SchemeLookupKey == key);
         }
         if (query?.Search is { Length: > 0 } search)
@@ -103,16 +103,18 @@ internal sealed class EfConnectionRepository(DbContext context) : IConnectionRep
 
     public async ValueTask<bool> IsSecretReferencedAsync(string tenantId, string secretName, string? excludedConnectionName = null, CancellationToken cancellationToken = default)
     {
-        ConnectionKeys.Tenant(tenantId);
+        var tenantKey = ConnectionKeys.Tenant(tenantId);
         ArgumentException.ThrowIfNullOrWhiteSpace(secretName);
         var secret = ConnectionKeys.Secret(secretName);
         var excluded = excludedConnectionName is null ? null : ConnectionKeys.Name(excludedConnectionName);
         try
         {
             // An unreadable document cannot establish that deleting its referenced secret is safe.
-            if (await Connections.AnyAsync(x => x.TenantId == tenantId && x.SchemaVersion != ConnectionsEfModule.SchemaVersion, cancellationToken))
+            if (await Connections.Where(x => x.TenantLookupKey == tenantKey).Select(x => x.SchemaVersion)
+                .Concat(SecretReferences.Where(x => x.TenantLookupKey == tenantKey).Select(x => x.SchemaVersion))
+                .AnyAsync(version => version != ConnectionsEfModule.SchemaVersion, cancellationToken))
                 throw new ConnectionStoreException("connection", "Connection references cannot be inspected in an unsupported stored schema.", new InvalidDataException());
-            return await SecretReferences.AnyAsync(x => x.TenantId == tenantId && x.SecretLookupHash == secret &&
+            return await SecretReferences.AnyAsync(x => x.TenantLookupKey == tenantKey && x.SecretLookupHash == secret &&
                 (excluded == null || x.NormalizedName != excluded), cancellationToken);
         }
         catch (OperationCanceledException) { throw; }
@@ -146,13 +148,15 @@ internal sealed class EfConnectionRepository(DbContext context) : IConnectionRep
         {
             await using var transaction = await EfSharedTransaction.BeginAsync([context], cancellationToken);
             var owned = transaction.Context<DbContext>();
-            var changed = await owned.Set<ConnectionRecord>().Where(x => x.TenantId == row.TenantId && x.NormalizedName == row.NormalizedName &&
-                x.Version == expectedVersion && x.SchemaVersion == ConnectionsEfModule.SchemaVersion).ExecuteUpdateAsync(setters => setters
+            var changed = await owned.Set<ConnectionRecord>().Where(x => x.TenantLookupKey == row.TenantLookupKey && x.NormalizedName == row.NormalizedName &&
+                x.Version == expectedVersion && x.SchemaVersion == ConnectionsEfModule.SchemaVersion &&
+                !owned.Set<ConnectionSecretReferenceRecord>().Any(reference => reference.TenantLookupKey == row.TenantLookupKey && reference.NormalizedName == row.NormalizedName && reference.SchemaVersion != ConnectionsEfModule.SchemaVersion))
+                .ExecuteUpdateAsync(setters => setters
                 .SetProperty(x => x.Version, row.Version).SetProperty(x => x.Payload, row.Payload)
                 .SetProperty(x => x.NameSearchKey, row.NameSearchKey).SetProperty(x => x.DisplayNameSearchKey, row.DisplayNameSearchKey)
                 .SetProperty(x => x.TypeLookupKey, row.TypeLookupKey).SetProperty(x => x.SchemeLookupKey, row.SchemeLookupKey), cancellationToken);
             if (changed != 1) throw new ConnectionConflictException(document.Definition.Name, "The connection changed before its metadata could be saved.");
-            await owned.Set<ConnectionSecretReferenceRecord>().Where(x => x.TenantId == row.TenantId && x.NormalizedName == row.NormalizedName).ExecuteDeleteAsync(cancellationToken);
+            await owned.Set<ConnectionSecretReferenceRecord>().Where(x => x.TenantLookupKey == row.TenantLookupKey && x.NormalizedName == row.NormalizedName).ExecuteDeleteAsync(cancellationToken);
             owned.Set<ConnectionSecretReferenceRecord>().AddRange(References(row));
             await owned.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
@@ -167,17 +171,19 @@ internal sealed class EfConnectionRepository(DbContext context) : IConnectionRep
 
     private async ValueTask<bool> DeleteCoreAsync(string tenantId, string name, int? expectedVersion, CancellationToken cancellationToken)
     {
-        ConnectionKeys.Tenant(tenantId);
+        var tenantKey = ConnectionKeys.Tenant(tenantId);
         var key = ConnectionKeys.Name(name);
         try
         {
             await using var transaction = await EfSharedTransaction.BeginAsync([context], cancellationToken);
             var owned = transaction.Context<DbContext>();
-            var changed = await owned.Set<ConnectionRecord>().Where(x => x.TenantId == tenantId && x.NormalizedName == key && x.SchemaVersion == ConnectionsEfModule.SchemaVersion &&
-                (!expectedVersion.HasValue || x.Version == expectedVersion.Value)).ExecuteDeleteAsync(cancellationToken);
+            var changed = await owned.Set<ConnectionRecord>().Where(x => x.TenantLookupKey == tenantKey && x.NormalizedName == key && x.SchemaVersion == ConnectionsEfModule.SchemaVersion &&
+                (!expectedVersion.HasValue || x.Version == expectedVersion.Value) &&
+                !owned.Set<ConnectionSecretReferenceRecord>().Any(reference => reference.TenantLookupKey == tenantKey && reference.NormalizedName == key && reference.SchemaVersion != ConnectionsEfModule.SchemaVersion))
+                .ExecuteDeleteAsync(cancellationToken);
             // Keep reference cleanup atomic even when a SQLite host disabled FK enforcement.
             if (changed == 1)
-                await owned.Set<ConnectionSecretReferenceRecord>().Where(x => x.TenantId == tenantId && x.NormalizedName == key).ExecuteDeleteAsync(cancellationToken);
+                await owned.Set<ConnectionSecretReferenceRecord>().Where(x => x.TenantLookupKey == tenantKey && x.NormalizedName == key).ExecuteDeleteAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return changed == 1;
         }
@@ -190,16 +196,20 @@ internal sealed class EfConnectionRepository(DbContext context) : IConnectionRep
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(document.Definition);
         ArgumentNullException.ThrowIfNull(document.State);
+        // Validate identity before JSON can replace malformed UTF-16 with U+FFFD.
+        ConnectionKeys.Tenant(document.Definition.TenantId);
+        ConnectionKeys.Name(document.Definition.Name);
+        ValidateLookupValues(document);
         var snapshot = Clone(document);
-        ConnectionKeys.Tenant(snapshot.Definition.TenantId);
+        var tenantKey = ConnectionKeys.Tenant(snapshot.Definition.TenantId);
         var key = ConnectionKeys.Name(snapshot.Definition.Name);
         if (increment) snapshot.State.Version = checked(snapshot.State.Version + 1);
         return new()
         {
-            TenantId = snapshot.Definition.TenantId, NormalizedName = key, Version = snapshot.State.Version,
+            TenantId = snapshot.Definition.TenantId, TenantLookupKey = tenantKey, NormalizedName = key, Version = snapshot.State.Version,
             SchemaVersion = ConnectionsEfModule.SchemaVersion, Payload = JsonSerializer.Serialize(snapshot, Json),
             NameSearchKey = ConnectionKeys.Fold(snapshot.Definition.Name), DisplayNameSearchKey = ConnectionKeys.Fold(snapshot.Definition.DisplayName),
-            TypeLookupKey = ConnectionKeys.Fold(snapshot.Definition.TypeName), SchemeLookupKey = ConnectionKeys.Fold(snapshot.Definition.AuthScheme)
+            TypeLookupKey = ConnectionKeys.Lookup(snapshot.Definition.TypeName), SchemeLookupKey = ConnectionKeys.Lookup(snapshot.Definition.AuthScheme)
         };
     }
 
@@ -209,11 +219,33 @@ internal sealed class EfConnectionRepository(DbContext context) : IConnectionRep
         {
             EfSchemaVersion.EnsureReadable(ConnectionsEfModule.Chain, row.SchemaVersion);
             var document = JsonSerializer.Deserialize<ConnectionDocument>(row.Payload, Json) ?? throw new InvalidDataException();
-            if (document.Definition.TenantId != row.TenantId || ConnectionKeys.Name(document.Definition.Name) != row.NormalizedName || document.State.Version != row.Version)
+            if (document.Definition.TenantId != row.TenantId || ConnectionKeys.Tenant(document.Definition.TenantId) != row.TenantLookupKey || ConnectionKeys.Name(document.Definition.Name) != row.NormalizedName || document.State.Version != row.Version)
                 throw new InvalidDataException("The connection payload does not match its persisted identity and version.");
             return Clone(document);
         }
         catch (Exception exception) { throw Failure(string.IsNullOrWhiteSpace(row.NormalizedName) ? "connection" : row.NormalizedName, exception); }
+    }
+
+    private static void ValidateLookupValues(ConnectionDocument document)
+    {
+        var definition = document.Definition;
+        // JSON replacement must not change a routing, setting or credential-reference identity.
+        ConnectionKeys.Fold(definition.TypeName);
+        ConnectionKeys.Fold(definition.AuthScheme);
+        ConnectionKeys.Fold(definition.DisplayName);
+        ArgumentNullException.ThrowIfNull(definition.Settings);
+        ArgumentNullException.ThrowIfNull(definition.SecretFields);
+        foreach (var name in definition.Settings.Keys) ConnectionKeys.Fold(name);
+        foreach (var (name, field) in definition.SecretFields)
+        {
+            ConnectionKeys.Fold(name);
+            ArgumentNullException.ThrowIfNull(field);
+            ConnectionKeys.Fold(field.FieldName);
+            ConnectionKeys.Fold(field.SourceKind);
+            if (field.SecretName is { } secret) ConnectionKeys.Fold(secret);
+            if (field.NamedCredentialName is { } credential) ConnectionKeys.Fold(credential);
+        }
+        if (document.State.GrantSecretName is { } grant) ConnectionKeys.Fold(grant);
     }
 
     private static ConnectionDocument Clone(ConnectionDocument document)
@@ -226,6 +258,6 @@ internal sealed class EfConnectionRepository(DbContext context) : IConnectionRep
 
     private static IEnumerable<ConnectionSecretReferenceRecord> References(ConnectionRecord row) =>
         JsonSerializer.Deserialize<ConnectionDocument>(row.Payload, Json)!.Definition.SecretFields.Values.Where(x => x.SecretName is not null).Select(x => ConnectionKeys.Secret(x.SecretName!)).Distinct(StringComparer.Ordinal)
-            .Select(key => new ConnectionSecretReferenceRecord { TenantId = row.TenantId, NormalizedName = row.NormalizedName, SecretLookupHash = key });
+            .Select(key => new ConnectionSecretReferenceRecord { TenantLookupKey = row.TenantLookupKey, NormalizedName = row.NormalizedName, SecretLookupHash = key, SchemaVersion = row.SchemaVersion });
     private static ConnectionStoreException Failure(string name, Exception cause) => new(name, "The connection metadata store could not complete the operation.", cause);
 }

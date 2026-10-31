@@ -3,6 +3,7 @@ namespace Elsa.Connections.Persistence.EntityFrameworkCore.Entities;
 internal sealed class ConnectionRecord
 {
     public string TenantId { get; set; } = "";
+    public string TenantLookupKey { get; set; } = "";
     public string NormalizedName { get; set; } = "";
     public string NameSearchKey { get; set; } = "";
     public string DisplayNameSearchKey { get; set; } = "";
@@ -15,7 +16,8 @@ internal sealed class ConnectionRecord
 
 internal sealed class ConnectionSecretReferenceRecord
 {
-    public string TenantId { get; set; } = "";
+    public string TenantLookupKey { get; set; } = "";
     public string NormalizedName { get; set; } = "";
     public string SecretLookupHash { get; set; } = "";
+    public string SchemaVersion { get; set; } = ConnectionsEfModule.SchemaVersion;
 }
