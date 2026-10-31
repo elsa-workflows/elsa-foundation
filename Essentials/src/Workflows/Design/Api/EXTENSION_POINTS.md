@@ -35,8 +35,12 @@ return current owner decisions without accepting a principal, permission string,
 Weaver model. The default uses the normalized HTTP principal, typed `WorkflowLibraryResource`
 permission checks, tenant-scoped `IWorkflowDefinitionStore.FindByIdAsync` existence and the existing
 `IWorkflowDefinitionDetailsReader.AuthorizeReadAsync` preflight for definition/folder/ancestor visibility.
-Management includes read visibility plus the typed management permission. Unexpected reader/store
-failures propagate; they never become permission grants.
+Management includes read visibility plus the typed management permission. Infrastructure failures
+from permission, metadata-store or reader operations become
+`WorkflowDefinitionAuthorizationException` from Workflow Design Core, with the definition identity,
+requested read/manage operation and original `InnerException`. Its outer message excludes infrastructure
+details. An existing authorization exception is preserved without another wrapper. Known native
+authorization refusals remain false, cancellation propagates, and failures never become permission grants.
 
 The startup validator captures the configuring collection's metadata only. Copied child-shell
 registrations rebind it to the child's collection, and repeated configuration retains one validator;

@@ -4,6 +4,7 @@ using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,6 +28,17 @@ internal sealed class HttpWorkflowDefinitionAuthorizer(
         => AuthorizeAsync(definitionId, true, cancellationToken);
 
     private async ValueTask<bool> AuthorizeAsync(string definitionId, bool manage, CancellationToken cancellationToken)
+    {
+        try { return await EvaluateAsync(definitionId, manage, cancellationToken); }
+        catch (OperationCanceledException) { throw; }
+        catch (WorkflowDefinitionAuthorizationException) { throw; }
+        catch (Exception error)
+        {
+            throw new WorkflowDefinitionAuthorizationException(definitionId, manage ? "manage" : "read", error);
+        }
+    }
+
+    private async ValueTask<bool> EvaluateAsync(string definitionId, bool manage, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var context = accessor.HttpContext;

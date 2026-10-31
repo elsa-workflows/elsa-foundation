@@ -21,6 +21,7 @@ using Elsa.Workflows.Design.Api;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Core.Contracts;
+using Elsa.Workflows.Design.Core.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
@@ -256,10 +257,13 @@ public sealed class WorkflowAgentNativeAuthorityTests
         using var fixture = await Fixture.CreateAsync(services => services.Replace(
             ServiceDescriptor.Scoped<IWorkflowDefinitionDetailsReader>(_ => new FailingReader())));
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Services
+        var error = await Assert.ThrowsAsync<WorkflowDefinitionAuthorizationException>(() => fixture.Services
             .GetRequiredService<IWorkflowDefinitionAuthorizer>().CanReadAsync("wf-1").AsTask());
 
-        Assert.Equal("Owned reader is unavailable.", error.Message);
+        Assert.Equal("Owned reader is unavailable.", Assert.IsType<InvalidOperationException>(error.InnerException).Message);
+        Assert.Equal("wf-1", error.DefinitionId);
+        Assert.Equal("read", error.Operation);
+        Assert.DoesNotContain("Owned reader is unavailable.", error.Message, StringComparison.Ordinal);
     }
 
     [Theory]
