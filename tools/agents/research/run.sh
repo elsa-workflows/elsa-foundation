@@ -9,7 +9,7 @@ trap 'rm -rf -- "$probe_dir"' EXIT
 if [[ "${1:-}" == "--foundation-compatibility" ]]; then
     foundation_root="$(cd -- "$research_dir/../../.." && pwd -P)"
     cp "$research_dir/Compatibility.cs" "$probe_dir/Program.cs"
-    cp "$research_dir/compatibility.packages.lock.json" "$probe_dir/packages.lock.json"
+    cp "$research_dir/compatibility.packages.lock.json.template" "$probe_dir/packages.lock.json"
     python3 - "$research_dir/Compatibility.csproj.template" "$foundation_root" "$probe_dir/Probe.csproj" <<'PY'
 import pathlib, sys
 from xml.sax.saxutils import escape
@@ -22,7 +22,7 @@ PY
 fi
 cp "$research_dir/Program.cs" "$probe_dir/Program.cs"
 cp "$research_dir/Probe.csproj.template" "$probe_dir/Probe.csproj"
-cp "$research_dir/packages.lock.json" "$probe_dir/packages.lock.json"
+cp "$research_dir/packages.lock.json.template" "$probe_dir/packages.lock.json"
 dotnet restore "$probe_dir/Probe.csproj" --locked-mode --verbosity quiet
 dotnet run --no-restore --project "$probe_dir/Probe.csproj" -- --write-session "$probe_dir/session.json" "$@"
 dotnet run --no-build --no-restore --project "$probe_dir/Probe.csproj" -- --restore-only "$probe_dir/session.json"

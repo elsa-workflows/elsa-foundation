@@ -12,6 +12,8 @@ Requires the repository's .NET 10 SDK and access to NuGet for the locked package
 and removes an owned temporary project so the experiment cannot change Foundation's central package
 pins, solution filters or production composition. The fixture makes no model-provider network calls,
 requires no API key and incurs no inference charge. Package restore can access NuGet.
+The checked-in lock fixtures use a `.template` suffix; the runner materializes `packages.lock.json`
+only beside its temporary project. This preserves the repository's solution-lock ownership guard.
 
 The project pins Microsoft.Agents.AI and Microsoft.Agents.AI.Workflows 1.27.0 and their complete
 transitive lock. Source provenance is

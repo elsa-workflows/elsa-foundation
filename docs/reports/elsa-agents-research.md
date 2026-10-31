@@ -46,6 +46,8 @@ existing Anthropic `IChatClient` alongside MAF 1.27.0. The resolved abstractions
 provider requests. It is not an independently packaged consumer, a full Workbench host, or a completed
 existing-provider regression suite. An initial `/tmp` versus `/private/tmp` project-reference path
 failure was corrected by using a physical temporary path; no production source fix was required.
+The locked graphs are research templates, copied to real lock files only in the temporary projects;
+this preserves the architecture rule that every tracked solution lock belongs to a solution project.
 
 Primary product references, consulted 31 October:
 
