@@ -1,0 +1,16 @@
+[
+  {
+    "file": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll",
+    "informationalVersionMatches": [
+      "1.0.0+43741654e6b5fa99359910b12321d6a12179c996"
+    ],
+    "sha256": "87d58383bddc961b1a00befc03c9336bf4593b66ffe635973346645bc2d4e688"
+  },
+  {
+    "file": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+    "informationalVersionMatches": [
+      "1.0.0+43741654e6b5fa99359910b12321d6a12179c996"
+    ],
+    "sha256": "bedff37fd86c0150e8250ba3520b803f2350328dd3fae9b10cb22955e4f4a501"
+  }
+]

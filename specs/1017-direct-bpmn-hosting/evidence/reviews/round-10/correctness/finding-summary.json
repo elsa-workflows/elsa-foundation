@@ -1,0 +1,22 @@
+{
+  "head": "5ff0d52c6245ab89bc673e45da683a0f6c3cc141",
+  "base": "e26c11bd94bc7a99d6cd0c522ada89961ef72aa5",
+  "verdict": "one static P2 for root adjudication; no clean verdict",
+  "findings": [
+    {
+      "id": "C1",
+      "priority": "P2",
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnNativeWorkBoundary.cs",
+      "lineStart": 136,
+      "lineEnd": 137,
+      "title": "Cancelled model settlement waits for an obsolete future native compensation retry",
+      "evidence": "static production-source trace of a supported built-in journey",
+      "executedReproduction": false,
+      "limit": "Private helper compilation failed during setup; no runtime scenario ran. No new queued-result capture exists."
+    }
+  ],
+  "newBehavioralTestsExecuted": 0,
+  "qualificationAssetsVerified": 156,
+  "baselineAssetsVerified": 104,
+  "sharedEdits": false
+}

@@ -1,0 +1,67 @@
+{
+  "records": {
+    "original": {
+      "databaseSha256": "f19abce8444b42284483f511018039a48e39dd4d9cd6a53ab348a55191f4ecb4",
+      "compressedSha256": "87a7a76fdc45f7cc7c2c0a4f1ac94361c8108a33c1cc1633cafcc49f7487773c",
+      "outerLifecycle": "Running",
+      "outerRevision": 1,
+      "innerLifecycle": "TerminalPendingSettlement",
+      "outerTerminalResult": null,
+      "earlierCancelStatus": "FailedRetryable",
+      "earlierCancelDeliveredAt": null,
+      "outerDecisionAt": "2026-10-31T16:45:01.13795+00:00",
+      "nativeResultStatus": "FailedRetryable",
+      "nativeResultDeliveredAt": null,
+      "oldCancellationSources": [],
+      "queuedOuterInputs": 1
+    },
+    "completed": {
+      "databaseSha256": "55aee80c772fa5ca26f228e97658212eef2f356cc8ef9360675c5a7851a27569",
+      "compressedSha256": "d46ad862f43e5f505b6aa693a3dbff76d07e760b8b40d4115628f3ef1c876887",
+      "outerLifecycle": "TerminalSettled",
+      "outerRevision": 2,
+      "innerLifecycle": "TerminalSettled",
+      "outerTerminalResult": {
+        "status": "Cancelled"
+      },
+      "earlierCancelStatus": "Delivered",
+      "earlierCancelDeliveredAt": "2026-10-31T17:56:33.636669+00:00",
+      "outerDecisionAt": "2026-10-31T17:57:33.157142+00:00",
+      "nativeResultStatus": "Delivered",
+      "nativeResultDeliveredAt": "2026-10-31T17:57:33.980196+00:00",
+      "oldCancellationSources": [],
+      "queuedOuterInputs": 0
+    },
+    "retained": {
+      "databaseSha256": "55aee80c772fa5ca26f228e97658212eef2f356cc8ef9360675c5a7851a27569",
+      "compressedSha256": "d46ad862f43e5f505b6aa693a3dbff76d07e760b8b40d4115628f3ef1c876887",
+      "outerLifecycle": "TerminalSettled",
+      "outerRevision": 2,
+      "innerLifecycle": "TerminalSettled",
+      "outerTerminalResult": {
+        "status": "Cancelled"
+      },
+      "earlierCancelStatus": "Delivered",
+      "earlierCancelDeliveredAt": "2026-10-31T17:56:33.636669+00:00",
+      "outerDecisionAt": "2026-10-31T17:57:33.157142+00:00",
+      "nativeResultStatus": "Delivered",
+      "nativeResultDeliveredAt": "2026-10-31T17:57:33.980196+00:00",
+      "oldCancellationSources": [],
+      "queuedOuterInputs": 0
+    }
+  },
+  "assertions": {
+    "originalCompressedHash": true,
+    "sameNativeResultPayload": true,
+    "oldPayloadCancellationSourcesRemainsEmpty": true,
+    "nativeWorkerHeaderByteIdentical": true,
+    "sameEarlierCancelIntent": true,
+    "sameSemanticState": true,
+    "sameImmutableModelIdentityAndAuthority": true,
+    "cancelThenModelThenResultAck": true,
+    "differentColdProcessIds": true,
+    "coldDatabaseByteIdentical": true
+  },
+  "caseSource": "36831a014d621b76c863170dd84b87f171ea8b62",
+  "scope": "Standard runtime-only SQLite host recovers a derived published SDK fixture's original queued result. No new ETL, Studio, other-provider or broader program acceptance."
+}

@@ -1,0 +1,35 @@
+{
+  "head": "5ff0d52c6245ab89bc673e45da683a0f6c3cc141",
+  "base": "e26c11bd94bc7a99d6cd0c522ada89961ef72aa5",
+  "3410-comments": {
+    "count": 341,
+    "authors": {
+      "coderabbitai[bot]": 1,
+      "elsa-workflows-codex[bot]": 133,
+      "gitguardian[bot]": 1,
+      "dotnet-policy-service[bot]": 206
+    },
+    "newCount": 17,
+    "latestId": 6547239658
+  },
+  "3410-reviews": {
+    "count": 0,
+    "authors": {},
+    "newCount": 0,
+    "latestId": null
+  },
+  "3410-inline-comments": {
+    "count": 0,
+    "authors": {},
+    "newCount": 0,
+    "latestId": null
+  },
+  "2898-comments": {
+    "count": 131,
+    "authors": {
+      "elsa-workflows-codex[bot]": 131
+    },
+    "newCount": 5,
+    "latestId": 6547226298
+  }
+}

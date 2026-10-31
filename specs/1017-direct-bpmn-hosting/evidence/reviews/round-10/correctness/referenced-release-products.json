@@ -1,0 +1,83 @@
+[
+  {
+    "name": "Elsa.Activities.Bpmn",
+    "path": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.dll",
+    "embeddedInformationalVersion": [
+      "1.0.0+43741654e6b5fa99359910b12321d6a12179c996"
+    ],
+    "sha256": "848ff68ad92263c6e55bab27b68de2371b9afcede5d818fdb32691f0226df2df",
+    "executedInRound10": false
+  },
+  {
+    "name": "Elsa.Workflows.Runtime.Core",
+    "path": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Core.dll",
+    "embeddedInformationalVersion": [
+      "1.0.0+43741654e6b5fa99359910b12321d6a12179c996"
+    ],
+    "sha256": "83adc80cfb74a70de22fe95a82ceaafc9f857d46e9e96a8fafa9f3c49f435f92",
+    "executedInRound10": false
+  },
+  {
+    "name": "Elsa.Workflows.Runtime",
+    "path": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.dll",
+    "embeddedInformationalVersion": [
+      "1.0.0+43741654e6b5fa99359910b12321d6a12179c996"
+    ],
+    "sha256": "a802a0b2fa525a32ceb6c9225724ea1c7b6056e68b109235882f090f465691eb",
+    "executedInRound10": false
+  },
+  {
+    "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+    "path": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+    "embeddedInformationalVersion": [
+      "1.0.0+43741654e6b5fa99359910b12321d6a12179c996"
+    ],
+    "sha256": "bedff37fd86c0150e8250ba3520b803f2350328dd3fae9b10cb22955e4f4a501",
+    "executedInRound10": false
+  },
+  {
+    "name": "Elsa.Activities.Testing",
+    "path": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Activities.Testing.dll",
+    "embeddedInformationalVersion": [
+      "1.0.0+43741654e6b5fa99359910b12321d6a12179c996"
+    ],
+    "sha256": "50f2a17668fe73683311215cb603afff3c50b9d851f615e7dd556c383311bce8",
+    "executedInRound10": false
+  },
+  {
+    "name": "Elsa.Activities.Compensation",
+    "path": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/bpmn/NativeWorkDispatch/bin/Release/net10.0/Elsa.Activities.Compensation.dll",
+    "embeddedInformationalVersion": [
+      "1.0.0+36831a014d621b76c863170dd84b87f171ea8b62"
+    ],
+    "sha256": "0286aab716a9ab379c6222045d4724125217e4b7041c618331f6e0a5b54bb9c7",
+    "executedInRound10": false
+  },
+  {
+    "name": "Elsa.Activities.Sequence",
+    "path": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/bpmn/NativeWorkDispatch/bin/Release/net10.0/Elsa.Activities.Sequence.dll",
+    "embeddedInformationalVersion": [
+      "1.0.0+36831a014d621b76c863170dd84b87f171ea8b62"
+    ],
+    "sha256": "8ef5a61cb30bdb32b41134e08c91a0acc707a096d0d3adcd954e16d55f6d0787",
+    "executedInRound10": false
+  },
+  {
+    "name": "Elsa.Activities.Flowchart",
+    "path": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/bpmn/NativeWorkDispatch/bin/Release/net10.0/Elsa.Activities.Flowchart.dll",
+    "embeddedInformationalVersion": [
+      "1.0.0+36831a014d621b76c863170dd84b87f171ea8b62"
+    ],
+    "sha256": "77a70195401766a730abefba1b10d9ec85eaf66e231ba61a019479a73116d223",
+    "executedInRound10": false
+  },
+  {
+    "name": "Elsa.Workflows.Runtime.Resumption",
+    "path": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workflows.Runtime.Resumption.dll",
+    "embeddedInformationalVersion": [
+      "1.0.0+36831a014d621b76c863170dd84b87f171ea8b62"
+    ],
+    "sha256": "7945b75dfcd08ed56d86e68b9284d888598c0a8d4a828415508c028f09b13000",
+    "executedInRound10": false
+  }
+]

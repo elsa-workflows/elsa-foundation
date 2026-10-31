@@ -1,0 +1,12 @@
+[
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-9/corrections/qualification/manifest.json",
+    "assets": 156,
+    "mismatches": []
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json",
+    "assets": 104,
+    "mismatches": []
+  }
+]

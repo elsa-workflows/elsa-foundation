@@ -1,0 +1,46 @@
+{
+  "exitCode": 0,
+  "result": {
+    "executed": 5,
+    "passed": 5,
+    "failed": 0,
+    "productSource": "1.0.0",
+    "checks": [
+      {
+        "kind": "io",
+        "expectedDomainBoundary": true,
+        "exception": "Elsa.Workflows.Runtime.Core.Exceptions.RuntimeSchedulerWorkUnavailableException",
+        "inner": "System.IO.IOException",
+        "message": "Prior outbox responsibility could not be read in persistence scope 'boundary-scope' for execution 'owned-worker'."
+      },
+      {
+        "kind": "unrequested-cancellation",
+        "expectedDomainBoundary": true,
+        "exception": "Elsa.Workflows.Runtime.Core.Exceptions.RuntimeSchedulerWorkUnavailableException",
+        "inner": "System.OperationCanceledException",
+        "message": "Prior outbox responsibility could not be read in persistence scope 'boundary-scope' for execution 'owned-worker'."
+      },
+      {
+        "kind": "provider",
+        "expectedDomainBoundary": true,
+        "exception": "Elsa.Workflows.Runtime.Core.Exceptions.RuntimeSchedulerWorkUnavailableException",
+        "inner": "Microsoft.Data.Sqlite.SqliteException",
+        "message": "Prior outbox responsibility could not be read in persistence scope 'boundary-scope' for execution 'owned-worker'."
+      },
+      {
+        "kind": "requested-cancellation",
+        "expectedDomainBoundary": true,
+        "exception": "System.OperationCanceledException",
+        "inner": null,
+        "message": "The operation was canceled."
+      },
+      {
+        "kind": "existing-retention-io",
+        "expectedDomainBoundary": true,
+        "exception": "Elsa.Workflows.Runtime.Core.Exceptions.StimulusDeliveryRetentionException",
+        "inner": "System.IO.IOException",
+        "message": "Saved stimulus retention roots could not be established; executable material must be retained."
+      }
+    ]
+  }
+}

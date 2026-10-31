@@ -1,0 +1,46 @@
+{
+  "exitCode": 1,
+  "result": {
+    "executed": 5,
+    "passed": 3,
+    "failed": 2,
+    "productSource": "1.0.0+43741654e6b5fa99359910b12321d6a12179c996",
+    "checks": [
+      {
+        "kind": "io",
+        "expectedDomainBoundary": false,
+        "exception": "System.IO.IOException",
+        "inner": null,
+        "message": "Injected physical read IO failure"
+      },
+      {
+        "kind": "unrequested-cancellation",
+        "expectedDomainBoundary": false,
+        "exception": "System.OperationCanceledException",
+        "inner": null,
+        "message": "Injected physical provider cancellation"
+      },
+      {
+        "kind": "provider",
+        "expectedDomainBoundary": true,
+        "exception": "Elsa.Workflows.Runtime.Core.Exceptions.RuntimeSchedulerWorkUnavailableException",
+        "inner": "Microsoft.Data.Sqlite.SqliteException",
+        "message": "Prior outbox responsibility could not be read in persistence scope 'boundary-scope' for execution 'owned-worker'."
+      },
+      {
+        "kind": "requested-cancellation",
+        "expectedDomainBoundary": true,
+        "exception": "System.OperationCanceledException",
+        "inner": null,
+        "message": "The operation was canceled."
+      },
+      {
+        "kind": "existing-retention-io",
+        "expectedDomainBoundary": true,
+        "exception": "Elsa.Workflows.Runtime.Core.Exceptions.StimulusDeliveryRetentionException",
+        "inner": "System.IO.IOException",
+        "message": "Saved stimulus retention roots could not be established; executable material must be retained."
+      }
+    ]
+  }
+}
