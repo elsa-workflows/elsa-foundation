@@ -552,6 +552,9 @@ async function resource() {
     result.observations = { retainedResult: true, oneMutation: true };
   }
   await screenshot("resource-applied");
+  // Applied owner/render evidence can precede receipt-stream authentication and
+  // completion. A full navigation here would cancel that still-running turn.
+  await expect(dock()).toHaveAttribute("aria-busy", "false");
   await page.goto(studio + "/dashboard");
   if (next) await expect(page.getByTestId("acme-home-widget")).toBeVisible();
   else await expect(page.getByTestId("acme-home-widget")).toHaveCount(0);
@@ -733,6 +736,7 @@ async function workflow() {
   await second.proposal.getByRole("button", { name: "Apply", exact: true }).click();
   await accepted(ackAgain, "workflow-save-ack");
   await expect(second.proposal).toHaveAttribute("data-status", "executed");
+  await expect(dock()).toHaveAttribute("aria-busy", "false");
   expect(owningWrites).toEqual([]);
   const saved = page.waitForResponse(response => new URL(response.url()).origin === backend && response.request().method() === "PUT"
     && new URL(response.url()).pathname === owningDraftPath);

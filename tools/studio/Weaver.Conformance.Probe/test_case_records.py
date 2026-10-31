@@ -144,6 +144,14 @@ class ProtocolCorrelationTests(unittest.TestCase):
         self.assertEqual(proof["correlations"][0]["nativeToolCallId"], "native-call")
         self.assertFalse(proof["liveProvider"])
 
+    def test_executed_owner_without_actual_receipt_continuation_cannot_qualify(self):
+        fixture = self.fixture()
+        fixture.rows.pop()  # Keep the actual awaiting-approval SDK return, not its later receipt.
+        self.sync(fixture)
+        with self.assertRaisesRegex(RuntimeError, "The actual adapter result does not identify the native tool call"):
+            self.correlate(fixture)
+        self.assertFalse((fixture.output / "adapter-correlation.json").exists())
+
     def test_wrong_session_call_and_native_result_are_rejected(self):
         for kind in ("session", "continuation-session", "call-id", "native-result"):
             with self.subTest(kind=kind):
