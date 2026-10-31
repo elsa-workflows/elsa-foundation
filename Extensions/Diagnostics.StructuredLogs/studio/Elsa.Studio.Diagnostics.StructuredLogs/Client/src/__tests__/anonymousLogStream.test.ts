@@ -4,6 +4,38 @@ import { connectAnonymousLogStream } from "../anonymousLogStream";
 afterEach(() => vi.useRealTimers());
 
 describe("anonymous structured log stream", () => {
+  it("resumes after the last complete event and delivers a record committed while disconnected", async () => {
+    vi.useFakeTimers();
+    const request = vi.fn(async (_init: RequestInit) => new Response(new ReadableStream<Uint8Array>({start(controller) {
+      const first = request.mock.calls.length === 1;
+      controller.enqueue(new TextEncoder().encode(first ? "id: cursor-1\nevent: entry\ndata: first\n\n" : "id: cursor-2\nevent: entry\ndata: committed-during-disconnect\n\n"));
+      controller.close();
+    }})));
+    const received = vi.fn();
+    const close = connectAnonymousLogStream(request, vi.fn(), received, vi.fn());
+    try {
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(new Headers(request.mock.calls[1][0].headers).get("Last-Event-ID")).toBe("cursor-1");
+      expect(received.mock.calls[1][0]).toMatchObject({data:"committed-during-disconnect",lastEventId:"cursor-2"});
+    } finally {close();}
+  });
+
+  it("discards an incomplete cursor and honors an explicit empty event id", async () => {
+    vi.useFakeTimers();
+    const request = vi.fn(async (_init: RequestInit) => new Response(new ReadableStream<Uint8Array>({start(controller) {
+      const attempt = request.mock.calls.length;
+      controller.enqueue(new TextEncoder().encode(attempt === 1 ? "id: complete\ndata: first\n\nid: incomplete\ndata: unfinished" : "id:\ndata: reset\n\n"));
+      controller.close();
+    }})));
+    const close = connectAnonymousLogStream(request, vi.fn(), vi.fn(), vi.fn());
+    try {
+      await vi.advanceTimersByTimeAsync(0);await vi.advanceTimersByTimeAsync(1000);await vi.advanceTimersByTimeAsync(1000);
+      expect(new Headers(request.mock.calls[1][0].headers).get("Last-Event-ID")).toBe("complete");
+      expect(new Headers(request.mock.calls[2][0].headers).has("Last-Event-ID")).toBe(false);
+    } finally {close();}
+  });
+
   it("decodes named events across chunks, reconnects after EOF and stops retries on close", async () => {
     vi.useFakeTimers();
     const request = vi.fn(async (_init: RequestInit) => new Response(new ReadableStream<Uint8Array>({start(controller) {

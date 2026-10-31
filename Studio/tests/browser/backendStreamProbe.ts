@@ -11,9 +11,13 @@ export function backendStreamProbe(request: IncomingMessage, response: ServerRes
   if (url.pathname.endsWith("/stream")) {
     response.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" });
     const message = cookieSeen ? "Cookie leaked" : "Cookie-free";
-    response.write(url.pathname.includes("/agent/")
-      ? `data: ${JSON.stringify({type:"message-delta",messageId:"probe",content:`${message} Agent`})}\n\n`
-      : `event: entry\ndata: ${JSON.stringify({sequence:1,timestamp:new Date().toISOString(),level:"Information",category:"Probe",message:`${message} Logs`})}\n\n`);
+    if (!url.pathname.includes("/agent/")) {
+      const resume = request.headers["last-event-id"];
+      response.write(`id: ${resume ? "probe:2" : "probe:1"}\nevent: entry\ndata: ${JSON.stringify({sequence:resume ? 2 : 1,timestamp:new Date().toISOString(),level:"Information",category:"Probe",message:resume === "probe:1" ? `${message} Replay` : `${message} Logs`})}\n\n`);
+      if (!resume) {response.end();return;}
+    } else {
+      response.write(`data: ${JSON.stringify({type:"message-delta",messageId:"probe",content:`${message} Agent`})}\n\n`);
+    }
     const heartbeat = setInterval(() => response.write(": heartbeat\n\n"), 15000);
     response.on("close", () => clearInterval(heartbeat));
     return;
