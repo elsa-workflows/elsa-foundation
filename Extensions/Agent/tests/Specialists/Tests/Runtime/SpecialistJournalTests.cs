@@ -108,6 +108,23 @@ public sealed class SpecialistJournalTests
     }
 
     [Fact]
+    public async Task Malformed_ciphertext_retains_the_cause_without_exposing_it_in_the_business_message()
+    {
+        await using var services = Services();
+        var request = Request();
+        var store = new InMemorySpecialistTurnStore();
+        var journal = Journal(store, services);
+        var handle = await journal.StageAsync(request, DateTimeOffset.UtcNow, CancellationToken.None);
+        var (document, _) = await journal.ReadAsync(handle, request.Identity, CancellationToken.None);
+        var substituted = new InMemorySpecialistTurnStore();
+        await substituted.StageAsync(document with { ProtectedRequest = "malformed-private-ciphertext" }, CancellationToken.None);
+        var exception = await Assert.ThrowsAsync<SpecialistTurnException>(async () => await Journal(substituted, services).ReadAsync(handle, request.Identity, CancellationToken.None));
+        Assert.Equal("specialist.journal.protection", exception.Code);
+        Assert.NotNull(exception.InnerException);
+        Assert.Equal("The staged specialist request cannot be authenticated.", exception.Message);
+    }
+
+    [Fact]
     public async Task Restarted_process_local_journal_refuses_missing_handles()
     {
         await using var services = Services();

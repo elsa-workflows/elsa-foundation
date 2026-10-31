@@ -38,6 +38,15 @@ internal sealed class SpecialistSchemaCompiler(SpecialistSchemaValidator validat
             problems.Add(new(path, "specialist.schema.member", "Public member keys and JSON names must be nonempty and unique."));
             return null;
         }
+        if (path == "/resultConstraints" && fields.Any(member =>
+        {
+            var segments = member.Name.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            return segments.Length == 0 || fields.Any(other => other.Key != member.Key && other.Name == segments[0]);
+        }))
+        {
+            problems.Add(new(path, "specialist.schema.projection-name", "Output names must not overlap another output's dotted-path root or collapse to an empty path."));
+            return null;
+        }
         var properties = new JsonObject();
         var required = new JsonArray();
         foreach (var member in fields)
@@ -57,8 +66,8 @@ internal sealed class SpecialistSchemaCompiler(SpecialistSchemaValidator validat
                     if (prepared.Schema.Schema.ValueKind != JsonValueKind.Object)
                         throw Refinement(memberPath);
                     schema = Merge(schema, JsonNode.Parse(prepared.Schema.Schema.GetRawText())!.AsObject(), memberPath);
-                    ValidateRefinement(schema, memberPath);
                 }
+                ValidateNativeRefinements(schema, member.Type, member.Nullable, memberPath);
                 properties[member.Name] = schema;
                 if (member.Required) required.Add(member.Name);
             }
@@ -153,6 +162,7 @@ internal sealed class SpecialistSchemaCompiler(SpecialistSchemaValidator validat
             }
             else result[pair.Key] = pair.Value?.DeepClone();
         }
+        ValidateRefinement(result, path);
         return result;
     }
 
@@ -175,6 +185,27 @@ internal sealed class SpecialistSchemaCompiler(SpecialistSchemaValidator validat
                 if (prepared.Schema.Validate(JsonSerializer.SerializeToElement(item)).Count != 0) throw Refinement(path);
         if (schema.TryGetPropertyValue("const", out var constant) &&
             prepared.Schema.Validate(JsonSerializer.SerializeToElement(constant)).Count != 0) throw Refinement(path);
+    }
+
+    private static void ValidateNativeRefinements(JsonObject schema, TypeReference type, bool nullable, string path)
+    {
+        bool Representable(JsonNode? node)
+        {
+            var value = JsonSerializer.SerializeToElement(node);
+            return value.ValueKind == JsonValueKind.Null ? nullable : SpecialistWireTypes.CanConvert(value, type.Alias, type.CollectionKind);
+        }
+        if (schema["enum"] is JsonArray enumeration && enumeration.Any(x => !Representable(x))) throw Refinement(path);
+        if (schema.TryGetPropertyValue("const", out var constant) && !Representable(constant)) throw Refinement(path);
+        if (type.CollectionKind is CollectionKind.Array or CollectionKind.List or CollectionKind.Dictionary)
+        {
+            var itemType = new TypeReference(type.Alias);
+            var itemNullable = type.Alias is "Object" or "JsonElement" or "System.Text.Json.JsonElement";
+            var keyword = type.CollectionKind == CollectionKind.Dictionary ? "additionalProperties" : "items";
+            if (schema[keyword] is JsonObject item) ValidateNativeRefinements(item, itemType, itemNullable, path);
+            if (type.CollectionKind == CollectionKind.Dictionary && schema["properties"] is JsonObject properties)
+                foreach (var property in properties)
+                    if (property.Value is JsonObject value) ValidateNativeRefinements(value, itemType, itemNullable, path);
+        }
     }
 
     private static HashSet<string> Types(JsonNode node) => node is JsonArray array

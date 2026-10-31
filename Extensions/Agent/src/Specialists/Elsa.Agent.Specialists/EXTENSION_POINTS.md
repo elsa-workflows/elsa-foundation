@@ -2,7 +2,7 @@
 
 `Elsa.Agent.Specialists` owns `SpecialistsRuntime`. Compose it with a model contribution and an
 explicit journal profile. Its feature depends on ordinary Background Activities, Serialization,
-Secrets and the shared specialist JSON validator. Configure the existing Secrets key ring; there is
+and Secrets. The feature registers the shared helper's scoped specialist JSON validator. Configure the existing Secrets key ring; there is
 no implicit ephemeral encryption key or memory-journal fallback.
 
 ## Cross-domain contributions

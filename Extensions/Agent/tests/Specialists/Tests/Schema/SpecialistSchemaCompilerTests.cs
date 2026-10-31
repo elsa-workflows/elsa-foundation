@@ -57,6 +57,8 @@ public sealed class SpecialistSchemaCompilerTests
     [InlineData("String", "{\"minimum\":5}")]
     [InlineData("Int32", "{\"minLength\":1}")]
     [InlineData("String", "{\"items\":{\"type\":\"string\"}}")]
+    [InlineData("Guid", "{\"const\":\"not-a-guid\"}")]
+    [InlineData("DateTimeOffset", "{\"enum\":[\"yesterday\"]}")]
     public void Constraints_cannot_widen_or_contradict_the_public_type(string alias, string constraint)
     {
         var compiled = Compile(Contract(new(alias)), Manifest(new Dictionary<string, JsonElement> { ["opaque.output.key"] = Json(constraint) }));
@@ -85,6 +87,43 @@ public sealed class SpecialistSchemaCompilerTests
         Assert.Empty(compiled.Problems);
         Assert.Empty(compiled.Result!.Validate(Json("""{"Verdict":["one","two"]}""")));
         Assert.NotEmpty(compiled.Result.Validate(Json("""{"Verdict":["one",2]}""")));
+    }
+
+    [Theory]
+    [InlineData("{\"minItems\":1,\"items\":{\"enum\":[1]}}")]
+    [InlineData("{\"minItems\":1,\"items\":{\"minLength\":10,\"maxLength\":2}}")]
+    public void Nested_refinements_cannot_contradict_the_declared_item_type(string constraint)
+    {
+        var compiled = Compile(Contract(new("String", CollectionKind.Array)), Manifest(new Dictionary<string, JsonElement> { ["opaque.output.key"] = Json(constraint) }));
+        Assert.Null(compiled.Result);
+        Assert.Contains(compiled.Problems, x => x.Code == "specialist.schema.refinement");
+    }
+
+    [Theory]
+    [InlineData(CollectionKind.Array, "{\"items\":{\"const\":\"invalid-guid\"}}")]
+    [InlineData(CollectionKind.Dictionary, "{\"properties\":{\"primary\":{\"enum\":[\"invalid-guid\"]}}}")]
+    public void Nested_finite_values_must_have_a_native_representation(CollectionKind collection, string constraint)
+    {
+        var compiled = Compile(Contract(new("Guid", collection)), Manifest(new Dictionary<string, JsonElement> { ["opaque.output.key"] = Json(constraint) }));
+        Assert.Null(compiled.Result);
+        Assert.Contains(compiled.Problems, x => x.Code == "specialist.schema.refinement");
+    }
+
+    [Theory]
+    [InlineData("Article.body")]
+    [InlineData("Article..body")]
+    [InlineData("Article.")]
+    [InlineData(".")]
+    public void Optional_output_names_cannot_fall_back_to_another_business_member(string name)
+    {
+        var contract = Contract(new("Object")) with
+        {
+            Outputs = [new("article", "Article", new("Object"), true, false, "elsa.json"),
+                new("optional", name, new("String"), false, false, "elsa.json")]
+        };
+        var compiled = Compile(contract, Manifest());
+        Assert.Null(compiled.Result);
+        Assert.Contains(compiled.Problems, x => x.Code == "specialist.schema.projection-name");
     }
 
     [Fact]

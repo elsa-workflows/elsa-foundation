@@ -14,7 +14,6 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Agent.Specialists.Core.Contracts;
 using Elsa.Agent.Specialists.Core.Models;
 using Elsa.Agent.Specialists.Design;
-using Elsa.Agent.Specialists.JsonSchema;
 using Elsa.Locking.Core;
 using Elsa.Locking.FileSystem;
 using Elsa.Primitives.Contracts;
@@ -48,9 +47,9 @@ namespace Elsa.Agent.Specialists.Tests.Publication;
 
 public sealed class SpecialistPublicationTests
 {
-    internal static async ValueTask<(ActivityTemplatePlacement Placement, IReadOnlyCollection<RuntimeStorageDriverRequirement> Storage)> PublishAndPlaceAsync(string outputName, string outputType)
+    internal static async ValueTask<(ActivityTemplatePlacement Placement, IReadOnlyCollection<RuntimeStorageDriverRequirement> Storage)> PublishAndPlaceAsync(string outputName, string outputType, bool outputNullable = false, bool optionalBrief = false, RuntimeInputBinding? briefBinding = null)
     {
-        await using var fixture = await Fixture.CreateAsync(outputName, outputType);
+        await using var fixture = await Fixture.CreateAsync(outputName, outputType, outputNullable, optionalBrief);
         Assert.Equal(ActivityPublicationReceiptStatus.Applied, (await fixture.PublishAsync()).Status);
         var publication = (await fixture.Publications.FindAsync("copywriter-v1"))!;
         var template = (await fixture.Templates.FindAsync(publication.TemplateId))!;
@@ -63,10 +62,10 @@ public sealed class SpecialistPublicationTests
             new([new(ActivityInvocationOriginSegmentKind.WorkflowRoot, "workflow-v1")]), publication.ActivityTypeKey,
             new Dictionary<string, RuntimeInputBinding>
             {
-                ["brief-key"] = new("brief-key", new("String"), ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
-                    literal: ValueEnvelope.Inline(new("String"), Json("\"moss gardens\""), ValueProtectionPolicy.InstanceInline))
+                ["brief-key"] = briefBinding ?? new("brief-key", new("String"), ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
+                    literal: optionalBrief ? ValueEnvelope.Absent(new("String"), ValueProtectionPolicy.InstanceInline) :
+                        ValueEnvelope.Inline(new("String"), Json("\"moss gardens\""), ValueProtectionPolicy.InstanceInline))
             }, new Dictionary<string, RuntimeOutputCapture>()));
-        Assert.Equal(0, fixture.Model.OpenCalls);
         return (placement, template.StorageDriverRequirements);
     }
 
@@ -102,7 +101,6 @@ public sealed class SpecialistPublicationTests
         Assert.Equal(receipt.RequestFingerprint, replay.RequestFingerprint);
         Assert.Equal(receipt.Outcome, replay.Outcome);
         Assert.Single(await fixture.Design.ActivityDefinitionVersionPublications.ToListAsync());
-        Assert.Equal(0, fixture.Model.OpenCalls);
     }
 
     [Fact]
@@ -168,13 +166,12 @@ public sealed class SpecialistPublicationTests
         Assert.Contains(review.Diagnostics, x => x.Code == code);
         Assert.False(await fixture.Design.ActivityDefinitionVersionPublications.AnyAsync());
         Assert.False(await fixture.Runtime.ExecutableActivityTemplates.AnyAsync());
-        Assert.Equal(0, fixture.Model.OpenCalls);
     }
 
     private sealed class Fixture(string directory, ActivitiesDesignSqliteDbContext design, RuntimeSqliteDbContext runtime,
         PublishingSnapshotReviewSqliteDbContext publishing, ServiceProvider root, AsyncServiceScope scope,
         EfActivityDesignStores stores, EfExecutableActivityTemplateStore templates, EfWorkflowExecutableSourceReferenceStore sources,
-        EfActivityPublicationReceiptStore receipts, EfActivityPublicationCommand commit, Access access, MetadataModel model, string outputName, string outputType) : IAsyncDisposable
+        EfActivityPublicationReceiptStore receipts, EfActivityPublicationCommand commit, Access access, MetadataModel model, string outputName, string outputType, bool outputNullable, bool optionalBrief) : IAsyncDisposable
     {
         public ActivitiesDesignSqliteDbContext Design => design;
         public RuntimeSqliteDbContext Runtime => runtime;
@@ -197,8 +194,8 @@ public sealed class SpecialistPublicationTests
             new ActivityVersionDiffer(), Compiler, access, commit, Services.GetRequiredService<IDistributedLockProvider>(), new Ids(), TimeProvider.System, receipts,
             runtimeInstalled ? Services.GetServices<IActivityActivationStrategy>() : [], storageInstalled ? Drivers : new RuntimeDurableValueStorageDriverRegistry([]));
 
-        public ActivityDefinitionDraftState State(SpecialistManifest manifest) => new(new("1", [new("brief-key", "Brief", new("String"), true, false, null, "elsa.json")],
-            [new("article-key", outputName, new(outputType), true, false, "elsa.json")], [new("done", "Done", true)]),
+        public ActivityDefinitionDraftState State(SpecialistManifest manifest) => new(new("1", [new("brief-key", "Brief", new("String"), !optionalBrief, false, null, "elsa.json")],
+            [new("article-key", outputName, new(outputType), true, outputNullable, "elsa.json")], [new("done", "Done", true)]),
             new(SpecialistRuntimeIds.ProviderKey, "1", JsonSerializer.SerializeToElement(manifest, new JsonSerializerOptions(JsonSerializerDefaults.Web))), new Dictionary<string, string>());
 
         public async Task<ActivityPublicationReceipt> PublishAsync()
@@ -214,7 +211,7 @@ public sealed class SpecialistPublicationTests
             new() { Id = id, DefinitionId = "copywriter", Revision = 1, State = State(manifest), CreatedAt = DateTimeOffset.UtcNow, LastModifiedAt = DateTimeOffset.UtcNow },
             new() { Id = id + "-layout", DraftId = id, Revision = 1, CreatedAt = DateTimeOffset.UtcNow, LastModifiedAt = DateTimeOffset.UtcNow }, head));
 
-        public static async Task<Fixture> CreateAsync(string outputName = "Article", string outputType = "String")
+        public static async Task<Fixture> CreateAsync(string outputName = "Article", string outputType = "String", bool outputNullable = false, bool optionalBrief = false)
         {
             var directory = Path.Combine(Path.GetTempPath(), "elsa-specialist-publication-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(directory);
@@ -239,17 +236,16 @@ public sealed class SpecialistPublicationTests
             new ActivitiesRuntimeFeature().ConfigureServices(services);
             new SerializationFeature().ConfigureServices(services);
             new SecretsFeature { EncryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) }.ConfigureServices(services);
-            new SpecialistJsonSchemaFeature().ConfigureServices(services);
             new SpecialistsDesignFeature().ConfigureServices(services);
             new SpecialistsRuntimeFeature().ConfigureServices(services);
             new SpecialistsInMemoryJournalFeature().ConfigureServices(services);
             new FileSystemLockingFeature { LocksFolderPath = Path.Combine(directory, "locks") }.ConfigureServices(services);
-            services.AddSingleton<ISpecialistModelClientFactory>(model);
+            services.AddSingleton<ISpecialistModelCapabilitiesSource>(model);
             services.AddSingleton<IActivityDefinitionAuthoringStore>(stores);
             services.AddSingleton<IActivityDefinitionVersionPublicationStore>(stores);
             var root = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             var scope = root.CreateAsyncScope();
-            var fixture = new Fixture(directory, design, runtime, publishing, root, scope, stores, templates, sources, receipts, commit, access, model, outputName, outputType);
+            var fixture = new Fixture(directory, design, runtime, publishing, root, scope, stores, templates, sources, receipts, commit, access, model, outputName, outputType, outputNullable, optionalBrief);
             var now = DateTimeOffset.UtcNow;
             await stores.ExecuteAsync(new CreateActivityDefinitionRequest(
                 new() { Id = "copywriter", ActivityTypeKey = "acme.copywriter", Category = "Specialists", DisplayName = "Copywriter", CreatedAt = now, LastModifiedAt = now },
@@ -282,17 +278,11 @@ public sealed class SpecialistPublicationTests
         public IReadOnlyCollection<ActivityContractTypeCapability> Types => new[] { "String", "Guid" }.Select(alias =>
             new ActivityContractTypeCapability(alias, alias, "Primitives", "text", new HashSet<CollectionKind> { CollectionKind.Single }, true, true, new HashSet<string> { "elsa.json" })).ToArray();
     }
-    private sealed class MetadataModel : ISpecialistModelClientFactory
+    private sealed class MetadataModel : ISpecialistModelCapabilitiesSource
     {
         public string ProviderKey => "fixture";
-        public int OpenCalls { get; private set; }
         public ValueTask<SpecialistModelCapabilities> GetCapabilitiesAsync(SpecialistModelReference model, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new SpecialistModelCapabilities("fixture/1", Json("{\"type\":\"object\",\"additionalProperties\":false}"), true, 4096));
-        public ValueTask<SpecialistModelClientLease> OpenAsync(SpecialistModelOpenRequest request, CancellationToken cancellationToken = default)
-        {
-            OpenCalls++;
-            throw new InvalidOperationException("Publication must not open an inference client.");
-        }
     }
     private static JsonElement Json(string text) => JsonDocument.Parse(text).RootElement.Clone();
 }

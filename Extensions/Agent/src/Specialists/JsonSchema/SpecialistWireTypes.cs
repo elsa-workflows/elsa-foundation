@@ -33,7 +33,7 @@ internal static class SpecialistWireTypes
         return problems;
     }
 
-    private static bool CanConvert(JsonElement value, string alias, CollectionKind collection)
+    internal static bool CanConvert(JsonElement value, string alias, CollectionKind collection)
     {
         if (collection is CollectionKind.Array or CollectionKind.List)
             return value.ValueKind == JsonValueKind.Array && value.EnumerateArray().All(x => CanConvertItem(x, alias));

@@ -5,7 +5,6 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
 using Elsa.Agent.Specialists.Core.Contracts;
 using Elsa.Agent.Specialists.Core.Models;
-using Elsa.Agent.Specialists.JsonSchema;
 using Elsa.Agent.Specialists.Tests.Publication;
 using Elsa.Primitives.Models;
 using Elsa.Secrets.Features;
@@ -22,6 +21,56 @@ namespace Elsa.Agent.Specialists.Tests.Runtime;
 
 public sealed class SpecialistNativeTests
 {
+    [Theory]
+    [InlineData("{\"Article\":null}", WorkflowExecutionStatus.Completed)]
+    [InlineData("{}", WorkflowExecutionStatus.Faulted)]
+    public async Task Required_nullable_result_keeps_presence_separate_from_allowed_null(string response, WorkflowExecutionStatus expected)
+    {
+        var factory = new FixtureFactory(response);
+        await using var provider = await ServicesAsync(factory);
+        var (actor, _) = await StartAsync(provider, await ExecutableAsync(provider, outputNullable: true));
+        var claim = await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2));
+        Assert.NotNull(claim);
+        await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim);
+        await DrainAsync(actor);
+        Assert.Equal(expected, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
+        Assert.Equal(1, factory.Calls);
+    }
+
+    [Fact]
+    public async Task Optional_nonnullable_input_can_be_absent_without_becoming_explicit_null()
+    {
+        var factory = new FixtureFactory("{\"Article\":\"no brief supplied\"}");
+        await using var provider = await ServicesAsync(factory);
+        var (actor, _) = await StartAsync(provider, await ExecutableAsync(provider, optionalBrief: true));
+        var claim = await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2));
+        Assert.NotNull(claim);
+        await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim);
+        await DrainAsync(actor);
+        Assert.Equal(WorkflowExecutionStatus.Completed, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
+        Assert.False(JsonDocument.Parse(factory.LastUser!).RootElement.TryGetProperty("Brief", out _));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Null_or_encryption_required_input_is_refused_before_dispatch(bool requiresEncryption)
+    {
+        var factory = new FixtureFactory("{\"Article\":\"must not dispatch\"}");
+        await using var provider = await ServicesAsync(factory);
+        var policy = requiresEncryption
+            ? new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true)
+            : ValueProtectionPolicy.InstanceInline;
+        var value = requiresEncryption ? ValueEnvelope.Inline(new("String"), Json("\"private brief\""), policy) : ValueEnvelope.Null(new("String"), policy);
+        var binding = new RuntimeInputBinding("brief-key", new("String"), policy, RuntimeInputBindingSource.Literal, literal: value);
+        var (actor, _) = await StartAsync(provider, await ExecutableAsync(provider, optionalBrief: true, briefBinding: binding));
+        await DrainAsync(actor);
+        Assert.Null(await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2)));
+        Assert.Equal(WorkflowExecutionStatus.Faulted, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
+        Assert.Equal(0, factory.Calls);
+        Assert.Equal(0, factory.Opens);
+    }
+
     [Theory]
     [InlineData("Article")]
     [InlineData("Article.body")]
@@ -102,7 +151,6 @@ public sealed class SpecialistNativeTests
         new SerializationFeature().ConfigureServices(services);
         new BackgroundActivitiesFeature { RunWorkers = false }.ConfigureServices(services);
         new SecretsFeature { EncryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) }.ConfigureServices(services);
-        new SpecialistJsonSchemaFeature().ConfigureServices(services);
         new SpecialistsRuntimeFeature().ConfigureServices(services);
         new SpecialistsInMemoryJournalFeature().ConfigureServices(services);
         services.AddSingleton<ISpecialistModelClientFactory>(factory);
@@ -116,10 +164,10 @@ public sealed class SpecialistNativeTests
         return provider;
     }
 
-    private static async ValueTask<WorkflowExecutable> ExecutableAsync(ServiceProvider provider, string outputName = "Article", string outputType = "String")
+    private static async ValueTask<WorkflowExecutable> ExecutableAsync(ServiceProvider provider, string outputName = "Article", string outputType = "String", bool outputNullable = false, bool optionalBrief = false, RuntimeInputBinding? briefBinding = null)
     {
         // The authoring fixture is disposed, including its three SQLite stores, before execution starts.
-        var published = await SpecialistPublicationTests.PublishAndPlaceAsync(outputName, outputType);
+        var published = await SpecialistPublicationTests.PublishAndPlaceAsync(outputName, outputType, outputNullable, optionalBrief, briefBinding);
         var executable = new WorkflowExecutable(new("editorial", "workflow", "workflow-v1", "1.0.0", "artifact-hash"), published.Placement.Root,
             published.Placement.ResumeTargets, DateTimeOffset.UtcNow, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference,
             published.Placement.RuntimeRequirements, published.Storage);
@@ -154,16 +202,18 @@ public sealed class SpecialistNativeTests
     {
         private string Response { get; } = response;
         public string ProviderKey => "fixture";
+        public int Opens { get; private set; }
         public int Calls { get; private set; }
         public int Disposals { get; private set; }
         public string? Instructions { get; private set; }
         public string? LastUser { get; private set; }
         public string? ModelId { get; private set; }
         public JsonElement? Schema { get; private set; }
-        public ValueTask<SpecialistModelCapabilities> GetCapabilitiesAsync(SpecialistModelReference model, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new SpecialistModelCapabilities("fixture/1", Json("{\"type\":\"object\",\"additionalProperties\":false}"), true, 4096));
-        public ValueTask<SpecialistModelClientLease> OpenAsync(SpecialistModelOpenRequest request, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new SpecialistModelClientLease(new Client(this), new ChatOptions(), "fixture/1", 1));
+        public ValueTask<SpecialistModelClientLease> OpenAsync(SpecialistModelOpenRequest request, CancellationToken cancellationToken = default)
+        {
+            Opens++;
+            return ValueTask.FromResult(new SpecialistModelClientLease(new Client(this), new ChatOptions(), "fixture/1", 1));
+        }
         private sealed class Client(FixtureFactory owner) : IChatClient
         {
             public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)

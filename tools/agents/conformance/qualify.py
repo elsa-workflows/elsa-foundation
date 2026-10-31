@@ -152,13 +152,15 @@ def main():
         report["consumers"][name] = {"sourceReferences": [], "authoringDependencies": authoring, "resolvedCandidates": resolved}
         save()
 
+    central = ET.parse(producer / "Directory.Packages.props")
+    sqlite_bundle_version = next(p.attrib["Version"] for p in central.iter("PackageVersion") if p.attrib.get("Include") == "SQLitePCLRaw.bundle_e_sqlite3")
     for name in ["Model", "Author", "Consumer"]:
         directory = out / name
         directory.mkdir()
         for path in (fixtures / name).iterdir():
             if path.suffix != ".template":
                 continue
-            (directory / path.stem).write_text(path.read_text().replace("__VERSION__", args.version))
+            (directory / path.stem).write_text(path.read_text().replace("__VERSION__", args.version).replace("__SQLITE_BUNDLE_VERSION__", sqlite_bundle_version))
         if name == "Author":
             test_source = producer / "Extensions/Agent/tests/Specialists/Tests/Publication/SpecialistPublicationTests.cs"
             shutil.copy2(test_source, directory / test_source.name)

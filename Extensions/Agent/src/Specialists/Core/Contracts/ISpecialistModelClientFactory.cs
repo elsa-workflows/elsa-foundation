@@ -12,9 +12,6 @@ public interface ISpecialistModelClientFactory
     /// <summary>The exact provider key this contribution owns; duplicate registrations are refused.</summary>
     string ProviderKey { get; }
 
-    /// <summary>Reads authorized metadata in the ambient authoring/execution scope, without model inference.</summary>
-    ValueTask<SpecialistModelCapabilities> GetCapabilitiesAsync(SpecialistModelReference model, CancellationToken cancellationToken = default);
-
     /// <summary>
     /// Revalidates the native identity against current access and opens a client without issuing inference.
     /// Options reflect the validated published settings; the runtime owns model, schema, limits and tool admission.

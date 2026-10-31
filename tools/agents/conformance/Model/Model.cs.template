@@ -23,11 +23,13 @@ public static class ModelRegistration
     public static void AddFixtureModel(this IServiceCollection services)
     {
         services.AddSingleton<ModelObservations>();
-        services.AddScoped<ISpecialistModelClientFactory, FixtureModel>();
+        services.AddScoped<FixtureModel>();
+        services.AddScoped<ISpecialistModelClientFactory>(sp => sp.GetRequiredService<FixtureModel>());
+        services.AddScoped<ISpecialistModelCapabilitiesSource>(sp => sp.GetRequiredService<FixtureModel>());
     }
 }
 
-internal sealed class FixtureModel(ModelObservations observations) : ISpecialistModelClientFactory
+internal sealed class FixtureModel(ModelObservations observations) : ISpecialistModelClientFactory, ISpecialistModelCapabilitiesSource
 {
     public string ProviderKey => "fixture";
     public ValueTask<SpecialistModelCapabilities> GetCapabilitiesAsync(SpecialistModelReference model, CancellationToken cancellationToken = default) =>

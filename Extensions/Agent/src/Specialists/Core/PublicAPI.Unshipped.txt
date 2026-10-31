@@ -1,6 +1,5 @@
 #nullable enable
 Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelClientFactory
-Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelClientFactory.GetCapabilitiesAsync(Elsa.Agent.Specialists.Core.Models.SpecialistModelReference! model, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities!>
 Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelClientFactory.OpenAsync(Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Specialists.Core.Contracts.SpecialistModelClientLease!>
 Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelClientFactory.ProviderKey.get -> string!
 Elsa.Agent.Specialists.Core.Contracts.SpecialistModelClientLease
@@ -172,3 +171,6 @@ static Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.operator !
 static Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor? left, Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor? right) -> bool
 static Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits? left, Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits? right) -> bool
 static Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits? left, Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits? right) -> bool
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelCapabilitiesSource
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelCapabilitiesSource.GetCapabilitiesAsync(Elsa.Agent.Specialists.Core.Models.SpecialistModelReference! model, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities!>
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelCapabilitiesSource.ProviderKey.get -> string!

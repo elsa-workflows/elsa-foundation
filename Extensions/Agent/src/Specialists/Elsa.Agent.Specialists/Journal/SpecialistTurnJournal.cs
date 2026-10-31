@@ -31,7 +31,7 @@ internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretV
         var document = await store.ReadAsync(handle, identity, cancellationToken) ?? throw Failure("specialist.journal.missing", "The staged specialist turn is unavailable in this execution scope.");
         RequestEnvelope? envelope;
         try { envelope = JsonSerializer.Deserialize<RequestEnvelope>(protector.Unprotect(document.ProtectedRequest), SpecialistJson.Options); }
-        catch (Exception) { throw Failure("specialist.journal.protection", "The staged specialist request cannot be authenticated."); }
+        catch (Exception exception) { throw Failure("specialist.journal.protection", "The staged specialist request cannot be authenticated.", exception); }
         if (envelope is null || envelope.Purpose != RequestPurpose || envelope.Identity != identity || envelope.Request.Identity != identity || envelope.Hash != document.RequestHash ||
             Hash(JsonSerializer.Serialize(envelope.Request, SpecialistJson.Options)) != document.RequestHash)
             throw Failure("specialist.journal.protection", "The staged specialist request does not match this native invocation.");
@@ -45,7 +45,7 @@ internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretV
             throw Failure("specialist.turn.unaccepted", "This native child has no accepted specialist turn.");
         ResultEnvelope? envelope;
         try { envelope = JsonSerializer.Deserialize<ResultEnvelope>(protector.Unprotect(document.ProtectedResult), SpecialistJson.Options); }
-        catch (Exception) { throw Failure("specialist.journal.protection", "The specialist result cannot be authenticated."); }
+        catch (Exception exception) { throw Failure("specialist.journal.protection", "The specialist result cannot be authenticated.", exception); }
         if (envelope is null || envelope.Purpose != ResultPurpose || envelope.Identity != identity || envelope.RequestHash != document.RequestHash ||
             envelope.ChildInvocationId != childInvocationId || envelope.Fence != document.Fence)
             throw Failure("specialist.journal.protection", "The accepted specialist result does not match this native invocation.");
@@ -85,7 +85,7 @@ internal sealed class SpecialistTurnJournal(ISpecialistTurnStore store, ISecretV
         access.Current.EnsureTenantScope(identity.TenantId);
     }
     private static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).ToLowerInvariant();
-    private static SpecialistTurnException Failure(string code, string message) => SpecialistModelRunner.Failure(code, message);
+    private static SpecialistTurnException Failure(string code, string message, Exception? innerException = null) => SpecialistModelRunner.Failure(code, message, innerException);
     private sealed record RequestEnvelope(string Purpose, SpecialistInvocationIdentity Identity, string Hash, SpecialistTurnRequest Request);
     private sealed record ResultEnvelope(string Purpose, SpecialistInvocationIdentity Identity, string RequestHash, string ChildInvocationId, string Fence, SpecialistTurnResult Result);
 }

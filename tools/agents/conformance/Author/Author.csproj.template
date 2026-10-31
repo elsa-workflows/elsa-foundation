@@ -18,8 +18,8 @@
     <PackageReference Include="Elsa.Activities.Design.Persistence.EntityFrameworkCore" Version="__VERSION__" />
     <PackageReference Include="Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore" Version="__VERSION__" />
     <PackageReference Include="Elsa.Locking.FileSystem" Version="__VERSION__" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="__SQLITE_BUNDLE_VERSION__" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.10" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.10" />
     <PackageReference Include="xunit" Version="2.9.3" />
   </ItemGroup>
 </Project>

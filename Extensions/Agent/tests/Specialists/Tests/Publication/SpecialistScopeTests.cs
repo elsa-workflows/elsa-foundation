@@ -4,7 +4,6 @@ using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Agent.Specialists.Core.Contracts;
 using Elsa.Agent.Specialists.Core.Models;
 using Elsa.Agent.Specialists.Design;
-using Elsa.Agent.Specialists.JsonSchema;
 using Elsa.Workflows.Publishing;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
@@ -25,9 +24,9 @@ public sealed class SpecialistScopeTests
         services.AddWorkflowRuntime();
         new ActivitiesDesignApiFeature().ConfigureServices(services);
         new WorkflowsPublishingFeature().ConfigureServices(services);
-        new SpecialistJsonSchemaFeature().ConfigureServices(services);
+
         new SpecialistsDesignFeature().ConfigureServices(services);
-        services.AddScoped<ISpecialistModelClientFactory, ScopedModel>();
+        services.AddScoped<ISpecialistModelCapabilitiesSource, ScopedModel>();
         await using var root = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         foreach (var partition in new[] { "tenant-a", "tenant-b" })
         {
@@ -48,12 +47,11 @@ public sealed class SpecialistScopeTests
         }
     }
 
-    private sealed class ScopedModel(IPersistenceAccessContextAccessor access) : ISpecialistModelClientFactory
+    private sealed class ScopedModel(IPersistenceAccessContextAccessor access) : ISpecialistModelCapabilitiesSource
     {
         public string ProviderKey => "fixture";
         public ValueTask<SpecialistModelCapabilities> GetCapabilitiesAsync(SpecialistModelReference model, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new SpecialistModelCapabilities(access.Current.RequireScope().Value, Json("{}"), true, 4096));
-        public ValueTask<SpecialistModelClientLease> OpenAsync(SpecialistModelOpenRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
     private static JsonElement Json(string text) => JsonDocument.Parse(text).RootElement.Clone();
 }

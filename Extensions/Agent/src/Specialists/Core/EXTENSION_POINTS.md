@@ -4,9 +4,11 @@ Owner contract package: `Elsa.Agent.Specialists.Core`. Runtime owner: `Elsa.Agen
 
 ## Model providers
 
-[`ISpecialistModelClientFactory`](Contracts/ISpecialistModelClientFactory.cs) is an additive provider
-contribution, keyed by its exact `ProviderKey`. Register a scoped implementation through DI. Authoring
-and execution each require exactly one matching owner; duplicates and missing owners are refusals.
+[`ISpecialistModelCapabilitiesSource`](Contracts/ISpecialistModelCapabilitiesSource.cs) owns authoring
+metadata; [`ISpecialistModelClientFactory`](Contracts/ISpecialistModelClientFactory.cs) owns runtime
+client creation. Register scoped implementations through DI, keyed by their exact `ProviderKey`. Each
+operation requires exactly one matching owner of its own port; duplicates and missing owners are refusals.
+A provider can implement both ports, while authoring-only and runtime-only hosts register only what they consume.
 This registry is independent of Weaver's selected assistant provider.
 
 `GetCapabilitiesAsync` reads authorized current model metadata without inference. The capabilities

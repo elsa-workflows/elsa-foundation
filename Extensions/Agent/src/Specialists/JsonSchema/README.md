@@ -1,7 +1,7 @@
 # Specialist JSON profile
 
-`SpecialistJsonSchema` registers the internal shared validator used by Design and Runtime. It has no
-Design dependency. Its pinned engine is JsonSchema.Net 9.2.0 and its explicit dialect is draft 2020-12.
+This helper library contains the internal shared validator used by Design and Runtime. Each consuming
+feature registers its own scoped validator; the helper has no feature or Design dependency. Its pinned engine is JsonSchema.Net 9.2.0 and its explicit dialect is draft 2020-12.
 
 `elsa.specialist.json/1` accepts `type`, `properties`, `required`, `additionalProperties`, `items`,
 `enum`, `const`, numeric bounds/`multipleOf`, string/collection/object length bounds, annotations and
@@ -15,7 +15,8 @@ object members and unbounded/nonfinite numeric lexemes are rejected. Diagnostics
 Each preparation uses an isolated engine registry; no process-wide schema cache or fetch hook changes.
 
 The generic activity contract owns required/nullability/type declarations. Constraint keys are opaque
-member reference keys; public `Name` values become JSON field names. A constraint may refine a public
+member reference keys; public `Name` values become JSON field names. Output names that overlap another
+output's dotted-path root, or collapse to an empty path, are refused to keep native projection unambiguous. A constraint may refine a public
 type, never widen it. Runtime validation also checks the declared native conversion (for example Guid,
 DateTimeOffset and bounded integers); a schema-valid string alone does not establish that conversion.
 

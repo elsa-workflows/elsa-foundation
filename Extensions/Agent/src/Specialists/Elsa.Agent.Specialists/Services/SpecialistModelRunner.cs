@@ -11,7 +11,7 @@ namespace Elsa.Agent.Specialists.Services;
 
 internal sealed record SpecialistTurnRequest(SpecialistInvocationIdentity Identity, SpecialistRuntimeDescriptor Descriptor, ActivityContract Contract, JsonElement Inputs, string BindingFingerprint);
 internal sealed record SpecialistTurnResult(JsonElement Result, long? InputTokens, long? OutputTokens, long? TotalTokens, int ModelCalls, int ConnectionVersion);
-internal sealed class SpecialistTurnException(string code, string message) : Exception(message)
+internal sealed class SpecialistTurnException(string code, string message, Exception? innerException = null) : Exception(message, innerException)
 {
     public string Code { get; } = code;
 }
@@ -80,7 +80,7 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
         return new(result, response.Usage?.InputTokenCount, response.Usage?.OutputTokenCount, response.Usage?.TotalTokenCount, bounded.Calls, lease.ConnectionVersion);
     }
 
-    internal static SpecialistTurnException Failure(string code, string message) => new(code, message);
+    internal static SpecialistTurnException Failure(string code, string message, Exception? innerException = null) => new(code, message, innerException);
 
     private sealed class BoundedClient(IChatClient inner, int maximumCalls) : IChatClient
     {

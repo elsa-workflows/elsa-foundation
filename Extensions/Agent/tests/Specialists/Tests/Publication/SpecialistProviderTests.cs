@@ -5,7 +5,6 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Agent.Specialists.Core.Contracts;
 using Elsa.Agent.Specialists.Core.Models;
 using Elsa.Agent.Specialists.Design;
-using Elsa.Agent.Specialists.JsonSchema;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
@@ -40,7 +39,6 @@ public sealed class SpecialistProviderTests
         Assert.Empty(worker.ActivityContract.Inputs);
         Assert.DoesNotContain("private-instructions", worker.DescriptorPayload.GetRawText(), StringComparison.Ordinal);
         Assert.Equal(1, factory.MetadataCalls);
-        Assert.Equal(0, factory.OpenCalls);
         Assert.Empty(result.DirectDependencies);
         Assert.Equal(2, result.ResourceMeasurements.ClosedNodeCount);
     }
@@ -85,7 +83,6 @@ public sealed class SpecialistProviderTests
         Assert.Null(unavailable.ExecutableRoot);
         Assert.Equal(2, factory.MetadataCalls);
         Assert.DoesNotContain(unavailable.Diagnostics, x => x.Message.Contains("PRIVATE", StringComparison.Ordinal));
-        Assert.Equal(0, factory.OpenCalls);
     }
 
     [Fact]
@@ -147,9 +144,8 @@ public sealed class SpecialistProviderTests
     private static ScopedServices Services(params MetadataFactory[] factories)
     {
         var services = new ServiceCollection();
-        new SpecialistJsonSchemaFeature().ConfigureServices(services);
         new SpecialistsDesignFeature().ConfigureServices(services);
-        foreach (var factory in factories) services.AddSingleton<ISpecialistModelClientFactory>(factory);
+        foreach (var factory in factories) services.AddSingleton<ISpecialistModelCapabilitiesSource>(factory);
         return new(services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }));
     }
 
@@ -172,22 +168,16 @@ public sealed class SpecialistProviderTests
         new Dictionary<string, JsonElement>(), new Dictionary<string, JsonElement>(), new());
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
 
-    private sealed class MetadataFactory : ISpecialistModelClientFactory
+    private sealed class MetadataFactory : ISpecialistModelCapabilitiesSource
     {
         public string ProviderKey => "fixture";
         public int MetadataCalls { get; private set; }
-        public int OpenCalls { get; private set; }
         public bool Unavailable { get; set; }
         public ValueTask<SpecialistModelCapabilities> GetCapabilitiesAsync(SpecialistModelReference model, CancellationToken cancellationToken = default)
         {
             MetadataCalls++;
             if (Unavailable) throw new InvalidOperationException("PRIVATE credential error");
             return ValueTask.FromResult(new SpecialistModelCapabilities("fixture/1", Json("""{"type":"object","properties":{"temperature":{"type":"number","minimum":0,"maximum":2}},"additionalProperties":false}"""), true, 4096));
-        }
-        public ValueTask<SpecialistModelClientLease> OpenAsync(SpecialistModelOpenRequest request, CancellationToken cancellationToken = default)
-        {
-            OpenCalls++;
-            throw new InvalidOperationException("Publication must never open an inference client.");
         }
     }
 }

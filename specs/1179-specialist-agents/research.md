@@ -234,7 +234,7 @@ failures before correction: direct and portable-expression reads selected nested
 an exact dotted member, and mishandled the whole-result `$` path. Both readers now preserve completion
 projection semantics for those cases while retaining ordinary nested traversal. The whole workflow
 runtime suite passed 3,062 tests on the earlier kernel baseline and 3,069 after integrating current
-main; the current whole specialist suite passes 89 cases. Actual specialist execution also covers a dotted public output followed by a causal read.
+main; the initial whole specialist suite passed 89 cases before review additions. Actual specialist execution also covers a dotted public output followed by a causal read.
 
 The real MAF package graph additionally requires DI/logging/caching abstractions 10.0.12 and the
 latter's Primitives 10.0.12 dependency. Normal restore reproduced NU1109 against Foundation's 10.0.10
@@ -272,3 +272,31 @@ are refusals. Fresh MAF sessions are always new; a published continuity capabili
 restores history. Durable providers, explicit continuation, physical SDK/HTTP retry accounting and
 accepted-versus-applied settlement remain M3 work. Independent package proof, final review/CI and
 resulting-main qualification remain pending for this implementation slice.
+
+
+### M2 independent review corrections
+
+The first independent kernel review reproduced incompatible scalar and nested finite constraints,
+required nullable output completion, and optional nonnullable input presence. A corrected native
+fixture supplies an explicit absent binding; removing the presence mapping still causes the native
+run to fault before scheduling. Runtime contracts admit optional absence and nullable projections;
+the immutable business schema independently enforces required presence and rejects explicit null.
+Nested refinements are checked at every merge and finite values must convert to the declared native
+alias, including collection and dictionary values. Output names that could fall back to another
+member through native dotted-path projection are refused before publication. A dotted name with no
+conflicting output remains supported and has a causal native reader fixture.
+
+Authoring consumes `ISpecialistModelCapabilitiesSource`; execution consumes
+`ISpecialistModelClientFactory`. Metadata-only contributors no longer implement a throwing runtime
+method. The shared JSON library is an internal helper with scoped registrations in each consuming
+feature, without a feature identity of its own. Journal authentication failures retain their original
+exception as the cause while exposing a fixed business message. The whole specialist suite now passes
+105 cases, including explicit-null and encryption-required input refusal before opening a client.
+
+The first immutable package run at `f3d5cb2` failed at Author restore, after actual product and model
+packages built. Its independent consumer selected the old vulnerable SQLite native bundle because it
+did not inherit the producer's central bundle pin; a redundant Logging reference also raised NU1510
+under warnings-as-errors. The fixture now derives the existing native bundle version from the archived
+producer and uses the framework's logging reference. The failed receipt is retained; a new immutable
+run must qualify the corrected head. This is a consumer-configuration correction, not a product package
+or final support-matrix pass.

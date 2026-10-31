@@ -20,7 +20,7 @@ namespace Elsa.Agent.Specialists.Design.Services;
 internal sealed class SpecialistActivityProvider(
     SpecialistSchemaCompiler schemas,
     SpecialistSchemaValidator validator,
-    IEnumerable<ISpecialistModelClientFactory> modelFactories,
+    IEnumerable<ISpecialistModelCapabilitiesSource> modelFactories,
     IActivityDefinitionAuthoringStore? authoring = null,
     IActivityDefinitionVersionPublicationStore? publications = null) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer
 {
@@ -173,9 +173,9 @@ internal sealed class SpecialistActivityProvider(
         var resultPolicy = ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result };
         return new(request.ActivityTypeKey, request.CandidateVersion, SpecialistRuntimeIds.ConsumerKey, payload,
             request.Contract.Inputs.Select(x => new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(x.ReferenceKey, x.Name,
-                new(x.Type.Alias, x.Type.CollectionKind), x.IsRequired, x.IsNullable, x.Default is not null, x.Default?.Value, ActivityValuePolicy.Default)),
+                new(x.Type.Alias, x.Type.CollectionKind), x.IsRequired, !x.IsRequired || x.IsNullable, x.Default is not null, x.Default?.Value, ActivityValuePolicy.Default)),
             new(new("System.Text.Json.JsonElement"), true, resultPolicy,
-                request.Contract.Outputs.Select(x => new ActivityResultProjectionContract(x.ReferenceKey, x.Name, new(x.Type.Alias, x.Type.CollectionKind), x.IsRequired, resultPolicy, x.SourceRepresentation)),
+                request.Contract.Outputs.Select(x => new ActivityResultProjectionContract(x.ReferenceKey, x.Name, new(x.Type.Alias, x.Type.CollectionKind), x.IsRequired && !x.IsNullable, resultPolicy, x.SourceRepresentation)),
                 ValueRepresentation.StructuredValue), ["Done"], new(SpecialistRuntimeIds.ConsumerKey, SpecialistRuntimeIds.FacadeCapability));
     }
 

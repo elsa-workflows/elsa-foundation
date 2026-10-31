@@ -5,7 +5,6 @@ using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
 using Elsa.Agent.Specialists;
-using Elsa.Agent.Specialists.JsonSchema;
 using Elsa.Secrets.Features;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
@@ -37,7 +36,7 @@ new ActivitiesRuntimeFeature().ConfigureServices(services);
 new SerializationFeature().ConfigureServices(services);
 new BackgroundActivitiesFeature { RunWorkers = false }.ConfigureServices(services);
 new SecretsFeature { EncryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) }.ConfigureServices(services);
-new SpecialistJsonSchemaFeature().ConfigureServices(services);
+
 new SpecialistsRuntimeFeature().ConfigureServices(services);
 new SpecialistsInMemoryJournalFeature().ConfigureServices(services);
 services.AddFixtureModel();

@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Agent.Specialists.JsonSchema;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Agent.Specialists.Activities;
@@ -19,7 +20,7 @@ namespace Elsa.Agent.Specialists;
 [ManifestFeatureCategory("Runtime")]
 [ShellFeature(name: "SpecialistsRuntime", DisplayName = "Specialists (Runtime)",
     Description = "Executes published specialists through Microsoft Agent Framework. Requires an explicitly configured turn journal and model provider.",
-    DependsOn = new object[] { "BackgroundActivities", "SpecialistJsonSchema", "Secrets", "Serialization" })]
+    DependsOn = new object[] { "BackgroundActivities", "Secrets", "Serialization" })]
 public class SpecialistsRuntimeFeature : IShellFeature
 {
     /// <inheritdoc />
@@ -27,6 +28,7 @@ public class SpecialistsRuntimeFeature : IShellFeature
     {
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddScoped<SpecialistSchemaValidator>();
         services.TryAddScoped<SpecialistNativeBinding>();
         services.TryAddScoped<SpecialistTurnJournal>();
         services.TryAddScoped<SpecialistModelRunner>();
