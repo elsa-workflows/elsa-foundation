@@ -70,6 +70,10 @@ configuration is the initial designer; a bespoke free-form graph needs evidence 
    persistence and integration seams. Reconcile #2913 before proposing collaboration mechanics.
 3. After those gates, elaborate M1's reviewed product/architecture packet and the next implementation leaf.
 
+The initial umbrella research is split into the SDK/source-compatibility spike #3529 and
+[publication/lifecycle witness #3533](https://github.com/elsa-workflows/elsa-foundation/issues/3533).
+The latter preserves the remaining M0 gates; SDK success alone cannot advance M1 or freeze contracts.
+
 ## Completion
 
 Published Copywriter and Proofreader execute a bounded editorial process with human approval through
