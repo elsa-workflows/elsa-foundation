@@ -85,6 +85,7 @@ function renderBpmnShape(nodeData: BpmnNodeData) {
               ownerNodeId={bound.nodeId}
               ownerLabel={element.name?.trim() || bound.label}
               slots={nodeData.childSlots}
+              collections={nodeData.collectionSlots}
               onEnterSlot={nodeData.onEnterSlot}
             />
           </span>

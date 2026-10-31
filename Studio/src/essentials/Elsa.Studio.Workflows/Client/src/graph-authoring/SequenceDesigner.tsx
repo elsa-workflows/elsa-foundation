@@ -10,6 +10,8 @@ import { ExecutionActivityPulse, ExecutionSequencePulse } from "../workflow-edit
 import { resolveNodeActivityVisual } from "../workflow-editor/workflowNodeVisual";
 import type { ChildSlot, WorkflowNodeData } from "../workflowAdapter";
 import "./sequenceDesigner.css";
+import { NodeCollectionActions } from "../workflow-editor/NodeSlotBadges";
+import type { CollectionSlotAction } from "../workflow-editor/contexts";
 
 export const sequenceNodeDragDataType = "application/x-elsa-sequence-node";
 
@@ -19,6 +21,7 @@ interface SequenceDesignerBaseProps {
   canvasRef: RefObject<HTMLDivElement | null>;
   onSelect(id: string | null): void;
   onOpenSlot?(ownerNodeId: string, ownerLabel: string, slot: ChildSlot): void;
+  onAddCollectionItem?: CollectionSlotAction;
   availabilityLookup?: WorkflowNodeAvailabilityLookup;
   children?: ReactNode;
 }
@@ -60,6 +63,7 @@ export function SequenceDesigner({
   onDuplicate,
   onSetWorkflowStart,
   onOpenSlot,
+  onAddCollectionItem,
   availabilityLookup,
   children
 }: SequenceDesignerProps) {
@@ -164,6 +168,7 @@ export function SequenceDesigner({
                   onDuplicate={onDuplicate ? () => onDuplicate(node.id) : undefined}
                   onSetWorkflowStart={onSetWorkflowStart ? enabled => onSetWorkflowStart(node.id, enabled) : undefined}
                   onOpenSlot={onOpenSlot}
+                  onAddCollectionItem={readOnly ? undefined : onAddCollectionItem}
                   availabilityLookup={availabilityLookup}
                 />
                 {index < nodes.length - 1 ? (
@@ -196,6 +201,7 @@ function SequenceStep({
   onDuplicate,
   onSetWorkflowStart,
   onOpenSlot,
+  onAddCollectionItem,
   availabilityLookup
 }: {
   node: Node<WorkflowNodeData>;
@@ -211,6 +217,7 @@ function SequenceStep({
   onDuplicate?: () => void;
   onSetWorkflowStart?: (enabled: boolean) => void;
   onOpenSlot?: SequenceDesignerProps["onOpenSlot"];
+  onAddCollectionItem?: CollectionSlotAction;
   availabilityLookup?: WorkflowNodeAvailabilityLookup;
 }) {
   const { data } = node;
@@ -286,7 +293,7 @@ function SequenceStep({
         </span>
       </button>
 
-      {data.childSlots.length ? (
+      {data.childSlots.length || (!readOnly && data.collectionSlots?.length) ? (
         <div className="wf-sequence-slots" aria-label={`${data.label} child slots`}>
           {data.childSlots.map(slot => (
             <button
@@ -301,6 +308,7 @@ function SequenceStep({
               <span className="wf-sequence-slot-summary">{slotSummary(slot)}<ChevronRight size={14} aria-hidden="true" /></span>
             </button>
           ))}
+          {!readOnly ? <NodeCollectionActions ownerNodeId={node.id} collections={data.collectionSlots} onAdd={onAddCollectionItem} className="wf-sequence-slot" /> : null}
         </div>
       ) : null}
 
