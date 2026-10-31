@@ -54,10 +54,23 @@ public sealed class LegacyNestedCancellationWorkbenchTests
             Assert.Equal("Cancelled", innerCompleted["result"]!["status"]!.GetValue<string>());
             var command = await host.GetAsync("/bpmn/executions/" + outer + "/commands/cancel-nested-root");
             Assert.True(JsonNode.DeepEquals(oldCommand["result"], command["result"]));
+            JsonNode physical;
+            JsonNode direct;
+            do
+            {
+                physical = await ObserveAsync();
+                direct = await ObserveAsync(directModel: true);
+                if (physical["resultSource"]?["status"]?.GetValue<int>() == 2 &&
+                    direct["sources"]!.AsArray().All(source => source!["status"]!.GetValue<int>() == 2) &&
+                    direct["queuedModelInputs"]!.AsArray().Count == 0) break;
+                if (DateTimeOffset.UtcNow >= limit) throw host.Failure("Nested cancellation consumption has not acknowledged every original source.");
+                await Task.Delay(100);
+            } while (true);
             var first = host.ProcessId;
             await host.StopAsync();
             var firstExit = host.LastStoppedExitCode;
-            var physical = await ObserveAsync();
+            Assert.True(JsonNode.DeepEquals(physical, await ObserveAsync()));
+            Assert.True(JsonNode.DeepEquals(direct, await ObserveAsync(directModel: true)));
             Assert.Equal(3, physical["model"]!["lifecycle"]!.GetValue<int>());
             Assert.True(Assert.Single(physical["model"]!["payload"]!["cancellations"]!.AsArray())!["settled"]!.GetValue<bool>());
             Assert.NotNull(physical["resultInput"]);
@@ -73,6 +86,7 @@ public sealed class LegacyNestedCancellationWorkbenchTests
             await host.StopAsync();
             var secondExit = host.LastStoppedExitCode;
             Assert.True(JsonNode.DeepEquals(physical, await ObserveAsync()));
+            Assert.True(JsonNode.DeepEquals(direct, await ObserveAsync(directModel: true)));
             var retainedStore = await host.SnapshotAsync("retained-runtime.sqlite.gz", "nested-cancel");
             if (Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_EVIDENCE_DIRECTORY") is { } evidence)
             {
@@ -80,18 +94,19 @@ public sealed class LegacyNestedCancellationWorkbenchTests
                 await File.WriteAllTextAsync(Path.Combine(directory, "case.json"), JsonSerializer.Serialize(new
                 {
                     sourceRevision = Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_SOURCE_REVISION"), originalWriter = capture["sourceRevision"],
-                    outer, inner, native, completed, innerCompleted, command, physical, first, second, firstExit, secondExit,
+                    outer, inner, native, completed, innerCompleted, command, physical, direct, first, second, firstExit, secondExit,
                     firstStore, retainedStore, binaries = host.DescribeBinaries(Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_SOURCE_REVISION")),
                     runtimeOnly = true, etlStoresOpened = false,
                     scope = "Actual source9508 outer-pending/inner-settled cancellation recovery. Original coupled ETL stores remain offline; alternative pending-child delivery order and broader ETL/Studio/provider acceptance are separate."
                 }, new JsonSerializerOptions { WriteIndented = true }));
             }
 
-            async Task<JsonNode> ObserveAsync()
+            async Task<JsonNode> ObserveAsync(bool directModel = false)
             {
                 var info = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
                     { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-                foreach (var arg in new[] { host.ReaderAssemblyPath, "--read-bpmn-native", host.RuntimeDatabase, outer, native }) info.ArgumentList.Add(arg);
+                foreach (var arg in new[] { host.ReaderAssemblyPath, directModel ? "--read-bpmn-direct" : "--read-bpmn-native", host.RuntimeDatabase, outer }) info.ArgumentList.Add(arg);
+                if (!directModel) info.ArgumentList.Add(native);
                 using var reader = Process.Start(info) ?? throw host.Failure("The closed-store nested cancellation reader did not start.");
                 var output = reader.StandardOutput.ReadToEndAsync();
                 var error = reader.StandardError.ReadToEndAsync();
