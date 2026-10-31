@@ -358,7 +358,7 @@ describe("workflow adapter", () => {
     const updated = replaceSlotActivities(root, slots[2], [body]);
 
     expect(new Set(slots.map(slot => slot.id)).size).toBe(3);
-    expect(slots.map(slot => slot.label)).toEqual(["Case A", "Case B", "Case B"]);
+    expect(slots.map(slot => slot.label)).toEqual(["A", "B", "B"]);
     expect(updated.structure?.payload.cases).toEqual([
       { name: "A", expression: "a", activity: null },
       { name: "B", expression: "b", activity: null },
@@ -367,15 +367,15 @@ describe("workflow adapter", () => {
   });
 
   it.each([
-    { kind: "parallel", scenario: "named", name: "Parallel.Branch", collection: "branches", labelProperty: "name", template: "Parallel.Branch[{name}]", values: ["Left", "Right"], labels: ["Parallel.Branch[Left]", "Parallel.Branch[Right]"] },
-    { kind: "switch", scenario: "named", name: "Switch.Case", collection: "cases", labelProperty: "match", template: "Switch.Case[{match}]", values: ["Left", "Right"], labels: ["Switch.Case[Left]", "Switch.Case[Right]"] },
+    { kind: "parallel", scenario: "named", name: "Parallel.Branch", collection: "branches", labelProperty: "name", template: "Parallel.Branch[{name}]", values: ["Left", "Right"], labels: ["Left", "Right"] },
+    { kind: "switch", scenario: "named", name: "Switch.Case", collection: "cases", labelProperty: "match", template: "Switch.Case[{match}]", values: ["Left", "Right"], labels: ["Left", "Right"] },
     { kind: "parallel", scenario: "literal", name: "Parallel.Branch", collection: "branches", labelProperty: "name", template: "Parallel.Branch[{name}]",
       values: ["{name}", "Parallel.Branch", "Left{index}", "Left1", "Sales $& Marketing"],
-      labels: ["Parallel.Branch[{name}]", "Parallel.Branch[Parallel.Branch]", "Parallel.Branch[Left{index}]", "Parallel.Branch[Left1]", "Parallel.Branch[Sales $& Marketing]"] },
+      labels: ["{name}", "Parallel.Branch", "Left{index}", "Left1", "Sales $& Marketing"] },
     { kind: "switch", scenario: "empty and literal", name: "Switch.Case", collection: "cases", labelProperty: "match", template: "Switch.Case[{match}]",
-      values: ["", "1", "$&", "{match}"], labels: ["Switch.Case[]", "Switch.Case[1]", "Switch.Case[$&]", "Switch.Case[{match}]"] },
+      values: ["", "1", "$&", "{match}", " ", " Padded "], labels: ['""', "1", "$&", "{match}", '" "', '" Padded "'] },
     { kind: "switch", scenario: "legacy alias", name: "Case", collection: "cases", labelProperty: "label", template: "Case {label}",
-      values: ["{name}", "Case", "{index}", "1"], labels: ["Case {name}", "Case Case", "Case {index}", "Case 1"] }
+      values: ["{name}", "Case", "{index}", "1"], labels: ["{name}", "Case", "{index}", "1"] }
   ])("distinguishes $kind collection slots using the declared item label ($scenario)", ({ kind, name, collection, labelProperty, template, values, labels }) => {
     const item: ActivityCatalogItem = {
       ...writeLine,
@@ -393,6 +393,7 @@ describe("workflow adapter", () => {
       } } };
     const slots = getChildSlots(root, item);
     expect(slots.map(slot => slot.label)).toEqual(labels);
+    expect(slots.map(slot => slot.slotNameTemplate)).toEqual(values.map(() => template));
     expect(new Set(slots.map(slot => slot.id)).size).toBe(values.length);
     expect(slots.map(slot => slot.activities.map(activity => activity.nodeId))).toEqual(values.map((_, index) => [`child-${index}`]));
     const changed = replaceSlotActivities(root, slots[1], [node("second-new")]);
@@ -403,6 +404,27 @@ describe("workflow adapter", () => {
     const selected = replaceSlotActivities(reordered, slots[0], [node("first-reordered-new")]);
     expect(getChildSlots(selected, item).map(slot => slot.activities.map(activity => activity.nodeId)))
       .toEqual(values.map((_, index) => [index === 0 ? "first-reordered-new" : `child-${index}`]).reverse());
+  });
+
+  it("keeps empty, quoted and Default case labels distinct while retaining exact matches", () => {
+    const values = ["", '""', " ", '" "', "Default", '"Default"', "Approved"];
+    const item: ActivityCatalogItem = { ...writeLine, activityVersionId: "switch-labels", designFacets: [{
+      kind: "elsa.switch.structure", schemaVersion: "1.0.0", payload: {
+        mode: "generic", supportsScopedVariables: false,
+        slots: [{ name: "Switch.Case", property: "cases", displayName: "Cases", cardinality: "single",
+          collectionProperty: "cases", childProperty: "activity", labelProperty: "match", slotNameTemplate: "Switch.Case[{match}]" },
+        { name: "Switch.Default", property: "default", displayName: "Default", cardinality: "single" }],
+        initialPayload: { cases: [], default: null }
+      }
+    }] };
+    const root = createActivityNode(item, "switch");
+    root.structure!.payload.cases = values.map(match => ({ match, activity: null }));
+    const slots = getChildSlots(root, item);
+    expect(new Set(slots.map(slot => slot.label)).size).toBe(values.length + 1);
+    expect(slots.slice(0, -1).map(slot => slot.collectionItemLabel)).toEqual(values);
+    expect(slots.at(-1)!.label).toBe("Default");
+    expect(slots.find(slot => slot.collectionItemLabel === "Default")!.label).toBe('"Default"');
+    expect(slots.find(slot => slot.collectionItemLabel === "Approved")!.label).toBe("Approved");
   });
 
   it("resolves explicit designer support for flowchart and sequence activities", () => {

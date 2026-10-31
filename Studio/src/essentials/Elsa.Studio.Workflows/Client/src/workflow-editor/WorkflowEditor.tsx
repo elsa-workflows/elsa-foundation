@@ -90,6 +90,7 @@ import { useWorkflowScope } from "./useWorkflowScope";
 import { useWorkflowContextBridge } from "./useWorkflowContextBridge";
 import { ActivityPalettePanel } from "./ActivityPalettePanel";
 import { SequenceDesigner } from "../graph-authoring/SequenceDesigner";
+import { addCollectionItem, getCollectionSlots, type CollectionSlot } from "../collectionSlots";
 import { CompensationScopeDesigner, type CompensationActivityTarget } from "../graph-authoring/CompensationScopeDesigner";
 import {
   addCompensationStep,
@@ -306,8 +307,9 @@ export function WorkflowEditor({
   const { setInspectorCollapsed } = sidePanelLayout;
   useEffect(() => {
     setActiveInspectorTabId(current =>
-      resolveActivityInspectorTabId(current, inspectedSupportsScopedVariables, inspectedSlots.length > 0));
-  }, [inspectedSlots.length, inspectedSupportsScopedVariables]);
+      resolveActivityInspectorTabId(current, inspectedSupportsScopedVariables, inspectedSlots.length > 0
+        || Boolean(inspectedNode && getCollectionSlots(inspectedNode, catalogByVersion.get(inspectedNode.activityVersionId)).length)));
+  }, [catalogByVersion, inspectedNode, inspectedSlots.length, inspectedSupportsScopedVariables]);
   const inspectedCatalogItem = inspectedNode ? catalogByVersion.get(inspectedNode.activityVersionId) : null;
   const inspectedIsHttpEndpoint = !!inspectedNode && isHttpEndpointType(
     inspectedDescriptor?.typeName ?? inspectedCatalogItem?.activityTypeKey);
@@ -469,8 +471,9 @@ export function WorkflowEditor({
   const nodes = useMemo(() => {
     const activities = new Map((scope?.slot.activities ?? (scopeOwner ? [scopeOwner] : [])).map(activity => [activity.nodeId, activity]));
     return runCanvas.nodes.map(node => {
-      const activity = activities.get(node.id);
+      const activity = activities.get(node.data.runtimeNodeId ?? node.id);
       return activity ? { ...node, data: { ...node.data,
+        collectionSlots: getCollectionSlots(activity, catalogByVersion.get(activity.activityVersionId)),
         workflowStartEnabled: getWorkflowStartEnabled(activity, catalogByVersion.get(activity.activityVersionId))
       } } : node;
     });
@@ -776,8 +779,14 @@ export function WorkflowEditor({
     editDraft(({ draft: current }) => {
       const rootActivity = current?.state.rootActivity;
       if (!current || !rootActivity) return null;
+      const previous = findActivityNode(rootActivity, activity.nodeId, catalogByVersion);
+      const kept = collectOwnedNodeIds(activity, catalogByVersion, new Set<string>());
+      const removed = previous
+        ? new Set([...collectOwnedNodeIds(previous, catalogByVersion, new Set<string>())].filter(nodeId => !kept.has(nodeId)))
+        : new Set<string>();
       return {
         ...current,
+        ...forgetRemovedNodes(current, removed),
         state: {
           ...current.state,
           rootActivity: updateActivity(rootActivity, activity.nodeId, () => activity, catalogByVersion)
@@ -785,6 +794,22 @@ export function WorkflowEditor({
       };
     });
   }, [catalogByVersion, editDraft]);
+
+  const addCollectionSlotItem = useCallback((ownerNodeId: string, collection: CollectionSlot) => {
+    if (!canAddActivitiesToCanvas) return;
+    editDraft(({ draft: current }) => current?.state.rootActivity ? {
+      ...current,
+      state: { ...current.state, rootActivity: updateActivity(current.state.rootActivity, ownerNodeId, owner => {
+        const live = getCollectionSlots(owner, catalogByVersion.get(owner.activityVersionId)).find(candidate => candidate.property === collection.property);
+        return live ? addCollectionItem(owner, live) : owner;
+      }, catalogByVersion) }
+    } : null);
+    select(nodes.find(node => node.id === ownerNodeId || node.data.runtimeNodeId === ownerNodeId)?.id ?? ownerNodeId);
+    setActiveRightPanelId("inspector");
+    setInspectorView("configuration");
+    setActiveInspectorTabId("slots");
+    setInspectorCollapsed(false);
+  }, [canAddActivitiesToCanvas, catalogByVersion, editDraft, nodes, select, setInspectorCollapsed]);
 
   const updateSelectedPresentation = useCallback((
     presentation: { displayName?: string | null; description?: string | null }
@@ -1568,7 +1593,7 @@ export function WorkflowEditor({
             </CompensationScopeDesigner>
           ) : scope?.slot.mode === "sequence" && scope.slot.cardinality === "many" && !isUnsupportedDesigner ? (
             <SequenceDesigner
-              nodes={nodes}
+              nodes={nodes.filter(node => node.type !== "bpmnElement")}
               selectedNodeId={selectedNodeId}
               readOnly={!canAddActivitiesToCanvas}
               canvasRef={canvasRef}
@@ -1583,6 +1608,7 @@ export function WorkflowEditor({
               onDelete={deleteCanvasNode}
               onDuplicate={nodeId => duplicateSelectedActivities([nodeId])}
               onSetWorkflowStart={setWorkflowStart}
+              onAddCollectionItem={addCollectionSlotItem}
               onOpenSlot={(ownerId, label, slot) => enterSlotScope(ownerId, slot, slotCrumbLabel(label, slot))}
             >
               {connectMenu ? <ConnectMenu clientX={connectMenu.clientX} clientY={connectMenu.clientY} activities={paletteCatalog} onPick={onConnectMenuPick} onClose={() => setConnectMenu(null)} /> : null}
@@ -1590,6 +1616,7 @@ export function WorkflowEditor({
           ) : <GraphAuthoringCanvas
             canvasRef={canvasRef}
             nodeActions={nodeActions}
+            collectionAction={canAddActivitiesToCanvas ? addCollectionSlotItem : null}
             canvasProps={{
               tabIndex: -1,
               "aria-label": "Workflow canvas",
