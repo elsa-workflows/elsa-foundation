@@ -68,8 +68,10 @@ configuration is the initial designer; a bespoke free-form graph needs evidence 
 2. M1 design is complete through [PR #3540](https://github.com/elsa-workflows/elsa-foundation/pull/3540)
    and resulting-main core/Studio qualification on `e26c11bd9`.
 3. M2 publication/runtime kernel [#3548](https://github.com/elsa-workflows/elsa-foundation/issues/3548)
-   is the active implementation. Draft discovery #3541 merged through #3543; the central MEAI enabler
-   #3544/#3546 remains in the review/qualification lane. Kernel package qualification and product
+   is finishing qualification in [PR #3573](https://github.com/elsa-workflows/elsa-foundation/pull/3573).
+   Its bounded source and independent package proof passed, with no production durability or live-model
+   claim. Draft discovery #3541 merged through #3543; central MEAI enabler #3544/#3546 remains in the
+   review/qualification lane. Exact-head CI, dependency merge, resulting-main qualification and product
    M2–M7 acceptance remain open.
 
 The initial umbrella research is split into the SDK/source-compatibility spike #3529 and
