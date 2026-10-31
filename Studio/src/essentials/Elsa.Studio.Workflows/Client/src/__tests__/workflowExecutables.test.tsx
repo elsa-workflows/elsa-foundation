@@ -59,10 +59,71 @@ describe("WorkflowExecutables", () => {
     await definitions;
     await flushAsyncUpdates();
 
-    const artifactCell = container.querySelector(".wf-artifact-cell");
-    expect(artifactCell?.textContent).toContain("Definition version");
-    expect(artifactCell?.textContent).toContain("Version 12.4");
+    expect(container.textContent).toContain("Nightly orders");
+    expect(container.querySelector(".wf-executable-workflow-name")?.getAttribute("title")).toBe("Nightly orders");
+    expect(container.querySelector('footer[aria-label="Workflow executable pagination"]')?.textContent).toContain("Showing 1-1 of 1");
+
+    const identifiersTrigger = container.querySelector<HTMLButtonElement>('button[aria-label="Identifiers for Nightly orders"]');
+    expect(identifiersTrigger).not.toBeNull();
+    identifiersTrigger!.click();
+    flushSync(() => {});
+
+    const identifiersDialog = document.body.querySelector('[role="dialog"][aria-label="Workflow executable identifiers for Nightly orders"]');
+    expect(identifiersDialog?.textContent).toContain("Definition version");
+    expect(identifiersDialog?.textContent).toContain("Version 12.4");
     expect(container.textContent).not.toContain("Loading workflow names");
+  });
+
+  it("keeps long workflow names on one line and offers an empty-state action", async () => {
+    const longName = "Customer-onboarding-and-KYC-refresh-for-regulated-markets-with-manual-exception-review-and-multi-region-escalation";
+    vi.mocked(listExecutables).mockResolvedValue([executableSummary()]);
+    vi.mocked(listDefinitions).mockResolvedValue({ definitions: [definitionSummary(longName)], page: 1, pageSize: 100, totalCount: 1 });
+
+    flushSync(() => root.render(<WorkflowExecutables
+      context={{} as StudioEndpointContext}
+      ai={emptyAi()}
+      runInputEditors={[]}
+      definitionFilter={null}
+      onDefinitionFilterChange={() => {}}
+    />));
+    await flushAsyncUpdates();
+
+    const name = container.querySelector(".wf-executable-workflow-name");
+    expect(name?.textContent).toBe(longName);
+    expect(name?.getAttribute("title")).toBe(longName);
+    expect(container.querySelector(".studio-collection-table")).not.toBeNull();
+    expect(container.textContent).toContain("Inspect");
+    expect(container.textContent).toContain("Run");
+    expect(Array.from(container.querySelectorAll(".wf-row-actions button"), button => button.textContent?.replace(/\s+/g, " ").trim()))
+      .toEqual(expect.arrayContaining(["Inspect", "Run"]));
+    expect(container.querySelector(".wf-row-actions .studio-overflow-menu")).toBeNull();
+
+    const identifiers = container.querySelector(".wf-executable-identifiers");
+    expect(identifiers?.querySelector(".wf-list-primary-id")).not.toBeNull();
+    expect(identifiers?.querySelector(`button[aria-label="Identifiers for ${longName}"]`)).not.toBeNull();
+
+    const published = container.querySelector<HTMLTimeElement>(".wf-executable-published time");
+    const publishedAt = new Date("2026-10-18T00:00:00Z");
+    expect(published?.textContent?.trim()).toBe(publishedAt.toLocaleDateString());
+    expect(published?.getAttribute("title")).toBe(publishedAt.toLocaleString());
+  });
+
+  it("shows a primary empty-state action and the pager footer when there are no executables", async () => {
+    vi.mocked(listExecutables).mockResolvedValue([]);
+    vi.mocked(listDefinitions).mockResolvedValue({ definitions: [], page: 1, pageSize: 100, totalCount: 0 });
+
+    flushSync(() => root.render(<WorkflowExecutables
+      context={{} as StudioEndpointContext}
+      ai={emptyAi()}
+      runInputEditors={[]}
+      definitionFilter={null}
+      onDefinitionFilterChange={() => {}}
+    />));
+    await flushAsyncUpdates();
+
+    expect(container.textContent).toContain("No workflow executables");
+    expect(container.textContent).toContain("Open workflow definitions");
+    expect(container.querySelector('footer[aria-label="Workflow executable pagination"]')?.textContent).toContain("Showing 0-0 of 0");
   });
 });
 
