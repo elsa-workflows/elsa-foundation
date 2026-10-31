@@ -1,4 +1,8 @@
-# Round 6 corrections in development
+# Round 6 corrections
+
+[Committed-source qualification](qualification-2191/README.md) now passes499 BPMN tests atdaac,42 actual host tests at2191,zero skips, and12 public binary API comparisons. The original accepted timer and a normal direct restart journey are proved through real SIGKILLs and closed stores. New main dec598d99 Identity/Studio adoption and its affected qualification remain due; no extra full review is authorized yet.
+
+## Initial development checkpoint
 
 Both adopted findings have implementations; committed-source host qualification and a clean full review remain due. This is repair work under the existing delivery authorization, not a seventh review round. Six full rounds remain completed, none clean; the owner review-route card is pending.
 

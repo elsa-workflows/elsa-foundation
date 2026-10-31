@@ -1,0 +1,18 @@
+[
+  {
+    "suite": "bpmn",
+    "listedCases": 499,
+    "distinctListedMethods": 340,
+    "distinctExecutedMethods": 340,
+    "missing": [],
+    "extra": []
+  },
+  {
+    "suite": "hosting",
+    "listedCases": 42,
+    "distinctListedMethods": 21,
+    "distinctExecutedMethods": 21,
+    "missing": [],
+    "extra": []
+  }
+]
