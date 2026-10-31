@@ -1,6 +1,6 @@
 # Switch case conditions
 
-**Status**: Implemented (delivery qualification in progress)
+**Status**: Implemented
 **Issue**: #3518
 **Program bucket**: none/free-flow
 
@@ -12,7 +12,7 @@ An author labels a Switch case Approved, selects an expression syntax, and write
 
 1. Each new case exposes a label, a boolean condition with the standard expression editor/syntax picker, and its branch. Labels and breadcrumbs remain human-readable.
 2. Literal booleans, supported expression languages and scoped data references retain normal input typing, conversion, validation and error handling. Reuse each host's existing ordinary-input capabilities and report unavailable language services honestly. Case conditions are compiled bindings, never ad-hoc source evaluation inside Switch.
-3. Conditions are evaluated in authored order and short-circuit at the first true value. Later conditions are not evaluated after a match. An unbound predicate is false. A failed evaluated condition faults through the normal expression diagnostic path instead of selecting Default.
+3. Conditions are evaluated in authored order and short-circuit at the first true value. Later conditions are not evaluated after a match. An unbound predicate is false. A failed evaluated condition records the normal blocking input-failure incident instead of selecting Default.
 4. A selected empty case completes with its label outcome; Default handles only no-match. Branch completion and Break propagation retain existing behavior.
 5. Saved conditions retain expression syntax and payload through reload, branch edits, label edits, undo/redo, and publication. Moving cases changes priority without changing their identity. Deleting a case preserves every remaining condition and descendant; pending editor/tooling results cannot attach to another case.
 6. Both workflow and activity-definition hosts support Sequence, Flowchart and BPMN, keyboard/narrow layouts and read-only/source-owned controls.

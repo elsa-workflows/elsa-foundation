@@ -31,7 +31,9 @@ Spec and revised plan reviewed independently for correctness, standards and acce
 ## Qualification and delivery
 
 - [x] T18 Update canonical extension-point catalogs and Switch README for the new projection/materialization/hydration contracts and v1/v2 behavior. Record the pre-existing Activity Graph server-language-service limitation without claiming new support.
-- [ ] T19 Run focused and complete affected frontend tests, lint/typecheck/style/build/bundle checks; affected backend tests, architecture and generated maps checks. Record failures/skips/retries separately.
+- [x] T19 Run focused and complete affected frontend tests, lint/typecheck/style/build/bundle checks; affected backend tests, architecture and generated maps checks. Record failures/skips/retries separately.
 - [x] T20 Run fresh real Workbench/Studio proofs: author conditions, autosave/reload, publish, execute first-match/default/error; publish/place/run a condition-bearing Activity Definition graph with variable and prior-result references. Clean owned processes.
-- [ ] T21 Recheck main, integrate if necessary, requalify and obtain independent reviews of the complete diff plus issue/PR comments. Record causal red/green evidence.
+- [x] T21 Recheck main, integrate if necessary, requalify and obtain independent reviews of the complete diff plus issue/PR comments. Record causal red/green evidence.
 - [ ] T22 Open/attach the PR with acceptance mapping, request Code Review, verify exact-head CI/Studio checks, merge through authorized review and qualify resulting main. Close #3518 with the merge/source-preservation receipt.
+
+T22 includes gates that occur after the final branch commit. Exact-head hosted checks, merge and resulting-main receipts are recorded on PR #3539 and issue #3518.

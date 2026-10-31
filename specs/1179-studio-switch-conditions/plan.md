@@ -32,7 +32,7 @@ V2's projection consumes the ordinary Value input: it is not eagerly compiled/hy
 
 Use a dedicated Upgrade to case conditions action in the shared inspector for v1 nodes when the v2 catalog version is available. One normal mutation atomically changes activity version and structure schema, assigns case IDs, and preserves Value, labels, children, unknown payload members and literal matching. It works in both editable hosts, with undo/redo. V1 refuses predicate fields rather than publishing them with old matching semantics. This does not depend on the reusable-version helper, which cannot migrate structure schemas.
 
-Branch completion resolves the outcome from the selected branch, without re-evaluating conditions; Break behavior is unchanged. Empty selected branches complete with their case label, and evaluated errors fault normally.
+Branch completion resolves the outcome from the selected branch, without re-evaluating conditions; Break behavior is unchanged. Empty selected branches complete with their case label. Evaluated errors record the normal blocking input-failure incident before activation; they do not select Default.
 
 ### Studio and expression tooling
 
