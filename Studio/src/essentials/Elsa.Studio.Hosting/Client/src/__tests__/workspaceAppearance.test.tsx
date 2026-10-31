@@ -43,6 +43,63 @@ afterEach(async () => {
 });
 
 describe("independent workspace appearance", () => {
+  it.each(["builtin:porcelain", "builtin:atelier", "builtin:graphite"] as const)("applies %s as an explicit complete preset and restores it after remount", async id => {
+    await render();
+    await update(() => appearance.setNavModePreference("top"));
+    await update(() => appearance.applyPreset(id));
+    const mode = id === "builtin:graphite" ? "dark" : "light";
+    expect(html().getAttribute("data-theme")).toBe(id);
+    expect(html().getAttribute("data-color-scheme")).toBe(id);
+    expect(html().getAttribute("data-workspace-style")).toBe("minimal");
+    expect(html().getAttribute("data-theme-appearance")).toBe(mode);
+    expect(html().getAttribute("data-nav-mode")).toBe("top");
+    expect(html().style.getPropertyValue("--studio-nav-bg")).toBe(getThemeModeDefinition(getTheme(id)!, mode)!.sidebar);
+    expect(localStorage.getItem("elsa-studio-color-scheme")).toBe("@theme");
+    await update(() => root.render(<div />));
+    await render();
+    expect(html().getAttribute("data-theme")).toBe(id);
+    expect(html().getAttribute("data-workspace-style")).toBe("minimal");
+    expect(html().getAttribute("data-theme-appearance")).toBe(mode);
+  });
+
+  it("changes the palette without changing a minimal preset's mode, geometry or edited input", async () => {
+    await render();
+    await update(() => appearance.applyPreset("builtin:porcelain"));
+    const input = container.querySelector("input")!;
+    input.value = "Keep this edit";
+    const radius = html().style.getPropertyValue("--radius");
+    await update(() => appearance.setColorScheme("builtin:graphite"));
+    expect(html().getAttribute("data-theme-appearance")).toBe("light");
+    expect(html().getAttribute("data-theme")).toBe("builtin:porcelain");
+    expect(html().getAttribute("data-color-scheme")).toBe("builtin:graphite");
+    expect(html().style.getPropertyValue("--radius")).toBe(radius);
+    expect(input.value).toBe("Keep this edit");
+  });
+
+  it("previews a custom minimal treatment without persisting or overriding its editable theme defaults", async () => {
+    await render();
+    const before = { ...localStorage };
+    await update(() => appearance.previewTheme({ ...getTheme("builtin:porcelain")!, id: "custom-minimal", source: "custom", layout: "floating", shape: { radius: "18px" }, typography: { sans: "Custom Sans" } }));
+    expect(html().getAttribute("data-workspace-style")).toBe("minimal");
+    expect(html().getAttribute("data-theme-layout")).toBe("floating");
+    expect(html().style.getPropertyValue("--radius")).toBe("18px");
+    expect(html().style.getPropertyValue("--font-sans")).toBe("Custom Sans");
+    expect({ ...localStorage }).toEqual(before);
+    await update(() => appearance.setTheme("atelier"));
+    expect(html().hasAttribute("data-workspace-style")).toBe(false);
+    expect(html().getAttribute("data-theme-layout")).toBe("editorial");
+  });
+
+  it("does not apply a hidden complete preset", async () => {
+    const context = { http: { getJson: async () => normalizeThemeStore({ disabledBuiltInThemeIds: ["builtin:graphite"] }) } } as unknown as StudioEndpointContext;
+    await render(context);
+    await vi.waitFor(() => expect(appearance.store.disabledBuiltInThemeIds).toContain("builtin:graphite"));
+    const before = { ...localStorage };
+    await update(() => appearance.applyPreset("builtin:graphite"));
+    expect(appearance.currentTheme.id).toBe("linen");
+    expect({ ...localStorage }).toEqual(before);
+  });
+
   it("keeps a host palette default unpersisted so a later host default can apply", async () => {
     window.__ELSA_STUDIO_RUNTIME__ = { appearance: { paletteId: "drift" } };
     const context = { http: { getJson: async () => normalizeThemeStore({ defaultThemeId: "meridian" }) } } as unknown as StudioEndpointContext;

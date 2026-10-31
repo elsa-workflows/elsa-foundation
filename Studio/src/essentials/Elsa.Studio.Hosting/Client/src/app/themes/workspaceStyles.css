@@ -338,3 +338,52 @@ html[data-workspace-style="linen"] .nav-section a:hover:not(.active) {
   background: color-mix(in srgb, var(--studio-nav-text) 8%, var(--studio-nav-bg));
   color: var(--studio-nav-text);
 }
+
+/* Minimal chrome: palette-owned navigation, restrained dividers and no ambient color wash. */
+html[data-workspace-style="minimal"] .studio-shell { background: var(--studio-bg); }
+html[data-workspace-style="minimal"] .sidebar {
+  --sidebar: var(--studio-nav-bg);
+  --sidebar-foreground: var(--studio-nav-text);
+  --sidebar-active: var(--studio-nav-active);
+  --sidebar-active-foreground: var(--studio-nav-active-text);
+  --studio-text: var(--studio-nav-text);
+  --studio-text-muted: var(--studio-nav-muted);
+  --foreground: var(--studio-nav-text);
+  --muted-foreground: var(--studio-nav-muted);
+  --studio-surface: var(--studio-nav-bg);
+  --studio-surface-muted: color-mix(in srgb, var(--studio-nav-text) 6%, var(--studio-nav-bg));
+  --studio-accent-soft: var(--studio-nav-active);
+  --studio-focus: var(--studio-nav-text);
+  background: var(--studio-nav-bg);
+  color: var(--studio-nav-text);
+  border-right: 1px solid color-mix(in srgb, var(--studio-nav-text) 8%, var(--studio-nav-bg));
+  padding: 22px 12px 14px;
+}
+html[data-workspace-style="minimal"] .brand { gap: 10px; padding: 0 6px 14px; }
+html[data-workspace-style="minimal"] .brand strong { font-size: 16px; font-weight: 650; overflow-wrap: anywhere; }
+html[data-workspace-style="minimal"] .brand small { font-size: 11px; }
+html[data-workspace-style="minimal"] :is(.brand small, .nav-heading) { opacity: 1; }
+html[data-workspace-style="minimal"] .nav-icon-tile { width: 20px; height: 20px; color: currentColor; background: transparent; border: 0; box-shadow: none; }
+html[data-workspace-style="minimal"] .nav-section a { position: relative; min-height: 42px; font-size: 14px; color: var(--studio-nav-text); }
+html[data-workspace-style="minimal"] .nav-section a.active { background: var(--studio-nav-active); color: var(--studio-nav-active-text); }
+html[data-workspace-style="minimal"] .nav-section a.active::before { content: ""; display: block; position: absolute; left: 0; top: 10px; bottom: 10px; width: 2px; border-radius: 2px; background: var(--studio-selection-mark); }
+html[data-workspace-style="minimal"] .nav-section a:hover:not(.active) { background: color-mix(in srgb, var(--studio-nav-text) 5%, var(--studio-nav-bg)); }
+html[data-workspace-style="minimal"] .sidebar :is(.sidebar-collapse-toggle, .user-menu-button, .nav-overflow-toggle) { color: var(--studio-nav-text); }
+html[data-workspace-style="minimal"] .sidebar-search { border-color: color-mix(in srgb, var(--studio-nav-text) 16%, var(--studio-nav-bg)); background: transparent; }
+html[data-workspace-style="minimal"] .sidebar-environment { border: 0; border-top: 1px var(--studio-section-boundary-style) color-mix(in srgb, var(--studio-nav-text) 20%, transparent); border-radius: 0; background: transparent; padding-top: 16px; }
+html[data-workspace-style="minimal"] .sidebar-account { border-top: 1px var(--studio-section-boundary-style) color-mix(in srgb, var(--studio-nav-text) 20%, transparent); padding-top: 12px; }
+html[data-workspace-style="minimal"] .main-frame { background: var(--studio-bg); min-width: 0; }
+html[data-workspace-style="minimal"] .topbar { min-height: 52px; background: var(--studio-bg); border-bottom: 1px solid var(--studio-edge-subtle); }
+html[data-workspace-style="minimal"] .content { padding: 24px 28px; background: var(--studio-bg); }
+html[data-workspace-style="minimal"] .content:has(> :is(.wf-editor, .wf-page--run-workbench)) { padding: 0; }
+html[data-workspace-style="minimal"] .studio-dialog-confirm[data-tone="default"] { background: var(--studio-action-primary-bg); border-color: var(--studio-action-primary-bg); color: var(--studio-action-primary-fg); }
+@media (min-width: 1025px) {
+  html[data-workspace-style="minimal"] .studio-shell { grid-template-columns: 216px minmax(0, 1fr); }
+  html[data-workspace-style="minimal"] .studio-shell.sidebar-collapsed { grid-template-columns: 72px minmax(0, 1fr); }
+  html[data-workspace-style="minimal"][data-nav-mode="top"] .studio-shell { grid-template-columns: minmax(0, 1fr); }
+  html[data-workspace-style="minimal"][data-nav-mode="top"] .sidebar { padding: 8px 20px; }
+}
+@media (max-width: 600px) {
+  html[data-workspace-style="minimal"] .content { padding: 16px; }
+  html[data-workspace-style="minimal"] .sidebar { padding: 8px 12px; }
+}

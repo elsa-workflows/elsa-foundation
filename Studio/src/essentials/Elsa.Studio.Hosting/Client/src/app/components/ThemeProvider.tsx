@@ -26,7 +26,8 @@ import {
   type ThemeModePreference
 } from "../themes/appearance";
 import { findSelectableTheme, getSelectableThemes, getThemeStore, normalizeThemeStore, type ThemeStoreResponse } from "../themes/themeStoreApi";
-import { applyWorkspaceStyle, getWorkspaceStyle, type WorkspaceStyle } from "../themes/workspaceStyles";
+import { applyWorkspaceStyle, getWorkspaceStyle, isWorkspaceStyle, type WorkspaceStyle } from "../themes/workspaceStyles";
+import { minimalStudioPresets, type MinimalStudioPresetId } from "../themes/minimalPresets";
 
 interface ThemeContextType {
   currentTheme: Theme;
@@ -41,6 +42,8 @@ interface ThemeContextType {
   /** The stored mode choice, including `system` (follow the OS). */
   modePreference: ThemeModePreference;
   setTheme: (themeId: string) => void;
+  /** Explicitly applies a complete reference combination; one-axis setters keep their semantics. */
+  applyPreset: (themeId: MinimalStudioPresetId) => void;
   /** Accepts a concrete mode or `system`. Same implementation as `setModePreference`. */
   setMode: (mode: ThemeModePreference) => void;
   setModePreference: (preference: ThemeModePreference) => void;
@@ -80,10 +83,11 @@ export function ThemeProvider({
   const [workspaceStyle, setWorkspaceStyleState] = useState<WorkspaceStyle | null>("linen");
   const [colorSchemeId, setColorSchemeId] = useState<string | null>(null);
   const currentTheme = preview ?? baseTheme;
-  const inheritedStyle = currentTheme.id === "linen" ? "linen" : null;
+  const inheritedStyle = isWorkspaceStyle(currentTheme.workspaceStyle) ? currentTheme.workspaceStyle : currentTheme.id === "linen" ? "linen" : null;
   const activeStyle = preview ? inheritedStyle : workspaceStyle ?? inheritedStyle;
   const currentColorScheme = preview ?? (colorSchemeId === null ? baseTheme : findSelectableTheme(store, colorSchemeId));
-  const styledTheme = React.useMemo(() => applyWorkspaceStyle(currentTheme, activeStyle), [currentTheme, activeStyle]);
+  // Theme defaults retain editable layout/type/shape; only an explicit workspace override replaces them.
+  const styledTheme = React.useMemo(() => applyWorkspaceStyle(currentTheme, preview ? null : workspaceStyle), [currentTheme, preview, workspaceStyle]);
   // The preferred mode survives theme switches: picking High contrast, visiting a light/dark-only
   // theme, and coming back restores High contrast rather than whatever that theme fell back to.
   const [modePreference, setModePreferenceState] = useState<ThemeModePreference>("system");
@@ -94,7 +98,7 @@ export function ThemeProvider({
   const [mounted, setMounted] = useState(false);
   const supportedModes = getSupportedThemeModes(currentColorScheme);
   const activeMode = resolveThemeMode(currentColorScheme, preferredMode);
-  const themeNavMode = activeStyle ? getWorkspaceStyle(activeStyle).navigation : getThemeNavMode(styledTheme.layout);
+  const themeNavMode = !preview && workspaceStyle ? getWorkspaceStyle(workspaceStyle).navigation : getThemeNavMode(styledTheme.layout);
   const navMode = navModePreference === "theme" ? themeNavMode : navModePreference;
 
   // Initialize from localStorage on mount and again whenever the store changes, falling back to the
@@ -211,6 +215,18 @@ export function ThemeProvider({
     setCurrentTheme(nextTheme);
   };
 
+  const handleApplyPreset = (themeId: MinimalStudioPresetId) => {
+    const preset = minimalStudioPresets.find(candidate => candidate.id === themeId);
+    const nextTheme = getSelectableThemes(store).find(candidate => candidate.id === themeId);
+    if (!preset || !nextTheme) return;
+    writeAppearancePreferences({ themeId, workspaceStyle: "minimal", colorSchemeId: null, mode: preset.mode });
+    setPreview(undefined);
+    setWorkspaceStyleState("minimal");
+    setColorSchemeId(null);
+    setCurrentTheme(nextTheme);
+    setModePreferenceState(preset.mode);
+  };
+
   const handleSetWorkspaceStyle = (style: WorkspaceStyle | null) => {
     setPreview(undefined);
     setWorkspaceStyleState(style);
@@ -265,6 +281,7 @@ export function ThemeProvider({
         mode: activeMode,
         preferredMode,
         setTheme: handleSetTheme,
+        applyPreset: handleApplyPreset,
         modePreference,
         setMode: handleSetModePreference,
         setModePreference: handleSetModePreference,
