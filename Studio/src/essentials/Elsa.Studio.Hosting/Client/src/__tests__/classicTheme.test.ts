@@ -60,8 +60,8 @@ function luminance(color: string) {
 }
 
 describe("Classic palette", () => {
-  it("is the out-of-box default and keeps Meridian selectable", () => {
-    expect(foundationThemeIds[0]).toBe("classic");
+  it("remains selectable alongside Linen and Meridian", () => {
+    expect(foundationThemeIds).toContain("classic");
     expect(foundationThemeIds).toContain("meridian");
     expect(getTheme("meridian")).toBeDefined();
   });

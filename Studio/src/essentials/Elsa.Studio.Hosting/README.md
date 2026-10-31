@@ -110,3 +110,9 @@ shell configuration as host-owned/read-only, even if a previously loaded file st
 and other installed options remain unchanged. Addons must also check actual configuration-provider ownership
 before writing; a file path alone does not establish that its values control the running shell.
 
+
+## Branding
+
+The standard browser supports public host branding and independent Linen/palette/appearance defaults.
+See the [integrator guide](../../../docs/branding.md) for configuration, image-led login layouts,
+custom artwork, replacement presentation and shared module styling.

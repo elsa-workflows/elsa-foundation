@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import axe from "axe-core";
+import type { StudioBrandingConfig } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/runtime";
 
 const provider = "aspnetcore-identity";
 const loginPage = "<!doctype html><title>Sign in</title><h1>Backend sign-in page</h1>";
@@ -51,11 +52,15 @@ type UserMenuOptions = {
   account?: boolean;
   authEnabled?: boolean;
   backend?: "long";
+  branding?: StudioBrandingConfig;
 };
 
 async function openShell(page: Page, options: UserMenuOptions = {}) {
   const theme = options.theme ?? "light";
   const state = await mockIdentity(page, options);
+  if (options.branding) await page.addInitScript(branding => {
+    window.__ELSA_STUDIO_RUNTIME__ = { branding };
+  }, options.branding);
   const query = new URLSearchParams({
     mode: "user-menu",
     theme,
@@ -118,7 +123,7 @@ async function readShellGeometry(page: Page) {
       controls: {
         weaver: describe(".topbar-actions .agent-launcher"),
         github: describe('.topbar-actions a[aria-label="GitHub"]'),
-        designer: describe('.topbar-actions a[aria-label="Designer source"]'),
+        documentation: describe('.topbar-actions a[aria-label="Documentation"]'),
         appearance: describe(".topbar-actions .theme-selector-button"),
         account: describe(".topbar-actions .user-menu-button")
       },
@@ -271,7 +276,7 @@ test.describe("shell user menu", () => {
       await page.keyboard.press("Tab");
       await expect(page.getByRole("link", { name: "GitHub" })).toBeFocused();
       await page.keyboard.press("Tab");
-      await expect(page.getByRole("link", { name: "Designer source" })).toBeFocused();
+      await expect(page.getByRole("link", { name: "Documentation" })).toBeFocused();
       await page.keyboard.press("Tab");
       await expect(page.getByRole("button", { name: "Select theme" })).toBeFocused();
       await page.keyboard.press("Tab");
@@ -345,8 +350,8 @@ test.describe("shell user menu", () => {
     const themeMenu = page.locator(".theme-dropdown");
     const workspaceGroup = themeMenu.getByRole("group", { name: "Workspace style", exact: true });
     const navigationGroup = themeMenu.getByRole("group", { name: "Navigation", exact: true });
-    await expect(workspaceGroup.getByRole("menuitemradio", { name: "Quiet Studio", exact: true })).toBeFocused();
-    for (const name of ["Focus Canvas", "Open Studio", "Theme default", "Light"]) {
+    await expect(workspaceGroup.getByRole("menuitemradio", { name: "Linen", exact: true })).toBeFocused();
+    for (const name of ["Quiet Studio", "Focus Canvas", "Open Studio", "Theme default", "Light"]) {
       await page.keyboard.press("ArrowDown");
       await expect((name === "Theme default" ? workspaceGroup : themeMenu).getByRole("menuitemradio", { name, exact: true })).toBeFocused();
     }
@@ -356,8 +361,8 @@ test.describe("shell user menu", () => {
     await expect(page.locator("html")).toHaveAttribute("data-theme-appearance", "dark");
 
     await page.keyboard.press("Home");
-    await expect(workspaceGroup.getByRole("menuitemradio", { name: "Quiet Studio", exact: true })).toBeFocused();
-    for (const name of ["Focus Canvas", "Open Studio", "Theme default", "Light", "Dark", "Dim", "High contrast"]) {
+    await expect(workspaceGroup.getByRole("menuitemradio", { name: "Linen", exact: true })).toBeFocused();
+    for (const name of ["Quiet Studio", "Focus Canvas", "Open Studio", "Theme default", "Light", "Dark", "Dim", "High contrast"]) {
       await page.keyboard.press("ArrowDown");
       await expect((name === "Theme default" ? workspaceGroup : themeMenu).getByRole("menuitemradio", { name, exact: true })).toBeFocused();
     }
@@ -383,7 +388,7 @@ test.describe("shell user menu", () => {
     await expect(themeMenu).toBeHidden();
     await expect(themeTrigger).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(workspaceGroup.getByRole("menuitemradio", { name: "Quiet Studio", exact: true })).toBeFocused();
+    await expect(workspaceGroup.getByRole("menuitemradio", { name: "Linen", exact: true })).toBeFocused();
     await page.keyboard.press("c");
     await expect(themeMenu.getByRole("menuitemradio", { name: "Classic", exact: true })).toBeFocused();
     await page.keyboard.press("Enter");
@@ -443,8 +448,8 @@ test.describe("shell user menu", () => {
     await openShell(page, { account: false, appearance: false, weaver: true });
     await expect(page.locator(".user-menu-button")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Select theme" })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "GitHub" })).toHaveAttribute("href", "https://github.com/elsa-workflows/elsa-foundation-studio");
-    await expect(page.getByRole("link", { name: "Designer source" })).toHaveAttribute("href", "https://github.com/elsa-workflows/elsa-foundation-designer");
+    await expect(page.getByRole("link", { name: "GitHub" })).toHaveAttribute("href", "https://github.com/elsa-workflows/elsa-foundation");
+    await expect(page.getByRole("link", { name: "Documentation" })).toHaveAttribute("href", "https://docs.elsaworkflows.io");
     expectHeaderToFit(await readShellGeometry(page), 320);
   });
 
@@ -505,4 +510,31 @@ test.describe("shell user menu", () => {
       }
     });
   }
+});
+
+
+test.describe("host branding resource links", () => {
+  test("uses configured help/privacy destinations and visible product name", async ({ page }) => {
+    await openShell(page, { branding: { productName: "Northstar Studio", subtitle: "Private workspace", helpUrl: "https://support.northstar.example/help", privacyUrl: "/privacy" } });
+    await expect(page.locator(".brand strong")).toHaveText("Northstar Studio");
+    await expect(page.getByRole("link", { name: "Help", exact: true })).toHaveAttribute("href", "https://support.northstar.example/help");
+    await expect(page.getByRole("link", { name: "Privacy", exact: true })).toHaveAttribute("href", "/privacy");
+    await expect(page.getByRole("link", { name: "GitHub", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Documentation", exact: true })).toHaveCount(0);
+  });
+
+  test("hides empty configured links while preserving keyboard access", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 900 });
+    await openShell(page, { weaver: true, branding: { helpUrl: "", privacyUrl: "" } });
+    await expect(page.locator(".topbar-actions > a")).toHaveCount(0);
+    await page.locator(".agent-launcher").focus();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "Select theme", exact: true })).toBeFocused();
+    expectHeaderToFit(await readShellGeometry(page), 320);
+  });
+
+  test("hides rejected configured links instead of restoring product links", async ({ page }) => {
+    await openShell(page, { branding: { helpUrl: "javascript:alert(1)", privacyUrl: "//untrusted.example/privacy" } });
+    await expect(page.locator(".topbar-actions > a")).toHaveCount(0);
+  });
 });

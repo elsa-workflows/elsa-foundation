@@ -1,5 +1,6 @@
 import { isThemeMode, themeModeLabels, type ThemeMode } from "./presets";
 import { isNavModePreference, navModeStorageKey, type NavModePreference } from "./navMode";
+import { getStudioRuntimeConfig } from "../runtime";
 import { isWorkspaceStyle, type WorkspaceStyle } from "./workspaceStyles";
 
 /**
@@ -69,7 +70,7 @@ export const appearanceModePreferences: readonly ThemeModePreference[] = [
 
 export const defaultAppearancePreferences: AppearancePreferences = {
   themeId: null,
-  workspaceStyle: null,
+  workspaceStyle: "linen",
   colorSchemeId: null,
   mode: "system",
   navigation: "theme"
@@ -102,18 +103,38 @@ function safely<T>(action: () => T, fallback: T): T {
   }
 }
 
+/** Host defaults are only fallbacks; an explicit user preference always wins. */
+export function getDefaultAppearancePreferences(): AppearancePreferences {
+  const configured = getStudioRuntimeConfig().appearance;
+  return {
+    ...defaultAppearancePreferences,
+    workspaceStyle: configured?.workspaceStyle === "preset" ? null : isWorkspaceStyle(configured?.workspaceStyle) ? configured.workspaceStyle : "linen",
+    colorSchemeId: configured?.paletteId || null,
+    mode: isThemeModePreference(configured?.mode) ? configured.mode : "system",
+    navigation: isNavModePreference(configured?.navigation) ? configured.navigation : "theme"
+  };
+}
+
+/** Distinguishes a stored choice from a resolved host fallback during reconciliation. */
+export function hasStoredAppearancePreference(key: keyof AppearancePreferences, storage: PreferenceStorage | undefined = defaultStorage()): boolean {
+  return storage ? safely(() => storage.getItem(appearanceStorageKeys[key]) !== null, false) : false;
+}
+
 /** Reads stored preferences; unknown or missing values fall back to the defaults. */
 export function readAppearancePreferences(storage: PreferenceStorage | undefined = defaultStorage()): AppearancePreferences {
   const read = (key: string) => (storage ? safely(() => storage.getItem(key), null) : null);
   const mode = read(appearanceStorageKeys.mode);
   const navigation = read(appearanceStorageKeys.navigation);
   const workspaceStyle = read(appearanceStorageKeys.workspaceStyle);
+  const themeId = read(appearanceStorageKeys.themeId) || null;
+  const colorSchemeId = read(appearanceStorageKeys.colorSchemeId);
+  const defaults = getDefaultAppearancePreferences();
   return {
-    themeId: read(appearanceStorageKeys.themeId) || null,
-    workspaceStyle: isWorkspaceStyle(workspaceStyle) ? workspaceStyle : null,
-    colorSchemeId: read(appearanceStorageKeys.colorSchemeId) || null,
-    mode: isThemeModePreference(mode) ? mode : defaultAppearancePreferences.mode,
-    navigation: isNavModePreference(navigation) ? navigation : defaultAppearancePreferences.navigation
+    themeId,
+    workspaceStyle: workspaceStyle === "preset" || (themeId !== null && !isWorkspaceStyle(workspaceStyle)) ? null : isWorkspaceStyle(workspaceStyle) ? workspaceStyle : defaults.workspaceStyle,
+    colorSchemeId: colorSchemeId === "@theme" ? null : colorSchemeId || (themeId ? null : defaults.colorSchemeId),
+    mode: isThemeModePreference(mode) ? mode : defaults.mode,
+    navigation: isNavModePreference(navigation) ? navigation : defaults.navigation
   };
 }
 
@@ -130,7 +151,8 @@ export function writeAppearancePreferences(
     }
     for (const key of ["workspaceStyle", "colorSchemeId"] as const) {
       const value = preferences[key];
-      if (value === null) storage.removeItem(appearanceStorageKeys[key]);
+      if (value === null && key === "workspaceStyle") storage.setItem(appearanceStorageKeys[key], "preset");
+      else if (value === null) storage.setItem(appearanceStorageKeys[key], "@theme");
       else if (value !== undefined) storage.setItem(appearanceStorageKeys[key], value);
     }
     if (preferences.mode !== undefined) storage.setItem(appearanceStorageKeys.mode, preferences.mode);
@@ -146,7 +168,7 @@ export function resetAppearancePreferences(storage: PreferenceStorage | undefine
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(appearanceResetEventName));
   }
-  return { ...defaultAppearancePreferences };
+  return getDefaultAppearancePreferences();
 }
 
 type MatchMedia = (query: string) => { matches: boolean };

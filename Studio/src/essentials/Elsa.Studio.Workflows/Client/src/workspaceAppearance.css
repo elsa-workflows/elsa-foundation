@@ -113,3 +113,10 @@ html[data-workspace-style][data-theme-appearance="high-contrast"] :is(.wf-grid-r
 @media (max-width: 600px) {
   html[data-workspace-style] .wf-definitions-list .wf-search { flex: 1 1 180px; margin-left: 0; }
 }
+
+html[data-workspace-style="linen"] .wf-grid {
+  overflow: hidden;
+  border: 1px solid var(--studio-edge-subtle);
+  border-radius: var(--studio-radius-lg);
+  background: var(--studio-panel);
+}

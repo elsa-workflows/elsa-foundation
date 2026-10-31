@@ -38,6 +38,11 @@ public static class AspNetCoreIdentityApi
                 name: "AspNetCoreIdentityLoginPage", documentAuthResponses: false, successContentType: "text/html", containFailures: false)
             .AllowPublic(PublicCategory, PublicReason);
 
+        api.MapUnboundOperation("GET", "/_elsa/identity/login-assets/{name}", "LoginArtwork",
+                typeof(byte[]), StatusCodes.Status200OK, null, HandleLoginArtworkAsync,
+                name: "AspNetCoreIdentityLoginArtwork", documentAuthResponses: false, successContentType: "image/jpeg", containFailures: false)
+            .AllowPublic(PublicCategory, "Public decorative login artwork; contains no identity data.");
+
         api.MapUnboundOperation("POST", "/" + AspNetCoreIdentityDefaults.LoginRoute, "Login",
                 typeof(AuthSession), StatusCodes.Status200OK, null, HandleLoginAsync,
                 name: "AspNetCoreIdentityLogin", documentAuthResponses: false, containFailures: false)
@@ -45,6 +50,21 @@ public static class AspNetCoreIdentityApi
                 new ProducesResponseTypeMetadata(StatusCodes.Status401Unauthorized, typeof(void), []),
                 new AcceptsMetadata(["application/json", "application/x-www-form-urlencoded"], typeof(LoginRequest), false))
             .AllowPublic(PublicCategory, PublicReason);
+    }
+
+    private static async Task HandleLoginArtworkAsync(HttpContext context)
+    {
+        var name = context.Request.RouteValues["name"]?.ToString();
+        if (name is not ("ember.jpg" or "tidal.jpg" or "daybreak.jpg" or "canopy.jpg"))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+        using var stream = typeof(LoginPage).Assembly.GetManifestResourceStream($"Elsa.LoginArtwork.{name}")
+            ?? throw new InvalidOperationException("Bundled login artwork is missing.");
+        context.Response.ContentType = "image/jpeg";
+        context.Response.Headers.CacheControl = "public,max-age=86400";
+        await stream.CopyToAsync(context.Response.Body, context.RequestAborted);
     }
 
     private static async Task HandleLoginPageAsync(HttpContext context)
@@ -55,7 +75,7 @@ public static class AspNetCoreIdentityApi
         var tokens = context.RequestServices.GetRequiredService<IAntiforgery>().GetAndStoreTokens(context);
 
         context.Response.ContentType = "text/html; charset=utf-8";
-        await context.Response.WriteAsync(LoginPage.Render(returnUrl, error is not null, tokens.RequestToken), context.RequestAborted);
+        await context.Response.WriteAsync(LoginPage.Render(returnUrl, error is not null, tokens.RequestToken, context.RequestServices.GetRequiredService<IOptions<LoginPageOptions>>().Value), context.RequestAborted);
     }
 
     private static async Task HandleLoginAsync(HttpContext context)
