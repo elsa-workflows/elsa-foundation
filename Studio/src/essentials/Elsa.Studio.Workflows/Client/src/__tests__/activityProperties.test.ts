@@ -89,6 +89,21 @@ describe("activity property values", () => {
     expect(definition?.resultType.alias).toBe(expectedAlias);
   });
 
+  it("removes assembly qualifiers from generic arguments in the portable result type alias", () => {
+    const definition = withWorkflowInputExpressionArgument(
+      "args.Orders",
+      "JavaScript",
+      {
+        ...textDescriptor,
+        typeName: "System.Collections.Generic.List`1[[System.String, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e"
+      } as StudioActivityInputDescriptor,
+      { referenceKey: "input-orders", name: "Orders", displayName: "Orders" } as WorkflowInput
+    );
+
+    expect(definition?.resultType.alias).toBe("System.Collections.Generic.List`1[[System.String]]");
+    expect(definition?.resultType.alias).not.toContain("System.Private.CoreLib");
+  });
+
   it("refuses to replace a JavaScript argument already bound to another source", () => {
     const definition = {
       language: "JavaScript",

@@ -61,9 +61,42 @@ function portableResultType(input: StudioActivityInputDescriptor): Record<string
   const collectionKind = ["Single", "Array", "List", "HashSet", "Dictionary"].find(
     kind => kind.toLowerCase() === input.collectionKind?.toLowerCase()
   ) ?? "Single";
-  const fullName = input.typeName.split(",", 1)[0]!.trim();
+  const fullName = stripAssemblyQualifiers(input.typeName);
   const alias = fullName.replace(/^System\.(String|Object|Boolean|Byte|SByte|Int16|UInt16|Int32|UInt32|Int64|UInt64|Single|Double|Decimal|Char|DateTime|DateTimeOffset|TimeSpan|Guid)$/, "$1");
   return { alias: alias || "Elsa.Any", collectionKind };
+}
+
+function stripAssemblyQualifiers(typeName: string): string {
+  let result = "";
+  let depth = 0;
+
+  for (let index = 0; index < typeName.length; index++) {
+    const char = typeName[index];
+    if (char === "[") {
+      depth++;
+      result += char;
+    } else if (char === "]") {
+      depth--;
+      result += char;
+    } else if (char === "," && depth === 0) {
+      break;
+    } else if (char === "," && depth >= 2) {
+      let nestedDepth = depth;
+      let end = index + 1;
+      for (; end < typeName.length; end++) {
+        if (typeName[end] === "[") nestedDepth++;
+        else if (typeName[end] === "]") {
+          if (nestedDepth === depth) break;
+          nestedDepth--;
+        }
+      }
+      index = end - 1;
+    } else {
+      result += char;
+    }
+  }
+
+  return result.trim();
 }
 
 interface WorkflowInputArgumentBindingsProps {
