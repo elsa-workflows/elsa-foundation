@@ -1,0 +1,74 @@
+[
+  {
+    "source": "attached-test-run.png",
+    "sourceSha256": "875a403594e179ef55eb68e1e0098c42c1063eeb458be5a19ee2529073b49325",
+    "output": "attached-test-run.jpg",
+    "outputSha256": "ea85cbc5a0338ff6e7cb859db9b1fffd133ee94d1c13f713a47169d0514b3522",
+    "width": 1280,
+    "height": 720,
+    "operation": "PNG to JPEG format conversion only; no crop or resize"
+  },
+  {
+    "source": "legacy-run.png",
+    "sourceSha256": "e981f27c8992fd68185379458e52d0031550aa3e1909e6675d45dbe840df99b8",
+    "output": "legacy-run.jpg",
+    "outputSha256": "da1990b9c11e443aee5da1ff4413447afb46e4a7f7534a9ae7826fb97bef0fde",
+    "width": 1280,
+    "height": 720,
+    "operation": "PNG to JPEG format conversion only; no crop or resize"
+  },
+  {
+    "source": "open.png",
+    "sourceSha256": "a8dd4f4f8fedecc84d0a705a4cf3740046c1a3e57bcd24731d7ea0a98e2aa5bb",
+    "output": "open.jpg",
+    "outputSha256": "9392ab0282c6d4e8eb29df9c3733aeb3dbc243fef34c5a0db2298f164e20bdc2",
+    "width": 1280,
+    "height": 720,
+    "operation": "PNG to JPEG format conversion only; no crop or resize"
+  },
+  {
+    "source": "published-run.png",
+    "sourceSha256": "27a96ea4b0d48cbe611825a12ae85af865a4e246eb6759e5cd69e8a3d993d6de",
+    "output": "published-run.jpg",
+    "outputSha256": "f8137b09db57e805454151953594576288f1a7faa6d513cc8c1d18fba788dbeb",
+    "width": 1280,
+    "height": 720,
+    "operation": "PNG to JPEG format conversion only; no crop or resize"
+  },
+  {
+    "source": "published.png",
+    "sourceSha256": "faab8945dd5d2f4a094483bdb63dbfed0f5d26b81ca552198762a109e8153f9f",
+    "output": "published.jpg",
+    "outputSha256": "1d81c03630d8f0bcd6ff49f5cd4d5d871a5bbd5deb11d18a197cf2358d1a2824",
+    "width": 1280,
+    "height": 720,
+    "operation": "PNG to JPEG format conversion only; no crop or resize"
+  },
+  {
+    "source": "restarted-published-run-initial-loading.png",
+    "sourceSha256": "dbeca63d0574b3180a84ebde2f1a8c8f40b33a6f0c5398a4a4196f1cb10a7e36",
+    "output": "restarted-published-run-initial-loading.jpg",
+    "outputSha256": "db3f17c77df1c5db4d8254453a14a3d181679591e9180e8fa7fa9ef4e2237405",
+    "width": 1280,
+    "height": 720,
+    "operation": "PNG to JPEG format conversion only; no crop or resize"
+  },
+  {
+    "source": "restarted-published-run.png",
+    "sourceSha256": "77d9b4007711191134f4cb364624c84f98d950e62e008c40cbbf235fbaf74c84",
+    "output": "restarted-published-run.jpg",
+    "outputSha256": "07716f4fc620158a114051b56e6dc8dae6f87904bf8f1a603b831dfb3cd2ca98",
+    "width": 1280,
+    "height": 720,
+    "operation": "PNG to JPEG format conversion only; no crop or resize"
+  },
+  {
+    "source": "test-run.png",
+    "sourceSha256": "76be024da7c1cecb26a550f87de26ca833e4be7f8566538349d87429bf9e32aa",
+    "output": "test-run.jpg",
+    "outputSha256": "27d139cfc4e5fa1d085e49cab646de5f22b57b7021967dc640b3e72d12a43d81",
+    "width": 1280,
+    "height": 720,
+    "operation": "PNG to JPEG format conversion only; no crop or resize"
+  }
+]

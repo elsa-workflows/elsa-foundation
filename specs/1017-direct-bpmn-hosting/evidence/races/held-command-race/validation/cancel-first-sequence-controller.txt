@@ -1,0 +1,4 @@
+Observed durable 429 and completed sibling; owned predecessor terminated.
+Actual cancel-first concurrent submissions retained after stale proposal refusal; cold recovery follows.
+Actual cancel-first concurrent held commands settled with original fault and prior effects unchanged.
+Owned private diagnostic root: /var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-etl-http-recovery-p_4tkht6

@@ -1,0 +1,65 @@
+[
+  {
+    "index": 0,
+    "revision": 2,
+    "lifecycle": 2,
+    "workCount": 1,
+    "cancellations": null,
+    "nativeWorkflows": 3,
+    "queuedInputs": 0
+  },
+  {
+    "index": 1,
+    "revision": 3,
+    "lifecycle": 3,
+    "workCount": 1,
+    "cancellations": null,
+    "nativeWorkflows": 3,
+    "queuedInputs": 0
+  },
+  {
+    "index": 2,
+    "revision": 3,
+    "lifecycle": 3,
+    "workCount": 1,
+    "cancellations": null,
+    "nativeWorkflows": 3,
+    "queuedInputs": 0
+  },
+  {
+    "index": 3,
+    "revision": 3,
+    "lifecycle": 3,
+    "workCount": 1,
+    "cancellations": null,
+    "nativeWorkflows": 3,
+    "queuedInputs": 0
+  },
+  {
+    "index": 4,
+    "revision": 3,
+    "lifecycle": 3,
+    "workCount": 1,
+    "cancellations": null,
+    "nativeWorkflows": 3,
+    "queuedInputs": 0
+  },
+  {
+    "index": 5,
+    "revision": 3,
+    "lifecycle": 3,
+    "workCount": 1,
+    "cancellations": null,
+    "nativeWorkflows": 3,
+    "queuedInputs": 0
+  },
+  {
+    "index": 6,
+    "revision": 3,
+    "lifecycle": 3,
+    "workCount": 1,
+    "cancellations": null,
+    "nativeWorkflows": 3,
+    "queuedInputs": 0
+  }
+]

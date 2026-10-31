@@ -1,0 +1,10 @@
+{
+  "status": 202,
+  "response": {
+    "executionId": "bpmn:ff32e1b1d0839abc30238d45b796ced92b14fe7cb12541bb3bf02cdf69e9d9bd",
+    "inputId": "invalid-retry",
+    "replay": false,
+    "pending": true,
+    "result": null
+  }
+}

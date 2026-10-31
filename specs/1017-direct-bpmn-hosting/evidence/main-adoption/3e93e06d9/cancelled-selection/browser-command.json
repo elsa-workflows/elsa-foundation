@@ -1,0 +1,14 @@
+{
+  "source": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+  "arguments": [
+    "pnpm",
+    "exec",
+    "playwright",
+    "test",
+    "--config",
+    "/tmp/elsa-2898-main-3e93-qualification/playwright.config.ts"
+  ],
+  "exitCode": 1,
+  "elapsedSeconds": 26.58297610282898,
+  "scope": "Existing browser suite, same configured ignores; no expanded matrix; owned strict port and two workers"
+}

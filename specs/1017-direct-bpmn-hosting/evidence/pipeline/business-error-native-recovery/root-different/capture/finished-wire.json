@@ -1,0 +1,98 @@
+{
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/source/shard-a/page",
+      "status": 200,
+      "receivedAtMs": 6588.510417,
+      "shard": "shard-a",
+      "page": 0
+    },
+    {
+      "method": "POST",
+      "path": "/output/records",
+      "status": 200,
+      "receivedAtMs": 6695.535625,
+      "recordCount": 1
+    },
+    {
+      "method": "GET",
+      "path": "/source/shard-b/page",
+      "status": 429,
+      "receivedAtMs": 6848.008208,
+      "shard": "shard-b",
+      "page": 0
+    },
+    {
+      "method": "GET",
+      "path": "/source/shard-a/page",
+      "status": 200,
+      "receivedAtMs": 7119.853292,
+      "shard": "shard-a",
+      "page": 1
+    },
+    {
+      "method": "POST",
+      "path": "/output/records",
+      "status": 200,
+      "receivedAtMs": 7306.119875,
+      "recordCount": 1
+    },
+    {
+      "method": "GET",
+      "path": "/source/shard-b/page",
+      "status": 200,
+      "receivedAtMs": 27172.984958,
+      "shard": "shard-b",
+      "page": 0
+    },
+    {
+      "method": "POST",
+      "path": "/output/records",
+      "status": 200,
+      "receivedAtMs": 27427.552,
+      "recordCount": 1
+    },
+    {
+      "method": "GET",
+      "path": "/source/shard-b/page",
+      "status": 200,
+      "receivedAtMs": 27588.363583,
+      "shard": "shard-b",
+      "page": 1
+    }
+  ],
+  "outputPosts": [
+    {
+      "recordCount": 1,
+      "records": [
+        {
+          "id": 1,
+          "name": "Ada"
+        }
+      ],
+      "hasIdempotencyKey": true
+    },
+    {
+      "recordCount": 1,
+      "records": [
+        {
+          "id": 2,
+          "name": "Grace"
+        }
+      ],
+      "hasIdempotencyKey": true
+    },
+    {
+      "recordCount": 1,
+      "records": [
+        {
+          "id": 3,
+          "name": "Linus"
+        }
+      ],
+      "hasIdempotencyKey": true
+    }
+  ],
+  "overflow": false
+}

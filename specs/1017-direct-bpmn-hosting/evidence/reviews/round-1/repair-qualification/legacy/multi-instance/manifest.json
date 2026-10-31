@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-legacy-multi-instance-upgrade",
+  "sourceRevision": "0ce9a41dba03c4f362c4d386f14737823f33238a",
+  "baselineManifestSha256": "c2e5d9c8c2a001ff5141c2ca8eaaed097ec7c81d78d0180b6c7a4ecf5bed4153",
+  "baselineAssets": {
+    "multi-instance-and-studio/runtime.sqlite.gz": "3fcd6e38a968d05026a2c57a188f5d5c9d6fdbc313afd9ce19c82ad3e2b21416",
+    "multi-instance-and-studio/design.sqlite.gz": "0690408195251a99edf26be0c048d91821fbe974972dd2228f070dd5b2d01043",
+    "multi-instance-and-studio/api.json": "8ebe243d1d6ecff3e834aef2842c8122c68171584f48617dd70e826d6b16fd73",
+    "multi-instance-and-studio/physical-checked.json": "0ffa466e00304e72b59ea2a0e5a49ad4ceca4d636aec965340bbc5cfd550a918"
+  },
+  "assets": [
+    {
+      "path": "legacy-multi-instance/process.json.gz",
+      "sha256": "64b59f99ab844266398ea2316000e39e4f4422b124caa746e093dd453aa82733",
+      "encoding": "gzip",
+      "uncompressedSha256": "6242983b4bcb44d83d5d67db4db26efc9db741e4f9ef970c2924347222f7b700"
+    },
+    {
+      "path": "legacy-multi-instance/finished-design.sqlite.gz",
+      "sha256": "8fc840ec21e759017350326dbe65f160ce504188770d9b8929ceb63c0c36ad2a"
+    },
+    {
+      "path": "frozen-contract.json",
+      "sha256": "da0b68a3c7bef885ca4b5b8dfb65820d7d6b13a4619eaf5b568016be0ae4a170"
+    },
+    {
+      "path": "legacy-multi-instance/recovered.sqlite.gz",
+      "sha256": "93455bf8b4eabc55741a5102f5063aa004b4814548990c51f17cb30ad45bce60"
+    },
+    {
+      "path": "legacy-multi-instance/progressed.sqlite.gz",
+      "sha256": "067d5a71c4a728072acff50b6c31c8ab6fa14181b0304ee2611c08ae89217ea5"
+    },
+    {
+      "path": "legacy-multi-instance/resumed.sqlite.gz",
+      "sha256": "067d5a71c4a728072acff50b6c31c8ab6fa14181b0304ee2611c08ae89217ea5"
+    },
+    {
+      "path": "legacy-multi-instance/finished.sqlite.gz",
+      "sha256": "70616ba215a6064c14beb6f990816a3b0845d1cab57ad0d635eb8dc32985808a"
+    }
+  ]
+}

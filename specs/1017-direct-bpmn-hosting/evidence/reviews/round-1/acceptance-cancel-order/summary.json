@@ -1,0 +1,77 @@
+{
+  "reviewedHead": "7cfbf739f0d4c3c220097918b04c2b33b5cb3bb3",
+  "executingSource": "d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+  "actualOriginalSnapshot": "specs/1017-direct-bpmn-hosting/evidence/pipeline/pending-cancellation/native-terminal/native-cancel",
+  "initialRuntimeSnapshotSha256": "1380bc749db55812d0e2f6aaff2428bc4bdc06aa962ffca7ed7f52ef79595dc1",
+  "etlSnapshotOriginalAndUnchanged": true,
+  "before": {
+    "revision": 1,
+    "lifecycle": 0,
+    "terminalResult": null,
+    "cancelSourceStatus": 0
+  },
+  "after": {
+    "revision": 2,
+    "lifecycle": 3,
+    "terminalResult": {
+      "status": "Cancelled"
+    },
+    "cancelSourceStatus": 0,
+    "nativeResultAccepted": {
+      "status": "Accepted",
+      "code": null,
+      "revision": 2,
+      "lifecycle": "TerminalSettled"
+    }
+  },
+  "enumMeaning": {
+    "modelLifecycle3": "TerminalSettled",
+    "outboxStatus0": "Pending",
+    "etlStatus1": "Running"
+  },
+  "actualEtlRows": [
+    {
+      "status": 1,
+      "revision": 22,
+      "acceptedRecords": 2,
+      "outstandingRecords": 0,
+      "outstandingBytes": 0
+    }
+  ],
+  "actualEtlPartitions": [
+    {
+      "ordinal": 0,
+      "completed": 1,
+      "notBeforeUtcTicks": null
+    },
+    {
+      "ordinal": 1,
+      "completed": 0,
+      "notBeforeUtcTicks": 639288880178983000
+    }
+  ],
+  "actualEtlTerminalCount": 0,
+  "products": [
+    {
+      "name": "Elsa.Activities.Bpmn",
+      "version": "1.0.0+d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+      "sha256": "8bf6327b5c524fbaea93f02049005d2f7bf6614432c0360b6544588ec4e304d7"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+      "version": "1.0.0+d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+      "sha256": "76e6e3db6dba0262892c46bc7b7a662682d26867e85553ba049279d2fb0a4f70"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime",
+      "version": "1.0.0+d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+      "sha256": "7da41bb1425e39411c727ecc9b9fda56e614c799324a2c777fbc3d600ed6f242"
+    }
+  ],
+  "noExecutionQueueReceiptOrClaimSeeding": true,
+  "actions": [
+    "Normal production outbox processor delivery filtered to Elsa.Bpmn.NativeWorkResult.v1",
+    "Normal production model mailbox RunSchedulerWork drain"
+  ],
+  "limit": "SDK diagnostic over actual closed-store copies. No HTTP fixture or live host recreation; no ETL pump run. It falsifies settlement ordering, not eventual retry of retained cancellation."
+}

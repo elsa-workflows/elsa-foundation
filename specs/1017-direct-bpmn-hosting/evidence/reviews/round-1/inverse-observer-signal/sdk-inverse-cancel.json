@@ -1,0 +1,6 @@
+{
+  "operation": "enqueue-model-owned-native-start",
+  "accepted": false,
+  "failureType": "RuntimeSchedulerWorkUnavailableException",
+  "message": "Native downstream cancellation remains owed."
+}

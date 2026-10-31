@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "kind": "round-3-correction-qualification",
+  "sourceRevision": "76e8139dc7744781fba864f8247c180134eaaaed",
+  "assets": [
+    {
+      "path": "gates/architecture-discovery.log.gz",
+      "sha256": "78d81ef056512cdc29cb4aac01bc160b60e9de955a7e83a4e459c5e91e728a81"
+    },
+    {
+      "path": "gates/architecture-project-graph.log.gz",
+      "sha256": "d1c9ab5bddab95b1309345642d2b671280519b367e17dde15c3ffe37701ef0ff"
+    },
+    {
+      "path": "gates/architecture.log.gz",
+      "sha256": "c28a28a855791832262c7c11b2c03b66d3af669ae04da596db5665a232e7241c"
+    },
+    {
+      "path": "gates/architecture.trx.gz",
+      "sha256": "703179f171e4071e5aebe064ad0b3b17e300d985eb13a2efad8fc2b5869b58a2"
+    },
+    {
+      "path": "gates/bpmn-discovery.log.gz",
+      "sha256": "b7f81b66f43c981f03bd7cfd8f9d8b6ac6d33111a208049d3ac0b3daa3c2e5a2"
+    },
+    {
+      "path": "gates/bpmn.log.gz",
+      "sha256": "7a2b220cda5cab4d87229a5f737fff6a3e7ca9c0e4cc84e1b8f5c1bf8df24115"
+    },
+    {
+      "path": "gates/bpmn.trx.gz",
+      "sha256": "39553df228016281463b7f2f94cb2f26b8e1d622be91aa7b125309891f70e6e0"
+    },
+    {
+      "path": "gates/discovery-reconciliation.json",
+      "sha256": "da0132777bd115ba290214a9bc9e7c88dec2b2e89828807fc71fa7cdb3d1a878"
+    },
+    {
+      "path": "gates/hosting-discovery.log.gz",
+      "sha256": "ccc4668442c03ef8b9c490ca790f48536d8123cbaca859cadf5a9ccf17e612e3"
+    },
+    {
+      "path": "gates/hosting.log.gz",
+      "sha256": "13ba1c88c79e078325fea5ac815ff9f2dcd2d5015759493f56c909554597c88e"
+    },
+    {
+      "path": "gates/hosting.trx.gz",
+      "sha256": "6ca6a9f729c7953d2d0aed5826d0fde30863a1f4a68d921970e6fe045641a004"
+    },
+    {
+      "path": "gates/initial-commands.json",
+      "sha256": "ee3345b56a020cb608850a5522c805e3e5b87dc536bffcb78541bb360ff387e5"
+    },
+    {
+      "path": "gates/maps.log.gz",
+      "sha256": "331099547a70ba6594d7004b2f491da5fa852cfb2cebba8b98e78c4d02acfc47"
+    },
+    {
+      "path": "gates/native-providers-discovery.log.gz",
+      "sha256": "61d6e054fea717847cd7233f475edf0467f8ca1d9aa339239a81c5259f7c63cc"
+    },
+    {
+      "path": "gates/native-providers.log.gz",
+      "sha256": "5b80cef699bb2f2c512795784dc8fba23a14532dbccea35c91d669f19a00fc80"
+    },
+    {
+      "path": "gates/native-providers.trx.gz",
+      "sha256": "58d9577be4570574ef04ce0e05e3413b0ebaea8b01b959069596c8aecaf2cbb4"
+    },
+    {
+      "path": "gates/runtime-discovery.log.gz",
+      "sha256": "f1014a91f13f64cbe39486442a0280bb64c177c255971497a72f2e309130dd50"
+    },
+    {
+      "path": "gates/runtime-ef-discovery.log.gz",
+      "sha256": "80a1f1513bf70c5e1fff269920e20eec2a6b82cb60cb814166c773e5f3c2d615"
+    },
+    {
+      "path": "gates/runtime-ef.log.gz",
+      "sha256": "dd7dec01b079f2d0398ce714dae54754a3dbd75dc4b21c550f853d26dccf3d87"
+    },
+    {
+      "path": "gates/runtime-ef.trx.gz",
+      "sha256": "9ef2442fe6b3e3f2e5bdd7c727be060efcaefdda89fa95aa62cb6fec7e21f2e2"
+    },
+    {
+      "path": "gates/runtime.log.gz",
+      "sha256": "1a7ca280381ad7f73772283f8644acdc326695cf2cf69a2c542086f58cbe2bec"
+    },
+    {
+      "path": "gates/runtime.trx.gz",
+      "sha256": "f854f3a37973df89b5e0b19f550fdd5ecce16314a5625fc9af954f622a70ff33"
+    },
+    {
+      "path": "gates/source-and-counts.json",
+      "sha256": "98a86348a4759f96a9ee9a9ca53cc369aad1b0bd3784349af683d9fe757e363e"
+    },
+    {
+      "path": "gates/studio-build.log.gz",
+      "sha256": "c5be7fbabb6f2b4613de231bc4b41c29ddaa8bfa42793e76175bfec612347d1d"
+    },
+    {
+      "path": "gates/studio-controls.log.gz",
+      "sha256": "ce5e80bfd7633c6ec8c72d7cb295921c7046b468dd2b72e385ff913e3317ace7"
+    },
+    {
+      "path": "gates/studio-frontend-build.log.gz",
+      "sha256": "7b85fbe8e8c2b6dc3d336516d0f32d8dde037eb60c440f29c3940cdf4d76cc57"
+    },
+    {
+      "path": "gates/tail-commands.json",
+      "sha256": "eb9631f3f499ff6cd286bffde69ac7ddf7525781beb785445721a2507e168c51"
+    },
+    {
+      "path": "gates/tiers.log.gz",
+      "sha256": "1a8157b4352879e76039fc8a43e213c9445f1ee78abfacc41693401a9dc16be3"
+    },
+    {
+      "path": "gates/workbench-build.log.gz",
+      "sha256": "1395cc927dfbc89cbe2585fa35f7c5eecbbbeb97005e2af9b73f1a77c87f14d0"
+    },
+    {
+      "path": "studio-cleanup.json",
+      "sha256": "0e858f65df5fa400129805b887252a70e64b1d993a7bff238630b52c3a2fe186"
+    },
+    {
+      "path": "studio-verification.json",
+      "sha256": "a83c53123bc5f239e34e24392b7222dd166374fc3c08748b78200b1967b14ad9"
+    },
+    {
+      "path": "studio/manifest.json",
+      "sha256": "6bc31d09c31fc28cc4e70a73f3790ef76d4f79576ecdb0df34b704aca8c61d42"
+    }
+  ]
+}

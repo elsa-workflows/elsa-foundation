@@ -1,0 +1,47 @@
+{
+  "sourceRevision": "f4c923ed9bb01f764e648ee45d1c76b081f51098",
+  "productionCodeSource": "c40881fd0209dd1f2e8765358c3afd3f007247ab",
+  "productionFilesUnchanged": true,
+  "builds": [
+    {
+      "product": "standard",
+      "errors": 0,
+      "warnings": 261,
+      "command": [
+        "dotnet",
+        "build",
+        "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+        "-c",
+        "Release",
+        "--no-restore"
+      ]
+    },
+    {
+      "product": "reader",
+      "errors": 0,
+      "warnings": 0,
+      "command": [
+        "dotnet",
+        "build",
+        "tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj",
+        "-c",
+        "Release",
+        "--no-restore"
+      ]
+    },
+    {
+      "product": "probe",
+      "errors": 0,
+      "warnings": 13,
+      "command": [
+        "dotnet",
+        "build",
+        "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+        "-c",
+        "Release",
+        "--no-restore",
+        "-p:ElsaBpmnRecoveryProbe=true"
+      ]
+    }
+  ]
+}

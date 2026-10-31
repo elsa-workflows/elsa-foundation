@@ -1,0 +1,38 @@
+[
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/3e93e06d9/studio/layout/finished-runtime.sqlite.gz",
+    "sha256": "299239c3507d1dacc361a642308ecd33658bded19b563832dc78465fcadf201e",
+    "modelExecutions": 0,
+    "modelInputs": 0
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/3e93e06d9/studio/layout/recovered-runtime.sqlite.gz",
+    "sha256": "533b1cd2345b1589cb70818eb4b4dd70cb81d70e0ee92683ce37d791391eb363",
+    "modelExecutions": 0,
+    "modelInputs": 0
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/3e93e06d9/studio/layout/restarted-runtime.sqlite.gz",
+    "sha256": "de7077b1b6559344b071a109581908180f589330d5df65542b31a6ccfe06aef8",
+    "modelExecutions": 0,
+    "modelInputs": 0
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/3e93e06d9/studio/original/finished-runtime.sqlite.gz",
+    "sha256": "4b8aa0721e45519f9b70e045ee353997d63536861930b7bc1824fdc0bf8723a5",
+    "modelExecutions": 0,
+    "modelInputs": 0
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/3e93e06d9/studio/original/recovered-runtime.sqlite.gz",
+    "sha256": "54e5cb8add896587f1312f64199a7c72fc384217350ffbb8eacc8c6737b0b140",
+    "modelExecutions": 0,
+    "modelInputs": 0
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/3e93e06d9/studio/original/restarted-runtime.sqlite.gz",
+    "sha256": "970cbe58462e24c47c4773d50a4a76f8a6173904f47ce9e5c95ed7c7f64b14a6",
+    "modelExecutions": 0,
+    "modelInputs": 0
+  }
+]

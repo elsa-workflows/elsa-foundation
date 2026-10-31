@@ -1,0 +1,45 @@
+{
+  "request": {
+    "requestId": "retry-actual-held-service",
+    "incidentId": "bpmn-incident:59dbed8e7b0d0cb94a1c21cae946d4c68dd19e1553b542974a6455d56b80be03",
+    "invocationId": "bpmn-work:4afb40563567ee513eee6c16a700c9b9dd6da03ed187e94700713618fb5ef34c",
+    "failedAttemptId": "attempt:4fcb1af178a862fa78c0b6614df12cb5171134461f7aa6491d29bd53f7df0b4a"
+  },
+  "submitted": {
+    "executionId": "bpmn-embedded:96a801f378aaa13620ae8b3e983dac54175a925e5305cb1d5ba6086b361eb198",
+    "inputId": "retry-actual-held-service",
+    "replay": false,
+    "pending": false,
+    "result": {
+      "status": "Accepted",
+      "code": null,
+      "revision": 3,
+      "lifecycle": "Running"
+    }
+  },
+  "accepted": {
+    "executionId": "bpmn-embedded:96a801f378aaa13620ae8b3e983dac54175a925e5305cb1d5ba6086b361eb198",
+    "inputId": "retry-actual-held-service",
+    "replay": true,
+    "pending": false,
+    "result": {
+      "status": "Accepted",
+      "code": null,
+      "revision": 3,
+      "lifecycle": "Running"
+    }
+  },
+  "duplicate": {
+    "executionId": "bpmn-embedded:96a801f378aaa13620ae8b3e983dac54175a925e5305cb1d5ba6086b361eb198",
+    "inputId": "retry-actual-held-service",
+    "replay": true,
+    "pending": false,
+    "result": {
+      "status": "Accepted",
+      "code": null,
+      "revision": 3,
+      "lifecycle": "Running"
+    }
+  },
+  "conflictingContentHttpStatus": 409
+}

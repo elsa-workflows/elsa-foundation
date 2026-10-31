@@ -1,0 +1,18 @@
+{
+  "countedAsQualified": false,
+  "attempts": [
+    {
+      "kind": "direct-publish-route",
+      "outcome": "Normal direct publication succeeded, but review-dialog confirmation was absent. Replayed the canonical review/publish journey from fresh immutable input."
+    },
+    {
+      "kind": "missing-pre-restart-api-record",
+      "outcome": "New runs completed and restarted, but pre-restart new-run API views were not saved. Replayed from fresh immutable input; final families capture before any restart command and compare exact after views."
+    }
+  ],
+  "onlyQualifiedFamilies": [
+    "studio/original",
+    "studio/layout"
+  ],
+  "productsOrFrozenInputsChanged": false
+}

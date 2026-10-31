@@ -1,0 +1,24 @@
+{
+  "originalInput": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/acceptance/old-embedded/old-pending-parent.snapshot.sqlite.gz",
+  "compressedSha256": "c7e0247a7da55fdb73897c0be677eed7cbf9b1c54f365338ef33f84c064d3b13",
+  "decodedSha256": "0a5ea64058dcdb950fdda9e5b792264ceec2f6ca19fa9398a7733f6c62ea097e",
+  "integrity": [
+    [
+      "ok"
+    ]
+  ],
+  "modelLifecycle": "TerminalPendingSettlement",
+  "modelPayloadFormat": 5,
+  "terminalResult": {
+    "status": "Faulted",
+    "code": "bpmn.work.faulted",
+    "message": "BPMN process faulted because the work bound to 'worker' faulted (Native service work failed.): failed work cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
+    "errorCode": null
+  },
+  "retainedNativeWork": 1,
+  "cancellationInventory": null,
+  "workerId": "wfexec:start:v1:a7203484cd6ef8cf324a6db6e3f24d710a922645598845d5b95aba68ae70a121",
+  "workerProjectedStatus": 1,
+  "workerStoredStatus": "Running",
+  "physicalBookmarks": 1
+}

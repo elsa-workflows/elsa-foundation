@@ -1,0 +1,213 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="79dd3baa-ce3a-45f0-a1f2-eea24e216b36" name="@Sipkes-Mac-Mini 2026-10-30 14:18:46" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-30T14:18:46.7213190+01:00" queuing="2026-10-30T14:18:46.7213190+01:00" start="2026-10-30T14:18:44.0568680+01:00" finish="2026-10-30T14:18:46.7234080+01:00" />
+  <TestSettings name="default" id="cdd20fc7-e961-45e5-a42c-f1320ce4fa12">
+    <Deployment runDeploymentRoot="_Sipkes-Mac-Mini_2026-10-30_14_18_46" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="e87c018d-9803-43f8-bd1f-5f255af95d12" testId="1311aa48-e221-cc1a-e3ad-cd0276d59769" testName="Elsa.Activities.Bpmn.Hosting.Tests.LegacyPartialForkUpgradeTests.Actual_legacy_partial_forks_upgrade_and_finish_through_production_commands" computerName="Sipkes-Mac-Mini" duration="00:00:02.3649133" startTime="2026-10-30T14:18:44.3126860+01:00" endTime="2026-10-30T14:18:46.6842870+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e87c018d-9803-43f8-bd1f-5f255af95d12">
+      <Output>
+        <ErrorInfo>
+          <Message>System.InvalidOperationException : The owned Workbench reported a failed shell activation.
+info: CShells.AspNetCore.Extensions.ApplicationBuilderExtensions[0]
+      Configuring CShells middleware and endpoints
+info: CShells.AspNetCore.Extensions.ApplicationBuilderExtensions[0]
+      CShells middleware and endpoints configured successfully
+info: Elsa.Workbench.WorkbenchOpenIddictPruningService[0]
+      The OpenIddict store runs on Microsoft.EntityFrameworkCore.InMemory, which cannot delete in bulk, so it is not pruned; it is discarded when the host stops.
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://127.0.0.1:64857
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Development
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: /var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-bpmn-hosting-fmsjUb
+info: Elsa.Workbench.Readiness.DefaultShellWarmup[0]
+      Preparing default shell default after the server began listening
+info: CShells.Features.RuntimeFeatureCatalog[0]
+      Committed runtime feature catalog generation 1 with 121 feature(s): DiagnosticsOpenTelemetryEngineBridge, RuntimeFaultStackTrace, ActivitiesBpmn, ActivitiesBpmnHosting, ActivitiesBpmnHostingApi, ActivitiesBpmnInterchange, ActivitiesCompensation, ActivitiesControlFlow, ActivitiesDesignApi, ActivitiesDesignEntityFrameworkCore, ActivitiesDesignReconciliation, ClrActivityReconciliation, ActivitiesDispatchWorkflowDesign, ActivitiesDispatchWorkflowRuntime, ActivitiesFlowchart, ActivitiesGraphDesign, ActivitiesGraphRuntime, ActivitiesHttp, ActivitiesPrimitives, ActivitiesRuntime, BackgroundActivities, ActivitiesScheduling, ActivitiesSequence, FoundationAgentAbstractions, FoundationAgentApi, GitHubCopilotAgent, FoundationWorkflowsAgent, ApiCapabilities, AttentionApi, MemoryCache, Connections, ConnectionsApi, ConnectionsDesign, ConnectionsWorkflows, DiagnosticsOpenTelemetry, DiagnosticsOpenTelemetryEntityFrameworkCore, DiagnosticsStructuredLogs, DiagnosticsStructuredLogsEntityFrameworkCore, EtlDesign, EtlDesignApi, EtlDesignEntityFrameworkCore, EtlRuntimeEntityFrameworkCore, EtlRuntime, EtlRuntimeApi, EtlWorkflowsDesign, EtlWorkflowsRuntime, Events, Expressions, ExpressionsApi, JavaScriptExpressions, JavaScriptJintEngine, JavaScriptRenderingEndpoints, JavaScriptRendering, Liquid, FoundationIdentityAbstractions, FoundationIdentityApi, FoundationIdentityAspNetCoreIdentity, FoundationIdentityAspNetCoreIdentityEntityFrameworkCore, FoundationIdentityOidc, FoundationIdentityOpenIddict, IdentityIamEntityFrameworkCore, IdentityProviderConfigurationEntityFrameworkCore, Http, HttpJavaScript, DatabaseDistributedLocking, FileSystemDistributedLocking, Mediator, ModularityApi, ModularityAttention, Primitives, RulesRuntimeEntityFrameworkCore, RulesRuntime, RulesWorkflowsDesign, RulesWorkflowsRuntime, Secrets, SecretsAttention, SecretsApi, SecretsEntityFrameworkCore, SecretsWorkflows, Serialization.Newtonsoft, Serialization, StudioPreferences, StudioPreferencesApi, StudioPreferencesEntityFrameworkCore, Tasks, WorkflowsDashboard, WorkflowsDashboardEntityFrameworkCore, WorkflowsDesignApi, JavaScriptWorkflowsDesign, WorkflowsDesignEntityFrameworkCore, JsonWorkflowReconciliation, WorkflowDesignValidations, WorkflowsExecutionEvidence, WorkflowsPublishing, WorkflowsPublishingApi, WorkflowsPublishingEntityFrameworkCore, WorkflowsRuntimeTracing, WorkflowsRuntimeAttention, WorkflowsActivationChannels, WorkflowsRuntimeApi, WorkflowsRuntimeTriggers, WorkflowsRuntimeCheckpointPersistence, WorkflowsRuntimeDistributed, WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence, WorkflowsRuntimeDistributedEntityFrameworkCorePersistence, WorkflowsRuntimeHttp, JavaScriptEndpoints, JavaScriptActivities, WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence, WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence, WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence, WorkflowsRuntimeEntityFrameworkCore, WorkflowsRuntimeOperationalStateEntityFrameworkCorePersistence, WorkflowsRuntimeAlterationEntityFrameworkCorePersistence, WorkflowsRuntimeWorkflowExecutionEntityFrameworkCorePersistence, WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence, JsonWorkflowArtifactReconciliation, WorkflowsRuntimeReferenceGarbageCollection, WorkflowsRuntimeResumption, WorkflowsRuntimeRecurringTriggers, WorkflowsRuntimeScheduling
+warn: Microsoft.EntityFrameworkCore.Migrations[20410]
+      The migration operation 'PRAGMA foreign_keys = 0;
+      ' from migration 'SchemaVersionStamp' cannot be executed in a transaction. If the app is terminated or an unrecoverable error occurs while this operation is being executed then the migration will be left in a partially applied state and would need to be reverted manually before it can be applied again. Create a separate migration that contains just this operation.
+warn: Microsoft.EntityFrameworkCore.Migrations[20410]
+      The migration operation 'PRAGMA foreign_keys = 0;
+      ' from migration 'FreeNameOnDelete' cannot be executed in a transaction. If the app is terminated or an unrecoverable error occurs while this operation is being executed then the migration will be left in a partially applied state and would need to be reverted manually before it can be applied again. Create a separate migration that contains just this operation.
+info: Elsa.Persistence.EntityFramework.EfModuleMigrator[0]
+      Schema family RuntimeSchedulerWork of EF module Workflows.Runtime finalized 3.0.0.
+info: Elsa.Persistence.EntityFramework.EfModuleMigrator[0]
+      Schema family RuntimeWorkflowExecution of EF module Workflows.Runtime finalized 2.0.0.
+fail: Microsoft.EntityFrameworkCore.Database.Command[20102]
+      Failed executing DbCommand (0ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+      CREATE TABLE "__ElsaDatabaseIdentity_ElsaWorkflowsDesign" (
+          "Id" INTEGER NOT NULL CONSTRAINT "PK___ElsaDatabaseIdentity_ElsaWorkflowsDesign" PRIMARY KEY,
+          "DatabaseIdentity" TEXT NOT NULL,
+          "SchemaVersion" TEXT NOT NULL
+      );
+fail: Elsa.Workbench.Readiness.DefaultShellWarmup[0]
+      Default shell preparation failed
+      Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'table "__ElsaDatabaseIdentity_ElsaWorkflowsDesign" already exists'.
+         at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+         at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+         at Microsoft.Data.Sqlite.SqliteCommand.GetStatements()+MoveNext()
+         at Microsoft.Data.Sqlite.SqliteDataReader.NextResult()
+         at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader(CommandBehavior behavior)
+         at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader()
+         at Microsoft.Data.Sqlite.SqliteCommand.ExecuteNonQuery()
+         at System.Data.Common.DbCommand.ExecuteNonQueryAsync(CancellationToken cancellationToken)
+      --- End of stack trace from previous location ---
+         at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteNonQueryAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+         at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteNonQueryAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+         at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteNonQueryAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+         at Microsoft.EntityFrameworkCore.Migrations.Internal.MigrationCommandExecutor.ExecuteAsync(IReadOnlyList`1 migrationCommands, IRelationalConnection connection, MigrationExecutionState executionState, Boolean beginTransaction, Boolean commitTransaction, Nullable`1 isolationLevel, CancellationToken cancellationToken)
+         at Microsoft.EntityFrameworkCore.Migrations.Internal.MigrationCommandExecutor.ExecuteAsync(IReadOnlyList`1 migrationCommands, IRelationalConnection connection, MigrationExecutionState executionState, Boolean beginTransaction, Boolean commitTransaction, Nullable`1 isolationLevel, CancellationToken cancellationToken)
+         at Microsoft.EntityFrameworkCore.Migrations.Internal.MigrationCommandExecutor.ExecuteNonQueryAsync(IReadOnlyList`1 migrationCommands, IRelationalConnection connection, MigrationExecutionState executionState, Boolean commitTransaction, Nullable`1 isolationLevel, CancellationToken cancellationToken)
+         at Microsoft.EntityFrameworkCore.Migrations.Internal.Migrator.MigrateImplementationAsync(DbContext context, String targetMigration, MigrationExecutionState state, Boolean useTransaction, CancellationToken cancellationToken)
+         at Microsoft.EntityFrameworkCore.Migrations.Internal.Migrator.MigrateImplementationAsync(DbContext context, String targetMigration, MigrationExecutionState state, Boolean useTransaction, CancellationToken cancellationToken)
+         at Microsoft.EntityFrameworkCore.Migrations.Internal.Migrator.&lt;&gt;c.&lt;&lt;MigrateAsync&gt;b__22_1&gt;d.MoveNext()
+      --- End of stack trace from previous location ---
+         at Microsoft.EntityFrameworkCore.Migrations.Internal.Migrator.MigrateAsync(String targetMigration, CancellationToken cancellationToken)
+         at Microsoft.EntityFrameworkCore.Migrations.Internal.Migrator.MigrateAsync(String targetMigration, CancellationToken cancellationToken)
+         at Elsa.Persistence.EntityFramework.EfSqliteMigrationLock.MigrateAsync(DbContext context, EfMigrateOptions options, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/EfSqliteMigrationLock.cs:line 62
+         at Elsa.Persistence.EntityFramework.SchemaFinalization.EfContractingMigrationCheck.MigrateAsync(DbContext context, SchemaFinalizationMember host, EfSchemaModuleFamilies families, EfMigrateOptions options, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/SchemaFinalization/EfContractingMigrationCheck.cs:line 120
+         at Elsa.Persistence.EntityFramework.EfDatabaseMigrator.ApplyAsync(DbContext context, String expectedProviderName, EfMigrateOptions options, SchemaFinalizationMember host, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/EfDatabaseMigrator.cs:line 72
+         at Elsa.Persistence.EntityFramework.EfModuleMigrator`1.ApplyAsync(CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/EfModuleMigrator.cs:line 81
+         at Elsa.Persistence.EntityFramework.EfModuleMigrator`1.ApplyAsync(CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/EfModuleMigrator.cs:line 96
+         at CShells.Lifecycle.ShellRegistry.RunInitializersAsync(ShellDescriptor descriptor, IServiceProvider provider, CancellationToken cancellationToken)
+         at CShells.Lifecycle.ShellRegistry.RunInitializersAsync(ShellDescriptor descriptor, IServiceProvider provider, CancellationToken cancellationToken)
+         at CShells.Lifecycle.ShellRegistry.CreateGenerationAsync(NameSlot slot, IShellBlueprint blueprint, CancellationToken cancellationToken)
+         at CShells.Lifecycle.ShellRegistry.CreateGenerationAsync(NameSlot slot, IShellBlueprint blueprint, CancellationToken cancellationToken)
+         at CShells.Lifecycle.ShellRegistry.GetOrActivateAsync(String name, CancellationToken cancellationToken)
+         at CShells.Hosting.ShellActivationRun.RunAttemptAsync(Int32 index)
+         at Elsa.Workbench.Readiness.DefaultShellWarmup.ThrowActivationFailure(ShellActivationAttempt attempt) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/Readiness/DefaultShellWarmup.cs:line 163
+         at Elsa.Workbench.Readiness.DefaultShellWarmup.&lt;&gt;c__DisplayClass14_1.&lt;&lt;WarmAsync&gt;b__2&gt;d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/Readiness/DefaultShellWarmup.cs:line 129
+      --- End of stack trace from previous location ---
+         at Elsa.Workbench.Readiness.DefaultShellWarmup.ObservePhaseAsync[T](String phase, Func`1 action) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/Readiness/DefaultShellWarmup.cs:line 188
+         at Elsa.Workbench.Readiness.DefaultShellWarmup.&lt;&gt;c__DisplayClass14_1.&lt;&lt;WarmAsync&gt;b__0&gt;d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/Readiness/DefaultShellWarmup.cs:line 111
+      --- End of stack trace from previous location ---
+         at Elsa.Workbench.Readiness.DefaultShellWarmup.ObservePhaseAsync[T](String phase, Func`1 action) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/Readiness/DefaultShellWarmup.cs:line 188
+         at Elsa.Workbench.Readiness.DefaultShellWarmup.WarmAsync(CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/Readiness/DefaultShellWarmup.cs:line 104</Message>
+          <StackTrace>   at Elsa.Activities.Bpmn.Hosting.Tests.OwnedWorkbench.LaunchAsync() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/OwnedWorkbench.cs:line 251
+   at Elsa.Activities.Bpmn.Hosting.Tests.OwnedWorkbench.StartAsync(Boolean directBpmn, Boolean runtimeOnly, String legacySnapshotDirectory, String runtimeSnapshotPath, Nullable`1 recoverySweepSeconds, Boolean legacyCombinedStore) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/OwnedWorkbench.cs:line 81
+   at Elsa.Activities.Bpmn.Hosting.Tests.OwnedWorkbench.StartAsync(Boolean directBpmn, Boolean runtimeOnly, String legacySnapshotDirectory, String runtimeSnapshotPath, Nullable`1 recoverySweepSeconds, Boolean legacyCombinedStore) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/OwnedWorkbench.cs:line 87
+   at Elsa.Activities.Bpmn.Hosting.Tests.LegacyPartialForkUpgradeTests.Actual_legacy_partial_forks_upgrade_and_finish_through_production_commands() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/LegacyPartialForkUpgradeTests.cs:line 30
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Elsa.Activities.Bpmn.Hosting.Tests.LegacyPartialForkUpgradeTests.Actual_legacy_partial_forks_upgrade_and_finish_through_production_commands" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/activities/bpmn/hosting/tests/bin/release/net10.0/elsa.activities.bpmn.hosting.tests.dll" id="1311aa48-e221-cc1a-e3ad-cd0276d59769">
+      <Execution id="e87c018d-9803-43f8-bd1f-5f255af95d12" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.Hosting.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Activities.Bpmn.Hosting.Tests.LegacyPartialForkUpgradeTests" name="Actual_legacy_partial_forks_upgrade_and_finish_through_production_commands" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="1311aa48-e221-cc1a-e3ad-cd0276d59769" executionId="e87c018d-9803-43f8-bd1f-5f255af95d12" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="1" executed="1" passed="0" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.03]   Discovering: Elsa.Activities.Bpmn.Hosting.Tests
+[xUnit.net 00:00:00.05]   Discovered:  Elsa.Activities.Bpmn.Hosting.Tests
+[xUnit.net 00:00:00.05]   Starting:    Elsa.Activities.Bpmn.Hosting.Tests
+[xUnit.net 00:00:02.43]       System.InvalidOperationException : The owned Workbench reported a failed shell activation.
+[xUnit.net 00:00:02.43]       info: CShells.AspNetCore.Extensions.ApplicationBuilderExtensions[0]
+[xUnit.net 00:00:02.43]             Configuring CShells middleware and endpoints
+[xUnit.net 00:00:02.43]       info: CShells.AspNetCore.Extensions.ApplicationBuilderExtensions[0]
+[xUnit.net 00:00:02.43]             CShells middleware and endpoints configured successfully
+[xUnit.net 00:00:02.43]       info: Elsa.Workbench.WorkbenchOpenIddictPruningService[0]
+[xUnit.net 00:00:02.43]             The OpenIddict store runs on Microsoft.EntityFrameworkCore.InMemory, which cannot delete in bulk, so it is not pruned; it is discarded when the host stops.
+[xUnit.net 00:00:02.43]       info: Microsoft.Hosting.Lifetime[14]
+[xUnit.net 00:00:02.43]             Now listening on: http://127.0.0.1:64857
+[xUnit.net 00:00:02.43]       info: Microsoft.Hosting.Lifetime[0]
+[xUnit.net 00:00:02.43]             Application started. Press Ctrl+C to shut down.
+[xUnit.net 00:00:02.43]       info: Microsoft.Hosting.Lifetime[0]
+[xUnit.net 00:00:02.43]             Hosting environment: Development
+[xUnit.net 00:00:02.43]       info: Microsoft.Hosting.Lifetime[0]
+[xUnit.net 00:00:02.43]             Content root path: /var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-bpmn-hosting-fmsjUb
+[xUnit.net 00:00:02.43]       info: Elsa.Workbench.Readiness.DefaultShellWarmup[0]
+[xUnit.net 00:00:02.43]             Preparing default shell default after the server began listening
+[xUnit.net 00:00:02.43]       info: CShells.Features.RuntimeFeatureCatalog[0]
+[xUnit.net 00:00:02.43]             Committed runtime feature catalog generation 1 with 121 feature(s): DiagnosticsOpenTelemetryEngineBridge, RuntimeFaultStackTrace, ActivitiesBpmn, ActivitiesBpmnHosting, ActivitiesBpmnHostingApi, ActivitiesBpmnInterchange, ActivitiesCompensation, ActivitiesControlFlow, ActivitiesDesignApi, ActivitiesDesignEntityFrameworkCore, ActivitiesDesignReconciliation, ClrActivityReconciliation, ActivitiesDispatchWorkflowDesign, ActivitiesDispatchWorkflowRuntime, ActivitiesFlowchart, ActivitiesGraphDesign, ActivitiesGraphRuntime, ActivitiesHttp, ActivitiesPrimitives, ActivitiesRuntime, BackgroundActivities, ActivitiesScheduling, ActivitiesSequence, FoundationAgentAbstractions, FoundationAgentApi, GitHubCopilotAgent, FoundationWorkflowsAgent, ApiCapabilities, AttentionApi, MemoryCache, Connections, ConnectionsApi, ConnectionsDesign, ConnectionsWorkflows, DiagnosticsOpenTelemetry, DiagnosticsOpenTelemetryEntityFrameworkCore, DiagnosticsStructuredLogs, DiagnosticsStructuredLogsEntityFrameworkCore, EtlDesign, EtlDesignApi, EtlDesignEntityFrameworkCore, EtlRuntimeEntityFrameworkCore, EtlRuntime, EtlRuntimeApi, EtlWorkflowsDesign, EtlWorkflowsRuntime, Events, Expressions, ExpressionsApi, JavaScriptExpressions, JavaScriptJintEngine, JavaScriptRenderingEndpoints, JavaScriptRendering, Liquid, FoundationIdentityAbstractions, FoundationIdentityApi, FoundationIdentityAspNetCoreIdentity, FoundationIdentityAspNetCoreIdentityEntityFrameworkCore, FoundationIdentityOidc, FoundationIdentityOpenIddict, IdentityIamEntityFrameworkCore, IdentityProviderConfigurationEntityFrameworkCore, Http, HttpJavaScript, DatabaseDistributedLocking, FileSystemDistributedLocking, Mediator, ModularityApi, ModularityAttention, Primitives, RulesRuntimeEntityFrameworkCore, RulesRuntime, RulesWorkflowsDesign, RulesWorkflowsRuntime, Secrets, SecretsAttention, SecretsApi, SecretsEntityFrameworkCore, SecretsWorkflows, Serialization.Newtonsoft, Serialization, StudioPreferences, StudioPreferencesApi, StudioPreferencesEntityFrameworkCore, Tasks, WorkflowsDashboard, WorkflowsDashboardEntityFrameworkCore, WorkflowsDesignApi, JavaScriptWorkflowsDesign, WorkflowsDesignEntityFrameworkCore, JsonWorkflowReconciliation, WorkflowDesignValidations, WorkflowsExecutionEvidence, WorkflowsPublishing, WorkflowsPublishingApi, WorkflowsPublishingEntityFrameworkCore, WorkflowsRuntimeTracing, WorkflowsRuntimeAttention, WorkflowsActivationChannels, WorkflowsRuntimeApi, WorkflowsRuntimeTriggers, WorkflowsRuntimeCheckpointPersistence, WorkflowsRuntimeDistributed, WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence, WorkflowsRuntimeDistributedEntityFrameworkCorePersistence, WorkflowsRuntimeHttp, JavaScriptEndpoints, JavaScriptActivities, WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence, WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence, WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence, WorkflowsRuntimeEntityFrameworkCore, WorkflowsRuntimeOperationalStateEntityFrameworkCorePersistence, WorkflowsRuntimeAlterationEntityFrameworkCorePersistence, WorkflowsRuntimeWorkflowExecutionEntityFrameworkCorePersistence, WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence, JsonWorkflowArtifactReconciliation, WorkflowsRuntimeReferenceGarbageCollection, WorkflowsRuntimeResumption, WorkflowsRuntimeRecurringTriggers, WorkflowsRuntimeScheduling
+[xUnit.net 00:00:02.43]       warn: Microsoft.EntityFrameworkCore.Migrations[20410]
+[xUnit.net 00:00:02.43]             The migration operation 'PRAGMA foreign_keys = 0;
+[xUnit.net 00:00:02.43]             ' from migration 'SchemaVersionStamp' cannot be executed in a transaction. If the app is terminated or an unrecoverable error occurs while this operation is being executed then the migration will be left in a partially applied state and would need to be reverted manually before it can be applied again. Create a separate migration that contains just this operation.
+[xUnit.net 00:00:02.43]       warn: Microsoft.EntityFrameworkCore.Migrations[20410]
+[xUnit.net 00:00:02.43]             The migration operation 'PRAGMA foreign_keys = 0;
+[xUnit.net 00:00:02.43]             ' from migration 'FreeNameOnDelete' cannot be executed in a transaction. If the app is terminated or an unrecoverable error occurs while this operation is being executed then the migration will be left in a partially applied state and would need to be reverted manually before it can be applied again. Create a separate migration that contains just this operation.
+[xUnit.net 00:00:02.43]       info: Elsa.Persistence.EntityFramework.EfModuleMigrator[0]
+[xUnit.net 00:00:02.43]             Schema family RuntimeSchedulerWork of EF module Workflows.Runtime finalized 3.0.0.
+[xUnit.net 00:00:02.43]       info: Elsa.Persistence.EntityFramework.EfModuleMigrator[0]
+[xUnit.net 00:00:02.43]             Schema family RuntimeWorkflowExecution of EF module Workflows.Runtime finalized 2.0.0.
+[xUnit.net 00:00:02.43]       fail: Microsoft.EntityFrameworkCore.Database.Command[20102]
+[xUnit.net 00:00:02.43]             Failed executing DbCommand (0ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+[xUnit.net 00:00:02.43]             CREATE TABLE "__ElsaDatabaseIdentity_ElsaWorkflowsDesign" (
+[xUnit.net 00:00:02.43]                 "Id" INTEGER NOT NULL CONSTRAINT "PK___ElsaDatabaseIdentity_ElsaWorkflowsDesign" PRIMARY KEY,
+[xUnit.net 00:00:02.43]                 "DatabaseIdentity" TEXT NOT NULL,
+[xUnit.net 00:00:02.43]                 "SchemaVersion" TEXT NOT NULL
+[xUnit.net 00:00:02.43]             );
+[xUnit.net 00:00:02.43]       fail: Elsa.Workbench.Readiness.DefaultShellWarmup[0]
+[xUnit.net 00:00:02.43]             Default shell preparation failed
+[xUnit.net 00:00:02.43]             Microsoft.Data.Sqlite.SqliteException (0x80004005): SQLite Error 1: 'table "__ElsaDatabaseIdentity_ElsaWorkflowsDesign" already exists'.
+[xUnit.net 00:00:02.43]                at Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC(Int32 rc, sqlite3 db)
+[xUnit.net 00:00:02.43]                at Microsoft.Data.Sqlite.SqliteCommand.PrepareAndEnumerateStatements()+MoveNext()
+[xUnit.net 00:00:02.43]                at Microsoft.Data.Sqlite.SqliteCommand.GetStatements()+MoveNext()
+[xUnit.net 00:00:02.43]                at Microsoft.Data.Sqlite.SqliteDataReader.NextResult()
+[xUnit.net 00:00:02.43]                at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader(CommandBehavior behavior)
+[xUnit.net 00:00:02.43]                at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReader()
+[xUnit.net 00:00:02.43]                at Microsoft.Data.Sqlite.SqliteCommand.ExecuteNonQuery()
+[xUnit.net 00:00:02.43]                at System.Data.Common.DbCommand.ExecuteNonQueryAsync(CancellationToken cancellationToken)
+[xUnit.net 00:00:02.43]             --- End of stack trace from previous location ---
+[xUnit.net 00:00:02.43]                at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteNonQueryAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.43]                at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteNonQueryAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.43]                at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteNonQueryAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.43]                at Microsoft.EntityFrameworkCore.Migrations.Internal.MigrationCommandExecutor.ExecuteAsync(IReadOnlyList`1 migrationCommands, IRelationalConnection connection, MigrationExecutionState executionState, Boolean beginTransaction, Boolean commitTransaction, Nullable`1 isolationLevel, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.43]                at Microsoft.EntityFrameworkCore.Migrations.Internal.MigrationCommandExecutor.ExecuteAsync(IReadOnlyList`1 migrationCommands, IRelationalConnection connection, MigrationExecutionState executionState, Boolean beginTransaction, Boolean commitTransaction, Nullable`1 isolationLevel, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.43]                at Microsoft.EntityFrameworkCore.Migrations.Internal.MigrationCommandExecutor.ExecuteNonQueryAsync(IReadOnlyList`1 migrationCommands, IRelationalConnection connection, MigrationExecutionState executionState, Boolean commitTransaction, Nullable`1 isolationLevel, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.43]                at Microsoft.EntityFrameworkCore.Migrations.Internal.Migrator.MigrateImplementationAsync(DbContext context, String targetMigration, MigrationExecutionState state, Boolean useTransaction, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.43]                at Microsoft.EntityFrameworkCore.Migrations.Internal.Migrator.MigrateImplementationAsync(DbContext context, String targetMigration, MigrationExecutionState state, Boolean useTransaction, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.43]                at Microsoft.EntityFrameworkCore.Migrations.Internal.Migrator.&lt;&gt;c.&lt;&lt;MigrateAsync&gt;b__22_1&gt;d.MoveNext()
+[xUnit.net 00:00:02.43]             --- End of stack trace from previous location ---
+[xUnit.net 00:00:02.43]                at Microsoft.EntityFrameworkCore.Migrations.Internal.Migrator.MigrateAsync(String targetMigration, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.43]                at Microsoft.EntityFrameworkCore.Migrations.Internal.Migrator.MigrateAsync(String targetMigration, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.43]                at Elsa.Persistence.EntityFramework.EfSqliteMigrationLock.MigrateAsync(DbContext context, EfMigrateOptions options, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/EfSqliteMigrationLock.cs:line 62
+[xUnit.net 00:00:02.43]                at Elsa.Persistence.EntityFramework.SchemaFinalization.EfContractingMigrationCheck.MigrateAsync(DbContext context, SchemaFinalizationMember host, EfSchemaModuleFamilies families, EfMigrateOptions options, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/SchemaFinalization/EfContractingMigrationCheck.cs:line 120
+[xUnit.net 00:00:02.43]                at Elsa.Persistence.EntityFramework.EfDatabaseMigrator.ApplyAsync(DbContext context, String expectedProviderName, EfMigrateOptions options, SchemaFinalizationMember host, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/EfDatabaseMigrator.cs:line 72
+[xUnit.net 00:00:02.43]                at Elsa.Persistence.EntityFramework.EfModuleMigrator`1.ApplyAsync(CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/EfModuleMigrator.cs:line 81
+[xUnit.net 00:00:02.43]                at Elsa.Persistence.EntityFramework.EfModuleMigrator`1.ApplyAsync(CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/EfModuleMigrator.cs:line 96
+[xUnit.net 00:00:02.43]                at CShells.Lifecycle.ShellRegistry.RunInitializersAsync(ShellDescriptor descriptor, IServiceProvider provider, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.43]                at CShells.Lifecycle.ShellRegistry.RunInitializersAsync(ShellDescriptor descriptor, IServiceProvider provider, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.43]                at CShells.Lifecycle.ShellRegistry.CreateGenerationAsync(NameSlot slot, IShellBlueprint blueprint, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.43]                at CShells.Lifecycle.ShellRegistry.CreateGenerationAsync(NameSlot slot, IShellBlueprint blueprint, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.43]                at CShells.Lifecycle.ShellRegistry.GetOrActivateAsync(String name, CancellationToken cancellationToken)
+[xUnit.net 00:00:02.43]                at CShells.Hosting.ShellActivationRun.RunAttemptAsync(Int32 index)
+[xUnit.net 00:00:02.43]                at Elsa.Workbench.Readiness.DefaultShellWarmup.ThrowActivationFailure(ShellActivationAttempt attempt) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/Readiness/DefaultShellWarmup.cs:line 163
+[xUnit.net 00:00:02.43]                at Elsa.Workbench.Readiness.DefaultShellWarmup.&lt;&gt;c__DisplayClass14_1.&lt;&lt;WarmAsync&gt;b__2&gt;d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/Readiness/DefaultShellWarmup.cs:line 129
+[xUnit.net 00:00:02.43]             --- End of stack trace from previous location ---
+[xUnit.net 00:00:02.43]                at Elsa.Workbench.Readiness.DefaultShellWarmup.ObservePhaseAsync[T](String phase, Func`1 action) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/Readiness/DefaultShellWarmup.cs:line 188
+[xUnit.net 00:00:02.43]                at Elsa.Workbench.Readiness.DefaultShellWarmup.&lt;&gt;c__DisplayClass14_1.&lt;&lt;WarmAsync&gt;b__0&gt;d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/Readiness/DefaultShellWarmup.cs:line 111
+[xUnit.net 00:00:02.43]             --- End of stack trace from previous location ---
+[xUnit.net 00:00:02.43]                at Elsa.Workbench.Readiness.DefaultShellWarmup.ObservePhaseAsync[T](String phase, Func`1 action) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/Readiness/DefaultShellWarmup.cs:line 188
+[xUnit.net 00:00:02.43]                at Elsa.Workbench.Readiness.DefaultShellWarmup.WarmAsync(CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/Readiness/DefaultShellWarmup.cs:line 104
+[xUnit.net 00:00:02.43]       Stack Trace:
+[xUnit.net 00:00:02.44]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/OwnedWorkbench.cs(251,0): at Elsa.Activities.Bpmn.Hosting.Tests.OwnedWorkbench.LaunchAsync()
+[xUnit.net 00:00:02.44]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/OwnedWorkbench.cs(81,0): at Elsa.Activities.Bpmn.Hosting.Tests.OwnedWorkbench.StartAsync(Boolean directBpmn, Boolean runtimeOnly, String legacySnapshotDirectory, String runtimeSnapshotPath, Nullable`1 recoverySweepSeconds, Boolean legacyCombinedStore)
+[xUnit.net 00:00:02.44]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/OwnedWorkbench.cs(87,0): at Elsa.Activities.Bpmn.Hosting.Tests.OwnedWorkbench.StartAsync(Boolean directBpmn, Boolean runtimeOnly, String legacySnapshotDirectory, String runtimeSnapshotPath, Nullable`1 recoverySweepSeconds, Boolean legacyCombinedStore)
+[xUnit.net 00:00:02.44]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/LegacyPartialForkUpgradeTests.cs(30,0): at Elsa.Activities.Bpmn.Hosting.Tests.LegacyPartialForkUpgradeTests.Actual_legacy_partial_forks_upgrade_and_finish_through_production_commands()
+[xUnit.net 00:00:02.44]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:02.44]   Finished:    Elsa.Activities.Bpmn.Hosting.Tests
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="Sipkes-Mac-Mini" outcome="Error" timestamp="2026-10-30T14:18:46.6860110+01:00">
+        <Text>[xUnit.net 00:00:02.43]     Elsa.Activities.Bpmn.Hosting.Tests.LegacyPartialForkUpgradeTests.Actual_legacy_partial_forks_upgrade_and_finish_through_production_commands [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

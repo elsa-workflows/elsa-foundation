@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "shard": "pr-3",
+  "headSha": "b9cf52c181b79e3e79eef233f7d61cb0843f4da7",
+  "failedTwice": [],
+  "passedOnRetry": [],
+  "quarantinedFailed": [],
+  "slow": [
+    {
+      "test": "Elsa.Activities.Behavioral.GraphBodyScopeTests.Add_two_numbers_computes_its_sum_in_a_body_node_from_its_own_inputs",
+      "seconds": 10.5
+    },
+    {
+      "test": "Elsa.Activities.Behavioral.GraphBoundaryCompleteDurableCancellationTests.TheCancelledSiblingsBookmarkCannotBeResumed",
+      "seconds": 21.4
+    },
+    {
+      "test": "Elsa.Activities.Scheduling.Tests.DurableTimerRestartCrashTests.TimerFire_IsIdempotent_UnderAtLeastOnceDuplicateDelivery",
+      "seconds": 15.9
+    },
+    {
+      "test": "Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleSchemaFinalizationTests.Every_sqlite_module_keeps_its_own_finalization_record_in_one_shared_database",
+      "seconds": 104.0
+    },
+    {
+      "test": "Elsa.Secrets.Nuplane.Tests.SecretsCredentialedFeedTests.A_reference_to_a_secret_that_does_not_exist_refuses_the_feed_without_contacting_it",
+      "seconds": 11.6
+    },
+    {
+      "test": "Elsa.Tasks.Tests.TaskManagerConcurrencyTests.GetOrInitializeTaskStateManager_ConcurrentFirstCallers_AllObserveTheSameInstance",
+      "seconds": 10.9
+    },
+    {
+      "test": "Elsa.Activities.Compensation.Tests.CompensationOperatorActionJourneyTests.J1_the_journal_follows_the_run_through_waiting_and_abandoned",
+      "seconds": 16.8
+    },
+    {
+      "test": "Elsa.Activities.Compensation.Tests.CompensationRetentionJourneyTests.R3_a_pending_delayed_retry_keeps_its_executable_from_the_collector",
+      "seconds": 19.2
+    },
+    {
+      "test": "Elsa.Activities.Compensation.Tests.CompensationUpcastJourneyTests.U2_to_U4_a_waiting_scope_of_an_older_version_resumes_and_finishes",
+      "seconds": 24.8
+    },
+    {
+      "test": "Elsa.Activities.Compensation.Tests.DelayedScheduleSqliteTests.DelayedSchedule_D4_a_host_stopped_after_the_commit_schedules_the_child_once_after_restart",
+      "seconds": 15.0
+    }
+  ],
+  "aborted": null
+}

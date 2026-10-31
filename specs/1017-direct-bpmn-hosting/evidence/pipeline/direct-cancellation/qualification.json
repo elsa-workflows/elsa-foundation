@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "b5c612276334d1d39aec827b85d12cb1021e5c38",
+  "actualJourneys": 1,
+  "workbenchProcesses": 3,
+  "ownedHttpFixtureProcesses": 1,
+  "wholeStores": 6,
+  "rawAssets": 19,
+  "manifestSha256": "892de8163fe20453a1cec708325e25078cd2fd1c8aaed8074aa0179021e4d0d2",
+  "originalBaselineAssetsUnchanged": 104,
+  "checks": [
+    {
+      "name": "native checkpoint/result delivery, connector cancellation races and runtime API",
+      "passed": 72,
+      "skipped": 0,
+      "testedContentCommit": "b5c612276334d1d39aec827b85d12cb1021e5c38",
+      "trxSha256": "afaae027a23ac892ea44bc329dce9c423f54aaaf4ecf20fb0ba1478b47efe44c"
+    },
+    {
+      "name": "portable native/direct recovery and pipeline cancellation comparisons plus rehashed corrupt controls",
+      "passed": 17,
+      "skipped": 0,
+      "logSha256": "8ceb9c4dc8b4ac58780533245b9fe5119b94aaccaf3feea414df044211f93448"
+    }
+  ],
+  "observedCancellation": {
+    "origin": "normal ETL cancel API after process-loss recovery",
+    "etlStatus": "cancelled",
+    "nativeWorkflowStatus": "Cancelled",
+    "bpmnResultStatus": "Cancelled",
+    "acceptedPhysicalHttpRecords": 2,
+    "rejectedRecords": 0,
+    "outstandingRecords": 0,
+    "outstandingBytes": 0,
+    "exactTypedEtlNativeConsumption": true,
+    "exactModelReceiptBeforeNativeResultAcknowledgment": true,
+    "observedAfterOriginalRetryDeadlineAtUtc": "2026-10-29T14:05:33.557818+00:00",
+    "retainedViewsAndWireAfterThirdProcess": true
+  },
+  "scopeLimits": [
+    "Pipeline-originated cancellation through one closed direct BPMN/native RunEtl root on SQLite and the built-in single-node actor only.",
+    "Model-to-worker cancellation, native admission/result cuts and RunBpmn ETL embedding remain unproved.",
+    "Matched business errors, technical faults, worker/timer races and model-held terminal-fault retry remain open.",
+    "Same-source recovery; upgraded-host ETL and final affected-source Studio remain open. Earlier receipts retain their own sources.",
+    "External effects remain at least once; already delivered records are retained, not undone.",
+    "T027/T029/T031/T034-T041 and #2898/#2907/program remain incomplete. Full-PR rounds0 of6; exact-head CI/security/CLA/merge gates remain separate."
+  ],
+  "ownedJourneyChildrenStopped": 4
+}

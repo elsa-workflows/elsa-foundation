@@ -1,0 +1,82 @@
+{
+  "kind": "Obsolete/terminal model-input receipts preserve state and still compare the physical revision",
+  "sourceCommit": "1dd83ad436bffcef45377e462e580ea41a5924b9",
+  "sourceBinding": "The host suite was rebuilt and rerun after source commit 1dd83ad436bffcef45377e462e580ea41a5924b9 and asserts its product revision. The whole BPMN suite was repeated on evidence-only descendant d61bd5d828cf9c54c2b93628e0d36673183c3853, whose production sources are identical. EF/provider checkpoint and runtime contract checks cover unchanged component sources; final whole architecture verification covers the final selector condition and test-only friend grant. No project/package dependencies changed in this slice.",
+  "uniquePassingChecks": 1054,
+  "results": [
+    {
+      "scope": "BPMN whole suite",
+      "passed": 379,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "422aef6eb731f392b7dfc0f73cc676629d93ad1f83df33a00f711389eca0c84d"
+    },
+    {
+      "scope": "Runtime model/ownership/drain selection",
+      "passed": 51,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "9b3627e54c25bc53f495d234139d8e2d04c9feffe962c5611c689b9e6ff93810"
+    },
+    {
+      "scope": "EF model checkpoint selection",
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "1ce02e7e76d1568fbd7ec50508897e05c8dd353d2e1618f68c3e5e54ad42555c"
+    },
+    {
+      "scope": "Required PostgreSQL/SQL Server/MySQL receipt checks",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "88001f012cdff1d489151d1dac782afd8aad6158ac575215c2c2e0d63ff27649"
+    },
+    {
+      "scope": "Architecture whole suite",
+      "passed": 594,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "3d6bf02f02be4682a7adbb7d2f9a2deb72f683af91d1a724b5aec1491313cb37"
+    },
+    {
+      "scope": "Exact-source production host whole suite",
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "89fa1c664cadae4a0986d57615fe672313755044745d054f97d754048165f194"
+    }
+  ],
+  "providerScopes": "Actual PostgreSQL, SQL Server and MySQL, required-provider mode with zero skips; both Running and TerminalSettled retained states per provider, real artifact/root leases and checkpoint store. SQLite same-state/mutation/concurrency/rollback checks are in the EF selection.",
+  "negativeControl": {
+    "removed": "EF retained-state Revision property IsModified=true; model row compare omitted",
+    "result": "Expected DbUpdateConcurrencyException was not thrown; the receipt committed without its physical compare.",
+    "failed": 1,
+    "trxSha256": "8869f53bb00c1c120cdf6299bdfb8950fecb5dd66b60f5c19ff525199a3c86a3",
+    "restoredStagingSha256": "61d9f81771494b1b93e674713546c8be79f59a957b5525689cf95dec5d6105e6",
+    "restoredEfSelectionPassed": 25
+  },
+  "ciRepairs": {
+    "failedHead": "1b95de8708614d22ee2693ed4a5a5a859bfa9ff4",
+    "failedJob": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40791428087/job/123177429092",
+    "causes": [
+      "Missing physical model reader prevented default feature composition from resolving.",
+      "New BPMN API owner was missing from schema-refusal endpoint mapping coverage."
+    ],
+    "repair": "Default native-only composition resolves/runs while model operations explicitly refuse unavailable state. Selected model checkpoint without its reader refuses before claim. New API owner is covered endpoint-by-endpoint; whole architecture594 passes."
+  },
+  "metadataChecks": {
+    "forcedLockedSolutionRestore": true,
+    "mapsCheck": true,
+    "testTierProjects": 123
+  },
+  "limits": [
+    "Same-source process restart; no changed-binary or legacy-upgrade acceptance.",
+    "Combined host has Design storage configured; runtime-only proof remains open.",
+    "Clustered model placement, service/timer/native bindings, Studio and full scenario matrix remain open.",
+    "No concurrent source-retirement/admission proof."
+  ],
+  "notClaimed": "Generic cancellation/parent settlement, clustered placement, full fork/race matrix, real bound native/ETL service work, actual upgraded-host/Studio acceptance and complete-PR review. All remain open.",
+  "fullPrReviewRounds": 0,
+  "gitGuardian": "Owner chose Handle it later; finding remains open and is a required pre-merge resolution, not a bypass."
+}

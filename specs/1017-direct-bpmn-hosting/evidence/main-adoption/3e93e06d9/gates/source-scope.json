@@ -1,0 +1,25 @@
+{
+  "executingStudioSource": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+  "listCorrectionSource": "4d62b2f30331bc5e14d1a6d1a66ff7f6f68cc9df",
+  "changedPaths": [
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/workflowDefinitionTable.css",
+    "Studio/tests/browser/workflow-definition-browse-context.spec.ts"
+  ],
+  "actualStudioSnapshotListSelectorAbsent": {
+    "original/published-run-dom.txt": true,
+    "original/restarted-test-run-dom.txt": true,
+    "original/test-run-dom.txt": true,
+    "original/open-dom.txt": true,
+    "original/legacy-run-dom.txt": true,
+    "original/published-dom.txt": true,
+    "layout/published-run-dom.txt": true,
+    "layout/restarted-published-run-dom.txt": true,
+    "layout/test-run-dom.txt": true,
+    "layout/open-dom.txt": true,
+    "layout/legacy-run-dom.txt": true,
+    "layout/published-dom.txt": true
+  },
+  "backendAndControllerTreesUnchanged": true,
+  "mainSource": "3e93e06d9bd22763c81767ca296c8924142d030b",
+  "originalStudioTreeMatchesMain": true
+}

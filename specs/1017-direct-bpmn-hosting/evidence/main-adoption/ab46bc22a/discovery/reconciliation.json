@@ -1,0 +1,150 @@
+[
+  {
+    "project": "Essentials/tests/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-build",
+      "--list-tests"
+    ],
+    "discoveredCount": 122,
+    "executedCount": 122,
+    "missingFromExecuted": [],
+    "unexpectedExecuted": [],
+    "exactNamesMatch": true
+  },
+  {
+    "project": "Essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-build",
+      "--list-tests"
+    ],
+    "discoveredCount": 401,
+    "executedCount": 401,
+    "missingFromExecuted": [],
+    "unexpectedExecuted": [],
+    "exactNamesMatch": true
+  },
+  {
+    "project": "Essentials/tests/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-build",
+      "--list-tests"
+    ],
+    "discoveredCount": 886,
+    "executedCount": 906,
+    "missingFromExecuted": [
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_InvalidPublicationPreservesSeededRegistration",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_ValidPublicationIndexesEveryCompleteBinding",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.LegacyActionCatalogRow_RepublishProjectsTriggerAndPreservesPriorRegistrationOnFailure",
+      "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.A_literal_or_expression_on_a_credential_input_is_refused_by_the_credential_literal_rule_ahead_of_VF_ACT_011"
+    ],
+    "unexpectedExecuted": [
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code(provider: CronTriggerStimulusProvider { ProviderId = \"Elsa.Cron\" }, activityType: \"Elsa.Cron\", inputName: \"Expression\")",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code(provider: HttpEndpointTriggerStimulusProvider { Cardinality = Exclusive, ProviderId = \"Elsa.HttpEndpoint\" }, activityType: \"Elsa.HttpEndpoint\", inputName: \"Authorize\")",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code(provider: HttpEndpointTriggerStimulusProvider { Cardinality = Exclusive, ProviderId = \"Elsa.HttpEndpoint\" }, activityType: \"Elsa.HttpEndpoint\", inputName: \"CanStartWorkflow\")",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code(provider: HttpEndpointTriggerStimulusProvider { Cardinality = Exclusive, ProviderId = \"Elsa.HttpEndpoint\" }, activityType: \"Elsa.HttpEndpoint\", inputName: \"Path\")",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code(provider: HttpEndpointTriggerStimulusProvider { Cardinality = Exclusive, ProviderId = \"Elsa.HttpEndpoint\" }, activityType: \"Elsa.HttpEndpoint\", inputName: \"Policy\")",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code(provider: HttpEndpointTriggerStimulusProvider { Cardinality = Exclusive, ProviderId = \"Elsa.HttpEndpoint\" }, activityType: \"Elsa.HttpEndpoint\", inputName: \"RequestSizeLimit\")",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code(provider: HttpEndpointTriggerStimulusProvider { Cardinality = Exclusive, ProviderId = \"Elsa.HttpEndpoint\" }, activityType: \"Elsa.HttpEndpoint\", inputName: \"RequestTimeout\")",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code(provider: HttpEndpointTriggerStimulusProvider { Cardinality = Exclusive, ProviderId = \"Elsa.HttpEndpoint\" }, activityType: \"Elsa.HttpEndpoint\", inputName: \"ResponseMode\")",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code(provider: HttpEndpointTriggerStimulusProvider { Cardinality = Exclusive, ProviderId = \"Elsa.HttpEndpoint\" }, activityType: \"Elsa.HttpEndpoint\", inputName: \"SupportedMethods\")",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code(provider: TimerTriggerStimulusProvider { ProviderId = \"Elsa.Timer\" }, activityType: \"Elsa.Timer\", inputName: \"Interval\")",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_InvalidPublicationPreservesSeededRegistration(scenario: Elsa.Cron)",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_InvalidPublicationPreservesSeededRegistration(scenario: Elsa.Event)",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_InvalidPublicationPreservesSeededRegistration(scenario: Elsa.HttpEndpoint)",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_InvalidPublicationPreservesSeededRegistration(scenario: Elsa.Timer)",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_ValidPublicationIndexesEveryCompleteBinding(scenario: Elsa.Cron)",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_ValidPublicationIndexesEveryCompleteBinding(scenario: Elsa.Event)",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_ValidPublicationIndexesEveryCompleteBinding(scenario: Elsa.HttpEndpoint)",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_ValidPublicationIndexesEveryCompleteBinding(scenario: Elsa.Timer)",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.LegacyActionCatalogRow_RepublishProjectsTriggerAndPreservesPriorRegistrationOnFailure(scenario: Elsa.Cron)",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.LegacyActionCatalogRow_RepublishProjectsTriggerAndPreservesPriorRegistrationOnFailure(scenario: Elsa.Event)",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.LegacyActionCatalogRow_RepublishProjectsTriggerAndPreservesPriorRegistrationOnFailure(scenario: Elsa.HttpEndpoint)",
+      "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.LegacyActionCatalogRow_RepublishProjectsTriggerAndPreservesPriorRegistrationOnFailure(scenario: Elsa.Timer)",
+      "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.A_literal_or_expression_on_a_credential_input_is_refused_by_the_credential_literal_rule_ahead_of_VF_ACT_011(value: ArgumentValue { Value = 'typed-in', ExpressionType = JavaScript })",
+      "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.A_literal_or_expression_on_a_credential_input_is_refused_by_the_credential_literal_rule_ahead_of_VF_ACT_011(value: ArgumentValue { Value = typed-in, ExpressionType = Literal })",
+      "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.A_literal_or_expression_on_a_credential_input_is_refused_by_the_credential_literal_rule_ahead_of_VF_ACT_011(value: ArgumentValue { Value = variable-reference, ExpressionType = Variable })"
+    ],
+    "exactNamesMatch": false
+  },
+  {
+    "project": "Studio/tests/Elsa.Studio.Tests/Elsa.Studio.Tests.csproj",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Studio/tests/Elsa.Studio.Tests/Elsa.Studio.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-build",
+      "--list-tests"
+    ],
+    "discoveredCount": 646,
+    "executedCount": 653,
+    "missingFromExecuted": [
+      "Elsa.Studio.Tests.StudioModuleManifestProviderTests.GetModules_ProjectsModuleManifest"
+    ],
+    "unexpectedExecuted": [
+      "Elsa.Studio.Tests.StudioModuleManifestProviderTests.GetModules_ProjectsModuleManifest(expected: ModuleExpectation { Id = Elsa.Studio.Diagnostics.OpenTelemetry, DisplayName = OpenTelemetry, Capabilities = System.String[], AssetPath = /_content/Elsa.Studio.Diagnostics.OpenTelemetry/studio/modules/open-telemetry/, ShellFeatureName = , Version =  })",
+      "Elsa.Studio.Tests.StudioModuleManifestProviderTests.GetModules_ProjectsModuleManifest(expected: ModuleExpectation { Id = Elsa.Studio.Diagnostics.StructuredLogs, DisplayName = Structured logs, Capabilities = System.String[], AssetPath = /_content/Elsa.Studio.Diagnostics.StructuredLogs/studio/modules/structured-logs/, ShellFeatureName = , Version =  })",
+      "Elsa.Studio.Tests.StudioModuleManifestProviderTests.GetModules_ProjectsModuleManifest(expected: ModuleExpectation { Id = Elsa.Studio.ExpressionEditors.JavaScript, DisplayName = JavaScript expression editor, Capabilities = System.String[], AssetPath = /_content/Elsa.Studio.ExpressionEditors.JavaScript/studio/modules/expression-editors/javascript/, ShellFeatureName = JavaScriptExpressionEditorStudio, Version =  })",
+      "Elsa.Studio.Tests.StudioModuleManifestProviderTests.GetModules_ProjectsModuleManifest(expected: ModuleExpectation { Id = Elsa.Studio.ExpressionEditors.Liquid, DisplayName = Liquid expression editor, Capabilities = System.String[], AssetPath = /_content/Elsa.Studio.ExpressionEditors.Liquid/studio/modules/expression-editors/liquid/, ShellFeatureName = LiquidExpressionEditorStudio, Version =  })",
+      "Elsa.Studio.Tests.StudioModuleManifestProviderTests.GetModules_ProjectsModuleManifest(expected: ModuleExpectation { Id = Elsa.Studio.ExtensionBuilder, DisplayName = Extension Builder, Capabilities = System.String[], AssetPath = /_content/Elsa.Studio.ExtensionBuilder/studio/modules/extension-builder/, ShellFeatureName = ExtensionBuilderStudio, Version =  })",
+      "Elsa.Studio.Tests.StudioModuleManifestProviderTests.GetModules_ProjectsModuleManifest(expected: ModuleExpectation { Id = Elsa.Studio.FeatureManagement, DisplayName = Feature management, Capabilities = System.String[], AssetPath = /_content/Elsa.Studio.FeatureManagement/studio/modules/features/, ShellFeatureName = , Version =  })",
+      "Elsa.Studio.Tests.StudioModuleManifestProviderTests.GetModules_ProjectsModuleManifest(expected: ModuleExpectation { Id = Elsa.Studio.Weaver.Workflows, DisplayName = Weaver workflows, Capabilities = System.String[], AssetPath = , ShellFeatureName = WeaverWorkflowsStudio, Version =  })",
+      "Elsa.Studio.Tests.StudioModuleManifestProviderTests.GetModules_ProjectsModuleManifest(expected: ModuleExpectation { Id = Elsa.Studio.Workflows, DisplayName = Workflows, Capabilities = System.String[], AssetPath = /_content/Elsa.Studio.Workflows/studio/modules/workflows/, ShellFeatureName = , Version =  })"
+    ],
+    "exactNamesMatch": false
+  },
+  {
+    "project": "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-build",
+      "--list-tests"
+    ],
+    "discoveredCount": 585,
+    "executedCount": 594,
+    "missingFromExecuted": [
+      "Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Canonical_domain_api_depends_on_capability_aggregation_and_registers_one_stable_declaration",
+      "Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_collectible_api_explorer_artifact_is_rejected"
+    ],
+    "unexpectedExecuted": [
+      "Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Canonical_domain_api_depends_on_capability_aggregation_and_registers_one_stable_declaration(featureType: typeof(Elsa.Activities.Design.Api.ActivitiesDesignApiFeature), expected: ApiCapabilityDeclaration { CapabilityId = elsa.api.activity-design, ContractMajorVersion = 1, Links = Elsa.Api.Capabilities.Models.ApiCapabilityLink[], SourceFeatureId = ActivitiesDesignApi, DormantReason =  })",
+      "Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Canonical_domain_api_depends_on_capability_aggregation_and_registers_one_stable_declaration(featureType: typeof(Elsa.Expressions.Api.ExpressionsApiFeature), expected: ApiCapabilityDeclaration { CapabilityId = elsa.api.expressions, ContractMajorVersion = 1, Links = Elsa.Api.Capabilities.Models.ApiCapabilityLink[], SourceFeatureId = ExpressionsApi, DormantReason =  })",
+      "Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Canonical_domain_api_depends_on_capability_aggregation_and_registers_one_stable_declaration(featureType: typeof(Elsa.Workflows.Design.Api.WorkflowsDesignApiFeature), expected: ApiCapabilityDeclaration { CapabilityId = elsa.api.workflow-design, ContractMajorVersion = 1, Links = Elsa.Api.Capabilities.Models.ApiCapabilityLink[], SourceFeatureId = WorkflowsDesignApi, DormantReason =  })",
+      "Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Canonical_domain_api_depends_on_capability_aggregation_and_registers_one_stable_declaration(featureType: typeof(Elsa.Workflows.Publishing.Api.WorkflowsPublishingApiFeature), expected: ApiCapabilityDeclaration { CapabilityId = elsa.api.publishing, ContractMajorVersion = 1, Links = Elsa.Api.Capabilities.Models.ApiCapabilityLink[], SourceFeatureId = WorkflowsPublishingApi, DormantReason =  })",
+      "Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Canonical_domain_api_depends_on_capability_aggregation_and_registers_one_stable_declaration(featureType: typeof(Elsa.Workflows.Runtime.Api.WorkflowsRuntimeApiFeature), expected: ApiCapabilityDeclaration { CapabilityId = elsa.api.runtime, ContractMajorVersion = 1, Links = Elsa.Api.Capabilities.Models.ApiCapabilityLink[], SourceFeatureId = WorkflowsRuntimeApi, DormantReason =  })",
+      "Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_collectible_api_explorer_artifact_is_rejected(expectedCategory: DelegateOrTransformer, metadataFactory: Func`1 { Method = System.Delegate <UnsafeMetadataCases>b__27_4(), Target = <>c { } })",
+      "Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_collectible_api_explorer_artifact_is_rejected(expectedCategory: MemberOrMethod, metadataFactory: Func`1 { Method = System.Reflection.MethodInfo <UnsafeMetadataCases>b__27_3(), Target = <>c { } })",
+      "Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_collectible_api_explorer_artifact_is_rejected(expectedCategory: MetadataObject, metadataFactory: Func`1 { Method = System.Object <UnsafeMetadataCases>b__27_2(), Target = <>c { } })",
+      "Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_collectible_api_explorer_artifact_is_rejected(expectedCategory: RequestType, metadataFactory: Func`1 { Method = AcceptsMetadata <UnsafeMetadataCases>b__27_0(), Target = <>c { } })",
+      "Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_collectible_api_explorer_artifact_is_rejected(expectedCategory: ResponseType, metadataFactory: Func`1 { Method = ProducesMetadata <UnsafeMetadataCases>b__27_1(), Target = <>c { } })",
+      "Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_collectible_api_explorer_artifact_is_rejected(expectedCategory: SerializerMetadata, metadataFactory: Func`1 { Method = System.Text.Json.Serialization.Metadata.JsonTypeInfo <UnsafeMetadataCases>b__27_5(), Target = <>c { } })"
+    ],
+    "exactNamesMatch": false
+  }
+]

@@ -1,0 +1,40 @@
+{
+  "sourceRevision": "4f46ac55c482b3b68932ca74f147439bfdacda49",
+  "assets": [
+    {
+      "path": "Elsa.Persistence.EntityFramework.source.diff.gz",
+      "sha256": "6080607a44a023278298f112fe4d9a5d556ff45d3553b14c17514794c154dc9c",
+      "bytes": 2942
+    },
+    {
+      "path": "README.md",
+      "sha256": "8a3a778a5e0f471c64053cf4f7ab4f8ab39ea4452a7bb786f1b530c1a46aa1eb",
+      "bytes": 1664
+    },
+    {
+      "path": "command.json",
+      "sha256": "bdfb58a619a91dff5ccb9b5d64a4044b43d18376b11aa3f479a80bc202f98f96",
+      "bytes": 421
+    },
+    {
+      "path": "comparison.json",
+      "sha256": "d53271c1bd409e8bb10d6a050b62778cc54362824817d36d91667c426b334484",
+      "bytes": 31455
+    },
+    {
+      "path": "published-versions.json",
+      "sha256": "50134a0e131b524e729d5a5be4d418a5419fa7b4cbd5d9fab8a461f8e690ab4e",
+      "bytes": 26520
+    },
+    {
+      "path": "version-computation.json",
+      "sha256": "aea4187f4d73e3c16efd07ce9435ba991d4fc8011ed496d3b576a58bdbc153bf",
+      "bytes": 101971
+    },
+    {
+      "path": "version-computation.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    }
+  ]
+}

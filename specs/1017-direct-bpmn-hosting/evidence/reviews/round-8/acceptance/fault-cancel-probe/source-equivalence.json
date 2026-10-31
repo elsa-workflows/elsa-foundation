@@ -1,0 +1,23 @@
+[
+  {
+    "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingDelivery.cs",
+    "builtSource": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "reviewedHead": "e72641e6714768987f555b52ebd36dbc129959a5",
+    "identicalSource": true,
+    "sha256": "aff03e311cb44a12c5210dc4eacd0de46fc5a713108e359fa64b5a2bd87a3d1e"
+  },
+  {
+    "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingBoundary.cs",
+    "builtSource": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "reviewedHead": "e72641e6714768987f555b52ebd36dbc129959a5",
+    "identicalSource": true,
+    "sha256": "56e2d5a7198784e42bcfe6d160c9a0bcc959552773a20d5c6d481514d9bb9ea4"
+  },
+  {
+    "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnDirectExecutionDriver.cs",
+    "builtSource": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "reviewedHead": "e72641e6714768987f555b52ebd36dbc129959a5",
+    "identicalSource": true,
+    "sha256": "39a81022b31d805ff37dc1e529e0d2f8eab672465f7275f0553410fa73d0af47"
+  }
+]

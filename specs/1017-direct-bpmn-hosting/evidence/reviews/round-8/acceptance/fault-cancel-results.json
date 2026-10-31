@@ -1,0 +1,30 @@
+[
+  {
+    "variant": "fault-cancel-probe",
+    "model": "old-pending-model.json",
+    "exit": -6,
+    "stdout": "{\"reviewedHead\":\"e72641e6714768987f555b52ebd36dbc129959a5\",\"Lifecycle\":2,\"retainedNativeWork\":1,\"retainedFormat\":5,\"unsettledCancellations\":0,\"deliveryReturned\":true,\"deliveryFailure\":null,\"result\":\"Original old fault still retains native work without cancellation disposition\",\"normalResultDeliveryGuard\":\"returned\",\"library\":\"Elsa.Activities.Bpmn, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null\",\"productVersion\":\"1.0.0\\u002B1cee5acd4e7d7adb01dd467342641a108e349d60\",\"productSha256\":\"3c7512b9f2d8b4d7b2368e41a1716ba5facd7d60959512547e4e04f5ff728d0c\"}\n",
+    "stderr": "Unhandled exception. System.InvalidOperationException: ASSERTION FAILED: cancel source must remain owed while the child has unsettled native cancellation responsibility.\n   at Program.<Main>$(String[] args) in /private/tmp/elsa-2898-review8-acceptance/fault-cancel-probe/Program.cs:line 42\n   at Program.<Main>(String[] args)\n"
+  },
+  {
+    "variant": "fault-cancel-probe",
+    "model": "completed-pending-model.json",
+    "exit": 0,
+    "stdout": "{\"reviewedHead\":\"e72641e6714768987f555b52ebd36dbc129959a5\",\"Lifecycle\":3,\"retainedNativeWork\":0,\"retainedFormat\":14,\"unsettledCancellations\":0,\"deliveryReturned\":true,\"deliveryFailure\":null,\"result\":\"Actual recovered control has no retained native work\",\"normalResultDeliveryGuard\":\"returned\",\"library\":\"Elsa.Activities.Bpmn, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null\",\"productVersion\":\"1.0.0\\u002B1cee5acd4e7d7adb01dd467342641a108e349d60\",\"productSha256\":\"3c7512b9f2d8b4d7b2368e41a1716ba5facd7d60959512547e4e04f5ff728d0c\"}\n",
+    "stderr": ""
+  },
+  {
+    "variant": "fault-cancel-control",
+    "model": "old-pending-model.json",
+    "exit": 0,
+    "stdout": "{\"reviewedHead\":\"e72641e6714768987f555b52ebd36dbc129959a5\",\"Lifecycle\":2,\"retainedNativeWork\":1,\"retainedFormat\":5,\"unsettledCancellations\":0,\"deliveryReturned\":false,\"deliveryFailure\":\"RuntimeSchedulerWorkUnavailableException: The retained old fault still owes native work before cancellation acknowledgment.\",\"result\":\"Original old fault still retains native work without cancellation disposition\",\"normalResultDeliveryGuard\":\"returned\",\"library\":\"Elsa.Activities.Bpmn, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null\",\"productVersion\":\"1.0.0\\u002B1cee5acd4e7d7adb01dd467342641a108e349d60\",\"productSha256\":\"3c7512b9f2d8b4d7b2368e41a1716ba5facd7d60959512547e4e04f5ff728d0c\"}\n",
+    "stderr": ""
+  },
+  {
+    "variant": "fault-cancel-control",
+    "model": "completed-pending-model.json",
+    "exit": 0,
+    "stdout": "{\"reviewedHead\":\"e72641e6714768987f555b52ebd36dbc129959a5\",\"Lifecycle\":3,\"retainedNativeWork\":0,\"retainedFormat\":14,\"unsettledCancellations\":0,\"deliveryReturned\":true,\"deliveryFailure\":null,\"result\":\"Actual recovered control has no retained native work\",\"normalResultDeliveryGuard\":\"returned\",\"library\":\"Elsa.Activities.Bpmn, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null\",\"productVersion\":\"1.0.0\\u002B1cee5acd4e7d7adb01dd467342641a108e349d60\",\"productSha256\":\"3c7512b9f2d8b4d7b2368e41a1716ba5facd7d60959512547e4e04f5ff728d0c\"}\n",
+    "stderr": ""
+  }
+]

@@ -1,0 +1,11 @@
+{
+  "planId": "alteration-plan-cf2fb0383955058630091547dcc4ef77",
+  "status": "CapturingTargets",
+  "submissionDisposition": "Accepted",
+  "createdAt": "2026-10-30T12:02:02.916284+00:00",
+  "links": {
+    "self": "/runtime/workflows/alteration-plans/alteration-plan-cf2fb0383955058630091547dcc4ef77",
+    "jobsPage": "/runtime/workflows/alteration-plans/alteration-plan-cf2fb0383955058630091547dcc4ef77/jobs/page",
+    "cancel": "/runtime/workflows/alteration-plans/alteration-plan-cf2fb0383955058630091547dcc4ef77/cancel"
+  }
+}

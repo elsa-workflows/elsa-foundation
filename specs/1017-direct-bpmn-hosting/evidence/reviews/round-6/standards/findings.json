@@ -1,0 +1,27 @@
+{
+  "lens": "standards",
+  "round": 6,
+  "head": "d1449c0bff679212f8a64766a95b1c29cfadbcea",
+  "base": "d481d6a5e624e35bba9fbf32033ed02aff64cbef",
+  "verdict": "not_clean",
+  "findings": [
+    {
+      "id": "S1",
+      "priority": "P2",
+      "title": "Wrap owned RunBpmnState wrapper decoding at the native checkpoint boundary",
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingBoundary.cs",
+      "line": 81,
+      "relatedSites": [
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingCheckpointEnricher.cs:23",
+        "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingCheckpointEnricher.cs:60",
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs:90"
+      ],
+      "standard": "Ratified framework constitution section 2.23.5",
+      "failure": "A malformed owned inline RunBpmnState wrapper under a valid ActivityPrivateState envelope leaks raw JsonException through the public checkpoint committer when native cancellation reads its retained predecessor, without native execution or invocation context.",
+      "proof": "embedding-json-probe/output.log",
+      "sourceBoundary": "Focused source9c in-process contract probe; relevant source trees equal reviewed d144; no actual-host corruption/recovery claim and no physical persistence calls.",
+      "suggestedCorrection": "Wrap typed wrapper decoding in the BPMN domain exception with native execution/invocation/node context and preserve the original JsonException as InnerException; retain the valid wire."
+    }
+  ],
+  "knownHoldsAreNotNewFindings": ["owner API/version-magnitude and needs:decision", "deferred GitGuardian incident 39189012", "exact reviewed-head required CI", "protected merge", "resulting-main verification"]
+}

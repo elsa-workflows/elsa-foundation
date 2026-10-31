@@ -1,0 +1,202 @@
+[
+  {
+    "file": "runtime-ef.trx.gz",
+    "counters": {
+      "total": "1790",
+      "executed": "1790",
+      "passed": "1790",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "actualResults": 1790,
+    "outcomes": {
+      "Passed": 1790
+    }
+  },
+  {
+    "file": "architecture.trx.gz",
+    "counters": {
+      "total": "594",
+      "executed": "594",
+      "passed": "594",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "actualResults": 594,
+    "outcomes": {
+      "Passed": 594
+    }
+  },
+  {
+    "file": "bpmn.trx.gz",
+    "counters": {
+      "total": "492",
+      "executed": "492",
+      "passed": "492",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "actualResults": 492,
+    "outcomes": {
+      "Passed": 492
+    }
+  },
+  {
+    "file": "design.trx.gz",
+    "counters": {
+      "total": "655",
+      "executed": "655",
+      "passed": "655",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "actualResults": 655,
+    "outcomes": {
+      "Passed": 655
+    }
+  },
+  {
+    "file": "runtime.trx.gz",
+    "counters": {
+      "total": "3083",
+      "executed": "3083",
+      "passed": "3083",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "actualResults": 3083,
+    "outcomes": {
+      "Passed": 3083
+    }
+  },
+  {
+    "file": "publishing.trx.gz",
+    "counters": {
+      "total": "61",
+      "executed": "61",
+      "passed": "61",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "actualResults": 61,
+    "outcomes": {
+      "Passed": 61
+    }
+  },
+  {
+    "file": "standard-host.trx.gz",
+    "counters": {
+      "total": "41",
+      "executed": "41",
+      "passed": "41",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "actualResults": 41,
+    "outcomes": {
+      "Passed": 41
+    }
+  },
+  {
+    "file": "native-providers.trx.gz",
+    "counters": {
+      "total": "212",
+      "executed": "212",
+      "passed": "212",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "actualResults": 212,
+    "outcomes": {
+      "Passed": 212
+    }
+  }
+]

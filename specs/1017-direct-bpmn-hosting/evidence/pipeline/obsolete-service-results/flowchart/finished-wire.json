@@ -1,0 +1,180 @@
+{
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/source/shard-b/page",
+      "status": 429,
+      "receivedAtMs": 7958.928459,
+      "shard": "shard-b",
+      "page": 0
+    },
+    {
+      "method": "GET",
+      "path": "/source/shard-a/page",
+      "status": 200,
+      "receivedAtMs": 8086.84125,
+      "shard": "shard-a",
+      "page": 0
+    },
+    {
+      "method": "POST",
+      "path": "/output/records",
+      "status": 200,
+      "receivedAtMs": 8204.367667,
+      "recordCount": 1
+    },
+    {
+      "method": "GET",
+      "path": "/source/shard-a/page",
+      "status": 200,
+      "receivedAtMs": 8367.838084,
+      "shard": "shard-a",
+      "page": 1
+    },
+    {
+      "method": "POST",
+      "path": "/output/records",
+      "status": 200,
+      "receivedAtMs": 8413.30875,
+      "recordCount": 1
+    },
+    {
+      "method": "GET",
+      "path": "/source/shard-a/page",
+      "status": 200,
+      "receivedAtMs": 38386.893292,
+      "shard": "shard-a",
+      "page": 0
+    },
+    {
+      "method": "POST",
+      "path": "/output/records",
+      "status": 200,
+      "receivedAtMs": 38498.367417,
+      "recordCount": 1
+    },
+    {
+      "method": "GET",
+      "path": "/source/shard-b/page",
+      "status": 429,
+      "receivedAtMs": 38681.841917,
+      "shard": "shard-b",
+      "page": 0
+    },
+    {
+      "method": "GET",
+      "path": "/source/shard-a/page",
+      "status": 200,
+      "receivedAtMs": 38947.400792,
+      "shard": "shard-a",
+      "page": 1
+    },
+    {
+      "method": "POST",
+      "path": "/output/records",
+      "status": 200,
+      "receivedAtMs": 38980.625959,
+      "recordCount": 1
+    },
+    {
+      "method": "GET",
+      "path": "/source/shard-b/page",
+      "status": 200,
+      "receivedAtMs": 58950.856959,
+      "shard": "shard-b",
+      "page": 0
+    },
+    {
+      "method": "POST",
+      "path": "/output/records",
+      "status": 200,
+      "receivedAtMs": 58985.256834,
+      "recordCount": 1
+    },
+    {
+      "method": "GET",
+      "path": "/source/shard-b/page",
+      "status": 200,
+      "receivedAtMs": 59057.561125,
+      "shard": "shard-b",
+      "page": 1
+    },
+    {
+      "method": "POST",
+      "path": "/output/records",
+      "status": 200,
+      "receivedAtMs": 59081.421875,
+      "recordCount": 1
+    }
+  ],
+  "outputPosts": [
+    {
+      "recordCount": 1,
+      "records": [
+        {
+          "id": 1,
+          "name": "Ada"
+        }
+      ],
+      "hasIdempotencyKey": true
+    },
+    {
+      "recordCount": 1,
+      "records": [
+        {
+          "id": 2,
+          "name": "Grace"
+        }
+      ],
+      "hasIdempotencyKey": true
+    },
+    {
+      "recordCount": 1,
+      "records": [
+        {
+          "id": 1,
+          "name": "Ada"
+        }
+      ],
+      "hasIdempotencyKey": true
+    },
+    {
+      "recordCount": 1,
+      "records": [
+        {
+          "id": 2,
+          "name": "Grace"
+        }
+      ],
+      "hasIdempotencyKey": true
+    },
+    {
+      "recordCount": 1,
+      "records": [
+        {
+          "id": 3,
+          "name": "Linus"
+        }
+      ],
+      "hasIdempotencyKey": true
+    },
+    {
+      "recordCount": 1,
+      "records": [
+        {
+          "id": 4,
+          "name": "Margaret"
+        }
+      ],
+      "hasIdempotencyKey": true
+    }
+  ],
+  "overflow": false,
+  "retryRearms": [
+    {
+      "rearmNumber": 1,
+      "previousShardBAttempts": 1,
+      "rearmedAtMs": 36515.993792
+    }
+  ]
+}

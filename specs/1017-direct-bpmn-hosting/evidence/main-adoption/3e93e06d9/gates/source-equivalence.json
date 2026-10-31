@@ -1,0 +1,9 @@
+{
+  "currentSource": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+  "priorHostingSource": "8e9b31360d4c71c4cdd70f18cb93d70bedc57bb0",
+  "unchangedTrees": {
+    "Essentials": true,
+    "tools/bpmn": true,
+    "e2e-tests/bpmn": true
+  }
+}

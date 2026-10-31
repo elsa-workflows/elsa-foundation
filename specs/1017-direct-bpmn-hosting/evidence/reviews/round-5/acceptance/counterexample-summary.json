@@ -1,0 +1,325 @@
+{
+  "oldModel": {
+    "revision": 2,
+    "lifecycle": 2,
+    "workCount": 1,
+    "format": 5
+  },
+  "stages": {
+    "pending-parent-upgrade": {
+      "modelRevision": 3,
+      "lifecycle": 3,
+      "workCount": 1,
+      "cancellations": null,
+      "queuedModelInputs": 0,
+      "allOriginalFieldsUnchanged": true,
+      "semanticStateUnchanged": true,
+      "allOutboxRowsDelivered": true,
+      "outboxRows": [
+        {
+          "execution": "cgBlAHYAaQBlAHcALQBuAGEAdABpAHYAZQAtAHAAYQByAGUAbgB0AA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "cgBlAHYAaQBlAHcALQBuAGEAdABpAHYAZQAtAHAAYQByAGUAbgB0AA==",
+          "kind": "Elsa.Bpmn.StartEmbedded.v1",
+          "status": 2
+        },
+        {
+          "execution": "YgBwAG0AbgAtAGUAbQBiAGUAZABkAGUAZAA6AGUANwAwADUAYQAzADQANQA2AGYAZAAwADMAOABiAGMAZgBmADUANQBiAGYAMgAxADAAOQA0AGQAZQA2ADUANQBiAGQAOAA5AGIAZgA4AGIAMwA5ADUAYwA5ADYAYQA5AGYAZQAxADQAZABlAGMAYQAyAGQAMgBjAGIANAA0AGQA",
+          "kind": "Elsa.Bpmn.StartNativeWork.v1",
+          "status": 2
+        },
+        {
+          "execution": "YgBwAG0AbgAtAGUAbQBiAGUAZABkAGUAZAA6AGUANwAwADUAYQAzADQANQA2AGYAZAAwADMAOABiAGMAZgBmADUANQBiAGYAMgAxADAAOQA0AGQAZQA2ADUANQBiAGQAOAA5AGIAZgA4AGIAMwA5ADUAYwA5ADYAYQA5AGYAZQAxADQAZABlAGMAYQAyAGQAMgBjAGIANAA0AGQA",
+          "kind": "Elsa.Bpmn.StartNativeWork.v1",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgBhADcAMgAwADMANAA4ADQAYwBkADYAZQBmADgAYwBmADMAMgA0AGEANgBkAGIANgBlADMAZgAyADQAZAA3ADEAMABhADkAMgAyADYANAA1ADUAOQA4ADgANAA1AGQANQBiADkANQBhAGIAYQA2ADgAYQBlADcAMABhADEAMgAxAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgBhADcAMgAwADMANAA4ADQAYwBkADYAZQBmADgAYwBmADMAMgA0AGEANgBkAGIANgBlADMAZgAyADQAZAA3ADEAMABhADkAMgAyADYANAA1ADUAOQA4ADgANAA1AGQANQBiADkANQBhAGIAYQA2ADgAYQBlADcAMABhADEAMgAxAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgBhADcAMgAwADMANAA4ADQAYwBkADYAZQBmADgAYwBmADMAMgA0AGEANgBkAGIANgBlADMAZgAyADQAZAA3ADEAMABhADkAMgAyADYANAA1ADUAOQA4ADgANAA1AGQANQBiADkANQBhAGIAYQA2ADgAYQBlADcAMABhADEAMgAxAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgBhADcAMgAwADMANAA4ADQAYwBkADYAZQBmADgAYwBmADMAMgA0AGEANgBkAGIANgBlADMAZgAyADQAZAA3ADEAMABhADkAMgAyADYANAA1ADUAOQA4ADgANAA1AGQANQBiADkANQBhAGIAYQA2ADgAYQBlADcAMABhADEAMgAxAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgBhADcAMgAwADMANAA4ADQAYwBkADYAZQBmADgAYwBmADMAMgA0AGEANgBkAGIANgBlADMAZgAyADQAZAA3ADEAMABhADkAMgAyADYANAA1ADUAOQA4ADgANAA1AGQANQBiADkANQBhAGIAYQA2ADgAYQBlADcAMABhADEAMgAxAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgBhADcAMgAwADMANAA4ADQAYwBkADYAZQBmADgAYwBmADMAMgA0AGEANgBkAGIANgBlADMAZgAyADQAZAA3ADEAMABhADkAMgAyADYANAA1ADUAOQA4ADgANAA1AGQANQBiADkANQBhAGIAYQA2ADgAYQBlADcAMABhADEAMgAxAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgBhADcAMgAwADMANAA4ADQAYwBkADYAZQBmADgAYwBmADMAMgA0AGEANgBkAGIANgBlADMAZgAyADQAZAA3ADEAMABhADkAMgAyADYANAA1ADUAOQA4ADgANAA1AGQANQBiADkANQBhAGIAYQA2ADgAYQBlADcAMABhADEAMgAxAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Bpmn.NativeWorkResult.v1",
+          "status": 2
+        },
+        {
+          "execution": "YgBwAG0AbgAtAGUAbQBiAGUAZABkAGUAZAA6AGUANwAwADUAYQAzADQANQA2AGYAZAAwADMAOABiAGMAZgBmADUANQBiAGYAMgAxADAAOQA0AGQAZQA2ADUANQBiAGQAOAA5AGIAZgA4AGIAMwA5ADUAYwA5ADYAYQA5AGYAZQAxADQAZABlAGMAYQAyAGQAMgBjAGIANAA0AGQA",
+          "kind": "Elsa.Bpmn.ResumeNativeParent.v1",
+          "status": 2
+        }
+      ],
+      "bookmarks": [
+        {
+          "bookmarkId": "review-event-3:attempt:1:trigger:1",
+          "workflowExecutionId": "wfexec:start:v1:a7203484cd6ef8cf324a6db6e3f24d710a922645598845d5b95aba68ae70a121",
+          "activityExecutionId": "review-event-3",
+          "executableNodeId": "wait",
+          "resumeTargetId": "wait:resume-target:event",
+          "stimulusType": "Event",
+          "stimulusHash": "sha256:117a36044b0fb340a27df25053d8582ecd8b2d1de6e24de93c2481374cdb0f52",
+          "payload": null,
+          "metadata": {
+            "runtime.schedulerWorkItemId": "053463f42f1b9460:create-bookmark:review-event-3:attempt:1:trigger:1",
+            "runtime.commandId": "a96c5f739db728c0:create-bookmark:review-event-3:attempt:1:trigger:1",
+            "runtime.reason": "ActivitySuspended"
+          },
+          "createdAt": "2026-10-30T23:38:49.852447+00:00",
+          "expiresAt": null
+        }
+      ],
+      "snapshotSha256": "3ea0cc0cce2c4d92c4287d504de9959e657e2d8771e2b84bce6dc52880445f8d"
+    },
+    "second-start-control": {
+      "modelRevision": 5,
+      "lifecycle": 3,
+      "workCount": 0,
+      "cancellations": [
+        {
+          "origin": {
+            "formatVersion": 1,
+            "scope": {
+              "value": "default"
+            },
+            "executionId": "bpmn-embedded:e705a3456fd038bcff55bf21094de655bd89bf8b395c96a9fe14deca2d2cb44d",
+            "protocol": {
+              "key": "elsa.bpmn",
+              "version": 1
+            },
+            "executable": {
+              "artifactId": "sha256:7c2c44efc18f98b9e435792a98a4fc2cc01e16ffce0e99faf28a190c1d214140",
+              "definitionId": "bpmn-model:sha256:7c2c44efc18f98b9e435792a98a4fc2cc01e16ffce0e99faf28a190c1d214140",
+              "definitionVersionId": "sha256:7c2c44efc18f98b9e435792a98a4fc2cc01e16ffce0e99faf28a190c1d214140",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:7c2c44efc18f98b9e435792a98a4fc2cc01e16ffce0e99faf28a190c1d214140"
+            },
+            "materialIncarnationId": "5c9bb3e2800942e8be3aeea00e1a5e81",
+            "bindingId": "worker",
+            "invocationId": "bpmn-work:3f7af719c75da5d55f043bc85d2b686356ca631c1588a7b9e5b5ff624ea309d4",
+            "attemptId": "attempt:0385828475616965db071b47d17a27f10e726f5f799985d41fce9951c88f3ede",
+            "workerExecutable": {
+              "artifactId": "artifact-1",
+              "definitionId": "definition-1",
+              "definitionVersionId": "version-1",
+              "artifactVersion": "1.0.0",
+              "artifactHash": "sha256:test"
+            },
+            "workerExecutionId": "wfexec:start:v1:a7203484cd6ef8cf324a6db6e3f24d710a922645598845d5b95aba68ae70a121",
+            "sourceOutboxItemId": "model-input:a7f7f4b2734b428601d55c990f2277eddd5809c0bebd7bf80c7c9ca23b9cb071:bpmn-start-native:34f801f01ed176501c76259e731d806f3b41684dc2f2f0a4eae567b7c5ccee65",
+            "sourceIntentId": "bpmn-start-native:34f801f01ed176501c76259e731d806f3b41684dc2f2f0a4eae567b7c5ccee65",
+            "resultIntentKind": "Elsa.Bpmn.NativeWorkResult.v1",
+            "resultInputId": "native-result:5c68b8da1be57e19eab3f7cf53a1abf09920285af4f9da6137c776348beafc10"
+          },
+          "sourceOutboxItemId": "model-input:f38b12d000866bcca80e0e1bfe619de0c3189e250263692bec1bd5aaa2ea1644:bpmn-cancel-native:34f801f01ed176501c76259e731d806f3b41684dc2f2f0a4eae567b7c5ccee65",
+          "settled": true
+        }
+      ],
+      "queuedModelInputs": 0,
+      "allOriginalFieldsUnchanged": true,
+      "semanticStateUnchanged": true,
+      "allOutboxRowsDelivered": true,
+      "outboxRows": [
+        {
+          "execution": "cgBlAHYAaQBlAHcALQBuAGEAdABpAHYAZQAtAHAAYQByAGUAbgB0AA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "cgBlAHYAaQBlAHcALQBuAGEAdABpAHYAZQAtAHAAYQByAGUAbgB0AA==",
+          "kind": "Elsa.Bpmn.StartEmbedded.v1",
+          "status": 2
+        },
+        {
+          "execution": "YgBwAG0AbgAtAGUAbQBiAGUAZABkAGUAZAA6AGUANwAwADUAYQAzADQANQA2AGYAZAAwADMAOABiAGMAZgBmADUANQBiAGYAMgAxADAAOQA0AGQAZQA2ADUANQBiAGQAOAA5AGIAZgA4AGIAMwA5ADUAYwA5ADYAYQA5AGYAZQAxADQAZABlAGMAYQAyAGQAMgBjAGIANAA0AGQA",
+          "kind": "Elsa.Bpmn.StartNativeWork.v1",
+          "status": 2
+        },
+        {
+          "execution": "YgBwAG0AbgAtAGUAbQBiAGUAZABkAGUAZAA6AGUANwAwADUAYQAzADQANQA2AGYAZAAwADMAOABiAGMAZgBmADUANQBiAGYAMgAxADAAOQA0AGQAZQA2ADUANQBiAGQAOAA5AGIAZgA4AGIAMwA5ADUAYwA5ADYAYQA5AGYAZQAxADQAZABlAGMAYQAyAGQAMgBjAGIANAA0AGQA",
+          "kind": "Elsa.Bpmn.StartNativeWork.v1",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgBhADcAMgAwADMANAA4ADQAYwBkADYAZQBmADgAYwBmADMAMgA0AGEANgBkAGIANgBlADMAZgAyADQAZAA3ADEAMABhADkAMgAyADYANAA1ADUAOQA4ADgANAA1AGQANQBiADkANQBhAGIAYQA2ADgAYQBlADcAMABhADEAMgAxAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgBhADcAMgAwADMANAA4ADQAYwBkADYAZQBmADgAYwBmADMAMgA0AGEANgBkAGIANgBlADMAZgAyADQAZAA3ADEAMABhADkAMgAyADYANAA1ADUAOQA4ADgANAA1AGQANQBiADkANQBhAGIAYQA2ADgAYQBlADcAMABhADEAMgAxAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgBhADcAMgAwADMANAA4ADQAYwBkADYAZQBmADgAYwBmADMAMgA0AGEANgBkAGIANgBlADMAZgAyADQAZAA3ADEAMABhADkAMgAyADYANAA1ADUAOQA4ADgANAA1AGQANQBiADkANQBhAGIAYQA2ADgAYQBlADcAMABhADEAMgAxAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgBhADcAMgAwADMANAA4ADQAYwBkADYAZQBmADgAYwBmADMAMgA0AGEANgBkAGIANgBlADMAZgAyADQAZAA3ADEAMABhADkAMgAyADYANAA1ADUAOQA4ADgANAA1AGQANQBiADkANQBhAGIAYQA2ADgAYQBlADcAMABhADEAMgAxAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgBhADcAMgAwADMANAA4ADQAYwBkADYAZQBmADgAYwBmADMAMgA0AGEANgBkAGIANgBlADMAZgAyADQAZAA3ADEAMABhADkAMgAyADYANAA1ADUAOQA4ADgANAA1AGQANQBiADkANQBhAGIAYQA2ADgAYQBlADcAMABhADEAMgAxAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgBhADcAMgAwADMANAA4ADQAYwBkADYAZQBmADgAYwBmADMAMgA0AGEANgBkAGIANgBlADMAZgAyADQAZAA3ADEAMABhADkAMgAyADYANAA1ADUAOQA4ADgANAA1AGQANQBiADkANQBhAGIAYQA2ADgAYQBlADcAMABhADEAMgAxAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgBhADcAMgAwADMANAA4ADQAYwBkADYAZQBmADgAYwBmADMAMgA0AGEANgBkAGIANgBlADMAZgAyADQAZAA3ADEAMABhADkAMgAyADYANAA1ADUAOQA4ADgANAA1AGQANQBiADkANQBhAGIAYQA2ADgAYQBlADcAMABhADEAMgAxAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Workflows.Runtime.EnqueueSchedulerWork",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgAyAGEAYgA3ADMAOQA0ADEAZgBmAGYAOQAyADIANwAyADUANgBhADIANABhADkANwBhAGQAYgAxAGEAMwAyADEAYQA2ADgAZgA2AGEAMwBmADMAOAA3ADIAOAA1ADIAYgA1ADcANQBhADAAOQBiADYANgBhAGEANQA4ADEAOQBjAA==",
+          "kind": "Elsa.Bpmn.NativeWorkResult.v1",
+          "status": 2
+        },
+        {
+          "execution": "YgBwAG0AbgAtAGUAbQBiAGUAZABkAGUAZAA6AGUANwAwADUAYQAzADQANQA2AGYAZAAwADMAOABiAGMAZgBmADUANQBiAGYAMgAxADAAOQA0AGQAZQA2ADUANQBiAGQAOAA5AGIAZgA4AGIAMwA5ADUAYwA5ADYAYQA5AGYAZQAxADQAZABlAGMAYQAyAGQAMgBjAGIANAA0AGQA",
+          "kind": "Elsa.Bpmn.ResumeNativeParent.v1",
+          "status": 2
+        },
+        {
+          "execution": "YgBwAG0AbgAtAGUAbQBiAGUAZABkAGUAZAA6AGUANwAwADUAYQAzADQANQA2AGYAZAAwADMAOABiAGMAZgBmADUANQBiAGYAMgAxADAAOQA0AGQAZQA2ADUANQBiAGQAOAA5AGIAZgA4AGIAMwA5ADUAYwA5ADYAYQA5AGYAZQAxADQAZABlAGMAYQAyAGQAMgBjAGIANAA0AGQA",
+          "kind": "Elsa.Bpmn.CancelNativeWork.v1",
+          "status": 2
+        },
+        {
+          "execution": "dwBmAGUAeABlAGMAOgBzAHQAYQByAHQAOgB2ADEAOgBhADcAMgAwADMANAA4ADQAYwBkADYAZQBmADgAYwBmADMAMgA0AGEANgBkAGIANgBlADMAZgAyADQAZAA3ADEAMABhADkAMgAyADYANAA1ADUAOQA4ADgANAA1AGQANQBiADkANQBhAGIAYQA2ADgAYQBlADcAMABhADEAMgAxAA==",
+          "kind": "Elsa.Bpmn.NativeWorkResult.v1",
+          "status": 2
+        }
+      ],
+      "bookmarks": [],
+      "snapshotSha256": "f509d2edc960d4d121949b3ceba82cd36c40417173584bfafa5beafc1fe41134"
+    }
+  }
+}

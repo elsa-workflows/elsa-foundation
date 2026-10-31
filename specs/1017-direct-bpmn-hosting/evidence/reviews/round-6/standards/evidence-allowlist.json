@@ -1,0 +1,97 @@
+{
+  "head": "d1449c0bff679212f8a64766a95b1c29cfadbcea",
+  "base": "d481d6a5e624e35bba9fbf32033ed02aff64cbef",
+  "scope": "Exact portable report/evidence import list. Raw discussion snapshots/indexes and source.diff remain audit working material outside this import list; the parent already owns the frozen source snapshots. No active project, bin, obj, dll or product data is included.",
+  "assets": [
+    {
+      "path": "report.md",
+      "bytes": 11550,
+      "sha256": "ba41712901f7a6c265cf7350623d2ac9ef0ef10c8b2b6c5ccead1f42d521e16a"
+    },
+    {
+      "path": "findings.json",
+      "bytes": 1851,
+      "sha256": "c2185a48d0d960e85deb54b15041bf77011fbb021d870996ff189e57d5a6c784"
+    },
+    {
+      "path": "diff-scope.json",
+      "bytes": 288,
+      "sha256": "6ae4cd9735be8491c7fd3b94823e1ae2d6d1f48e6efe3c5ca23dec13f2ab01a1"
+    },
+    {
+      "path": "input-provenance.json",
+      "bytes": 4575,
+      "sha256": "1e45d7ca3ddc31f0d717e8dbabaff13997eaa2407a57d2a21db5406ae51ae118"
+    },
+    {
+      "path": "discussion-counts.json",
+      "bytes": 892,
+      "sha256": "fe7714382c2817a6a8ae09fa1c43ca4c4ee7df46dfe0226dd9d57f689c7350c3"
+    },
+    {
+      "path": "evidence-audit.json",
+      "bytes": 9374,
+      "sha256": "fdcbc4564e31898a7dba56e63854dcbb99c4bb7ee07c781bfb45c5a932e575f6"
+    },
+    {
+      "path": "independent-discovery-audit.json",
+      "bytes": 1318,
+      "sha256": "af3caf92838fb567dfe6289c25985c628c499cee82105e616a01bbcfa3c35200"
+    },
+    {
+      "path": "sqlite-integrity-audit.json",
+      "bytes": 14078,
+      "sha256": "f87d2f16c21b7883975cdcaa05fa4e28300805dd44f8a91a0081f09be0e60514"
+    },
+    {
+      "path": "audit_evidence.py",
+      "bytes": 4027,
+      "sha256": "16a83ee3d0936e54b0ebf3965d78dc483ece8fbd808070a4abd0b31ad9341eba"
+    },
+    {
+      "path": "audit_discovery.py",
+      "bytes": 1418,
+      "sha256": "d23fcd2b46cf9ae74a2bc4c6b1119da2594292ff5e42568e2baf343a9fd6bc2a"
+    },
+    {
+      "path": "audit_sqlite.py",
+      "bytes": 1426,
+      "sha256": "4798a348a72fc6f29bd389b054e58db2ae22545a1df1da6ce9a24bc0ed75dfca"
+    },
+    {
+      "path": "embedding-json-probe/README.md",
+      "bytes": 1537,
+      "sha256": "fb3e11ceb4facded9e5f4b154b2e087861edae9213b933ed33566dfc95fc5def"
+    },
+    {
+      "path": "embedding-json-probe/Program.cs",
+      "bytes": 5496,
+      "sha256": "6c29d52b3f225812606c81182fc7b0f819e601109cf790c601b3628a8e19012e"
+    },
+    {
+      "path": "embedding-json-probe/generate-probe-project.py",
+      "bytes": 1224,
+      "sha256": "4ac422fc08fa1f38573872cfd217a438b2f0b6fba7cc2be766ee51b27923e12e"
+    },
+    {
+      "path": "embedding-json-probe/output.log",
+      "bytes": 5782,
+      "sha256": "8961f0543fef21652a1fb47906e325980bd237122216fa481266526bc8b60f2b"
+    },
+    {
+      "path": "embedding-json-probe/provenance.json",
+      "bytes": 1431,
+      "sha256": "b50b9ef00c1b3f6133717c32fbf3792acfddf1770d123569b808fc2929d51ab0"
+    },
+    {
+      "path": "embedding-json-probe/Probe.csproj.gz",
+      "bytes": 3830,
+      "sha256": "fcc6c3d04849afbf202fca9d8d92dda222ecd5e042222c94ab240810189cc67f"
+    },
+    {
+      "path": "embedding-json-probe/configuration.json",
+      "bytes": 481,
+      "sha256": "85ba02975d5428792f02e4d564b62991fe231c1e9bbd883155d74c39de03accb"
+    }
+  ]
+}

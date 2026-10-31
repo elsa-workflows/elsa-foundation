@@ -1,0 +1,211 @@
+Test run for /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.dll (.NETCoreApp,Version=v10.0)
+The following Tests are available:
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.ClaimLeaseOverrunPostgreSqlSmokeTests.PostgreSql_outbox_dispatches_an_item_whose_claim_lapsed_while_waiting_once_and_the_in_flight_item_may_repeat
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.ClaimLeaseOverrunPostgreSqlSmokeTests.PostgreSql_timer_pump_fires_a_timer_whose_claim_lapsed_mid_batch_exactly_once
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.EfRuntimeCheckpointActivityExecutionParticipantPostgreSqlSmokeTests.PostgreSql_runtime_checkpoint_activity_execution_transaction_and_concurrency
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.EfRuntimeCheckpointActivityExecutionParticipantSqlServerSmokeTests.SqlServer_runtime_checkpoint_activity_execution_transaction_and_concurrency
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.EfRuntimeCheckpointActivityExecutionParticipantMySqlSmokeTests.MySql_runtime_checkpoint_activity_execution_transaction_and_concurrency
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointAlterationJobParticipantPostgreSqlSmokeTests.PostgreSql_checkpoint_alteration_job_participant_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointAlterationJobParticipantSqlServerSmokeTests.SqlServer_checkpoint_alteration_job_participant_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointAlterationJobParticipantMySqlSmokeTests.MySql_checkpoint_alteration_job_participant_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointBookmarkParticipantPostgreSqlSmokeTests.PostgreSql_checkpoint_bookmark_participant_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointBookmarkParticipantSqlServerSmokeTests.SqlServer_checkpoint_bookmark_participant_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointBookmarkParticipantMySqlSmokeTests.MySql_checkpoint_bookmark_participant_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointDurableValueParticipantPostgreSqlSmokeTests.PostgreSql_checkpoint_durable_value_participant_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointDurableValueParticipantSqlServerSmokeTests.SqlServer_checkpoint_durable_value_participant_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointDurableValueParticipantMySqlSmokeTests.MySql_checkpoint_durable_value_participant_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointIncidentParticipantPostgreSqlSmokeTests.PostgreSql_checkpoint_incident_participant_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointIncidentParticipantSqlServerSmokeTests.SqlServer_checkpoint_incident_participant_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointIncidentParticipantMySqlSmokeTests.MySql_checkpoint_incident_participant_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointInspectionParticipantPostgreSqlSmokeTests.PostgreSql_checkpoint_inspection_participant_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointInspectionParticipantSqlServerSmokeTests.SqlServer_checkpoint_inspection_participant_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointInspectionParticipantMySqlSmokeTests.MySql_checkpoint_inspection_participant_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointRunHealthParticipantPostgreSqlSmokeTests.PostgreSql_checkpoint_run_health_model_transaction_and_concurrency
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointRunHealthParticipantSqlServerSmokeTests.SqlServer_checkpoint_run_health_model_transaction_and_concurrency
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointRunHealthParticipantMySqlSmokeTests.MySql_checkpoint_run_health_model_transaction_and_concurrency
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointSchedulerWorkParticipantPostgreSqlSmokeTests.PostgreSql_checkpoint_scheduler_work_participant_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointSchedulerWorkParticipantSqlServerSmokeTests.SqlServer_checkpoint_scheduler_work_participant_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCheckpointSchedulerWorkParticipantMySqlSmokeTests.MySql_checkpoint_scheduler_work_participant_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.LiveDrainSweepContentionPostgreSqlSmokeTests.PostgreSql(scenario: "real-sweep-before-the-drains-read")
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.LiveDrainSweepContentionPostgreSqlSmokeTests.PostgreSql(scenario: "real-sweep-between-the-drains-read-and-record")
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.LiveDrainSweepContentionPostgreSqlSmokeTests.PostgreSql(scenario: "drain-waits-for-another-deliverer-that-holds-its-c"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.LiveDrainSweepContentionPostgreSqlSmokeTests.PostgreSql(scenario: "drain-delivers-a-continuation-whose-other-claim-la"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.LiveDrainSweepContentionPostgreSqlSmokeTests.PostgreSql(scenario: "drain-whose-continuation-stays-taken-does-not-repo"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.LiveDrainSweepContentionPostgreSqlSmokeTests.PostgreSql(scenario: "a-transient-continuation-failure-is-retried-and-de"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.LiveDrainSweepContentionPostgreSqlSmokeTests.PostgreSql(scenario: "drain-whose-continuation-another-deliverer-failed-"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.LiveDrainSweepContentionPostgreSqlSmokeTests.PostgreSql(scenario: "a-continuation-whose-retries-are-exhausted-fails-f"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.PostCommitOutboxClaimedListingPostgreSqlSmokeTests.PostgreSql_store_lists_one_executions_held_items_of_one_kind
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.PublishStimulusStartPostgreSqlSmokeTests.PostgreSql_publish_stimulus_delivered_again_on_another_node_starts_its_workflow_once
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.PublishStimulusStartPostgreSqlSmokeTests.PostgreSql_publish_stimulus_delivery_racing_on_another_node_converges_on_the_first_start
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RecurringOccurrencePostgreSqlSmokeTests.PostgreSql_an_occurrence_whose_claimant_died_before_routing_starts_once_through_a_peer_after_the_lease
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RecurringOccurrencePostgreSqlSmokeTests.PostgreSql_an_occurrence_whose_claimant_died_after_routing_is_repeated_by_a_peer_without_a_second_start
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RecurringOccurrencePostgreSqlSmokeTests.PostgreSql_two_pumps_racing_on_one_occurrence_route_and_start_it_once
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RecurringOccurrencePostgreSqlSmokeTests.PostgreSql_a_republish_while_an_occurrence_is_due_keeps_it_for_the_pump
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RecurringOccurrencePostgreSqlSmokeTests.PostgreSql_a_replacement_activated_while_the_replaced_publication_holds_the_occurrence_fires_it_once
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RecurringOccurrencePostgreSqlSmokeTests.PostgreSql_a_replacement_activated_after_the_replaced_publication_routed_the_occurrence_does_not_start_it_again
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RecurringOccurrencePostgreSqlSmokeTests.PostgreSql_an_exhausted_cron_fires_its_last_occurrence_once_and_is_then_deleted
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RecurringOccurrencePostgreSqlSmokeTests.PostgreSql_a_claim_holds_the_occurrence_until_its_lease_lapses
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RecurringOccurrencePostgreSqlSmokeTests.PostgreSql_a_release_keeps_the_occurrence_and_counts_the_failure
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RecurringOccurrencePostgreSqlSmokeTests.PostgreSql_deleting_and_saving_the_schedule_again_fences_out_its_claim_without_reissuing_the_token
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RecurringOccurrencePostgreSqlSmokeTests.PostgreSql_two_stores_that_read_one_due_row_grant_exactly_one_claim
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RecurringOccurrencePostgreSqlSmokeTests.PostgreSql_activating_a_replacement_takes_over_the_due_occurrence_and_fences_out_the_replaced_claim
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RecurringOccurrencePostgreSqlSmokeTests.PostgreSql_activating_a_replacement_keeps_its_own_cursor_when_no_due_occurrence_of_its_trigger_preceded_it
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RecurringOccurrencePostgreSqlSmokeTests.PostgreSql_activating_a_replacement_takes_over_an_occurrence_that_fell_due_between_its_preparation_and_its_activation
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RecurringOccurrencePostgreSqlSmokeTests.PostgreSql_compensating_an_activation_that_took_over_a_due_occurrence_restores_the_replaced_schedule_and_removes_the_candidate
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RecurringOccurrencePostgreSqlSmokeTests.PostgreSql_compensating_restores_a_replaced_schedule_that_settled_while_it_was_active
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeActivityExecutionPostgreSqlSmokeTests.PostgreSql_runtime_activity_execution_model_crud_query_transaction_and_concurrency
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeActivityExecutionSqlServerSmokeTests.SqlServer_runtime_activity_execution_model_crud_query_transaction_and_concurrency
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeActivityExecutionMySqlSmokeTests.MySql_runtime_activity_execution_model_crud_query_transaction_and_concurrency
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeAlterationPostgreSqlSmokeTests.PostgreSql_runtime_alteration_and_test_scope_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeAlterationSqlServerSmokeTests.SqlServer_runtime_alteration_and_test_scope_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeAlterationMySqlSmokeTests.MySql_runtime_alteration_and_test_scope_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeArtifactsPostgreSqlSmokeTests.PostgreSql_runtime_artifacts_model_crud_query_and_concurrency
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeArtifactsPostgreSqlSmokeTests.PostgreSql_doomed_reference_delete_loses_to_a_restore_between_its_read_and_its_delete
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeArtifactsPostgreSqlSmokeTests.PostgreSql_a_guard_that_expires_during_its_delete_cannot_delete_under_a_late_lease
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeArtifactsPostgreSqlSmokeTests.PostgreSql_concurrent_root_write_lease_holders_of_one_artifact_all_succeed
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeArtifactsPostgreSqlSmokeTests.PostgreSql_concurrent_idempotent_executable_saves_reconcile_a_winner_before_coordination_read
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeArtifactsSqlServerSmokeTests.SqlServer_runtime_artifacts_model_crud_query_and_concurrency
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeArtifactsSqlServerSmokeTests.SqlServer_a_guard_that_expires_during_its_delete_cannot_delete_under_a_late_lease
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeArtifactsSqlServerSmokeTests.SqlServer_concurrent_root_write_lease_holders_of_one_artifact_all_succeed
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeArtifactsMySqlSmokeTests.MySql_runtime_artifacts_model_crud_query_and_concurrency
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeArtifactsMySqlSmokeTests.MySql_a_guard_that_expires_during_its_delete_cannot_delete_under_a_late_lease
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeArtifactsMySqlSmokeTests.MySql_concurrent_root_write_lease_holders_of_one_artifact_all_succeed
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeBookmarksPostgreSqlSmokeTests.PostgreSql_live_schema_crud_ordered_query_rollback_concurrency_and_reopen
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeBookmarksSqlServerSmokeTests.SqlServer_live_schema_crud_ordered_query_rollback_concurrency_and_reopen
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeBookmarksMySqlSmokeTests.MySql_live_schema_crud_ordered_query_rollback_concurrency_and_reopen
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCoalescingScopeRegistrationTests.Default_factory_and_ef_collaborators_are_scoped_to_each_command(validateScopes: True)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeCoalescingScopeRegistrationTests.Default_factory_and_ef_collaborators_are_scoped_to_each_command(validateScopes: False)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeDurableTimerPostgreSqlSmokeTests.PostgreSql_durable_timer_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeDurableTimerSqlServerSmokeTests.SqlServer_durable_timer_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeDurableTimerMySqlSmokeTests.MySql_durable_timer_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeEntityFrameworkCoreAggregatePostgreSqlSmokeTests.PostgreSql_full_runtime_aggregate_model_checkpoint_and_rollback
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeEntityFrameworkCoreAggregatePostgreSqlSmokeTests.PostgreSql_fresh_runtime_aggregate_migrates_and_commits_on_an_empty_database
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeEntityFrameworkCoreAggregateSqlServerSmokeTests.SqlServer_full_runtime_aggregate_model_checkpoint_and_rollback
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeEntityFrameworkCoreAggregateSqlServerSmokeTests.SqlServer_fresh_runtime_aggregate_migrates_and_commits_on_an_empty_database
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeEntityFrameworkCoreAggregateMySqlSmokeTests.MySql_full_runtime_aggregate_model_checkpoint_and_rollback
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeEntityFrameworkCoreAggregateMySqlSmokeTests.MySql_fresh_runtime_aggregate_migrates_and_commits_on_an_empty_database
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointPostgreSqlSmokeTests.PostgreSql_model_checkpoint_participants_are_atomic(failMarker: False)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointPostgreSqlSmokeTests.PostgreSql_model_checkpoint_participants_are_atomic(failMarker: True)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointPostgreSqlSmokeTests.PostgreSql_model_checkpoint_fences_revisions_and_replay
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointSqlServerSmokeTests.SqlServer_model_checkpoint_participants_are_atomic(failMarker: False)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointSqlServerSmokeTests.SqlServer_model_checkpoint_participants_are_atomic(failMarker: True)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointSqlServerSmokeTests.SqlServer_model_checkpoint_fences_revisions_and_replay
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointMySqlSmokeTests.MySql_model_checkpoint_participants_are_atomic(failMarker: False)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointMySqlSmokeTests.MySql_model_checkpoint_participants_are_atomic(failMarker: True)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointMySqlSmokeTests.MySql_model_checkpoint_fences_revisions_and_replay
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelMigrationPostgreSqlSmokeTests.PostgreSql_model_migrations_install_or_preserve_captured_rows(retained: False)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelMigrationPostgreSqlSmokeTests.PostgreSql_model_migrations_install_or_preserve_captured_rows(retained: True)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelMigrationSqlServerSmokeTests.SqlServer_model_migrations_install_or_preserve_captured_rows(retained: False)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelMigrationSqlServerSmokeTests.SqlServer_model_migrations_install_or_preserve_captured_rows(retained: True)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelMigrationMySqlSmokeTests.MySql_model_migrations_install_or_preserve_captured_rows(retained: False)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelMigrationMySqlSmokeTests.MySql_model_migrations_install_or_preserve_captured_rows(retained: True)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelReceiptPostgreSqlSmokeTests.PostgreSql_retained_model_receipt_compares_without_mutating_state
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelReceiptSqlServerSmokeTests.SqlServer_retained_model_receipt_compares_without_mutating_state
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelReceiptMySqlSmokeTests.MySql_retained_model_receipt_compares_without_mutating_state
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeOperationalStatePostgreSqlSmokeTests.PostgreSql_runtime_operational_state_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeOperationalStateSqlServerSmokeTests.SqlServer_runtime_operational_state_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeOperationalStateMySqlSmokeTests.MySql_runtime_operational_state_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimePostCommitOutboxContentionPostgreSqlSmokeTests.PostgreSql_claim_less_recording_of_a_claimed_item_reports_superseded
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimePostCommitOutboxContentionPostgreSqlSmokeTests.PostgreSql_claimed_completion_that_lost_its_fence_surfaces_a_stale_claim
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql(store: "trigger-bindings", scenario: "a-switch-that-lost-its-write-reads-again-and-switc"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql(store: "trigger-bindings", scenario: "a-switch-that-keeps-losing-its-write-reports-it-ch"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql(store: "trigger-bindings", scenario: "a-switch-chosen-as-a-deadlock-victim-retries-and-s"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql(store: "trigger-bindings", scenario: "a-switch-that-keeps-deadlocking-reports-the-transi"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql(store: "trigger-bindings", scenario: "a-switch-whose-provider-fails-otherwise-is-not-ret"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql(store: "trigger-bindings", scenario: "a-switch-whose-state-moved-while-it-read-reads-aga"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql(store: "trigger-bindings", scenario: "a-switch-whose-state-keeps-moving-while-it-reads-r"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql(store: "trigger-bindings", scenario: "a-switch-whose-rows-disagree-with-a-state-that-sto"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql(store: "recurring-schedules", scenario: "a-switch-that-lost-its-write-reads-again-and-switc"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql(store: "recurring-schedules", scenario: "a-switch-that-keeps-losing-its-write-reports-it-ch"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql(store: "recurring-schedules", scenario: "a-switch-chosen-as-a-deadlock-victim-retries-and-s"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql(store: "recurring-schedules", scenario: "a-switch-that-keeps-deadlocking-reports-the-transi"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql(store: "recurring-schedules", scenario: "a-switch-whose-provider-fails-otherwise-is-not-ret"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql(store: "recurring-schedules", scenario: "a-switch-whose-state-moved-while-it-read-reads-aga"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql(store: "recurring-schedules", scenario: "a-switch-whose-state-keeps-moving-while-it-reads-r"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql(store: "recurring-schedules", scenario: "a-switch-whose-rows-disagree-with-a-state-that-sto"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql(store: "trigger-bindings", scenario: "a-state-read-that-a-switch-interleaved-answers-aft"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql(store: "trigger-bindings", scenario: "a-state-read-that-switches-keep-interleaving-repor"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql(store: "trigger-bindings", scenario: "a-state-read-across-a-projection-deleted-and-prepa"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql_interleaved_switches(store: "trigger-bindings", scenario: "a-switch-that-read-a-state-deleted-and-prepared-ag"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql_interleaved_switches(store: "trigger-bindings", scenario: "a-switch-that-read-a-projection-deleted-and-prepar"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql_interleaved_switches(store: "recurring-schedules", scenario: "a-switch-that-read-a-state-deleted-and-prepared-ag"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeProjectionSwitchPostgreSqlTests.PostgreSql_interleaved_switches(store: "recurring-schedules", scenario: "a-switch-that-read-a-projection-deleted-and-prepar"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeRecurringTriggerSchedulePostgreSqlSmokeTests.PostgreSql_recurring_trigger_schedule_model_crud_query_transaction_and_cas
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeRecurringTriggerScheduleSqlServerSmokeTests.SqlServer_recurring_trigger_schedule_model_crud_query_transaction_and_cas
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeRecurringTriggerScheduleMySqlSmokeTests.MySql_recurring_trigger_schedule_model_crud_query_transaction_and_cas
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeRouteConvergenceIndexPlanSqliteTests.Sqlite_convergence_projections_search_their_covering_indexes
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeRouteConvergenceIndexPlanPostgreSqlTests.PostgreSql_convergence_projections_are_index_only_scans_of_their_covering_indexes
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeRouteConvergenceIndexPlanSqlServerTests.SqlServer_convergence_projections_seek_their_covering_indexes_without_a_lookup
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeSchedulerPoisonPostgreSqlSmokeTests.PostgreSql_scheduler_poison_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeSchedulerPoisonPostgreSqlSmokeTests.PostgreSql_scheduler_poison_records_a_long_execution_id
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeSchedulerPoisonSqlServerSmokeTests.SqlServer_scheduler_poison_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeSchedulerPoisonSqlServerSmokeTests.SqlServer_scheduler_poison_records_a_long_execution_id
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeSchedulerPoisonMySqlSmokeTests.MySql_scheduler_poison_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeSchedulerPoisonMySqlSmokeTests.MySql_scheduler_poison_records_a_long_execution_id
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeSchedulerWorkQueuePostgreSqlSmokeTests.PostgreSql_scheduler_work_queue_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeSchedulerWorkQueuePostgreSqlSmokeTests.PostgreSql_scheduler_work_queue_claimable_discovery
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeSchedulerWorkQueueSqlServerSmokeTests.SqlServer_scheduler_work_queue_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeSchedulerWorkQueueSqlServerSmokeTests.SqlServer_scheduler_work_queue_claimable_discovery
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeSchedulerWorkQueueMySqlSmokeTests.MySql_scheduler_work_queue_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeSchedulerWorkQueueMySqlSmokeTests.MySql_scheduler_work_queue_claimable_discovery
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationAuthorityPostgreSqlSmokeTests.PostgreSql_activation_authority_model_crud_cas_and_unique_placement
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationAuthoritySqlServerSmokeTests.SqlServer_activation_authority_model_crud_cas_and_unique_placement
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationAuthorityMySqlSmokeTests.MySql_activation_authority_model_crud_cas_and_unique_placement
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-call-that-stops-after-its-switch-leaves-the-acti"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-call-that-stops-before-its-switch-leaves-the-pre"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-switch-whose-projection-cannot-switch-moves-noth"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-refused-switch-changes-nothing")
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-stale-call-cannot-switch-a-replaced-first-activa"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-revert-restores-the-predecessor-with-a-live-refe"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-revert-refused-after-a-later-writer-moved-the-sl"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "in-flight-activation-and-a-concurrent-check-that-i"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-slot-left-half-done-is-repaired-by-the-next-acti"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-slot-left-half-done-is-repaired-by-a-check-that-"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-replacement-repairs-a-slot-left-half-done-before"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "two-calls-meeting-a-slot-left-half-done-repair-it-"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-slot-left-partly-switched-is-repaired-by-the-nex"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-slot-left-partly-switched-is-repaired-by-a-check"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-replacement-repairs-a-slot-left-partly-switched-"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "two-calls-meeting-a-slot-left-partly-switched-repa"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-stale-repair-changes-nothing")
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-repair-of-a-slot-naming-another-activation-chang"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-repair-of-an-activation-missing-from-a-store-cha"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-repair-of-a-replaced-activation-changes-nothing")
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-repair-of-a-serving-activation-changes-nothing")
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-slot-whose-activation-cannot-be-repaired-is-repo"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "deactivating-a-slot-left-half-done-turns-off-every"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "projection-switch-is-a-no-op-once-made")
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "projection-switch-is-refused-once-the-replaced-act"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "same-activation-losing-the-switch-keeps-the-winner")
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "same-activation-losing-to-a-winner-that-stopped-af"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "same-activation-refused-at-preparation-keeps-the-w"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "cancelled-same-activation-keeps-the-winner")
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "cancelled-same-activation-keeps-a-winner-that-stop"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "same-activation-loser-discarding-before-the-winner"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "same-activation-loser-discarding-after-the-winner-"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "same-activation-loser-discarding-before-the-winner"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "same-activation-loser-cancelled-in-its-switch-keep"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-call-cancelled-in-a-switch-that-did-not-commit-d"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "a-call-cancelled-as-its-switch-committed-keeps-its"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "same-activation-loser-keeps-its-lease-after-the-wi"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql(scenario: "lease-of-a-call-that-stopped-inside-it-expires")
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql_concurrent_switches(scenario: "a-switch-whose-slot-another-switch-moved-before-it"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql_concurrent_switches(scenario: "a-discard-that-read-a-prepared-activation-before-a"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql_concurrent_switches(scenario: "a-switch-that-read-a-prepared-activation-before-a-"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql_concurrent_switches(scenario: "a-repair-that-read-a-slot-before-a-deactivation-em"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowActivationCrashRepairPostgreSqlTests.PostgreSql_concurrent_switches(scenario: "a-deactivation-that-read-a-slot-before-a-repair-tu"···)
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowDispatchPostgreSqlSmokeTests.PostgreSql_workflow_dispatch_model_crud_query_and_cas
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowDispatchSqlServerSmokeTests.SqlServer_workflow_dispatch_model_crud_query_and_cas
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowDispatchMySqlSmokeTests.MySql_workflow_dispatch_model_crud_query_and_cas
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowDispatchTestScopedPostgreSqlSmokeTests.PostgreSql_test_scoped_dispatch_admission_model_and_transaction
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowDispatchTestScopedSqlServerSmokeTests.SqlServer_test_scoped_dispatch_admission_model_and_transaction
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowDispatchTestScopedMySqlSmokeTests.MySql_test_scoped_dispatch_admission_model_and_transaction
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowExecutionPostgreSqlSmokeTests.PostgreSql_workflow_execution_model_crud_query_transaction_and_concurrency
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowExecutionSqlServerSmokeTests.SqlServer_workflow_execution_model_crud_query_transaction_and_concurrency
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowExecutionMySqlSmokeTests.MySql_workflow_execution_model_crud_query_transaction_and_concurrency
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowTestScopeCleanupPostgreSqlSmokeTests.PostgreSql_test_scope_cleanup_model_and_transaction
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowTestScopeCleanupSqlServerSmokeTests.SqlServer_test_scope_cleanup_model_and_transaction
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowTestScopeCleanupMySqlSmokeTests.MySql_test_scope_cleanup_model_and_transaction
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowTriggerBindingPostgreSqlSmokeTests.PostgreSql_trigger_binding_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowTriggerBindingSqlServerSmokeTests.SqlServer_trigger_binding_smoke
+    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeWorkflowTriggerBindingMySqlSmokeTests.MySql_trigger_binding_smoke

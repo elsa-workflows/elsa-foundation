@@ -1,0 +1,83 @@
+{
+  "processes": [
+    {
+      "role": "workbench",
+      "processId": 75131,
+      "controllerProcessId": 75112,
+      "started": "Fri Oct 30 23:27:28 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Workbench.dll",
+      "assemblySha256": "b90d5fc10f8e456751eabdecc145845bedf07b8e89cdfc3d566ac8191d477c7a",
+      "family": "original",
+      "stopped": true
+    },
+    {
+      "role": "studio",
+      "processId": 75172,
+      "controllerProcessId": 75112,
+      "started": "Fri Oct 30 23:27:34 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Studio.Web.dll",
+      "assemblySha256": "38d60aab6126d81171c92a3724370a718ce252ac55fb74fe3c33558b7f8d3207",
+      "family": "original",
+      "stopped": true
+    },
+    {
+      "role": "workbench",
+      "processId": 77487,
+      "controllerProcessId": 75112,
+      "started": "Fri Oct 30 23:36:02 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Workbench.dll",
+      "assemblySha256": "b90d5fc10f8e456751eabdecc145845bedf07b8e89cdfc3d566ac8191d477c7a",
+      "family": "original",
+      "stopped": true
+    },
+    {
+      "role": "workbench",
+      "processId": 75130,
+      "controllerProcessId": 75113,
+      "started": "Fri Oct 30 23:27:28 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Workbench.dll",
+      "assemblySha256": "b90d5fc10f8e456751eabdecc145845bedf07b8e89cdfc3d566ac8191d477c7a",
+      "family": "layout",
+      "stopped": true
+    },
+    {
+      "role": "studio",
+      "processId": 75170,
+      "controllerProcessId": 75113,
+      "started": "Fri Oct 30 23:27:34 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Studio.Web.dll",
+      "assemblySha256": "38d60aab6126d81171c92a3724370a718ce252ac55fb74fe3c33558b7f8d3207",
+      "family": "layout",
+      "stopped": true
+    },
+    {
+      "role": "workbench",
+      "processId": 80116,
+      "controllerProcessId": 75113,
+      "started": "Fri Oct 30 23:44:56 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Workbench.dll",
+      "assemblySha256": "b90d5fc10f8e456751eabdecc145845bedf07b8e89cdfc3d566ac8191d477c7a",
+      "family": "layout",
+      "stopped": true
+    }
+  ],
+  "controllerExits": {
+    "original": 0,
+    "layout": 0
+  },
+  "closedOwnedBrowserTabs": [
+    "22",
+    "23"
+  ],
+  "remainingUserBrowserTabs": [
+    "4",
+    "11"
+  ],
+  "noUserHostsOrTabsStopped": true
+}

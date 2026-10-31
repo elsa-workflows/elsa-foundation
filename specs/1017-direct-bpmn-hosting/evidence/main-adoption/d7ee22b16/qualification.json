@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "kind": "affected-main-legacy-studio-and-partial-fork-repeat",
+  "sourceRevision": "d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+  "adoptedMainRevision": "c986f9ddfdec2c641b2f1c1f5d8f82f8dd19e529",
+  "hosting": {
+    "passed": 32,
+    "failed": 0,
+    "skipped": 0
+  },
+  "architecture": {
+    "passed": 594,
+    "failed": 0,
+    "skipped": 0
+  },
+  "acknowledgmentFixture": {
+    "initialPassed": 1,
+    "boundedRepeatPassed": 3,
+    "guardUnchanged": true
+  },
+  "legacy": {
+    "partial-forks": {
+      "actualLegacyExecutionsRecovered": 8,
+      "wholeStoresVerified": 2,
+      "frozenAuthoringPreserved": true,
+      "sourceRevision": "d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+      "allLegacyFamiliesRecovered": false,
+      "studioAcceptanceProved": false
+    },
+    "native-parents": {
+      "pendingParentRecoveries": 6,
+      "nativeParentOutcomesApplied": 4,
+      "terminalDispositionsWithoutParentConsumption": 2,
+      "retainedNativeTerminals": 12,
+      "wholeStoresVerified": 8,
+      "frozenAuthoringPreserved": true,
+      "sourceRevision": "d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+      "allLegacyFamiliesRecovered": false,
+      "studioAcceptanceProved": false
+    },
+    "called-ack": {
+      "actualCalledAcknowledgmentCutsRecovered": 2,
+      "wholeStoresVerified": 4,
+      "exactCommittedAcceptanceVerified": true,
+      "frozenAuthoringPreserved": true,
+      "sourceRevision": "d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+      "allLegacyFamiliesRecovered": false,
+      "studioAcceptanceProved": false,
+      "directModelSettlementProved": false
+    },
+    "broadcast": {
+      "actualBroadcastCutsRecovered": 4,
+      "wholeStoresVerified": 8,
+      "deliveryTimeMatchingPreserved": true,
+      "emptyAndRearmedDecisionsPreserved": true,
+      "frozenAuthoringPreserved": true,
+      "sourceRevision": "d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+      "allLegacyFamiliesRecovered": false,
+      "studioAcceptanceProved": false,
+      "directModelBroadcastProved": false
+    },
+    "controls": {
+      "actualEscalationCasesRecovered": 6,
+      "actualSameBindingSiblingPoliciesRecovered": 2,
+      "actualCompensationReplayRecovered": 1,
+      "managedWorkflowExecutions": 19,
+      "wholeStoresVerified": 6,
+      "frozenAuthoringPreserved": true,
+      "sourceRevision": "d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+      "allLegacyFamiliesRecovered": false,
+      "studioAcceptanceProved": false,
+      "directModelSettlementProved": false
+    },
+    "multi-instance": {
+      "actualMultiInstanceCasesRecovered": 4,
+      "nativeIterationsCompleted": 12,
+      "finalWorkflowExecutions": 16,
+      "wholeStoresVerified": 5,
+      "frozenAuthoringPreserved": true,
+      "sourceRevision": "d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+      "allLegacyFamiliesRecovered": false,
+      "studioAcceptanceProved": false,
+      "directModelMultiInstanceProved": false
+    }
+  },
+  "parallel": {
+    "sourceRevision": "d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+    "actualParentPairs": 4,
+    "modelExecutionsCompleted": 8,
+    "wholeStoresVerified": 24,
+    "partialBranchesPreservedAcrossProcessLoss": true,
+    "singleLogicalJoins": 8,
+    "directEmbeddedTracesEqual": true,
+    "normalization": "Only tokens.producingWorkHandle: owning model ID or observed local human invocation mapped by exact element/binding/token/iteration.",
+    "etlOrStudioAcceptanceProved": false
+  },
+  "studio": {
+    "actualStudioFamiliesVerified": 2,
+    "completedNewRuns": 4,
+    "originalRunObservations": 9,
+    "wholeStoresVerified": 12,
+    "retainedNativeMaterialCounts": [
+      84,
+      92
+    ],
+    "frozenAuthoringPreserved": true,
+    "sourceRevision": "d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+    "existingStudioCompatibilityProved": true,
+    "directModelStudioAcceptanceProved": false
+  },
+  "portableControls": {
+    "partialForkPassed": 13,
+    "studioPassed": 13,
+    "failed": 0,
+    "skipped": 0
+  },
+  "allListedHostsStopped": 63,
+  "frozenBaselineAssetsUnchanged": 104,
+  "frozenAuthoringFingerprint": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "runtimeAndVerifierChangeRequiredForObservedRefusals": false,
+  "limits": [
+    "Selected SQLite actual hosts/built-in single-node actor.",
+    "Non-SQLite provider/storage gates retain their own sources and do not prove upgraded-host recovery.",
+    "First-class direct-model Studio and broader #2907/program acceptance remain open.",
+    "Existing Test Run draft layout sidecar behavior and initial authentication return to Workbench root remain observed limits.",
+    "Public API magnitude decision, complete-PR review, required checks, scan gate and post-merge main verification remain open."
+  ]
+}

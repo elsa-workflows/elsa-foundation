@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "executingSource": "b6e7e1f0de7367f81d35aebc5016d4b91e2d7927",
+  "actualEmbeddedJourneysPassed": 8,
+  "actualDirectSuccessCounterparts": 1,
+  "nativeParentShapes": [
+    "Root",
+    "Sequence",
+    "Flowchart",
+    "CompensationScope"
+  ],
+  "embeddedOutcomes": [
+    "Completed",
+    "CancelledByNativeParent"
+  ],
+  "rawAssets": 190,
+  "wholeStoresVerified": 54,
+  "ownedWorkbenchProcesses": 27,
+  "ownedHttpProcesses": 9,
+  "actualSigkillExits": 9,
+  "allQualifiedJourneyChildrenStopped": true,
+  "physicalOutputRecordsPerSuccessCase": 4,
+  "physicalOutputRecordsPerCancellationCase": 2,
+  "lateRetryRequestsPerCancellationCase": 0,
+  "standardHostBuild": {
+    "errors": 0,
+    "warnings": 261,
+    "logSha256": "aec1de9d30e7404cf3ede187f8de5d5b2b7d4371d8eea7e1c163bdd8246989b2"
+  },
+  "bpmnTests": {
+    "passed": 391,
+    "failed": 0,
+    "skipped": 0,
+    "logSha256": "3c6434ac3cc1adbf47dc77d4da88a084ef68b0f05f74965f0cb1c185dc5611f8"
+  },
+  "actualHumanEmbeddingHostRegression": {
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0,
+    "logSha256": "0311b0b5d8e55bbef17d5249a1ee0116d442fca2453c61de37f8ad151c225294",
+    "scope": "Actual owned Workbench human-model root/composite completion and cancellation; not upgraded-host or final Studio acceptance."
+  },
+  "portableChecks": {
+    "passed": 84,
+    "failed": 0,
+    "skipped": 0,
+    "newPositiveMatrix": 1,
+    "newRehashedNegativeControls": 12,
+    "verifierSha256": "b10be08cf68efd3f522a8e588fb70f50be1d11604e54c5a9ecb882a7b3de94fd",
+    "controlsSha256": "1b79d6f10a338f66335125c4a43a411e97b299bde939bb49d62d747bdf960f14",
+    "logSha256": "66bb40720ce0ef71c28ec706a932127c6a5264d22c71afc714a62b79bf7c58a9"
+  },
+  "mapsCheckPassed": true,
+  "testTiersPassed": 123,
+  "frozenBaselineAssetsUnchanged": 104,
+  "runBpmnEtlIntegrationProved": true,
+  "sameSourceDirectInterpreterSuccessTraceComparedParents": [
+    "Root",
+    "Sequence",
+    "Flowchart",
+    "CompensationScope"
+  ],
+  "pendingParentResultCrashProved": false,
+  "modelHeldFaultRetryProved": false,
+  "finalUpgradeAndStudioProved": false,
+  "fullPrReviewRounds": 0,
+  "scopeLimits": [
+    "Root/Sequence/Flowchart/CompensationScope complete and whole-parent cancel after actual HTTP429/SIGKILL/restart, with actual ETL/native/model/parent stores and receipts.",
+    "Success native-result receipt leaves the model pending native parent settlement at revision2, then typed RunBpmn consumption and exact parent settlement advance revision3.",
+    "Native-parent cancellation leaves worker cancellation owed at revision2, retains actual Cancelled native/ETL and exact result at revision3, then parent settlement advances revision4; result ACK follows settlement.",
+    "Direct comparison uses one actual isolated success run on the same captured first-party product hashes. Only the self-referential producingWorkHandle is normalized; before/final interpreter state, process and binding contract otherwise compare exactly. Executable pins remain individually checked, not equated. External library hashes were not captured in this product receipt.",
+    "Runtime model formats5/6 explicitly retain service embedding/cancellation; human format3 and direct formats1/2/4 remain unchanged. Reader controls are synthetic and are not host recovery evidence.",
+    "Pending parent-result/source-ACK loss, business/technical-fault mappings, held retry, races, other providers/rollback and final affected-source upgrade/Studio remain open."
+  ]
+}

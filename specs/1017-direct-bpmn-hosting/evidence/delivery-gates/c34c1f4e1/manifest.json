@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "kind": "failed-whole-hosting-regression",
+  "sourceRevision": "c34c1f4e1f279c66598a5ab83a8c2cc05e9b4a72",
+  "assets": [
+    {
+      "path": "README.md",
+      "sha256": "5b2e7cc4229ff76ae773dffaacd63eb1b7bc6ef240e09f918f0278665363d816"
+    },
+    {
+      "path": "command.json",
+      "sha256": "7d0e843fdc9f2e616082dca12fe2e5f6216cf89b6b732aaabbb7ea588a621056"
+    },
+    {
+      "path": "summary.json",
+      "sha256": "e2ef7d4f87615ce724394e5e540ef23f98b08ff0049fce6807009288de683dc9"
+    },
+    {
+      "path": "test.txt",
+      "sha256": "53905f7d3cdc0dbb4688dabb0d0b24ccc899b3df9dcbbb599c65b45e0caa4468"
+    },
+    {
+      "path": "whole.trx.gz",
+      "sha256": "472636546586d6ef0d748053375861b9e77bac59c3b4178a5de9adbefee15615"
+    }
+  ]
+}

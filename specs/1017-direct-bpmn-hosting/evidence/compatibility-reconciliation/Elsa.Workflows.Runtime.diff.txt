@@ -1,0 +1,12 @@
+diff --git a/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/PublicAPI.Unshipped.txt b/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/PublicAPI.Unshipped.txt
+index 5babebdac..720e4d299 100644
+--- a/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/PublicAPI.Unshipped.txt
++++ b/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/PublicAPI.Unshipped.txt
+@@ -1876,3 +1876,7 @@ virtual Elsa.Workflows.Runtime.Services.Claims.FencedClaimRenewal<TClaim>.Invoke
+ ~override Elsa.Workflows.Runtime.Services.Values.RuntimeInputBindingStateProjectionSet.ToString() -> string
+ ~override Elsa.Workflows.Runtime.Services.Values.RuntimeWorkflowIdentity.Equals(object obj) -> bool
+ ~override Elsa.Workflows.Runtime.Services.Values.RuntimeWorkflowIdentity.ToString() -> string
++static Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableDependencyGraph.ResolveMaterialClosure(System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.WorkflowExecutableIdentity!>! roots, System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial!>! materials) -> System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.RuntimeExecutionMaterial!>!
++Elsa.Workflows.Runtime.Services.Coalescing.CoalescingWorkflowSchedulerWorkQueue.SupportsClaimValidation.get -> bool
++Elsa.Workflows.Runtime.Extensions.RuntimeModelHostingServiceCollectionExtensions
++static Elsa.Workflows.Runtime.Extensions.RuntimeModelHostingServiceCollectionExtensions.AddRuntimeModelHosting(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

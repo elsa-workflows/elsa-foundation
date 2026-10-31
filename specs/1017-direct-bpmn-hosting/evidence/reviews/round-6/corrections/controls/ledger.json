@@ -1,0 +1,144 @@
+{
+  "sourceBoundary": "Development worktree over e5df13ae16d9da2d421ec9aa66b9c477da99978b; final production/test source hashes retained separately; not exact committed-host qualification",
+  "publicCheckpointAndFreshAdmissionCases": 6,
+  "addedLateDeadlineCase": 1,
+  "results": [
+    {
+      "file": "before-fixes.trx.gz",
+      "role": "original-six-guards-red",
+      "counters": {
+        "total": "6",
+        "executed": "6",
+        "passed": "0",
+        "failed": "6",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "after-fixes.trx.gz",
+      "role": "six-guards-green",
+      "counters": {
+        "total": "6",
+        "executed": "6",
+        "passed": "6",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "whole-bpmn.trx.gz",
+      "role": "late-test-clock-setup-diagnostic",
+      "counters": {
+        "total": "499",
+        "executed": "499",
+        "passed": "498",
+        "failed": "1",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "late-deadline-positive.trx.gz",
+      "role": "corrected-late-clock-control",
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "1",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "late-guard-removed.trx.gz",
+      "role": "durable-fault-guard-removal-red",
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "0",
+        "failed": "1",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "file": "whole-bpmn-final.trx.gz",
+      "role": "whole-bpmn-after-restoration",
+      "counters": {
+        "total": "499",
+        "executed": "499",
+        "passed": "499",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    }
+  ],
+  "setupDiagnostics": [
+    "First test compilation imported conflicting BPMN model namespaces; replaced broad import with RunBpmnState alias.",
+    "Initial late-timer clock used year9999 and was refused by the existing 42-bit ShortIdentityGenerator range; corrected the test to a current clock plus a long representable interval. No identity guard was weakened."
+  ],
+  "mutationSourceRestoredByteExactly": true
+}

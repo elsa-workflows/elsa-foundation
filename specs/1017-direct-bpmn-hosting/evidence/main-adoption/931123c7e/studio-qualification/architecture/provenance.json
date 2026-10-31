@@ -1,0 +1,14 @@
+{
+  "ciFailedHead": "4f46ac55c482b3b68932ca74f147439bfdacda49",
+  "ciJobUrl": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/41073168377/job/124122763764",
+  "ciFailure": "Exact reviewed-source inventory omitted the two added EF history/metadata source files.",
+  "localTree": "Source4f46ac55c plus only the two explicit inventory entries; no production edit.",
+  "localArchitecture": {
+    "passed": 594,
+    "failed": 0,
+    "skipped": 0
+  },
+  "mapsExitCode": 0,
+  "tiersExitCode": 0,
+  "guardRelaxed": false
+}

@@ -1,0 +1,162 @@
+[
+  {
+    "name": "design-ef",
+    "source": "0f5f6c6efaada666f40766478ef63ad488b28e58",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=design-ef.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-main-c4cfa-qualification/constructor-correction"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 10.474409818649292
+  },
+  {
+    "name": "design-api",
+    "source": "0f5f6c6efaada666f40766478ef63ad488b28e58",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=design-api.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-main-c4cfa-qualification/constructor-correction"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 6.2881858348846436
+  },
+  {
+    "name": "workbench-build",
+    "source": "0f5f6c6efaada666f40766478ef63ad488b28e58",
+    "arguments": [
+      "dotnet",
+      "build",
+      "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+      "-c",
+      "Release",
+      "--no-restore"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 8.078893184661865
+  },
+  {
+    "name": "studio-host-build",
+    "source": "0f5f6c6efaada666f40766478ef63ad488b28e58",
+    "arguments": [
+      "dotnet",
+      "build",
+      "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj",
+      "-c",
+      "Release",
+      "--no-restore"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 4.451419830322266
+  },
+  {
+    "name": "hosting-affected",
+    "source": "0f5f6c6efaada666f40766478ef63ad488b28e58",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--filter",
+      "FullyQualifiedName~TemplateDesignUpgradeTests|FullyQualifiedName~LegacyNestedCancellationWorkbenchTests|FullyQualifiedName~LegacyTimerAdmissionWorkbenchTests",
+      "--logger",
+      "trx;LogFileName=hosting-affected.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-main-c4cfa-qualification/constructor-correction"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 34.392642974853516
+  },
+  {
+    "name": "maps",
+    "source": "0f5f6c6efaada666f40766478ef63ad488b28e58",
+    "arguments": [
+      "dotnet",
+      "run",
+      "--project",
+      "tools/maps/Elsa.Maps.Generator",
+      "-c",
+      "Release",
+      "--",
+      "check"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 1.330881118774414
+  },
+  {
+    "name": "tiers",
+    "source": "0f5f6c6efaada666f40766478ef63ad488b28e58",
+    "arguments": [
+      "dotnet",
+      "run",
+      "--project",
+      "tools/maps/Elsa.Maps.Generator",
+      "-c",
+      "Release",
+      "--no-build",
+      "--",
+      "test-tiers-check"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.9489459991455078
+  },
+  {
+    "name": "tier-docs",
+    "source": "0f5f6c6efaada666f40766478ef63ad488b28e58",
+    "arguments": [
+      "python3",
+      "tools/ci/test_tiers.py",
+      "check-docs"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.04513096809387207
+  },
+  {
+    "name": "tier-workflows",
+    "source": "0f5f6c6efaada666f40766478ef63ad488b28e58",
+    "arguments": [
+      "python3",
+      "tools/ci/test_tiers.py",
+      "check-workflows"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.03178071975708008
+  },
+  {
+    "name": "versions",
+    "source": "0f5f6c6efaada666f40766478ef63ad488b28e58",
+    "arguments": [
+      "dotnet",
+      "run",
+      "--project",
+      "tools/versioning/Elsa.Versioning.Calculator",
+      "-c",
+      "Release",
+      "--",
+      "--record-ref",
+      "origin/publish-state",
+      "--commit",
+      "0f5f6c6efaada666f40766478ef63ad488b28e58",
+      "--output",
+      "/tmp/elsa-2898-main-c4cfa-qualification/constructor-correction/version-computation.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 4.9194700717926025
+  }
+]

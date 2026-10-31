@@ -1,0 +1,7 @@
+{
+  "build": "dotnet build router-probe/Probe.csproj -c Release --nologo --verbosity quiet",
+  "run": "dotnet router-probe/bin/Release/net10.0/Probe.dll",
+  "surroundingTests": "dotnet test Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj -c Release --no-build --filter FullyQualifiedName~RuntimeModelMaterialTests|FullyQualifiedName~RuntimeModelCheckpointTests|FullyQualifiedName~WorkflowExecutableRootWriteLeaseManagerTests --logger trx;LogFileName=focused-runtime.trx",
+  "capture": "dotnet tools/bpmn/DeliveryRecoveryRead/bin/Release/net10.0/DeliveryRecoveryRead.dll --backup-sqlite <closed-producer-db> <new-backup>",
+  "setup": "Probe.csproj records historical absolute product paths. For reproduction, bind them to a fresh build of the declared byte-equivalent source, include its packaged SQLite native library, and keep fresh private stores. Do not reuse old temporary paths as inputs."
+}

@@ -1,0 +1,49 @@
+{
+  "reviewedHead": "cdc02819f852684dc855ecb111bfa261171f40b6",
+  "mergeBase": "3386a1abcc01b5ff07f127e4bc0cc07ecbe0bc37",
+  "observedOriginMain": "8b5f2b3d8662a7f31fd8b2b39d2d19e588b1cbbf",
+  "executingProductSource": "76e8139dc7744781fba864f8247c180134eaaaed",
+  "implicatedSourcesByteEquivalent": [
+    {
+      "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableRootWriteLeaseManager.cs",
+      "reviewedHeadBlob": "423db49c122c9022d99170c747558167747b807f",
+      "executingSourceBlob": "423db49c122c9022d99170c747558167747b807f"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/RuntimeExecutionProtocolRouter.cs",
+      "reviewedHeadBlob": "bbc8f99dbe36ab09b7aaed877c2ea989549298f7",
+      "executingSourceBlob": "bbc8f99dbe36ab09b7aaed877c2ea989549298f7"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/RuntimeExecutionProtocolSelector.cs",
+      "reviewedHeadBlob": "e8f1dcb7f2401018c24db7ae201f31a67055ca50",
+      "executingSourceBlob": "e8f1dcb7f2401018c24db7ae201f31a67055ca50"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeModelExecutionReader.cs",
+      "reviewedHeadBlob": "556b017b339d8d4a16c746378ef3c4d94051da5f",
+      "executingSourceBlob": "556b017b339d8d4a16c746378ef3c4d94051da5f"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfSchedulerWorkQueueStore.cs",
+      "reviewedHeadBlob": "fd800223772966115d36edfd27399c5d2866e5f3",
+      "executingSourceBlob": "fd800223772966115d36edfd27399c5d2866e5f3"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs",
+      "reviewedHeadBlob": "3863dfb70cb921bc36049f360923e025170499f1",
+      "executingSourceBlob": "3863dfb70cb921bc36049f360923e025170499f1"
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs",
+      "reviewedHeadBlob": "0b4426f8afc0d888198d348608283f1a1ec82a49",
+      "executingSourceBlob": "0b4426f8afc0d888198d348608283f1a1ec82a49"
+    }
+  ],
+  "probeUsesActualCompiledRouterAndSelector": true,
+  "protocolDriver": "Minimal public extension driver validates shape only; pause exists solely in queue decorator before invoking actual EF EnqueueAsync; semantic drain stub used only by positive control",
+  "mutationScope": "Fresh private provider stores through normal material/source-retirement/lease/queue/collector ports; no SQL state writes; immutable .NET provider backups after process exit",
+  "modelPublicationRetiredThroughNormalPort": true,
+  "rootCreationGracePeriod": "Configured zero, as permitted by the production options; system clock unchanged",
+  "initialNativeLibrarySetupFailure": "diagnostic only, corrected by copying the same packaged native library into the isolated probe output"
+}

@@ -1,0 +1,76 @@
+{
+  "sourceRevision": "78554070a07b5a71481abf106bf33e12acc6fa19",
+  "integratedMain": "7b49513650665606e5f52fdc08c5831f60802dac",
+  "fullRecoveryAndStudioSource": "30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+  "kind": "affected-frontend-smoke-not-full-upgrade-journey",
+  "cases": [
+    {
+      "family": "original",
+      "exportsByteIdentical": true,
+      "originalRunViewsUnchanged": true,
+      "wholeStores": 4,
+      "integrityChecksPassed": 4,
+      "screenshotsVisuallyInspected": true,
+      "cleanup": [
+        {
+          "processId": 6908,
+          "sameRecordedProcessPresent": false
+        },
+        {
+          "processId": 6939,
+          "sameRecordedProcessPresent": false
+        }
+      ]
+    },
+    {
+      "family": "layout",
+      "exportsByteIdentical": true,
+      "originalRunViewsUnchanged": true,
+      "wholeStores": 4,
+      "integrityChecksPassed": 4,
+      "screenshotsVisuallyInspected": true,
+      "cleanup": [
+        {
+          "processId": 6909,
+          "sameRecordedProcessPresent": false
+        },
+        {
+          "processId": 6942,
+          "sameRecordedProcessPresent": false
+        }
+      ]
+    }
+  ],
+  "attachedInspector": {
+    "executionId": "14n0qPCG9sD",
+    "testRunId": "14n0qOqaDyM",
+    "status": "Completed",
+    "incidentCount": 0,
+    "selectedActivity": "Delay",
+    "evaluatedDuration": "00:00:01",
+    "wrapperPadding": "12px",
+    "screenshotVisuallyInspected": true
+  },
+  "sequenceTests": {
+    "passed": 12,
+    "failed": 0,
+    "skipped": 0
+  },
+  "ownedTabsClosed": [
+    "24",
+    "25"
+  ],
+  "userTabsRetained": [
+    "4",
+    "11"
+  ],
+  "all104FrozenAssetsUnchanged": true,
+  "finalEvidenceTreeArchitecture": {
+    "passed": 594,
+    "failed": 0,
+    "skipped": 0,
+    "testBinaryBuiltFrom": "30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+    "filesystemSource": "78554070a07b5a71481abf106bf33e12acc6fa19",
+    "includesUncommittedQualificationEvidence": true
+  }
+}

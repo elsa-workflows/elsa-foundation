@@ -1,0 +1,40 @@
+{
+  "kind": "retained-independent-round4-standards",
+  "reviewedHead": "cdc02819f852684dc855ecb111bfa261171f40b6",
+  "assets": [
+    {
+      "path": "report.md",
+      "sha256": "f413490fcbc04c9fc48b39e6d2ad20744c5f2caa537880d1a5212b3ce8cd20c7"
+    },
+    {
+      "path": "provenance.json",
+      "sha256": "cdda81066d9f6c4da4d66a6eb2cfa0d73c88c559b0078cedfb3b93170dd1b45e"
+    },
+    {
+      "path": "evidence-audit.json",
+      "sha256": "34b3a9ab0a300e6a828338626d87fc727549decf5b3ec6a996065f3583938835"
+    },
+    {
+      "path": "probe.log",
+      "sha256": "52694b22b68d71b49a33f587ece5adb7f6cd6f05806aa4f46a55212f5b0ccaba"
+    },
+    {
+      "path": "probe-dispatcher.log",
+      "sha256": "a0f9eaeef9df1d27ac159add6374165258a83b3436be27d7d0ca70cf041c801b"
+    },
+    {
+      "path": "generate-probe-project.py",
+      "sha256": "068f896f62a2b38350898387de5023817044a4460e73f4cb18dea42b45436751"
+    },
+    {
+      "path": "probe/Program.cs",
+      "sha256": "f528ba8046f21f43d4c7aef36813a38751176472cb652d74e8081da595ca686e"
+    },
+    {
+      "path": "probe/Probe.csproj.gz",
+      "sha256": "85d393621c648fc0bc7c6aed76ced7073a3648bed84a115b9d50e20c54a83d81",
+      "decodedSha256": "83d1205a28ff98daddb15619b12f8976c4b2fa811743b3a94eb243abe5dbbb83",
+      "decodedBytes": 62908
+    }
+  ]
+}

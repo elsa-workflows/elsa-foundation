@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "executingSource": "9380009b86f3ceb383b7b58b6317b2a90f94b17d",
+  "productionRuntimeInterpreterOrWriterChanged": false,
+  "actualJourneys": 5,
+  "rawAssets": 211,
+  "wholeStoresVerified": 60,
+  "actualModelMailboxTransports": 15,
+  "exactOldResultReplayHasNoNewSemanticProgression": true,
+  "oldAcceptedReceiptRevision": 2,
+  "liveReplacementRevisionDuringAllProbes": 3,
+  "conflictingOldContentRefusedBeforeAdmission": true,
+  "newlyAddressedOldResultRefusedBeforeAdmission": true,
+  "originalFaultReceiptAndSourceAckUnchanged": true,
+  "noExtraAcceptedModelInput": true,
+  "sameReplacementAndOriginalNativeParentFinish": true,
+  "exactConsumptionSettlementAndSourcesAcknowledged": true,
+  "fourthStandardHostUnchanged": true,
+  "replacementHasOwnRealHttp429": true,
+  "replacementRetryAfterSeconds": 20,
+  "probesFinishBeforeActualRetryDeadline": true,
+  "oneShotRearmOnlyInOwnedLoopbackFixture": true,
+  "sqlStateOrClockEdited": false,
+  "physicalHttpOutputRecordsPerCase": 6,
+  "priorTwoRecordsRepeatInReplacement": true,
+  "executionStateSeeded": false,
+  "actualWorkbenchProcesses": 20,
+  "actualHttpProcesses": 5,
+  "actualSdkProcesses": 5,
+  "all30ListedChildrenStopped": true,
+  "actualSigkillExits": 10,
+  "portableControlsPassed": 208,
+  "newPortablePositiveAndCorruptControls": 16,
+  "initialCorruptCopyTestQueryErrorFixed": true,
+  "skippedTests": 0,
+  "standardHostBuildErrors": 0,
+  "testTierRegistrations": 123,
+  "frozenBaselineAssetsVerifiedUnchanged": 104,
+  "frozenBaselineManifestUnchanged": true,
+  "diagnostic": {
+    "sourceRevision": "d64970a0d05eb9f33844defa3918b3a462f57eb6",
+    "wholeStores": 9,
+    "listedChildrenStopped": 4,
+    "actualSdkProbes": 0,
+    "includedInQualifyingCounts": false,
+    "reason": "Observer read a transient partition before its fetch checkpoint existed."
+  },
+  "portableReaderCorrection": "Use actual model Running lifecycle0 and UTF16 physical column encoding. Captures unchanged.",
+  "earlierBpmn418HumanHost9AndActualIdentityAuthorizationSource": "1a10565935b568e42c8431158bfafe77b571c775",
+  "earlierResultsRelabeledAsThisSource": false,
+  "timerInterruptionProved": false,
+  "competingRetryCancelCommitOrdersProved": false,
+  "remainingProviderRetentionRollbackAndFinalUpgradeStudioProved": false,
+  "nativeCompositeFaultStatusDecisionResolved": false,
+  "fullPrReviewRounds": 0,
+  "completeTaskOrProgramAcceptance": false,
+  "validationLogs": [
+    {
+      "path": "validation/compensationscope-controller.txt",
+      "sha256": "3c6d06bee7d8b76bcafb5aebffa26d26127d58890a2de4328caaaefe3d988346"
+    },
+    {
+      "path": "validation/direct-controller.txt",
+      "sha256": "bd7e9b6358d765bd61a38a29d1cec45a85c01e323153e9d4e3c1f97ea1bcc322"
+    },
+    {
+      "path": "validation/flowchart-controller.txt",
+      "sha256": "e9c77a0250c3bef7a5ff31725b0dbaaf46237e15a372e258c43f03813b877d7e"
+    },
+    {
+      "path": "validation/maps.txt",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+    },
+    {
+      "path": "validation/portable-initial-query-error.txt",
+      "sha256": "68b21d8edbb0b13340dea41f41028bb03c29ae10d0cba20a45ab75cd68ad9617"
+    },
+    {
+      "path": "validation/portable-tests.txt",
+      "sha256": "bd366db7f598a7e0b39217cad7da635e3ef5900dcfd9216e10633b457335deaa"
+    },
+    {
+      "path": "validation/root-controller.txt",
+      "sha256": "7b74722b207c34e133a2a491618358fa35e63ca23c6a1d2dc3d5d860626ad5f7"
+    },
+    {
+      "path": "validation/sequence-controller.txt",
+      "sha256": "e6035d0c6c7c277527f53c1e536ce728a6c32f3f22bc5031d663199ff6beeb18"
+    },
+    {
+      "path": "validation/standard-host-build.txt",
+      "sha256": "fbaff8536dd4410258521c66f6aae5913b5544f58892c92cfadc30305bb6215e"
+    },
+    {
+      "path": "validation/test-tiers.txt",
+      "sha256": "91cc02f2f85c466bbc3d5d675d3bf055059b2c0e5e185229a4c4d99b174f25c4"
+    },
+    {
+      "path": "validation/whole-stores.json",
+      "sha256": "fe5d3fb91a1a175b7c8839e2bb90eb05a93d2510cdca89447f43ff7c109a4eeb"
+    }
+  ]
+}

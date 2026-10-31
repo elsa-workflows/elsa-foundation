@@ -1,0 +1,113 @@
+[
+  {
+    "project": "Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+    "listedCount": 456,
+    "passed": 456,
+    "skipped": 0,
+    "runtimeTheoryExpansions": []
+  },
+  {
+    "project": "Essentials/tests/Activities/Bpmn/Interchange/Tests/Elsa.Activities.Bpmn.Interchange.Tests.csproj",
+    "listedCount": 130,
+    "passed": 130,
+    "skipped": 0,
+    "runtimeTheoryExpansions": []
+  },
+  {
+    "project": "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+    "listedCount": 3067,
+    "passed": 3078,
+    "skipped": 0,
+    "runtimeTheoryExpansions": [
+      {
+        "test": "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident",
+        "listed": 1,
+        "executed": 2
+      },
+      {
+        "test": "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running",
+        "listed": 1,
+        "executed": 4
+      },
+      {
+        "test": "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches",
+        "listed": 1,
+        "executed": 8
+      }
+    ]
+  },
+  {
+    "project": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+    "listedCount": 1779,
+    "passed": 1779,
+    "skipped": 0,
+    "runtimeTheoryExpansions": []
+  },
+  {
+    "project": "Essentials/tests/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj",
+    "listedCount": 380,
+    "passed": 380,
+    "skipped": 0,
+    "runtimeTheoryExpansions": []
+  },
+  {
+    "project": "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+    "listedCount": 1009,
+    "passed": 1009,
+    "skipped": 0,
+    "runtimeTheoryExpansions": []
+  },
+  {
+    "project": "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+    "listedCount": 28,
+    "passed": 28,
+    "skipped": 0,
+    "runtimeTheoryExpansions": []
+  },
+  {
+    "project": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+    "listedCount": 209,
+    "passed": 209,
+    "skipped": 0,
+    "runtimeTheoryExpansions": []
+  },
+  {
+    "project": "Essentials/tests/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj",
+    "listedCount": 61,
+    "passed": 61,
+    "skipped": 0,
+    "runtimeTheoryExpansions": []
+  },
+  {
+    "project": "Essentials/tests/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj",
+    "listedCount": 117,
+    "passed": 117,
+    "skipped": 0,
+    "runtimeTheoryExpansions": []
+  },
+  {
+    "project": "Essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj",
+    "listedCount": 220,
+    "passed": 220,
+    "skipped": 0,
+    "runtimeTheoryExpansions": []
+  },
+  {
+    "project": "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+    "listedCount": 585,
+    "passed": 594,
+    "skipped": 0,
+    "runtimeTheoryExpansions": [
+      {
+        "test": "Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Canonical_domain_api_depends_on_capability_aggregation_and_registers_one_stable_declaration",
+        "listed": 1,
+        "executed": 5
+      },
+      {
+        "test": "Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_collectible_api_explorer_artifact_is_rejected",
+        "listed": 1,
+        "executed": 6
+      }
+    ]
+  }
+]

@@ -1,0 +1,109 @@
+{
+  "stage": "retain-settled",
+  "sourceRevision": "0dc96a38fa2504b54a3f2299ce2b9be4e7d52f75",
+  "parent": "Direct",
+  "type": "ObservationUnavailable",
+  "processes": [
+    {
+      "role": "probe",
+      "processId": 61543,
+      "controllerProcessId": 61505,
+      "started": "Fri Oct 30 03:35:57 2026"
+    },
+    {
+      "role": "standard",
+      "processId": 62701,
+      "controllerProcessId": 61505,
+      "started": "Fri Oct 30 03:36:11 2026"
+    },
+    {
+      "role": "standard",
+      "processId": 64844,
+      "controllerProcessId": 61505,
+      "started": "Fri Oct 30 03:37:18 2026"
+    }
+  ],
+  "exits": [
+    {
+      "processId": 61543,
+      "exitCode": -9
+    },
+    {
+      "processId": 62701,
+      "exitCode": -9
+    },
+    {
+      "processId": 64844,
+      "exitCode": -9
+    }
+  ],
+  "snapshots": {
+    "pending": {
+      "runtime": {
+        "file": "pending-runtime.sqlite.gz",
+        "databaseSha256": "b73e63a956b41adb7df6466a21edc9a373734a39f90b35a944a354eeaef0818d",
+        "gzipSha256": "3ac960fbc039d73d156fcd8fe362788832fede91d9d5f02d44b60ef27a5b2f1c",
+        "observer": {
+          "readOnly": true,
+          "sourceMainSha256": "a4e2cd3df1e043b6db29fdb0827ac341b5ba3632d757c608395fa45b6a28fe8f",
+          "snapshotSha256": "b73e63a956b41adb7df6466a21edc9a373734a39f90b35a944a354eeaef0818d"
+        }
+      },
+      "design": {
+        "file": "pending-design.sqlite.gz",
+        "databaseSha256": "700e6822c6734672a9f2d67db3b80184547c6f1473ab47e2f78939d4eb8cfb36",
+        "gzipSha256": "742e4ca4286bdbd1cff127115522fa61145ac635ea21c7d217a83ed0ec6e722f",
+        "observer": {
+          "readOnly": true,
+          "sourceMainSha256": "676654a4a192b58f796bf1a6f571c9dae0e09e04917f595fe4cfa957cf418899",
+          "snapshotSha256": "700e6822c6734672a9f2d67db3b80184547c6f1473ab47e2f78939d4eb8cfb36"
+        }
+      }
+    },
+    "finished": {
+      "runtime": {
+        "file": "finished-runtime.sqlite.gz",
+        "databaseSha256": "703a203778c6d89772854e7bb7efd0cf14b1f1a451df18c503f2e2d1d4c51f27",
+        "gzipSha256": "ee37782078009e762a0a51df9beefd57de44dc1de77ee70b51a3ef9b619a25f8",
+        "observer": {
+          "readOnly": true,
+          "sourceMainSha256": "360d98b24906706d59d5231ceb761b14a2d7acc65e93573dc3210b63eac4a7e4",
+          "snapshotSha256": "703a203778c6d89772854e7bb7efd0cf14b1f1a451df18c503f2e2d1d4c51f27"
+        }
+      },
+      "design": {
+        "file": "finished-design.sqlite.gz",
+        "databaseSha256": "6ec3e6bb959382037c03c39a5a997ee1efc6c7ca93d6e2abcf311e9ac532b54e",
+        "gzipSha256": "ba2f0f9976186a7c4c9df663ba2725be0d44de6fc3c69988acef1a5dba85d8f5",
+        "observer": {
+          "readOnly": true,
+          "sourceMainSha256": "777c538ef3a01c3f7f4b606a3377d6affaa92539568cce9f30ed5f8a6d7fdf8f",
+          "snapshotSha256": "6ec3e6bb959382037c03c39a5a997ee1efc6c7ca93d6e2abcf311e9ac532b54e"
+        }
+      }
+    },
+    "failed": {
+      "runtime": {
+        "file": "failed-runtime.sqlite.gz",
+        "databaseSha256": "703a203778c6d89772854e7bb7efd0cf14b1f1a451df18c503f2e2d1d4c51f27",
+        "gzipSha256": "8c3f1b3fb1cb536d2283a42d5fe28496a86cf21227393b17767cad9d04154895",
+        "observer": {
+          "readOnly": true,
+          "sourceMainSha256": "360d98b24906706d59d5231ceb761b14a2d7acc65e93573dc3210b63eac4a7e4",
+          "snapshotSha256": "703a203778c6d89772854e7bb7efd0cf14b1f1a451df18c503f2e2d1d4c51f27"
+        }
+      },
+      "design": {
+        "file": "failed-design.sqlite.gz",
+        "databaseSha256": "33ca43f30e529f634ca5ee2eca5ce4dd525675fff30baa7dc71e567474820a15",
+        "gzipSha256": "5b71968751950c660add87523bae45b1f6bb2d45da25236c7529446a7fea2bc8",
+        "observer": {
+          "readOnly": true,
+          "sourceMainSha256": "6b6f4c48e28883266a24e68fd4284a5f8113dcc9c496b4fe8ba999925d21f1b8",
+          "snapshotSha256": "33ca43f30e529f634ca5ee2eca5ce4dd525675fff30baa7dc71e567474820a15"
+        }
+      }
+    }
+  },
+  "qualifiesJourney": false
+}

@@ -1,0 +1,14 @@
+{
+  "adoptedMain": "184759ce53bc251ccc81b07ec3980d804ad8fd76",
+  "mergeSource": "833e586e74dbe3a7c4dc362ef73bdfe3f7349273",
+  "runtimeQualificationSource": "e3ec219fcc3a93c949d2669fc585bd1e79152abe",
+  "unchangedProductionTrees": {
+    "Essentials/src/Activities/Bpmn": true,
+    "Essentials/src/Workflows/Runtime": true,
+    "Essentials/src/Persistence/EntityFramework": true,
+    "Essentials/src/Workflows/Design": true
+  },
+  "sdkChange": "One added fallback for payload.error in getProblemDetailsMessage, used only by error-response parsing; successful requests and persisted workflow/diagram data unchanged.",
+  "newActualStudioRunClaimed": false,
+  "exactFinalRequiredCiStillDue": true
+}

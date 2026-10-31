@@ -1,0 +1,14 @@
+{
+  "fullJourneySource": "30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+  "affectedUiSource": "78554070a07b5a71481abf106bf33e12acc6fa19",
+  "changedProductionAndTestPaths": [
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/sequenceDesigner.test.tsx",
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/SequenceDesigner.tsx",
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/sequenceDesigner.css",
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor.tsx"
+  ],
+  "nonStudioProductionCodeChanged": false,
+  "persistenceWriterChanged": false,
+  "evidenceCommit": "7a05e2097",
+  "meaning": "Retain six-suite and full Studio/recovery receipts at declared executing sources; only four frontend presentation files require fresh affected qualification."
+}

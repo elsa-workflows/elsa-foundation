@@ -1,0 +1,19 @@
+{
+  "command": [
+    "dotnet",
+    "test",
+    "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+    "-c",
+    "Release",
+    "--no-build",
+    "--filter",
+    "FullyQualifiedName~Authenticated_direct_execution_waits_restarts_resumes_and_completes_in_the_real_host",
+    "--logger",
+    "trx;LogFileName=direct-journey.trx",
+    "--results-directory",
+    "/tmp/elsa-2898-design-template-upgrade/fixed-3ac1c6757"
+  ],
+  "sourceRevision": "3ac1c675729c14b1c2ad7249f43c47d33d13e37e",
+  "exitCode": 0,
+  "seconds": 12.024034976959229
+}

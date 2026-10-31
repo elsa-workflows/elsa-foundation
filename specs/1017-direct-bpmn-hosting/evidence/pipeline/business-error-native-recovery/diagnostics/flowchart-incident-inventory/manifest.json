@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-journey-controller-counterexample",
+  "sourceRevision": "663464b61595969ba0d5e1ba4183131d147191b6",
+  "qualifyingRecovery": false,
+  "assets": [
+    {
+      "path": "capture/before-checked-embedding.json",
+      "sha256": "787cb95f0ec3ef5baf9d3bc601a0c70138a9977bd2de1e4b9e91115c276bdaf4"
+    },
+    {
+      "path": "capture/before-checked-model.json",
+      "sha256": "cb9c427a871b0ae57d21ff5bd21ec61c3d703a51b78b9cbd3b7c111431ea1ed6"
+    },
+    {
+      "path": "capture/before-elsa.sqlite.gz",
+      "sha256": "ff6e476dc172dd5db172d83a110992ba0b54cbc68a217e1cd5dbf613a53122e5"
+    },
+    {
+      "path": "capture/before-etl-design.sqlite.gz",
+      "sha256": "4b1aaf648a048b1ca9f611b2d51121bfeb1cf2038184604c39429d952f5502ee"
+    },
+    {
+      "path": "capture/before-etl-runtime.sqlite.gz",
+      "sha256": "a73407d879ba0b129ee79bc87af4c9152cb1422330ce2f5d2aa31d63586c0742"
+    },
+    {
+      "path": "capture/before-wire.json",
+      "sha256": "e24f3c47fede87e1ca31d5b1d98bc459dfdd4012e99a8a835cc7cde6e745f3a1"
+    },
+    {
+      "path": "capture/before.json",
+      "sha256": "e0fd2549a5db96cedcd8a22fad132e1fe6999ccd95b2fbefb4cd60ade49c3c40"
+    },
+    {
+      "path": "capture/failed-elsa.sqlite.gz",
+      "sha256": "2e44ad0ea7459becd5f1a723c95f79d7e7776199e4e58cde1086a09e8c5bbcbb"
+    },
+    {
+      "path": "capture/failed-etl-design.sqlite.gz",
+      "sha256": "352ab9dc1b21e856aa2d87d734cf3a637dca401a66624d92b10d8ff964704b0e"
+    },
+    {
+      "path": "capture/failed-etl-runtime.sqlite.gz",
+      "sha256": "27978482ed994bb733965b587b6448ed4d4217978598d3ca1e6e9f5832a9de1f"
+    },
+    {
+      "path": "capture/failure.json",
+      "sha256": "4e2c10a69ab23a4b748951705cbbf667e28b35f76fae2dd2d3c420355b838ab4"
+    },
+    {
+      "path": "capture/finished-checked-embedding.json",
+      "sha256": "7ada5af5c5fa31df03a0ed01db20f50279ad4296c0affc81702dab3ee6e388d7"
+    },
+    {
+      "path": "capture/finished-checked-model.json",
+      "sha256": "981e355bc7aac343b5cbd2c144fb57bbf847123c387c6dc2777ca00928dd059c"
+    },
+    {
+      "path": "capture/recovered.json",
+      "sha256": "e0fd2549a5db96cedcd8a22fad132e1fe6999ccd95b2fbefb4cd60ade49c3c40"
+    }
+  ]
+}

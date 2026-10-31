@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-runtime-only-human-duration-race",
+  "sourceRevision": "a2c2e47751d595c9489f889593ed4d7427ef6076",
+  "order": "timer-first",
+  "durationSeconds": 30,
+  "dueAt": "2026-10-29T22:25:21.488582+00:00",
+  "capturedAtUtc": "2026-10-29T22:25:27.557297+00:00",
+  "published": {
+    "executable": {
+      "artifactId": "sha256:dcb279c55932f1614eba72dc884c60977c896fb036289110461c24f3ad8f9dd3",
+      "definitionId": "bpmn-model:sha256:dcb279c55932f1614eba72dc884c60977c896fb036289110461c24f3ad8f9dd3",
+      "definitionVersionId": "sha256:dcb279c55932f1614eba72dc884c60977c896fb036289110461c24f3ad8f9dd3",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:dcb279c55932f1614eba72dc884c60977c896fb036289110461c24f3ad8f9dd3"
+    },
+    "incarnationId": "68cce8a38a0f4daea69923f7861a04cc",
+    "sourceReferenceId": "bpmn-source:5fb478357dbd9a085dc34dd7c66db9ca3f2be7f193d76ac35038934ba7add579",
+    "profile": "foundation-native-work-v1"
+  },
+  "started": {
+    "executionId": "bpmn:dd74c426e21d33e18f20e4b24dc69cec0a0c455ef01af980b490a641b7530861",
+    "inputId": "start-duration",
+    "replay": false,
+    "pending": false,
+    "result": {
+      "status": "Accepted",
+      "code": null,
+      "revision": 1,
+      "lifecycle": "Running"
+    }
+  },
+  "human": {
+    "elementId": "review",
+    "bindingId": "review-work",
+    "tokenId": "token:4",
+    "iterationId": null,
+    "invocationId": "bpmn-work:f2afab324a2833f2bd4dfd9d49178c41be6989dd95c011d8d0e44f1baea03800",
+    "attemptId": "attempt:2011c14ed6557b33008f753f48cfda9e6017c73157cc0044fb7e97c3f0cb618c"
+  },
+  "humanResponse": null,
+  "replay": {
+    "executionId": "bpmn:dd74c426e21d33e18f20e4b24dc69cec0a0c455ef01af980b490a641b7530861",
+    "inputId": "actual-human-decision",
+    "replay": false,
+    "pending": false,
+    "result": {
+      "status": "Rejected",
+      "code": "execution-terminal",
+      "revision": 2,
+      "lifecycle": "TerminalSettled"
+    }
+  },
+  "processes": [
+    {
+      "processId": 87728,
+      "controllerProcessId": 87442,
+      "startedAtUtc": "2026-10-29T22:24:49.272855Z"
+    },
+    {
+      "processId": 87730,
+      "controllerProcessId": 87442,
+      "startedAtUtc": "2026-10-29T22:24:52.238775Z"
+    },
+    {
+      "processId": 87969,
+      "controllerProcessId": 87442,
+      "startedAtUtc": "2026-10-29T22:25:22.754875Z"
+    },
+    {
+      "processId": 87977,
+      "controllerProcessId": 87442,
+      "startedAtUtc": "2026-10-29T22:25:25.300776Z"
+    }
+  ],
+  "exits": [
+    137,
+    137,
+    137,
+    137
+  ],
+  "snapshots": [
+    {
+      "file": "before-runtime.sqlite.gz",
+      "databaseSha256": "726ba743fec1ce2f5d33e505dfa077c15147f5c57e596da31a8c1e67326fbaee",
+      "gzipSha256": "66d490e3d562a408eedf16b23d9b63310704ddacf786bb22d61db35a333c3ff3"
+    },
+    {
+      "file": "decided-runtime.sqlite.gz",
+      "databaseSha256": "06b8c154d4b12383c598dd6cc04b07198bf4af9fde38e26659ee0dbb3685f3c2",
+      "gzipSha256": "b1230a3df9cf249c028dfc3e4dcc0cba9da03300467510ede9c67eda68127c75"
+    },
+    {
+      "file": "finished-runtime.sqlite.gz",
+      "databaseSha256": "962feffc1359eb514d2a67e822aadebd4ed438f48bb0b97c79e0a3bc7a5aabc0",
+      "gzipSha256": "c11bd3a0f15e38e1ce49c132fb49e7e360a0a9401b1b8b970b8eaccb8031692d"
+    },
+    {
+      "file": "retained-runtime.sqlite.gz",
+      "databaseSha256": "962feffc1359eb514d2a67e822aadebd4ed438f48bb0b97c79e0a3bc7a5aabc0",
+      "gzipSha256": "c11bd3a0f15e38e1ce49c132fb49e7e360a0a9401b1b8b970b8eaccb8031692d"
+    }
+  ],
+  "binaries": [
+    {
+      "file": "Elsa.Workbench.dll",
+      "productVersion": "1.0.0\u002Ba2c2e47751d595c9489f889593ed4d7427ef6076",
+      "sha256": "ab7fce246af34c54447a138ff325b86f166c25af01e8a40bac672d707246d0f6"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Core.dll",
+      "productVersion": "1.0.0\u002Ba2c2e47751d595c9489f889593ed4d7427ef6076",
+      "sha256": "3929e31ab453e1aa299e225bb3d059a515d46af9403969880c5c214e6b7f45e9"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.dll",
+      "productVersion": "1.0.0\u002Ba2c2e47751d595c9489f889593ed4d7427ef6076",
+      "sha256": "ddf8f50b1853051585be85196b73a31b6824d76c862980b758d61e6bd16b9be5"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0\u002Ba2c2e47751d595c9489f889593ed4d7427ef6076",
+      "sha256": "4ee97f694b36fcd6ee235e5212d20148af1c2927f9b8425a3fe77c168b640da2"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Core.dll",
+      "productVersion": "1.0.0\u002Ba2c2e47751d595c9489f889593ed4d7427ef6076",
+      "sha256": "4b3fd140c5b1d74b8e1834594082ae320406fa849d0f1a4af3e1797d3c871eae"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.dll",
+      "productVersion": "1.0.0\u002Ba2c2e47751d595c9489f889593ed4d7427ef6076",
+      "sha256": "42407b3c779a7132c125d64927c9c6e3bacc90e82b32cc7cc57f1fb3be59f7a7"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Api.dll",
+      "productVersion": "1.0.0\u002Ba2c2e47751d595c9489f889593ed4d7427ef6076",
+      "sha256": "71487700d00137709275c6b311fff217690b3f99f68e5c2cd2467971ff2c016e"
+    },
+    {
+      "file": "Bpmn.Model.dll",
+      "productVersion": "0.5.0\u002B021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776"
+    },
+    {
+      "file": "Bpmn.Semantics.dll",
+      "productVersion": "0.5.0\u002B021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+    }
+  ],
+  "observer": {
+    "file": "DeliveryRecoveryRead.dll",
+    "productVersion": "1.0.0\u002Ba2c2e47751d595c9489f889593ed4d7427ef6076",
+    "sha256": "e803eff855c067122334e4f3b356bdefacae666a0e16ba27f357155f06e80e9f"
+  },
+  "noDesignStorage": true,
+  "stateSeeded": false,
+  "clockEdited": false,
+  "limits": [
+    "Same-source direct human/timer journey. Worker/held timer interruption and simultaneous commit orders remain separate.",
+    "No upgraded-host or final Studio acceptance is inferred."
+  ]
+}

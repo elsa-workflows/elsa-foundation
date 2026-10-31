@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "executingSource": "5533b8367c7fe78850677fcebf5c7fcb0f2e7e27",
+  "productionRuntimeChanged": false,
+  "actualTechnicalFinalFaultJourneys": 5,
+  "qualifyingRawAssets": 117,
+  "wholeStoresVerified": 30,
+  "diagnosticRawAssets": 28,
+  "diagnosticWholeStoresIntegrityChecked": 12,
+  "diagnosticsQualifyAsTechnicalRecovery": false,
+  "actualWorkbenchProcesses": 15,
+  "actualHttpProcesses": 5,
+  "actualSigkillExits": 5,
+  "all20QualifiedListedChildrenStopped": true,
+  "all30RejectedListedChildrenStopped": true,
+  "faultCode": "etl.snapshot-read-failed",
+  "businessErrorCatchCode": "etl.rows-rejected",
+  "modelSemanticFaultErrorCode": null,
+  "acceptedAndPhysicalHttpOutputRecordsPerCase": 2,
+  "additionalHttpEffectsAfterInitialCrash": 0,
+  "originalHttpWaitUnchangedPastRetryDeadline": true,
+  "lookupSnapshotTemporarilyRenamedWithoutByteMutation": true,
+  "immutableLookupSourceStayedAvailable": true,
+  "snapshotRestoredOnlyAfterAllHostsStopped": true,
+  "pinnedAndPreparedLookupPhysicallyVerified": true,
+  "sqlStateAndClocksEdited": false,
+  "resumptionSweepIntervalSeconds": 0.2,
+  "httpRetryAfterSeconds": 20,
+  "sameSourceInterpreterTracesCompared": true,
+  "normalization": [
+    "Only self-referential token.producingWorkHandle equal to model.executionId"
+  ],
+  "capturedFirstPartyProducts": 12,
+  "capturedExternalLibraryHashes": false,
+  "nativeCompositeFaultStatusDecisionResolved": false,
+  "portableControls": {
+    "passed": 128,
+    "failed": 0,
+    "skipped": 0,
+    "prior": 119,
+    "newPositiveMatrix": 1,
+    "newRehashedNegativeControls": 8
+  },
+  "mapsCheckPassed": true,
+  "testTiers": 123,
+  "standardHostBuild": {
+    "errors": 0,
+    "warnings": 261,
+    "testOnlyProbeEnabled": false
+  },
+  "frozenBaselineAssetsUnchanged": 104,
+  "frozenBaselineManifestUnchanged": true,
+  "priorBpmn400AndHumanHost8Source": "663464b61595969ba0d5e1ba4183131d147191b6",
+  "technicalFinalFaultProved": true,
+  "modelHeldFaultRetryProved": false,
+  "finalFaultRetryRefusalProved": false,
+  "finalUpgradeAndStudioProved": false,
+  "fullPrReviewRoundsCompleted": 0,
+  "fullPrReviewRoundBound": 6,
+  "legacyModelV2Fixture": {
+    "path": "legacy-model-v2.json",
+    "sha256": "d14491ae0d95700966c544863b4c7183573c0313f23af362dc25f994c15b8ef9"
+  },
+  "verifierSha256": "2101314c64c9d33989ca31e84ee651946f3028314e7948c323b61381741cbdcb",
+  "controlsSha256": "761150e5d7b1c64853325a7a9dbc1484915b21566600c596b144e848a75e7bc4",
+  "recorderSha256": "eb18cb239ea83b9ec8c18b040962d35dbc2ced9d378e070af3e4f0e482dc398e",
+  "validationLogs": [
+    {
+      "path": "validation/source-matched-host-build.log",
+      "sha256": "e3417c32e955f7ee33990333938e50d3e9a91d019e1bca102c64d8286b0f9557"
+    },
+    {
+      "path": "validation/portable128.log",
+      "sha256": "f9ded802c5207b512155d69913ecdfbb7b4cb82b1ed427923306d1580447f6e1"
+    },
+    {
+      "path": "validation/matrix-verification.log",
+      "sha256": "f21b0c9fdb3c567548a3ebd8283b6eca2dff27e3b913d8a860c440a22a8118ec"
+    },
+    {
+      "path": "validation/maps.log",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+    },
+    {
+      "path": "validation/test-tiers123.log",
+      "sha256": "91cc02f2f85c466bbc3d5d675d3bf055059b2c0e5e185229a4c4d99b174f25c4"
+    },
+    {
+      "path": "validation/frozen104.log",
+      "sha256": "58972459218403495be4349c16918fe60d3a51da88264abfafaee94b9e9ef925"
+    }
+  ]
+}

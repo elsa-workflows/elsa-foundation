@@ -1,0 +1,10 @@
+{
+  "command": [
+    "python3",
+    "tools/bpmn/verify_studio_upgrade.py",
+    "--manifest",
+    "/tmp/elsa-2898-studio-d7ee22b16/packaged/manifest.json"
+  ],
+  "exitCode": 1,
+  "reason": "New main uses a generic Run header; the old Published Run label is absent from the actual DOM. No capture or state is changed."
+}

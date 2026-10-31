@@ -1,0 +1,22 @@
+[
+  {
+    "uniqueLeaseIds": false,
+    "firstFailure": "TaskCanceledException",
+    "sourceRetiredThroughPort": true,
+    "artifactsDeletedBetweenAdmissions": 1,
+    "secondFailure": "RuntimeSchedulerWorkUnavailableException: The exact pinned model material is unavailable.",
+    "pendingCommands": 1,
+    "materialPresentAfterAdmission": false,
+    "database": "/private/tmp/elsa-2898-full-pr-r4-correctness/router-probe/bin/Release/net10.0/shared-4714f44685894802a5ac8d676d59289f.db"
+  },
+  {
+    "uniqueLeaseIds": true,
+    "firstFailure": "TaskCanceledException",
+    "sourceRetiredThroughPort": true,
+    "artifactsDeletedBetweenAdmissions": 0,
+    "secondFailure": "none",
+    "pendingCommands": 1,
+    "materialPresentAfterAdmission": true,
+    "database": "/private/tmp/elsa-2898-full-pr-r4-correctness/router-probe/bin/Release/net10.0/unique-1a71d8ca37d74c41927fd533252e89dd.db"
+  }
+]

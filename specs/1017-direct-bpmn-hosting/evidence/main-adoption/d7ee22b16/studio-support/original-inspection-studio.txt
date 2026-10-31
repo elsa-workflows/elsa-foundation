@@ -1,0 +1,12 @@
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://127.0.0.1:61934
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Development
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: /var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-studio-upgrade-4a06cams/studio
+warn: CShells.Lifecycle.ShellProviderBuilder[0]
+      Shell 'Default' requested 1 feature(s) that are not available in the runtime feature catalog: WeatherForecastSample. The shell will activate with available features only.
+info: Microsoft.Hosting.Lifetime[0]
+      Application is shutting down...

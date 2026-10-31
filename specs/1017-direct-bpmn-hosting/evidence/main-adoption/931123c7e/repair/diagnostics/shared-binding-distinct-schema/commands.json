@@ -1,0 +1,19 @@
+[
+  {
+    "name": "migrations",
+    "command": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj",
+      "-c",
+      "Release",
+      "--logger",
+      "trx;LogFileName=migrations.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-design-template-upgrade/development-cache-fix"
+    ],
+    "tree": "uncommitted development correction over38c402d31",
+    "exitCode": 1,
+    "seconds": 100.50376892089844
+  }
+]

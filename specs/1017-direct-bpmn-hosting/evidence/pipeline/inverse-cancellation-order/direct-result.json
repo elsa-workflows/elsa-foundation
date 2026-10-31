@@ -1,0 +1,21 @@
+{
+  "source": "0ce9a41dba03c4f362c4d386f14737823f33238a",
+  "exitCode": 0,
+  "command": [
+    "python3",
+    "e2e-tests/etl/qualify_http_recovery.py",
+    "--parent",
+    "BpmnModel",
+    "--native-cancel",
+    "--pending-cancellation-crash",
+    "--native-result-before-etl-cancel",
+    "--workbench-assembly",
+    "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll",
+    "--reader-assembly",
+    "/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/bpmn/DeliveryRecoveryRead/bin/Release/net10.0/DeliveryRecoveryRead.dll",
+    "--dispatcher-assembly",
+    "/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/bpmn/NativeWorkDispatch/bin/Release/net10.0/NativeWorkDispatch.dll",
+    "--output",
+    "/tmp/elsa-2898-review-1/fixed-0ce9a41db/inverse-cancel/direct"
+  ]
+}

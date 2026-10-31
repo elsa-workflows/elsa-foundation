@@ -1,0 +1,111 @@
+{
+  "sourceRevision": "9c7681c56c529c8a1a4ab4d9fc91934ec07d0448",
+  "integratedMain": "d481d6a5e624e35bba9fbf32033ed02aff64cbef",
+  "fullRecoveryAndStudioSource": "04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+  "kind": "affected-frontend-smoke-not-full-upgrade-journey",
+  "cases": [
+    {
+      "family": "original",
+      "exportsByteIdenticalTo04c": true,
+      "originalRunViewsUnchanged": true,
+      "closedCoupledStores": 4,
+      "integrityChecksPassed": 4,
+      "normalTestRun": {
+        "source": "9c7681c56c529c8a1a4ab4d9fc91934ec07d0448",
+        "family": "original",
+        "testRunId": "14n6TQXRQlG",
+        "executionId": "14n6TRg1d9R",
+        "executionStatus": "Completed",
+        "selectedActivity": "Delay",
+        "incidents": 0,
+        "evaluatedDuration": "00:00:01",
+        "outcome": "Done"
+      },
+      "screenshotsVisuallyInspected": true
+    },
+    {
+      "family": "layout",
+      "exportsByteIdenticalTo04c": true,
+      "originalRunViewsUnchanged": true,
+      "closedCoupledStores": 4,
+      "integrityChecksPassed": 4,
+      "normalTestRun": {
+        "source": "9c7681c56c529c8a1a4ab4d9fc91934ec07d0448",
+        "family": "layout",
+        "testRunId": "14n6eR3NshH",
+        "executionId": "14n6eTFVcMO",
+        "executionStatus": "Completed",
+        "selectedActivity": "Delay",
+        "incidents": 0,
+        "evaluatedDuration": "00:00:01",
+        "outcome": "Done",
+        "initialHeadingWait": "selector did not match; actual completed execution inspected without another start"
+      },
+      "screenshotsVisuallyInspected": true
+    }
+  ],
+  "processes": [
+    {
+      "role": "workbench",
+      "processId": 97936,
+      "controllerProcessId": 97808,
+      "started": "Sat Oct 31 01:43:27 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Workbench.dll",
+      "assemblySha256": "a300eb660707f98f6c71d7d916b23b3aa8cd7859a2a54c668af342423c05511a",
+      "sameRecordedProcessPresent": false
+    },
+    {
+      "role": "studio",
+      "processId": 99103,
+      "controllerProcessId": 97808,
+      "started": "Sat Oct 31 01:44:01 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Studio.Web.dll",
+      "assemblySha256": "119a086efdd5048dc908e3c9f77ecbe43a5487b40fe0c86e3b2b5e358bccd72f",
+      "sameRecordedProcessPresent": false
+    },
+    {
+      "role": "workbench",
+      "processId": 2708,
+      "controllerProcessId": 2628,
+      "started": "Sat Oct 31 01:46:32 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Workbench.dll",
+      "assemblySha256": "a300eb660707f98f6c71d7d916b23b3aa8cd7859a2a54c668af342423c05511a",
+      "sameRecordedProcessPresent": false
+    },
+    {
+      "role": "studio",
+      "processId": 3044,
+      "controllerProcessId": 2628,
+      "started": "Sat Oct 31 01:46:58 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Studio.Web.dll",
+      "assemblySha256": "119a086efdd5048dc908e3c9f77ecbe43a5487b40fe0c86e3b2b5e358bccd72f",
+      "sameRecordedProcessPresent": false
+    }
+  ],
+  "ownedTabsClosed": [
+    "28",
+    "29"
+  ],
+  "userTabsRetained": [
+    "4",
+    "11"
+  ],
+  "all104FrozenAssetsUnchanged": true,
+  "frontendTests": {
+    "passed": 116,
+    "failed": 0,
+    "skipped": 0
+  },
+  "architectureGuard": {
+    "passed": 594,
+    "failed": 0,
+    "skipped": 0,
+    "testBinaryBuiltAt": "04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+    "filesystemSource": "9c7681c56c529c8a1a4ab4d9fc91934ec07d0448",
+    "scope": "Unchanged source04c binary, source9c filesystem with preceding qualification present; smoke files imported afterward; exact final-head CI separate"
+  }
+}

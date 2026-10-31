@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "shard": "pr-1",
+  "headSha": "b9cf52c181b79e3e79eef233f7d61cb0843f4da7",
+  "failedTwice": [],
+  "passedOnRetry": [],
+  "quarantinedFailed": [],
+  "slow": [
+    {
+      "test": "Elsa.Activities.Flowchart.Tests.FlowchartStateGrowthTests.LoopHeavyFlowchart_PersistedStateStaysBounded",
+      "seconds": 11.3
+    },
+    {
+      "test": "Elsa.Etl.Tests.EtlNativeCompositeJourneyTests.Placed_composite_returns_ETL_completion_to_its_outer_sequence",
+      "seconds": 19.1
+    },
+    {
+      "test": "Elsa.Etl.Tests.EtlPublishedWorkflowJourneyTests.Published_parent_keeps_its_ETL_version_after_edit_and_runs_without_design_services",
+      "seconds": 10.2
+    },
+    {
+      "test": "Elsa.Etl.Tests.EtlRuntimeJourneyTests.Two_http_worker_processes_honor_source_retry_after_before_capturing_the_page",
+      "seconds": 12.5
+    },
+    {
+      "test": "Elsa.Etl.Tests.EtlRuntimeJourneyTests.Two_http_worker_processes_retry_error_route_after_main_ack_without_early_dispatch_or_double_accounting",
+      "seconds": 13.3
+    },
+    {
+      "test": "Elsa.Rules.Tests.RulesPersistedNativeFlowchartTests.Consumed_completion_is_reclaimed_and_acknowledged_without_redispatch_while_sibling_waits",
+      "seconds": 12.9
+    },
+    {
+      "test": "Elsa.Rules.Tests.RulesPersistedNativeRetryTests.Resume_store_unavailability_retains_trigger_redrives_once_and_acknowledges_after_completion",
+      "seconds": 12.8
+    }
+  ],
+  "aborted": null
+}

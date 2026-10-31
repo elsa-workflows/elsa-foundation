@@ -1,0 +1,100 @@
+{
+  "sourceRevision": "8dc088bae4463b8a9279a1f25036ac14b1715cd6",
+  "actualServiceDurationJourneys": [
+    {
+      "parent": "direct",
+      "order": "worker-first",
+      "wholeStoresVerified": 9,
+      "actualOriginalWorkerPreserved": true
+    },
+    {
+      "parent": "direct",
+      "order": "timer-first",
+      "wholeStoresVerified": 9,
+      "actualOriginalWorkerPreserved": true
+    },
+    {
+      "parent": "direct",
+      "order": "held-interruption",
+      "wholeStoresVerified": 9,
+      "actualOriginalWorkerPreserved": true
+    },
+    {
+      "parent": "root",
+      "order": "worker-first",
+      "wholeStoresVerified": 9,
+      "actualOriginalWorkerPreserved": true
+    },
+    {
+      "parent": "root",
+      "order": "timer-first",
+      "wholeStoresVerified": 9,
+      "actualOriginalWorkerPreserved": true
+    },
+    {
+      "parent": "root",
+      "order": "held-interruption",
+      "wholeStoresVerified": 9,
+      "actualOriginalWorkerPreserved": true
+    },
+    {
+      "parent": "sequence",
+      "order": "worker-first",
+      "wholeStoresVerified": 9,
+      "actualOriginalWorkerPreserved": true
+    },
+    {
+      "parent": "sequence",
+      "order": "timer-first",
+      "wholeStoresVerified": 9,
+      "actualOriginalWorkerPreserved": true
+    },
+    {
+      "parent": "sequence",
+      "order": "held-interruption",
+      "wholeStoresVerified": 9,
+      "actualOriginalWorkerPreserved": true
+    },
+    {
+      "parent": "flowchart",
+      "order": "worker-first",
+      "wholeStoresVerified": 9,
+      "actualOriginalWorkerPreserved": true
+    },
+    {
+      "parent": "flowchart",
+      "order": "timer-first",
+      "wholeStoresVerified": 9,
+      "actualOriginalWorkerPreserved": true
+    },
+    {
+      "parent": "flowchart",
+      "order": "held-interruption",
+      "wholeStoresVerified": 9,
+      "actualOriginalWorkerPreserved": true
+    },
+    {
+      "parent": "compensationscope",
+      "order": "worker-first",
+      "wholeStoresVerified": 9,
+      "actualOriginalWorkerPreserved": true
+    },
+    {
+      "parent": "compensationscope",
+      "order": "timer-first",
+      "wholeStoresVerified": 9,
+      "actualOriginalWorkerPreserved": true
+    },
+    {
+      "parent": "compensationscope",
+      "order": "held-interruption",
+      "wholeStoresVerified": 9,
+      "actualOriginalWorkerPreserved": true
+    }
+  ],
+  "wholeStoresVerified": 135,
+  "actualBothWorkerTimerOrdersProved": true,
+  "actualHeldFailureTimerInterruptionProved": true,
+  "simultaneousCommitOrdersProved": false,
+  "finalUpgradeAndStudioProved": false
+}

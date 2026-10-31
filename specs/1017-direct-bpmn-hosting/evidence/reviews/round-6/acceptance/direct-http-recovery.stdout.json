@@ -1,0 +1,26 @@
+{
+  "actualReferenceJourneys": [
+    {
+      "case": "direct-success",
+      "acceptedRecords": 4,
+      "rejectedRecords": 0,
+      "physicalOutputRecords": 4,
+      "businessErrorPreserved": false
+    },
+    {
+      "case": "direct-business",
+      "acceptedRecords": 3,
+      "rejectedRecords": 1,
+      "physicalOutputRecords": 3,
+      "businessErrorPreserved": true
+    }
+  ],
+  "wholeStoresVerified": 12,
+  "sourceRevision": "18ac139e055b7e9af4573b720086c989884a9f48",
+  "directBpmnClosedWorkerIntegrationProved": true,
+  "runBpmnEtlIntegrationProved": false,
+  "modelHeldFaultRetryProved": false,
+  "pendingCancellationCrashProved": false,
+  "pendingCancellationStage": null,
+  "postConsumptionPreAckCrashProved": false
+}

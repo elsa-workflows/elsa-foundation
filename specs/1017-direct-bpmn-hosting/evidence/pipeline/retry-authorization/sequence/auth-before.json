@@ -1,0 +1,311 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-bpmn-retry-http-authorization",
+  "sourceRevision": "1a10565935b568e42c8431158bfafe77b571c775",
+  "stage": "before",
+  "modelExecutionId": "bpmn-embedded:bac5065348da1d299822e63e359da97b62ed4fb8f12c87f550c1bc10968ba7eb",
+  "principals": [
+    {
+      "profile": "reader",
+      "session": {
+        "status": "authenticated",
+        "subject": "37657ac8-4cb0-4b3c-9ea9-ad795358d05a",
+        "displayName": "bpmn-probe-reader",
+        "tenantId": "default",
+        "roles": [
+          "f5813a25e2c347a3b8ecae3ede9320c6"
+        ],
+        "permissions": [
+          "bpmn:read"
+        ],
+        "tokenFreshness": "fresh",
+        "provider": null
+      }
+    },
+    {
+      "profile": "retrier",
+      "session": {
+        "status": "authenticated",
+        "subject": "159d8dae-b84d-4efd-8f50-260b43a91557",
+        "displayName": "bpmn-probe-retrier",
+        "tenantId": "default",
+        "roles": [
+          "cf7c82055e4c4225851dafcd4e10bf4f"
+        ],
+        "permissions": [
+          "bpmn:retry-service"
+        ],
+        "tokenFreshness": "fresh",
+        "provider": null
+      }
+    },
+    {
+      "profile": "nobody",
+      "session": {
+        "status": "authenticated",
+        "subject": "b7a6ada0-2323-40ba-84bb-8b6cbbabe438",
+        "displayName": "bpmn-probe-nobody",
+        "tenantId": "default",
+        "roles": [
+          "0ff7bb0a44314e8abdbf8b936caeaaa7"
+        ],
+        "permissions": [],
+        "tokenFreshness": "fresh",
+        "provider": null
+      }
+    },
+    {
+      "profile": "foreign",
+      "session": {
+        "status": "authenticated",
+        "subject": "145c916a-0581-41a6-9338-69872d99f4fe",
+        "displayName": "bpmn-probe-foreign",
+        "tenantId": "bpmn-probe-foreign",
+        "roles": [
+          "16ab6557a2a3464eba462648414356cb"
+        ],
+        "permissions": [
+          "bpmn:read",
+          "bpmn:retry-service"
+        ],
+        "tokenFreshness": "fresh",
+        "provider": null
+      }
+    }
+  ],
+  "outcomes": [
+    {
+      "profile": "anonymous",
+      "operation": "read-execution",
+      "httpStatus": 401,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        401
+      ]
+    },
+    {
+      "profile": "anonymous",
+      "operation": "read-incidents",
+      "httpStatus": 401,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        401
+      ]
+    },
+    {
+      "profile": "anonymous",
+      "operation": "read-command",
+      "httpStatus": 401,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        401
+      ]
+    },
+    {
+      "profile": "anonymous",
+      "operation": "retry-before-admission",
+      "httpStatus": 401,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        401
+      ]
+    },
+    {
+      "profile": "anonymous",
+      "operation": "read-unknown-command",
+      "httpStatus": 401,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        401
+      ]
+    },
+    {
+      "profile": "reader",
+      "operation": "read-execution",
+      "httpStatus": 200,
+      "returnedOutcome": true,
+      "permittedHttpStatuses": [
+        200
+      ]
+    },
+    {
+      "profile": "reader",
+      "operation": "read-incidents",
+      "httpStatus": 200,
+      "returnedOutcome": true,
+      "permittedHttpStatuses": [
+        200
+      ]
+    },
+    {
+      "profile": "reader",
+      "operation": "read-command",
+      "httpStatus": 200,
+      "returnedOutcome": true,
+      "permittedHttpStatuses": [
+        200
+      ]
+    },
+    {
+      "profile": "reader",
+      "operation": "retry-before-admission",
+      "httpStatus": 404,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        403,
+        404
+      ]
+    },
+    {
+      "profile": "retrier",
+      "operation": "read-execution",
+      "httpStatus": 404,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        403,
+        404
+      ]
+    },
+    {
+      "profile": "retrier",
+      "operation": "read-incidents",
+      "httpStatus": 404,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        403,
+        404
+      ]
+    },
+    {
+      "profile": "retrier",
+      "operation": "read-command",
+      "httpStatus": 404,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        403,
+        404
+      ]
+    },
+    {
+      "profile": "retrier",
+      "operation": "read-unknown-command",
+      "httpStatus": 404,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        403,
+        404
+      ]
+    },
+    {
+      "profile": "nobody",
+      "operation": "read-execution",
+      "httpStatus": 404,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        403,
+        404
+      ]
+    },
+    {
+      "profile": "nobody",
+      "operation": "read-incidents",
+      "httpStatus": 404,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        403,
+        404
+      ]
+    },
+    {
+      "profile": "nobody",
+      "operation": "read-command",
+      "httpStatus": 404,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        403,
+        404
+      ]
+    },
+    {
+      "profile": "nobody",
+      "operation": "retry-before-admission",
+      "httpStatus": 404,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        403,
+        404
+      ]
+    },
+    {
+      "profile": "nobody",
+      "operation": "read-unknown-command",
+      "httpStatus": 404,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        403,
+        404
+      ]
+    },
+    {
+      "profile": "foreign",
+      "operation": "read-execution",
+      "httpStatus": 404,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        403,
+        404
+      ]
+    },
+    {
+      "profile": "foreign",
+      "operation": "read-incidents",
+      "httpStatus": 404,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        403,
+        404
+      ]
+    },
+    {
+      "profile": "foreign",
+      "operation": "read-command",
+      "httpStatus": 404,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        403,
+        404
+      ]
+    },
+    {
+      "profile": "foreign",
+      "operation": "retry-before-admission",
+      "httpStatus": 404,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        403,
+        404
+      ]
+    },
+    {
+      "profile": "foreign",
+      "operation": "read-unknown-command",
+      "httpStatus": 404,
+      "returnedOutcome": false,
+      "permittedHttpStatuses": [
+        403,
+        404
+      ]
+    }
+  ],
+  "expectedCommand": {
+    "inputId": "native-result:69781860d156484be98326b4a7d12f874aaef6e04c960efa123b4c5a8351fa9f",
+    "result": {
+      "status": "Accepted",
+      "code": null,
+      "revision": 2,
+      "lifecycle": "WaitingIncident"
+    }
+  },
+  "credentialsIncluded": false,
+  "mockAuthenticationUsed": false
+}

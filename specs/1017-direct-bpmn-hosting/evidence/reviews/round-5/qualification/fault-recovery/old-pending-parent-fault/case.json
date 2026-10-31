@@ -1,0 +1,92 @@
+{
+  "kind": "actual-old-final-fault-workbench-recovery",
+  "sourceRevision": "04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+  "admitted": true,
+  "waiting": true,
+  "pendingParent": true,
+  "modelExecutionId": "bpmn-embedded:e705a3456fd038bcff55bf21094de655bd89bf8b395c96a9fe14deca2d2cb44d",
+  "fixtureSha256": "c7e0247a7da55fdb73897c0be677eed7cbf9b1c54f365338ef33f84c064d3b13",
+  "first": 70980,
+  "second": 71122,
+  "firstExit": 137,
+  "secondExit": 137,
+  "runtimeOnly": true,
+  "completedStore": {
+    "file": "completed-runtime.sqlite.gz",
+    "databaseSha256": "01b9564b40419c402be6c71bb1edde9c9b200710a5ae121cadcc5cb3a18070a2",
+    "gzipSha256": "ed5edb7b2d79bd40cc0f94dfd84c69ae44c14ef8ff288abdb7500f24071dd110"
+  },
+  "retainedStore": {
+    "file": "retained-runtime.sqlite.gz",
+    "databaseSha256": "01b9564b40419c402be6c71bb1edde9c9b200710a5ae121cadcc5cb3a18070a2",
+    "gzipSha256": "ed5edb7b2d79bd40cc0f94dfd84c69ae44c14ef8ff288abdb7500f24071dd110"
+  },
+  "binaries": [
+    {
+      "file": "Elsa.Workbench.dll",
+      "productVersion": "1.0.0\u002B04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+      "sha256": "61a0a147edc9f6dcfe2e7a033ebd7fb9cb8268677c03a10e22b1c734a99df7fd"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Core.dll",
+      "productVersion": "1.0.0\u002B04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+      "sha256": "500a9ddc2949d119ec16ad2f7f41c65daf501ea1ad8fa04bd76798a0383ef0e8"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.dll",
+      "productVersion": "1.0.0\u002B04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+      "sha256": "5396b92f6c6e8257ca10542abdf01ce67ed25b05c2eea76a58046d8b60d69c2f"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0\u002B04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+      "sha256": "55e2c1cb87f60d7306e28bc4fd1cdbb08951bda1aef92fd345a52f52faeae010"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Core.dll",
+      "productVersion": "1.0.0\u002B04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+      "sha256": "22322abc8a88fd60f666b78532b6a02406d34eeb0ebe5cfb39ee73d81b226e48"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.dll",
+      "productVersion": "1.0.0\u002B04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+      "sha256": "7dcd54140f5aae19bacf1570e12e8599a32a17ffeece452770618f61e3effbf7"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Api.dll",
+      "productVersion": "1.0.0\u002B04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+      "sha256": "c8a6385c7216e7e2ea5981a1b94c45bd2cb9d7ae0d20b5766319a9d4f9f7f235"
+    },
+    {
+      "file": "Bpmn.Model.dll",
+      "productVersion": "0.5.0\u002B021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776"
+    },
+    {
+      "file": "Bpmn.Semantics.dll",
+      "productVersion": "0.5.0\u002B021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Core.dll",
+      "productVersion": "1.0.0\u002B04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+      "sha256": "5c72f468ed0b1a9bded555afaf6d54340ddab3badcfd498ae67efb8b9649ed60"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Api.dll",
+      "productVersion": "1.0.0\u002B04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+      "sha256": "6f9b27dc0da1c5bd1f222e94323b8dd93525020d4cbe3dc27a9f8c6e88dbbabc"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0\u002B04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+      "sha256": "f3eecbe0b4fe1f72f73e1fab55ee980bdd9436fb44ca11f3fe11ad4a2818917e"
+    },
+    {
+      "file": "Elsa.Persistence.EntityFramework.dll",
+      "productVersion": "1.0.0\u002B04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+      "sha256": "85d63eaba53a2eb8f177b0f50d6be22fc6e89fd124bdea15d6b64a278ff321b9"
+    }
+  ],
+  "scopeLimit": "Actual normally produced old fault cuts over SQLite, standard runtime-only Workbench; no Studio, ETL or other-provider claim."
+}

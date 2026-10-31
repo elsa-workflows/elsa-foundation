@@ -1,0 +1,34 @@
+[
+  {
+    "name": "constructor-red",
+    "exitCode": 1,
+    "expectedExitCode": 1,
+    "productMatchesCurrent9508Bytes": true,
+    "productSha256": "70447dc4e6dee1a94597ed12f22d389f7abb246466f62e3d42447faef9f1e3a7",
+    "probeAssembly": "/tmp/elsa-2898-review7-standards/pending-probe/bin/Release/net10.0/Elsa.Activities.Bpmn.Tests.dll"
+  },
+  {
+    "name": "shape-control",
+    "exitCode": 0,
+    "expectedExitCode": 0,
+    "productMatchesCurrent9508Bytes": true,
+    "productSha256": "70447dc4e6dee1a94597ed12f22d389f7abb246466f62e3d42447faef9f1e3a7",
+    "probeAssembly": "/tmp/elsa-2898-review7-standards/pending-probe/bin/Release/net10.0/Elsa.Activities.Bpmn.Tests.dll"
+  },
+  {
+    "name": "private-causal-green",
+    "exitCode": 0,
+    "expectedExitCode": 0,
+    "productMatchesCurrent9508Bytes": true,
+    "productSha256": "70447dc4e6dee1a94597ed12f22d389f7abb246466f62e3d42447faef9f1e3a7",
+    "probeAssembly": "/tmp/elsa-2898-review7-standards/pending-green/bin/Release/net10.0/Elsa.Activities.Bpmn.Tests.dll"
+  },
+  {
+    "name": "nested-cancel-terminal",
+    "exitCode": 0,
+    "expectedExitCode": 0,
+    "productMatchesCurrent9508Bytes": true,
+    "productSha256": "70447dc4e6dee1a94597ed12f22d389f7abb246466f62e3d42447faef9f1e3a7",
+    "probeAssembly": "/tmp/elsa-2898-review7-correctness/probe/bin/Debug/net10.0/Elsa.Activities.Bpmn.Interchange.Tests.dll"
+  }
+]

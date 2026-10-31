@@ -1,0 +1,227 @@
+{
+  "concurrent": [
+    {
+      "stage": "INITIAL",
+      "lifecycle": 0,
+      "revision": 1,
+      "workCount": 2,
+      "cancellations": null,
+      "terminal": null
+    },
+    {
+      "stage": "AFTER FIRST WORKER",
+      "lifecycle": 0,
+      "revision": 1,
+      "workCount": 2,
+      "cancellations": null,
+      "terminal": null
+    },
+    {
+      "stage": "AFTER FAULT ACCEPTANCE",
+      "lifecycle": 3,
+      "revision": 2,
+      "workCount": 1,
+      "cancellations": null,
+      "terminal": {
+        "status": "Faulted",
+        "code": "bpmn.work.faulted",
+        "message": "BPMN process faulted because the work bound to 'worker' faulted (Native service work failed.): failed work cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
+        "errorCode": null
+      }
+    },
+    {
+      "stage": "OTHER START",
+      "value": {
+        "Items": [
+          {
+            "OutboxItemId": "model-input:58fcebd3fc51a713c818ae786768c8cf9dd34cb868d6f66b78e8d66f13eb6d28:bpmn-start-native:6295ee6687222e8bdc088099248c6285ec5746b20fd73126f0b33e8bd0da859b",
+            "IntentId": "bpmn-start-native:6295ee6687222e8bdc088099248c6285ec5746b20fd73126f0b33e8bd0da859b",
+            "RequestedDeliveryResultStatus": 3,
+            "FailureMessage": "Runtime post-commit intent delivery deferred pending acknowledgement.",
+            "Outcome": 0,
+            "IsSuperseded": false
+          }
+        ],
+        "AttemptedCount": 1,
+        "DeliveredCount": 0,
+        "FailedCount": 1,
+        "SupersededCount": 0
+      }
+    },
+    {
+      "stage": "CANCEL TERMINAL",
+      "value": {
+        "ExecutionId": "bpmn:29ce72ce3be41205dfa938e934fbac80cb4cca8c3508df1b2dd86fa94dfdc220",
+        "InputId": "cancel-terminal",
+        "Replay": false,
+        "Pending": false,
+        "Result": {
+          "status": "Rejected",
+          "code": "execution-terminal",
+          "revision": 2,
+          "lifecycle": "TerminalSettled"
+        }
+      }
+    },
+    {
+      "stage": "OTHER START RETRY",
+      "value": {
+        "Items": [
+          {
+            "OutboxItemId": "model-input:58fcebd3fc51a713c818ae786768c8cf9dd34cb868d6f66b78e8d66f13eb6d28:bpmn-start-native:6295ee6687222e8bdc088099248c6285ec5746b20fd73126f0b33e8bd0da859b",
+            "IntentId": "bpmn-start-native:6295ee6687222e8bdc088099248c6285ec5746b20fd73126f0b33e8bd0da859b",
+            "RequestedDeliveryResultStatus": 3,
+            "FailureMessage": "Runtime post-commit intent delivery deferred pending acknowledgement.",
+            "Outcome": 0,
+            "IsSuperseded": false
+          }
+        ],
+        "AttemptedCount": 1,
+        "DeliveredCount": 0,
+        "FailedCount": 1,
+        "SupersededCount": 0
+      }
+    },
+    {
+      "stage": "FINAL",
+      "lifecycle": 3,
+      "revision": 2,
+      "workCount": 1,
+      "cancellations": null,
+      "terminal": {
+        "status": "Faulted",
+        "code": "bpmn.work.faulted",
+        "message": "BPMN process faulted because the work bound to 'worker' faulted (Native service work failed.): failed work cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
+        "errorCode": null
+      }
+    }
+  ],
+  "single-control": [
+    {
+      "stage": "INITIAL",
+      "lifecycle": 0,
+      "revision": 1,
+      "workCount": 1,
+      "cancellations": null,
+      "terminal": null
+    },
+    {
+      "stage": "AFTER FIRST WORKER",
+      "lifecycle": 0,
+      "revision": 1,
+      "workCount": 1,
+      "cancellations": null,
+      "terminal": null
+    },
+    {
+      "stage": "AFTER FAULT ACCEPTANCE",
+      "lifecycle": 3,
+      "revision": 2,
+      "workCount": 0,
+      "cancellations": null,
+      "terminal": {
+        "status": "Faulted",
+        "code": "bpmn.work.faulted",
+        "message": "BPMN process faulted because the work bound to 'worker' faulted (Native service work failed.): failed work cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
+        "errorCode": null
+      }
+    },
+    {
+      "stage": "OTHER START",
+      "value": {
+        "Items": [],
+        "AttemptedCount": 0,
+        "DeliveredCount": 0,
+        "FailedCount": 0,
+        "SupersededCount": 0
+      }
+    },
+    {
+      "stage": "CANCEL TERMINAL",
+      "value": {
+        "ExecutionId": "bpmn:29ce72ce3be41205dfa938e934fbac80cb4cca8c3508df1b2dd86fa94dfdc220",
+        "InputId": "cancel-terminal",
+        "Replay": false,
+        "Pending": false,
+        "Result": {
+          "status": "Rejected",
+          "code": "execution-terminal",
+          "revision": 2,
+          "lifecycle": "TerminalSettled"
+        }
+      }
+    },
+    {
+      "stage": "OTHER START RETRY",
+      "value": {
+        "Items": [],
+        "AttemptedCount": 0,
+        "DeliveredCount": 0,
+        "FailedCount": 0,
+        "SupersededCount": 0
+      }
+    },
+    {
+      "stage": "FINAL",
+      "lifecycle": 3,
+      "revision": 2,
+      "workCount": 0,
+      "cancellations": null,
+      "terminal": {
+        "status": "Faulted",
+        "code": "bpmn.work.faulted",
+        "message": "BPMN process faulted because the work bound to 'worker' faulted (Native service work failed.): failed work cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
+        "errorCode": null
+      }
+    }
+  ],
+  "policy-control": [
+    {
+      "observation": "PUBLICATION REFUSED Elsa.Activities.Bpmn.Core.BpmnModelValidationException: The service fault policy profile requires one start and no concurrent outgoing branches."
+    }
+  ],
+  "legacy-contract-final": [
+    {
+      "observation": "LEGACY NATIVE STATUS Faulted"
+    },
+    {
+      "observation": "PUBLICATION REFUSED System.NullReferenceException: Object reference not set to an instance of an object."
+    }
+  ],
+  "cold-retry": [
+    {
+      "stage": "COLD BEFORE",
+      "lifecycle": 3,
+      "revision": 2,
+      "workCount": 1
+    },
+    {
+      "stage": "COLD RETRY",
+      "value": {
+        "Items": [
+          {
+            "OutboxItemId": "model-input:58fcebd3fc51a713c818ae786768c8cf9dd34cb868d6f66b78e8d66f13eb6d28:bpmn-start-native:6295ee6687222e8bdc088099248c6285ec5746b20fd73126f0b33e8bd0da859b",
+            "IntentId": "bpmn-start-native:6295ee6687222e8bdc088099248c6285ec5746b20fd73126f0b33e8bd0da859b",
+            "RequestedDeliveryResultStatus": 3,
+            "FailureMessage": "Runtime post-commit intent delivery deferred pending acknowledgement.",
+            "Outcome": 0,
+            "IsSuperseded": false
+          }
+        ],
+        "AttemptedCount": 1,
+        "DeliveredCount": 0,
+        "FailedCount": 1,
+        "SupersededCount": 0
+      }
+    },
+    {
+      "stage": "COLD AFTER",
+      "lifecycle": 3,
+      "revision": 2,
+      "workCount": 1
+    },
+    {
+      "observation": "COLD NATIVE COUNT 1"
+    }
+  ]
+}

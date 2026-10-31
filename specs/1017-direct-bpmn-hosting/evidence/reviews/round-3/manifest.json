@@ -1,0 +1,165 @@
+{
+  "reviewedHead": "fcf551c789c37c722b3b07d0c1cf4aecb56a16ad",
+  "mergeBase": "184759ce53bc251ccc81b07ec3980d804ad8fd76",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 3323,
+      "sha256": "595384d78c03ae8920e1c25c280ea1df53600909505a7beae5ab193fb5739e98"
+    },
+    {
+      "path": "acceptance/hash-audit.json",
+      "bytes": 806,
+      "sha256": "584a27a1599af5b587702a6c21893940d2c89174c733f4b56db43c0153d30ec9"
+    },
+    {
+      "path": "acceptance/pipeline-origin-audit.json",
+      "bytes": 438,
+      "sha256": "83fb536344337ef010eed22649d76d75d77ed37f97078e044bcc465586b1ecdb"
+    },
+    {
+      "path": "acceptance/portable.log.gz",
+      "bytes": 8983,
+      "sha256": "62bfc95f4d060541d136376c15c51cc328bab41f52d51168fff1804bad93cc85"
+    },
+    {
+      "path": "acceptance/report.md",
+      "bytes": 14378,
+      "sha256": "2a0d1219727556eed23e746a0879f7ce6bbeb8945daef7b82b3c407aec4c5bd0"
+    },
+    {
+      "path": "acceptance/validation-probe/Probe.csproj.gz",
+      "bytes": 153,
+      "sha256": "ed98a5682e9e274347ebb9643f086dd566312d59e480337e417ef336ff73096a"
+    },
+    {
+      "path": "acceptance/validation-probe/Program.cs",
+      "bytes": 3665,
+      "sha256": "1bb6da454d5e9fb103236d6f41de2cc177d8fb0acd14732c5a2257bed1128e64"
+    },
+    {
+      "path": "acceptance/validation-probe-provenance.json",
+      "bytes": 582,
+      "sha256": "7ccedf70a11e68e845123df5a6cace320ab264ce52ac989db7779b1fc466e9d9"
+    },
+    {
+      "path": "acceptance/validation-probe.log.gz",
+      "bytes": 420,
+      "sha256": "645b14598306971b14ac469dd150ed84e048f99ee04830b6edcd7f681e63b927"
+    },
+    {
+      "path": "acceptance/whole-project-reconciliation.json",
+      "bytes": 2657,
+      "sha256": "75f594e951fd564446e890133c41160e310e468568eb284182da4a6d4e09b202"
+    },
+    {
+      "path": "correctness/legacy-checkpoint/backup-receipt.json",
+      "bytes": 188,
+      "sha256": "f054a1ed24aae8f485191eaad940bcdfe938daee07f5748c363f8f3bc2e63fd7"
+    },
+    {
+      "path": "correctness/legacy-checkpoint/concurrent-terminal.sqlite.gz",
+      "bytes": 58976,
+      "sha256": "5676f8bd43eefe98333e97a6c231bc7f28d777656de58c71941cfe457e582170"
+    },
+    {
+      "path": "correctness/native-probe/Probe.csproj.gz",
+      "bytes": 4067,
+      "sha256": "587c8628e046a7dfc916d4b1b7a7df4893e1dbe2aca5a927e26e90aac5e4dde4"
+    },
+    {
+      "path": "correctness/native-probe/Program.cs",
+      "bytes": 7527,
+      "sha256": "ffb5702b6d3fb738791f88290bd4c095e19a98f515750860879dcfe968793593"
+    },
+    {
+      "path": "correctness/native-probe/cold-retry.log.gz",
+      "bytes": 2508,
+      "sha256": "0eceaa6ba637c6c5c103aa50730e56176a64d5ef03c124885fdfc606b7771583"
+    },
+    {
+      "path": "correctness/native-probe/concurrent.log.gz",
+      "bytes": 4126,
+      "sha256": "a0154c0d88004a5fa021e6f4615370ae600f52c31d9ee33847bd6e679f6f4bfa"
+    },
+    {
+      "path": "correctness/native-probe/legacy-contract-final.log.gz",
+      "bytes": 1160,
+      "sha256": "f4f2af58a0cece264c112e0d83222ebd8faa672f9f03373717e4af7439c0c64e"
+    },
+    {
+      "path": "correctness/native-probe/policy-control.log.gz",
+      "bytes": 797,
+      "sha256": "04ea37870e47b6b0e3839a3399ffa72956c53f425b06479c2b55464912a7938c"
+    },
+    {
+      "path": "correctness/native-probe/single-control.log.gz",
+      "bytes": 3565,
+      "sha256": "4c879a0471336526dfd402b99ff714ae450424d9408c3b691f4298434037fa91"
+    },
+    {
+      "path": "correctness/observations.json",
+      "bytes": 6946,
+      "sha256": "855e3d72bcbf48d69b359fc9c9bc0a8410538cffe435e4c0aa4e355a5845dd98"
+    },
+    {
+      "path": "correctness/probe-manifest.json",
+      "bytes": 6174,
+      "sha256": "49efee77a9686167960b713c37391f7921e1ae4fc31e1722e79df10eb7cb5015"
+    },
+    {
+      "path": "correctness/report.md",
+      "bytes": 13486,
+      "sha256": "baca48f658e724b1e2f89983b6a02deac3974639225d5af53bd17a2374ffe45e"
+    },
+    {
+      "path": "standards/probe-pending/Probe.csproj.gz",
+      "bytes": 1141,
+      "sha256": "932738b98d49137f7f61a12bbeeccab168240ac2d774fd976644e7d8b3b95c5a"
+    },
+    {
+      "path": "standards/probe-pending/Program.cs",
+      "bytes": 3530,
+      "sha256": "b89fcf8ad54bc0b52767dbdc56fdec3b01b1e63bd8f68efa46f096ef2bbcd851"
+    },
+    {
+      "path": "standards/probe-pending.log.gz",
+      "bytes": 622,
+      "sha256": "8e4f06c75533a36913b549c685df58a6ec0f1d150693b0f171f9ccb416af45f3"
+    },
+    {
+      "path": "standards/provenance.json",
+      "bytes": 2370,
+      "sha256": "b9ec3cfa910180506cf4f4e109a4e90d586c9adf307db782e49c65a64715ddce"
+    },
+    {
+      "path": "standards/report.md",
+      "bytes": 8233,
+      "sha256": "2a3efc783f1d582a2fcca64eb0ea77bbb0424c238b32025a1287aa31579c6820"
+    },
+    {
+      "path": "correctness/legacy-checkpoint/admitted-backup-receipt.json",
+      "bytes": 188,
+      "sha256": "ab1939ee73aabb3f1ea3499be8d8f37133ba36a74eccdb5d7f27f4d6b021baee"
+    },
+    {
+      "path": "correctness/legacy-checkpoint/admitted-old-writer-Program.cs",
+      "bytes": 7559,
+      "sha256": "205bd6862b4566a0c4a8fdda6b316933a8df6471438223b4bb6365f15af02fc4"
+    },
+    {
+      "path": "correctness/legacy-checkpoint/admitted-old-writer.log.gz",
+      "bytes": 4480,
+      "sha256": "add779188c1d78de082b22adf5c5b0a0bda60ed50f74fb96523cdfdf7ece710b"
+    },
+    {
+      "path": "correctness/legacy-checkpoint/concurrent-admitted-terminal.sqlite.gz",
+      "bytes": 74301,
+      "sha256": "ae0027de22b16b04912106623724207d493879fc96f195e61e87a42af9a1d683"
+    }
+  ],
+  "additionalOldWriterCapture": {
+    "executingSource": "e3ec219fcc3a93c949d2669fc585bd1e79152abe",
+    "purpose": "Normally admitted second worker with original result owed; preserved old writer, no state seeding."
+  }
+}

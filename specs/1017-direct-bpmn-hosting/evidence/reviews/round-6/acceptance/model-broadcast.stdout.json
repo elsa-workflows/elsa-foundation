@@ -1,0 +1,26 @@
+{
+  "kind": "actual-model-broadcast-recovery-matrix",
+  "cases": [
+    {
+      "cut": "after-resume",
+      "sourceRevision": "6bde6e8ff3606244a8708d476cc662cacb04418b",
+      "wholeStores": 6,
+      "ownedHosts": 4
+    },
+    {
+      "cut": "before-selection",
+      "sourceRevision": "791dc17016a6b6022a0413820fe61eb202c52afc",
+      "wholeStores": 6,
+      "ownedHosts": 4
+    },
+    {
+      "cut": "empty-cohort",
+      "sourceRevision": "791dc17016a6b6022a0413820fe61eb202c52afc",
+      "wholeStores": 6,
+      "ownedHosts": 4
+    }
+  ],
+  "wholeStores": 18,
+  "ownedHosts": 12,
+  "finalUpgradeAndStudioProved": false
+}

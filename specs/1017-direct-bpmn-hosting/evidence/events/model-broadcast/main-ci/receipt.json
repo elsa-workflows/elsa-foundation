@@ -1,0 +1,56 @@
+{
+  "runId": 40978933651,
+  "head": "b9cf52c181b79e3e79eef233f7d61cb0843f4da7",
+  "conclusion": "success",
+  "url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40978933651",
+  "outcomeArtifacts": [
+    {
+      "file": "test-outcomes-architecture-guards.json",
+      "sha256": "893be43e5701017c0db949a40bee2e8bfc4e50febcdfae73da516cf9e3fbc3cd"
+    },
+    {
+      "file": "test-outcomes-cluster-foundation-host.json",
+      "sha256": "38aec2c630336fc5e32cedb21ed82d954010cef9ae85510155ca1845eb3bcce5"
+    },
+    {
+      "file": "test-outcomes-core-only.json",
+      "sha256": "aa2808d3123ec980c3049a473ac79d8f106013dfc4989036b8b9a426fdcfa9c6"
+    },
+    {
+      "file": "test-outcomes-integration-other.json",
+      "sha256": "390d4aaab533f5ee2f1d3b1da930e94200baba98d3acbbd05cbce7af65546be6"
+    },
+    {
+      "file": "test-outcomes-pr-1.json",
+      "sha256": "8b073ca7e9a8730e6a8a3035961aaeceb362541fba03175086eb18287ec6537c"
+    },
+    {
+      "file": "test-outcomes-pr-2.json",
+      "sha256": "e61df9dbdafb7d9a0224c79f1eb209bafd155c365aa69ef4d048a2e7b2b22405"
+    },
+    {
+      "file": "test-outcomes-pr-3.json",
+      "sha256": "a70f084fe99d9b0ca86f3b3675cffc8a25bdb6b615bd79135883d24216aed031"
+    },
+    {
+      "file": "test-outcomes-workbench-native-hosting.json",
+      "sha256": "3b08a92f12a92c6d8e269c0cb8b4b8df34c690700acbbdf119e3bdbcb809eb95"
+    },
+    {
+      "file": "test-outcomes-workbench-rest.json",
+      "sha256": "29610260d3fdc884b04ff8ca482c3746ada9ac40b912883bfbfdfc6b7fe286a5"
+    }
+  ],
+  "failedTwice": 0,
+  "passedOnRetry": 0,
+  "aborted": 0,
+  "quarantinedFailures": [
+    {
+      "test": "Elsa.Workbench.Tests.WorkbenchCompensationSampleTests.The_sample_workflows_end_as_the_readme_says",
+      "issue": 3261
+    }
+  ],
+  "efContainerMatrix": "skipped",
+  "ownerMergedRepair": 3453,
+  "ownerClosedIssue": 3452
+}

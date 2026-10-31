@@ -1,0 +1,9 @@
+{
+  "source": "04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+  "strictNativeProviders": true,
+  "externalConnectionOverrideNamesCleared": [
+    "ELSA_RUNTIME_BOOKMARKS_EF_POSTGRESQL_TEST_CONNECTION_STRING",
+    "ELSA_RUNTIME_BOOKMARKS_EF_SQLSERVER_TEST_CONNECTION_STRING",
+    "ELSA_RUNTIME_BOOKMARKS_EF_MYSQL_TEST_CONNECTION_STRING"
+  ]
+}

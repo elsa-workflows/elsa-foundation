@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "kind": "physical-provider-model-storage-contracts",
+  "sourceRevision": "26aef90429532f26c41907d8b8d8a743b9837b8f",
+  "testAssemblySha256": "bd07ef62cb2abcd282d358827333f63b721da4dd23b64453bc85c0a016ac95d4",
+  "requireNativeProviders": true,
+  "externalConnectionStringsUsed": false,
+  "passed": 18,
+  "failed": 0,
+  "skipped": 0,
+  "providers": [
+    "PostgreSql",
+    "SqlServer",
+    "MySql"
+  ],
+  "checks": [
+    "atomic model state/input/protected claim/outbox/marker success",
+    "physical participants present before final-marker failure and full rollback",
+    "stale fence/revision/reused input refusal and exact replay",
+    "Running/TerminalSettled receipt-only comparison",
+    "fresh additive migrations",
+    "initial-schema native artifact/header fixture preservation and post-upgrade model writes"
+  ],
+  "legacyFixture": {
+    "path": "../../baseline/multi-instance-and-studio/runtime.sqlite.gz",
+    "sha256": "3fcd6e38a968d05026a2c57a188f5d5c9d6fdbc313afd9ce19c82ad3e2b21416",
+    "scope": "Two unchanged tables from an actual SQLite capture are copied into isolated native-engine initial-schema migration fixtures. This is not an actual old-engine database or execution-resume journey."
+  },
+  "notProved": [
+    "non-SQLite actual-host recovery",
+    "final actual legacy/Studio upgrade",
+    "whole-program acceptance"
+  ],
+  "assets": [
+    {
+      "path": "MySql.trx",
+      "sha256": "0b46fb10a8b922482a4e6dc6147ca17cde38b971bb92851daf98a707f4c2b484"
+    },
+    {
+      "path": "MySql.txt",
+      "sha256": "8bcc31b53e130de5c47ed98304bdc86b7737337140bc4d4578f441b74376b931"
+    },
+    {
+      "path": "PostgreSql.trx",
+      "sha256": "6a32b69734baab717a54f32318461b39db541273cf25f781464a0c2d134640ba"
+    },
+    {
+      "path": "PostgreSql.txt",
+      "sha256": "b7c94e2635ac74dc8c330b18e409771374e5abe038c95c294acc53959ae72540"
+    },
+    {
+      "path": "SqlServer.trx",
+      "sha256": "1fa15488b1173b0e88408f08ec3a50dd157761383e01273214a5273f1bf48fc4"
+    },
+    {
+      "path": "SqlServer.txt",
+      "sha256": "867c4b867efbcaf5107c62e9ddc0aa102de083464ac41264efdccf80f526e6c4"
+    },
+    {
+      "path": "Sqlite-results.json",
+      "sha256": "db94658295f84245e07e0bf8bf05e356b61965a63d818cc510669cb601d25356"
+    },
+    {
+      "path": "Sqlite.trx",
+      "sha256": "8f2ba749793e380eea7dd7c4e23267314925bed6cf1dca16d7511a50c7bfc5f9"
+    },
+    {
+      "path": "Sqlite.txt",
+      "sha256": "91d4c6421dce72268be6c6b6db8bde372cc59c4986ef11a2b4e7cb5ca7c33e86"
+    },
+    {
+      "path": "assembly-info.json",
+      "sha256": "d25e39315294c331e8bc10f4103f85fee4730d4d2e24dedf2412ed68c4f6cac2"
+    },
+    {
+      "path": "results.json",
+      "sha256": "38c8774737818d5326fb21426eebad769f01f23ef4da8057a637d44a7317dca6"
+    }
+  ],
+  "sqlite": {
+    "passed": 53,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Real SQLite checkpoint/admission/fence/retention/receipt/schema tests and whole actual frozen baseline database migration with every original column preserved."
+  },
+  "aggregatePassed": 71
+}

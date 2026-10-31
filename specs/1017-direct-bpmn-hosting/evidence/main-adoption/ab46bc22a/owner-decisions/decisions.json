@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-31T07:06:32.750609+00:00",
+  "pr": 3410,
+  "reviewRoundLimit": 16,
+  "roundsAlreadyCompleted": 6,
+  "additionalRoundsAuthorized": 10,
+  "versionException": {
+    "scope": "PR3410 compatible API additions only",
+    "line": "computed4.0.x-preview",
+    "generalPostGaRuleUnchanged": true,
+    "ownerReceipt": "https://github.com/elsa-workflows/elsa-foundation/pull/3410#issuecomment-6540308020"
+  },
+  "gitGuardian": {
+    "incident": 39189012,
+    "url": "https://dashboard.gitguardian.com/workspace/571996/incidents/39189012?occurrence=307758917",
+    "actualUiStatus": "Ignored",
+    "actualUiReason": "Not a secret (false positive)",
+    "verifiedDisplayedValueEqualsFrozenFingerprint": true,
+    "frozenFingerprint": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+    "occurrenceCount": 2,
+    "globalScanPolicyChanged": false,
+    "proofImage": "elsa-2898-gitguardian39189012-false-positive.png",
+    "proofImageSha256": "141fd8bdfb11fb26caf86b8c8f98ac1026b20d5a165593b91dfa55a8d6dc7ae2"
+  },
+  "allDecisionsReceipt": "https://github.com/elsa-workflows/elsa-foundation/pull/3410#issuecomment-6540343366",
+  "goalStatus": "active",
+  "programComplete": false
+}

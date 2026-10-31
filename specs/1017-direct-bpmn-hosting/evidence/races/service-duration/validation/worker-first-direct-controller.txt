@@ -1,0 +1,3 @@
+Observed durable 429 and completed sibling; owned predecessor terminated.
+Actual worker-first preserved its original worker and timer through process loss and a fourth host.
+Owned private diagnostic root: /var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-etl-http-recovery-48z3v5a0

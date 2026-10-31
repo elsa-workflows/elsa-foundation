@@ -1,0 +1,9 @@
+{
+  "testsRun": 13,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "source": "4dc934c444705ddf40707b8eeb1991e1949fefa9",
+  "testClass": "FinalActualStudioUpgradeControls",
+  "controlsUnchanged": true
+}

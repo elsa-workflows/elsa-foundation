@@ -1,0 +1,86 @@
+{
+  "sourceRevision": "3111ba0cc185d0926fbef1baff2740eef725a594",
+  "cut": "after-resume",
+  "type": "ObservationUnavailable",
+  "processes": [
+    {
+      "role": "probe",
+      "processId": 13888,
+      "controllerProcessId": 13882,
+      "started": "Fri Oct 30 02:18:37 2026"
+    },
+    {
+      "role": "assist-standard",
+      "processId": 13982,
+      "controllerProcessId": 13882,
+      "started": "Fri Oct 30 02:18:47 2026"
+    },
+    {
+      "role": "standard",
+      "processId": 14722,
+      "controllerProcessId": 13882,
+      "started": "Fri Oct 30 02:18:54 2026"
+    }
+  ],
+  "exits": [
+    {
+      "processId": 13888,
+      "exitCode": -9
+    },
+    {
+      "processId": 13982,
+      "exitCode": -9
+    },
+    {
+      "processId": 14722,
+      "exitCode": -9
+    }
+  ],
+  "snapshots": {
+    "pending": {
+      "runtime": {
+        "file": "pending-runtime.sqlite.gz",
+        "databaseSha256": "2a7ae29ee070d91cb567cd6be9db7d45d60d23bd89832f2bc48bc6bf89acc2db",
+        "gzipSha256": "7fa472c4d0f840a7f9e6f16530cdb030af120ec1b2cae56f5b9953cd6b8159a4",
+        "observer": {
+          "readOnly": true,
+          "sourceMainSha256": "18940a1729d0e123152482478dd899e1752f7aaf8b6dc1218602d19726308c63",
+          "snapshotSha256": "2a7ae29ee070d91cb567cd6be9db7d45d60d23bd89832f2bc48bc6bf89acc2db"
+        }
+      },
+      "design": {
+        "file": "pending-design.sqlite.gz",
+        "databaseSha256": "1ad893a002eee2e6835b30011b7bba2bf87aefc9c92e8d82da7fc5abcec3e179",
+        "gzipSha256": "6509cbab3ae506f4d39f42906593e42b01827791952c3dfdea07faae963b9817",
+        "observer": {
+          "readOnly": true,
+          "sourceMainSha256": "802d5affbd17082e30e189e2b15981bee5f64ca9b6dc5d6e4f0d6b868ad1ad57",
+          "snapshotSha256": "1ad893a002eee2e6835b30011b7bba2bf87aefc9c92e8d82da7fc5abcec3e179"
+        }
+      }
+    },
+    "failed": {
+      "runtime": {
+        "file": "failed-runtime.sqlite.gz",
+        "databaseSha256": "65dc2193bc548ef05b38f80b95da8691e13797b6f3970e6f052b890092294ec1",
+        "gzipSha256": "ce64186fccf2b03afbcda0edd2f963372973bb9f095f8cedceb5a024ccceb444",
+        "observer": {
+          "readOnly": true,
+          "sourceMainSha256": "8ce2cd88f6a20cbdb2e2859c29354809056cd4ddf68fe6d6980e0736c3e416fe",
+          "snapshotSha256": "65dc2193bc548ef05b38f80b95da8691e13797b6f3970e6f052b890092294ec1"
+        }
+      },
+      "design": {
+        "file": "failed-design.sqlite.gz",
+        "databaseSha256": "1074714a65483d00ba9c51b14d91fd818adbca60be195e29eafe7491aa0d474e",
+        "gzipSha256": "97897b85e991510717d5700ee4ce7b2444f3f68eb14f8eef5b65b1e074f92843",
+        "observer": {
+          "readOnly": true,
+          "sourceMainSha256": "21ca3d94f43f8ae5dd1dc44abb9f277ec762df3007a4b1b4a151d4186f0394de",
+          "snapshotSha256": "1074714a65483d00ba9c51b14d91fd818adbca60be195e29eafe7491aa0d474e"
+        }
+      }
+    }
+  },
+  "qualifiesJourney": false
+}

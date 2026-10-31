@@ -1,0 +1,3 @@
+Browser tab: 13, Title: "Elsa Studio", URL: "http://127.0.0.1:61934/workflows/definitions?definition=14iBsLEuiJS".
+There has been no change in the accessibility tree.
+The focused UI element is 1 AXWebArea Elsa Studio, URL: 127.0.0.1:61934/workflows/definitions?definition=14iBsLEuiJS

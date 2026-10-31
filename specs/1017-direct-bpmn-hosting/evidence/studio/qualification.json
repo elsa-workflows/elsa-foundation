@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "kind": "saved-state-and-existing-studio-phase-qualification",
+  "executingSourceRevision": "801042981812d52b327fa0d008a09f12d6160a94",
+  "originalAssetsVerified": 104,
+  "originalWholeStoreInputsCovered": [
+    "broadcast/after-cohort.sqlite.gz",
+    "broadcast/after-resume.sqlite.gz",
+    "broadcast/before-selection.sqlite.gz",
+    "broadcast/empty-cohort.sqlite.gz",
+    "called-ack/notice-held.sqlite.gz",
+    "called-ack/terminal-held.sqlite.gz",
+    "legacy-controls/design.sqlite.gz",
+    "legacy-controls/runtime.sqlite.gz",
+    "multi-instance-and-studio/design.sqlite.gz",
+    "multi-instance-and-studio/runtime.sqlite.gz",
+    "native-parent-pending/compensationscope-balanced.sqlite.gz",
+    "native-parent-pending/compensationscope-durable.sqlite.gz",
+    "native-parent-pending/flowchart-balanced.sqlite.gz",
+    "native-parent-pending/flowchart-durable.sqlite.gz",
+    "native-parent-pending/sequence-balanced.sqlite.gz",
+    "native-parent-pending/sequence-durable.sqlite.gz",
+    "native-parents/design.sqlite.gz",
+    "native-parents/runtime.sqlite.gz",
+    "partial-forks/design.sqlite",
+    "partial-forks/runtime.sqlite",
+    "studio/design.sqlite.gz",
+    "studio/runtime.sqlite.gz"
+  ],
+  "qualifiedFamilyReceipts": [
+    {
+      "manifest": "upgrade/broadcast/manifest.json",
+      "sha256": "e528ddca8139ddf90e0c8c63c5d61c3024389925c65835461d2094354af05895",
+      "executingSourceRevision": "facffc859ce01a2d4e3fe85be52bcb5b5b285998"
+    },
+    {
+      "manifest": "upgrade/called-ack/manifest.json",
+      "sha256": "8d4726b9b38ae2dba5bc48de83689c691ef4f542c3e35c951315015610344d21",
+      "executingSourceRevision": "4bba8f266327369608733fb4ee484e07a33bbf6a"
+    },
+    {
+      "manifest": "upgrade/controls/manifest.json",
+      "sha256": "ad6b510dd5e51f48b375a469784bc1000419a10219928bc23667c3e3f91f65ad",
+      "executingSourceRevision": "0595851685e3c0ce3321d1a884ad18dbd8f00215"
+    },
+    {
+      "manifest": "upgrade/multi-instance/manifest.json",
+      "sha256": "433bf0ba9293005c369dda11e55c30ba115dc7a5307750563fe288a5eea03b5f",
+      "executingSourceRevision": "645d59aa6990df001d218af055154092c841cc41"
+    },
+    {
+      "manifest": "upgrade/native-parents/manifest.json",
+      "sha256": "54c09a5c2cc904b005f03a68d1ac0115f16c36d1f76c350e753b103503aff984",
+      "executingSourceRevision": "02602bad34602496314b5cbf7a84a6b2f549124a"
+    },
+    {
+      "manifest": "upgrade/partial-forks/manifest.json",
+      "sha256": "da4138e7762f08dde80b14b90722f1f95621a9ac5149498e3a9bde7f3b1b3b97",
+      "executingSourceRevision": "f3b56e516d4e6bd05bfa82995f512f27f4520fe8"
+    },
+    {
+      "manifest": "studio/manifest.json",
+      "sha256": "2f160cbc0405a54e127ecc60efa7f16ed4c9085d9944723e882e063804852254",
+      "executingSourceRevision": "801042981812d52b327fa0d008a09f12d6160a94"
+    }
+  ],
+  "actualStudioManifestSha256": "2f160cbc0405a54e127ecc60efa7f16ed4c9085d9944723e882e063804852254",
+  "existingStudioCompatibilityProved": true,
+  "directModelStudioAcceptanceProved": false,
+  "finalSourceQualificationAfterBridges": false,
+  "localChecks": [
+    {
+      "project": "Essentials/tests/Activities/Bpmn/Hosting/Tests",
+      "passed": 10,
+      "skipped": 0,
+      "total": 10,
+      "trxSha256": "46d3c4730cff555f03e03b49c866bdc7da1ab68d45b9a6a9aa6a208cc21b3387",
+      "times": {
+        "creation": "2026-10-29T10:22:15.9623510+01:00",
+        "queuing": "2026-10-29T10:22:15.9623510+01:00",
+        "start": "2026-10-29T10:22:08.5829040+01:00",
+        "finish": "2026-10-29T10:25:40.3275350+01:00"
+      }
+    },
+    {
+      "project": "Essentials/tests/Activities/Bpmn/Tests",
+      "passed": 379,
+      "skipped": 0,
+      "total": 379,
+      "trxSha256": "9839bb6bce8001d98d635368f7b472738ba9d632223137b11269f39ef9fb2ce1",
+      "times": {
+        "creation": "2026-10-29T10:23:01.8598610+01:00",
+        "queuing": "2026-10-29T10:23:01.8598610+01:00",
+        "start": "2026-10-29T10:23:01.5038580+01:00",
+        "finish": "2026-10-29T10:23:05.6719690+01:00"
+      }
+    },
+    {
+      "project": "Essentials/tests/Activities/Bpmn/Interchange/Tests",
+      "passed": 130,
+      "skipped": 0,
+      "total": 130,
+      "trxSha256": "6c5ccb04134e74f645d5f6a93b99ebac9af632a8d7dcf11f31d8d14a4643803e",
+      "times": {
+        "creation": "2026-10-29T10:24:12.0389700+01:00",
+        "queuing": "2026-10-29T10:24:12.0389700+01:00",
+        "start": "2026-10-29T10:24:11.6738510+01:00",
+        "finish": "2026-10-29T10:24:12.1163580+01:00"
+      }
+    },
+    {
+      "project": "Essentials/tests/Workflows/Runtime/Tests",
+      "passed": 16,
+      "skipped": 0,
+      "total": 16,
+      "trxSha256": "186ddc8d8ed8d6ec9a1246c8f09d81d3dcd18f1e90474e1a7f549da47f6babc5",
+      "times": {
+        "creation": "2026-10-29T10:27:51.8033900+01:00",
+        "queuing": "2026-10-29T10:27:51.8033900+01:00",
+        "start": "2026-10-29T10:27:51.3501720+01:00",
+        "finish": "2026-10-29T10:27:51.8877900+01:00"
+      }
+    },
+    {
+      "project": "Essentials/tests/Serialization/Tests",
+      "passed": 11,
+      "skipped": 0,
+      "total": 12,
+      "trxSha256": "8218fa34accdd3e407d8e668530787bfa5d6c1384660c0fc447761efba3e979d",
+      "times": {
+        "creation": "2026-10-29T10:27:46.1118250+01:00",
+        "queuing": "2026-10-29T10:27:46.1118250+01:00",
+        "start": "2026-10-29T10:27:45.8206050+01:00",
+        "finish": "2026-10-29T10:27:46.1321050+01:00"
+      }
+    }
+  ],
+  "verifiers": [
+    {
+      "suite": "test_qualify_hosting.py",
+      "passed": 54,
+      "skipped": 0,
+      "logSha256": "0e73752f05506110246f6bb50a111030baf5c444d930eaab826075613c4a8871"
+    },
+    {
+      "suite": "test_verify_studio_upgrade.py",
+      "passed": 10,
+      "skipped": 0,
+      "logSha256": "b6faf8c63303811825f633f4a5fcd3cc9f836a9f092062d5dfbde0b5ccf314ae"
+    }
+  ],
+  "linuxSerialization": {
+    "sourceRevision": "801042981812d52b327fa0d008a09f12d6160a94",
+    "jobUrl": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/40847492397/job/123359045006",
+    "labels": [
+      "ubuntu-latest"
+    ],
+    "conclusion": "success",
+    "passed": 62,
+    "skipped": 0,
+    "rawJobLogSha256": "4afbe25847be83484a9e6d764008200ca3b3e39d4cc6586abd3abb1d42804a0b",
+    "summary": "2026-10-29T09:17:36.8186756Z Passed!  - Failed:     0, Passed:    62, Skipped:     0, Total:    62, Duration: 585 ms - Elsa.Serialization.Tests.dll (net10.0)"
+  },
+  "localPayloadSkip": {
+    "test": "ReadArray_IoFailure_WrapsOriginalIoException",
+    "reason": "Existing Linux-only /proc/self/mem I/O-error probe; not counted as a local pass. Same-source full Linux serialization suite passed62/62 with zero skips."
+  },
+  "guards": {
+    "maps": "Generated solution filters still describe the project graph.",
+    "testTiers": "Test tiers: 123 test projects, each in one tier and one shard."
+  },
+  "scopeLimits": [
+    "T030/T032/T033 current phase only; T041 requires final affected-source repetition after native/model/ETL bridge or retry changes.",
+    "Earlier raw upgrade family receipts retain their own source identities; current whole-host suite additionally ran all six saved native families on this source.",
+    "No new direct-model Studio, native/ETL bindings, model settlement/retry or remaining operational/clustered acceptance is inferred.",
+    "Draft PR remains incomplete; full-PR review rounds0, current/new-head required checks and deferred GitGuardian finding/scan gate still required before merge."
+  ]
+}

@@ -1,0 +1,142 @@
+[
+  {
+    "name": "install",
+    "source": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+    "arguments": [
+      "pnpm",
+      "install",
+      "--frozen-lockfile"
+    ],
+    "workingDirectory": "Studio",
+    "exitCode": 0,
+    "elapsedSeconds": 0.49233508110046387
+  },
+  {
+    "name": "frontend-tests",
+    "source": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+    "arguments": [
+      "python3.14",
+      "/tmp/elsa-2898-main-3e93-qualification/serial-frontend.py"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 151.67459893226624
+  },
+  {
+    "name": "typecheck",
+    "source": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+    "arguments": [
+      "pnpm",
+      "typecheck"
+    ],
+    "workingDirectory": "Studio",
+    "exitCode": 0,
+    "elapsedSeconds": 11.409060001373291
+  },
+  {
+    "name": "lint",
+    "source": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+    "arguments": [
+      "pnpm",
+      "lint"
+    ],
+    "workingDirectory": "Studio",
+    "exitCode": 0,
+    "elapsedSeconds": 11.408330917358398
+  },
+  {
+    "name": "frontend-build",
+    "source": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+    "arguments": [
+      "pnpm",
+      "build"
+    ],
+    "workingDirectory": "Studio",
+    "exitCode": 0,
+    "elapsedSeconds": 23.195443153381348
+  },
+  {
+    "name": "studio-dotnet",
+    "source": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Studio/tests/Elsa.Studio.Tests/Elsa.Studio.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=studio-dotnet.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-main-3e93-qualification"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 187.40866923332214
+  },
+  {
+    "name": "workbench-build",
+    "source": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+    "arguments": [
+      "dotnet",
+      "build",
+      "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+      "-c",
+      "Release",
+      "--no-restore"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 16.1477210521698
+  },
+  {
+    "name": "studio-host-build",
+    "source": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+    "arguments": [
+      "dotnet",
+      "build",
+      "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj",
+      "-c",
+      "Release",
+      "--no-restore"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 7.428346157073975
+  },
+  {
+    "name": "maps",
+    "source": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+    "arguments": [
+      "dotnet",
+      "run",
+      "--project",
+      "tools/maps/Elsa.Maps.Generator",
+      "-c",
+      "Release",
+      "--",
+      "check"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 2.2545700073242188
+  },
+  {
+    "name": "tiers",
+    "source": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+    "arguments": [
+      "dotnet",
+      "run",
+      "--project",
+      "tools/maps/Elsa.Maps.Generator",
+      "-c",
+      "Release",
+      "--no-build",
+      "--",
+      "test-tiers-check"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 2.5340490341186523
+  }
+]

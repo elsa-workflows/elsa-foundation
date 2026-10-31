@@ -1,0 +1,50 @@
+[
+  {
+    "path": "scope-cancel.sqlite.gz",
+    "sha256": "15009c33d33f2950595037008a9f8bd37d7e75303eb6298cf9427b86939ac07e",
+    "decodedSha256": "2621cbb6578427390b22a9c5beab486dc50c90784bc3e5dd7ed341f306874e92",
+    "integrity": "ok"
+  },
+  {
+    "path": "drain-inner-cancel.sqlite.gz",
+    "sha256": "06830ca0fd051c9131e9eeaab9c290f9800323e39d8444754e87b548516087d9",
+    "decodedSha256": "c14f36da5d62adb8170bd63e8c2a9cd1091118dc6726787516b71082df85cb54",
+    "integrity": "ok"
+  },
+  {
+    "path": "defer-scope-cancel.sqlite.gz",
+    "sha256": "c2c897a3fa660831b5217991db67ab4501933209fda83cb883f464d5c2ee12ff",
+    "decodedSha256": "66acf95b47081d07f31b6a126abc00a2a10a9a844eac87b8eee3efee449d726a",
+    "integrity": "ok"
+  },
+  {
+    "path": "deliver-worker-result.sqlite.gz",
+    "sha256": "87a7a76fdc45f7cc7c2c0a4f1ac94361c8108a33c1cc1633cafcc49f7487773c",
+    "decodedSha256": "f19abce8444b42284483f511018039a48e39dd4d9cd6a53ab348a55191f4ecb4",
+    "integrity": "ok"
+  },
+  {
+    "path": "whole-worker-cancel.sqlite.gz",
+    "sha256": "1bcc1c37d664356275f33b7ea7922aba34a68220a38156f0e47096d0d45081fd",
+    "decodedSha256": "a601e40cb1624b64d7590c7410ce2ece28d12070737a5dded5f1f273e7a1acff",
+    "integrity": "ok"
+  },
+  {
+    "path": "drain-outer-result.sqlite.gz",
+    "sha256": "0260da83d0e3025fc683762bbbc5764269e9655eb0b0e2c0b6ccf1f2d1732d65",
+    "decodedSha256": "ac61c1b7416d4ae195a2cbeb4975bb85cb817b91a802c8e941f985285af51b75",
+    "integrity": "ok"
+  },
+  {
+    "path": "deliver-scope-cancel.sqlite.gz",
+    "sha256": "94c7d47b8d2bd1eaa2d5fb7ff346e1303b6d77957f13e89b052cc98678956c5e",
+    "decodedSha256": "34f79570f4799ec9aa258d6fff3a49ab26f6e86a9094f9efd6a54cb1fce2080d",
+    "integrity": "ok"
+  },
+  {
+    "path": "before.sqlite.gz",
+    "sha256": "b3fedbb55edef97cd7e24834e13f9b0d730974e46739059112947b7e2d539a72",
+    "decodedSha256": "079ac47d8c9b1ef90a48390604e852d680d2079487e6378a2ad5d1083de79491",
+    "integrity": "ok"
+  }
+]

@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-legacy-native-parent-upgrade",
+  "sourceRevision": "02602bad34602496314b5cbf7a84a6b2f549124a",
+  "baselineManifestSha256": "c2e5d9c8c2a001ff5141c2ca8eaaed097ec7c81d78d0180b6c7a4ecf5bed4153",
+  "baselineAssets": {
+    "native-parents/runtime.sqlite.gz": "ebd8e9f73682d3b7dad027aac97c9ccbb7f45d4b5e06a2a2b4b2e3239ec30ffe",
+    "native-parents/design.sqlite.gz": "76db0531fa7f79fa9a729f0d2835f82837bcb3dead651b64bc05d05003da9d4a",
+    "native-parents/api.json": "a08795259b28b6d179899376fd3549e3ce7deba6741dfb25825b9ee1491cce66",
+    "native-parent-pending/compensationscope-balanced-api.json": "eb1a4cff627cd46936800c5af9105bafdda310e4c820f8f7602f93ab8dff4ad5",
+    "native-parent-pending/compensationscope-balanced-marker.json": "9c89e8a21c2cacfa4019417c83794a806e0776087bbcb716b125a470c0ad2fb5",
+    "native-parent-pending/compensationscope-durable-api.json": "cb8a8f5d4bc11007f9e4605a6283c4e640a972c39279a45304611e8c4a2236b5",
+    "native-parent-pending/compensationscope-durable-marker.json": "9386fdb82fd63f38810d4bd0f0bde621349f2aff2c146744b9cbee128093bc61",
+    "native-parent-pending/flowchart-balanced-api.json": "3bca558885d682e66201717fd7312e9ffb37adb1f5913182d4c3f4f15dfa369f",
+    "native-parent-pending/flowchart-balanced-marker.json": "98f054a22902ab7bc34e383ca95e6e30dd381af3bfcc9d29f0bdcfd26763f157",
+    "native-parent-pending/flowchart-durable-api.json": "58d5c37585e66fce45aad26cc2d30a7edce5cd9a2923e90a67df44b9d05a7595",
+    "native-parent-pending/flowchart-durable-marker.json": "4357e7a18f6636ff4f1213bd46d0e08177c52e1f6c21034be32521846375d8ff",
+    "native-parent-pending/sequence-balanced-api.json": "9982e3361c2f052a7f81dcefa4ca08d730a636d566e6cbf6c9fb87b4217084a4",
+    "native-parent-pending/sequence-balanced-marker.json": "2e948259263e0dcb663954e330e47decc44f7aaa1852810a1fab2658abaf77a2",
+    "native-parent-pending/sequence-durable-api.json": "cf88f7701a0d0a0f57d4090ea5205e33d1b8f6d0169fdc04888faf570ba251dc",
+    "native-parent-pending/sequence-durable-marker.json": "40699cca573fc87f1cdc20fb4f361f54c7035f758e9a919c48008186de80f785",
+    "native-parent-pending/sequence-durable.sqlite.gz": "6eb303ee628bf754e1afd5c21fb4686449e54c12855e64cb2e16e340cfa75d04",
+    "native-parent-pending/flowchart-durable.sqlite.gz": "b81875daa3b96370d8e9df874dcf0305d417990cbdca3d845bf94094823386d4",
+    "native-parent-pending/compensationscope-durable.sqlite.gz": "ef5f310dfde74a850ff834bdc82cdbfdbebf4050d7ddba6929b1c016dca21882",
+    "native-parent-pending/sequence-balanced.sqlite.gz": "a8116ebb8cd61e8d3fc221288d6c050a514b2b1218d2181340cadaef0fb5e2c5",
+    "native-parent-pending/flowchart-balanced.sqlite.gz": "ca4145c62ee5a371d033f9bba6b0b2435fa62ebebbd9c7b864817806f34edd86",
+    "native-parent-pending/compensationscope-balanced.sqlite.gz": "184819bdf2652180af09e9d79de6935f5a51a133597f8b32f9be83317fb52375"
+  },
+  "assets": [
+    {
+      "path": "legacy-pending-parent/process.json",
+      "sha256": "2edb58964a43d2b16d3d51a132bf0285a38b93f6528fb1ce05a81656c0eed191"
+    },
+    {
+      "path": "legacy-native-terminals/process.json",
+      "sha256": "e3d1628cb33a1ad7c073b422b34c9d5b3e9f7c6b9612ed430df3af7db2e1e9f2"
+    },
+    {
+      "path": "frozen-contract.json",
+      "sha256": "eeace5e994e68b39544a8a7ed5e5e52225ec7b1cad7e57e8b20bb6d9f3e2f0f7"
+    },
+    {
+      "path": "legacy-native-terminals/native-terminals-runtime.sqlite.gz",
+      "sha256": "f37f1c75bd885bf56bd71e92ec2ff1c0605a380afa54bcfcfde60e5ab933abfe"
+    },
+    {
+      "path": "legacy-native-terminals/native-terminals-design.sqlite.gz",
+      "sha256": "5a86112bf6e3dec3ef6fd4ee6347bf419ccbbb910f40265891e000369e798de9"
+    },
+    {
+      "path": "legacy-pending-parent/sequence-durable-runtime.sqlite.gz",
+      "sha256": "f86abeb8b414db4a085d8e0f6e99f5ae8f9e17f685c6a42c4b28576372e94a68"
+    },
+    {
+      "path": "legacy-pending-parent/flowchart-durable-runtime.sqlite.gz",
+      "sha256": "4f2431e82ee74100ab1d526683a7aa246b9b620a5270f2bcbda32014352e1fd8"
+    },
+    {
+      "path": "legacy-pending-parent/compensationscope-durable-runtime.sqlite.gz",
+      "sha256": "63de08a5809c7d21050036a2271fd4620d3782a40904b9b8644cf372d882ea19"
+    },
+    {
+      "path": "legacy-pending-parent/sequence-balanced-runtime.sqlite.gz",
+      "sha256": "824cc47db8e9cb51bc487c525c3bad8a337544bbbaacca0b9314e29b22abc3b9"
+    },
+    {
+      "path": "legacy-pending-parent/flowchart-balanced-runtime.sqlite.gz",
+      "sha256": "a2365c5e3b6cc42aa33fb7ed2a50f6e4301979fab9b9b8a8d64cd84bb17b7279"
+    },
+    {
+      "path": "legacy-pending-parent/compensationscope-balanced-runtime.sqlite.gz",
+      "sha256": "73bdf1e304eb38cc997b2b9fe75554a95e0e21ce78cbdb45a6d9f3e9ca983732"
+    }
+  ]
+}

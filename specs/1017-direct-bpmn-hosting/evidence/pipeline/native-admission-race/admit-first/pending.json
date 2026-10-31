@@ -1,0 +1,59 @@
+{
+  "model": {
+    "executionId": "bpmn:94d326c7600e03ec080e794d1086a33ff6e283a70a40fe24c271caa728b1d9cb",
+    "revision": 2,
+    "status": "TerminalPendingSettlement",
+    "protocol": {
+      "key": "elsa.bpmn",
+      "version": 1
+    },
+    "executable": {
+      "artifactId": "sha256:3eac212f70743c5ac36bd4daa41b827cd5cecf3a41426b547eec87bc2d76b87f",
+      "definitionId": "bpmn-model:sha256:3eac212f70743c5ac36bd4daa41b827cd5cecf3a41426b547eec87bc2d76b87f",
+      "definitionVersionId": "sha256:3eac212f70743c5ac36bd4daa41b827cd5cecf3a41426b547eec87bc2d76b87f",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:3eac212f70743c5ac36bd4daa41b827cd5cecf3a41426b547eec87bc2d76b87f"
+    },
+    "materialIncarnationId": "d62f8ea78acb4902861ce1945543a377",
+    "createdAt": "2026-10-29T16:15:02.541683+00:00",
+    "updatedAt": "2026-10-29T16:15:05.387657+00:00",
+    "result": {
+      "status": "Cancelled",
+      "reason": "Retire the original native start before admission."
+    }
+  },
+  "native": [
+    {
+      "workflowExecutionId": "wfexec:start:v1:dedbee144f7ba1adc6dc7c98c267426d31c5cbd8a6cc5b0bf8e84905492eb6a7",
+      "artifactId": "artifact-2a022aaac8f8",
+      "definitionId": "14kr5fHwzxM",
+      "definitionVersionId": "14kr5fJJoMa",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:2a022aaac8f870971ca349c7dbe64da37857a399116780fe970012b3f8c3b595",
+      "status": "Running",
+      "runKind": "PublishedRun",
+      "subStatus": null,
+      "createdAt": "2026-10-29T16:15:03.501219+00:00",
+      "startedAt": "2026-10-29T16:15:03.501219+00:00",
+      "updatedAt": "2026-10-29T16:15:06.101573+00:00",
+      "completedAt": null,
+      "correlationId": null,
+      "parentWorkflowExecutionId": null,
+      "tenantId": "default",
+      "activityCount": 1,
+      "incidentCount": 0,
+      "sourceReferenceId": null,
+      "publicationId": null,
+      "slotId": null,
+      "sourceKind": null,
+      "sourceId": null,
+      "sourceVersion": null,
+      "activeIncidentCount": 0,
+      "blockingIncidentCount": 0
+    }
+  ],
+  "runs": {
+    "items": [],
+    "nextCursor": null
+  }
+}

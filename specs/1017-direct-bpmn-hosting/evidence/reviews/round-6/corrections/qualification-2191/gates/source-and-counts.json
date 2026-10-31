@@ -1,0 +1,104 @@
+{
+  "hostSource": "2191e3710d87a63ed2f3a3770c5df84084a369ad",
+  "bpmnSource": "daac77da4f2f7b6974dc9fb5c2f521446e14f1fa",
+  "bpmnEquivalentProductionAndUnitSource": [
+    {
+      "path": "Essentials/src",
+      "qualifiedEntry": "040000 tree c5e0321df19b758c269933c5481f6258a056453d\tEssentials/src",
+      "currentEntry": "040000 tree c5e0321df19b758c269933c5481f6258a056453d\tEssentials/src"
+    },
+    {
+      "path": "Essentials/tests/Activities/Bpmn/Tests",
+      "qualifiedEntry": "040000 tree 2e93f6809efe11aa6a2c443e9862037d157b8162\tEssentials/tests/Activities/Bpmn/Tests",
+      "currentEntry": "040000 tree 2e93f6809efe11aa6a2c443e9862037d157b8162\tEssentials/tests/Activities/Bpmn/Tests"
+    },
+    {
+      "path": "Directory.Build.props",
+      "qualifiedEntry": "100644 blob 70a24aa63d9e977fe91829e6c32920e14ce80466\tDirectory.Build.props",
+      "currentEntry": "100644 blob 70a24aa63d9e977fe91829e6c32920e14ce80466\tDirectory.Build.props"
+    },
+    {
+      "path": "Directory.Packages.props",
+      "qualifiedEntry": "100644 blob ffae358e2e02d6dc9a7cc9ad16029ca4c454422d\tDirectory.Packages.props",
+      "currentEntry": "100644 blob ffae358e2e02d6dc9a7cc9ad16029ca4c454422d\tDirectory.Packages.props"
+    }
+  ],
+  "results": [
+    {
+      "trx": "committed-bpmn.trx.gz",
+      "executingSource": "daac77da4f2f7b6974dc9fb5c2f521446e14f1fa",
+      "counters": {
+        "total": "499",
+        "executed": "499",
+        "passed": "499",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "trx": "actual-old-timer-qualified.trx.gz",
+      "executingSource": "2191e3710d87a63ed2f3a3770c5df84084a369ad",
+      "counters": {
+        "total": "1",
+        "executed": "1",
+        "passed": "1",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "trx": "whole-standard-host.trx.gz",
+      "executingSource": "2191e3710d87a63ed2f3a3770c5df84084a369ad",
+      "counters": {
+        "total": "42",
+        "executed": "42",
+        "passed": "42",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    }
+  ],
+  "hostProductsUnchangedAcrossRuns": true,
+  "wholeSuiteCaseReceipts": 22,
+  "retainedWholeSuitePayloadCases": [
+    "old-unrepresentable-timer",
+    "old-admitted-fault",
+    "old-unadmitted-fault",
+    "old-admitted-waiting-fault",
+    "old-pending-parent-fault"
+  ],
+  "scope": "All42 actual host tests pass; selected new/affected closed output payloads retained here. Other repeated output stores remain working material, not required portable inputs. Each normal test uses committed original fixtures. Source21 main adoption/Studio/Identity qualification remains separate."
+}

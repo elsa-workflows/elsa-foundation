@@ -1,0 +1,19 @@
+{
+  "caseId": "actual-cut",
+  "phase": "before-selection",
+  "providerEvent": null,
+  "sourceOutboxItemId": "commit:f5425deee45fbd73:invoke:14lV5t4OOKv:activity-completed:14lV5t4OOKv:244810d0ae9abd6a:0",
+  "sourceCommitId": "commit:f5425deee45fbd73:invoke:14lV5t4OOKv:activity-completed:14lV5t4OOKv",
+  "intentFingerprint": "5fce9f613dcca5de7f56ecd63b9b1d974926d73484fb430c8e969bfd7707e113",
+  "scope": "default",
+  "ownerId": "runtime-outbox-edc4677635d04ebeaf6fdf78594ff771",
+  "fencingToken": 1,
+  "visibleAfter": "2026-10-30T01:35:49.895998+00:00",
+  "workflowExecutionId": "14lV5t0p73W",
+  "snapshot": null,
+  "proposal": null,
+  "acceptedExecution": null,
+  "acceptedBookmark": null,
+  "observedStart": null,
+  "capturedAtUtc": "2026-10-30T01:34:49.916297+00:00"
+}

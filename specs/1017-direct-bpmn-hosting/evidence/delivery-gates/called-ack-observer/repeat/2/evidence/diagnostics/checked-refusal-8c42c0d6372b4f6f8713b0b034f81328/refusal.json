@@ -1,0 +1,34 @@
+{
+  "command": "--inspect-called-ack",
+  "arguments": [
+    "/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-called-ack-upgrade-u3CEcX/finished-api.json",
+    "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/bin/Release/net10.0/Fixtures/called-ack/notice-marker.json",
+    "finished"
+  ],
+  "snapshot": {
+    "file": "refused.sqlite.gz",
+    "databaseSha256": "d48bb46127bf4b89b3b0337c232db20aa50ff5aac1fb16cbbc05d186f14d551d",
+    "gzipSha256": "46642a6cab95c824e6437b0650ecbe79dafb23c851fe328e4318ea4c924bd6e1"
+  },
+  "inputs": [
+    {
+      "file": "0-finished-api.json",
+      "originalPath": "/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-called-ack-upgrade-u3CEcX/finished-api.json",
+      "sha256": "39acbdd6e1a9d591a6063c739a2cc57e6b87a106316127e24b3ca077a9b54b6f"
+    },
+    {
+      "file": "1-notice-marker.json",
+      "originalPath": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/bin/Release/net10.0/Fixtures/called-ack/notice-marker.json",
+      "sha256": "840c69a2ec3c8e61bfd33ac8eaaaed140b411ddf16493868fdd61fd76b2dc81b"
+    }
+  ],
+  "exitCode": 2,
+  "reader": {
+    "file": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/bpmn/DeliveryRecoveryRead/bin/Release/net10.0/DeliveryRecoveryRead.dll",
+    "productVersion": "1.0.0\u002B6153c1c23bf66f3b63f4f218147b1f2a7b5c2730",
+    "sha256": "a0a7060e641834579845abbfd0bfcc037eb6b2509b20a8d77c8076d328ca6eb3"
+  },
+  "standardOutput": "{\u0022providerChecked\u0022:false,\u0022status\u0022:\u0022ObservationUnavailable\u0022,\u0022failureType\u0022:\u0022InvalidDataException\u0022}\n",
+  "standardError": "",
+  "qualifyingObservation": false
+}

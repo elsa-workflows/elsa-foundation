@@ -1,0 +1,32 @@
+[
+  {
+    "package_id": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
+    "version": "4.0.25-preview",
+    "commit": "c4cfa0736a2216c924092d12a3ad432c6f05e8bb",
+    "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.workflows.design.persistence.entityframeworkcore/4.0.25-preview/elsa.workflows.design.persistence.entityframeworkcore.4.0.25-preview.nupkg",
+    "packageSha256": "79c197c57cf9e5dca71920e674e0e13ed7aa2af815113e6fd12e9ebc91c95f9e",
+    "assemblySha256": "4abd2a665d05856dd3c172e5fae48e1b23b6e057ee833dd48b28b199f49d5e71",
+    "repositoryCommit": "c4cfa0736a2216c924092d12a3ad432c6f05e8bb",
+    "assemblyFile": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll"
+  },
+  {
+    "package_id": "Elsa.Workflows.Runtime",
+    "version": "4.0.71-preview",
+    "commit": "c4cfa0736a2216c924092d12a3ad432c6f05e8bb",
+    "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.workflows.runtime/4.0.71-preview/elsa.workflows.runtime.4.0.71-preview.nupkg",
+    "packageSha256": "9bcf01cd5c62b4c475c27f19a655832e14d20c09c84332675666f10726a47500",
+    "assemblySha256": "ce4b527f214b7c499d5579fca79da2929c33f6e41d00abed164ed2040b052f9a",
+    "repositoryCommit": "c4cfa0736a2216c924092d12a3ad432c6f05e8bb",
+    "assemblyFile": "Elsa.Workflows.Runtime.dll"
+  },
+  {
+    "package_id": "Elsa.Workflows.Runtime.Core",
+    "version": "4.0.57-preview",
+    "commit": "c4cfa0736a2216c924092d12a3ad432c6f05e8bb",
+    "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.workflows.runtime.core/4.0.57-preview/elsa.workflows.runtime.core.4.0.57-preview.nupkg",
+    "packageSha256": "851f91111728f6aab3fc284f7f35738c8bb755af25e8defb0c76be2d610de31a",
+    "assemblySha256": "8ef985f51c486778cbad2907185cbc416289551b616d5335262a953d7de7c77f",
+    "repositoryCommit": "c4cfa0736a2216c924092d12a3ad432c6f05e8bb",
+    "assemblyFile": "Elsa.Workflows.Runtime.Core.dll"
+  }
+]

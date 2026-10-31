@@ -1,0 +1,38 @@
+{
+  "executingHostReaderSource": "facffc859ce01a2d4e3fe85be52bcb5b5b285998",
+  "actualLegacyBroadcastCuts": 4,
+  "upgradedSnapshots": 8,
+  "wholeHostingSuite": {
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0,
+    "command": "dotnet test Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj -c Release --artifacts-path /private/tmp/elsa-2898-stale-input-host --no-build --no-restore --logger trx;LogFileName=broadcast-exact-source-whole-host.trx",
+    "trxSha256": "28cac6913394400416910c6593cd53d68da6d3b810b244b503a190c8458a511d"
+  },
+  "verifierControls": {
+    "passed": 37,
+    "failed": 0,
+    "skipped": 0,
+    "newBroadcastRefusalControls": 8,
+    "command": "ELSA_BPMN_CAPTURE_MANIFEST=specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/manifest.json python3 -m unittest discover -s e2e-tests/bpmn -p test_qualify_hosting.py -v",
+    "verifierSha256": "84d1b7db2c94781b717b02a75b1ced570ca5e976ff9b159a39ab0b821044845f",
+    "controlsSha256": "cf88745c4b8b4f866a658ac1803b6c6eea0cbd3ab5de517ff33a731753c14e56"
+  },
+  "projectGraphAndTierChecks": {
+    "solutionFilters": "pass",
+    "testTiers": "123 projects, each in one tier and one shard"
+  },
+  "originalCapturesUnchanged": true,
+  "retainedOriginalArtifactsPerStore": 5,
+  "frozenPublishedDescriptorsVerified": 2,
+  "completedExecutions": 11,
+  "cancelledExecutions": 5,
+  "fullPrReviewRounds": 0,
+  "portableVerification": "Pass after correcting the verifier against actual native text activity status and raw bookmark identity/Revision layout; host and checked-reader source remains separately bound above.",
+  "limits": [
+    "Legacy native/BpmnProcess source recovery only; direct-model broadcasts/settlement and native/ETL remain open.",
+    "Infinite loops and explicitly Ambiguous excluded listeners retire through existing native cancellation.",
+    "Legacy controls, active MI, actual Studio and final-source qualification remain open.",
+    "This does not complete T030, #2898, #2907 or Program #2892."
+  ]
+}

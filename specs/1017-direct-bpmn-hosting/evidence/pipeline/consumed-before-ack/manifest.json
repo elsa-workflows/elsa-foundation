@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-bpmn-consumed-before-ack-matrix",
+  "sourceRevision": "d1bd08c33f436764eaca5a5c69017f14a3ea85d5",
+  "cases": [
+    {
+      "stage": "model-command",
+      "manifest": "model-command/manifest.json",
+      "sha256": "d3af5838d022bb74333b16875d0eed5eb7a9642ec74c55542a72706170c25db9"
+    },
+    {
+      "stage": "native-terminal",
+      "manifest": "native-terminal/manifest.json",
+      "sha256": "a795d77ab805c7d7bb1b5f32b43a6755a1e5532fa5a80bb7a061de12f8603f34"
+    }
+  ]
+}

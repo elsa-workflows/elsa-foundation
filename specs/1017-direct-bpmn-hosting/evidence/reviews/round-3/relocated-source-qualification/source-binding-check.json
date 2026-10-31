@@ -1,0 +1,14 @@
+{
+  "readOnlyClosedCopies": true,
+  "originalAssetSha256": "a8955fb7f1f7da7e315958fac476e08bfe996a89bdce0dc53fdeccf4577214c2",
+  "upgradedAssetSha256": "66b0c9799383293891e353bca0e1d4f682c44c24c5d4044d48d9fb959f848d9c",
+  "preservedAuthorityRows": 34,
+  "preservedImmutableVersionRows": 34,
+  "newVersionRows": 1,
+  "capturedLogicalClrSourceIds": [
+    "/private/tmp/elsa-2898-broadcast-products-791dc1701/probe/"
+  ],
+  "authorityOrVersionRowsEdited": false,
+  "guardsRemoved": false,
+  "physicalAssemblyScan": "current Workbench AppContext.BaseDirectory; SourceId remains opaque identity"
+}

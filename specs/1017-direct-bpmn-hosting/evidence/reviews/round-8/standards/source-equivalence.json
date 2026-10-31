@@ -1,0 +1,9 @@
+{
+  "totalChangedPaths": 8822,
+  "outsideEvidence": 421,
+  "backendCsOrCsprojDeltaFrom8e9": [],
+  "sourceDeltaFrom8e9": [
+    "Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/styles.css",
+    "Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/styles.css"
+  ]
+}

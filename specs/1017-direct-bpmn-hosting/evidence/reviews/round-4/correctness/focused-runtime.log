@@ -1,0 +1,5 @@
+Test run for /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+Results File: /tmp/elsa-2898-full-pr-r4-correctness/results/focused-runtime.trx
+
+Passed!  - Failed:     0, Passed:    66, Skipped:     0, Total:    66, Duration: 121 ms - Elsa.Workflows.Runtime.Tests.dll (net10.0)

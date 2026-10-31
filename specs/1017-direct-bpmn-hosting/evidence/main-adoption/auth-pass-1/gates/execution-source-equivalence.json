@@ -1,0 +1,27 @@
+{
+  "executingStudioSource": "82f6202a5f2e56521525092f0d06698fdeb7d10c",
+  "archiveRepairSource": "8e9b31360d4c71c4cdd70f18cb93d70bedc57bb0",
+  "trees": {
+    "Essentials": {
+      "executingTree": "38f20fef8f325fbf24f39dd791e43ff7ef62126f",
+      "candidateTree": "38f20fef8f325fbf24f39dd791e43ff7ef62126f",
+      "identical": true
+    },
+    "Extensions": {
+      "executingTree": "74b5b24951e37b43ade2a0bab512ce6f2d9e2317",
+      "candidateTree": "74b5b24951e37b43ade2a0bab512ce6f2d9e2317",
+      "identical": true
+    },
+    "Studio": {
+      "executingTree": "e3fb15b56570f3e3df0a121f661dadde627afd35",
+      "candidateTree": "e3fb15b56570f3e3df0a121f661dadde627afd35",
+      "identical": true
+    },
+    "tools/bpmn/run_owned_studio_upgrade.py": {
+      "executingTree": "7ddf2891bb06e5d741c28892e88fad0849ebea7b",
+      "candidateTree": "7ddf2891bb06e5d741c28892e88fad0849ebea7b",
+      "identical": true
+    }
+  },
+  "earlierProductSourcesKeepTheirLabels": true
+}

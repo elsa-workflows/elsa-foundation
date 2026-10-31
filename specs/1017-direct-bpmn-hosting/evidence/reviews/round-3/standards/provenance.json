@@ -1,0 +1,40 @@
+{
+  "reviewedHead": "fcf551c789c37c722b3b07d0c1cf4aecb56a16ad",
+  "mergeBase": "184759ce53bc251ccc81b07ec3980d804ad8fd76",
+  "generatedAtUtc": "2026-10-30T16:34:08.089775+00:00",
+  "sourceCompiledDirectly": {
+    "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnModelRuntime.cs",
+    "sha256": "59610087054dc06e0bf701c6e597f7db9fed3b27b4aa0992ae77fb03a26d6a7a"
+  },
+  "sourceEqualToExecutingE3": true,
+  "probe": {
+    "path": "probe-pending/Probe.csproj",
+    "command": "DOTNET_CLI_USE_MSBUILD_SERVER=0 dotnet run --project /tmp/elsa-2898-review-r3-standards/probe-pending/Probe.csproj --configuration Release",
+    "result": "Both StartAsync and FindCommandAsync throw raw System.Text.Json.JsonException with absent InnerException for wrong-shaped owned queued ExecuteModel payload.",
+    "dependencyInformationalVersion": "1.0.0+e3ec219fcc3a93c949d2669fc585bd1e79152abe",
+    "state": "Stub provider-neutral queue and reader only; no persisted production or historical store changed."
+  },
+  "inputs": {
+    "org-AGENTS.md": "ed7b301dc6211e5ed6f48cdc4b4eb2271fd03ee92f906adcbf0cf94762d42623",
+    "pr.json": "31b3dc8a1dd73034165e1b78741f8da135ee3caf35f65ef759698770913ff62b",
+    "issue-2898.json": "8bac1121fcfa985596e281aafc13756d8898bf226640e1c779745cf637f9e221",
+    "comments-2898.json": "3d787ddc864ed43946dd9af19475af5c98542e018b456c27547aa8b95af18d74",
+    "comments-3410.json": "c425b6d3414d2fecfab7610ad3fd044046f71b87ef04960dd9e04874fa053c32",
+    "reviews.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "review-comments.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "threads.json": "b0ec74bbc9cf1b356ba0be9b49a47b79434a3d17672c3bd0bc581ec3067f3b40"
+  },
+  "privateAssets": {
+    "probe-pending/Probe.csproj": "7e4ef0552bd1cbeb1054826f9dcf661c46095deb7212037e20eb13f417440d38",
+    "probe-pending/Program.cs": "b89fcf8ad54bc0b52767dbdc56fdec3b01b1e63bd8f68efa46f096ef2bbcd851",
+    "probe-pending.log": "654b6a60936ab75f485df154f1f2d15583c9dc72ceb040ce342cb595972fd24b",
+    "diff-check.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "checks": {
+    "diffCheckExitCode": 0,
+    "worktreeStatus": "",
+    "wholeSuitesRunInThisLens": false,
+    "actualHostsOrBrowsersTouched": false,
+    "otherRound3ReviewerOutputsRead": false
+  }
+}

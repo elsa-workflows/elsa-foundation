@@ -1,0 +1,79 @@
+{
+  "sourceRevision": "7414d8a13ee6cd2f65923914065b075602437ca2",
+  "actualConcurrentSubmissionJourneys": [
+    {
+      "parent": "direct",
+      "order": "retry-first",
+      "wholeStoresVerified": 12,
+      "newAdmittedWorkers": 0,
+      "newEtlRuns": 0
+    },
+    {
+      "parent": "direct",
+      "order": "cancel-first",
+      "wholeStoresVerified": 12,
+      "newAdmittedWorkers": 0,
+      "newEtlRuns": 0
+    },
+    {
+      "parent": "root",
+      "order": "retry-first",
+      "wholeStoresVerified": 12,
+      "newAdmittedWorkers": 0,
+      "newEtlRuns": 0
+    },
+    {
+      "parent": "root",
+      "order": "cancel-first",
+      "wholeStoresVerified": 12,
+      "newAdmittedWorkers": 0,
+      "newEtlRuns": 0
+    },
+    {
+      "parent": "sequence",
+      "order": "retry-first",
+      "wholeStoresVerified": 12,
+      "newAdmittedWorkers": 0,
+      "newEtlRuns": 0
+    },
+    {
+      "parent": "sequence",
+      "order": "cancel-first",
+      "wholeStoresVerified": 12,
+      "newAdmittedWorkers": 0,
+      "newEtlRuns": 0
+    },
+    {
+      "parent": "flowchart",
+      "order": "retry-first",
+      "wholeStoresVerified": 12,
+      "newAdmittedWorkers": 0,
+      "newEtlRuns": 0
+    },
+    {
+      "parent": "flowchart",
+      "order": "cancel-first",
+      "wholeStoresVerified": 12,
+      "newAdmittedWorkers": 0,
+      "newEtlRuns": 0
+    },
+    {
+      "parent": "compensationscope",
+      "order": "retry-first",
+      "wholeStoresVerified": 12,
+      "newAdmittedWorkers": 0,
+      "newEtlRuns": 0
+    },
+    {
+      "parent": "compensationscope",
+      "order": "cancel-first",
+      "wholeStoresVerified": 12,
+      "newAdmittedWorkers": 0,
+      "newEtlRuns": 0
+    }
+  ],
+  "wholeStoresVerified": 120,
+  "bothFifoDecisionOrdersProved": true,
+  "twoSimultaneousProviderProposalsManufactured": false,
+  "finalUpgradeAndStudioProved": false
+}

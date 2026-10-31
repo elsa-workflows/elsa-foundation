@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-direct-embedded-partial-fork-qualification",
+  "executingSourceRevision": "c34c1f4e1f279c66598a5ab83a8c2cc05e9b4a72",
+  "actualCasesPassed": 4,
+  "actualCasesSkipped": 0,
+  "actualModelExecutionsCompleted": 8,
+  "qualifyingRawAssets": 52,
+  "wholeRuntimeAndDesignStores": 24,
+  "qualifyingOwnedHostsKilled": 12,
+  "portableControls": {
+    "passed": 13,
+    "positive": 1,
+    "rehashedCorrupt": 12,
+    "failed": 0,
+    "skipped": 0,
+    "raw": "controls-fixed.txt"
+  },
+  "initialPortableControlFailure": {
+    "raw": "controls.txt",
+    "reason": "Negative-copy SQLite connection was not closed before recompression; the committed positive capture was never edited. The correction closes the copy and asserts the deleted row count."
+  },
+  "diagnosticAttempts": [
+    {
+      "sourceRevision": "33f3ffe9422763fa06161c280d1f7a97db0542e0",
+      "failedCases": 4,
+      "wholeStoresRetained": 0,
+      "qualifying": false,
+      "location": "diagnostics/33f3ffe94"
+    },
+    {
+      "sourceRevision": "53c64a05a7ec5cb0c9cea67220441d34a0642924",
+      "failedCases": 4,
+      "wholeStoresRetained": 8,
+      "qualifying": false,
+      "location": "diagnostics/53c64a05a"
+    }
+  ],
+  "productionRuntimeChangeRequired": false,
+  "normalization": "Only tokens.producingWorkHandle: owning model ID, or observed model-local human invocation mapped by exact element/binding/token/iteration; actual invocation and attempt are bound to physical accepted-input receipts.",
+  "frozenAssetsUnchanged": 104,
+  "frozenAuthoringFingerprint": "41aa0bb979ea46fc2533b057e3677f408ab54c3411fecfafaa238a2adae38c92",
+  "verifierSources": [
+    {
+      "path": "tools/bpmn/verify_parallel_embedding.py",
+      "sha256": "c1fadfcc90ac06632fe955cafd8d93cc67ebad80962c8d9553e4fbd7836b420c"
+    },
+    {
+      "path": "tools/bpmn/test_verify_parallel_embedding.py",
+      "sha256": "c67fd7c49b99c1d9c4f6bbcc2e49db5f8cd15777f65008b1dee993421c96c5fd"
+    }
+  ],
+  "limits": [
+    "SQLite owned standard Workbench and built-in single-node actor.",
+    "One immutable format1 human parallel process; service, signal and Studio evidence is separate.",
+    "Whole expanded hosting-suite regression is recorded separately when complete.",
+    "Historical process paths and PIDs are provenance; reproduction uses new private stores and hosts."
+  ]
+}

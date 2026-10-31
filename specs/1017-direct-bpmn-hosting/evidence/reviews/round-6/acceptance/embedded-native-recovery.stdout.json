@@ -1,0 +1,49 @@
+{
+  "sourceRevision": "b6e7e1f0de7367f81d35aebc5016d4b91e2d7927",
+  "actualRunBpmnEtlJourneys": [
+    {
+      "parent": "Root",
+      "cancel": false
+    },
+    {
+      "parent": "Root",
+      "cancel": true
+    },
+    {
+      "parent": "Sequence",
+      "cancel": false
+    },
+    {
+      "parent": "Sequence",
+      "cancel": true
+    },
+    {
+      "parent": "Flowchart",
+      "cancel": false
+    },
+    {
+      "parent": "Flowchart",
+      "cancel": true
+    },
+    {
+      "parent": "CompensationScope",
+      "cancel": false
+    },
+    {
+      "parent": "CompensationScope",
+      "cancel": true
+    }
+  ],
+  "wholeStoresVerified": 54,
+  "runBpmnEtlIntegrationProved": true,
+  "actualDirectSuccessCounterpartVerified": true,
+  "sameSourceInterpreterSuccessTraceComparedParents": [
+    "Root",
+    "Sequence",
+    "Flowchart",
+    "CompensationScope"
+  ],
+  "allNativeParentCompletionAndCancellationProved": true,
+  "pendingParentResultCrashProved": false,
+  "modelHeldFaultRetryProved": false
+}

@@ -1,0 +1,7 @@
+{
+  "qualifying": false,
+  "expectedSourceRevision": "c52af4d8a6e3c744d6aa8d6682c37070b2fdd5c3",
+  "actualReaderRevision": "d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+  "cause": "A documentation commit occurred while the build was preparing. The exact-source guard correctly refused the otherwise completed fixed fixture.",
+  "replacement": "One fixed source d7ee22b16, initial plus three bounded actual passes, then whole32-case suite."
+}

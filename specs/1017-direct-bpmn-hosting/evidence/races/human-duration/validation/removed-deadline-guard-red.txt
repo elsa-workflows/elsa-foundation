@@ -1,0 +1,63 @@
+Negative control: remove only the elapsed-deadline eligibility guard; use the actual retained source and EF-backed mailbox test.
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/Elsa.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Http will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/Elsa.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Logging.Abstractions will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/Elsa.Http.csproj : warning NU1510: PackageReference Microsoft.Extensions.Options will not be pruned. This package is automatically available and does not need to be referenced explicitly. Remove the PackageReference item.
+  Elsa.Architecture.Analyzers -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/build/Analyzers/bin/Release/netstandard2.0/Elsa.Architecture.Analyzers.dll
+  Elsa.Tasks.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Tasks/Core/bin/Release/net10.0/Elsa.Tasks.Core.dll
+  Elsa.Primitives -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Primitives/Primitives/bin/Release/net10.0/Elsa.Primitives.dll
+  Elsa.Persistence.Schema -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/Schema/bin/Release/net10.0/Elsa.Persistence.Schema.dll
+  Elsa.Pipelines.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Pipelines/Core/bin/Release/net10.0/Elsa.Pipelines.Core.dll
+  Elsa.Attention.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Attention/Core/bin/Release/net10.0/Elsa.Attention.Core.dll
+  Elsa.Foundation.Identity.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/Core/bin/Release/net10.0/Elsa.Foundation.Identity.Core.dll
+  Elsa.Http.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Core/bin/Release/net10.0/Elsa.Http.Core.dll
+  Elsa.Api.AspNetCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Api/AspNetCore/bin/Release/net10.0/Elsa.Api.AspNetCore.dll
+  Elsa.Cluster.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/Core/bin/Release/net10.0/Elsa.Cluster.Core.dll
+  Elsa.Mediator.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Mediator/Core/bin/Release/net10.0/Elsa.Mediator.Core.dll
+  Elsa.Events.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Events/Core/bin/Release/net10.0/Elsa.Events.Core.dll
+  Elsa.Expressions.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/Core/bin/Release/net10.0/Elsa.Expressions.Core.dll
+  Elsa.Persistence.EntityFramework -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/bin/Release/net10.0/Elsa.Persistence.EntityFramework.dll
+  Elsa.Activities.Runtime.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Runtime/Core/bin/Release/net10.0/Elsa.Activities.Runtime.Core.dll
+  Elsa.Tasks.Schedules -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Tasks/Schedules/bin/Release/net10.0/Elsa.Tasks.Schedules.dll
+  Elsa.Events.Strategies -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Events/Strategies/bin/Release/net10.0/Elsa.Events.Strategies.dll
+  Elsa.Activities.Design.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Core/bin/Release/net10.0/Elsa.Activities.Design.Core.dll
+  Elsa.Serialization.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Serialization/Core/bin/Release/net10.0/Elsa.Serialization.Core.dll
+  Elsa.Caching.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Caching/Core/bin/Release/net10.0/Elsa.Caching.Core.dll
+  Elsa.Foundation.Identity -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/bin/Release/net10.0/Elsa.Foundation.Identity.dll
+  Elsa.Events -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Events/Elsa.Events/bin/Release/net10.0/Elsa.Events.dll
+  Elsa.Cluster.InProcess -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/InProcess/bin/Release/net10.0/Elsa.Cluster.InProcess.dll
+  Elsa.Workflows.Design.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Core/bin/Release/net10.0/Elsa.Workflows.Design.Core.dll
+  Elsa.Serialization.SystemText -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Serialization/SystemText/bin/Release/net10.0/Elsa.Serialization.SystemText.dll
+  Elsa.Workflows.Runtime.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Core/bin/Release/net10.0/Elsa.Workflows.Runtime.Core.dll
+  Elsa.Cluster.Readability -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/Readability/bin/Release/net10.0/Elsa.Cluster.Readability.dll
+  Elsa.Activities.Bpmn.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Core/bin/Release/net10.0/Elsa.Activities.Bpmn.Core.dll
+  Elsa.Http -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Http/Elsa.Http/bin/Release/net10.0/Elsa.Http.dll
+  Elsa.Activities.Scheduling -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Scheduling/bin/Release/net10.0/Elsa.Activities.Scheduling.dll
+  Elsa.Workflows.Publishing.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Core/bin/Release/net10.0/Elsa.Workflows.Publishing.Core.dll
+  Elsa.Workflows.Runtime -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/bin/Release/net10.0/Elsa.Workflows.Runtime.dll
+  Elsa.Activities.Bpmn.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Api/bin/Release/net10.0/Elsa.Activities.Bpmn.Api.dll
+  Elsa.Serialization.Testing -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Serialization/Testing/bin/Release/net10.0/Elsa.Serialization.Testing.dll
+  Elsa.Api.Capabilities -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Api/Capabilities/bin/Release/net10.0/Elsa.Api.Capabilities.dll
+  Elsa.Workflows.Runtime.Scheduling -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Scheduling/bin/Release/net10.0/Elsa.Workflows.Runtime.Scheduling.dll
+  Elsa.Activities.Runtime -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/bin/Release/net10.0/Elsa.Activities.Runtime.dll
+  Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll
+  Elsa.Workflows.Runtime.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Api/bin/Release/net10.0/Elsa.Workflows.Runtime.Api.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnModelRuntime.cs(267,13): warning CS8602: Dereference of a possibly null reference. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnDirectExecutionDriver.cs(188,56): warning CS8604: Possible null reference argument for parameter 'source' in 'IEnumerable<BpmnNativeWorkCancellation> Enumerable.Select<BpmnNativeWorkCancellation, BpmnNativeWorkCancellation>(IEnumerable<BpmnNativeWorkCancellation> source, Func<BpmnNativeWorkCancellation, BpmnNativeWorkCancellation> selector)'. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj]
+  Elsa.Activities.Bpmn -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/bin/Release/net10.0/Elsa.Activities.Bpmn.dll
+  Elsa.Activities.Primitives -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Primitives/bin/Release/net10.0/Elsa.Activities.Primitives.dll
+  Elsa.Activities.Testing -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Testing/bin/Release/net10.0/Elsa.Activities.Testing.dll
+  Elsa.Activities.Bpmn.Tests -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.Tests.dll
+Test run for /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:01.55]     Elsa.Activities.Bpmn.Tests.BpmnDirectExecutionTests.An_actual_retained_timer_source_cannot_advance_the_model_before_its_deadline [FAIL]
+  Failed Elsa.Activities.Bpmn.Tests.BpmnDirectExecutionTests.An_actual_retained_timer_source_cannot_advance_the_model_before_its_deadline [1 s]
+  Error Message:
+   Assert.Throws() Failure: No exception was thrown
+Expected: typeof(Elsa.Workflows.Runtime.Core.Exceptions.RuntimePostCommitDeliveryException)
+  Stack Trace:
+     at Elsa.Activities.Bpmn.Tests.BpmnDirectExecutionTests.An_actual_retained_timer_source_cannot_advance_the_model_before_its_deadline() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/BpmnDirectExecutionTests.DurationTimers.cs:line 76
+   at Elsa.Activities.Bpmn.Tests.BpmnDirectExecutionTests.An_actual_retained_timer_source_cannot_advance_the_model_before_its_deadline() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/BpmnDirectExecutionTests.DurationTimers.cs:line 78
+   at Elsa.Activities.Bpmn.Tests.BpmnDirectExecutionTests.An_actual_retained_timer_source_cannot_advance_the_model_before_its_deadline() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/BpmnDirectExecutionTests.DurationTimers.cs:line 78
+--- End of stack trace from previous location ---
+
+Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 1 s - Elsa.Activities.Bpmn.Tests.dll (net10.0)

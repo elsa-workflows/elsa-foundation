@@ -1,0 +1,399 @@
+{
+  "kind": "pr3410-round5-mailbox-probe-generation",
+  "generatedAtUtc": "2026-10-30T23:45:14.875061+00:00",
+  "reviewedHead": "1e707d58fc2148be3715d50616dfdb69dc82ae65",
+  "reviewedBase": "7b49513650665606e5f52fdc08c5831f60802dac",
+  "recordedOriginalProductSource": "f6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1",
+  "sourceNote": "The probe result records the supplied products' assembly informational versions. Generation does not claim that arbitrary supplied products match the original reviewed head.",
+  "productsDirectory": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0",
+  "harnessDirectory": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0",
+  "programSha256": "6da30c5bebde48c1c8cd8f38010226dd245b75a95939cef6b93fb3c67b6a4553",
+  "runtimeId": "osx-arm64",
+  "sqliteNative": {
+    "file": "libe_sqlite3.dylib",
+    "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/runtimes/osx-arm64/native/libe_sqlite3.dylib",
+    "sha256": "7b319cd32435ab28c97041fad74b892be218e6f0f74790802105309c1ec515a9"
+  },
+  "references": [
+    {
+      "file": "Bpmn.Model.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Bpmn.Model.dll",
+      "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776"
+    },
+    {
+      "file": "Bpmn.Semantics.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Bpmn.Semantics.dll",
+      "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+    },
+    {
+      "file": "CShells.Abstractions.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/CShells.Abstractions.dll",
+      "sha256": "dbcf0e5d572791124ac582e3a10519d80f01b9f2e4228cffadb61171f796b5a0"
+    },
+    {
+      "file": "CShells.AspNetCore.Abstractions.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/CShells.AspNetCore.Abstractions.dll",
+      "sha256": "3b0062c2ad98dc96471a1cb18527855c4a06eb7220cda44c48e89e13cb816084"
+    },
+    {
+      "file": "CShells.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/CShells.dll",
+      "sha256": "b0afda775aa0c330f982856ebfaeb461c7ea1c5d201998351ba7ca105f69ebc0"
+    },
+    {
+      "file": "Cronos.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Cronos.dll",
+      "sha256": "e0ad7c799904f1b663ab090b32665e0e90ede27699937588900845383064ba03"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Api.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.Api.dll",
+      "sha256": "7dd9d5f96670384c4ac6580e5356837b513807aac1dc90f8fd48095770dd8410"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Core.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.Core.dll",
+      "sha256": "a844000d3ddcad6318bca8bee668cad3fb08b9e384fde5ad5efdde86ab0a8a28"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Tests.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.Tests.dll",
+      "sha256": "6a28d737c25e926ea89d6f78b52411b16688042040ecaee27841fb38c386586b"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.dll",
+      "sha256": "98c9cc27dbc5ade2c12f1317ea3f525d8412f170df5a61eef2d29a38032ef0e1"
+    },
+    {
+      "file": "Elsa.Activities.Design.Core.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Activities.Design.Core.dll",
+      "sha256": "466c4eadb206b051ff9d38ee5ac270fb6fc96bddb42f070447afd05d28557408"
+    },
+    {
+      "file": "Elsa.Activities.Primitives.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Activities.Primitives.dll",
+      "sha256": "249f1ef4fcc4a198d779aa07e20420e7fc5844ccfe455ab35eca15065e39625d"
+    },
+    {
+      "file": "Elsa.Activities.Runtime.Core.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Activities.Runtime.Core.dll",
+      "sha256": "6021416f1d42332539436888376e4c3a3a236498d193254e1f3153f9f97778d2"
+    },
+    {
+      "file": "Elsa.Activities.Runtime.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Activities.Runtime.dll",
+      "sha256": "92fdcbaa79beb4833404ab471f3ba11561cf27866ef4e0429150835e6ab1338a"
+    },
+    {
+      "file": "Elsa.Activities.Scheduling.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Activities.Scheduling.dll",
+      "sha256": "02e048f7948f3cd2c6a79b65e76e71f453d066fc77d0a0ebf7f692626d93455a"
+    },
+    {
+      "file": "Elsa.Activities.Testing.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Activities.Testing.dll",
+      "sha256": "4449147bda391aed21d2b9e145f17772a4f79d24d1c72a3b47732df5f4de9876"
+    },
+    {
+      "file": "Elsa.Api.AspNetCore.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Api.AspNetCore.dll",
+      "sha256": "2956b41dca84f1d7a7215e18c9fa57ba457dc33def19199b5ee017437aa2df91"
+    },
+    {
+      "file": "Elsa.Api.Capabilities.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Api.Capabilities.dll",
+      "sha256": "8ac3119d59558f867194bac80bd69cd6abaf8bbb8049b1edd480ae5572a4eced"
+    },
+    {
+      "file": "Elsa.Attention.Core.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Attention.Core.dll",
+      "sha256": "49814daa069bd43a8fd11afa672c3ce302b55eb854aa2c2b3d676766ba87a632"
+    },
+    {
+      "file": "Elsa.Caching.Core.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Caching.Core.dll",
+      "sha256": "6105aca56ae87c2a765afa71b570bde45395b790fa174f469687afc127c713ee"
+    },
+    {
+      "file": "Elsa.Cluster.Core.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Cluster.Core.dll",
+      "sha256": "1343060e3d1fb9489be436a628de6013a9301cec95ba0445cafabb236538e6ad"
+    },
+    {
+      "file": "Elsa.Cluster.InProcess.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Cluster.InProcess.dll",
+      "sha256": "1390eaec26a1fec4f31fc2e7772fbad03461cff050abb80606e546d18eb50d44"
+    },
+    {
+      "file": "Elsa.Cluster.Readability.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Cluster.Readability.dll",
+      "sha256": "ed2b8420614ed0016920c23c23f57389637cb30913c8a27873bdf2a63cf0dead"
+    },
+    {
+      "file": "Elsa.Events.Core.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Events.Core.dll",
+      "sha256": "d90d1cc27e024c415529f2a6ac2c712eae87493274ed8f18330dfd06a9e2b862"
+    },
+    {
+      "file": "Elsa.Events.Strategies.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Events.Strategies.dll",
+      "sha256": "cc938ec4bfea03c084a2b2bd1950ed8514d352bbafae0efc3ce0cb7fa9b3b424"
+    },
+    {
+      "file": "Elsa.Events.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Events.dll",
+      "sha256": "15d1a1ffd1760a3bf044fdca50a29b6a5765d4cc4aa23cf036d23f0cfbaa1e09"
+    },
+    {
+      "file": "Elsa.Expressions.Core.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Expressions.Core.dll",
+      "sha256": "d11f794702bfddc652146cbc1e563235fba71ea8a27632551b9f23aa94809cf8"
+    },
+    {
+      "file": "Elsa.Foundation.Identity.Core.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Foundation.Identity.Core.dll",
+      "sha256": "0228d211ecbc2eeac9cb2959d9bc4843078009ae0fdf999657b1124ed1163b31"
+    },
+    {
+      "file": "Elsa.Foundation.Identity.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Foundation.Identity.dll",
+      "sha256": "e0717868779a8824a6f56cb9b834e3ad5ece2295037aba2856da6968e91082aa"
+    },
+    {
+      "file": "Elsa.Http.Core.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Http.Core.dll",
+      "sha256": "05b1f996f359b2dd3878c03d073a1d6bd95e7d2220ce0493b065648abaaed889"
+    },
+    {
+      "file": "Elsa.Http.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Http.dll",
+      "sha256": "0930b51ea06f519d51317e5b1af3b416a59d3629f4d54f755ab2635aaa01327b"
+    },
+    {
+      "file": "Elsa.Mediator.Core.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Mediator.Core.dll",
+      "sha256": "4248cc7145ac99fb45d49e559e224da9477705ee126278a1ed0e85239bd9d301"
+    },
+    {
+      "file": "Elsa.Persistence.EntityFramework.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Persistence.EntityFramework.dll",
+      "sha256": "e4605092e1f6ca7b02dceef3b393f538d497ee38175a6ddb6b0995f609f496fe"
+    },
+    {
+      "file": "Elsa.Persistence.Schema.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Persistence.Schema.dll",
+      "sha256": "2c94223ba670febdf527a8c552960ff4f038b22a4e1b32ea628335ad1f72c0ea"
+    },
+    {
+      "file": "Elsa.Pipelines.Core.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Pipelines.Core.dll",
+      "sha256": "ea96144d1d1aaceb3e414aeb64f624d6a38d489e006d43a0329cb756230889f7"
+    },
+    {
+      "file": "Elsa.Primitives.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Primitives.dll",
+      "sha256": "49c5b47c47e7fbed64955bfdc2256dda5a6931d69846a8938cd68bdf771ad448"
+    },
+    {
+      "file": "Elsa.Serialization.Core.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Serialization.Core.dll",
+      "sha256": "a8a2b9250868b46c7aae439f298c51f6fd8ec9626b6e5bbf69ef1c814790c0f9"
+    },
+    {
+      "file": "Elsa.Serialization.SystemText.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Serialization.SystemText.dll",
+      "sha256": "6694a77db8fe820fb97bba4124ad302a845186302f358e55195327a6c97991e6"
+    },
+    {
+      "file": "Elsa.Serialization.Testing.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Serialization.Testing.dll",
+      "sha256": "642303a267e3aa1220d13de7d3155b9b5853ef893caa163fd22c5eb8123e7380"
+    },
+    {
+      "file": "Elsa.Tasks.Core.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Tasks.Core.dll",
+      "sha256": "09ebe8b35706f910580475857eac09287b12ec1a2607ac7ed7694a26e6fb388a"
+    },
+    {
+      "file": "Elsa.Tasks.Schedules.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Tasks.Schedules.dll",
+      "sha256": "13c5249c6341501eb57de9fcfd723cc1ac582c064992016e897306a99561195d"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Core.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Workflows.Design.Core.dll",
+      "sha256": "25316a00a706ca097536f4a18725c0c2ffa32e4cf6964a7ebf7036c4ceda621d"
+    },
+    {
+      "file": "Elsa.Workflows.Publishing.Core.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Workflows.Publishing.Core.dll",
+      "sha256": "36cbc9991abfeb23cf14189a62d23db6b0543cd59676df9c01a647a902647e96"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Api.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Api.dll",
+      "sha256": "3094e48f6f2f96d308e7a61c0171ec777f6f602598891b9756c6c2561a95ac1e"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Core.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Core.dll",
+      "sha256": "440e18e0e0fc9e2844a74f1b698ea135bb6f3409674c0bc530637223fcfb1124"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "sha256": "c7930cabf227e011c89d9bb0092753240130b6e1b81d2ac2d40bd255fda132e0"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Scheduling.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Scheduling.dll",
+      "sha256": "48604025569a05b6b6985e07cc84ee3551199df560e360f72de4340adc63fc75"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.dll",
+      "sha256": "8ec1c2d9e45a86d51f4cf48bbfe74fcae51552de861175a384e251ed6635125d"
+    },
+    {
+      "file": "JetBrains.Annotations.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/JetBrains.Annotations.dll",
+      "sha256": "8f2c837af3f4f61b1726a2e67eafcf5bae23debd9e1de425bb5ce1d4837508d6"
+    },
+    {
+      "file": "Microsoft.Data.Sqlite.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Microsoft.Data.Sqlite.dll",
+      "sha256": "1078d41c6c0f2cee48a8b706e3a54ce145705993f19f703d2b3bdf2abcc59088"
+    },
+    {
+      "file": "Microsoft.EntityFrameworkCore.Abstractions.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Microsoft.EntityFrameworkCore.Abstractions.dll",
+      "sha256": "98c8252995283ef0884b904dbab03696ca7f71a05b8dde34dace5eeb9bf4382c"
+    },
+    {
+      "file": "Microsoft.EntityFrameworkCore.Relational.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Microsoft.EntityFrameworkCore.Relational.dll",
+      "sha256": "ac1146e68d53d56b79e9473f68c557999de99674be392bbbbb02ae93a296b93e"
+    },
+    {
+      "file": "Microsoft.EntityFrameworkCore.Sqlite.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Microsoft.EntityFrameworkCore.Sqlite.dll",
+      "sha256": "b8c5027b27be2012094699cbd5260239778a1891dc5c1887797d331b67f0ef89"
+    },
+    {
+      "file": "Microsoft.EntityFrameworkCore.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Microsoft.EntityFrameworkCore.dll",
+      "sha256": "acb89dff050d681fab6f86d2175929471200b9bed66ac9321cbe6a17eaa26933"
+    },
+    {
+      "file": "Microsoft.Extensions.DependencyModel.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Microsoft.Extensions.DependencyModel.dll",
+      "sha256": "2385bfbc9344e03acb2ff44f1ed21a3770fbafdf1ba4be2dbcacd42027b8c3bd"
+    },
+    {
+      "file": "Microsoft.TestPlatform.CommunicationUtilities.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Microsoft.TestPlatform.CommunicationUtilities.dll",
+      "sha256": "ec4b51df00684261eb6ff3ca1095ac3f6d2e4a0edd64c6785293dede135993d3"
+    },
+    {
+      "file": "Microsoft.TestPlatform.CoreUtilities.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Microsoft.TestPlatform.CoreUtilities.dll",
+      "sha256": "f3321a772e26a844095dee350618e8bb2fbfc7491f033565efc1cb934bccfc3d"
+    },
+    {
+      "file": "Microsoft.TestPlatform.CrossPlatEngine.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Microsoft.TestPlatform.CrossPlatEngine.dll",
+      "sha256": "c09199b0a94b05eb305aa068362c7d8675298e32a4e961a23b09ddb6e82c3458"
+    },
+    {
+      "file": "Microsoft.TestPlatform.PlatformAbstractions.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Microsoft.TestPlatform.PlatformAbstractions.dll",
+      "sha256": "f0d83493a38dc3ea3f093a32f945d5d54e3c5e5ab963be474f4c6fb861c4008d"
+    },
+    {
+      "file": "Microsoft.TestPlatform.Utilities.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Microsoft.TestPlatform.Utilities.dll",
+      "sha256": "03a03028986be5e109ebddd556c496b4eadfd8d55d83088671d512477dd04906"
+    },
+    {
+      "file": "Microsoft.VisualStudio.CodeCoverage.Shim.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Microsoft.VisualStudio.CodeCoverage.Shim.dll",
+      "sha256": "b8d16360ff831bd09562700f6b51b435d74884a68b48707e180f811cba47e5aa"
+    },
+    {
+      "file": "Microsoft.VisualStudio.TestPlatform.Common.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Microsoft.VisualStudio.TestPlatform.Common.dll",
+      "sha256": "b24d33ac6b0707ebaed537812b71a97b9a1fcdda49e0202ce1f4ea094153d9cc"
+    },
+    {
+      "file": "Microsoft.VisualStudio.TestPlatform.ObjectModel.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Microsoft.VisualStudio.TestPlatform.ObjectModel.dll",
+      "sha256": "b06be0dd6f9434fefb41c6b538b300b89389d56e1377f5355e19f332db474813"
+    },
+    {
+      "file": "NativeEndpoints.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/NativeEndpoints.dll",
+      "sha256": "33b9de8bc38d14d7a08ec814b5b3f6ca1c0f45feddc071228bd1c39eeb401d47"
+    },
+    {
+      "file": "Newtonsoft.Json.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Newtonsoft.Json.dll",
+      "sha256": "a28c251dfe36d881e9e2462e171441b8b0ec156fe3f452602c9149b1b9efe05b"
+    },
+    {
+      "file": "Nuplane.Abstractions.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Nuplane.Abstractions.dll",
+      "sha256": "bf106e06f163cf57de6ef4bd7cca117822a49064081cd4d75010a833a11361cb"
+    },
+    {
+      "file": "Nuplane.Loading.Abstractions.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/Nuplane.Loading.Abstractions.dll",
+      "sha256": "8449e0385ed07faf47f42fe00576e0e074462faee38f967e38cdcf0c1c51323c"
+    },
+    {
+      "file": "SQLitePCLRaw.batteries_v2.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/SQLitePCLRaw.batteries_v2.dll",
+      "sha256": "e83aed1d42d8ae806abeb02f0233a477275b82b5db92c92aa0c243255ab6a793"
+    },
+    {
+      "file": "SQLitePCLRaw.core.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/SQLitePCLRaw.core.dll",
+      "sha256": "1e18b89ea319bffb633ea5698d8958cdaae3de8c5ac855353c7c6ad292795403"
+    },
+    {
+      "file": "SQLitePCLRaw.provider.e_sqlite3.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/SQLitePCLRaw.provider.e_sqlite3.dll",
+      "sha256": "64f5e6797a789e6f212cf619cc42af3888e64df3d2ac2b35b81304e5d0945b9d"
+    },
+    {
+      "file": "testhost.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/testhost.dll",
+      "sha256": "e628c35d40214ce1db714937109bac6a8e7591fcb424482f81c1ec123fe5bd54"
+    },
+    {
+      "file": "xunit.abstractions.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/xunit.abstractions.dll",
+      "sha256": "3166dc70323fb30ccf1cedb0fe86f2ad122c46d254542342d90386efc4c9285c"
+    },
+    {
+      "file": "xunit.assert.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/xunit.assert.dll",
+      "sha256": "bcd9711b22d227ac8cd4c1568e72433a0f576d2ec8aae64ac508081892015b1d"
+    },
+    {
+      "file": "xunit.core.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/xunit.core.dll",
+      "sha256": "2f7feeec8c6dec7df684c25fb80aadb292b963d09723460f03d53c5ad2088acc"
+    },
+    {
+      "file": "xunit.execution.dotnet.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/xunit.execution.dotnet.dll",
+      "sha256": "e70febe547c15f8155db3e2d95c3ba4445a59cbc21a3e7541ab22ed49d3dcf7b"
+    },
+    {
+      "file": "xunit.runner.visualstudio.testadapter.dll",
+      "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Tests/bin/Release/net10.0/xunit.runner.visualstudio.testadapter.dll",
+      "sha256": "384aba4bad96399a7fd2205a5a3517b643a16f4d7e843bd0b92e1e42f81fce2a"
+    }
+  ]
+}

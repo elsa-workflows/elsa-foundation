@@ -26,6 +26,8 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
     IStimulusDeliveryStore
 {
     private readonly RuntimeDbContext context;
+    internal bool Uses(RuntimeDbContext expected, PersistenceScope scope) =>
+        ReferenceEquals(context, expected) && accessContextAccessor.Current.Scope == scope;
     private readonly IPersistenceAccessContextAccessor accessContextAccessor;
     private readonly TimeProvider timeProvider;
     private readonly WorkflowExecutableStartSourceResolver? retentionSources;
@@ -177,6 +179,51 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
         cancellationToken.ThrowIfCancellationRequested();
         EnsureCommittedSourceBoundary();
         return FindAsync(outboxItemId, cancellationToken);
+    }
+
+    public async ValueTask<RuntimePostCommitOutboxItem?> FindUndeliveredDurableAsync(string workflowExecutionId,
+        string excludedIntentKind, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(excludedIntentKind);
+        cancellationToken.ThrowIfCancellationRequested();
+        EnsureCommittedSourceBoundary();
+        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
+        try
+        {
+            var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
+            var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
+            var executionKey = EfRuntimeOperationalStoreSupport.Encode(workflowExecutionId);
+            var executionHash = EfRuntimeOperationalStoreSupport.Hash(workflowExecutionId);
+            string? after = null;
+            while (true)
+            {
+                // Either identity projection can reveal a corrupt owned row. Do not filter on status or
+                // kind projections before checking their payload: a damaged projection cannot prove absence.
+                var query = context.RuntimePostCommitOutbox.AsNoTracking().Where(row =>
+                    (row.ScopeKeyHash == scopeHash || row.ScopeKey == scopeKey) &&
+                    (row.WorkflowExecutionIdHash == executionHash || row.WorkflowExecutionId == executionKey));
+                if (after is not null) query = query.Where(row => row.Id.CompareTo(after) > 0);
+                var page = await query.OrderBy(row => row.Id).Take(ProviderPageSize).ToArrayAsync(cancellationToken);
+                foreach (var row in page)
+                {
+                    var source = ReadChecked(row, scope);
+                    if (source.Intent.WorkflowExecutionId != workflowExecutionId)
+                        throw new InvalidDataException("The durable source differs from its exact execution query.");
+                    if (source.Intent.Kind != excludedIntentKind && source.Status != RuntimePostCommitOutboxStatus.Delivered)
+                        return source;
+                }
+                if (page.Length < ProviderPageSize) return null;
+                after = page[^1].Id;
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception) when (exception is IOException or OperationCanceledException ||
+            EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        {
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.outbox-state-unavailable",
+                $"Prior outbox responsibility could not be read in persistence scope '{scope}' for execution '{workflowExecutionId}'.", exception);
+        }
     }
 
     private void EnsureCommittedSourceBoundary()

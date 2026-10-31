@@ -1,0 +1,146 @@
+[
+  {
+    "name": "legacy-cancel-red",
+    "counters": {
+      "total": "2",
+      "executed": "2",
+      "passed": "1",
+      "failed": "1",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "outcomes": {
+      "Passed": 1,
+      "Failed": 1,
+      "NotExecuted": 0
+    },
+    "uniqueTestIds": 2,
+    "newLegacyCancelCases": []
+  },
+  {
+    "name": "legacy-host-five",
+    "counters": {
+      "total": "5",
+      "executed": "5",
+      "passed": "5",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "outcomes": {
+      "Passed": 5,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "uniqueTestIds": 5,
+    "newLegacyCancelCases": [
+      "Elsa.Activities.Bpmn.Hosting.Tests.LegacyFaultSettlementWorkbenchTests.The_standard_runtime_only_host_settles_actual_old_fault_responsibility_and_retains_it_after_process_loss(admitted: True, waiting: True, pendingParent: True, parentCancellation: True)"
+    ]
+  },
+  {
+    "name": "hosting-whole44",
+    "counters": {
+      "total": "44",
+      "executed": "44",
+      "passed": "44",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "outcomes": {
+      "Passed": 44,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "uniqueTestIds": 44,
+    "newLegacyCancelCases": [
+      "Elsa.Activities.Bpmn.Hosting.Tests.LegacyFaultSettlementWorkbenchTests.The_standard_runtime_only_host_settles_actual_old_fault_responsibility_and_retains_it_after_process_loss(admitted: True, waiting: True, pendingParent: True, parentCancellation: True)"
+    ]
+  },
+  {
+    "name": "bpmn-whole",
+    "counters": {
+      "total": "506",
+      "executed": "506",
+      "passed": "506",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "outcomes": {
+      "Passed": 506,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "uniqueTestIds": 506,
+    "newLegacyCancelCases": []
+  },
+  {
+    "name": "architecture",
+    "counters": {
+      "total": "594",
+      "executed": "594",
+      "passed": "594",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "outcomes": {
+      "Passed": 594,
+      "Failed": 0,
+      "NotExecuted": 0
+    },
+    "uniqueTestIds": 585,
+    "newLegacyCancelCases": []
+  }
+]

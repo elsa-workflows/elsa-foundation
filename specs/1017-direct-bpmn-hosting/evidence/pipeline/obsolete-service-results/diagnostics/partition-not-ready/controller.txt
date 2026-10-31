@@ -1,0 +1,14 @@
+Observed durable 429 and completed sibling; owned predecessor terminated.
+Owned private diagnostic root: /var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-etl-http-recovery-v45sb9ro
+Traceback (most recent call last):
+  File "/Users/sipke/.codex/worktrees/f236/elsa-foundation/e2e-tests/etl/qualify_http_recovery.py", line 1095, in <module>
+    if __name__=="__main__":main()
+  File "/Users/sipke/.codex/worktrees/f236/elsa-foundation/e2e-tests/etl/qualify_http_recovery.py", line 686, in main
+    waiting=wait_for(pair,lambda value:value['replacement']['run']['status']=='running' and
+  File "/Users/sipke/.codex/worktrees/f236/elsa-foundation/e2e-tests/etl/qualify_http_recovery.py", line 36, in wait_for
+    if predicate(value): return value
+  File "/Users/sipke/.codex/worktrees/f236/elsa-foundation/e2e-tests/etl/qualify_http_recovery.py", line 687, in <lambda>
+    any(x['http']['fetch']['phase']=='waiting' and x['http']['fetch']['lastStatusCode']==429 for x in value['replacement']['partitions']['items']) and
+  File "/Users/sipke/.codex/worktrees/f236/elsa-foundation/e2e-tests/etl/qualify_http_recovery.py", line 687, in <genexpr>
+    any(x['http']['fetch']['phase']=='waiting' and x['http']['fetch']['lastStatusCode']==429 for x in value['replacement']['partitions']['items']) and
+TypeError: 'NoneType' object is not subscriptable

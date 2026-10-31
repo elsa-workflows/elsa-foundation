@@ -1,0 +1,18 @@
+test_an_existing_but_undeclared_screenshot_is_rejected (latest_studio_controls.FinalActualStudioUpgradeControls) ... ok
+test_both_actual_studio_journeys_and_all_twelve_stores_verify (latest_studio_controls.FinalActualStudioUpgradeControls) ... ok
+test_compressed_process_receipt_requires_its_original_decoded_hash (latest_studio_controls.FinalActualStudioUpgradeControls) ... ok
+test_rehashed_model_reclassification_of_native_material_is_rejected (latest_studio_controls.FinalActualStudioUpgradeControls) ... ok
+test_rehashed_native_binding_change_is_rejected (latest_studio_controls.FinalActualStudioUpgradeControls) ... ok
+test_rehashed_original_run_projection_change_is_rejected (latest_studio_controls.FinalActualStudioUpgradeControls) ... ok
+test_rehashed_physical_full_pin_change_is_rejected (latest_studio_controls.FinalActualStudioUpgradeControls) ... ok
+test_rehashed_provider_snapshot_with_another_hash_is_rejected (latest_studio_controls.FinalActualStudioUpgradeControls) ... ok
+test_rehashed_provider_snapshot_without_coupled_cut_is_rejected (latest_studio_controls.FinalActualStudioUpgradeControls) ... ok
+test_rehashed_provider_snapshot_without_readonly_receipt_is_rejected (latest_studio_controls.FinalActualStudioUpgradeControls) ... ok
+test_rehashed_saved_layout_change_is_rejected (latest_studio_controls.FinalActualStudioUpgradeControls) ... ok
+test_rehashed_test_run_cannot_be_called_a_published_run (latest_studio_controls.FinalActualStudioUpgradeControls) ... ok
+test_rehashed_xml_semantic_change_is_rejected (latest_studio_controls.FinalActualStudioUpgradeControls) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 3.365s
+
+OK

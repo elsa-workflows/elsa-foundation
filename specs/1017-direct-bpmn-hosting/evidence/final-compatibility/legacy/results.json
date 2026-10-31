@@ -1,0 +1,65 @@
+{
+  "partial-forks": {
+    "actualLegacyExecutionsRecovered": 8,
+    "wholeStoresVerified": 2,
+    "frozenAuthoringPreserved": true,
+    "sourceRevision": "de0e800384b91268827af674e195b1097455dd45",
+    "allLegacyFamiliesRecovered": false,
+    "studioAcceptanceProved": false
+  },
+  "native-parents": {
+    "pendingParentRecoveries": 6,
+    "nativeParentOutcomesApplied": 4,
+    "terminalDispositionsWithoutParentConsumption": 2,
+    "retainedNativeTerminals": 12,
+    "wholeStoresVerified": 8,
+    "frozenAuthoringPreserved": true,
+    "sourceRevision": "de0e800384b91268827af674e195b1097455dd45",
+    "allLegacyFamiliesRecovered": false,
+    "studioAcceptanceProved": false
+  },
+  "called-ack": {
+    "actualCalledAcknowledgmentCutsRecovered": 2,
+    "wholeStoresVerified": 4,
+    "exactCommittedAcceptanceVerified": true,
+    "frozenAuthoringPreserved": true,
+    "sourceRevision": "de0e800384b91268827af674e195b1097455dd45",
+    "allLegacyFamiliesRecovered": false,
+    "studioAcceptanceProved": false,
+    "directModelSettlementProved": false
+  },
+  "broadcast": {
+    "actualBroadcastCutsRecovered": 4,
+    "wholeStoresVerified": 8,
+    "deliveryTimeMatchingPreserved": true,
+    "emptyAndRearmedDecisionsPreserved": true,
+    "frozenAuthoringPreserved": true,
+    "sourceRevision": "de0e800384b91268827af674e195b1097455dd45",
+    "allLegacyFamiliesRecovered": false,
+    "studioAcceptanceProved": false,
+    "directModelBroadcastProved": false
+  },
+  "controls": {
+    "actualEscalationCasesRecovered": 6,
+    "actualSameBindingSiblingPoliciesRecovered": 2,
+    "actualCompensationReplayRecovered": 1,
+    "managedWorkflowExecutions": 19,
+    "wholeStoresVerified": 6,
+    "frozenAuthoringPreserved": true,
+    "sourceRevision": "de0e800384b91268827af674e195b1097455dd45",
+    "allLegacyFamiliesRecovered": false,
+    "studioAcceptanceProved": false,
+    "directModelSettlementProved": false
+  },
+  "multi-instance": {
+    "actualMultiInstanceCasesRecovered": 4,
+    "nativeIterationsCompleted": 12,
+    "finalWorkflowExecutions": 16,
+    "wholeStoresVerified": 5,
+    "frozenAuthoringPreserved": true,
+    "sourceRevision": "de0e800384b91268827af674e195b1097455dd45",
+    "allLegacyFamiliesRecovered": false,
+    "studioAcceptanceProved": false,
+    "directModelMultiInstanceProved": false
+  }
+}

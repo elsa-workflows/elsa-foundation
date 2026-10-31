@@ -1,0 +1,28 @@
+[
+  {
+    "name": "maps",
+    "command": [
+      "dotnet",
+      "run",
+      "--project",
+      "tools/maps/Elsa.Maps.Generator",
+      "--no-restore",
+      "--",
+      "check"
+    ],
+    "exitCode": 0
+  },
+  {
+    "name": "tiers",
+    "command": [
+      "dotnet",
+      "run",
+      "--project",
+      "tools/maps/Elsa.Maps.Generator",
+      "--no-restore",
+      "--",
+      "test-tiers-check"
+    ],
+    "exitCode": 0
+  }
+]

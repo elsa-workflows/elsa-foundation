@@ -17,6 +17,12 @@
   ],
   "projects": [
     {
+      "project": "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+      "tier": "integration",
+      "medianMinutes": null,
+      "trait": "child-process"
+    },
+    {
       "project": "Essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.54
@@ -857,7 +863,8 @@
           "Essentials/tests/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj",
           "Essentials/tests/Cli/Tests/Elsa.Cli.Tests.csproj",
           "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
-          "Essentials/tests/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj#cluster-rest"
+          "Essentials/tests/Cluster/EntityFrameworkCore/Tests/Elsa.Cluster.EntityFrameworkCore.Tests.csproj#cluster-rest",
+          "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj"
         ]
       }
     ],

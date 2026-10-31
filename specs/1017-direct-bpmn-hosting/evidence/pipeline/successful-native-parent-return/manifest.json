@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-native-runbpmn-etl-success-parent-matrix",
+  "sourceRevision": "cdef9b87e136ac082fbf1ef332ca3abb115a0018",
+  "cases": [
+    {
+      "name": "root-pending",
+      "parent": "Root",
+      "stage": "pending",
+      "manifest": "root-pending/manifest.json",
+      "sha256": "ddb0af28145d0db41b6635898f4b222137a8db90669a77d45eadb08faa233db3"
+    },
+    {
+      "name": "root-consumed",
+      "parent": "Root",
+      "stage": "consumed",
+      "manifest": "root-consumed/manifest.json",
+      "sha256": "30cfad0a82e49541e644c8475e0a2103b2ce7a25731713b35becbfa182111314"
+    },
+    {
+      "name": "root-settled",
+      "parent": "Root",
+      "stage": "settled",
+      "manifest": "root-settled/manifest.json",
+      "sha256": "f733987085f633051b8e334a3d900a500ea484f3b6ddd28c6d145f4e08257468"
+    },
+    {
+      "name": "sequence-pending",
+      "parent": "Sequence",
+      "stage": "pending",
+      "manifest": "sequence-pending/manifest.json",
+      "sha256": "2462ca8e10bc5116ca1b1cbad40303445df1928009e3b83e1c12d5af367469a5"
+    },
+    {
+      "name": "sequence-consumed",
+      "parent": "Sequence",
+      "stage": "consumed",
+      "manifest": "sequence-consumed/manifest.json",
+      "sha256": "ef22130a1e7ffc1d26917c0c09a4f86893050585f82edc9bec5d0151024f9be2"
+    },
+    {
+      "name": "sequence-settled",
+      "parent": "Sequence",
+      "stage": "settled",
+      "manifest": "sequence-settled/manifest.json",
+      "sha256": "7d871f7ef1053ac5563b9bdcb33eb48a026dc8c8ca11e83ff6051906ec70da24"
+    },
+    {
+      "name": "flowchart-pending",
+      "parent": "Flowchart",
+      "stage": "pending",
+      "manifest": "flowchart-pending/manifest.json",
+      "sha256": "88a0a91478c3675bfef0d0285ddbdcf763809024d361bd5f922dd7f3bbaa2356"
+    },
+    {
+      "name": "flowchart-consumed",
+      "parent": "Flowchart",
+      "stage": "consumed",
+      "manifest": "flowchart-consumed/manifest.json",
+      "sha256": "8242165252b05970b4efaa5b3a6643707b9b92233ab13b7795b7f9fcc860344c"
+    },
+    {
+      "name": "flowchart-settled",
+      "parent": "Flowchart",
+      "stage": "settled",
+      "manifest": "flowchart-settled/manifest.json",
+      "sha256": "d78eb7f200050279414a40942552fda916be07b6dd619ecb7284213724d1f448"
+    },
+    {
+      "name": "compensationscope-pending",
+      "parent": "CompensationScope",
+      "stage": "pending",
+      "manifest": "compensationscope-pending/manifest.json",
+      "sha256": "4ec971bc6140dc5af542266454f633a501c39ef74e1e84802ecc9836d8f601e1"
+    },
+    {
+      "name": "compensationscope-consumed",
+      "parent": "CompensationScope",
+      "stage": "consumed",
+      "manifest": "compensationscope-consumed/manifest.json",
+      "sha256": "2c31ca2221b5ef8e354bad3cbe5ef8667c898eecc8738f7b1c101a78ec31379f"
+    },
+    {
+      "name": "compensationscope-settled",
+      "parent": "CompensationScope",
+      "stage": "settled",
+      "manifest": "compensationscope-settled/manifest.json",
+      "sha256": "5ada07d54923088466abc5ba77970eb7d67de33b096f345a229c47480469df66"
+    }
+  ]
+}

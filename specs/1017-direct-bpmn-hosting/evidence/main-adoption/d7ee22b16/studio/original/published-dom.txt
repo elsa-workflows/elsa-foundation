@@ -1,0 +1,19 @@
+Browser tab: 13, Title: "Elsa Studio", URL: "http://127.0.0.1:61934/workflows/definitions?definition=14iBsLEuiJS".
+1 AXWebArea Elsa Studio, URL: 127.0.0.1:61934/workflows/definitions?definition=14iBsLEuiJS
+	2 container Published
+		3 container
+			4 heading Published, Value: 3, ID: publication-review-title
+				10 text Published
+			11 container Version 3.0.0 is active in default.
+				12 heading Version 3.0.0 is active in default., Value: 4, ID: publication-success-title
+					13 text Version 
+					14 text 3.0.0
+					15 text  is active in 
+					16 text default
+					17 text .
+				18 button (collapsed) Technical details, Secondary Actions: Expand
+					19 text Technical details
+			8 button Close
+			9 button View published workflow
+
+The focused UI element is 12 heading Version 3.0.0 is active in default., Value: 4, ID: publication-success-title

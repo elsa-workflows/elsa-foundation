@@ -1,0 +1,17 @@
+{
+  "sourceRevision": "9508e25e57672c569f462aff9a1e0282c5780eb9",
+  "observations": 4162,
+  "lastObservedKey": [
+    2,
+    2,
+    3,
+    4,
+    0
+  ],
+  "outerModelSettled": false,
+  "innerModelSettled": true,
+  "prematureAncestorSettlementObserved": false,
+  "fullCancellationPass": false,
+  "limit": "The30-second window ended with outer model lifecycle2/pending and one unsettled cancellation; inner model lifecycle3/settled. Exit0 from the observation controller was not a passing completion assertion.",
+  "captureDiagnostic": "Tuple/list comparison retained repeated unchanged observations; the complete raw history is compressed without discarding rows."
+}

@@ -1,0 +1,30 @@
+{
+  "baseBeforeCorrections": "5e7642e5e",
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "83fe1f5941aef158af5103ca27a97d4fb34e24cfd8e7c6599069099db03a067f",
+      "bytes": 1242
+    },
+    {
+      "path": "green.log.gz",
+      "sha256": "5918f7e17e60a6484085dcec120a82f3e493ad5a6e6d60c7ec0f68821bc19df0",
+      "bytes": 1349
+    },
+    {
+      "path": "green.trx.gz",
+      "sha256": "95ee0c7f6bef8b19c07b175dd338ff96b3840f12bc3901051c732230a653acad",
+      "bytes": 1722
+    },
+    {
+      "path": "red.log.gz",
+      "sha256": "b88a29e7d4fd12cfc951c4332dff3423fb685b8a27115a3c32b9d0c5c3bed4cb",
+      "bytes": 2425
+    },
+    {
+      "path": "red.trx.gz",
+      "sha256": "0ff4d07523b4451f5c60b82ade4cabb7637661a2bf3c43c7349989af6fae80ac",
+      "bytes": 3277
+    }
+  ]
+}

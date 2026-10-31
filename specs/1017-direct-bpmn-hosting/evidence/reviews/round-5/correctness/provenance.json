@@ -1,0 +1,619 @@
+{
+  "head": "1e707d58fc2148be3715d50616dfdb69dc82ae65",
+  "base": "7b49513650665606e5f52fdc08c5831f60802dac",
+  "executingSource": "f6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1",
+  "noDifferencesInTestedSourceTrees": true,
+  "differences": [],
+  "equivalence": [
+    {
+      "file": "Essentials/src/Activities/Bpmn/Api/ActivitiesBpmnHostingApiFeature.cs",
+      "executingSourceBlob": "150c504d3c48e5341173a429e2d85fee9572b2a9",
+      "reviewedHeadBlob": "150c504d3c48e5341173a429e2d85fee9572b2a9",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Api/Endpoints/BpmnHostingApi.cs",
+      "executingSourceBlob": "d66d8a95f15dbb7dc09561bd8310189f9d7f0cce",
+      "reviewedHeadBlob": "d66d8a95f15dbb7dc09561bd8310189f9d7f0cce",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Core/BpmnModelDefinition.cs",
+      "executingSourceBlob": "15c38912e6324aa8b0987bc6ef1295ca6723f097",
+      "reviewedHeadBlob": "15c38912e6324aa8b0987bc6ef1295ca6723f097",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Core/IBpmnModelRuntime.cs",
+      "executingSourceBlob": "aec120287cad0a85b2ef510fe73d91ec0b29fcee",
+      "reviewedHeadBlob": "aec120287cad0a85b2ef510fe73d91ec0b29fcee",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Activities/RunBpmn.cs",
+      "executingSourceBlob": "bae172c0c3f3ea16f5ad5800dd57bd1242ff1b26",
+      "reviewedHeadBlob": "bae172c0c3f3ea16f5ad5800dd57bd1242ff1b26",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/ActivitiesBpmnHostingFeature.cs",
+      "executingSourceBlob": "b06c095befd79063e8853cde95214a394005e9af",
+      "reviewedHeadBlob": "b06c095befd79063e8853cde95214a394005e9af",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Contracts/IBpmnModelActivityRuntime.cs",
+      "executingSourceBlob": "c4973f0a96b71e4454b3a4c5dfb142a85551900d",
+      "reviewedHeadBlob": "c4973f0a96b71e4454b3a4c5dfb142a85551900d",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnDirectExecutionDriver.cs",
+      "executingSourceBlob": "bc38ebe611edac43aad6f5daed3ef6c589db4a7e",
+      "reviewedHeadBlob": "bc38ebe611edac43aad6f5daed3ef6c589db4a7e",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnDurationTimer.cs",
+      "executingSourceBlob": "35595fe419d87a30586008b15f69cf2b85757ee7",
+      "reviewedHeadBlob": "35595fe419d87a30586008b15f69cf2b85757ee7",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingBoundary.cs",
+      "executingSourceBlob": "c2f0c94285ec01370d9aa7a6db6d089dc91c0658",
+      "reviewedHeadBlob": "c2f0c94285ec01370d9aa7a6db6d089dc91c0658",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingCheckpointEnricher.cs",
+      "executingSourceBlob": "53b47c350703d5213185cec9e3facf7545c660b3",
+      "reviewedHeadBlob": "53b47c350703d5213185cec9e3facf7545c660b3",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingDelivery.cs",
+      "executingSourceBlob": "dcabfa84f064724ca59173f30fb04babd9e2e5dd",
+      "reviewedHeadBlob": "dcabfa84f064724ca59173f30fb04babd9e2e5dd",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingJson.cs",
+      "executingSourceBlob": "d419594642df677c2c805237f4406f03c42a5775",
+      "reviewedHeadBlob": "d419594642df677c2c805237f4406f03c42a5775",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingPinSource.cs",
+      "executingSourceBlob": "46bde54fd9097381a81be42f1c4e4004fbc2910d",
+      "reviewedHeadBlob": "46bde54fd9097381a81be42f1c4e4004fbc2910d",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEvaluationComponent.cs",
+      "executingSourceBlob": "c72156b002879ddfaf0da068f64b176c0525a47e",
+      "reviewedHeadBlob": "c72156b002879ddfaf0da068f64b176c0525a47e",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnLegacyFaultWorkRecovery.cs",
+      "executingSourceBlob": "abfc0a5973ffec431ba62191592f0bb9c5839500",
+      "reviewedHeadBlob": "abfc0a5973ffec431ba62191592f0bb9c5839500",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnModelActivityRuntime.cs",
+      "executingSourceBlob": "1d313c7f77d9fa3a04cb7eb1f95414828aac766c",
+      "reviewedHeadBlob": "1d313c7f77d9fa3a04cb7eb1f95414828aac766c",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnModelIdentity.cs",
+      "executingSourceBlob": "32cd39f9387d8909e736a2f6ab220fdf8ec6d934",
+      "reviewedHeadBlob": "32cd39f9387d8909e736a2f6ab220fdf8ec6d934",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnModelRuntime.cs",
+      "executingSourceBlob": "be229d657a0689b0ddf707d0a55fe612c4440d33",
+      "reviewedHeadBlob": "be229d657a0689b0ddf707d0a55fe612c4440d33",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnNativeWorkBoundary.cs",
+      "executingSourceBlob": "1b2c970fda96a4e517c22bd80dd5c0fbe83c72fa",
+      "reviewedHeadBlob": "1b2c970fda96a4e517c22bd80dd5c0fbe83c72fa",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnNativeWorkCheckpointEnricher.cs",
+      "executingSourceBlob": "71c474ac25cb5c9a69424d35af17b114f57bafdc",
+      "reviewedHeadBlob": "71c474ac25cb5c9a69424d35af17b114f57bafdc",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnNativeWorkDelivery.cs",
+      "executingSourceBlob": "455e6af639964ae9c8170b0bf540a0a775081b2f",
+      "reviewedHeadBlob": "455e6af639964ae9c8170b0bf540a0a775081b2f",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs",
+      "executingSourceBlob": "3298b43146496be3d49e4bc562b516714c09b7f5",
+      "reviewedHeadBlob": "3298b43146496be3d49e4bc562b516714c09b7f5",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Models/RunBpmnState.cs",
+      "executingSourceBlob": "c11d9d0163fce5fdfe52b4bbd806195234d9324f",
+      "reviewedHeadBlob": "c11d9d0163fce5fdfe52b4bbd806195234d9324f",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Persistence/EntityFramework/EfMigrationHistoryRepository.cs",
+      "executingSourceBlob": "02b4fffad73b27a8af4f9012710b671d6bfd8927",
+      "reviewedHeadBlob": "02b4fffad73b27a8af4f9012710b671d6bfd8927",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Persistence/EntityFramework/EfMigrationIncludesAttribute.cs",
+      "executingSourceBlob": "6e379479ac24a13b5f882d2badf8061d98d61521",
+      "reviewedHeadBlob": "6e379479ac24a13b5f882d2badf8061d98d61521",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Persistence/EntityFramework/EfMigrationsHistory.cs",
+      "executingSourceBlob": "70c5811577e2f82d8144c4db846671c2b1cfe5fd",
+      "reviewedHeadBlob": "70c5811577e2f82d8144c4db846671c2b1cfe5fd",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Persistence/EntityFramework/EfRelationalProviderBinding.cs",
+      "executingSourceBlob": "d181b478cdc3de115dbf5610cc78d96eb6603236",
+      "reviewedHeadBlob": "d181b478cdc3de115dbf5610cc78d96eb6603236",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Core/Constants/RuntimeCheckpointNames.cs",
+      "executingSourceBlob": "5a6c15de4cf68f0a5f4900c01b51f79cba23e045",
+      "reviewedHeadBlob": "5a6c15de4cf68f0a5f4900c01b51f79cba23e045",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimeCheckpointCommitStore.cs",
+      "executingSourceBlob": "3e4721e3b80920cb68cc07f7666f1f1073aff272",
+      "reviewedHeadBlob": "3e4721e3b80920cb68cc07f7666f1f1073aff272",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimeExecutionProtocolDriver.cs",
+      "executingSourceBlob": "46d0bdc296162ccf365f2eabad0b98f9ac30d819",
+      "reviewedHeadBlob": "46d0bdc296162ccf365f2eabad0b98f9ac30d819",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Core/Contracts/IRuntimeModelExecutionReader.cs",
+      "executingSourceBlob": "b5464b60935c7a659a3a341c346ea5f294c34b73",
+      "reviewedHeadBlob": "b5464b60935c7a659a3a341c346ea5f294c34b73",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Core/Contracts/IWorkflowExecutableStore.cs",
+      "executingSourceBlob": "46a81455c89c251b13f956fc32225650f70ff468",
+      "reviewedHeadBlob": "46a81455c89c251b13f956fc32225650f70ff468",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Core/Contracts/IWorkflowSchedulerWorkQueue.cs",
+      "executingSourceBlob": "6e4c6bbca9e4f5fb50bc66e1a85af13963d00597",
+      "reviewedHeadBlob": "6e4c6bbca9e4f5fb50bc66e1a85af13963d00597",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Core/Events/RuntimeExecutionProtocolsInitializing.cs",
+      "executingSourceBlob": "e1c94e9ca7cbd21e224b38e640212f90279b9c6d",
+      "reviewedHeadBlob": "e1c94e9ca7cbd21e224b38e640212f90279b9c6d",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommandPayload.cs",
+      "executingSourceBlob": "b9102b5b3b40c6826b2eca7468d3a1d83fffc8f3",
+      "reviewedHeadBlob": "b9102b5b3b40c6826b2eca7468d3a1d83fffc8f3",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommit.cs",
+      "executingSourceBlob": "51b60c66833d957e0d520d7dba33cdbbaa29115c",
+      "reviewedHeadBlob": "51b60c66833d957e0d520d7dba33cdbbaa29115c",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Core/Models/RuntimeCheckpointCommitFingerprint.cs",
+      "executingSourceBlob": "7e1210d42c2d211b026d3cf8ae2cf26648a37428",
+      "reviewedHeadBlob": "7e1210d42c2d211b026d3cf8ae2cf26648a37428",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Core/Models/RuntimeExecutionMaterial.cs",
+      "executingSourceBlob": "c3afea794630e13f15d33f7a9ad23a9838b479fc",
+      "reviewedHeadBlob": "c3afea794630e13f15d33f7a9ad23a9838b479fc",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Core/Models/RuntimeModelExecutionCommand.cs",
+      "executingSourceBlob": "3feb1e2c0bcdae94526c6ab34b460ad8ad2d1abc",
+      "reviewedHeadBlob": "3feb1e2c0bcdae94526c6ab34b460ad8ad2d1abc",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Core/Models/RuntimeModelExecutionState.cs",
+      "executingSourceBlob": "bf21d29bc23d07f000e8460471caac748ffc8901",
+      "reviewedHeadBlob": "bf21d29bc23d07f000e8460471caac748ffc8901",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Core/Models/RuntimeModelNativeWorkOrigin.cs",
+      "executingSourceBlob": "4b4dd1f43ea83dd31eaa943b5698d8a605efd615",
+      "reviewedHeadBlob": "4b4dd1f43ea83dd31eaa943b5698d8a605efd615",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Core/Models/RuntimeSchedulerWorkClaim.cs",
+      "executingSourceBlob": "78ff0b442127f0271f0c6579f32faad693c8578c",
+      "reviewedHeadBlob": "78ff0b442127f0271f0c6579f32faad693c8578c",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutionCommand.cs",
+      "executingSourceBlob": "66b20ef5eb9d3ff7d7d5e55fca476391b563a0e8",
+      "reviewedHeadBlob": "66b20ef5eb9d3ff7d7d5e55fca476391b563a0e8",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutionStartDispatch.cs",
+      "executingSourceBlob": "363031bad387ef6a7651549d62d034fbab198a5c",
+      "reviewedHeadBlob": "363031bad387ef6a7651549d62d034fbab198a5c",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Core/Models/WorkflowExecutionState.cs",
+      "executingSourceBlob": "54e491bcfcff455f3ecaf4d2f11eea61a23d223f",
+      "reviewedHeadBlob": "54e491bcfcff455f3ecaf4d2f11eea61a23d223f",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/ModelHostingServiceCollectionExtensions.cs",
+      "executingSourceBlob": "22b059011763fa8da7a2640d7e82bd3d512c35ef",
+      "reviewedHeadBlob": "22b059011763fa8da7a2640d7e82bd3d512c35ef",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeCoreServiceCollectionExtensions.cs",
+      "executingSourceBlob": "0fbaa133e94f8600034b68bdfb273a3c438344d5",
+      "reviewedHeadBlob": "0fbaa133e94f8600034b68bdfb273a3c438344d5",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/InMemoryRuntimeCheckpointCommitStore.cs",
+      "executingSourceBlob": "41f0d8fa9a88cd0cfc13b22dc8f2a155c9f888fb",
+      "reviewedHeadBlob": "41f0d8fa9a88cd0cfc13b22dc8f2a155c9f888fb",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimeCheckpointCommitValidator.cs",
+      "executingSourceBlob": "0634924009de78bfc3ea08f197887061ff929d21",
+      "reviewedHeadBlob": "0634924009de78bfc3ea08f197887061ff929d21",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Checkpoints/RuntimeCheckpointCommitter.cs",
+      "executingSourceBlob": "28b6572b2ddeaf3a2850b918f52e272a82d9e375",
+      "reviewedHeadBlob": "28b6572b2ddeaf3a2850b918f52e272a82d9e375",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeCheckpointCommitStore.cs",
+      "executingSourceBlob": "fa9da5012fc36afc61399938c4d5b5376ba0ccf8",
+      "reviewedHeadBlob": "fa9da5012fc36afc61399938c4d5b5376ba0ccf8",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingRuntimeCheckpointPersistencePolicy.cs",
+      "executingSourceBlob": "6051a6296e0f6743c1071acfb675a537ae1d6c0a",
+      "reviewedHeadBlob": "6051a6296e0f6743c1071acfb675a537ae1d6c0a",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Coalescing/CoalescingWorkflowSchedulerWorkQueue.cs",
+      "executingSourceBlob": "152272e85507c29a7fb51fa385ae937dc33534b7",
+      "reviewedHeadBlob": "152272e85507c29a7fb51fa385ae937dc33534b7",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/CachingWorkflowExecutableStore.cs",
+      "executingSourceBlob": "013ca6e17e4f5cfc8a6980a71cdbae241764479f",
+      "reviewedHeadBlob": "013ca6e17e4f5cfc8a6980a71cdbae241764479f",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/InvalidatingWorkflowExecutableStore.cs",
+      "executingSourceBlob": "9c13effbf953bfb565e9fd0b9f825c58eca79bff",
+      "reviewedHeadBlob": "9c13effbf953bfb565e9fd0b9f825c58eca79bff",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableDependencyGraph.cs",
+      "executingSourceBlob": "b1c51110bada165ea2f9501f32b24b6bdf954559",
+      "reviewedHeadBlob": "b1c51110bada165ea2f9501f32b24b6bdf954559",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableReferenceGarbageCollector.cs",
+      "executingSourceBlob": "cac12b1c74b4b37fe730847565ddce01d00e9d25",
+      "reviewedHeadBlob": "cac12b1c74b4b37fe730847565ddce01d00e9d25",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executables/WorkflowExecutableRootWriteLeaseManager.cs",
+      "executingSourceBlob": "423db49c122c9022d99170c747558167747b807f",
+      "reviewedHeadBlob": "423db49c122c9022d99170c747558167747b807f",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/ModelProtocolWorkHandler.cs",
+      "executingSourceBlob": "78528a5726f526cfab7ed4105534e3620e5a6091",
+      "reviewedHeadBlob": "78528a5726f526cfab7ed4105534e3620e5a6091",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/RuntimeExecutionLeaseRunner.cs",
+      "executingSourceBlob": "9c6cd0cdbdfd11e77f63396ca825e1c5894c43d4",
+      "reviewedHeadBlob": "9c6cd0cdbdfd11e77f63396ca825e1c5894c43d4",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/RuntimeExecutionProtocolRegistry.cs",
+      "executingSourceBlob": "5fc97545cbc186781ddd29f94e47eea2a32c7ca1",
+      "reviewedHeadBlob": "5fc97545cbc186781ddd29f94e47eea2a32c7ca1",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/RuntimeExecutionProtocolRouter.cs",
+      "executingSourceBlob": "26e13b881b6d8057c4075c9d2b538175145f121e",
+      "reviewedHeadBlob": "26e13b881b6d8057c4075c9d2b538175145f121e",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/RuntimeExecutionProtocolSelector.cs",
+      "executingSourceBlob": "e8f1dcb7f2401018c24db7ae201f31a67055ca50",
+      "reviewedHeadBlob": "e8f1dcb7f2401018c24db7ae201f31a67055ca50",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/ScopedWorkflowExecutionCommandExecutor.cs",
+      "executingSourceBlob": "3a2fb85b1c89e328a0184d8c6242eaa5271287c7",
+      "reviewedHeadBlob": "3a2fb85b1c89e328a0184d8c6242eaa5271287c7",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Executions/WorkflowStartDispatcher.cs",
+      "executingSourceBlob": "c448a33a74bb0bab0f0a81779607f2c2934f1371",
+      "reviewedHeadBlob": "c448a33a74bb0bab0f0a81779607f2c2934f1371",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowDrainOrchestrator.cs",
+      "executingSourceBlob": "f12aba3bc2be1ba19d1b76c9016a4280f7b6594b",
+      "reviewedHeadBlob": "f12aba3bc2be1ba19d1b76c9016a4280f7b6594b",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Scheduler/WorkflowSchedulerDrainer.cs",
+      "executingSourceBlob": "3fab430d3bc731deab6dbcbd3d67a82ee7d5cd41",
+      "reviewedHeadBlob": "3fab430d3bc731deab6dbcbd3d67a82ee7d5cd41",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/WorkHandlers/WorkflowCheckpointSchedulerWorkHandler.cs",
+      "executingSourceBlob": "a508e8692a615c04587e17081f9cd5efd213f17a",
+      "reviewedHeadBlob": "a508e8692a615c04587e17081f9cd5efd213f17a",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/WorkHandlers/WorkflowStartSchedulerWorkHandler.cs",
+      "executingSourceBlob": "b5b8d8d6613c14aaec4de067f83f5a4517981b16",
+      "reviewedHeadBlob": "b5b8d8d6613c14aaec4de067f83f5a4517981b16",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/AssemblyInfo.cs",
+      "executingSourceBlob": "a4efbd9665f731bb35c3bcb25fe2f05bd3ee1b90",
+      "reviewedHeadBlob": "a4efbd9665f731bb35c3bcb25fe2f05bd3ee1b90",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Configuration/RuntimeArtifactEntityConfigurations.cs",
+      "executingSourceBlob": "7251a10a2476542d647dfe1669dc135002a76c99",
+      "reviewedHeadBlob": "7251a10a2476542d647dfe1669dc135002a76c99",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Configuration/RuntimeModelEntityConfigurations.cs",
+      "executingSourceBlob": "d3a546ec6c4a20bad01e2c13ab4348c50a1b5d66",
+      "reviewedHeadBlob": "d3a546ec6c4a20bad01e2c13ab4348c50a1b5d66",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/DependencyInjection/RuntimeCheckpointCommitEntityFrameworkCoreRegistration.cs",
+      "executingSourceBlob": "2df719ec446bc200aa1880f8ded5835f456c55ca",
+      "reviewedHeadBlob": "2df719ec446bc200aa1880f8ded5835f456c55ca",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Entities/RuntimeArtifactEntities.cs",
+      "executingSourceBlob": "af4c82ffbbbedc1fca0319663c09570c55c4043e",
+      "reviewedHeadBlob": "af4c82ffbbbedc1fca0319663c09570c55c4043e",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Entities/RuntimeModelEntities.cs",
+      "executingSourceBlob": "3a93907e314bedced0c4ba14d2586e1b1a976a46",
+      "reviewedHeadBlob": "3a93907e314bedced0c4ba14d2586e1b1a976a46",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Properties/AssemblyInfo.cs",
+      "executingSourceBlob": "3cb1321af40eef8d5ce3313413753286a1799a17",
+      "reviewedHeadBlob": "3cb1321af40eef8d5ce3313413753286a1799a17",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeDbContext.cs",
+      "executingSourceBlob": "8584f670e102147d99caaf939967a75b658183b2",
+      "reviewedHeadBlob": "8584f670e102147d99caaf939967a75b658183b2",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeModelStateEfModule.cs",
+      "executingSourceBlob": "27e19731f0fd523b01bf69fb8e4607976a89b3a2",
+      "reviewedHeadBlob": "27e19731f0fd523b01bf69fb8e4607976a89b3a2",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeModelWorkerUpcasters.cs",
+      "executingSourceBlob": "fd49036280f1fbcb59392d32efe0ff1d1da7f923",
+      "reviewedHeadBlob": "fd49036280f1fbcb59392d32efe0ff1d1da7f923",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeSchedulerWorkEfModule.cs",
+      "executingSourceBlob": "07652519d52c239f198a9a660532658ad1611b55",
+      "reviewedHeadBlob": "07652519d52c239f198a9a660532658ad1611b55",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeSchedulerWorkV1Upcaster.cs",
+      "executingSourceBlob": "6d62ccb1190cf4b6b8fb0e1229f2e8e5f717eb87",
+      "reviewedHeadBlob": "6d62ccb1190cf4b6b8fb0e1229f2e8e5f717eb87",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/RuntimeWorkflowExecutionEfModule.cs",
+      "executingSourceBlob": "47af57aca6d484d3c60496a800beb2abd26b87d5",
+      "reviewedHeadBlob": "47af57aca6d484d3c60496a800beb2abd26b87d5",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfModelCheckpointStaging.cs",
+      "executingSourceBlob": "cc6ec5db3fa96d952e9644038548f585ffc8e58c",
+      "reviewedHeadBlob": "cc6ec5db3fa96d952e9644038548f585ffc8e58c",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointCommitStore.cs",
+      "executingSourceBlob": "2f1621415d8fa912618d0d07419438a20b37ab61",
+      "reviewedHeadBlob": "2f1621415d8fa912618d0d07419438a20b37ab61",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeCheckpointParticipantStaging.cs",
+      "executingSourceBlob": "fd2ea1b4a34e9f98452402f1a74859f58e7764e6",
+      "reviewedHeadBlob": "fd2ea1b4a34e9f98452402f1a74859f58e7764e6",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeModelExecutionReader.cs",
+      "executingSourceBlob": "556b017b339d8d4a16c746378ef3c4d94051da5f",
+      "reviewedHeadBlob": "556b017b339d8d4a16c746378ef3c4d94051da5f",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs",
+      "executingSourceBlob": "07b17987c24b6d48c5ca468b394638c914c91053",
+      "reviewedHeadBlob": "07b17987c24b6d48c5ca468b394638c914c91053",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfSchedulerWorkQueueStore.cs",
+      "executingSourceBlob": "fd800223772966115d36edfd27399c5d2866e5f3",
+      "reviewedHeadBlob": "fd800223772966115d36edfd27399c5d2866e5f3",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableSourceReferenceStore.RootWrites.cs",
+      "executingSourceBlob": "8f10b503d65a4eca45ca18237ee76341da5c71e4",
+      "reviewedHeadBlob": "8f10b503d65a4eca45ca18237ee76341da5c71e4",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.ModelMaterial.cs",
+      "executingSourceBlob": "3863dfb70cb921bc36049f360923e025170499f1",
+      "reviewedHeadBlob": "3863dfb70cb921bc36049f360923e025170499f1",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutableStore.cs",
+      "executingSourceBlob": "0b4426f8afc0d888198d348608283f1a1ec82a49",
+      "reviewedHeadBlob": "0b4426f8afc0d888198d348608283f1a1ec82a49",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfWorkflowExecutionStateStore.cs",
+      "executingSourceBlob": "6e0cb6b6b4c63b52dc1e61bb605608ddfa0eeda4",
+      "reviewedHeadBlob": "6e0cb6b6b4c63b52dc1e61bb605608ddfa0eeda4",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/ModelWorkWriteVersion.cs",
+      "executingSourceBlob": "b0a90a1586c747997b1d1728e536b428bc9ba9fd",
+      "reviewedHeadBlob": "b0a90a1586c747997b1d1728e536b428bc9ba9fd",
+      "equivalent": true
+    },
+    {
+      "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/RuntimeSchedulerWorkWriteVersion.cs",
+      "executingSourceBlob": "8dde45b02b4cdefebf3cb9a32b09c96463688220",
+      "reviewedHeadBlob": "8dde45b02b4cdefebf3cb9a32b09c96463688220",
+      "equivalent": true
+    }
+  ],
+  "tests": [
+    {
+      "path": "bpmn/_Sipkes-Mac-Mini_2026-10-31_00_36_28_net10.0.trx",
+      "total": "481",
+      "executed": "481",
+      "passed": "481",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    {
+      "path": "runtime-ef/_Sipkes-Mac-Mini_2026-10-31_00_37_40_net10.0.trx",
+      "total": "50",
+      "executed": "50",
+      "passed": "50",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    }
+  ]
+}

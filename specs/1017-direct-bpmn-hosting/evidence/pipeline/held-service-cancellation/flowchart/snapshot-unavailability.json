@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-owned-lookup-snapshot-unavailability",
+  "sourceRevision": "a4098bd1a23a1e975c82ebefb7334ba7c9a2bfd4",
+  "snapshotKey": "4f9b93c75300668a8900c95c447b198c0fe2c4b266d553f8be5c3fc377f6c418.csv",
+  "unavailableKey": "4f9b93c75300668a8900c95c447b198c0fe2c4b266d553f8be5c3fc377f6c418.csv.unavailable",
+  "sourceSha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc",
+  "snapshotSha256Before": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc",
+  "snapshotSha256WhileUnavailable": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc",
+  "sourceStillAvailable": true,
+  "originalSnapshotReadPathMissing": true,
+  "inducedAtUtc": "2026-10-29T20:34:10.080993+00:00",
+  "predecessorExitCode": -9,
+  "restoredBeforeAuthorizedCancellation": true,
+  "restoredAtUtc": "2026-10-29T20:34:32.249537+00:00",
+  "restoredSha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+}

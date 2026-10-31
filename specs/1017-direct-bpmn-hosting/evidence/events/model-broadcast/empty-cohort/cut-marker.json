@@ -1,0 +1,42 @@
+{
+  "caseId": "actual-cut",
+  "phase": "after-cohort",
+  "providerEvent": null,
+  "sourceOutboxItemId": "commit:c38d4bef66dccabf:invoke:14lVtY8ngZm:activity-completed:14lVtY8ngZm:09d847afb6dfc4d0:0",
+  "sourceCommitId": "commit:c38d4bef66dccabf:invoke:14lVtY8ngZm:activity-completed:14lVtY8ngZm",
+  "intentFingerprint": "07c6d329bd87eab3f3f1380456654b3bb7ffba04c1739085518df08b0f4f4e09",
+  "scope": "default",
+  "ownerId": "runtime-outbox-20eec842cb6941bea8e1267065918fc9",
+  "fencingToken": 1,
+  "visibleAfter": "2026-10-30T01:47:02.944578+00:00",
+  "workflowExecutionId": "14lVtXYbQ06",
+  "snapshot": {
+    "version": 1,
+    "sourceOutboxItemId": "commit:c38d4bef66dccabf:invoke:14lVtY8ngZm:activity-completed:14lVtY8ngZm:09d847afb6dfc4d0:0",
+    "intentFingerprint": "07c6d329bd87eab3f3f1380456654b3bb7ffba04c1739085518df08b0f4f4e09",
+    "scope": {
+      "persistenceScope": {
+        "value": "default"
+      },
+      "tenantId": "default",
+      "partition": {
+        "value": "default"
+      },
+      "runKind": 2,
+      "testScope": null
+    },
+    "selectedAt": "2026-10-30T01:46:02.981763+00:00",
+    "stimulusType": "Event",
+    "stimulusHash": "sha256:33db92d37c554aee43f4379a83d6c774f53f55c7165f4422f382bf632b673106",
+    "starts": [],
+    "resumes": [],
+    "retentionAcceptance": {
+      "version": 1
+    }
+  },
+  "proposal": null,
+  "acceptedExecution": null,
+  "acceptedBookmark": null,
+  "observedStart": null,
+  "capturedAtUtc": "2026-10-30T01:46:03.023901+00:00"
+}

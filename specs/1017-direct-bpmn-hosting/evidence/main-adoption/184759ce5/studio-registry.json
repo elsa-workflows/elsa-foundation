@@ -1,0 +1,13 @@
+{
+  "args": [
+    "pnpm",
+    "--dir",
+    "Studio/src/essentials/Elsa.Studio.Hosting/Client",
+    "exec",
+    "vitest",
+    "run",
+    "src/__tests__/registry.test.ts"
+  ],
+  "exitCode": 0,
+  "executingSource": "833e586e74dbe3a7c4dc362ef73bdfe3f7349273"
+}

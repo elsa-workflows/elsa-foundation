@@ -1,0 +1,485 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-model-signal-recovery-matrix",
+  "sourceRevision": "8a1aa37942393923b4f55330d6da75a1d5eb5b12",
+  "baselineManifestSha256": "c2e5d9c8c2a001ff5141c2ca8eaaed097ec7c81d78d0180b6c7a4ecf5bed4153",
+  "frozenBaselineAssetCount": 104,
+  "cases": [
+    {
+      "parent": "direct",
+      "directory": "direct",
+      "assets": [
+        {
+          "path": "broadcast-checked.json",
+          "sha256": "b3ae3840f94b8eb874fab430236f74f039970d49af473b279651dbd69f1d1289"
+        },
+        {
+          "path": "finished-checked.json",
+          "sha256": "b98ff4b6651874a165cb43734118e7afc78f4fe40ecf25e70b3bbad3944d2d4e"
+        },
+        {
+          "path": "finished-design.sqlite.gz",
+          "sha256": "51019823366b315aae3b32d3b3ea28ed54cba8b2db8e94456627fbc048b61002"
+        },
+        {
+          "path": "finished-runtime.sqlite.gz",
+          "sha256": "8e2e569015f5aebd3a720a579880a721224f8e270606760ab9051e841bd7d6c3"
+        },
+        {
+          "path": "finished-workers.json",
+          "sha256": "cb612dd9d290fd722fb346396c8f10f591b68aa2906622c439ea425cb1df3708"
+        },
+        {
+          "path": "process.json",
+          "sha256": "163cd4e0220c4f5f793352ea8ea87e17d4fdd75355333e4710ba0011add90099"
+        },
+        {
+          "path": "recovered-checked.json",
+          "sha256": "d405d4c4d099c915bf4adf4022307f980a19b12c85c8026eba00ef1e5d7ca47e"
+        },
+        {
+          "path": "retained-checked.json",
+          "sha256": "b98ff4b6651874a165cb43734118e7afc78f4fe40ecf25e70b3bbad3944d2d4e"
+        },
+        {
+          "path": "retained-design.sqlite.gz",
+          "sha256": "51019823366b315aae3b32d3b3ea28ed54cba8b2db8e94456627fbc048b61002"
+        },
+        {
+          "path": "retained-runtime.sqlite.gz",
+          "sha256": "8e2e569015f5aebd3a720a579880a721224f8e270606760ab9051e841bd7d6c3"
+        },
+        {
+          "path": "waiting-api.json",
+          "sha256": "df98f186b0ddb9dfaeb5c129c338aebcfec507828fe310069f5b6a14084f7273"
+        },
+        {
+          "path": "waiting-checked.json",
+          "sha256": "b409dd50e1072f73382cf04515c41a94df3f41667d3b18442e503c42905024d5"
+        },
+        {
+          "path": "waiting-design.sqlite.gz",
+          "sha256": "58bdffaf5430a0b303f70e65f152184ba80a250c499a030eb8e4dafa39d0c4ce"
+        },
+        {
+          "path": "waiting-runtime.sqlite.gz",
+          "sha256": "beb7d3bc80697ebbe07af80284b2d1ee19104811e504e809af294dc943edeb54"
+        },
+        {
+          "path": "waiting-workers.json",
+          "sha256": "b105e59fb21926ec70fd683ab6ab1522264f2108d9a8ccc60bb6ebbe72a515c6"
+        }
+      ]
+    },
+    {
+      "parent": "root",
+      "directory": "root",
+      "assets": [
+        {
+          "path": "broadcast-checked.json",
+          "sha256": "d191214960cfa07c0a70afcfd0ed0681132035d2a2b8db1c39b3a1af637de633"
+        },
+        {
+          "path": "finished-checked.json",
+          "sha256": "076dc9501a4f2a50910048adeb457bfd2961547c203d3a4ab2e37fc0d15c257e"
+        },
+        {
+          "path": "finished-design.sqlite.gz",
+          "sha256": "98bc2018c51be6648dcb5806e3c40837e6fd5dad2d5c8e366ec3dbc0ec2fc712"
+        },
+        {
+          "path": "finished-parent.json",
+          "sha256": "88298fcd6e8f066b639a02b34f7d5d7e7447f646866f345066a90bc293a3766f"
+        },
+        {
+          "path": "finished-runtime.sqlite.gz",
+          "sha256": "c3ce1b25e84325ad7fe988d1cc290fc85ec9eb909f9f47e836ceb0731c444f4b"
+        },
+        {
+          "path": "finished-workers.json",
+          "sha256": "51dfb2e9132b08d81dd4e9d87c17f7d4514158b15309c427e6eb483931a7349f"
+        },
+        {
+          "path": "process.json",
+          "sha256": "2db5036b6f4864d7411eca55cb14d5d4e43ecadf7c1a97caea8910b006b2addd"
+        },
+        {
+          "path": "recovered-checked.json",
+          "sha256": "1cdac120fcf7dea3e7f96cbc3b33a82a071d4f6e4856a6c844a4c372b3987530"
+        },
+        {
+          "path": "retained-checked.json",
+          "sha256": "076dc9501a4f2a50910048adeb457bfd2961547c203d3a4ab2e37fc0d15c257e"
+        },
+        {
+          "path": "retained-design.sqlite.gz",
+          "sha256": "98bc2018c51be6648dcb5806e3c40837e6fd5dad2d5c8e366ec3dbc0ec2fc712"
+        },
+        {
+          "path": "retained-runtime.sqlite.gz",
+          "sha256": "c3ce1b25e84325ad7fe988d1cc290fc85ec9eb909f9f47e836ceb0731c444f4b"
+        },
+        {
+          "path": "waiting-api.json",
+          "sha256": "b305f8b5958bdef0ed6830edcfa0eaf7798ece8f84f8c675da6e8dd2d72cc21e"
+        },
+        {
+          "path": "waiting-checked.json",
+          "sha256": "1cdac120fcf7dea3e7f96cbc3b33a82a071d4f6e4856a6c844a4c372b3987530"
+        },
+        {
+          "path": "waiting-design.sqlite.gz",
+          "sha256": "32c6e676995217629b9350344982825cb46f9b4c40d6251dac095847f0616727"
+        },
+        {
+          "path": "waiting-runtime.sqlite.gz",
+          "sha256": "133e09bd9e14921ac30ca199fa310724b1b74bf67cef1ff9cc6d439114e16122"
+        },
+        {
+          "path": "waiting-workers.json",
+          "sha256": "cc6b1715a72b77491c58cef5e773e15fb290c69cd43e937eb692965b27cba407"
+        }
+      ]
+    },
+    {
+      "parent": "sequence",
+      "directory": "sequence",
+      "assets": [
+        {
+          "path": "broadcast-checked.json",
+          "sha256": "4454203bc996da93066a57d5f2489ac2cf436e9796dd2faba285a3d25b0b35e9"
+        },
+        {
+          "path": "finished-checked.json",
+          "sha256": "0ff5153606ab9704100b65b7fda15953a7979508afba5ad818852a1555ba06b0"
+        },
+        {
+          "path": "finished-design.sqlite.gz",
+          "sha256": "0dc152db6d1e8c274d4a2986ad407175e04d4951537c78f893e26ff26988a477"
+        },
+        {
+          "path": "finished-parent.json",
+          "sha256": "31606bded2f205d55d37710fe425ad6c09b091ff544fd30385d71e84de14b7bf"
+        },
+        {
+          "path": "finished-runtime.sqlite.gz",
+          "sha256": "3e93f6f4eb62ca44b162332c31f05237210bf72cb486f2939e288257a7c4c3dc"
+        },
+        {
+          "path": "finished-workers.json",
+          "sha256": "9fbc6226d6f587b72c83faf26abafb5ae21466d8c241b74a0cbb7e3d5d23feab"
+        },
+        {
+          "path": "process.json",
+          "sha256": "5a676c0f68a2acf749c5c4e0141e508a1ba3d1038109badc1314fc293cdc3bfd"
+        },
+        {
+          "path": "recovered-checked.json",
+          "sha256": "f71edda21f06cb4a7d57f6504e858c31a065d9013ac506b5a4c545c525a3773d"
+        },
+        {
+          "path": "retained-checked.json",
+          "sha256": "0ff5153606ab9704100b65b7fda15953a7979508afba5ad818852a1555ba06b0"
+        },
+        {
+          "path": "retained-design.sqlite.gz",
+          "sha256": "0dc152db6d1e8c274d4a2986ad407175e04d4951537c78f893e26ff26988a477"
+        },
+        {
+          "path": "retained-runtime.sqlite.gz",
+          "sha256": "3e93f6f4eb62ca44b162332c31f05237210bf72cb486f2939e288257a7c4c3dc"
+        },
+        {
+          "path": "waiting-api.json",
+          "sha256": "8ebf7bc94c570066017eacabd653bfe703f05f639cef8be8627907622ea8051c"
+        },
+        {
+          "path": "waiting-checked.json",
+          "sha256": "f71edda21f06cb4a7d57f6504e858c31a065d9013ac506b5a4c545c525a3773d"
+        },
+        {
+          "path": "waiting-design.sqlite.gz",
+          "sha256": "e592f585f7bbd3740573fc487def7165fa31cd1425ce81589e6ba29c9fd7ef67"
+        },
+        {
+          "path": "waiting-runtime.sqlite.gz",
+          "sha256": "63fff858a4cbd5c53c170f9fc574f9edfe5b4d18719c931ebdd80e3843b3d959"
+        },
+        {
+          "path": "waiting-workers.json",
+          "sha256": "f3d57f675fb267f047cf49562a40bd60b1deb36273ce09808e3d305537fb862e"
+        }
+      ]
+    },
+    {
+      "parent": "flowchart",
+      "directory": "flowchart",
+      "assets": [
+        {
+          "path": "broadcast-checked.json",
+          "sha256": "87133bdd3e8cb6b8cd2eb5a8f317283b731118a2da57ae703a2b92bc5656dd69"
+        },
+        {
+          "path": "finished-checked.json",
+          "sha256": "208d38ea9e97f7013e73c966a98a96fcba2e2c518400ceec171e4fd510c73a70"
+        },
+        {
+          "path": "finished-design.sqlite.gz",
+          "sha256": "19ecdf17ba618667c3cc27adf0a4d0fbb79d7fe0efc1a20f2a959feb70236fa2"
+        },
+        {
+          "path": "finished-parent.json",
+          "sha256": "72bbdd1935dcaf364b811fdd303fc3583eedac9a094c83bce9dc45a0dbed49c1"
+        },
+        {
+          "path": "finished-runtime.sqlite.gz",
+          "sha256": "73e09b6d611badf59a92d166ae59dd04607fe985a0033c3740d0f2d47ee58903"
+        },
+        {
+          "path": "finished-workers.json",
+          "sha256": "7348d5c1ced6d44cb7bab724aba868550d96048e7c354db9bd4ad72862cb91a4"
+        },
+        {
+          "path": "process.json",
+          "sha256": "eff5d375c97fecf7f70991eee91dceaaf35e267f29aa3cb1d6cc4abd5a8acfb2"
+        },
+        {
+          "path": "recovered-checked.json",
+          "sha256": "99c926925b873996ff295a31e539c1b62d9bce362b93816e1213f73468c3a944"
+        },
+        {
+          "path": "retained-checked.json",
+          "sha256": "208d38ea9e97f7013e73c966a98a96fcba2e2c518400ceec171e4fd510c73a70"
+        },
+        {
+          "path": "retained-design.sqlite.gz",
+          "sha256": "19ecdf17ba618667c3cc27adf0a4d0fbb79d7fe0efc1a20f2a959feb70236fa2"
+        },
+        {
+          "path": "retained-runtime.sqlite.gz",
+          "sha256": "73e09b6d611badf59a92d166ae59dd04607fe985a0033c3740d0f2d47ee58903"
+        },
+        {
+          "path": "waiting-api.json",
+          "sha256": "86fdb01dc28f046326e626f1fe9e913cd773caf2f9709cb7ed1094f5a8e7e4b5"
+        },
+        {
+          "path": "waiting-checked.json",
+          "sha256": "99c926925b873996ff295a31e539c1b62d9bce362b93816e1213f73468c3a944"
+        },
+        {
+          "path": "waiting-design.sqlite.gz",
+          "sha256": "83fa4bae5163c6c24a76c39f4aabf74a19f21a5ae0585411244253320c656238"
+        },
+        {
+          "path": "waiting-runtime.sqlite.gz",
+          "sha256": "b7f89be1f4db45174b6c2bb17bb8a7c13b399571b63976dd482aee8fc7916283"
+        },
+        {
+          "path": "waiting-workers.json",
+          "sha256": "dcc25bcb1e5da972773896d6b973e488c355711a9cf86a3bca3b0b7b93855ef9"
+        }
+      ]
+    },
+    {
+      "parent": "compensationscope",
+      "directory": "compensationscope",
+      "assets": [
+        {
+          "path": "broadcast-checked.json",
+          "sha256": "ca525c5c0945fb5d0fe528a710ebf948f9fad982298259f791ead3989a8f41b1"
+        },
+        {
+          "path": "finished-checked.json",
+          "sha256": "402334f90982c11bdc68c9c70bf62c926f29c97bee74517bf950fc21d04d9705"
+        },
+        {
+          "path": "finished-design.sqlite.gz",
+          "sha256": "9386ddc57ccf825655300b7023ddddce9a481adb547956967fc34f67c4349384"
+        },
+        {
+          "path": "finished-parent.json",
+          "sha256": "66fdd2076bd7502f7ed24d1520b41f59c8b6cd84f9869a54fada2e600f4b3943"
+        },
+        {
+          "path": "finished-runtime.sqlite.gz",
+          "sha256": "e090df8d6617f20a81346ccaf1e1b98f23073c44f972a47b05dc8687e49d1617"
+        },
+        {
+          "path": "finished-workers.json",
+          "sha256": "eece13c0bf66ee95a8eab754b37b65204b84b574d466009349aed03ee7d98bd6"
+        },
+        {
+          "path": "process.json",
+          "sha256": "a75f7c63cec9d4787b89790299ef1ad77f427e8535c3480cb6fde5f8f37f8260"
+        },
+        {
+          "path": "recovered-checked.json",
+          "sha256": "d9717fc19f905efacf7aaa9717eec83c3f8aeef5632d64bc8f66244d970db456"
+        },
+        {
+          "path": "retained-checked.json",
+          "sha256": "402334f90982c11bdc68c9c70bf62c926f29c97bee74517bf950fc21d04d9705"
+        },
+        {
+          "path": "retained-design.sqlite.gz",
+          "sha256": "9386ddc57ccf825655300b7023ddddce9a481adb547956967fc34f67c4349384"
+        },
+        {
+          "path": "retained-runtime.sqlite.gz",
+          "sha256": "e090df8d6617f20a81346ccaf1e1b98f23073c44f972a47b05dc8687e49d1617"
+        },
+        {
+          "path": "waiting-api.json",
+          "sha256": "0fb828a105908266ac66b253bae1a1689fd71409b2fde1171052252bcb7d2490"
+        },
+        {
+          "path": "waiting-checked.json",
+          "sha256": "d9717fc19f905efacf7aaa9717eec83c3f8aeef5632d64bc8f66244d970db456"
+        },
+        {
+          "path": "waiting-design.sqlite.gz",
+          "sha256": "fdc8c52fe53877e3987eca8336bb7428c95e2d15b83c55b2aedd1d50d019689d"
+        },
+        {
+          "path": "waiting-runtime.sqlite.gz",
+          "sha256": "3d19110888ed69795f75d7db2df364e0a0f9a81bb63f80665cfa1f01d2a39d34"
+        },
+        {
+          "path": "waiting-workers.json",
+          "sha256": "894443c3a254d4be1c012802ce6c6296cc73494d734903695add7d689bc79845"
+        }
+      ]
+    }
+  ],
+  "diagnostics": [
+    {
+      "name": "event-binding-refused",
+      "qualifiesJourney": false,
+      "sourceRevision": "4a25c30ba6d50c662742c5a44adb52791eda46a0",
+      "suppliedSourceLabel": null,
+      "assets": [
+        {
+          "path": "diagnostics/event-binding-refused/compensationscope/failed-design.sqlite.gz",
+          "sha256": "3ab3cae78e9d9c023c1a5442cd796c49a5b88d34141299068535fa1f70e2580a"
+        },
+        {
+          "path": "diagnostics/event-binding-refused/compensationscope/failed-runtime.sqlite.gz",
+          "sha256": "8f3038dadc7de83988000281e01517c5806028168248ad1fcd4cebe46204f805"
+        },
+        {
+          "path": "diagnostics/event-binding-refused/compensationscope/failure.json",
+          "sha256": "0473c9d14c6cacb27b074c8f3ee0e734d76efe3ff1638e20e1de550e3e8ef720"
+        },
+        {
+          "path": "diagnostics/event-binding-refused/direct/failed-design.sqlite.gz",
+          "sha256": "38caa9162faa71e3f4cba530f711dbaea535a24d1f04d7dc83637998cf4f9b68"
+        },
+        {
+          "path": "diagnostics/event-binding-refused/direct/failed-runtime.sqlite.gz",
+          "sha256": "1415a6efc7f943c18a98c799e945312b49ada7c9d9c88656d31e6c2fc6e67908"
+        },
+        {
+          "path": "diagnostics/event-binding-refused/direct/failure.json",
+          "sha256": "454744d149f282d8a2caf7b4446477fd1d19e3c0d0f29a7c04bf4778eb939274"
+        },
+        {
+          "path": "diagnostics/event-binding-refused/flowchart/failed-design.sqlite.gz",
+          "sha256": "9c311598e6a9629d3044a1c13e87765a8c23b8a4ff872125e8e7bdc645e3c474"
+        },
+        {
+          "path": "diagnostics/event-binding-refused/flowchart/failed-runtime.sqlite.gz",
+          "sha256": "39d97090528d91b45cb3cfd44700102b9b28f38dea1c52c2da75dc5aa39c15e1"
+        },
+        {
+          "path": "diagnostics/event-binding-refused/flowchart/failure.json",
+          "sha256": "55ed8fa002c666daacc4131e1ea6c452b22d84f026791d62d92c0f52f9142f56"
+        },
+        {
+          "path": "diagnostics/event-binding-refused/root/failed-design.sqlite.gz",
+          "sha256": "ced751543547953401cdab5b939cc471234c7521b75aab4b6f37b35fe9a236fe"
+        },
+        {
+          "path": "diagnostics/event-binding-refused/root/failed-runtime.sqlite.gz",
+          "sha256": "8ba02297ca50e2cc841b7a12cd23aab6db8f823ecada15d03464fb4876992bb8"
+        },
+        {
+          "path": "diagnostics/event-binding-refused/root/failure.json",
+          "sha256": "c9b1deb04d6ad186619f3435a4b6192226a3365cd38848f3d4d2bd82fb69c00c"
+        },
+        {
+          "path": "diagnostics/event-binding-refused/sequence/failed-design.sqlite.gz",
+          "sha256": "5c3997d6a391eb8105da76fb0ece61f57a0947a401b29ba625e465f5fd518c22"
+        },
+        {
+          "path": "diagnostics/event-binding-refused/sequence/failed-runtime.sqlite.gz",
+          "sha256": "137319089f461f3e05bfdeb88236497c2bdd22966bb38af7a690453ba1ce9179"
+        },
+        {
+          "path": "diagnostics/event-binding-refused/sequence/failure.json",
+          "sha256": "19a16429a156550a74ef68c9cc948b95185c09776606c68ff7efbd1588f3a1e6"
+        }
+      ]
+    },
+    {
+      "name": "source-label-error",
+      "qualifiesJourney": false,
+      "sourceRevision": null,
+      "suppliedSourceLabel": "4a25c30ba198b03816930c1ea0e897b81ff5537d",
+      "assets": [
+        {
+          "path": "diagnostics/source-label-error/compensationscope/failed-design.sqlite.gz",
+          "sha256": "505c9dda91c2d1911ca707338eeca1fe2770b64afa19e979c0ed3fd87134d390"
+        },
+        {
+          "path": "diagnostics/source-label-error/compensationscope/failed-runtime.sqlite.gz",
+          "sha256": "0eeb404abbe8ca739dea4f4ec337e5740e3a1a8b5f541a4180327e10ad0c5cbe"
+        },
+        {
+          "path": "diagnostics/source-label-error/compensationscope/failure.json",
+          "sha256": "fe3250a3353b6822af9fd006671dc3af5644454559961beddbca6af099a1b18b"
+        },
+        {
+          "path": "diagnostics/source-label-error/direct/failed-design.sqlite.gz",
+          "sha256": "85b63a4c5062d2f634171ed9c66548a352a33342d8116fddb630f7cd6befad99"
+        },
+        {
+          "path": "diagnostics/source-label-error/direct/failed-runtime.sqlite.gz",
+          "sha256": "89ce840aa5aa1598d0c11c19acc94e0d5af8a6660d759ad8bea36209f7407b3b"
+        },
+        {
+          "path": "diagnostics/source-label-error/direct/failure.json",
+          "sha256": "cd6742b0885d6b876e47af63ba7cd335f66e5a29fff42cae1d34a8f47300f9f7"
+        },
+        {
+          "path": "diagnostics/source-label-error/flowchart/failed-design.sqlite.gz",
+          "sha256": "969a029c11838567d82833bb08a4f567040eca100ac17e60d1b67f12560cbdaa"
+        },
+        {
+          "path": "diagnostics/source-label-error/flowchart/failed-runtime.sqlite.gz",
+          "sha256": "ac257e2ef473c0badfb04c482898bd202cda729d9f7b8814ffee4d087e993026"
+        },
+        {
+          "path": "diagnostics/source-label-error/flowchart/failure.json",
+          "sha256": "cd1c29b146137dc85611e447ba48256d2ebee661c1e9632997fb5bd4cdcc8a1c"
+        },
+        {
+          "path": "diagnostics/source-label-error/sequence/failed-design.sqlite.gz",
+          "sha256": "2804055142cbb0fe7409e84910d207a3ba7db8053d3e161ee2dcf7ed334ec95c"
+        },
+        {
+          "path": "diagnostics/source-label-error/sequence/failed-runtime.sqlite.gz",
+          "sha256": "de6dd9f7cec8c4c82a06b03af61ec1adc0d9b20121e54d6f84739b529a0e90db"
+        },
+        {
+          "path": "diagnostics/source-label-error/sequence/failure.json",
+          "sha256": "eb0795264bd20ea7825480690784cb877898b79f73bf7221802e321710069444"
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Actual same-source model signal recovery only. Delivery-time later-listener, rearm, pre-ACK retry and empty-cohort cuts remain unqualified.",
+    "These captures do not prove final upgraded-host or Studio compatibility."
+  ]
+}

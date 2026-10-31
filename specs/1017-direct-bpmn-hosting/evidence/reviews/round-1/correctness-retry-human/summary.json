@@ -1,0 +1,152 @@
+{
+  "executionId": "bpmn:ff32e1b1d0839abc30238d45b796ced92b14fe7cb12541bb3bf02cdf69e9d9bd",
+  "publicationStatus": 200,
+  "retry": {
+    "executionId": "bpmn:ff32e1b1d0839abc30238d45b796ced92b14fe7cb12541bb3bf02cdf69e9d9bd",
+    "inputId": "invalid-retry",
+    "replay": false,
+    "pending": true,
+    "result": null
+  },
+  "complete": {
+    "executionId": "bpmn:ff32e1b1d0839abc30238d45b796ced92b14fe7cb12541bb3bf02cdf69e9d9bd",
+    "inputId": "normal-complete",
+    "replay": false,
+    "pending": true,
+    "result": null
+  },
+  "cancel": {
+    "executionId": "bpmn:ff32e1b1d0839abc30238d45b796ced92b14fe7cb12541bb3bf02cdf69e9d9bd",
+    "inputId": "normal-cancel",
+    "replay": false,
+    "pending": true,
+    "result": null
+  },
+  "beforeRevision": 1,
+  "afterRevision": 1,
+  "finalRevision": 1,
+  "finalLifecycle": 0,
+  "queuedInputs": [
+    {
+      "workItemId": "model-input:2f4d430988a09f2a1ef2bb4536f4f44a21a1567192c19e6f0e0ea0e4f9cc4c22",
+      "workflowExecutionId": "bpmn:ff32e1b1d0839abc30238d45b796ced92b14fe7cb12541bb3bf02cdf69e9d9bd",
+      "commandId": "invalid-retry",
+      "commandKind": 21,
+      "envelopeId": "bpmn-command:7758a53ef89a9ac26504352a99caabd3f0b46ed1343742549c9bf25b7e758937",
+      "idempotencyKey": "bpmn-command:7758a53ef89a9ac26504352a99caabd3f0b46ed1343742549c9bf25b7e758937",
+      "enqueuedAt": "2026-10-30T07:01:56.905019+00:00",
+      "recordedAt": "2026-10-30T07:01:56.907845+00:00",
+      "sequence": null,
+      "payload": {
+        "executable": {
+          "artifactId": "sha256:c76f4631430558fe384feecd26b89855a65a273d71d20c67f0b9b8ed508892bd",
+          "definitionId": "bpmn-model:sha256:c76f4631430558fe384feecd26b89855a65a273d71d20c67f0b9b8ed508892bd",
+          "definitionVersionId": "sha256:c76f4631430558fe384feecd26b89855a65a273d71d20c67f0b9b8ed508892bd",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:c76f4631430558fe384feecd26b89855a65a273d71d20c67f0b9b8ed508892bd"
+        },
+        "materialIncarnationId": "61980656e5c7428f9d21b93691e636c7",
+        "inputId": "invalid-retry",
+        "inputKind": "retry-service",
+        "payload": {
+          "incidentId": "nonexistent-incident",
+          "invocationId": "bpmn-work:ea5f0af98107ac5cf5379572ba53739c97714fa42a46284322abe3e316583e2b",
+          "failedAttemptId": "attempt:5d67f7593e54f90ad09805ad0a23d0e0106ea2f55865a20ae2cee562fcb49ad8"
+        },
+        "authority": {
+          "systemIdentity": "bpmn-runtime",
+          "rootInitiator": "seed-user-516dd8aa49c146bd86326874",
+          "metadata": {}
+        },
+        "tenantId": "default"
+      },
+      "commandMetadata": {},
+      "envelopeMetadata": {},
+      "executionScopeId": null,
+      "attempt": null
+    },
+    {
+      "workItemId": "model-input:e439cd66ad772b965707bec8c06dbeeb555613c09b292d485fc0160e3ce98bc3",
+      "workflowExecutionId": "bpmn:ff32e1b1d0839abc30238d45b796ced92b14fe7cb12541bb3bf02cdf69e9d9bd",
+      "commandId": "normal-complete",
+      "commandKind": 21,
+      "envelopeId": "bpmn-command:5f90666ca84e43876e357a3adb1f48972c91955aa81d952f7d7c1b559f79fda2",
+      "idempotencyKey": "bpmn-command:5f90666ca84e43876e357a3adb1f48972c91955aa81d952f7d7c1b559f79fda2",
+      "enqueuedAt": "2026-10-30T07:01:57.524867+00:00",
+      "recordedAt": "2026-10-30T07:01:57.538383+00:00",
+      "sequence": null,
+      "payload": {
+        "executable": {
+          "artifactId": "sha256:c76f4631430558fe384feecd26b89855a65a273d71d20c67f0b9b8ed508892bd",
+          "definitionId": "bpmn-model:sha256:c76f4631430558fe384feecd26b89855a65a273d71d20c67f0b9b8ed508892bd",
+          "definitionVersionId": "sha256:c76f4631430558fe384feecd26b89855a65a273d71d20c67f0b9b8ed508892bd",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:c76f4631430558fe384feecd26b89855a65a273d71d20c67f0b9b8ed508892bd"
+        },
+        "materialIncarnationId": "61980656e5c7428f9d21b93691e636c7",
+        "inputId": "normal-complete",
+        "inputKind": "complete-human",
+        "payload": {
+          "invocationId": "bpmn-work:ea5f0af98107ac5cf5379572ba53739c97714fa42a46284322abe3e316583e2b",
+          "attemptId": "attempt:5d67f7593e54f90ad09805ad0a23d0e0106ea2f55865a20ae2cee562fcb49ad8",
+          "outcomes": [
+            "Done"
+          ]
+        },
+        "authority": {
+          "systemIdentity": "bpmn-runtime",
+          "rootInitiator": "seed-user-516dd8aa49c146bd86326874",
+          "metadata": {}
+        },
+        "tenantId": "default"
+      },
+      "commandMetadata": {},
+      "envelopeMetadata": {},
+      "executionScopeId": null,
+      "attempt": null
+    },
+    {
+      "workItemId": "model-input:26d6e165501e5d44bdc6159872668edeb209981115e0cb29d6e76baa5e3d9d3f",
+      "workflowExecutionId": "bpmn:ff32e1b1d0839abc30238d45b796ced92b14fe7cb12541bb3bf02cdf69e9d9bd",
+      "commandId": "normal-cancel",
+      "commandKind": 21,
+      "envelopeId": "bpmn-command:5a04389bab1a5582429f6d5faec36635b51b085f07999d19cd5411030e91a8d1",
+      "idempotencyKey": "bpmn-command:5a04389bab1a5582429f6d5faec36635b51b085f07999d19cd5411030e91a8d1",
+      "enqueuedAt": "2026-10-30T07:01:57.585484+00:00",
+      "recordedAt": "2026-10-30T07:01:57.585912+00:00",
+      "sequence": null,
+      "payload": {
+        "executable": {
+          "artifactId": "sha256:c76f4631430558fe384feecd26b89855a65a273d71d20c67f0b9b8ed508892bd",
+          "definitionId": "bpmn-model:sha256:c76f4631430558fe384feecd26b89855a65a273d71d20c67f0b9b8ed508892bd",
+          "definitionVersionId": "sha256:c76f4631430558fe384feecd26b89855a65a273d71d20c67f0b9b8ed508892bd",
+          "artifactVersion": "1.0.0",
+          "artifactHash": "sha256:c76f4631430558fe384feecd26b89855a65a273d71d20c67f0b9b8ed508892bd"
+        },
+        "materialIncarnationId": "61980656e5c7428f9d21b93691e636c7",
+        "inputId": "normal-cancel",
+        "inputKind": "cancel",
+        "payload": {
+          "reason": "ordinary cancellation after invalid retry"
+        },
+        "authority": {
+          "systemIdentity": "bpmn-runtime",
+          "rootInitiator": "seed-user-516dd8aa49c146bd86326874",
+          "metadata": {}
+        },
+        "tenantId": "default"
+      },
+      "commandMetadata": {},
+      "envelopeMetadata": {},
+      "executionScopeId": null,
+      "attempt": null
+    }
+  ],
+  "inputKinds": [
+    "start"
+  ],
+  "stateSeeded": false,
+  "clockEdited": false,
+  "sourceStateEdited": false,
+  "actualSourceRevision": "d7ee22b164bc04098bedde19e5b4722ed6f2b871"
+}

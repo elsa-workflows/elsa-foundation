@@ -1,0 +1,500 @@
+info: CShells.AspNetCore.Extensions.ApplicationBuilderExtensions[0]
+      Configuring CShells middleware and endpoints
+info: CShells.AspNetCore.Extensions.ApplicationBuilderExtensions[0]
+      CShells middleware and endpoints configured successfully
+info: Elsa.Workbench.WorkbenchOpenIddictPruningService[0]
+      The OpenIddict store runs on Microsoft.EntityFrameworkCore.InMemory, which cannot delete in bulk, so it is not pruned; it is discarded when the host stops.
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://127.0.0.1:49289
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Development
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: /tmp/elsa-2898-design-template-upgrade/new-writer/host
+info: Elsa.Workbench.Readiness.DefaultShellWarmup[0]
+      Preparing default shell default after the server began listening
+info: CShells.Features.RuntimeFeatureCatalog[0]
+      Committed runtime feature catalog generation 1 with 121 feature(s): DiagnosticsOpenTelemetryEngineBridge, RuntimeFaultStackTrace, ActivitiesBpmn, ActivitiesBpmnHosting, ActivitiesBpmnHostingApi, ActivitiesBpmnInterchange, ActivitiesCompensation, ActivitiesControlFlow, ActivitiesDesignApi, ActivitiesDesignEntityFrameworkCore, ActivitiesDesignReconciliation, ClrActivityReconciliation, ActivitiesDispatchWorkflowDesign, ActivitiesDispatchWorkflowRuntime, ActivitiesFlowchart, ActivitiesGraphDesign, ActivitiesGraphRuntime, ActivitiesHttp, ActivitiesPrimitives, ActivitiesRuntime, BackgroundActivities, ActivitiesScheduling, ActivitiesSequence, FoundationAgentAbstractions, FoundationAgentApi, GitHubCopilotAgent, FoundationWorkflowsAgent, ApiCapabilities, AttentionApi, MemoryCache, Connections, ConnectionsApi, ConnectionsDesign, ConnectionsWorkflows, DiagnosticsOpenTelemetry, DiagnosticsOpenTelemetryEntityFrameworkCore, DiagnosticsStructuredLogs, DiagnosticsStructuredLogsEntityFrameworkCore, EtlDesign, EtlDesignApi, EtlDesignEntityFrameworkCore, EtlRuntimeEntityFrameworkCore, EtlRuntime, EtlRuntimeApi, EtlWorkflowsDesign, EtlWorkflowsRuntime, Events, Expressions, ExpressionsApi, JavaScriptExpressions, JavaScriptJintEngine, JavaScriptRenderingEndpoints, JavaScriptRendering, Liquid, FoundationIdentityAbstractions, FoundationIdentityApi, FoundationIdentityAspNetCoreIdentity, FoundationIdentityAspNetCoreIdentityEntityFrameworkCore, FoundationIdentityOidc, FoundationIdentityOpenIddict, IdentityIamEntityFrameworkCore, IdentityProviderConfigurationEntityFrameworkCore, Http, HttpJavaScript, DatabaseDistributedLocking, FileSystemDistributedLocking, Mediator, ModularityApi, ModularityAttention, Primitives, RulesRuntimeEntityFrameworkCore, RulesRuntime, RulesWorkflowsDesign, RulesWorkflowsRuntime, Secrets, SecretsAttention, SecretsApi, SecretsEntityFrameworkCore, SecretsWorkflows, Serialization.Newtonsoft, Serialization, StudioPreferences, StudioPreferencesApi, StudioPreferencesEntityFrameworkCore, Tasks, WorkflowsDashboard, WorkflowsDashboardEntityFrameworkCore, WorkflowsDesignApi, JavaScriptWorkflowsDesign, WorkflowsDesignEntityFrameworkCore, JsonWorkflowReconciliation, WorkflowDesignValidations, WorkflowsExecutionEvidence, WorkflowsPublishing, WorkflowsPublishingApi, WorkflowsPublishingEntityFrameworkCore, WorkflowsRuntimeTracing, WorkflowsRuntimeAttention, WorkflowsActivationChannels, WorkflowsRuntimeApi, WorkflowsRuntimeTriggers, WorkflowsRuntimeCheckpointPersistence, WorkflowsRuntimeDistributed, WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence, WorkflowsRuntimeDistributedEntityFrameworkCorePersistence, WorkflowsRuntimeHttp, JavaScriptEndpoints, JavaScriptActivities, WorkflowsRuntimeActivityExecutionEntityFrameworkCorePersistence, WorkflowsRuntimeArtifactsEntityFrameworkCorePersistence, WorkflowsRuntimeBookmarksEntityFrameworkCorePersistence, WorkflowsRuntimeEntityFrameworkCore, WorkflowsRuntimeOperationalStateEntityFrameworkCorePersistence, WorkflowsRuntimeAlterationEntityFrameworkCorePersistence, WorkflowsRuntimeWorkflowExecutionEntityFrameworkCorePersistence, WorkflowsRuntimeTestScopeEntityFrameworkCorePersistence, JsonWorkflowArtifactReconciliation, WorkflowsRuntimeReferenceGarbageCollection, WorkflowsRuntimeResumption, WorkflowsRuntimeRecurringTriggers, WorkflowsRuntimeScheduling
+warn: Microsoft.EntityFrameworkCore.Migrations[20410]
+      The migration operation 'PRAGMA foreign_keys = 0;
+      ' from migration 'SchemaVersionStamp' cannot be executed in a transaction. If the app is terminated or an unrecoverable error occurs while this operation is being executed then the migration will be left in a partially applied state and would need to be reverted manually before it can be applied again. Create a separate migration that contains just this operation.
+warn: Microsoft.EntityFrameworkCore.Migrations[20410]
+      The migration operation 'PRAGMA foreign_keys = 0;
+      ' from migration 'FreeNameOnDelete' cannot be executed in a transaction. If the app is terminated or an unrecoverable error occurs while this operation is being executed then the migration will be left in a partially applied state and would need to be reverted manually before it can be applied again. Create a separate migration that contains just this operation.
+info: Elsa.Persistence.EntityFramework.EfModuleMigrator[0]
+      Schema family RuntimePostCommitOutbox of EF module Workflows.Runtime finalized 2.0.0.
+info: Elsa.Persistence.EntityFramework.EfModuleMigrator[0]
+      Schema family RuntimeSchedulerWork of EF module Workflows.Runtime finalized 3.0.0.
+info: Elsa.Persistence.EntityFramework.EfModuleMigrator[0]
+      Schema family RuntimeWorkflowExecution of EF module Workflows.Runtime finalized 2.0.0.
+info: Elsa.Activities.DispatchWorkflow.Runtime.Services.WorkflowDispatchReadinessInitializer[0]
+      DispatchWorkflow readiness is DistributedReady
+info: Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Seeding.EfCoreIdentitySeeder[0]
+      Seeded EF Core ASP.NET Core Identity administrator account. Sign in at /_elsa/identity/login with username 'admin' (development/demo only).
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Serialization.SystemText.Services.JsonPayloadConvertersInitializingStartupTask completed with outcome success after 3.066 ms
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Workflows.Design.Api.Services.ValidateActivityInputOptionsProvidersStartupTask completed with outcome success after 0.026 ms
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Workflows.Runtime.Services.Recovery.ValidateRuntimeRecoveryContinuationCodecStartupTask completed with outcome success after 0.010 ms
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Workflows.Runtime.Api.Services.ValidateActivityStateViewProjectorsStartupTask completed with outcome success after 0.025 ms
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Activities.Runtime.Tasks.RegisterActivityTypesStartupTask completed with outcome success after 260.130 ms
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Workflows.Runtime.Http.Tasks.UpdateRouteTableStartupTask completed with outcome success after 38.572 ms
+info: Elsa.Workbench.OpenTelemetryEngineTracingBridge[0]
+      OpenTelemetry engine tracing bridge attached to ActivitySource 'Elsa.Workflows.Runtime'.
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Workbench.StartEngineTracingBridgeStartupTask completed with outcome success after 0.203 ms
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Serialization.SystemText.Startup.SeedWellKnownTypesStartupTask completed with outcome success after 1.013 ms
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Workflows.Runtime.Services.ActivityExecutions.ValidateActivityExecutionHierarchyCursorCodecStartupTask completed with outcome success after 0.014 ms
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Workflows.Design.Persistence.Core.Services.ValidateDesignPersistenceReplacementContractsStartupTask completed with outcome success after 1.333 ms
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Workflows.Runtime.Distributed.Placement.ValidateDistributedRuntimeIdentityStartupTask completed with outcome success after 0.196 ms
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Activities.Design.Reconciliation.Services.ActivityVersionReconcilerStartupTask completed with outcome success after 787.599 ms
+info: Elsa.Tasks.Services.TaskExecutor[0]
+      Startup task Elsa.Workflows.Publishing.Services.CompleteInterruptedPublicationsStartupTask completed with outcome success after 9.998 ms
+info: Elsa.Workflows.Runtime.Distributed.Services.ExecutionPlacementPumpTask[0]
+      Reclaimed the leases held under host id Sipkes-Mac-Mini (join sweep): 0 placement lease(s) released, 0 transport item lease(s) made visible, 0 execution(s) made recovery candidates.
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Shell 'default#1' path prefix: '(none)', route prefix: '(none)', combined: '(none)'
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering middleware for 2 feature(s) in shell 'default#1'
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': interchange/bpmn/analyze
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': interchange/bpmn/export
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': interchange/bpmn/import
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/authoring-capabilities
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/availability/settings
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/availability/diagnostics
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/availability/settings
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/catalog
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/definitions
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/definitions/{definitionId}/drafts
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/definitions/{definitionId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/definitions
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/definitions/{definitionId}/drafts
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/definitions/{definitionId}/versions
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/definitions/picker
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/definitions/{definitionId}/fork-previews
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/definitions/{definitionId}/recommendation
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/definitions/{definitionId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/drafts/{draftId}/contract-proposals/apply
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/drafts/{draftId}/conflict-copies
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/drafts/{draftId}/diff
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/drafts/{draftId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/drafts/{draftId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/drafts/{draftId}/migrate-provider
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/drafts/{draftId}/contract-proposals
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/drafts/{draftId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/drafts/{draftId}/presentation
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/drafts/{draftId}/validate
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/fork-candidates/{candidateId}/apply
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/forks/{idempotencyKey}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/upgrade-plans/{planId}/apply
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/upgrade-plans
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/upgrade-plans/{planId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/upgrade-plans/{planId}/receipts/{receiptId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/upgrade-plans/{planId}/refresh
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/versions/{versionId}/dependencies
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/versions/{fromVersionId}/diff/{toVersionId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/versions/{versionId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/versions/{versionId}/restore
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/versions/{versionId}/retire
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/versions/{versionId}/revoke
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/agent/bootstrap
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/agent/sessions
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/agent/sessions/{sessionId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/agent/sessions/{sessionId}/messages
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/agent/sessions/{sessionId}/turns/{turnId}/cancel
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/agent/sessions/{sessionId}/stream
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/agent/feedback
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/agent/proposals/{proposalId}/approve
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/agent/proposals/{proposalId}/deny
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/agent/proposals/{proposalId}/execute
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/agent/sessions/{sessionId}/client-invocations/{invocationId}/acknowledgements
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/agent/audit
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /capabilities
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/attention/items
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /connections
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /connections
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /connections/descriptors
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /connections/picker
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /connections/{name}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /connections/{name}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /connections/{name}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /connections/{name}/revoke
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /connections/{name}/test
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /connections/{name}/oauth-redirect-uri
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /connections/{name}/oauth/authorize
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/connections/oauth/callback
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /diagnostics/opentelemetry/resources/search
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /diagnostics/opentelemetry/traces/search
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /diagnostics/opentelemetry/metrics/search
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /diagnostics/opentelemetry/logs/search
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /diagnostics/opentelemetry/traces/{traceId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /diagnostics/opentelemetry/storage
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /diagnostics/opentelemetry/collector-configuration
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/studio/diagnostics/opentelemetry/stream
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /elsa/otlp/v1/traces
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /elsa/otlp/v1/metrics
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /elsa/otlp/v1/logs
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/studio/diagnostics/structured-logs/recent
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/studio/diagnostics/structured-logs/sources
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/studio/diagnostics/structured-logs/stream
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': expressions/descriptors
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': expressions/variable-types
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/identity/bootstrap
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/identity/capabilities
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/identity/session
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/identity/token
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/identity/challenge/{provider}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/identity/logout/{provider}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/identity/refresh
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/identity/login
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/identity/login
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': modularity/features/apply
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': modularity/features
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /secrets
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /secrets
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /secrets/descriptors
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /secrets/picker
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /secrets/{name}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /secrets/{name}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /secrets/{name}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /secrets/{name}/revoke
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /secrets/{name}/rotate
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /secrets/{name}/test
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/studio/preferences/{namespace}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/studio/preferences/{namespace}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/studio/home-layout
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/studio/home-layout
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/studio/home-layout
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/studio/home-layout/default
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/studio/home-layout/default
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/workflows/dashboard/definitions
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/workflows/dashboard/runs
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/scoped-variables/analyze
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/expression-tooling/completions
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/expression-tooling/descriptors
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/expression-tooling/hover
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/activities/{activityVersionId}/inputs/{inputName}/options
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/expression-tooling/context
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/expression-tooling/symbols
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/expression-tooling/validate
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/definitions
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/definitions/{definitionId}/permanent
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/definitions/{definitionId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/definitions
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/definitions/{definitionId}/restore
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/definitions/{definitionId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/definitions/submit
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/definitions/submit/schema
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/definitions/{definitionId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/drafts/{draftId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/drafts/{draftId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/drafts/{draftId}/promote
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/drafts/{draftId}/promotion-preflight
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/drafts/{draftId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/drafts/{draftId}/validations
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/structures
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/templates
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/templates/{templateId}/delete
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/templates/{templateId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/templates
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/templates/{templateId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/versions/ingest
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/versions/{versionId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': design/workflows/definitions/{definitionId}/versions
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/execution-evidence
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/execution-evidence/workflows/{workflowExecutionId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /_elsa/execution-evidence
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/activities/{activityId}/construct
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/activities
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/drafts/{draftId}/publication-preflight
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/drafts/{draftId}/publish
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /design/activities/publications/{idempotencyKey}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/activity-test-runs/{testRunId}/cancel
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/activity-test-runs/{testRunId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/activity-drafts/{draftId}/test-runs/idempotency/{idempotencyKey}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/activity-drafts/{draftId}/test-runs
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/incident-strategies
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/workflows/{definitionId}/policy
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/workflows/{definitionId}/policy
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/publications/{publicationId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/preflight
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/workflows/{definitionId}/slots/{slotName}/restore
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/workflows/{definitionId}/slots/{slotName}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/workflow-test-runs/{testRunId}/events
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/workflow-test-runs/{testRunId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/workflows/drafts/test-run-options
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/test-runs
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/workflows/drafts/test-runs
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/workflow-test-runs/{testRunId}/stop
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/workflow-test-runs/{testRunId}/waits
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/value-conversion/profiles
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/preflight
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/publish
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': /publishing/workflows/preflight
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': publishing/workflows/{versionId:regex(^(?!drafts$).+$)}/executable-export
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/activation-slots/{definitionId}/{slotName}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/activation-slots/{definitionId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/descendants
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/layout
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/{workflowExecutionId}/activity-executions
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/state-view
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/value-evidence/{evidenceId}/payload
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/alteration-plans/{planId}/cancel
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/alteration-plans/{planId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/alteration-plans/{planId}/jobs/{jobId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/alteration-plans/{planId}/jobs/page
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/alteration-plans
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/diagnostics/settings
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/diagnostics/settings
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/dispatches/{dispatchId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/dispatches
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/dispatches/{dispatchId}/redrive
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/executables/{artifactId}/execute
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/executables/{artifactId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/executables/{artifactId}/source-references/{sourceReferenceId}/input-sources
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/executables
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/executables/{artifactId}/provenance
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/{workflowExecutionId}/incidents
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/{workflowExecutionId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/{workflowExecutionId}
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/instances/page
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': runtime/workflows/stimuli
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Registering endpoint for shell 'default#1': javascript/execute
+info: CShells.Lifecycle.ShellLifecycleLogger[1000]
+      Shell default#1 transitioned Initializing → Active
+info: CShells.Lifecycle.ShellRegistry[0]
+      Activated shell default#1 with 90 feature(s)
+info: Elsa.Workbench.Readiness.DefaultShellWarmup[0]
+      Default shell default generation 1 is ready after 3459.966 ms
+info: Microsoft.Hosting.Lifetime[0]
+      Application is shutting down...
+info: CShells.Hosting.CShellsStartupHostedService[0]
+      CShells shutdown: draining 1 active shell(s).
+info: CShells.Lifecycle.ShellLifecycleLogger[1000]
+      Shell default#1 transitioned Active → Draining
+info: CShells.AspNetCore.Notifications.ShellEndpointRegistrationHandler[0]
+      Removing endpoints for shell 'default#1' generation 1 (Draining)
+info: CShells.Lifecycle.ShellLifecycleLogger[1000]
+      Shell default#1 transitioned Draining → Drained
+info: Elsa.Workflows.Runtime.Distributed.Services.ExecutionPlacementPumpTask[0]
+      Handed off 1 workflow execution(s) before stopping.
+info: CShells.Lifecycle.ShellLifecycleLogger[1000]
+      Shell default#1 transitioned Drained → Disposed

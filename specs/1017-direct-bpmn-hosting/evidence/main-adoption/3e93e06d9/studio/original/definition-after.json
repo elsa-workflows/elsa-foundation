@@ -1,0 +1,222 @@
+{
+  "definition": {
+    "id": "14iBsLEuiJS",
+    "name": "BPMN execution model · reviewed host",
+    "description": null,
+    "createdAt": "2026-10-28T01:43:04.592749+00:00",
+    "lastModifiedAt": "2026-10-28T01:43:04.592749+00:00",
+    "deletedAt": null,
+    "draftId": "14iBsLEyzR4",
+    "latestVersionId": "14o3sGIWSDx",
+    "latestVersion": "3.0.0",
+    "versionCount": 3,
+    "publicationState": "published",
+    "publishedVersionId": "14o3sGIWSDx",
+    "publishedVersion": "3.0.0",
+    "folderId": null,
+    "folderBreadcrumb": [],
+    "tags": []
+  },
+  "draft": {
+    "id": "14iBsLEyzR4",
+    "definitionId": "14iBsLEuiJS",
+    "sourceVersionId": null,
+    "state": {
+      "variables": [],
+      "rootActivity": {
+        "nodeId": "bpmnprocess-77683892",
+        "activityVersionId": "actver_0XrufdkM-Qm0vrQmd0O7xc2c6tey0g5DIWlxzwX-TH4",
+        "inputs": [],
+        "outputs": [],
+        "structure": {
+          "kind": "elsa.bpmn.structure",
+          "schemaVersion": "1.0.0",
+          "payload": {
+            "activities": [
+              {
+                "nodeId": "node-wait",
+                "activityVersionId": "actver_P-qHSpNft8ljHsHRHHTZ-rV8_IPulCRZJ0_pbtBabIQ",
+                "inputs": [
+                  {
+                    "autoEvaluate": null,
+                    "evaluatorType": null,
+                    "storageDriverType": null,
+                    "isSensitive": null,
+                    "referenceKey": "Duration",
+                    "value": {
+                      "value": "00:00:01",
+                      "expressionType": "Literal"
+                    }
+                  }
+                ],
+                "outputs": [],
+                "structure": null
+              }
+            ],
+            "elements": [
+              {
+                "elementId": "start",
+                "elementType": "startEvent",
+                "name": "Start",
+                "childNodeId": null,
+                "laneId": null,
+                "defaultFlowId": null,
+                "eventDefinitions": [],
+                "properties": {},
+                "attachedToRef": null,
+                "cancelActivity": true,
+                "loopCharacteristics": null,
+                "isForCompensation": false,
+                "compensationHandlerElementId": null,
+                "isTransaction": false,
+                "triggeredByEvent": false,
+                "listenerNodeId": null
+              },
+              {
+                "elementId": "route",
+                "elementType": "exclusiveGateway",
+                "name": "Upgraded route original",
+                "childNodeId": null,
+                "laneId": null,
+                "defaultFlowId": "default-flow",
+                "eventDefinitions": [],
+                "properties": {},
+                "attachedToRef": null,
+                "cancelActivity": true,
+                "loopCharacteristics": null,
+                "isForCompensation": false,
+                "compensationHandlerElementId": null,
+                "isTransaction": false,
+                "triggeredByEvent": false,
+                "listenerNodeId": null
+              },
+              {
+                "elementId": "wait",
+                "elementType": "intermediateCatchEvent",
+                "name": "Default timer",
+                "childNodeId": "node-wait",
+                "laneId": null,
+                "defaultFlowId": null,
+                "eventDefinitions": [
+                  {
+                    "type": "timer",
+                    "properties": {
+                      "interval": "PT1S"
+                    }
+                  }
+                ],
+                "properties": {},
+                "attachedToRef": null,
+                "cancelActivity": true,
+                "loopCharacteristics": null,
+                "isForCompensation": false,
+                "compensationHandlerElementId": null,
+                "isTransaction": false,
+                "triggeredByEvent": false,
+                "listenerNodeId": null
+              },
+              {
+                "elementId": "end",
+                "elementType": "endEvent",
+                "name": "Default complete",
+                "childNodeId": null,
+                "laneId": null,
+                "defaultFlowId": null,
+                "eventDefinitions": [],
+                "properties": {},
+                "attachedToRef": null,
+                "cancelActivity": true,
+                "loopCharacteristics": null,
+                "isForCompensation": false,
+                "compensationHandlerElementId": null,
+                "isTransaction": false,
+                "triggeredByEvent": false,
+                "listenerNodeId": null
+              },
+              {
+                "elementId": "other-end",
+                "elementType": "endEvent",
+                "name": "Other complete",
+                "childNodeId": null,
+                "laneId": null,
+                "defaultFlowId": null,
+                "eventDefinitions": [],
+                "properties": {},
+                "attachedToRef": null,
+                "cancelActivity": true,
+                "loopCharacteristics": null,
+                "isForCompensation": false,
+                "compensationHandlerElementId": null,
+                "isTransaction": false,
+                "triggeredByEvent": false,
+                "listenerNodeId": null
+              }
+            ],
+            "sequenceFlows": [
+              {
+                "flowId": "begin",
+                "sourceRef": "start",
+                "targetRef": "route",
+                "name": null,
+                "conditionOutcome": null,
+                "isDefault": false
+              },
+              {
+                "flowId": "default-flow",
+                "sourceRef": "route",
+                "targetRef": "wait",
+                "name": null,
+                "conditionOutcome": null,
+                "isDefault": true
+              },
+              {
+                "flowId": "other-flow",
+                "sourceRef": "route",
+                "targetRef": "other-end",
+                "name": null,
+                "conditionOutcome": "Never",
+                "isDefault": false
+              },
+              {
+                "flowId": "finish",
+                "sourceRef": "wait",
+                "targetRef": "end",
+                "name": null,
+                "conditionOutcome": null,
+                "isDefault": false
+              }
+            ],
+            "pools": [],
+            "lanes": [],
+            "variables": [],
+            "diagram": null,
+            "isTransaction": false,
+            "messageFlows": []
+          }
+        }
+      },
+      "inputs": [],
+      "outputs": [],
+      "strategyOptions": null
+    },
+    "layout": [],
+    "activityPresentation": []
+  },
+  "versions": [
+    {
+      "id": "14iBukBqIUG",
+      "version": "1.0.0",
+      "createdAt": "2026-10-28T01:43:37.125093+00:00"
+    },
+    {
+      "id": "14iZnaXlfOd",
+      "version": "2.0.0",
+      "createdAt": "2026-10-28T07:17:51.0632+00:00"
+    },
+    {
+      "id": "14o3sGIWSDx",
+      "version": "3.0.0",
+      "createdAt": "2026-10-31T14:36:44.591098+00:00"
+    }
+  ]
+}

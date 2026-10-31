@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-direct-bpmn-native-etl-recovery",
+  "sourceRevision": "18ac139e055b7e9af4573b720086c989884a9f48",
+  "assets": [
+    {
+      "path": "direct-business/before-checked-model.json",
+      "sha256": "d6ff0db71c53220ee748fbd5f02a026e7bbac9a355af4ab3f1ef9b018055a5a3"
+    },
+    {
+      "path": "direct-business/before-elsa.sqlite.gz",
+      "sha256": "ef90d5ca0a180b2690f4caa6eaa70e6ea01347b1cc3a65c275897366e1662079"
+    },
+    {
+      "path": "direct-business/before-etl-design.sqlite.gz",
+      "sha256": "90421c22a58dd1ad853279fbf5507b5a17023fe29ce5a4591c5ec1ccc615f6ab"
+    },
+    {
+      "path": "direct-business/before-etl-runtime.sqlite.gz",
+      "sha256": "f855b6a3da7cf7191c919021b4e73f3bcbd4c48a92d9de6b555d7809794646f5"
+    },
+    {
+      "path": "direct-business/before-wire.json",
+      "sha256": "d2fba7b6065b0acc4f3bd07ca905084fb5d484e274e181162385e8ad5945ee5a"
+    },
+    {
+      "path": "direct-business/before.json",
+      "sha256": "fa2a188b5750d9bea37f7c08eb530de8bca0b896cbae3f0cfaf20372f50e8ccf"
+    },
+    {
+      "path": "direct-business/finished-checked-model.json",
+      "sha256": "32ebacbb40f7c086fe7e5cad33d60bfa8cfde80f9b5c19dfc654e237cf293020"
+    },
+    {
+      "path": "direct-business/finished-elsa.sqlite.gz",
+      "sha256": "f743a8f6979bd8c20b5113252c99f6f8e1f8f9e41d8fc466d3bf31b77e8660c2"
+    },
+    {
+      "path": "direct-business/finished-etl-design.sqlite.gz",
+      "sha256": "ce59fe2565bcee575f302f8d15b0fac720085f0ff72b81d5dab59481394d3900"
+    },
+    {
+      "path": "direct-business/finished-etl-runtime.sqlite.gz",
+      "sha256": "8ac20183bd43b022729568574fecab7beb221dff0e13cbd9dd6229510297854b"
+    },
+    {
+      "path": "direct-business/finished-wire.json",
+      "sha256": "e50aa79735f26387e9cba46948f0bc7779d85b8e79aec472e242fae30abc37c1"
+    },
+    {
+      "path": "direct-business/finished.json",
+      "sha256": "90f0855d084d0344c511595bef0e8723e2bd4d9fc7515e2c1756f1475a04dd1a"
+    },
+    {
+      "path": "direct-business/process.json",
+      "sha256": "c0e68d41fdb7548192bc7a39610943ab4e7a33429025197197c3142f9fe356bc"
+    },
+    {
+      "path": "direct-business/recovered.json",
+      "sha256": "fa2a188b5750d9bea37f7c08eb530de8bca0b896cbae3f0cfaf20372f50e8ccf"
+    },
+    {
+      "path": "direct-business/retained-checked-model.json",
+      "sha256": "32ebacbb40f7c086fe7e5cad33d60bfa8cfde80f9b5c19dfc654e237cf293020"
+    },
+    {
+      "path": "direct-business/retained-wire.json",
+      "sha256": "e50aa79735f26387e9cba46948f0bc7779d85b8e79aec472e242fae30abc37c1"
+    },
+    {
+      "path": "direct-business/retained.json",
+      "sha256": "90f0855d084d0344c511595bef0e8723e2bd4d9fc7515e2c1756f1475a04dd1a"
+    },
+    {
+      "path": "direct-business/safe-errors.json",
+      "sha256": "39d679ef113873784635aecb4105d095be0589df94213434a1b57aef5f84c124"
+    },
+    {
+      "path": "direct-success/before-checked-model.json",
+      "sha256": "a8ba7b46a4182658773bf8bc25d1b6624f6b57c4a22171194cfa259046cc0290"
+    },
+    {
+      "path": "direct-success/before-elsa.sqlite.gz",
+      "sha256": "0656fe7d04dbe3ab308ea51468a6585057d7fe4f7b2b1a143e75c02d0c9a566e"
+    },
+    {
+      "path": "direct-success/before-etl-design.sqlite.gz",
+      "sha256": "d26fb2dcb27737910920baf5b7e7ee1e59414da0f9f9b5c20d2d755ea01a0c82"
+    },
+    {
+      "path": "direct-success/before-etl-runtime.sqlite.gz",
+      "sha256": "5a469bacd2215d45127652912c01b6ae911b74c0ed838035b92a5a659e460f3b"
+    },
+    {
+      "path": "direct-success/before-wire.json",
+      "sha256": "816ab9d419f099fea9e6bb47a78439fe5ca84ee3592a8d17f1df15a3caf00571"
+    },
+    {
+      "path": "direct-success/before.json",
+      "sha256": "0cdc5031c2f65435ed7c12b1252cfc1633555dcdb62d36f152509c40f9489ecd"
+    },
+    {
+      "path": "direct-success/finished-checked-model.json",
+      "sha256": "e04d3d570b789ac91ca9974a0aa608a2276432de50d0c345d369dfd61fac6c4b"
+    },
+    {
+      "path": "direct-success/finished-elsa.sqlite.gz",
+      "sha256": "1e2a84fdbd23abcdacc77585e4343e6d563ac9995fafd8f326898a9cec471ff0"
+    },
+    {
+      "path": "direct-success/finished-etl-design.sqlite.gz",
+      "sha256": "aa051f7b24b2705f85689905500bcddeb8a146f2201d870a112bc1215ef401a3"
+    },
+    {
+      "path": "direct-success/finished-etl-runtime.sqlite.gz",
+      "sha256": "f255f24030bd8fcbbdd1348016ccb3e50e3d1d35c33979015a2bd9e6537a7f10"
+    },
+    {
+      "path": "direct-success/finished-wire.json",
+      "sha256": "6e5bf67413c1510c1016857ffeb119b05b5f0434c637be139c7c1b5db7e83843"
+    },
+    {
+      "path": "direct-success/finished.json",
+      "sha256": "3816d7c8bac53d6acecd6bde5bbc4fd7fbeddd27899aada0eb4340ab97d505e8"
+    },
+    {
+      "path": "direct-success/process.json",
+      "sha256": "451f0844406aa94ded039aed9a3e2d94c8c5ace6abb472f77541500a6485f4ec"
+    },
+    {
+      "path": "direct-success/recovered.json",
+      "sha256": "0cdc5031c2f65435ed7c12b1252cfc1633555dcdb62d36f152509c40f9489ecd"
+    },
+    {
+      "path": "direct-success/retained-checked-model.json",
+      "sha256": "e04d3d570b789ac91ca9974a0aa608a2276432de50d0c345d369dfd61fac6c4b"
+    },
+    {
+      "path": "direct-success/retained-wire.json",
+      "sha256": "6e5bf67413c1510c1016857ffeb119b05b5f0434c637be139c7c1b5db7e83843"
+    },
+    {
+      "path": "direct-success/retained.json",
+      "sha256": "3816d7c8bac53d6acecd6bde5bbc4fd7fbeddd27899aada0eb4340ab97d505e8"
+    },
+    {
+      "path": "direct-success/safe-errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  ]
+}

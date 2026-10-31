@@ -1,0 +1,15 @@
+{
+  "source": "/private/tmp/elsa-2898-full-pr-r5-correctness/mailbox-probe/completed-models/runtime.sqlite",
+  "backup": "/tmp/elsa-2898-full-pr-r5-correctness/mailbox-probe/completed-models-closed.sqlite",
+  "sha256": "20276c5f0eae782933d09adc8fb83ee174c5b3c72d6e7ae86c709cf89758374f",
+  "bytes": 1114112,
+  "integrity": [
+    [
+      "ok"
+    ]
+  ],
+  "sourceReadOnlyImmutable": true,
+  "producerExited": true,
+  "sidecarsAbsent": true,
+  "initialModeReadOnlyDiagnostic": "Python mode=ro refused the closed WAL-mode database without its removed sidecars; immutable mode read and backup succeeded."
+}

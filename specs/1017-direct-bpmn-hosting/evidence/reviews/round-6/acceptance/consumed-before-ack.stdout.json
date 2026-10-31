@@ -1,0 +1,15 @@
+{
+  "sourceRevision": "d1bd08c33f436764eaca5a5c69017f14a3ea85d5",
+  "actualPendingCancellationStages": [
+    "model-command",
+    "native-terminal"
+  ],
+  "pendingCancellationCrashProved": false,
+  "wholeStoresVerified": 24,
+  "actualWorkbenchProcesses": 8,
+  "actualHttpProcesses": 2,
+  "actualSdkProcesses": 2,
+  "postConsumptionPreAckCrashProved": true,
+  "runBpmnEtlIntegrationProved": false,
+  "modelHeldFaultRetryProved": false
+}

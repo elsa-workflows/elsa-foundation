@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "shard": "pr-2",
+  "headSha": "b9cf52c181b79e3e79eef233f7d61cb0843f4da7",
+  "failedTwice": [],
+  "passedOnRetry": [],
+  "quarantinedFailed": [],
+  "slow": [
+    {
+      "test": "Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.SqliteEfSecretRepositoryTests.Search_refuses_an_oversized_scoped_catalog",
+      "seconds": 10.6
+    },
+    {
+      "test": "Elsa3.Activities.Design.Import.Integration.Tests.DispatchWorkflowCallTests.An_imported_workflow_starts_another_imported_workflow_by_its_Elsa_3_definition_id",
+      "seconds": 28.2
+    },
+    {
+      "test": "Elsa3.Activities.Design.Import.Integration.Tests.ImportPublishPermissionTests.Apply_without_publish_permission_is_forbidden_and_writes_nothing",
+      "seconds": 19.8
+    },
+    {
+      "test": "Elsa3.Activities.Design.Import.Integration.Tests.ImportedReusableValueReadTests.A_body_reads_the_input_its_wrapper_passed",
+      "seconds": 11.3
+    },
+    {
+      "test": "Elsa3.Activities.Design.Import.Integration.Tests.ImportedReusableValueReadTests.A_body_reads_the_value_its_caller_passed_not_the_callers_own_input",
+      "seconds": 29.2
+    },
+    {
+      "test": "Elsa3.Activities.Design.Import.Integration.Tests.PublishEventResumeTests.An_imported_Publish_Event_resumes_an_imported_Event_wait",
+      "seconds": 21.0
+    },
+    {
+      "test": "Elsa3.Activities.Design.Import.Integration.Tests.PublishEventResumeTests.One_Publish_Event_starts_a_workflow_and_resumes_a_wait_with_the_same_payload",
+      "seconds": 14.8
+    },
+    {
+      "test": "Elsa3.Activities.Design.Import.Integration.Tests.ReusableBodyWaitTests.A_reusable_body_that_waits_for_an_event_resumes_when_the_event_arrives",
+      "seconds": 17.4
+    },
+    {
+      "test": "Elsa3.Activities.Design.Import.Integration.Tests.ReusableBodyWaitTests.A_reusable_body_that_waits_resumes_and_completes",
+      "seconds": 13.1
+    },
+    {
+      "test": "Elsa3.Activities.Design.Import.Integration.Tests.ReusableFlaggedStartTests.A_reusable_with_a_flagged_non_trigger_imports_and_starts_there",
+      "seconds": 29.8
+    },
+    {
+      "test": "Elsa3.Activities.Design.Import.Integration.Tests.WorkflowVariablePublishTests.A_list_variable_receives_a_captured_array",
+      "seconds": 15.6
+    },
+    {
+      "test": "Elsa3.Activities.Design.Import.Integration.Tests.WorkflowVariablePublishTests.A_workflow_variable_without_a_value_publishes_and_receives_a_captured_Event_payload",
+      "seconds": 17.3
+    },
+    {
+      "test": "Elsa.Activities.Compensation.Tests.CompensationBackoffJourneyTests.BK1_a_stop_after_the_retry_was_queued_runs_it_once_after_restart",
+      "seconds": 11.9
+    },
+    {
+      "test": "Elsa.Activities.Compensation.Tests.CompensationProviderSubsetTests.The_provider_subset_passes_on_SQLite",
+      "seconds": 52.0
+    }
+  ],
+  "aborted": null
+}

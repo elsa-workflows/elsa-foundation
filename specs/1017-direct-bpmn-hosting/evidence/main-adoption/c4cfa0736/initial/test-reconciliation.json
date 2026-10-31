@@ -1,0 +1,309 @@
+[
+  {
+    "name": "bpmn",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "discoveredDisplayEntries": 504,
+    "runtimeRows": 504,
+    "methodGroups": 341,
+    "missingMethodGroups": [],
+    "unexpectedMethodGroups": [],
+    "outcomes": {
+      "Passed": 504
+    },
+    "nonPassed": [],
+    "theoryExpansion": []
+  },
+  {
+    "name": "behavioral",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "discoveredDisplayEntries": 220,
+    "runtimeRows": 220,
+    "methodGroups": 50,
+    "missingMethodGroups": [],
+    "unexpectedMethodGroups": [],
+    "outcomes": {
+      "Passed": 220
+    },
+    "nonPassed": [],
+    "theoryExpansion": []
+  },
+  {
+    "name": "shared-ef",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "discoveredDisplayEntries": 691,
+    "runtimeRows": 711,
+    "methodGroups": 505,
+    "missingMethodGroups": [],
+    "unexpectedMethodGroups": [],
+    "outcomes": {
+      "Passed": 710,
+      "NotExecuted": 1
+    },
+    "nonPassed": [
+      {
+        "name": "Elsa.Persistence.EntityFramework.Tests.EfSqliteSerialOpenStressTests.Concurrent_opens_of_one_file_never_share_a_pooled_connection",
+        "message": "Set ELSA_SQLITE_POOL_STRESS=1 to run the SQLite pool stress test (see its class remarks)."
+      }
+    ],
+    "theoryExpansion": [
+      {
+        "method": "Elsa.Persistence.EntityFramework.Tests.EfHostConfigurationReaderTests.A_value_that_does_not_parse_is_refused_naming_its_key",
+        "discoveredEntries": 1,
+        "runtimeRows": 3
+      },
+      {
+        "method": "Elsa.Persistence.EntityFramework.Tests.EfHostConfigurationReaderTests.Refusals_are_raised_with_the_exception_the_reader_was_built_with",
+        "discoveredEntries": 1,
+        "runtimeRows": 4
+      },
+      {
+        "method": "Elsa.Persistence.EntityFramework.Tests.EfSchemaChainTests.A_read_that_is_not_its_tables_declared_content_columns_is_refused_at_every_version",
+        "discoveredEntries": 1,
+        "runtimeRows": 3
+      },
+      {
+        "method": "Elsa.Persistence.EntityFramework.Tests.EfSchemaChainTests.A_step_that_does_not_return_the_rows_declared_columns_reports_corruption",
+        "discoveredEntries": 1,
+        "runtimeRows": 5
+      },
+      {
+        "method": "Elsa.Persistence.EntityFramework.Tests.EfSchemaChainTests.A_malformed_chain_is_refused_at_registration",
+        "discoveredEntries": 1,
+        "runtimeRows": 10
+      }
+    ]
+  },
+  {
+    "name": "migrations",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "discoveredDisplayEntries": 494,
+    "runtimeRows": 508,
+    "methodGroups": 311,
+    "missingMethodGroups": [],
+    "unexpectedMethodGroups": [],
+    "outcomes": {
+      "Passed": 508
+    },
+    "nonPassed": [],
+    "theoryExpansion": [
+      {
+        "method": "Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.EfModuleBindingForTests.For_reproduces_the_modules_hand_written_binding",
+        "discoveredEntries": 1,
+        "runtimeRows": 15
+      }
+    ]
+  },
+  {
+    "name": "design",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "discoveredDisplayEntries": 585,
+    "runtimeRows": 655,
+    "methodGroups": 404,
+    "missingMethodGroups": [],
+    "unexpectedMethodGroups": [],
+    "outcomes": {
+      "Passed": 655
+    },
+    "nonPassed": [],
+    "theoryExpansion": [
+      {
+        "method": "Elsa.Workflows.Design.Tests.Unit.CredentialInputBindingTests.A_binding_that_carries_no_value_leaves_a_credential_input_unbound",
+        "discoveredEntries": 1,
+        "runtimeRows": 7
+      },
+      {
+        "method": "Elsa.Workflows.Design.Tests.Unit.CredentialInputBindingTests.A_secret_binding_whose_payload_is_a_reference_or_carries_no_value_is_accepted",
+        "discoveredEntries": 1,
+        "runtimeRows": 9
+      },
+      {
+        "method": "Elsa.Workflows.Design.Tests.Unit.CredentialInputBindingTests.A_secret_binding_with_any_other_payload_is_refused",
+        "discoveredEntries": 1,
+        "runtimeRows": 15
+      },
+      {
+        "method": "Elsa.Workflows.Design.Tests.Unit.CredentialInputBindingTests.An_input_that_is_not_a_credential_accepts_every_secret_payload",
+        "discoveredEntries": 1,
+        "runtimeRows": 15
+      },
+      {
+        "method": "Elsa.Workflows.Design.Tests.Unit.CredentialInputBindingTests.Every_other_binding_of_a_credential_input_is_refused",
+        "discoveredEntries": 1,
+        "runtimeRows": 8
+      },
+      {
+        "method": "Elsa.Workflows.Design.Tests.Unit.CredentialInputBindingTests.An_input_that_is_not_a_credential_accepts_every_binding",
+        "discoveredEntries": 1,
+        "runtimeRows": 8
+      },
+      {
+        "method": "Elsa.Workflows.Design.Tests.Unit.SecretReferencePayloadTests.A_malformed_payload_reads_as_a_defect_without_a_reference",
+        "discoveredEntries": 1,
+        "runtimeRows": 15
+      }
+    ]
+  },
+  {
+    "name": "design-ef",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "discoveredDisplayEntries": 147,
+    "runtimeRows": 147,
+    "methodGroups": 134,
+    "missingMethodGroups": [],
+    "unexpectedMethodGroups": [],
+    "outcomes": {
+      "Passed": 147
+    },
+    "nonPassed": [],
+    "theoryExpansion": []
+  },
+  {
+    "name": "design-api",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "discoveredDisplayEntries": 233,
+    "runtimeRows": 233,
+    "methodGroups": 136,
+    "missingMethodGroups": [],
+    "unexpectedMethodGroups": [],
+    "outcomes": {
+      "Passed": 233
+    },
+    "nonPassed": [],
+    "theoryExpansion": []
+  },
+  {
+    "name": "runtime",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "discoveredDisplayEntries": 3072,
+    "runtimeRows": 3083,
+    "methodGroups": 2288,
+    "missingMethodGroups": [],
+    "unexpectedMethodGroups": [],
+    "outcomes": {
+      "Passed": 3083
+    },
+    "nonPassed": [],
+    "theoryExpansion": [
+      {
+        "method": "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident",
+        "discoveredEntries": 1,
+        "runtimeRows": 2
+      },
+      {
+        "method": "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running",
+        "discoveredEntries": 1,
+        "runtimeRows": 4
+      },
+      {
+        "method": "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches",
+        "discoveredEntries": 1,
+        "runtimeRows": 8
+      }
+    ]
+  },
+  {
+    "name": "publishing-api",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "discoveredDisplayEntries": 886,
+    "runtimeRows": 906,
+    "methodGroups": 556,
+    "missingMethodGroups": [],
+    "unexpectedMethodGroups": [],
+    "outcomes": {
+      "Passed": 906
+    },
+    "nonPassed": [],
+    "theoryExpansion": [
+      {
+        "method": "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_ValidPublicationIndexesEveryCompleteBinding",
+        "discoveredEntries": 1,
+        "runtimeRows": 4
+      },
+      {
+        "method": "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_InvalidPublicationPreservesSeededRegistration",
+        "discoveredEntries": 1,
+        "runtimeRows": 4
+      },
+      {
+        "method": "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.LegacyActionCatalogRow_RepublishProjectsTriggerAndPreservesPriorRegistrationOnFailure",
+        "discoveredEntries": 1,
+        "runtimeRows": 4
+      },
+      {
+        "method": "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code",
+        "discoveredEntries": 1,
+        "runtimeRows": 10
+      },
+      {
+        "method": "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.A_literal_or_expression_on_a_credential_input_is_refused_by_the_credential_literal_rule_ahead_of_VF_ACT_011",
+        "discoveredEntries": 1,
+        "runtimeRows": 3
+      }
+    ]
+  },
+  {
+    "name": "studio",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "discoveredDisplayEntries": 656,
+    "runtimeRows": 663,
+    "methodGroups": 240,
+    "missingMethodGroups": [],
+    "unexpectedMethodGroups": [],
+    "outcomes": {
+      "Passed": 663
+    },
+    "nonPassed": [],
+    "theoryExpansion": [
+      {
+        "method": "Elsa.Studio.Tests.StudioModuleManifestProviderTests.GetModules_ProjectsModuleManifest",
+        "discoveredEntries": 1,
+        "runtimeRows": 8
+      }
+    ]
+  },
+  {
+    "name": "architecture",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "discoveredDisplayEntries": 585,
+    "runtimeRows": 594,
+    "methodGroups": 356,
+    "missingMethodGroups": [],
+    "unexpectedMethodGroups": [],
+    "outcomes": {
+      "Passed": 594
+    },
+    "nonPassed": [],
+    "theoryExpansion": [
+      {
+        "method": "Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Canonical_domain_api_depends_on_capability_aggregation_and_registers_one_stable_declaration",
+        "discoveredEntries": 1,
+        "runtimeRows": 5
+      },
+      {
+        "method": "Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_collectible_api_explorer_artifact_is_rejected",
+        "discoveredEntries": 1,
+        "runtimeRows": 6
+      }
+    ]
+  },
+  {
+    "name": "hosting",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "discoveredDisplayEntries": 43,
+    "runtimeRows": 43,
+    "methodGroups": 22,
+    "missingMethodGroups": [],
+    "unexpectedMethodGroups": [],
+    "outcomes": {
+      "Passed": 42,
+      "Failed": 1
+    },
+    "nonPassed": [
+      {
+        "name": "Elsa.Activities.Bpmn.Hosting.Tests.TemplateDesignUpgradeTests.Actual_cumulative_template_writer_store_retains_template_and_recovers_published_wait",
+        "message": "Assert.Equal() Failure: Collections differ\nExpected: [\"20261030020434_Initial|10.0.10\"]\nActual:   [\"20261030020434_Initial|10.0.10\", \"20261031002424_Initial|10.0.10\"]\n                                             \u2191 (pos 1)"
+      }
+    ],
+    "theoryExpansion": []
+  }
+]

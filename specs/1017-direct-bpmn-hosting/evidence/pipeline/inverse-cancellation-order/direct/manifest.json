@@ -1,0 +1,126 @@
+{
+  "kind": "actual-bpmn-etl-inverse-cancel-case",
+  "source": "0ce9a41dba03c4f362c4d386f14737823f33238a",
+  "assets": [
+    {
+      "path": "before-checked-model.json",
+      "sha256": "6f8953e292cc4720cef300d25db71d0c450d5150235fb35594e4eef19979a887"
+    },
+    {
+      "path": "before-elsa.sqlite.gz",
+      "sha256": "98770e2ef7a17eaf551d0bd6444ddb06436fcefe1e62048b729cbef3cc2bc5f0"
+    },
+    {
+      "path": "before-etl-design.sqlite.gz",
+      "sha256": "f85fc9e51ee065d64dd63192a7cd67008fe93ecc421f7c6d77f340369c318263"
+    },
+    {
+      "path": "before-etl-runtime.sqlite.gz",
+      "sha256": "a4d7196caa5c7ffa417204f6ccf51b866605222c816cdc3aebde5e0104b6f92b"
+    },
+    {
+      "path": "before-wire.json",
+      "sha256": "12235c0680834f8095f178681ebc97d72b454d6afbe45f41d4887fb14f82d6bc"
+    },
+    {
+      "path": "before.json",
+      "sha256": "cdc71a6643d833954acc59d659ff9383de48ce4408a3d758f292322b9c31f09c"
+    },
+    {
+      "path": "deferred-checked.json",
+      "sha256": "325ad0b000a00869edc21b3db3c4cec857c74306043c6427c877767d0f65dfcb"
+    },
+    {
+      "path": "deferred-elsa.sqlite.gz",
+      "sha256": "85e938844ac0222842a284b1390b38308eaae475f55d2d6ac1b80d8a3af8588b"
+    },
+    {
+      "path": "deferred-etl-design.sqlite.gz",
+      "sha256": "c2962713160c90930ebf27b5293fc804f400a5ffdcd4b3682983d277fb6bdc94"
+    },
+    {
+      "path": "deferred-etl-runtime.sqlite.gz",
+      "sha256": "2e40b5e209838f58373b2ad06420c8846c1cb5ef08f8c4b8f0a47f844d46ee04"
+    },
+    {
+      "path": "finished-checked-model.json",
+      "sha256": "47e7d5864635195519349f583587701d655ead574a6e3a12ad91b42711bfe6fe"
+    },
+    {
+      "path": "finished-elsa.sqlite.gz",
+      "sha256": "504c8074381ce03ae049cff9ded93e498239fe97778bf60fb05797ebf000cbb3"
+    },
+    {
+      "path": "finished-etl-design.sqlite.gz",
+      "sha256": "6e297dda451251b4caf70d508ad0601fa3ee66ec2baebe023fe9d42699102f80"
+    },
+    {
+      "path": "finished-etl-runtime.sqlite.gz",
+      "sha256": "9fdeb7956e723c122b38f0877b1a4af05e6359208a7cbf3fbc9d4742f4308d0c"
+    },
+    {
+      "path": "finished-wire.json",
+      "sha256": "12235c0680834f8095f178681ebc97d72b454d6afbe45f41d4887fb14f82d6bc"
+    },
+    {
+      "path": "finished.json",
+      "sha256": "4e6f4233a94415b54b9ea668287e6952f1222a3eae95ad0f0f198e717776a236"
+    },
+    {
+      "path": "native-cancel-response.json",
+      "sha256": "b13b950682871a838f099a7ae34c6b4bf26aaeb741a69c6a5eada8ac72fae12a"
+    },
+    {
+      "path": "pending-checked.json",
+      "sha256": "f327dc1a29834b1c8c52312b71bc7b307e4b2ca5b4b5eb7112830a4511a944d4"
+    },
+    {
+      "path": "pending-elsa.sqlite.gz",
+      "sha256": "19f107e861b125adfe7575e33b1dd6273fda2378c46e742a9226d17e167bbc10"
+    },
+    {
+      "path": "pending-etl-design.sqlite.gz",
+      "sha256": "7b3361adfa46e0bed9f91a112957e270fe1a83fff3e8f85c339794c91af760bb"
+    },
+    {
+      "path": "pending-etl-runtime.sqlite.gz",
+      "sha256": "8919aad00e6835e824196f4aaf5556a76b96be09d89f2d80e24546c00a7acf21"
+    },
+    {
+      "path": "pending-wire.json",
+      "sha256": "12235c0680834f8095f178681ebc97d72b454d6afbe45f41d4887fb14f82d6bc"
+    },
+    {
+      "path": "pending.json",
+      "sha256": "9de33f4549d94f990079d2f122b68d568a6fd84fd5f27ae747bb5054062792ca"
+    },
+    {
+      "path": "process.json",
+      "sha256": "40d54294800417385e9fc24e8fd8606f74787eaacf0534b6c2d8289d83c54fff"
+    },
+    {
+      "path": "recovered.json",
+      "sha256": "cdc71a6643d833954acc59d659ff9383de48ce4408a3d758f292322b9c31f09c"
+    },
+    {
+      "path": "retained-checked-model.json",
+      "sha256": "47e7d5864635195519349f583587701d655ead574a6e3a12ad91b42711bfe6fe"
+    },
+    {
+      "path": "retained-wire.json",
+      "sha256": "12235c0680834f8095f178681ebc97d72b454d6afbe45f41d4887fb14f82d6bc"
+    },
+    {
+      "path": "retained.json",
+      "sha256": "4e6f4233a94415b54b9ea668287e6952f1222a3eae95ad0f0f198e717776a236"
+    },
+    {
+      "path": "safe-errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "path": "sdk-inverse-cancel.json",
+      "sha256": "dd97b0b5697248cbf65740fb6dc03b0bab1fd33ecbf1264c9c0c7ccff92cb5a2"
+    }
+  ]
+}

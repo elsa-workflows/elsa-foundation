@@ -1,0 +1,28 @@
+{
+  "currentSource": "4dc934c444705ddf40707b8eeb1991e1949fefa9",
+  "previousHostSource": "2191e3710d87a63ed2f3a3770c5df84084a369ad",
+  "codeChanges": [
+    {
+      "path": "Essentials/src/Activities/Bpmn",
+      "changedFiles": [
+        "Essentials/src/Activities/Bpmn/Core/README.md"
+      ],
+      "changedCodeFiles": []
+    },
+    {
+      "path": "Essentials/src/Workflows/Runtime",
+      "changedFiles": [],
+      "changedCodeFiles": []
+    },
+    {
+      "path": "Essentials/src/Activities/DispatchWorkflow",
+      "changedFiles": [],
+      "changedCodeFiles": []
+    },
+    {
+      "path": "Essentials/tests/Activities/Bpmn",
+      "changedFiles": [],
+      "changedCodeFiles": []
+    }
+  ]
+}

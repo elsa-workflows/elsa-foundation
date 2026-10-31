@@ -1,0 +1,7 @@
+{
+  "kind": "source-audit assumption rejected during packaging",
+  "affectedPath": "Essentials/tests/Workflows/Runtime",
+  "finding": "Upstream provider-test dependency lock files changed although production/test code remained unchanged",
+  "action": "Retain raw tree hashes and exact changed-lock paths; preserve earlier suite sources and require current full CI",
+  "actualQualificationGatesUnchanged": true
+}

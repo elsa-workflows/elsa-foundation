@@ -1,0 +1,337 @@
+Browser tab: 16, Title: "Elsa Studio", URL: "http://127.0.0.1:64042/workflows/definitions?definition=14iBsLEuiJS".
+1 AXWebArea Elsa Studio, URL: 127.0.0.1:64042/workflows/definitions?definition=14iBsLEuiJS
+	2 container root
+		3 container
+			4 link Description: Elsa Studio Foundation, Value: 127.0.0.1:64042/
+			5 button (expanded) Description: Collapse navigation, Secondary Actions: Collapse
+				6 image
+			7 search text field (settable) Search modules
+			8 container Main
+				9 link Description: Home, Value: 127.0.0.1:64042/dashboard
+				10 link Description: Workflows, Value: 127.0.0.1:64042/workflows/definitions
+				11 link Description: Runs, Value: 127.0.0.1:64042/workflows/instances
+			12 container More tools
+				13 button (collapsed) More tools, Secondary Actions: Expand
+			14 container Settings
+				15 link Description: Settings, Value: 127.0.0.1:64042/settings
+			16 container Environment and account
+				17 container Description: Configured backend endpoint: 127.0.0.1:64041, Help: Configured backend endpoint; connectivity is not measured
+					18 text Backend API
+					19 text 127.0.0.1:64041
+				20 pop up button (collapsed) Description: Account: Administrator, Help: Administrator, ID: radix-_r_0_, Secondary Actions: Expand
+		21 container
+			22 text Studio /  Workflows
+			23 heading Workflows, Value: 1
+				24 text Workflows
+			25 button (collapsed) Weaver, Secondary Actions: Expand
+				26 image
+				27 text Weaver
+			28 link Description: GitHub, Value: github.com/elsa-workflows/elsa-foundation-studio
+			29 link Description: Designer source, Value: github.com/elsa-workflows/elsa-foundation-designer
+			30 Colour mode
+				31 radio button Description: Light, Help: Light mode, Value: 0
+				32 radio button Description: Dark, Help: Dark mode, Value: 1
+				33 radio button Description: Dim, Help: Dim mode, Value: 0
+			34 pop up button (collapsed) Description: Select theme, Help: Classic · Classic · Dark, ID: radix-_r_7_, Secondary Actions: Expand
+				35 image
+		36 container
+			37 button Definitions
+			38 text BPMN execution model · reviewed host
+			39 text Draft
+			40 container Canvas tools
+				41 button (disabled) Description: Undo, Help: Undo (Ctrl+Z)
+					42 image
+				43 button (disabled) Description: Redo, Help: Redo (Ctrl+Shift+Z)
+					44 image
+				45 button Description: Auto-layout, Help: Auto-layout the canvas
+					46 image
+			47 button Save, Help: Save workflow
+			48 container Workflow publication actions
+				49 button Review & publish
+				50 pop up button (collapsed) Description: Publish options, Secondary Actions: Expand
+			51 button Test Run, Help: Run a transient test of the current design
+			52 pop up button (collapsed) Description: More workflow actions, Secondary Actions: Expand
+				53 image
+			54 container Attached Test Run
+				55 button Test Run dispatched
+					56 image
+					57 text Test Run dispatched
+				58 text Completed
+				59 text Execution on this canvas
+				60 checkbox Pause following, Value: 1, Help: Follow recorded execution updates without changing the inspected occurrence. Pausing observation does not stop the workflow.
+				61 button Refresh execution
+				62 button Return to editing
+				63 button Open run
+				64 text Activity state is recorded at commit boundaries.
+			65 container Elements panel
+				66 tab group Elements panel tabs
+					67 tab (selected, settable, boolean) ELEMENTS, Help: Elements, Value: 1
+				68 button Description: Collapse activities panel, Help: Collapse
+					69 image
+				70 button Description: Maximize activities panel, Help: Maximize
+					71 image
+				72 search text field (settable) Search element palette
+				73 outline Available elements
+					74 row (selectable, expanded) BPMN 10, Secondary Actions: Collapse
+						75 image
+						76 text BPMN
+						77 text 10
+					78 container
+						79 row (selectable) Description: Start event, Help: Add start event
+							80 text Start event
+						81 row (selectable) Description: End event, Help: Add end event
+							82 text End event
+						83 row (selectable) Description: Terminate end event, Help: Add terminate end event
+							84 text Terminate end event
+						85 row (selectable) Description: Exclusive gateway, Help: Add exclusive gateway
+							86 text Exclusive gateway
+						87 row (selectable) Description: Parallel gateway, Help: Add parallel gateway
+							88 text Parallel gateway
+						89 row (selectable) Description: Inclusive gateway, Help: Add inclusive gateway
+							90 text Inclusive gateway
+						91 row (selectable) Description: Task (unbound), Help: Task with no activity bound yet.
+							92 text Task (unbound)
+							93 text Task with no activity bound yet.
+						94 row (selectable) Description: BPMN Decision, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: BPMN Decision — Version 1.0.0
+							95 text BPMN Decision
+						96 row (selectable) Description: BPMN Process, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: BPMN Process — Version 1.0.0
+							97 text BPMN Process
+						98 row (selectable) Description: Run BPMN, Exact version 1.0.0+cb0354a5b507271b67c5923a700d88f950975e25, Help: Run BPMN — Version 1.0.0
+							99 text Run BPMN
+					100 row (selectable, expanded) COMPENSATION 1, Secondary Actions: Collapse
+						101 image
+						102 text COMPENSATION
+						103 text 1
+					104 row (selectable) Description: Compensation Scope, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Compensation Scope — Version 1.0.0
+						105 text Compensation Scope
+					106 row (selectable, expanded) CONTROL FLOW 7, Secondary Actions: Collapse
+						107 image
+						108 text CONTROL FLOW
+						109 text 7
+					110 container
+						111 row (selectable) Description: Do, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Do — Version 1.0.0
+							112 text Do
+						113 row (selectable) Description: For, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: For — Version 1.0.0
+							114 text For
+						115 row (selectable) Description: For Each, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: For Each — Version 1.0.0
+							116 text For Each
+						117 row (selectable) Description: If, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: If — Version 1.0.0
+							118 text If
+						119 row (selectable) Description: Parallel, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Parallel — Version 1.0.0
+							120 text Parallel
+						121 row (selectable) Description: Switch, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Switch — Version 1.0.0
+							122 text Switch
+						123 row (selectable) Description: While, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: While — Version 1.0.0
+							124 text While
+					125 row (selectable, expanded) FLOWCHART 1, Secondary Actions: Collapse
+						126 image
+						127 text FLOWCHART
+						128 text 1
+					129 row (selectable) Description: Flowchart, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Flowchart — Version 1.0.0
+						130 text Flowchart
+					131 row (selectable, expanded) HTTP 3, Secondary Actions: Collapse
+						132 image
+						133 text HTTP
+						134 text 3
+					135 container
+						136 row (selectable) Description: Http Endpoint, Exact version 1.1.0, Help: Http Endpoint — Version 1.1.0
+							137 text Http Endpoint
+						138 row (selectable) Description: Send Http Request, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Send Http Request — Version 1.0.0
+							139 text Send Http Request
+						140 row (selectable) Description: Write Http Response, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Write Http Response — Version 1.0.0
+							141 text Write Http Response
+					142 row (selectable, expanded) PRIMITIVES 13, Secondary Actions: Collapse
+						143 image
+						144 text PRIMITIVES
+						145 text 13
+					146 container
+						147 row (selectable) Description: Break, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Break — Version 1.0.0
+							148 text Break
+						149 row (selectable) Description: Event, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Event — Version 1.0.0
+							150 text Event
+						151 row (selectable) Description: Fault, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Fault — Version 1.0.0
+							152 text Fault
+						153 row (selectable) Finish, Exact version 1
+							154 text Finish
+							155 text Completes the workflow with a named outcome.
+						156 row (selectable) Description: Inline, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Inline — Version 1.0.0
+							157 text Inline
+						158 row (selectable) Description: Publish Event, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Publish Event — Version 1.0.0
+							159 text Publish Event
+						160 row (selectable) Description: Read Line, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Read Line — Version 1.0.0
+							161 text Read Line
+						162 row (selectable) Set Correlation Id, Exact version 1
+							163 text Set Correlation Id
+							164 text Assigns the correlation id of the running workflow instance.
+						165 row (selectable) Set Instance Name, Exact version 1
+							166 text Set Instance Name
+							167 text Assigns the display name of the running workflow instance.
+						168 row (selectable) Set Output, Exact version 1
+							169 text Set Output
+							170 text Assigns a value to a named workflow output.
+						171 row (selectable) Set Variable, Exact version 1
+							172 text Set Variable
+							173 text Assigns a value to a declared workflow variable, resolved to its nearest visible scope.
+						174 row (selectable) Description: Write Line, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Write Line — Version 1.0.0
+							175 text Write Line
+						176 row (selectable) Description: Write Lines, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Write Lines — Version 1.0.0
+							177 text Write Lines
+					178 row (selectable, expanded) RUNTIME 4, Secondary Actions: Collapse
+						179 image
+						180 text RUNTIME
+						181 text 4
+					182 container
+						183 row (selectable) Description: Dispatch Workflow, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Dispatch Workflow — Version 1.0.0
+							184 text Dispatch Workflow
+						185 row (selectable) Description: Graph Activity, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Graph Activity — Version 1.0.0
+							186 text Graph Activity
+						187 row (selectable) Description: Run Etl, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Run Etl — Version 1.0.0
+							188 text Run Etl
+						189 row (selectable) Description: Run Rules, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Run Rules — Version 1.0.0
+							190 text Run Rules
+					191 row (selectable, expanded) SCHEDULING 3, Secondary Actions: Collapse
+						192 image
+						193 text SCHEDULING
+						194 text 3
+					195 container
+						196 row (selectable) Description: Cron, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Cron — Version 1.0.0
+							197 text Cron
+						198 row (selectable) Description: Delay, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Delay — Version 1.0.0
+							199 text Delay
+						200 row (selectable) Description: Timer, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Timer — Version 1.0.0
+							201 text Timer
+					202 row (selectable, expanded) SEQUENCE 1, Secondary Actions: Collapse
+						203 image
+						204 text SEQUENCE
+						205 text 1
+					206 row (selectable) Description: Sequence, Exact version 1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0, Help: Sequence — Version 1.0.0
+						207 text Sequence
+			208 splitter Description: Resize activities panel, Value: 260
+			209 tab group Editor view tabs
+				210 tab (selected, settable, boolean) DESIGNER, Help: Designer, Value: 1
+				211 tab (selectable, settable, boolean) CODE, Help: Code, Value: 0
+				212 tab (selectable, settable, boolean) PROPERTIES, Help: Properties, Value: 0
+			213 button Root
+			214 container Workflow canvas
+				215 container
+					216 container
+						217 image
+							218 edge Description: Connection from Start (start), Done output, to Upgraded route layout (route). Not selected., Value: 0
+						219 image
+							220 edge Description: Connection from Upgraded route layout (route), Done output, to Default timer (wait). Not selected., Value: 0
+								221 text default
+						222 image
+							223 edge Value: 0, Description: Connection from Upgraded route layout (route), Done output, to Other complete (other-end). Not selected.
+								224 text Never
+						225 image
+							226 edge Description: Connection from Default timer (wait), Done output, to Default complete (end). Not selected., Value: 0
+						227 container
+							228 button Description: Insert activity into connection, Help: Insert activity
+								229 image
+							230 button Delete connection
+								231 image
+						232 container
+							233 button Description: Insert activity into connection, Help: Insert activity
+								234 image
+							235 button Delete connection
+								236 image
+						237 container
+							238 button Description: Insert activity into connection, Help: Insert activity
+								239 image
+							240 button Delete connection
+								241 image
+						242 container
+							243 button Description: Insert activity into connection, Help: Insert activity
+								244 image
+							245 button Delete connection
+								246 image
+						247 node Description: Start. Node ID: start. Activity type: unknown. State: authoring. Not selected., Value: 0
+							248 container Start event
+								249 text Start
+						250 node Description: Upgraded route layout. Node ID: route. Activity type: unknown. State: authoring. Not selected., Value: 0
+							251 container Exclusive gateway
+								252 text Upgraded route layout
+						253 node Description: Default timer. Node ID: wait. Activity type: unknown. Run state: Completed. Not selected., Value: 0
+							254 container Intermediate catch event
+								255 text Default timer
+								256 text Intermediate catch event
+						257 node Description: Default complete. Node ID: end. Activity type: unknown. State: authoring. Not selected., Value: 0
+							258 container End event
+								259 text Default complete
+						260 node Description: Other complete. Node ID: other-end. Activity type: unknown. State: authoring. Not selected., Value: 0
+							261 container End event
+								262 text Other complete
+					263 image
+					264 container Control Panel
+						265 button Zoom In
+							266 image
+						267 button Zoom Out
+							268 image
+						269 button Fit View
+							270 image
+						271 button Toggle Interactivity
+							272 image
+					273 image Mini Map
+					274 link Description: React Flow attribution, Value: reactflow.dev/
+			275 image
+			276 text No validation errors
+			277 splitter Description: Resize inspector panel, Value: 320
+			278 container Inspector panel
+				279 tab group Inspector panel tabs
+					280 tab (selectable, settable, boolean) INSPECTOR, Help: Inspector, Value: 0
+					281 tab (selected, settable, boolean) RUNTIME, Help: Runtime, Value: 1
+					282 tab (selectable, settable, boolean) TEST RUN, Help: Test Run, Value: 0
+					283 tab (selectable, settable, boolean) ARTIFACTS, Help: Artifacts, Value: 0
+				284 button Description: Collapse inspector panel, Help: Collapse
+					285 image
+				286 button Description: Maximize inspector panel, Help: Maximize
+					287 image
+				288 container
+					289 text LATEST TEST RUN
+					290 heading Transient run accepted, Value: 3
+						291 text Transient run accepted
+					292 text DispatchAccepted Ephemeral - not saved, promoted, or published. Start:  Direct start
+					293 image
+					294 text Current draft has the same behavior as a published version.
+					295 definition list
+						296 container DISPATCH
+							297 text DISPATCH
+						298 text DispatchAccepted
+						299 container TEST RUN
+							300 text TEST RUN
+						301 text 14mI8ZNiRKm
+						302 container ARTIFACT
+							303 text ARTIFACT
+						304 text artifact-ab58de69c318
+						305 container RUN / INSTANCE
+							306 text RUN / INSTANCE
+						307 button 14mI8ZXND8p
+						308 container ACTIVITIES
+							309 text ACTIVITIES
+						310 text Available on linked Run
+						311 container INCIDENTS
+							312 text INCIDENTS
+						313 text Available on linked Run
+						314 container EXPIRES
+							315 text EXPIRES
+						316 text 10/30/2026, 2:31:07 PM
+					317 container Test Run controls
+						319 container
+							320 text Execution Completed
+						321 container
+							322 heading Waiting triggers, Value: 4
+								323 text Waiting triggers
+							324 button Refresh
+						340 text No supported waits are active on this Test Run.
+		330 container Bottom panel
+			331 tab group Bottom panels
+				332 tab (selected, settable, boolean) Console, Value: 1
+				333 tab (selectable, settable, boolean) Structured Logs, Value: 0
+				334 tab (selectable, settable, boolean) OpenTelemetry, Value: 0
+			335 container Bottom panel controls
+				336 button Description: Expand bottom panel, Help: Expand
+					337 image
+				338 button Description: Maximize bottom panel, Help: Maximize
+					339 image
+
+The focused UI element is 1 AXWebArea Elsa Studio, URL: 127.0.0.1:64042/workflows/definitions?definition=14iBsLEuiJS

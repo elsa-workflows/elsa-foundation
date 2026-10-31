@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "executingSource": "54d8532b0a00c39626185a7d617790004b9f9448",
+  "actualJourneysPassed": 2,
+  "actualCommitOrders": [
+    "cancel-first",
+    "admit-first"
+  ],
+  "rawAssets": 56,
+  "wholeStoresVerified": 18,
+  "ownedWorkbenchProcesses": 6,
+  "ownedSdkProcesses": 6,
+  "ownedHttpProcesses": 2,
+  "allQualifiedJourneyChildrenStopped": true,
+  "allRejectedAndSupersededJourneyChildrenStopped": true,
+  "checks": [
+    {
+      "name": "BPMN",
+      "command": "dotnet test Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj -c Release --no-restore",
+      "passed": 384,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "70cdbf0354335d157eea9262369147c192e145f6f9e3bcac617a6c05b068ac20"
+    },
+    {
+      "name": "EF model checkpoint",
+      "command": "dotnet test Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj -c Release --no-restore --filter FullyQualifiedName~EfRuntimeModelCheckpointTests",
+      "passed": 43,
+      "failed": 0,
+      "skipped": 0,
+      "logSha256": "aecb7d7564550d90e60abccc0714c701ef32e390f34b7cbec8b6fc0ab172099b"
+    }
+  ],
+  "portableChecks": {
+    "passed": 51,
+    "failed": 0,
+    "skipped": 0,
+    "newPositiveMatrix": 1,
+    "newRehashedNegativeControls": 10,
+    "verifierSha256": "ccfdc9d7269c0432082cd7e2af006069d3a7fbbd93fb2004c276c5ee1c86fff0",
+    "controlsSha256": "6667c81527c0433c3213b6a3c445003fb385394cf0b350ff0c0c8dd596218508",
+    "logSha256": "d74cb76465429fd0164269db27991e6982dab777129b2f732e05115472d12fef"
+  },
+  "mapsCheckPassed": true,
+  "testTiersPassed": 123,
+  "frozenBaselineAssetsUnchanged": 104,
+  "nativeWorkflowsAdmitted": 1,
+  "etlRunsAdmitted": 0,
+  "httpRequestsOrEffects": 0,
+  "admissionRaceProved": true,
+  "pendingNativeResultCrashProved": false,
+  "runBpmnEtlIntegrationProved": false,
+  "modelHeldFaultRetryProved": false,
+  "finalUpgradeAndStudioProved": false,
+  "fullPrReviewRounds": 0,
+  "scopeLimits": [
+    "Actual supported SDK writers interleave unchanged proposals at the existing final-validation hook before their production EF transactions.",
+    "Existing two-cycle native drain budget stops before root activity invocation; admitted capture retains scheduled root plus StartActivity queue.",
+    "Three standard Workbench processes per order perform publication, process loss and cold recovery on unedited owned stores.",
+    "ETL cancellation during work retains its earlier source-bound witness; these two races admit no ETL run.",
+    "Pending result/cancel process cuts, embedding, held retry, other providers/rollback and final upgrade/Studio remain open."
+  ]
+}

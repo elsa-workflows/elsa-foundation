@@ -1,0 +1,21 @@
+{
+  "request": {
+    "requestId": "retry-actual-retired-service",
+    "incidentId": "bpmn-incident:c343fca588a606e69d909653851bbfdef6f879547c439faa6b7c92c74a5e7a44",
+    "invocationId": "bpmn-work:1f023d356a7093c1fa2944cb4caa904c2010a7b22e9b770872e33339499bc60b",
+    "failedAttemptId": "attempt:f979de41c0237ac92440e7b8ec1aea9df76bd56927a23c2d17d4bdd9caf8b10f"
+  },
+  "httpStatus": 409,
+  "command": {
+    "executionId": "bpmn-embedded:e525173c8f73df10330224294d4d53771fdf4bbf56a995a7ca4e1a7c9d3be568",
+    "inputId": "retry-actual-retired-service",
+    "replay": true,
+    "pending": false,
+    "result": {
+      "status": "Rejected",
+      "code": "execution-terminal",
+      "revision": 4,
+      "lifecycle": "TerminalSettled"
+    }
+  }
+}

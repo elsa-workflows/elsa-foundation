@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-called-ack-observer-diagnostics",
+  "sourceRevision": "6153c1c23bf66f3b63f4f218147b1f2a7b5c2730",
+  "assets": [
+    {
+      "path": "README.md",
+      "sha256": "921c13e03dd2b577acb5f5e1499ebe414e39c6484168a055373645b228c426c3"
+    },
+    {
+      "path": "closed-diagnostic/Diagnostic.csproj.txt",
+      "sha256": "38e201f047792df530db8c7d157c2b6b19d1ed2e4134dba5da5c59e97d3b0da2"
+    },
+    {
+      "path": "closed-diagnostic/Program.cs.txt",
+      "sha256": "a72b972f3f137d2633923df63693855018fbc16829d931579f503a4b4b813ca1"
+    },
+    {
+      "path": "closed-diagnostic/command.json",
+      "sha256": "3f7bd56f2c9a83bab3ec21f6bb2cb1f4c00557e7f44db189b503b2e255c74052"
+    },
+    {
+      "path": "closed-diagnostic/output.txt",
+      "sha256": "be046cc70e491bccedf7c36201d69d1043075e175c14dd645a9886311c9e3893"
+    },
+    {
+      "path": "closed-diagnostic/physical-sources.json",
+      "sha256": "9c5e37125586e2add2b3e8e7fe9cee889c34ee8abbdbf5cb64945f20bbd60f99"
+    },
+    {
+      "path": "initial-pass/called.trx.gz",
+      "sha256": "e9b80b68fa4c38e047a35a5dbf18b4c70956da77e877124c1e46c36646232e3d"
+    },
+    {
+      "path": "initial-pass/evidence/legacy-called-ack/notice-finished.sqlite.gz",
+      "sha256": "b0e5bcf8075ea7123b1d29631011b0d6683e8e6dd16312f05b627eb6ae542d83"
+    },
+    {
+      "path": "initial-pass/evidence/legacy-called-ack/notice-recovered.sqlite.gz",
+      "sha256": "99e1e03dc3a5e74a39f393989f9f57b7c6f349cd75d4b9f0a134aacd2282c056"
+    },
+    {
+      "path": "initial-pass/evidence/legacy-called-ack/process.json",
+      "sha256": "12919d86985f0a9b5182bf066fe027385eb8d267fc83670e49f6b7c058fa2f41"
+    },
+    {
+      "path": "initial-pass/evidence/legacy-called-ack/terminal-finished.sqlite.gz",
+      "sha256": "6ebffa13eb05f37df5a439acfbe8f398349da937e22841d1daef18779b5cf88c"
+    },
+    {
+      "path": "initial-pass/evidence/legacy-called-ack/terminal-recovered.sqlite.gz",
+      "sha256": "dc0791b8d0f464827872f18aac8a1dd38dc4ddaf9227b3376a45e455372fd19b"
+    },
+    {
+      "path": "initial-pass/exit.json",
+      "sha256": "982b9e9bfb10ffe83cad665807abcfd3fa97b37822db5ab7831157a499548a9e"
+    },
+    {
+      "path": "initial-pass/run.json",
+      "sha256": "e1c976fc1bb720264677cb4c4d7084a2675642289f545d44da6bf08c037ad2f3"
+    },
+    {
+      "path": "initial-pass/test.txt",
+      "sha256": "87e4bbf8c7aa4fcfc23bf04a64fb095619f242e58b7eeb6d375546fefe0a18e4"
+    },
+    {
+      "path": "repeat/1/called.trx.gz",
+      "sha256": "43e193ce46a132048dc21c00a7841a3569a068dd6fbc1e7316aa0cd79340aaba"
+    },
+    {
+      "path": "repeat/1/evidence/legacy-called-ack/notice-finished.sqlite.gz",
+      "sha256": "2bf96a2700d544af99656f326b8d3730581f6da51fcdb45ab5be5127ec11bf75"
+    },
+    {
+      "path": "repeat/1/evidence/legacy-called-ack/notice-recovered.sqlite.gz",
+      "sha256": "b2d1dca64b1598f86e75c223333da4a08caa463204176bc6ce635cfa547b4730"
+    },
+    {
+      "path": "repeat/1/evidence/legacy-called-ack/process.json",
+      "sha256": "d531e6661308a187aaa6448806ddace4d7487fae62c418668335a5999a9a1aba"
+    },
+    {
+      "path": "repeat/1/evidence/legacy-called-ack/terminal-finished.sqlite.gz",
+      "sha256": "b7cf8e1e09b19e99b715981c029ccd95c357b230d4b0650c0d2915724eca963e"
+    },
+    {
+      "path": "repeat/1/evidence/legacy-called-ack/terminal-recovered.sqlite.gz",
+      "sha256": "9825e8119c6b42a16466b5d6f474b15024a3bab12d2f561ebde4f9cfd87d1f97"
+    },
+    {
+      "path": "repeat/1/run.json",
+      "sha256": "c8a1199abbb578d69c9f68ae1d303ca5fac0c7adadd5bc35a77b12b10f766302"
+    },
+    {
+      "path": "repeat/1/test.txt",
+      "sha256": "44d2e3b9e30bdb46014b3320bd12003a3411649affe3f270233dc0b63f49fb81"
+    },
+    {
+      "path": "repeat/2/called.trx.gz",
+      "sha256": "1898222bbd49848cc6233dc338f44049633ca25ab41d6fb240c232b0f18e1eec"
+    },
+    {
+      "path": "repeat/2/evidence/diagnostics/checked-refusal-8c42c0d6372b4f6f8713b0b034f81328/0-finished-api.json",
+      "sha256": "39acbdd6e1a9d591a6063c739a2cc57e6b87a106316127e24b3ca077a9b54b6f"
+    },
+    {
+      "path": "repeat/2/evidence/diagnostics/checked-refusal-8c42c0d6372b4f6f8713b0b034f81328/1-notice-marker.json",
+      "sha256": "840c69a2ec3c8e61bfd33ac8eaaaed140b411ddf16493868fdd61fd76b2dc81b"
+    },
+    {
+      "path": "repeat/2/evidence/diagnostics/checked-refusal-8c42c0d6372b4f6f8713b0b034f81328/refusal.json",
+      "sha256": "58905974b0febd59fa7d397875729f933a1b528a58714ca13df03301a864123b"
+    },
+    {
+      "path": "repeat/2/evidence/diagnostics/checked-refusal-8c42c0d6372b4f6f8713b0b034f81328/refused.sqlite.gz",
+      "sha256": "46642a6cab95c824e6437b0650ecbe79dafb23c851fe328e4318ea4c924bd6e1"
+    },
+    {
+      "path": "repeat/2/evidence/legacy-called-ack/notice-recovered.sqlite.gz",
+      "sha256": "be89b311bb71e9a1f6296eb187d614332b82fe46297007685657e5e309414a16"
+    },
+    {
+      "path": "repeat/2/run.json",
+      "sha256": "8c92701fa5e06c05536f52e12952afc60edd14ff344e246dc5040aa6ad7f16f0"
+    },
+    {
+      "path": "repeat/2/test.txt",
+      "sha256": "d239543f9d65da0b2386b7e9c7741a9e8b7e69d0254bc8eb0bacc7920e475d13"
+    },
+    {
+      "path": "repeat/summary.json",
+      "sha256": "104afa9fddc52a302f19f7a35bddbd0281b31e41b7b5bd7c0a3192520c3cf22e"
+    },
+    {
+      "path": "summary.json",
+      "sha256": "841ac703e6a48b532f50dcea9a14c295bd7e6d065f65f24d96537bde9b8ea8b0"
+    }
+  ]
+}

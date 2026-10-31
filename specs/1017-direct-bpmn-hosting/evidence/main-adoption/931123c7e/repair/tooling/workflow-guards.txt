@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/contributor-checkpoints/test_workflow_guards.py", line 19, in <module>
+    def run_helper(command: str, env: dict[str, str], payload: str | None = None) -> subprocess.CompletedProcess[str]:
+TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'

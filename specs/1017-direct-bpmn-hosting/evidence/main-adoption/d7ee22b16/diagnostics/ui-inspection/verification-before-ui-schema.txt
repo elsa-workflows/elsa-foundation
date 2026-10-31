@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/bpmn/verify_studio_upgrade.py", line 207, in <module>
+    print(json.dumps(verify(parser.parse_args().manifest.resolve(strict=True)), indent=2))
+  File "/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/bpmn/verify_studio_upgrade.py", line 196, in verify
+    raise ValueError("The actual Studio DOM does not show the exact completed Published Run.")
+ValueError: The actual Studio DOM does not show the exact completed Published Run.

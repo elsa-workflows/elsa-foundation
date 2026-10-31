@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "f3b56e516d4e6bd05bfa82995f512f27f4520fe8",
+  "baselineSourceRevision": "438001406d980051584234e5d656eb8e6a67f47f",
+  "hostSuite": {
+    "command": "dotnet test Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj -c Release --artifacts-path <owned-build-output> --no-build --no-restore",
+    "source": "Rebuilt by resume-upgrade; actual Workbench product revision is checked in exported host observations.",
+    "tests": [
+      {
+        "name": "Elsa.Activities.Bpmn.Hosting.Tests.LegacyPartialForkUpgradeTests.Actual_legacy_partial_forks_upgrade_and_finish_through_production_commands",
+        "outcome": "Passed",
+        "duration": "00:00:04.4354032"
+      },
+      {
+        "name": "Elsa.Activities.Bpmn.Hosting.Tests.OwnedWorkbenchTests.Actual_native_execution_and_pin_survive_an_owned_host_restart",
+        "outcome": "Passed",
+        "duration": "00:00:07.0373315"
+      },
+      {
+        "name": "Elsa.Activities.Bpmn.Hosting.Tests.RuntimeOnlyParallelBpmnTests.Partial_fork_recovers_and_joins_in_the_actual_host_without_design_storage",
+        "outcome": "Passed",
+        "duration": "00:00:04.1857062"
+      },
+      {
+        "name": "Elsa.Activities.Bpmn.Hosting.Tests.DirectBpmnWorkbenchTests.Authenticated_direct_execution_waits_restarts_resumes_and_completes_in_the_real_host",
+        "outcome": "Passed",
+        "duration": "00:00:06.7591708"
+      }
+    ],
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "trxSha256": "cf69650c38e0e2bf8be54225bb03a50a829af22bc357f7efa1fca6d5889e60de"
+  },
+  "portableEvidenceChecks": {
+    "command": "ELSA_BPMN_CAPTURE_MANIFEST=specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/manifest.json python3 -m unittest discover -s e2e-tests/bpmn -p test_qualify_hosting.py -v",
+    "passed": 17,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "Twelve capture guards plus five controls over copied actual upgraded evidence. Python control tests are added with this evidence, after the host-source commit.",
+    "initialControlCorrection": "The first two copied-store mutations were not checkpointed before compression and therefore did not reach the test input. Controls now close/checkpoint the SQLite writer before compression; all five altered bundles are refused."
+  },
+  "productionMutationControl": {
+    "scope": "Pre-commit failure control; separate from exact-source positive host acceptance.",
+    "file": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Migrations/Runtime/Sqlite/20261028214345_ModelMaterialKind.cs",
+    "mutation": "Change the additive IsModelMaterial column default from false to true for existing native artifacts.",
+    "test": "LegacyPartialForkUpgradeTests.Actual_legacy_partial_forks_upgrade_and_finish_through_production_commands",
+    "expectedFailure": "Normal Event stimulus returns HTTP 500; persisted native material is misread as corrupt/unsupported model material.",
+    "observedFailures": 1,
+    "restoredFileSha256": "c8135b4bd88e46d7c540b1ce6a46d68ea68770ad347100d6d4d70e08a68c36b4",
+    "restoredPositive": "The exact-source whole-host suite passed all four tests after restoration."
+  },
+  "recoveredLegacyExecutions": 8,
+  "retainedNativeArtifacts": 59,
+  "wholeStoresVerified": 2,
+  "frozenAuthoringPreserved": true,
+  "priorRunnerCorrections": [
+    "First runner refused reader-created empty WAL/SHM sidecars. Original capture hashes stayed unchanged; closed unused sidecars were removed and immutable source reads added.",
+    "Second runner refused a physical-row comparison written against decoded strings. The verifier now checks the existing lossless UTF-16 keys and native status value."
+  ],
+  "limits": [
+    "Only the actual legacy partial-fork family is upgraded here; the remaining captured writer families stay open.",
+    "Actual Studio compatibility, real native/ETL bindings, remaining races/settlement/admission and clustered placement are not established.",
+    "The program, #2898 and #2907 remain partial; full-PR review rounds remain zero."
+  ],
+  "unchangedBaselineMatrix": {
+    "assetsVerified": 104,
+    "wholeStoresIntegrityChecked": 22,
+    "scope": "Integrity/hash verification only; this does not assert upgraded recovery for the remaining families."
+  },
+  "defaultCopiedFixtureRun": {
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "scope": "The legacy host test also passes using the normal MSBuild-copied baseline fixtures without a capture-directory override."
+  }
+}

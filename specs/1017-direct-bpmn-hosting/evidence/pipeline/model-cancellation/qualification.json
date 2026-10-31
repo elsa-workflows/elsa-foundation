@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "executingSource": "6f6bf1786cb6fbf290caac500c4737f4721b2a96",
+  "actualJourneyPassed": true,
+  "actualAssets": 20,
+  "wholeStores": 6,
+  "ownedWorkbenchProcesses": 3,
+  "ownedHttpProcesses": 1,
+  "allJourneyChildrenStopped": true,
+  "checks": [
+    {
+      "command": "dotnet test Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj -c Release --no-restore",
+      "passed": 382,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "972b15bf0a06f8f0aa222c1d66d7cb6d14da27d8519daea8128dc67b2f1a3c9d"
+    },
+    {
+      "command": "dotnet test Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj -c Release --no-restore --filter EtlNativeResultDeliveryTests|EtlNativeCheckpointTests|EtlConnectorCancellationRaceTests|EtlRuntimeApiHttpTests",
+      "passed": 72,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "0f51f751c9583beb8c3f0ca184a7bcfaf1956a9c7f44080a1af8ce54227e89d7"
+    },
+    {
+      "command": "dotnet test Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj -c Release -p:ElsaBpmnRecoveryProbe=false --no-restore --filter Authenticated_direct_execution_waits_restarts_resumes_and_completes_in_the_real_host",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "1b92d693241cc30a13b05a1513eb7d2b263408ef2c53b51d28ee19f98c2e7a72"
+    }
+  ],
+  "portableChecks": {
+    "passed": 26,
+    "failed": 0,
+    "skipped": 0,
+    "positiveFamilies": 5,
+    "negativeControls": 21,
+    "verifierSha256": "3e768e93ebbc9fa4cfc6546207f35515ee7447bed615aaee416b821cf37e3b27",
+    "testSha256": "6cf1669ab2b8ae1fc3bbe3e825d950d3b8039156eb2f4781a006c2c56e076581"
+  },
+  "firstCaptureRejected": {
+    "source": "571e9997c",
+    "reason": "The actual native result lost its complete downstream cancellation inventory.",
+    "qualified": false
+  },
+  "frozenBaselineAssetsUnchanged": 104,
+  "modelCancellationBeforeAdmissionProved": false,
+  "pendingCancellationCrashProved": false,
+  "runBpmnEtlIntegrationProved": false,
+  "modelHeldFaultRetryProved": false,
+  "finalUpgradeAndStudioProved": false,
+  "fullPrReviewRounds": 0,
+  "scopeLimits": [
+    "BPMN-originated cancellation of an admitted native RunEtl worker after process recovery; cancellation before admission, pending cancel/result crashes, embedding, held retry and final upgrade/Studio remain unproved.",
+    "The crash cut uses SIGSTOP only to copy committed stores, then SIGKILL; no persisted state or clock is edited.",
+    "External HTTP effects remain at least once."
+  ]
+}

@@ -1,0 +1,27 @@
+[
+  {
+    "name": "locked-restore",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "dotnet",
+      "restore",
+      "Elsa.Server.slnx",
+      "--locked-mode",
+      "--force"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 8.20517611503601
+  },
+  {
+    "name": "frontend-tests",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "python3.14",
+      "/tmp/elsa-2898-main-c4cfa-qualification/serial-frontend.py"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 1,
+    "elapsedSeconds": 5.986248970031738
+  }
+]

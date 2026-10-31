@@ -1,0 +1,64 @@
+{
+  "formatVersion": 4,
+  "humanBindings": [
+    "review-work"
+  ],
+  "serviceBindings": [],
+  "timerBindings": [
+    "timeout-work"
+  ],
+  "process": {
+    "processId": "retry-human-empty-services",
+    "elements": [
+      {
+        "elementId": "start",
+        "elementType": "startEvent"
+      },
+      {
+        "elementId": "review",
+        "elementType": "userTask",
+        "bindingRef": "review-work"
+      },
+      {
+        "elementId": "timeout",
+        "elementType": "boundaryEvent",
+        "bindingRef": "timeout-work",
+        "attachedToRef": "review",
+        "cancelActivity": true,
+        "eventDefinitions": [
+          {
+            "type": "timer",
+            "properties": {
+              "interval": "PT1H"
+            }
+          }
+        ]
+      },
+      {
+        "elementId": "done",
+        "elementType": "endEvent"
+      },
+      {
+        "elementId": "timed-out",
+        "elementType": "endEvent"
+      }
+    ],
+    "sequenceFlows": [
+      {
+        "flowId": "start-review",
+        "sourceRef": "start",
+        "targetRef": "review"
+      },
+      {
+        "flowId": "review-done",
+        "sourceRef": "review",
+        "targetRef": "done"
+      },
+      {
+        "flowId": "timeout-end",
+        "sourceRef": "timeout",
+        "targetRef": "timed-out"
+      }
+    ]
+  }
+}

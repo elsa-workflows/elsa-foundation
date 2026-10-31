@@ -1,0 +1,208 @@
+{
+  "formatVersion": 1,
+  "sourceRevision": "1dd83ad436bffcef45377e462e580ea41a5924b9",
+  "capturedAt": "2026-10-29T00:35:42.729515+00:00",
+  "profile": "foundation-direct-v1 / built-in single-node mailbox / EF SQLite / production Workbench authenticated HTTP",
+  "originalProcessId": 56199,
+  "restartedProcessId": 56210,
+  "published": {
+    "executable": {
+      "artifactId": "sha256:30e34f85edc494f55f9c4c05139c23045466f8ef52cc7af4744bb7d4b0f9ca8f",
+      "definitionId": "bpmn-model:sha256:30e34f85edc494f55f9c4c05139c23045466f8ef52cc7af4744bb7d4b0f9ca8f",
+      "definitionVersionId": "sha256:30e34f85edc494f55f9c4c05139c23045466f8ef52cc7af4744bb7d4b0f9ca8f",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:30e34f85edc494f55f9c4c05139c23045466f8ef52cc7af4744bb7d4b0f9ca8f"
+    },
+    "incarnationId": "16b86027495a4cd6b0cf754c19871e03",
+    "sourceReferenceId": "bpmn-source:6f083444049460f8b207014e58b2deec7107f0471f2224034c1a29acbfdaf8cf",
+    "profile": "foundation-direct-v1"
+  },
+  "started": {
+    "executionId": "bpmn:8ee10ef05b851abe223ae814be4b72ec908b633fac78d78dd8ac77ab8b46fa12",
+    "inputId": "start",
+    "replay": false,
+    "pending": false,
+    "result": {
+      "status": "Accepted",
+      "code": null,
+      "revision": 1,
+      "lifecycle": "Running"
+    }
+  },
+  "waiting": {
+    "executionId": "bpmn:8ee10ef05b851abe223ae814be4b72ec908b633fac78d78dd8ac77ab8b46fa12",
+    "revision": 1,
+    "status": "Running",
+    "protocol": {
+      "key": "elsa.bpmn",
+      "version": 1
+    },
+    "executable": {
+      "artifactId": "sha256:30e34f85edc494f55f9c4c05139c23045466f8ef52cc7af4744bb7d4b0f9ca8f",
+      "definitionId": "bpmn-model:sha256:30e34f85edc494f55f9c4c05139c23045466f8ef52cc7af4744bb7d4b0f9ca8f",
+      "definitionVersionId": "sha256:30e34f85edc494f55f9c4c05139c23045466f8ef52cc7af4744bb7d4b0f9ca8f",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:30e34f85edc494f55f9c4c05139c23045466f8ef52cc7af4744bb7d4b0f9ca8f"
+    },
+    "materialIncarnationId": "16b86027495a4cd6b0cf754c19871e03",
+    "createdAt": "2026-10-29T00:35:39.489385\u002B00:00",
+    "updatedAt": "2026-10-29T00:35:39.489385\u002B00:00",
+    "result": null
+  },
+  "recovered": {
+    "executionId": "bpmn:8ee10ef05b851abe223ae814be4b72ec908b633fac78d78dd8ac77ab8b46fa12",
+    "revision": 1,
+    "status": "Running",
+    "protocol": {
+      "key": "elsa.bpmn",
+      "version": 1
+    },
+    "executable": {
+      "artifactId": "sha256:30e34f85edc494f55f9c4c05139c23045466f8ef52cc7af4744bb7d4b0f9ca8f",
+      "definitionId": "bpmn-model:sha256:30e34f85edc494f55f9c4c05139c23045466f8ef52cc7af4744bb7d4b0f9ca8f",
+      "definitionVersionId": "sha256:30e34f85edc494f55f9c4c05139c23045466f8ef52cc7af4744bb7d4b0f9ca8f",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:30e34f85edc494f55f9c4c05139c23045466f8ef52cc7af4744bb7d4b0f9ca8f"
+    },
+    "materialIncarnationId": "16b86027495a4cd6b0cf754c19871e03",
+    "createdAt": "2026-10-29T00:35:39.489385\u002B00:00",
+    "updatedAt": "2026-10-29T00:35:39.489385\u002B00:00",
+    "result": null
+  },
+  "work": {
+    "elementId": "human",
+    "bindingId": "human-work",
+    "tokenId": "token:4",
+    "iterationId": null,
+    "invocationId": "bpmn-work:222a9a0f3d8ecca9034e467be81305a5434f8cd8c8723ae187a4719b7baa319e",
+    "attemptId": "attempt:6c1bab641cd87a6ae97aa4b26650b3aca788a6b3fe986ad2bf6ffd5be4110a99"
+  },
+  "obsolete": {
+    "executionId": "bpmn:8ee10ef05b851abe223ae814be4b72ec908b633fac78d78dd8ac77ab8b46fa12",
+    "inputId": "obsolete",
+    "replay": false,
+    "pending": false,
+    "result": {
+      "status": "Rejected",
+      "code": "obsolete-human-work",
+      "revision": 1,
+      "lifecycle": "Running"
+    }
+  },
+  "accepted": {
+    "executionId": "bpmn:8ee10ef05b851abe223ae814be4b72ec908b633fac78d78dd8ac77ab8b46fa12",
+    "inputId": "complete",
+    "replay": false,
+    "pending": false,
+    "result": {
+      "status": "Accepted",
+      "code": null,
+      "revision": 2,
+      "lifecycle": "TerminalSettled"
+    }
+  },
+  "completed": {
+    "executionId": "bpmn:8ee10ef05b851abe223ae814be4b72ec908b633fac78d78dd8ac77ab8b46fa12",
+    "revision": 2,
+    "status": "TerminalSettled",
+    "protocol": {
+      "key": "elsa.bpmn",
+      "version": 1
+    },
+    "executable": {
+      "artifactId": "sha256:30e34f85edc494f55f9c4c05139c23045466f8ef52cc7af4744bb7d4b0f9ca8f",
+      "definitionId": "bpmn-model:sha256:30e34f85edc494f55f9c4c05139c23045466f8ef52cc7af4744bb7d4b0f9ca8f",
+      "definitionVersionId": "sha256:30e34f85edc494f55f9c4c05139c23045466f8ef52cc7af4744bb7d4b0f9ca8f",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:30e34f85edc494f55f9c4c05139c23045466f8ef52cc7af4744bb7d4b0f9ca8f"
+    },
+    "materialIncarnationId": "16b86027495a4cd6b0cf754c19871e03",
+    "createdAt": "2026-10-29T00:35:39.489385\u002B00:00",
+    "updatedAt": "2026-10-29T00:35:42.619443\u002B00:00",
+    "result": {
+      "status": "Completed",
+      "outcome": "Done"
+    }
+  },
+  "late": {
+    "executionId": "bpmn:8ee10ef05b851abe223ae814be4b72ec908b633fac78d78dd8ac77ab8b46fa12",
+    "inputId": "late",
+    "replay": false,
+    "pending": false,
+    "result": {
+      "status": "Rejected",
+      "code": "execution-terminal",
+      "revision": 2,
+      "lifecycle": "TerminalSettled"
+    }
+  },
+  "nativeWorkflowRows": 0,
+  "nativeActivityRows": 0,
+  "nativeBookmarkRows": 0,
+  "exactCompletionReplayPreservedRevision": true,
+  "binaries": [
+    {
+      "file": "Elsa.Workbench.dll",
+      "productVersion": "1.0.0\u002B1dd83ad436bffcef45377e462e580ea41a5924b9",
+      "sha256": "bab3fc4f6b4ce632d99a325a485fb39028beba3544fabe8d3adeea4d519a8790"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Core.dll",
+      "productVersion": "1.0.0\u002B1dd83ad436bffcef45377e462e580ea41a5924b9",
+      "sha256": "4d4cef3a1b6c333287f4fe78a8e1edbe4e8cbb7de045af82c1b1299a0c9fb182"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.dll",
+      "productVersion": "1.0.0\u002B1dd83ad436bffcef45377e462e580ea41a5924b9",
+      "sha256": "c97cc5ae6e9693de88b538d3354697018ecb0aeb56b5e4e9ec2ac676a6f9506f"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0\u002B1dd83ad436bffcef45377e462e580ea41a5924b9",
+      "sha256": "e23540950e3cd03ef6755159cb62e723595b9caf19c1ea2a151a2506ed7599f2"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Core.dll",
+      "productVersion": "1.0.0\u002B1dd83ad436bffcef45377e462e580ea41a5924b9",
+      "sha256": "4d5231e732f7173ccd351e98cf70c6c3de16705880f4b85fcd25aeb826162ee8"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.dll",
+      "productVersion": "1.0.0\u002B1dd83ad436bffcef45377e462e580ea41a5924b9",
+      "sha256": "f4f0882499d2e5fa8897ca1ca9e2f722d231f6fafc72c0bbe44f8cd9053d9e2d"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Api.dll",
+      "productVersion": "1.0.0\u002B1dd83ad436bffcef45377e462e580ea41a5924b9",
+      "sha256": "03a977903cad093dcb72eeab7bf3af8bab9279f1707790a0ce87bc5dde768721"
+    },
+    {
+      "file": "Bpmn.Model.dll",
+      "productVersion": "0.5.0\u002B021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776"
+    },
+    {
+      "file": "Bpmn.Semantics.dll",
+      "productVersion": "0.5.0\u002B021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+    }
+  ],
+  "snapshots": [
+    {
+      "file": "waiting.sqlite.gz",
+      "databaseSha256": "e04579c8de7952cb300779a06408b1ce677e9219a6897c94e2165c18b354078f",
+      "gzipSha256": "8a0a3599662babb8334da6efa8c1982fb3aa816afed4e2864c98739f40b326c2"
+    },
+    {
+      "file": "completed.sqlite.gz",
+      "databaseSha256": "6ef729234df734d8d5255877d1e03e1d888ce96a2184525576a76d59e478c0d1",
+      "gzipSha256": "457b6a712af7579c17d1275d7e0431900dbedcb604df7731ab146d7c264332bc"
+    }
+  ],
+  "limits": [
+    "Same-source process restart; no changed-binary or legacy-upgrade acceptance.",
+    "Combined host has Design storage configured; runtime-only proof remains open.",
+    "Clustered model placement, service/timer/native bindings, Studio and full scenario matrix remain open.",
+    "No concurrent source-retirement/admission proof."
+  ]
+}

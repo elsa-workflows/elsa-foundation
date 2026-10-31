@@ -1,0 +1,162 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="5d3dfb42-21c1-4a71-a5f3-b0230f9d824b" name="@Sipkes-Mac-Mini 2026-10-30 06:43:18" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-30T06:43:18.7407300+01:00" queuing="2026-10-30T06:43:18.7407300+01:00" start="2026-10-30T06:43:10.5374550+01:00" finish="2026-10-30T06:43:40.6350290+01:00" />
+  <TestSettings name="default" id="80a30fb6-52d2-4abf-bd2e-34d4db5aa834">
+    <Deployment runDeploymentRoot="_Sipkes-Mac-Mini_2026-10-30_06_43_18" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="a1554c41-b0c1-41f8-83e4-b791d6359e6a" testId="48ee1fbd-c6f6-7d22-0434-e94bf6e135fe" testName="Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(parent: &quot;Sequence&quot;)" computerName="Sipkes-Mac-Mini" duration="00:00:07.8384561" startTime="2026-10-30T06:43:18.7328250+01:00" endTime="2026-10-30T06:43:26.5486120+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a1554c41-b0c1-41f8-83e4-b791d6359e6a">
+      <Output>
+        <ErrorInfo>
+          <Message>The same accepted partial-fork inputs produced different released-interpreter states.</Message>
+          <StackTrace>   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;g__Checked|12&gt;d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 207
+--- End of stack trace from previous location ---
+   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;b__1&gt;d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 92
+--- End of stack trace from previous location ---
+   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;g__Until|0_15(Func`1 predicate) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 226
+   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(String parent) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 92
+   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(String parent) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 165
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="25cfd257-64eb-4e36-a62b-a01b4321f09e" testId="f5a7a51d-b121-2bae-f1de-d6cd5ab70616" testName="Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(parent: &quot;Root&quot;)" computerName="Sipkes-Mac-Mini" duration="00:00:07.0457228" startTime="2026-10-30T06:43:26.5496170+01:00" endTime="2026-10-30T06:43:33.5946320+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="25cfd257-64eb-4e36-a62b-a01b4321f09e">
+      <Output>
+        <ErrorInfo>
+          <Message>The same accepted partial-fork inputs produced different released-interpreter states.</Message>
+          <StackTrace>   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;g__Checked|12&gt;d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 207
+--- End of stack trace from previous location ---
+   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;b__1&gt;d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 92
+--- End of stack trace from previous location ---
+   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;g__Until|0_15(Func`1 predicate) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 226
+   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(String parent) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 92
+   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(String parent) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 165
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="edc0933f-edfe-48b3-a216-28faac3a5a8e" testId="0b462370-3349-ac78-8cb7-f1f85dcc3e39" testName="Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(parent: &quot;Flowchart&quot;)" computerName="Sipkes-Mac-Mini" duration="00:00:07.0205247" startTime="2026-10-30T06:43:33.5952940+01:00" endTime="2026-10-30T06:43:40.6154410+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="edc0933f-edfe-48b3-a216-28faac3a5a8e">
+      <Output>
+        <ErrorInfo>
+          <Message>The same accepted partial-fork inputs produced different released-interpreter states.</Message>
+          <StackTrace>   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;g__Checked|12&gt;d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 207
+--- End of stack trace from previous location ---
+   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;b__1&gt;d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 92
+--- End of stack trace from previous location ---
+   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;g__Until|0_15(Func`1 predicate) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 226
+   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(String parent) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 92
+   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(String parent) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 165
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="65d4e5a8-27f8-4c76-8cd1-76c1332892ba" testId="d18d7c5e-becf-a383-631c-426c2d2fc480" testName="Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(parent: &quot;CompensationScope&quot;)" computerName="Sipkes-Mac-Mini" duration="00:00:07.9437457" startTime="2026-10-30T06:43:10.7610740+01:00" endTime="2026-10-30T06:43:18.7096330+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="65d4e5a8-27f8-4c76-8cd1-76c1332892ba">
+      <Output>
+        <ErrorInfo>
+          <Message>The same accepted partial-fork inputs produced different released-interpreter states.</Message>
+          <StackTrace>   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;g__Checked|12&gt;d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 207
+--- End of stack trace from previous location ---
+   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;b__1&gt;d.MoveNext() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 92
+--- End of stack trace from previous location ---
+   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;g__Until|0_15(Func`1 predicate) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 226
+   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(String parent) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 92
+   at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(String parent) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs:line 165
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(parent: &quot;Root&quot;)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/activities/bpmn/hosting/tests/bin/release/net10.0/elsa.activities.bpmn.hosting.tests.dll" id="f5a7a51d-b121-2bae-f1de-d6cd5ab70616">
+      <Execution id="25cfd257-64eb-4e36-a62b-a01b4321f09e" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.Hosting.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests" name="The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent" />
+    </UnitTest>
+    <UnitTest name="Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(parent: &quot;CompensationScope&quot;)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/activities/bpmn/hosting/tests/bin/release/net10.0/elsa.activities.bpmn.hosting.tests.dll" id="d18d7c5e-becf-a383-631c-426c2d2fc480">
+      <Execution id="65d4e5a8-27f8-4c76-8cd1-76c1332892ba" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.Hosting.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests" name="The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent" />
+    </UnitTest>
+    <UnitTest name="Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(parent: &quot;Sequence&quot;)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/activities/bpmn/hosting/tests/bin/release/net10.0/elsa.activities.bpmn.hosting.tests.dll" id="48ee1fbd-c6f6-7d22-0434-e94bf6e135fe">
+      <Execution id="a1554c41-b0c1-41f8-83e4-b791d6359e6a" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.Hosting.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests" name="The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent" />
+    </UnitTest>
+    <UnitTest name="Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(parent: &quot;Flowchart&quot;)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/activities/bpmn/hosting/tests/bin/release/net10.0/elsa.activities.bpmn.hosting.tests.dll" id="0b462370-3349-ac78-8cb7-f1f85dcc3e39">
+      <Execution id="edc0933f-edfe-48b3-a216-28faac3a5a8e" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.Hosting.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests" name="The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="48ee1fbd-c6f6-7d22-0434-e94bf6e135fe" executionId="a1554c41-b0c1-41f8-83e4-b791d6359e6a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f5a7a51d-b121-2bae-f1de-d6cd5ab70616" executionId="25cfd257-64eb-4e36-a62b-a01b4321f09e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0b462370-3349-ac78-8cb7-f1f85dcc3e39" executionId="edc0933f-edfe-48b3-a216-28faac3a5a8e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d18d7c5e-becf-a383-631c-426c2d2fc480" executionId="65d4e5a8-27f8-4c76-8cd1-76c1332892ba" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="4" executed="4" passed="0" failed="4" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.03]   Discovering: Elsa.Activities.Bpmn.Hosting.Tests
+[xUnit.net 00:00:00.04]   Discovered:  Elsa.Activities.Bpmn.Hosting.Tests
+[xUnit.net 00:00:00.05]   Starting:    Elsa.Activities.Bpmn.Hosting.Tests
+[xUnit.net 00:00:08.01]       The same accepted partial-fork inputs produced different released-interpreter states.
+[xUnit.net 00:00:08.01]       Stack Trace:
+[xUnit.net 00:00:08.02]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(207,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;g__Checked|12&gt;d.MoveNext()
+[xUnit.net 00:00:08.02]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:08.02]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(92,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;b__1&gt;d.MoveNext()
+[xUnit.net 00:00:08.02]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:08.02]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(226,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;g__Until|0_15(Func`1 predicate)
+[xUnit.net 00:00:08.02]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(92,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(String parent)
+[xUnit.net 00:00:08.02]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(165,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(String parent)
+[xUnit.net 00:00:08.02]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:15.85]       The same accepted partial-fork inputs produced different released-interpreter states.
+[xUnit.net 00:00:15.85]       Stack Trace:
+[xUnit.net 00:00:15.85]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(207,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;g__Checked|12&gt;d.MoveNext()
+[xUnit.net 00:00:15.85]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:15.85]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(92,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;b__1&gt;d.MoveNext()
+[xUnit.net 00:00:15.85]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:15.85]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(226,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;g__Until|0_15(Func`1 predicate)
+[xUnit.net 00:00:15.85]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(92,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(String parent)
+[xUnit.net 00:00:15.85]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(165,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(String parent)
+[xUnit.net 00:00:15.85]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:22.89]       The same accepted partial-fork inputs produced different released-interpreter states.
+[xUnit.net 00:00:22.89]       Stack Trace:
+[xUnit.net 00:00:22.89]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(207,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;g__Checked|12&gt;d.MoveNext()
+[xUnit.net 00:00:22.89]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:22.89]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(92,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;b__1&gt;d.MoveNext()
+[xUnit.net 00:00:22.89]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:22.89]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(226,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;g__Until|0_15(Func`1 predicate)
+[xUnit.net 00:00:22.89]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(92,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(String parent)
+[xUnit.net 00:00:22.89]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(165,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(String parent)
+[xUnit.net 00:00:22.89]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:29.91]       The same accepted partial-fork inputs produced different released-interpreter states.
+[xUnit.net 00:00:29.91]       Stack Trace:
+[xUnit.net 00:00:29.91]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(207,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;g__Checked|12&gt;d.MoveNext()
+[xUnit.net 00:00:29.91]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:29.91]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(92,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;&gt;c__DisplayClass0_0.&lt;&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;b__1&gt;d.MoveNext()
+[xUnit.net 00:00:29.91]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:29.91]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(226,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.&lt;The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent&gt;g__Until|0_15(Func`1 predicate)
+[xUnit.net 00:00:29.91]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(92,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(String parent)
+[xUnit.net 00:00:29.91]         /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/RunBpmnParallelWorkbenchTests.cs(165,0): at Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(String parent)
+[xUnit.net 00:00:29.91]         --- End of stack trace from previous location ---
+[xUnit.net 00:00:29.91]   Finished:    Elsa.Activities.Bpmn.Hosting.Tests
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="Sipkes-Mac-Mini" outcome="Error" timestamp="2026-10-30T06:43:18.7110170+01:00">
+        <Text>[xUnit.net 00:00:08.01]     Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(parent: "CompensationScope") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="Sipkes-Mac-Mini" outcome="Error" timestamp="2026-10-30T06:43:26.5489680+01:00">
+        <Text>[xUnit.net 00:00:15.85]     Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(parent: "Sequence") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="Sipkes-Mac-Mini" outcome="Error" timestamp="2026-10-30T06:43:33.5949310+01:00">
+        <Text>[xUnit.net 00:00:22.89]     Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(parent: "Root") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="Sipkes-Mac-Mini" outcome="Error" timestamp="2026-10-30T06:43:40.6157010+01:00">
+        <Text>[xUnit.net 00:00:29.91]     Elsa.Activities.Bpmn.Hosting.Tests.RunBpmnParallelWorkbenchTests.The_same_partial_fork_recovers_and_joins_once_directly_and_under_a_real_native_parent(parent: "Flowchart") [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

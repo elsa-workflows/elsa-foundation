@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "kind": "authorization-diagnostic-capture-inventory",
+  "cases": [
+    {
+      "manifest": "denial-status-manifest.json",
+      "sha256": "cab1c6d7c7824121c67d901bc70cb9a61abf91be7eae90654ebf839e87225063",
+      "sourceRevision": "22f5f8607daa0c043f91b470b392f78b8b73887b",
+      "scope": "Initial overly strict403 expectation rejected actual masked404. Nine whole stores; all5 listed children stopped. Not qualifying."
+    },
+    {
+      "manifest": "pre-order-fix/manifest.json",
+      "sha256": "fc19a9dbea24e7ce7ec6f5352a46f9a2045c3a1028cd63b4d523e8cccbbbd5bd",
+      "sourceRevision": "b14152e7a292d2f312026892e38613550737afc1",
+      "scope": "Five real role/tenant/replay journeys qualify their source behavior and no outcome disclosure. They do not prove read authorization precedes command lookup: source audit and seven failing ordering controls found the old GET ordering. Final fixed-source qualification is separate.45 whole stores/186 raw assets; all30 listed children stopped."
+    }
+  ]
+}

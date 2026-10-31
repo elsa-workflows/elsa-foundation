@@ -1,0 +1,52 @@
+[
+  {
+    "name": "bpmn-whole",
+    "source": "e83fc58f6fa84a7cbeb72678729aa1b78c6b1ca9",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=bpmn-whole.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-review8-closeout"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 37.803722858428955,
+    "counts": {
+      "total": "506",
+      "executed": "506",
+      "passed": "506",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    }
+  },
+  {
+    "name": "producer-fixed-build",
+    "source": "e83fc58f6fa84a7cbeb72678729aa1b78c6b1ca9",
+    "arguments": [
+      "dotnet",
+      "build",
+      "tools/bpmn/NativeWorkDispatch/NativeWorkDispatch.csproj",
+      "-c",
+      "Release",
+      "--no-restore"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 3.506291151046753
+  }
+]

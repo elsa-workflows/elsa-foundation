@@ -1,0 +1,50 @@
+{
+  "actualHeldCancellationJourneys": [
+    {
+      "parent": "direct",
+      "wholeStoresVerified": 9,
+      "newWorkers": 0,
+      "newEtlRuns": 0,
+      "newPhysicalHttpEffects": 0
+    },
+    {
+      "parent": "root",
+      "wholeStoresVerified": 9,
+      "newWorkers": 0,
+      "newEtlRuns": 0,
+      "newPhysicalHttpEffects": 0
+    },
+    {
+      "parent": "sequence",
+      "wholeStoresVerified": 9,
+      "newWorkers": 0,
+      "newEtlRuns": 0,
+      "newPhysicalHttpEffects": 0
+    },
+    {
+      "parent": "flowchart",
+      "wholeStoresVerified": 9,
+      "newWorkers": 0,
+      "newEtlRuns": 0,
+      "newPhysicalHttpEffects": 0
+    },
+    {
+      "parent": "compensationscope",
+      "wholeStoresVerified": 9,
+      "newWorkers": 0,
+      "newEtlRuns": 0,
+      "newPhysicalHttpEffects": 0
+    }
+  ],
+  "wholeStoresVerified": 45,
+  "sourceRevision": "a4098bd1a23a1e975c82ebefb7334ba7c9a2bfd4",
+  "heldCancellationProved": true,
+  "retiredFailureAndOriginalFaultPreserved": true,
+  "retiredRetryRefusalProved": true,
+  "sameSourceInterpreterTracesCompared": true,
+  "budgetExhaustionProved": false,
+  "timerInterruptionProved": false,
+  "obsoleteResultControlsProved": false,
+  "authorizationBeforeReplayProved": false,
+  "finalAffectedSourceUpgradeAndStudioProved": false
+}

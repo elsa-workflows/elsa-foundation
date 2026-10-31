@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-bpmn-queued-native-start-cancellation-matrix",
+  "sourceRevision": "fc03c3b96b99ae309a3763ecbae07562a237ade5",
+  "cases": [
+    {
+      "stage": "start",
+      "manifest": "start/manifest.json",
+      "sha256": "4461f59d8682cc784606bc22301c06da1ac90f17262a2e18ac53afd3e0558583"
+    },
+    {
+      "stage": "checkpoint",
+      "manifest": "checkpoint/manifest.json",
+      "sha256": "aa097870a9eb66b1a1c90c2c2328ff332f0039e3387271796a22edc70083568d"
+    }
+  ]
+}

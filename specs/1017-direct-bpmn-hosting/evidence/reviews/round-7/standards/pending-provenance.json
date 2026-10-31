@@ -1,0 +1,9 @@
+{
+  "head": "9508e25e57672c569f462aff9a1e0282c5780eb9",
+  "source": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnModelRuntime.cs",
+  "sourceSha256": "d2bf9bd7ae28bb70ebe391ee68e2d9c255f13c4a1affe94803df241628ba18eb",
+  "privateGreenSourceSha256": "b2e9c250ae68bab1a8ea927ccd95c5eafd183de6956096e808227a7de4686587",
+  "sourceChange": "Only PendingAsync catch broadens JsonException to JsonException or owned-constructor ArgumentException",
+  "original": "Current exact-head compiled implementation; AssemblyInformationalVersion checked",
+  "fixture": "Synthetic opaque payload decoder control, no actual legacy upgrade or provider acceptance claim"
+}

@@ -1,0 +1,57 @@
+{
+  "kind": "round4-admission-and-owned-JSON-corrections",
+  "assets": [
+    {
+      "path": "owned-delivery-red.trx.gz",
+      "sha256": "94e66105c439363cd86694be83c8c080cbf7960a4c65abc40667481c6d1aded9",
+      "decodedSha256": "6e9d3d82c530cf894ad1f3927871223a430a081fe1759da8143b365bdcfa1c39",
+      "decodedBytes": 46266
+    },
+    {
+      "path": "owned-delivery-red.log.gz",
+      "sha256": "ee7a29cec28c9ccb89f942f5afa9162205c9c7c1b79f765b30a825aac44b98eb",
+      "decodedSha256": "a4d42572a6af92721dfb9b19f8e956935b3fbbd0d8ab9c22f6da89dd8ab1677b",
+      "decodedBytes": 103532
+    },
+    {
+      "path": "owned-delivery-green.trx.gz",
+      "sha256": "313c714f998318146cf58d4a03527667d9210e9c729d98c31846022a96d9530d",
+      "decodedSha256": "d4f0e6376fa27d7db22d4b4e0709dfaf3bd99faf2da14680d5bc1f9137b7a386",
+      "decodedBytes": 13012
+    },
+    {
+      "path": "owned-delivery-green.log.gz",
+      "sha256": "aa8c54f279bc55c324227f8510f453539a4baf6b181bb6ed5cc61cabc71cbc08",
+      "decodedSha256": "44e73ce97a29e81cbc55da288006425baa8be3d1649b10892875693c5e22a361",
+      "decodedBytes": 46966
+    },
+    {
+      "path": "admission-lease-red.trx.gz",
+      "sha256": "0187ed693c90df10681b9a859d517c82917e05c1e64435a0f832f44671a0f8aa",
+      "decodedSha256": "0759ab974fda1f3a1be8c6994ac1425f16a14171ab6fbd3c9f5417b287d67cec",
+      "decodedBytes": 9216
+    },
+    {
+      "path": "admission-lease-red.log.gz",
+      "sha256": "f00e615ae57f973d932c110e9523d320471f771f02b63c1d4e321ba795876ac0",
+      "decodedSha256": "7bdf86f9b0755da29b82ef4bff4f715b3f262151b458b314cad6f810007ed903",
+      "decodedBytes": 12094
+    },
+    {
+      "path": "admission-lease-green.trx.gz",
+      "sha256": "51fe7a56a6f053bbf499e2727bb3ff4763b36d461f9d1bb844f57146114df2e3",
+      "decodedSha256": "6d88e724d99eb6e005f6ab39e5d1042cbaff9723905031b1e1e2dd078ddbe6a8",
+      "decodedBytes": 5357
+    },
+    {
+      "path": "admission-lease-green.log.gz",
+      "sha256": "f85fa7d802b756afc44f09fa8fc42baa5e0b6b80629ad60326b718707db8570a",
+      "decodedSha256": "fe1f6cfeb9b6d806470a1830c61966f14ec108a2edb2b1f6f9c0c5301f110293",
+      "decodedBytes": 51104
+    },
+    {
+      "path": "source-and-results.json",
+      "sha256": "e4395c255961bf9f49cd66cd5ee812e271d1e5952a389984a27b94e67bad0f09"
+    }
+  ]
+}

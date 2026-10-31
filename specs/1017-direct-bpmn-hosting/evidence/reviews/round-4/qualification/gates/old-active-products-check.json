@@ -1,0 +1,57 @@
+{
+  "capturedSource": "f6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1",
+  "checks": [
+    {
+      "file": "Elsa.Workbench.dll",
+      "matches": true
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.dll",
+      "matches": true
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Interchange.dll",
+      "matches": true
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Core.dll",
+      "matches": true
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.dll",
+      "matches": true
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "matches": true
+    },
+    {
+      "file": "Elsa.Activities.Runtime.dll",
+      "matches": true
+    },
+    {
+      "file": "Elsa.Activities.DispatchWorkflow.Runtime.dll",
+      "matches": true
+    },
+    {
+      "file": "Elsa.Serialization.SystemText.dll",
+      "matches": true
+    },
+    {
+      "file": "Elsa.Workflows.Design.Core.dll",
+      "matches": true
+    },
+    {
+      "file": "Elsa.Workflows.Design.Api.dll",
+      "matches": true
+    },
+    {
+      "file": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll",
+      "matches": true
+    },
+    {
+      "file": "Elsa.Persistence.EntityFramework.dll",
+      "matches": true
+    }
+  ]
+}

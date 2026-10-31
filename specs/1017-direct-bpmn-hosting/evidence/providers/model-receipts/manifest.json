@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "kind": "physical-provider-model-receipt-contract",
+  "sourceRevision": "937dacc691604893de7ac9be5101d9f1a3524c26",
+  "testAssemblySha256": "f98a3c039e99fa7ebdc04900e8bd151dc0930812fb85e778682a3ef0e6490cad",
+  "requireNativeProviders": true,
+  "externalConnectionStringsUsed": false,
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "fixtureLifecycles": [
+    "Running",
+    "TerminalSettled"
+  ],
+  "providers": [
+    "PostgreSql",
+    "SqlServer",
+    "MySql"
+  ],
+  "scope": "Fresh EnsureCreated schema, actual EF model/material/lease/checkpoint writers, rejected receipt compare without state mutation and fresh-context readback. Synthetic contract fixtures; not actual BPMN executions.",
+  "notProved": [
+    "physical migration upgrade",
+    "atomic failure/fence matrix on every provider",
+    "non-SQLite production host recovery",
+    "final upgraded-host or Studio compatibility"
+  ],
+  "assets": [
+    {
+      "path": "MySql.trx",
+      "sha256": "684378c3a4e47fa6d255e4ead8170106e09b17bbd935ef4650b9507e876d6f04"
+    },
+    {
+      "path": "MySql.txt",
+      "sha256": "44131f6b06a69f201885e80729b44f0499f327ba058b37e11e3055ab8c2ee638"
+    },
+    {
+      "path": "PostgreSql.trx",
+      "sha256": "1b3c81eee328f233d664470419b9198d0d18aee9278ad9908d66b69597230a01"
+    },
+    {
+      "path": "PostgreSql.txt",
+      "sha256": "0d2ecaa1a877a7124215ba8f83993e3a35c9be89338e6404ff78c837be6080d5"
+    },
+    {
+      "path": "SqlServer.trx",
+      "sha256": "f5ca811714f34d73dfc004c6810d2bd0808a73d5ccde10ae1109e1d3b51feee4"
+    },
+    {
+      "path": "SqlServer.txt",
+      "sha256": "3d557cada159ffe19dfc70e99bb68a8e838201b8e428b1e761d639ed6b30a149"
+    },
+    {
+      "path": "assembly-info.json",
+      "sha256": "81d4639d3e9b913fd98ec4ee8bcb8582ee10137109fcd6de03c237bd91fe9597"
+    },
+    {
+      "path": "results.json",
+      "sha256": "bc6addc95d2f7d206327244416616f279dd93700cd9309fd67a5b86880c1961d"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "asBuiltFrom": "1.0.0\u002B76e8139dc7744781fba864f8247c180134eaaaed",
+  "observations": [
+    {
+      "corruptTypedPayload": false,
+      "type": "Elsa.Activities.Bpmn.Core.BpmnModelValidationException",
+      "message": "The duration timer delivery is missing its typed source.",
+      "inner": null,
+      "stack": "Elsa.Activities.Bpmn.Core.BpmnModelValidationException: The duration timer delivery is missing its typed source.\n   at Elsa.Activities.Bpmn.Internal.BpmnDurationTimerDelivery.HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnDurationTimer.cs:line 73\n   at Program.\u003CMain\u003E$(String[] args) in /private/tmp/elsa-2898-full-pr-r4-standards/probe/Program.cs:line 36",
+      "sourceOutboxId": "reviewed-commit:timer-source",
+      "executionId": "reviewed-model"
+    },
+    {
+      "corruptTypedPayload": true,
+      "type": "System.Text.Json.JsonException",
+      "message": "The JSON value could not be converted to Elsa.Activities.Bpmn.Internal.BpmnDurationTimer. Path: $ | LineNumber: 0 | BytePositionInLine: 20.",
+      "inner": null,
+      "stack": "System.Text.Json.JsonException: The JSON value could not be converted to Elsa.Activities.Bpmn.Internal.BpmnDurationTimer. Path: $ | LineNumber: 0 | BytePositionInLine: 20.\n   at System.Text.Json.ThrowHelper.ThrowJsonException_DeserializeUnableToConvertValue(Type propertyType)\n   at System.Text.Json.Serialization.Converters.ObjectWithParameterizedConstructorConverter\u00601.OnTryRead(Utf8JsonReader\u0026 reader, Type typeToConvert, JsonSerializerOptions options, ReadStack\u0026 state, T\u0026 value)\n   at System.Text.Json.Serialization.JsonConverter\u00601.TryRead(Utf8JsonReader\u0026 reader, Type typeToConvert, JsonSerializerOptions options, ReadStack\u0026 state, T\u0026 value, Boolean\u0026 isPopulatedValue)\n   at System.Text.Json.Serialization.JsonConverter\u00601.ReadCore(Utf8JsonReader\u0026 reader, T\u0026 value, JsonSerializerOptions options, ReadStack\u0026 state)\n   at System.Text.Json.Serialization.Metadata.JsonTypeInfo\u00601.Deserialize(Utf8JsonReader\u0026 reader, ReadStack\u0026 state)\n   at System.Text.Json.JsonSerializer.ReadFromSpan[TValue](ReadOnlySpan\u00601 utf8Json, JsonTypeInfo\u00601 jsonTypeInfo, Nullable\u00601 actualByteCount)\n   at System.Text.Json.JsonSerializer.Deserialize[TValue](JsonElement element, JsonSerializerOptions options)\n   at Elsa.Activities.Bpmn.Internal.BpmnDurationTimerDelivery.HandleAsync(PostCommitDeliveryContext source, CancellationToken cancellationToken) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnDurationTimer.cs:line 74\n   at Program.\u003CMain\u003E$(String[] args) in /private/tmp/elsa-2898-full-pr-r4-standards/probe/Program.cs:line 36",
+      "sourceOutboxId": "reviewed-commit:timer-source",
+      "executionId": "reviewed-model"
+    }
+  ]
+}

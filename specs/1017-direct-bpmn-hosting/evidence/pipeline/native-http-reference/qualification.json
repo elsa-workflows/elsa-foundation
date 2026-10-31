@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "9a3b397382e0a7dde27f830a9b236851d41c28fe",
+  "actualJourneys": 3,
+  "workbenchProcesses": 9,
+  "ownedHttpFixtureProcesses": 3,
+  "wholeStores": 18,
+  "manifestSha256": "d73fc0857175542cbedd076eddc298217aec8e49c408119da7bebc3ce2ccc0b1",
+  "originalBaselineAssetsUnchanged": 104,
+  "checks": [
+    {
+      "name": "actual production Workbench CLI journeys",
+      "passed": 3,
+      "skipped": 0,
+      "cases": [
+        "Sequence succeeded",
+        "Flowchart succeeded",
+        "RunEtl root native Completed / ETL BusinessError"
+      ]
+    },
+    {
+      "name": "RunEtlActivityTests and EtlNativeResultDeliveryTests",
+      "passed": 28,
+      "skipped": 0,
+      "trxSha256": "59df7ca2277d78835403b29aa31ea95394c753405060da3da2de3f1113c0a2d9"
+    },
+    {
+      "name": "portable reference comparison and rehashed corrupt controls",
+      "passed": 5,
+      "skipped": 0,
+      "logSha256": "66ba3d14046c0b409fc769b5bd1ed452f94c115e8205f1b5416d6c0323c99f5c"
+    },
+    {
+      "name": "existing loopback fixture default response",
+      "result": "Observed HTTP429 and Retry-After: 3 without new options; only the owned Node process was stopped."
+    }
+  ],
+  "scopeLimits": [
+    "Native ETL reference only; no direct/RunBpmn native-work binding, model cancellation settlement or model-held terminal-fault retry is proved.",
+    "Same-source process-loss recovery, not upgraded-host recovery of ETL or first-class direct-model Studio acceptance.",
+    "Reproduction creates fresh private bindings; historical temporary paths and listener ports are not reused.",
+    "Existing T030/T032/T033 qualification keeps its own source; T031 and T041 final-source repetition remain open."
+  ],
+  "guards": {
+    "maps": "Generated solution filters still describe the project graph.",
+    "testTiers": "Test tiers: 123 test projects, each in one tier and one shard."
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "d22a35f0e6e33305734cdfdb9e98d2dc604e71f8",
+  "actualJourneys": 1,
+  "workbenchProcesses": 3,
+  "wholeStores": 4,
+  "rawAssets": 9,
+  "manifestSha256": "fa3de664a7b7d627d4ea3dd5ef2f935012a4c4de8f01da33636126f9d9b12f80",
+  "originalBaselineAssetsUnchanged": 104,
+  "checks": [
+    {
+      "name": "actual pre-admission native root cancellation",
+      "passed": 1,
+      "skipped": 0,
+      "trxSha256": "45ff282d27cc86d0e8ac5b3cb3727b06d23615a18b0a7e1f3eec798d5ab47bfd",
+      "testedSource": "d22a35f0e6e33305734cdfdb9e98d2dc604e71f8"
+    },
+    {
+      "name": "all eight original real parent journeys after CI integration fixes",
+      "passed": 8,
+      "skipped": 0,
+      "testedSource": "d22a35f0e6e33305734cdfdb9e98d2dc604e71f8",
+      "sourceBinding": "No-build repeat against the same built host/reader products bound by the actual pre-admission capture. Original raw eight-case receipt retains source0c419.",
+      "trxSha256": "8f7ac3cdf4685a7281151471ab4f1d0491c35859d40422a7bedb7e13c8fb191e"
+    },
+    {
+      "name": "native/model optional-provider composition",
+      "passed": 2,
+      "skipped": 0,
+      "trxSha256": "16d69765699860f17fb7068e97522d2073e172b2e341837dc0fe80b3844c3bb3",
+      "testedContentCommit": "f925baa8c",
+      "sourceBinding": "Local pre-commit run of implementation content committed as f925baa8c; not an exact-head binary receipt."
+    },
+    {
+      "name": "complete activity behavioral suite including real RunBpmn drive",
+      "passed": 220,
+      "skipped": 0,
+      "trxSha256": "4e00fcebf76d76cd0eaacb3d978dab2adf4d2f33ac849d4d078601ffb063eeec",
+      "testedContentCommit": "f925baa8c",
+      "sourceBinding": "Local pre-commit run of implementation content committed as f925baa8c; not an exact-head binary receipt."
+    },
+    {
+      "name": "complete loaded schema readability suite",
+      "passed": 117,
+      "skipped": 0,
+      "trxSha256": "36fa3f1ee2e4d9473fbff0c6122217c33c7d5167850969952d81e1da431babba",
+      "testedContentCommit": "f925baa8c",
+      "sourceBinding": "Local pre-commit run of implementation content committed as f925baa8c; not an exact-head binary receipt."
+    },
+    {
+      "name": "actual activity contract comparison",
+      "passed": 3,
+      "skipped": 0,
+      "trxSha256": "c39c3523f7f939888cb7b4e2f94d6d3a50a1c04f20c87562be019250d1420451",
+      "testedContentCommit": "f925baa8c",
+      "sourceBinding": "Local pre-commit run of implementation content committed as f925baa8c; not an exact-head binary receipt."
+    },
+    {
+      "name": "actual tooling schema finalization expectations",
+      "passed": 15,
+      "skipped": 0,
+      "trxSha256": "d1b678d2711f2f4c3d5eb2bf045ebc098650d7ba170907089f6aef22c0709313",
+      "testedContentCommit": "f925baa8c",
+      "sourceBinding": "Local pre-commit run of implementation content committed as f925baa8c; not an exact-head binary receipt."
+    },
+    {
+      "name": "complete BPMN suite after delivery composition fixes",
+      "passed": 381,
+      "skipped": 0,
+      "trxSha256": "52afb4e176925bdd8ec4a0b11449321edcd48e78753be6a1a635afaef8da8915",
+      "testedContentCommit": "f925baa8c",
+      "sourceBinding": "Local pre-commit run of implementation content committed as f925baa8c; not an exact-head binary receipt."
+    },
+    {
+      "name": "both actual embedding evidence comparisons plus twelve rehashed corrupt controls",
+      "passed": 14,
+      "skipped": 0,
+      "logSha256": "8830999a171585b8732c9a8910bb96269756f066223c800fa101f920fcf50482"
+    }
+  ],
+  "observedCut": {
+    "nativeParentCancelledBeforeFirstModelAdmission": true,
+    "startAndCancelSourcesPendingBeforeCrash": true,
+    "modelCommandQueueEmptyAtCut": true,
+    "firstStartInputRetainsCancelledModelAtRevision": 1,
+    "interpreterSequence": 0,
+    "exactParentSettlementRevision": 2,
+    "retainedAfterAnotherProcess": true
+  },
+  "scopeLimits": [
+    "Native RunBpmn root on the built-in single-node actor / EF SQLite only.",
+    "Actual cut is before first source delivery; no simultaneous database race or pending-parent-result crash is inferred.",
+    "Same-source recovery; service/ETL embedding/cancellation, held retry, upgraded-host ETL and final affected-source Studio remain open.",
+    "Earlier human/native/ETL/Studio receipts retain their own sources; T027/T028/T029/T031/T034-T041 remain incomplete.",
+    "Exact-head CI and full-PR review remain separate merge gates. GitGuardian neutral size skip and owner-deferred incident39189012 remain unresolved."
+  ],
+  "ownedProcessesStopped": 3
+}

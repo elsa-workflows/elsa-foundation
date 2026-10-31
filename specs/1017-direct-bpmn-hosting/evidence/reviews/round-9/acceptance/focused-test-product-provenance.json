@@ -1,0 +1,16 @@
+[
+  {
+    "name": "Elsa.Activities.Bpmn",
+    "informationalVersionMatches": [
+      "1.0.0+e83fc58f6fa84a7cbeb72678729aa1b78c6b1ca9"
+    ],
+    "sha256": "1b41754d4f86bdc18eaa4042a546e354e234e4f1a1dd9cb4922678ccd19ab101"
+  },
+  {
+    "name": "Elsa.Activities.Bpmn.Tests",
+    "informationalVersionMatches": [
+      "1.0.0+e83fc58f6fa84a7cbeb72678729aa1b78c6b1ca9"
+    ],
+    "sha256": "6319b0d01cf662853c8777793baf6bf038d9e8c924ea900d02f33fccfe8ab2f6"
+  }
+]

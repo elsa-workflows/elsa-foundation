@@ -1,0 +1,20 @@
+[
+  {
+    "input": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-7/pre-correction/waiting/waiting-elsa.sqlite.gz",
+    "destination": "elsa.db",
+    "gzipSha256": "cbc0caf5cab087cbf4697b1cf195f706b9b7aa31cdd9e830125082ef30f3f092",
+    "rawSha256": "0dbe02e70cefcf69965add6b8230fec575fa78c2e9545cce7c34b64384a2e19d"
+  },
+  {
+    "input": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-7/pre-correction/waiting/waiting-etl-runtime.sqlite.gz",
+    "destination": "etl-runtime.db",
+    "gzipSha256": "b9cb3cd9a2282af8adbe36a9cde0d8369736eb9d2a8bbdb9d55fd3d0705c98a1",
+    "rawSha256": "cc0ca8a47fa2f64e8930cb73cae6809b2754af5593368955e6646304d161a2aa"
+  },
+  {
+    "input": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-7/pre-correction/waiting/waiting-etl-design.sqlite.gz",
+    "destination": "etl-design.db",
+    "gzipSha256": "ba4a7580842991dd67a6ae7634b604985df7327e290773d68393c42ae719012e",
+    "rawSha256": "18771bf22cbd150d543a08699b7dfa218bb418e688b43d46f11100535516b466"
+  }
+]

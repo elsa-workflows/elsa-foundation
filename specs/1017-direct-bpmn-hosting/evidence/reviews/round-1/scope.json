@@ -1,0 +1,20 @@
+{
+  "reviewHead": "7cfbf739f0d4c3c220097918b04c2b33b5cb3bb3",
+  "baseBranch": "main",
+  "baseApiSha": "c986f9ddfdec2c641b2f1c1f5d8f82f8dd19e529",
+  "fetchedBaseSha": "4df0c5e9d519946a5ae01b178d2ec26f87588d54",
+  "mergeBase": "c986f9ddfdec2c641b2f1c1f5d8f82f8dd19e529",
+  "discussionCounts": {
+    "pr-comments": 157,
+    "issue-comments": 67,
+    "program-comments": 259,
+    "reviews": 0,
+    "inline-comments": 0
+  },
+  "reviewThreads": 0,
+  "unresolvedThreads": 0,
+  "draft": true,
+  "completePrRoundsBeforeThisRound": 0,
+  "knownPendingOwnerDecision": "T042 preview API magnitude: scoped4.0 exception or shared4.1, no answer assumed.",
+  "GitGuardian": "Owner-deferred39189012 and scan gate remain unresolved before merge."
+}

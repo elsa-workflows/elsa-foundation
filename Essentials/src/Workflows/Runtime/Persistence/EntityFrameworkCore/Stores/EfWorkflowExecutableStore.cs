@@ -11,7 +11,7 @@ using System.Text.Json;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
 
-public sealed class EfWorkflowExecutableStore(
+public sealed partial class EfWorkflowExecutableStore(
     RuntimeDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IWorkflowExecutableStore
 {
@@ -172,7 +172,7 @@ public sealed class EfWorkflowExecutableStore(
                          x.ArtifactIdHash == Hash(artifactId) &&
                          x.ArtifactId == Encode(artifactId),
                     cancellationToken));
-        return row is null ? null : Read(row, scope, artifactId, id);
+        return row is null ? null : ReadMaterial(row, scope, artifactId, id).NativeWorkflow;
     }
 
     public async ValueTask<RuntimeStorePage<WorkflowExecutable>> ListPageAsync(
@@ -190,7 +190,7 @@ public sealed class EfWorkflowExecutableStore(
             scope,
             () => context.WorkflowExecutables
                 .AsNoTracking()
-                .Where(x => x.ScopeKeyHash == scopeHash && x.ScopeKey == encodedScope &&
+                .Where(x => !x.IsModelMaterial && x.ScopeKeyHash == scopeHash && x.ScopeKey == encodedScope &&
                             (cursor == null || x.ArtifactIdOrderKey.CompareTo(cursor) > 0))
                 .OrderBy(x => x.ArtifactIdOrderKey)
                 .Take(request.Limit + 1)
@@ -569,7 +569,7 @@ public sealed class EfWorkflowExecutableStore(
                     return false;
                 }
 
-                _ = Read(artifact, scope, artifactId, id);
+                _ = ReadMaterial(artifact, scope, artifactId, id);
                 var state = ReadCoordination(coordination, scope, artifactId, id);
 
                 if (guard is not null &&
@@ -701,7 +701,7 @@ public sealed class EfWorkflowExecutableStore(
             throw new InvalidDataException($"Workflow executable '{id}' has incomplete persisted state.");
         EnsureMatchingIncarnation(artifact, coordination, id);
 
-        _ = Read(artifact, scope, artifactId, id);
+        _ = ReadMaterial(artifact, scope, artifactId, id);
         _ = ReadCoordination(coordination, scope, artifactId, id);
         return (artifact, coordination);
     }
@@ -780,7 +780,7 @@ public sealed class EfWorkflowExecutableStore(
                              x.ArtifactIdHash == artifactIdHash && x.ArtifactId == encodedArtifactId,
                         cancellationToken));
             if (executable is not null)
-                _ = Read(executable, scope, artifactId, id);
+                _ = ReadMaterial(executable, scope, artifactId, id);
             var artifact = executable?.IncarnationId;
             var coordination = await RuntimeArtifactEfPersistenceBoundary.QueryAsync(
                 db, "reading", artifactId, () => db.WorkflowExecutableCoordinations
@@ -1126,13 +1126,16 @@ public sealed class EfWorkflowExecutableStore(
         state.Leases.All(x => x.Value.ExpiresAt <= now);
 
     internal async Task<IReadOnlyCollection<WorkflowExecutable>> ReadMaintenanceArtifactsAsync(string scope, CancellationToken cancellationToken)
+        => (await ReadMaintenanceMaterialAsync(scope, cancellationToken)).Where(x => x.NativeWorkflow is not null).Select(x => x.NativeWorkflow!).ToArray();
+
+    internal async Task<IReadOnlyCollection<RuntimeExecutionMaterial>> ReadMaintenanceMaterialAsync(string scope, CancellationToken cancellationToken)
     {
         if (RequireScope() != scope) throw new InvalidOperationException("Template maintenance artifact scope changed.");
         var rows = await EfExecutableActivityTemplateStore.ReadCheckedMaintenanceRowsAsync<WorkflowExecutableEntity>(context, scope, cancellationToken);
         return rows.Select(row =>
         {
             var id = EfExecutableActivityTemplateStore.DecodeMaintenanceId(row.ArtifactId);
-            return Read(row, scope, id, CreateId(scope, id));
+            return ReadMaterial(row, scope, id, CreateId(scope, id));
         }).ToArray();
     }
 

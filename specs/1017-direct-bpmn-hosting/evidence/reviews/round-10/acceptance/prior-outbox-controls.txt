@@ -1,0 +1,5 @@
+Test run for /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+Results File: /tmp/elsa-2898-review10-acceptance/prior-outbox-controls.trx
+
+Passed!  - Failed:     0, Passed:    21, Skipped:     0, Total:    21, Duration: 1 s - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.dll (net10.0)

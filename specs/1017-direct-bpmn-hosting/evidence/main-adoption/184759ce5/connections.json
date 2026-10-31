@@ -1,0 +1,37 @@
+{
+  "args": [
+    "dotnet",
+    "test",
+    "Essentials/tests/Connections/Tests/Elsa.Connections.Tests.csproj",
+    "-c",
+    "Release",
+    "--logger",
+    "trx;LogFileName=connections.trx",
+    "--results-directory",
+    "/tmp/elsa-2898-main-3480",
+    "-p:RestoreLockedMode=true",
+    "--nologo",
+    "--verbosity",
+    "quiet"
+  ],
+  "exitCode": 0,
+  "executingSource": "833e586e74dbe3a7c4dc362ef73bdfe3f7349273",
+  "counters": {
+    "total": "157",
+    "executed": "157",
+    "passed": "157",
+    "failed": "0",
+    "error": "0",
+    "timeout": "0",
+    "aborted": "0",
+    "inconclusive": "0",
+    "passedButRunAborted": "0",
+    "notRunnable": "0",
+    "notExecuted": "0",
+    "disconnected": "0",
+    "warning": "0",
+    "completed": "0",
+    "inProgress": "0",
+    "pending": "0"
+  }
+}

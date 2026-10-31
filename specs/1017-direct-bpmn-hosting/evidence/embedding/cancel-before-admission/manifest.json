@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-runbpmn-cancellation-before-admission",
+  "sourceRevision": "d22a35f0e6e33305734cdfdb9e98d2dc604e71f8",
+  "assets": [
+    {
+      "path": "cancelled-checked.json",
+      "sha256": "a69309096765a6afc771e2d0014017e262a80dafa24071144b9a3140d3a2629d"
+    },
+    {
+      "path": "cancelled-design.sqlite.gz",
+      "sha256": "af48291f3798c866d036140fd5fe1514cf565b72e5e992c10fcff4c17a45e509"
+    },
+    {
+      "path": "cancelled-runtime.sqlite.gz",
+      "sha256": "e62ed76a023c1a143d9447a999bcb34b2b3a38a19595c3b0bfc959fc7a3cfa7c"
+    },
+    {
+      "path": "case.json",
+      "sha256": "7335f7be39829c5db01901eed9319ab5790ec7e33072a55bcd77d80e74d70189"
+    },
+    {
+      "path": "completed-checked.json",
+      "sha256": "1ceb8b2cc0cb7ffdf82a55b6b827ae2023f096b1a5394681a9cb5e7ca3cb3d6e"
+    },
+    {
+      "path": "completed-design.sqlite.gz",
+      "sha256": "af48291f3798c866d036140fd5fe1514cf565b72e5e992c10fcff4c17a45e509"
+    },
+    {
+      "path": "completed-runtime.sqlite.gz",
+      "sha256": "337fc4505b3432bccd0b0fc4544c60bc1c89aa75f0eb258aa5624c3d6931cdb1"
+    },
+    {
+      "path": "prepared-checked.json",
+      "sha256": "9356bdedd2d42ff05da6b651d383951c135fdacb6bd980759de6ea9aa09746ae"
+    },
+    {
+      "path": "retained-checked.json",
+      "sha256": "1ceb8b2cc0cb7ffdf82a55b6b827ae2023f096b1a5394681a9cb5e7ca3cb3d6e"
+    }
+  ]
+}

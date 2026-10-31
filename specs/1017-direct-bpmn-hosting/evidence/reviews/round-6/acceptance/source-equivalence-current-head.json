@@ -1,0 +1,50 @@
+[
+  {
+    "path": "Essentials",
+    "qualifiedEntry": "040000 tree df7b03f23ad25b8034aab67aa9dc54f599a4bb0d\tEssentials",
+    "reviewedEntry": "040000 tree df7b03f23ad25b8034aab67aa9dc54f599a4bb0d\tEssentials",
+    "equal": true
+  },
+  {
+    "path": "Extensions",
+    "qualifiedEntry": "040000 tree 00643492c3957f4e68963193b635a6c723847e7b\tExtensions",
+    "reviewedEntry": "040000 tree 00643492c3957f4e68963193b635a6c723847e7b\tExtensions",
+    "equal": true
+  },
+  {
+    "path": "Directory.Build.props",
+    "qualifiedEntry": "100644 blob 70a24aa63d9e977fe91829e6c32920e14ce80466\tDirectory.Build.props",
+    "reviewedEntry": "100644 blob 70a24aa63d9e977fe91829e6c32920e14ce80466\tDirectory.Build.props",
+    "equal": true
+  },
+  {
+    "path": "Directory.Packages.props",
+    "qualifiedEntry": "100644 blob ffae358e2e02d6dc9a7cc9ad16029ca4c454422d\tDirectory.Packages.props",
+    "reviewedEntry": "100644 blob ffae358e2e02d6dc9a7cc9ad16029ca4c454422d\tDirectory.Packages.props",
+    "equal": true
+  },
+  {
+    "path": "tools/bpmn",
+    "qualifiedEntry": "040000 tree e29d352ac0e81c01e2d3bf8ec83749d9400fc4f3\ttools/bpmn",
+    "reviewedEntry": "040000 tree e29d352ac0e81c01e2d3bf8ec83749d9400fc4f3\ttools/bpmn",
+    "equal": true
+  },
+  {
+    "path": "e2e-tests/bpmn",
+    "qualifiedEntry": "040000 tree bd686e91e3ef3a7d744eb119536f40651780371e\te2e-tests/bpmn",
+    "reviewedEntry": "040000 tree bd686e91e3ef3a7d744eb119536f40651780371e\te2e-tests/bpmn",
+    "equal": true
+  },
+  {
+    "path": "e2e-tests/etl",
+    "qualifiedEntry": "040000 tree bd140738f24f6a257d534557b53472d2c2c983e0\te2e-tests/etl",
+    "reviewedEntry": "040000 tree bd140738f24f6a257d534557b53472d2c2c983e0\te2e-tests/etl",
+    "equal": true
+  },
+  {
+    "path": "tools/ci/test-tiers.json",
+    "qualifiedEntry": "100644 blob 62446f70173e22a1712b636ecd0a9d9c08688427\ttools/ci/test-tiers.json",
+    "reviewedEntry": "100644 blob 62446f70173e22a1712b636ecd0a9d9c08688427\ttools/ci/test-tiers.json",
+    "equal": true
+  }
+]

@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-legacy-broadcast-upgrade",
+  "sourceRevision": "facffc859ce01a2d4e3fe85be52bcb5b5b285998",
+  "baselineManifestSha256": "c2e5d9c8c2a001ff5141c2ca8eaaed097ec7c81d78d0180b6c7a4ecf5bed4153",
+  "baselineAssets": {
+    "broadcast/after-cohort.json": "ae43609b929ff41cc1f9a9ab91a47e0573a12ea4cc6b5473be270494792ede8d",
+    "broadcast/after-cohort.sqlite.gz": "bb8882b6dbf8fdf13931a6f1242cad2fb8f70ea227a50dad1e8c021b06cdcbd2",
+    "broadcast/before-selection.json": "ff5cbed69fb7422269b739295a10bc51fb1557143c79f6a90575c79c708ec4b2",
+    "broadcast/before-selection.sqlite.gz": "8ccf63b60cebef0ebfbd14bc97c4630a787f26c56b326af68849ab177ff2aad7",
+    "broadcast/empty-cohort.json": "a571a3c58862f3d817de5b668685010a4c4aa118453c1ce4ba0315070b9d858f",
+    "broadcast/empty-cohort.sqlite.gz": "8e18ffcc17a299b2849c7ed7e9b474eabc65fe6c0e97e411f425a888d9fc71fb",
+    "broadcast/after-resume.json": "98723d3f03c10d7d5c6c25cf73c4b6639d90f82abd5f02242627f934df80ef0e",
+    "broadcast/after-resume.sqlite.gz": "02cf373992c357974de342bc7968b845c8ffb242c5901fb00ac9e86f348608ae"
+  },
+  "assets": [
+    {
+      "path": "legacy-broadcast/process.json",
+      "sha256": "3e7b12699cedb7bc1f19792afac9a8dab90be09bc39199cc93f168dfd77eb49b"
+    },
+    {
+      "path": "frozen-contract.json",
+      "sha256": "be94e00289b9a81f771bf6c3b1df6b2e88a90bd1d7558955e18e6893bb29a2e8"
+    },
+    {
+      "path": "legacy-broadcast/before-selection-recovered.sqlite.gz",
+      "sha256": "c42aca76ff5e1007a207f08786c91158f98f386c0a7b5459b9ccfbbd82183ce6"
+    },
+    {
+      "path": "legacy-broadcast/before-selection-finished.sqlite.gz",
+      "sha256": "eb92333a2266213e064100440d8c944561816c8adb172fb724eb40258645220c"
+    },
+    {
+      "path": "legacy-broadcast/after-cohort-recovered.sqlite.gz",
+      "sha256": "8f710751f2ab52798689cc9eaf36044a612589f10b8b808a42807ce8cc71ea7c"
+    },
+    {
+      "path": "legacy-broadcast/after-cohort-finished.sqlite.gz",
+      "sha256": "6948f98b087077136dc9821e90806b3f355fdf15fa08e6bbcb8ca55473dc5dc5"
+    },
+    {
+      "path": "legacy-broadcast/after-resume-recovered.sqlite.gz",
+      "sha256": "5ff7cb0300dd6b3896388571b29f7c1f4f7850ff4e89ba364b7aa8b62ecd18a7"
+    },
+    {
+      "path": "legacy-broadcast/after-resume-finished.sqlite.gz",
+      "sha256": "78f246777579c31555ee9a307002a31a6be24b792aad926dcfa8e255d92c0c90"
+    },
+    {
+      "path": "legacy-broadcast/empty-cohort-recovered.sqlite.gz",
+      "sha256": "32c99b3ce713531f56376e3ff880df9eaab4b7448fff9eb8a0be91802bafb874"
+    },
+    {
+      "path": "legacy-broadcast/empty-cohort-finished.sqlite.gz",
+      "sha256": "9c737047f9ae7427ac31f1f366e25758377f57ee59e172fe7433c8409305ba50"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+Test run for /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.Hosting.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:10.79]     Elsa.Activities.Bpmn.Hosting.Tests.LegacyCalledAcknowledgmentUpgradeTests.Actual_accepted_called_results_recover_acknowledgment_without_repeating_the_caller [FAIL]
+  Failed Elsa.Activities.Bpmn.Hosting.Tests.LegacyCalledAcknowledgmentUpgradeTests.Actual_accepted_called_results_recover_acknowledgment_without_repeating_the_caller [10 s]
+  Error Message:
+   Actual checked provider refused: {"providerChecked":false,"status":"ObservationUnavailable","failureType":"InvalidDataException"}
+
+  Stack Trace:
+     at Elsa.Activities.Bpmn.Hosting.Tests.LegacyUpgradeInspection.CheckedSnapshotAsync(String reader, String database, String command, String[] arguments) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/LegacyUpgradeInspection.cs:line 125
+   at Elsa.Activities.Bpmn.Hosting.Tests.LegacyCalledAcknowledgmentUpgradeTests.Actual_accepted_called_results_recover_acknowledgment_without_repeating_the_caller() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/LegacyCalledAcknowledgmentUpgradeTests.cs:line 98
+   at Elsa.Activities.Bpmn.Hosting.Tests.LegacyCalledAcknowledgmentUpgradeTests.Actual_accepted_called_results_recover_acknowledgment_without_repeating_the_caller() in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/LegacyCalledAcknowledgmentUpgradeTests.cs:line 106
+--- End of stack trace from previous location ---
+Results File: /tmp/elsa-2898-called-repeat-6153c1c23/2/called.trx
+
+Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 10 s - Elsa.Activities.Bpmn.Hosting.Tests.dll (net10.0)

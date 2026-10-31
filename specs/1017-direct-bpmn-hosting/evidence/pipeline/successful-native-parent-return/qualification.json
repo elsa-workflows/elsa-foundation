@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "executingSource": "cdef9b87e136ac082fbf1ef332ca3abb115a0018",
+  "actualJourneysPassed": 12,
+  "nativeParentShapes": [
+    "Root",
+    "Sequence",
+    "Flowchart",
+    "CompensationScope"
+  ],
+  "actualSecondCrashStages": [
+    "pending",
+    "consumed",
+    "settled"
+  ],
+  "rawAssets": 348,
+  "wholeStoresVerified": 108,
+  "ownedWorkbenchProcesses": 48,
+  "ownedSdkProcesses": 12,
+  "ownedHttpProcesses": 12,
+  "actualSigkillExits": 24,
+  "allQualifiedJourneyChildrenStopped": true,
+  "allRejectedAndSupersededJourneyChildrenStopped": true,
+  "rejectedAndSupersededJourneyChildrenStopped": 37,
+  "physicalOutputRecordsAtSecondCrashPerCase": 4,
+  "additionalHttpEffectsAfterSecondCrashPerCase": 0,
+  "nativeParentHeaderAtSecondCrash": "Running in all12 cases; completed RunBpmn child consumption is distinct from whole-workflow completion. Standard third/fourth hosts finish the native workflow and its actual successors.",
+  "modelAtSecondCrash": {
+    "pending": {
+      "revision": 2,
+      "lifecycle": "TerminalPendingSettlement",
+      "parentSource": "Pending",
+      "modelSettlementQueued": false
+    },
+    "consumed": {
+      "revision": 2,
+      "lifecycle": "TerminalPendingSettlement",
+      "parentSource": "FailedRetryable",
+      "modelSettlementQueued": true
+    },
+    "settled": {
+      "revision": 3,
+      "lifecycle": "TerminalSettled",
+      "parentSource": "FailedRetryable",
+      "modelSettlementQueued": false
+    }
+  },
+  "nativeResultSourceAtSecondCrash": "FailedRetryable with original positive fence and exact accepted revision2 receipt in all12 cases.",
+  "standardHostAndSdkBuild": {
+    "errors": 0,
+    "warnings": 273,
+    "logSha256": "a93b9872cbffe16ef8b3b2237f472e96e558c8e224d39a4bf1d87472df71d2e3"
+  },
+  "portableChecks": {
+    "passed": 106,
+    "failed": 0,
+    "skipped": 0,
+    "newPositiveMatrix": 1,
+    "newRehashedNegativeControls": 11,
+    "verifierSha256": "212dfd194f9d9345d5792286f7c670d48f47f677d011e30be92916e83dce7b24",
+    "controlsSha256": "2ea4605dc0c62d653d12ee94d97a30bd264273156ad17cd61bbf27596cf09a46",
+    "logSha256": "35649ec3270aff855064317bad168b62be1ba4d8664766215af96fdf01f6050e"
+  },
+  "mapsCheckPassed": true,
+  "testTiersPassed": 123,
+  "frozenBaselineAssetsUnchanged": 104,
+  "successfulParentResultCrashProved": true,
+  "modelHeldFaultRetryProved": false,
+  "finalUpgradeAndStudioProved": false,
+  "productionSemanticsChangedForThisIncrement": false,
+  "fullPrReviewRounds": 0,
+  "retainedEarlierDotNetChecks": {
+    "executingSource": "b6e7e1f0de7367f81d35aebc5016d4b91e2d7927",
+    "receipt": "../embedded-native-recovery/qualification.json",
+    "bpmnPassed": 391,
+    "actualHumanEmbeddingHostRegressionPassed": 8,
+    "rerunAtThisSource": false,
+    "reason": "Only owned SDK/capture tooling and dependency composition changed; no production semantics changed."
+  },
+  "scopeLimits": [
+    "Actual HTTP429/first SIGKILL, native RunEtl success, exact native-result consumption, typed RunBpmn consumption and model settlement use existing production features and recovery mailboxes; no state/result/receipt/ACK is fabricated.",
+    "Existing activity runtime, CLR activation, native parent modules and serialization/type registry are composed in the SDK;14 captured SDK product identities match the executing source. It starts no background worker.",
+    "The exact typed child-consumption receipt permits model settlement while the surrounding native workflow still owes its own continuation. The second crash retains that distinction; fresh standard hosts complete original successors and clear queued work.",
+    "Success parent delivery/settlement/ACK cuts and previous cancellation receipts do not prove other outcome/race arms, held retry, other providers/rollback or final affected-source upgrade/Studio."
+  ]
+}

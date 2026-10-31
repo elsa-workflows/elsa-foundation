@@ -1,0 +1,10 @@
+{
+  "reviewedHead": "d1449c0bff679212f8a64766a95b1c29cfadbcea",
+  "manifestAssets": 5576,
+  "uniqueAssets": 5576,
+  "gzipPayloadsChecked": 346,
+  "looseFileAssets": 5419,
+  "archiveMembersChecked": 157,
+  "errors": [],
+  "initialProbe": "All initial missing-path candidates were packaged members; original loose-file-only diagnostic retained without relabelling it a product failure."
+}

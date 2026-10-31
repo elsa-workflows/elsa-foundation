@@ -1,0 +1,44 @@
+{
+  "sourceRevision": "e5f26582f25713ab6fc033cbe6cfad45e6d8605e",
+  "cut": "after-resume",
+  "type": "OperationalError",
+  "processes": [
+    {
+      "role": "probe",
+      "processId": 7343,
+      "controllerProcessId": 7330,
+      "started": "Fri Oct 30 02:05:45 2026"
+    }
+  ],
+  "exits": [
+    {
+      "processId": 7343,
+      "exitCode": -9
+    }
+  ],
+  "snapshots": {
+    "failed": {
+      "runtime": {
+        "file": "failed-runtime.sqlite.gz",
+        "databaseSha256": "d6cebf0fab663b8c7ac9db11dc639c0e0cc069d9f7986f14e8ac37ad8138fcbc",
+        "gzipSha256": "eae9a5d198af4a4dac23885e8674d4cb910aa02e601f1fec67c7248594649d2c",
+        "observer": {
+          "readOnly": true,
+          "sourceMainSha256": "af7360f2127d92e8317015b6e90c48520aff38d6a6c738a195cdd0655dbcc275",
+          "snapshotSha256": "d6cebf0fab663b8c7ac9db11dc639c0e0cc069d9f7986f14e8ac37ad8138fcbc"
+        }
+      },
+      "design": {
+        "file": "failed-design.sqlite.gz",
+        "databaseSha256": "95b5328dddd44fcc63dadb12f2ec9248ae6ee7f608a3e642447bf87394985b55",
+        "gzipSha256": "1669885bbc9d51861e2d313bcfd130930bd5931e1baf808fbd76edf795196a8a",
+        "observer": {
+          "readOnly": true,
+          "sourceMainSha256": "c5b3365a881ab439f4fc9e4e30239d8636726023caa9a717d85497af9945671d",
+          "snapshotSha256": "95b5328dddd44fcc63dadb12f2ec9248ae6ee7f608a3e642447bf87394985b55"
+        }
+      }
+    }
+  },
+  "qualifiesJourney": false
+}

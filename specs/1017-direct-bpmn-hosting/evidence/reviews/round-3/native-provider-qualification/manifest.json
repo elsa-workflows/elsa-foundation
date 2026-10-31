@@ -1,0 +1,24 @@
+{
+  "assets": [
+    {
+      "path": "README.md",
+      "sha256": "801f106eed30fa08e9d61c2507ac4cf18988e5f3e0869dabf39ae3897ddb2d8f",
+      "bytes": 1479
+    },
+    {
+      "path": "native-providers.log.gz",
+      "sha256": "5b80cef699bb2f2c512795784dc8fba23a14532dbccea35c91d669f19a00fc80",
+      "bytes": 5169
+    },
+    {
+      "path": "native-providers.trx.gz",
+      "sha256": "58d9577be4570574ef04ce0e05e3413b0ebaea8b01b959069596c8aecaf2cbb4",
+      "bytes": 50992
+    },
+    {
+      "path": "source-and-controls.json",
+      "sha256": "15dc8dc9f66197b5cbfb77b9895330f60c9b4dbd00dce146c9b384f693daf33a",
+      "bytes": 1702
+    }
+  ]
+}

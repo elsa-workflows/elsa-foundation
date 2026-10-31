@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+  "previousPushedHead": "524d22a32c2911249cd09524e1861f68845cc74d",
+  "adoptedMain": "ab46bc22a52aa6e456bca6ac0e803c80904de081",
+  "previousMain": "a01980064aed293502b9ada57a682286d950c7fd",
+  "publishedState": "a82590ea0f2c56a9037002ae5659d7a5e51baa30",
+  "allQualificationCommandsSucceeded": true,
+  "frontendActualAssertionsPassed": 4043,
+  "frontendActualTestFiles": 309,
+  "noTestFileScripts": 3,
+  "focusedBrowserPassed": 45,
+  "browserSkipped": 0,
+  "browserRetries": 0,
+  "wholeProjectPassed": {
+    "readability": 122,
+    "modularity": 401,
+    "publishingApi": 906,
+    "studio": 653,
+    "architecture": 594
+  },
+  "focusedActualHostPassed": 1,
+  "wholeBpmnHostingCurrentSourceNotClaimed": true,
+  "publicBinaryComparisons": 12,
+  "unresolvedReferences": 0,
+  "apiSuppressions": 0,
+  "actualStudio": {
+    "actualStudioFamiliesVerified": 2,
+    "completedNewRuns": 4,
+    "originalRunObservations": 9,
+    "wholeStoresVerified": 12,
+    "retainedNativeMaterialCounts": [
+      84,
+      92
+    ],
+    "frozenAuthoringPreserved": true,
+    "sourceRevision": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "existingStudioCompatibilityProved": true,
+    "directModelStudioAcceptanceProved": false
+  },
+  "studioControls": {
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "testClass": "FinalActualStudioUpgradeControls",
+    "testsRun": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "successful": true,
+    "unchangedControlSource": true,
+    "currentEvidenceInput": "studio/manifest.json"
+  },
+  "allOwnerDecisionsResolved": true,
+  "completedFullReviewRounds": 6,
+  "cleanReviewRounds": 0,
+  "authorizedReviewRoundLimit": 16,
+  "newFullReviewResultNotClaimed": true,
+  "currentHeadCiNotClaimed": true,
+  "programComplete": false
+}

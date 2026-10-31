@@ -1,0 +1,12 @@
+{
+  "originalPath": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimePostCommitOutboxStore.cs",
+  "originalSha256": "d31560f924ed5d3168a43ec51657b84b281b8342a1ff6363dca0521b847213fe",
+  "privateCorrectedSha256": "97bd0478868aa81f03881aa1a7b150e7e3e2729d7dc67d79da4ecd11ea20a99a",
+  "change": "Only the FindUndeliveredDurableAsync failure filter additionally normalizes IOException and unrequested OperationCanceledException; preceding requested-cancellation catch remains unchanged.",
+  "sharedSourceEdited": false,
+  "sourceEquivalentToCompiled437": true,
+  "productAssemblySha256": "bedff37fd86c0150e8250ba3520b803f2350328dd3fae9b10cb22955e4f4a501",
+  "productInformationalVersion": [
+    "1.0.0+43741654e6b5fa99359910b12321d6a12179c996"
+  ]
+}

@@ -1,0 +1,26 @@
+[
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/pipeline/embedded-pipeline-cancellation/flowchart/manifest.json",
+    "exit": 0,
+    "stdout": "{\n  \"actualReferenceJourneys\": [\n    {\n      \"case\": \"capture\",\n      \"acceptedRecords\": 2,\n      \"rejectedRecords\": 0,\n      \"physicalOutputRecords\": 2,\n      \"businessErrorPreserved\": false\n    }\n  ],\n  \"wholeStoresVerified\": 6,\n  \"sourceRevision\": \"d3b103df0c5a96d5b9c4ae4bc679b360c8ff3337\",\n  \"directBpmnClosedWorkerIntegrationProved\": false,\n  \"runBpmnEtlIntegrationProved\": true,\n  \"modelHeldFaultRetryProved\": false,\n  \"pendingCancellationCrashProved\": false,\n  \"pendingCancellationStage\": null,\n  \"postConsumptionPreAckCrashProved\": false,\n  \"embeddedParent\": \"Flowchart\",\n  \"nativeParentToPipelineCancellationProved\": false,\n  \"pipelineToNativeParentCancellationProved\": true,\n  \"pendingParentResultCrashProved\": false,\n  \"pipelineOriginatedCancellationProved\": true,\n  \"nativeWorkerOriginatedCancellationProved\": false,\n  \"modelToWorkerCancellationProved\": false,\n  \"modelCancellationBeforeAdmissionProved\": false\n}\n",
+    "stderr": ""
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/pipeline/embedded-pipeline-cancellation/compensationscope/manifest.json",
+    "exit": 0,
+    "stdout": "{\n  \"actualReferenceJourneys\": [\n    {\n      \"case\": \"capture\",\n      \"acceptedRecords\": 2,\n      \"rejectedRecords\": 0,\n      \"physicalOutputRecords\": 2,\n      \"businessErrorPreserved\": false\n    }\n  ],\n  \"wholeStoresVerified\": 6,\n  \"sourceRevision\": \"d3b103df0c5a96d5b9c4ae4bc679b360c8ff3337\",\n  \"directBpmnClosedWorkerIntegrationProved\": false,\n  \"runBpmnEtlIntegrationProved\": true,\n  \"modelHeldFaultRetryProved\": false,\n  \"pendingCancellationCrashProved\": false,\n  \"pendingCancellationStage\": null,\n  \"postConsumptionPreAckCrashProved\": false,\n  \"embeddedParent\": \"CompensationScope\",\n  \"nativeParentToPipelineCancellationProved\": false,\n  \"pipelineToNativeParentCancellationProved\": true,\n  \"pendingParentResultCrashProved\": false,\n  \"pipelineOriginatedCancellationProved\": true,\n  \"nativeWorkerOriginatedCancellationProved\": false,\n  \"modelToWorkerCancellationProved\": false,\n  \"modelCancellationBeforeAdmissionProved\": false\n}\n",
+    "stderr": ""
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/pipeline/embedded-pipeline-cancellation/root/manifest.json",
+    "exit": 0,
+    "stdout": "{\n  \"actualReferenceJourneys\": [\n    {\n      \"case\": \"capture\",\n      \"acceptedRecords\": 2,\n      \"rejectedRecords\": 0,\n      \"physicalOutputRecords\": 2,\n      \"businessErrorPreserved\": false\n    }\n  ],\n  \"wholeStoresVerified\": 6,\n  \"sourceRevision\": \"d3b103df0c5a96d5b9c4ae4bc679b360c8ff3337\",\n  \"directBpmnClosedWorkerIntegrationProved\": false,\n  \"runBpmnEtlIntegrationProved\": true,\n  \"modelHeldFaultRetryProved\": false,\n  \"pendingCancellationCrashProved\": false,\n  \"pendingCancellationStage\": null,\n  \"postConsumptionPreAckCrashProved\": false,\n  \"embeddedParent\": \"Root\",\n  \"nativeParentToPipelineCancellationProved\": false,\n  \"pipelineToNativeParentCancellationProved\": true,\n  \"pendingParentResultCrashProved\": false,\n  \"pipelineOriginatedCancellationProved\": true,\n  \"nativeWorkerOriginatedCancellationProved\": false,\n  \"modelToWorkerCancellationProved\": false,\n  \"modelCancellationBeforeAdmissionProved\": false\n}\n",
+    "stderr": ""
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/pipeline/embedded-pipeline-cancellation/sequence/manifest.json",
+    "exit": 0,
+    "stdout": "{\n  \"actualReferenceJourneys\": [\n    {\n      \"case\": \"capture\",\n      \"acceptedRecords\": 2,\n      \"rejectedRecords\": 0,\n      \"physicalOutputRecords\": 2,\n      \"businessErrorPreserved\": false\n    }\n  ],\n  \"wholeStoresVerified\": 6,\n  \"sourceRevision\": \"d3b103df0c5a96d5b9c4ae4bc679b360c8ff3337\",\n  \"directBpmnClosedWorkerIntegrationProved\": false,\n  \"runBpmnEtlIntegrationProved\": true,\n  \"modelHeldFaultRetryProved\": false,\n  \"pendingCancellationCrashProved\": false,\n  \"pendingCancellationStage\": null,\n  \"postConsumptionPreAckCrashProved\": false,\n  \"embeddedParent\": \"Sequence\",\n  \"nativeParentToPipelineCancellationProved\": false,\n  \"pipelineToNativeParentCancellationProved\": true,\n  \"pendingParentResultCrashProved\": false,\n  \"pipelineOriginatedCancellationProved\": true,\n  \"nativeWorkerOriginatedCancellationProved\": false,\n  \"modelToWorkerCancellationProved\": false,\n  \"modelCancellationBeforeAdmissionProved\": false\n}\n",
+    "stderr": ""
+  }
+]

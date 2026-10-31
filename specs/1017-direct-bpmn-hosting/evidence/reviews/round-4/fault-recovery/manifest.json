@@ -1,0 +1,249 @@
+{
+  "kind": "actual-old-final-fault-native-recovery",
+  "executingSource": "178154c1334a85ec3b06f0acf40360849c1f44c0",
+  "originalWaitingWriter": "e3ec219fcc3a93c949d2669fc585bd1e79152abe",
+  "originalWaitingInput": "../acceptance/waiting-old-writer/old-waiting.snapshot.sqlite.gz",
+  "positive": {
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+  },
+  "qualifiedProfileRegistrationDisabledControl": {
+    "passed": 2,
+    "expectedFailed": 1,
+    "skipped": 0
+  },
+  "cases": [
+    {
+      "family": "old-admitted-fault",
+      "revision": 4,
+      "first": 57927,
+      "second": 58546
+    },
+    {
+      "family": "old-admitted-waiting-fault",
+      "revision": 4,
+      "first": 56868,
+      "second": 57065
+    },
+    {
+      "family": "old-unadmitted-fault",
+      "revision": 4,
+      "first": 58965,
+      "second": 59810
+    }
+  ],
+  "scope": "Actual captured SQLite Runtime stores, ordinary Workbench native/model resumption and a second killed/restarted process; no Studio, ETL, other-provider or final-CI claim",
+  "assets": [
+    {
+      "path": "diagnostics/first-corrected-profile-positive.trx.gz",
+      "sha256": "23cd83e766ac48115bf485927536fa6699b38fdad98f942fd78770f07259962c",
+      "decodedSha256": "e94708fb7c7afe7e1508df93c3a21a972304c9ec66e85801eb21b279918d777b",
+      "decodedBytes": 6972
+    },
+    {
+      "path": "diagnostics/initial-incomplete-native-profile.trx.gz",
+      "sha256": "ac1dd98a2499674087dfc8245a492aad92b621c900abb5a3291d115879b500da",
+      "decodedSha256": "914ca367f85f411082c806ff5bcbab354e029000dab538e3f3836f1bc2c7da1d",
+      "decodedBytes": 59196
+    },
+    {
+      "path": "diagnostics/initial-log-marker-setup.trx.gz",
+      "sha256": "78a08749be19b580e60c1c69f2f1ac201b870afe011819995f508801b1ccb64a",
+      "decodedSha256": "d835c4ffb5fe83b6a565b7e1cfc23a5ce384d0c855d28019fde3a1e7f97890d9",
+      "decodedBytes": 11388
+    },
+    {
+      "path": "diagnostics/orphan-lock-architecture-red.trx.gz",
+      "sha256": "e6856d1720f99f17e5e9dfc14c0baba4e537cc79b25e525c5a237dc1b0cc4bf1",
+      "decodedSha256": "57e2f42e547d52cfb82bcda954cb638f29cd872906b05fc8bf09de39e02a8225",
+      "decodedBytes": 938114
+    },
+    {
+      "path": "diagnostics/recovery-with-incomplete-native-profile.trx.gz",
+      "sha256": "7882b64ae5531d465589a5fc161f58b7624f2dde8f5453b81bd7345e51d78f65",
+      "decodedSha256": "7e83359d1b6bc8a71a9954557b3fc0414a278b8f157174a1d8b0fc23d5671baf",
+      "decodedBytes": 71110
+    },
+    {
+      "path": "diagnostics/recovery-without-persistence-modes.trx.gz",
+      "sha256": "7179415ca6cffb835e7d64f8d30b08023d69bc9871b703fc49a5806aaf7a7ac8",
+      "decodedSha256": "09b786dd0fa54050734c4f45c99240f4a92b7018d4f9c39c8527294c97df922d",
+      "decodedBytes": 705864
+    },
+    {
+      "path": "diagnostics/startup-partition-control.trx.gz",
+      "sha256": "5a24dee90f48c76b8da7ccc6f5a93c7357126869ba9ce0e3a0528dc0f98ddab4",
+      "decodedSha256": "487541b31394d609866ec9c7a15997ff2afb5b8fcecd7af94934c1c84daf5f86",
+      "decodedBytes": 3160
+    },
+    {
+      "path": "diagnostics/temporary-stack-process.json.gz",
+      "sha256": "0ea750173003500c695475205eff0677821ec0ab2d6b56655165e80782b3cb3d",
+      "decodedSha256": "f9aedd41da69c9aebc3942e725ef4221db080a0a8382a8a14a660b73a37fbe8b",
+      "decodedBytes": 22813
+    },
+    {
+      "path": "diagnostics/temporary-stack-trace.log.gz",
+      "sha256": "7a75d893442e834900c7667e1f4f75c0bee78e1d12fb2a838b113807fbff3dd5",
+      "decodedSha256": "6babd1f564ddc1923e4a744d11d6d8dfe26148a929cc4a97b76d7d1430d882f6",
+      "decodedBytes": 104536
+    },
+    {
+      "path": "host/old-admitted-fault/api.json",
+      "sha256": "5d35d6bf271ed3058ec8e5d6cd0f834cfd6fe5772311ab59ad527735b17210ca"
+    },
+    {
+      "path": "host/old-admitted-fault/before.json",
+      "sha256": "82f1193afe7046808a6af23db3a31bc94847335c0f32844c74035143eebb30c0"
+    },
+    {
+      "path": "host/old-admitted-fault/case.json",
+      "sha256": "ca9a01dc2178bb05cf5b7cef486a9b66d985691e7b0749d62c03a212aafc7619"
+    },
+    {
+      "path": "host/old-admitted-fault/completed-runtime.sqlite.gz",
+      "sha256": "3db159f0d589dce3cfeb90277a62a7a71e352cad95336b619e3fc8b05ef7e79d",
+      "decodedSha256": "d87466e3348067aa84ce1a5142b7a1b067e86c75e65aa73882d57506bfaeacb5",
+      "decodedBytes": 1212416
+    },
+    {
+      "path": "host/old-admitted-fault/completed.json",
+      "sha256": "35899b06b0c44aac347082bc02b236a8f70907c1864820e09096b7a0aadaf0fa"
+    },
+    {
+      "path": "host/old-admitted-fault/retained-runtime.sqlite.gz",
+      "sha256": "3db159f0d589dce3cfeb90277a62a7a71e352cad95336b619e3fc8b05ef7e79d",
+      "decodedSha256": "d87466e3348067aa84ce1a5142b7a1b067e86c75e65aa73882d57506bfaeacb5",
+      "decodedBytes": 1212416
+    },
+    {
+      "path": "host/old-admitted-fault/retained-truth.json",
+      "sha256": "7e09669e183c9615185411be59e03b627b65f4f4788fc1e1f01f2cc4a95a4648"
+    },
+    {
+      "path": "host/old-admitted-fault/retained.json",
+      "sha256": "35899b06b0c44aac347082bc02b236a8f70907c1864820e09096b7a0aadaf0fa"
+    },
+    {
+      "path": "host/old-admitted-fault/truth.json",
+      "sha256": "7e09669e183c9615185411be59e03b627b65f4f4788fc1e1f01f2cc4a95a4648"
+    },
+    {
+      "path": "host/old-admitted-waiting-fault/api.json",
+      "sha256": "5d35d6bf271ed3058ec8e5d6cd0f834cfd6fe5772311ab59ad527735b17210ca"
+    },
+    {
+      "path": "host/old-admitted-waiting-fault/before.json",
+      "sha256": "b4100eed1c1f3d5f795af4093da0cfa248c2ed4dcc12130c6513c227435bca8b"
+    },
+    {
+      "path": "host/old-admitted-waiting-fault/case.json",
+      "sha256": "3c90b41c1a4302122af0217e11c039a919eb7773fb30747ae7cc60791d479367"
+    },
+    {
+      "path": "host/old-admitted-waiting-fault/completed-runtime.sqlite.gz",
+      "sha256": "c64da8dc050e2f164062255573d9c38b0fc6da0c2410f6a6d6b87f5ec5f64430",
+      "decodedSha256": "7b57afb4c85a60bf3094669acc301180834f9ade7a5ac3b45d61883d5c10f825",
+      "decodedBytes": 1490944
+    },
+    {
+      "path": "host/old-admitted-waiting-fault/completed.json",
+      "sha256": "844f67c7b59bcb8a4f6a25ace0a48f20928344688a35f06a07518b652e3b87c4"
+    },
+    {
+      "path": "host/old-admitted-waiting-fault/retained-runtime.sqlite.gz",
+      "sha256": "fd1052c48012c583e44af65c24c96be5221c42e83adad5a7cb8cf4808f241b64",
+      "decodedSha256": "fca84e249d9fe795019ada38bcca7d701d36005264914a957fd40f3fecc45938",
+      "decodedBytes": 1490944
+    },
+    {
+      "path": "host/old-admitted-waiting-fault/retained-truth.json",
+      "sha256": "18379edabd2e147ea41bdb92b404be744ffb82d8ba0b3bb19e8c27493fa0791a"
+    },
+    {
+      "path": "host/old-admitted-waiting-fault/retained.json",
+      "sha256": "844f67c7b59bcb8a4f6a25ace0a48f20928344688a35f06a07518b652e3b87c4"
+    },
+    {
+      "path": "host/old-admitted-waiting-fault/truth.json",
+      "sha256": "18379edabd2e147ea41bdb92b404be744ffb82d8ba0b3bb19e8c27493fa0791a"
+    },
+    {
+      "path": "host/old-unadmitted-fault/api.json",
+      "sha256": "5d35d6bf271ed3058ec8e5d6cd0f834cfd6fe5772311ab59ad527735b17210ca"
+    },
+    {
+      "path": "host/old-unadmitted-fault/before.json",
+      "sha256": "7b1921f1993d5d6d380ad3472c73bcce82e66fde64f1e5e70b37fc9a569af551"
+    },
+    {
+      "path": "host/old-unadmitted-fault/case.json",
+      "sha256": "3dff4c8e006500ae53436d77a44967640f3455523a6e53133463e1fed0e3687d"
+    },
+    {
+      "path": "host/old-unadmitted-fault/completed-runtime.sqlite.gz",
+      "sha256": "b611279324f15f76e80a8dc6e0ec8ed77b60e995963a5d5e16d81453db168e0e",
+      "decodedSha256": "19baffce3c21e6481801b8f8a461de6a3b53d6fbf5432000751210f8a1a21778",
+      "decodedBytes": 1122304
+    },
+    {
+      "path": "host/old-unadmitted-fault/completed.json",
+      "sha256": "9f3c11260135302a08276ea125597a7c156526824db4ab2e996fec92daf41252"
+    },
+    {
+      "path": "host/old-unadmitted-fault/retained-runtime.sqlite.gz",
+      "sha256": "b611279324f15f76e80a8dc6e0ec8ed77b60e995963a5d5e16d81453db168e0e",
+      "decodedSha256": "19baffce3c21e6481801b8f8a461de6a3b53d6fbf5432000751210f8a1a21778",
+      "decodedBytes": 1122304
+    },
+    {
+      "path": "host/old-unadmitted-fault/retained-truth.json",
+      "sha256": "4fcf735c82f3c72936f3941790c6906f3a9124213b56955aceb2e51601cedb16"
+    },
+    {
+      "path": "host/old-unadmitted-fault/retained.json",
+      "sha256": "9f3c11260135302a08276ea125597a7c156526824db4ab2e996fec92daf41252"
+    },
+    {
+      "path": "host/old-unadmitted-fault/truth.json",
+      "sha256": "4fcf735c82f3c72936f3941790c6906f3a9124213b56955aceb2e51601cedb16"
+    },
+    {
+      "path": "negative.log.gz",
+      "sha256": "9f18ca4bf72d27198960d519cc40b5fad738613f0b1eff5dbdff8e96bfdf359b",
+      "decodedSha256": "ced7b47e5c2cb2b8bb42212afd7484ffe55bf9d4ed1e278ce43a1e4d0e384f3d",
+      "decodedBytes": 4789
+    },
+    {
+      "path": "negative.trx.gz",
+      "sha256": "deba3a18302ee1f8d2ff6c3a7e880a28cef897515e7092c602d4976d918f1a06",
+      "decodedSha256": "84d244acaaf0c144b6f7c682f3948c2a58e0b36f5f36ab82e3e7d5c89c652792",
+      "decodedBytes": 698228
+    },
+    {
+      "path": "positive.log.gz",
+      "sha256": "ecfeb96f0f7c7cb2c0b60b671dc3eb854a2a577447c27c442437718c366cdd56",
+      "decodedSha256": "d8f1ae6b96c9383fc3ac6955b7cb3952ad9fd8b41a9d02ad440ed7c19d25dbce",
+      "decodedBytes": 151335
+    },
+    {
+      "path": "positive.trx.gz",
+      "sha256": "ce79e92f1308ae01fa6bd99675f46b9c5d535a9080220f6ff91385371f4ce2e9",
+      "decodedSha256": "c73a83f3fdc7f149ce6c19dc188c11ecae705625f41f4772c04d9e8af47bcf8d",
+      "decodedBytes": 6972
+    },
+    {
+      "path": "registration-disabled-feature.cs.gz",
+      "sha256": "c0dd5c3a0c59f26ae89830ecd009ea964a538b1edad2786a4d5d74ecf3000096",
+      "decodedSha256": "bd3aba96ae900faa1ba06727021c6afb445196c7e6120551f67ccd1fc2e698d3",
+      "decodedBytes": 4855
+    },
+    {
+      "path": "registration-negative-control.json.gz",
+      "sha256": "207258173a902a3ea69c2cfa75540265a0174a832bf45d8d4fdeef43fa0039a5",
+      "decodedSha256": "06d6b0f8ecce52cff1e89f2dde115790c897de309cc3bf7fb1f0cc1c2d513888",
+      "decodedBytes": 1426
+    }
+  ]
+}

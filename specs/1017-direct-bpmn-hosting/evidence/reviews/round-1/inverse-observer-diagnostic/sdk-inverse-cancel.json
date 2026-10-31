@@ -1,0 +1,6 @@
+{
+  "operation": "enqueue-model-owned-native-start",
+  "accepted": false,
+  "failureType": "InvalidOperationException",
+  "message": "An independently cancelled worker settled or queued its result before ETL cancellation."
+}

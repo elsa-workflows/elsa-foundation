@@ -1,0 +1,83 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="09fec516-e52b-49d5-81a6-0b2928756559" name="@Sipkes-Mac-Mini 2026-10-30 05:21:16" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-30T05:21:16.1592580+01:00" queuing="2026-10-30T05:21:16.1592580+01:00" start="2026-10-30T05:21:10.8045360+01:00" finish="2026-10-30T05:21:16.8412350+01:00" />
+  <TestSettings name="default" id="64454ebe-c900-4b48-a87d-ca0580374b34">
+    <Deployment runDeploymentRoot="_Sipkes-Mac-Mini_2026-10-30_05_21_16" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="b0db85e2-92fc-46bf-a980-541c44bb0eb3" testId="8ae8105d-2857-ac07-0723-86c8037b3de7" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelMigrationPostgreSqlSmokeTests.PostgreSql_model_migrations_install_or_preserve_captured_rows(retained: True)" computerName="Sipkes-Mac-Mini" duration="00:00:00.7278892" startTime="2026-10-30T05:21:15.6079970+01:00" endTime="2026-10-30T05:21:16.3334490+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b0db85e2-92fc-46bf-a980-541c44bb0eb3" />
+    <UnitTestResult executionId="f1345532-4602-4fd3-8c83-3868a27924c9" testId="7fc50a06-0e92-16ee-4a33-efcf3bbd5392" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointPostgreSqlSmokeTests.PostgreSql_model_checkpoint_participants_are_atomic(failMarker: False)" computerName="Sipkes-Mac-Mini" duration="00:00:00.0257808" startTime="2026-10-30T05:21:16.6290400+01:00" endTime="2026-10-30T05:21:16.6549040+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f1345532-4602-4fd3-8c83-3868a27924c9" />
+    <UnitTestResult executionId="158af329-a6fc-4eec-a2bd-2817a2f80488" testId="766cdefa-8c60-1401-3f16-02732bb3f6e8" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelMigrationPostgreSqlSmokeTests.PostgreSql_model_migrations_install_or_preserve_captured_rows(retained: False)" computerName="Sipkes-Mac-Mini" duration="00:00:00.1950832" startTime="2026-10-30T05:21:16.3337640+01:00" endTime="2026-10-30T05:21:16.5286720+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="158af329-a6fc-4eec-a2bd-2817a2f80488" />
+    <UnitTestResult executionId="bf3a22a6-4917-4ec7-b213-f02fc803f270" testId="cb6a5a0f-90f7-aa7a-6228-e6f20ae06551" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointPostgreSqlSmokeTests.PostgreSql_model_checkpoint_participants_are_atomic(failMarker: True)" computerName="Sipkes-Mac-Mini" duration="00:00:00.0368684" startTime="2026-10-30T05:21:16.5920720+01:00" endTime="2026-10-30T05:21:16.6289640+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="bf3a22a6-4917-4ec7-b213-f02fc803f270" />
+    <UnitTestResult executionId="8c4c2f38-280f-48f1-b2c3-5f59e35d8913" testId="17d12fab-c636-ac7b-96a5-4a00b8b9060a" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointPostgreSqlSmokeTests.PostgreSql_model_checkpoint_fences_revisions_and_replay" computerName="Sipkes-Mac-Mini" duration="00:00:00.0630100" startTime="2026-10-30T05:21:16.5288860+01:00" endTime="2026-10-30T05:21:16.5919700+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8c4c2f38-280f-48f1-b2c3-5f59e35d8913" />
+    <UnitTestResult executionId="123226aa-17dd-42fe-a495-b6f5f6c5830e" testId="bb235226-1791-52e2-6c6b-d204186ae8c2" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelReceiptPostgreSqlSmokeTests.PostgreSql_retained_model_receipt_compares_without_mutating_state" computerName="Sipkes-Mac-Mini" duration="00:00:00.9618567" startTime="2026-10-30T05:21:14.6478810+01:00" endTime="2026-10-30T05:21:15.6041010+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="123226aa-17dd-42fe-a495-b6f5f6c5830e" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelMigrationPostgreSqlSmokeTests.PostgreSql_model_migrations_install_or_preserve_captured_rows(retained: False)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/providertests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.providertests.dll" id="766cdefa-8c60-1401-3f16-02732bb3f6e8">
+      <Execution id="158af329-a6fc-4eec-a2bd-2817a2f80488" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelMigrationPostgreSqlSmokeTests" name="PostgreSql_model_migrations_install_or_preserve_captured_rows" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelMigrationPostgreSqlSmokeTests.PostgreSql_model_migrations_install_or_preserve_captured_rows(retained: True)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/providertests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.providertests.dll" id="8ae8105d-2857-ac07-0723-86c8037b3de7">
+      <Execution id="b0db85e2-92fc-46bf-a980-541c44bb0eb3" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelMigrationPostgreSqlSmokeTests" name="PostgreSql_model_migrations_install_or_preserve_captured_rows" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelReceiptPostgreSqlSmokeTests.PostgreSql_retained_model_receipt_compares_without_mutating_state" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/providertests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.providertests.dll" id="bb235226-1791-52e2-6c6b-d204186ae8c2">
+      <Execution id="123226aa-17dd-42fe-a495-b6f5f6c5830e" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelReceiptPostgreSqlSmokeTests" name="PostgreSql_retained_model_receipt_compares_without_mutating_state" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointPostgreSqlSmokeTests.PostgreSql_model_checkpoint_fences_revisions_and_replay" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/providertests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.providertests.dll" id="17d12fab-c636-ac7b-96a5-4a00b8b9060a">
+      <Execution id="8c4c2f38-280f-48f1-b2c3-5f59e35d8913" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointPostgreSqlSmokeTests" name="PostgreSql_model_checkpoint_fences_revisions_and_replay" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointPostgreSqlSmokeTests.PostgreSql_model_checkpoint_participants_are_atomic(failMarker: False)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/providertests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.providertests.dll" id="7fc50a06-0e92-16ee-4a33-efcf3bbd5392">
+      <Execution id="f1345532-4602-4fd3-8c83-3868a27924c9" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointPostgreSqlSmokeTests" name="PostgreSql_model_checkpoint_participants_are_atomic" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointPostgreSqlSmokeTests.PostgreSql_model_checkpoint_participants_are_atomic(failMarker: True)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/providertests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.providertests.dll" id="cb6a5a0f-90f7-aa7a-6228-e6f20ae06551">
+      <Execution id="bf3a22a6-4917-4ec7-b213-f02fc803f270" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointPostgreSqlSmokeTests" name="PostgreSql_model_checkpoint_participants_are_atomic" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="8ae8105d-2857-ac07-0723-86c8037b3de7" executionId="b0db85e2-92fc-46bf-a980-541c44bb0eb3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7fc50a06-0e92-16ee-4a33-efcf3bbd5392" executionId="f1345532-4602-4fd3-8c83-3868a27924c9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="766cdefa-8c60-1401-3f16-02732bb3f6e8" executionId="158af329-a6fc-4eec-a2bd-2817a2f80488" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="cb6a5a0f-90f7-aa7a-6228-e6f20ae06551" executionId="bf3a22a6-4917-4ec7-b213-f02fc803f270" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="17d12fab-c636-ac7b-96a5-4a00b8b9060a" executionId="8c4c2f38-280f-48f1-b2c3-5f59e35d8913" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="bb235226-1791-52e2-6c6b-d204186ae8c2" executionId="123226aa-17dd-42fe-a495-b6f5f6c5830e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="6" executed="6" passed="6" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.05]   Discovering: Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests
+[xUnit.net 00:00:00.08]   Discovered:  Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests
+[xUnit.net 00:00:00.09]   Starting:    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests
+[testcontainers.org 00:00:00.05] Connected to Docker:
+  Host: unix:///var/run/docker.sock
+  Server Version: 29.8.2
+  Kernel Version: 7.2.12-orbstack-00394-gbecdd6130068
+  API Version: 1.56
+  Operating System: OrbStack
+  Total Memory: 15.66 GB
+[testcontainers.org 00:00:00.15] Docker container a514bc2ca10e created
+[testcontainers.org 00:00:00.17] Start Docker container a514bc2ca10e
+[testcontainers.org 00:00:00.23] Wait for Docker container a514bc2ca10e to complete readiness checks
+[testcontainers.org 00:00:01.24] Docker container a514bc2ca10e ready
+[testcontainers.org 00:00:01.32] Docker container eec6118292c5 created
+[testcontainers.org 00:00:01.32] Start Docker container eec6118292c5
+[testcontainers.org 00:00:01.37] Wait for Docker container eec6118292c5 to complete readiness checks
+[testcontainers.org 00:00:01.38] Execute "pg_isready --host localhost --dbname elsa_runtime_bookmarks --username postgres" at Docker container eec6118292c5
+[testcontainers.org 00:00:02.40] Execute "pg_isready --host localhost --dbname elsa_runtime_bookmarks --username postgres" at Docker container eec6118292c5
+[testcontainers.org 00:00:03.42] Execute "pg_isready --host localhost --dbname elsa_runtime_bookmarks --username postgres" at Docker container eec6118292c5
+[testcontainers.org 00:00:03.45] Docker container eec6118292c5 ready
+[testcontainers.org 00:00:05.48] Delete Docker container eec6118292c5
+[xUnit.net 00:00:05.82]   Finished:    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

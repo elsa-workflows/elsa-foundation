@@ -1,0 +1,32 @@
+{
+  "baseline": {
+    "assets": 104,
+    "trackedExactGitBlobs": 104,
+    "integrityCheckedStores": 22
+  },
+  "reviews/round-2/qualification": {
+    "assets": 81,
+    "trackedExactGitBlobs": 81,
+    "integrityCheckedStores": 16
+  },
+  "main-adoption/184759ce5": {
+    "assets": 7,
+    "trackedExactGitBlobs": 7,
+    "integrityCheckedStores": 0
+  },
+  "repairArchiveMembers": 9,
+  "main-adoption/931123c7e/repair": {
+    "assets": 39,
+    "trackedExactGitBlobs": 39,
+    "integrityCheckedStores": 6
+  },
+  "main-adoption/931123c7e/studio-qualification": {
+    "assets": 92,
+    "trackedExactGitBlobs": 92,
+    "integrityCheckedStores": 12
+  },
+  "baselineWriterHashesAcrossSources": 48,
+  "frozenAssetByteEqualToGateA": 104,
+  "currentRelevantProductionEqualToE3": true,
+  "unchangedStudioLedgerFiles": 6
+}

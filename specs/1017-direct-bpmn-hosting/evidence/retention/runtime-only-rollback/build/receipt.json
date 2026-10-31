@@ -1,0 +1,27 @@
+{
+  "sourceRevision": "2e142e51055aa2d84c0839dffb49b3621489d9ce",
+  "productionCodeSource": "c40881fd0209dd1f2e8765358c3afd3f007247ab",
+  "productionFilesUnchanged": true,
+  "builds": [
+    {
+      "product": "standard",
+      "errors": 0,
+      "warnings": 261
+    },
+    {
+      "product": "reader",
+      "errors": 0,
+      "warnings": 0
+    },
+    {
+      "product": "probe",
+      "errors": 0,
+      "warnings": 13
+    },
+    {
+      "product": "sdk",
+      "errors": 0,
+      "warnings": 0
+    }
+  ]
+}

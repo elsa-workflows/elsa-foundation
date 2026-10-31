@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "shard": "workbench-rest",
+  "headSha": "b9cf52c181b79e3e79eef233f7d61cb0843f4da7",
+  "failedTwice": [],
+  "passedOnRetry": [],
+  "quarantinedFailed": [
+    {
+      "test": "Elsa.Workbench.Tests.WorkbenchCompensationSampleTests.The_sample_workflows_end_as_the_readme_says",
+      "issue": 3261
+    }
+  ],
+  "slow": [],
+  "aborted": null
+}

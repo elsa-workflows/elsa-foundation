@@ -1,0 +1,22 @@
+{
+  "baseline": {
+    "assets": 104,
+    "wholeStores": 22,
+    "writerFilesPerSource": 16,
+    "writerSources": 3
+  },
+  "main-adoption/931123c7e/repair": {
+    "assets": 39,
+    "fixed-38c402d31": {
+      "archiveAssets": 148,
+      "wholeStores": 0
+    },
+    "fixed-3ac1c6757": {
+      "archiveAssets": 9,
+      "wholeStores": 6
+    }
+  },
+  "main-adoption/931123c7e/studio-qualification": {
+    "assets": 92
+  }
+}

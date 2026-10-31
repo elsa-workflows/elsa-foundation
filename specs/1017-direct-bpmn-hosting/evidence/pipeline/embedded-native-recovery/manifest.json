@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-native-runbpmn-etl-matrix",
+  "sourceRevision": "b6e7e1f0de7367f81d35aebc5016d4b91e2d7927",
+  "cases": [
+    {
+      "name": "root-success",
+      "parent": "Root",
+      "cancel": false,
+      "manifest": "root-success/manifest.json",
+      "sha256": "d106fd09f2a95b4391be2d88fcb82672bd32b146cfc1ceb45ffc04cb3c7837cf"
+    },
+    {
+      "name": "root-parent-cancel",
+      "parent": "Root",
+      "cancel": true,
+      "manifest": "root-parent-cancel/manifest.json",
+      "sha256": "c028de3b5169c6b74551033a774ba13e9caaf150846948c9eeec28f710116541"
+    },
+    {
+      "name": "sequence-success",
+      "parent": "Sequence",
+      "cancel": false,
+      "manifest": "sequence-success/manifest.json",
+      "sha256": "9a7c3fe287bcc18bb2e93ef121dafdbf64a2096e20c6d7bd6cb24bf88420117b"
+    },
+    {
+      "name": "sequence-parent-cancel",
+      "parent": "Sequence",
+      "cancel": true,
+      "manifest": "sequence-parent-cancel/manifest.json",
+      "sha256": "c4860c297c77d0493cdab0ace14cc6dd0e4019019734f9f502bd79e9f7cbf800"
+    },
+    {
+      "name": "flowchart-success",
+      "parent": "Flowchart",
+      "cancel": false,
+      "manifest": "flowchart-success/manifest.json",
+      "sha256": "e7cc015d817987a49ff6028b7f01484df6c9f9d797269d03450351bfe801c2c3"
+    },
+    {
+      "name": "flowchart-parent-cancel",
+      "parent": "Flowchart",
+      "cancel": true,
+      "manifest": "flowchart-parent-cancel/manifest.json",
+      "sha256": "d28ac04e889ad15a57767f3a2dcb363a038e712edb01f9392cb83eeb12fd6a1a"
+    },
+    {
+      "name": "compensationscope-success",
+      "parent": "CompensationScope",
+      "cancel": false,
+      "manifest": "compensationscope-success/manifest.json",
+      "sha256": "aee31a277f4ea650d375cd5971f997baf2ed46f33762bb4660949b27750c2fc6"
+    },
+    {
+      "name": "compensationscope-parent-cancel",
+      "parent": "CompensationScope",
+      "cancel": true,
+      "manifest": "compensationscope-parent-cancel/manifest.json",
+      "sha256": "bc811e6c63684b42ebc759abb949897365707666e3af9d05fd4a21beafa2122c"
+    }
+  ],
+  "directCounterpart": {
+    "manifest": "direct-counterpart/manifest.json",
+    "sha256": "85aa12b8ea9652baee09d84bc309d9dc5e86fb066d84d05ff85dff561496a82f"
+  }
+}

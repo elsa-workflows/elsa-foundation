@@ -1,0 +1,32 @@
+[
+  {
+    "name": "browser",
+    "source": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+    "arguments": [
+      "pnpm",
+      "exec",
+      "playwright",
+      "test",
+      "--config",
+      "/tmp/elsa-2898-main-3e93-qualification/playwright.config.ts"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 158.88150811195374,
+    "scope": "Affected existing theme/authoring/list/canvas/run surfaces; owned strict port; no new capability matrix"
+  },
+  {
+    "name": "browser-root",
+    "source": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+    "arguments": [
+      "pnpm",
+      "exec",
+      "playwright",
+      "test",
+      "--config",
+      "/tmp/elsa-2898-main-3e93-qualification/playwright.root.config.ts"
+    ],
+    "exitCode": 1,
+    "elapsedSeconds": 0.8939018249511719,
+    "scope": "Affected existing theme/authoring/list/canvas/run surfaces; owned strict port; no new capability matrix"
+  }
+]

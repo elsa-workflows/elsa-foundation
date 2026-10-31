@@ -1,0 +1,43 @@
+{
+  "kind": "same-round5-portable-reproduction-verification",
+  "newReviewRound": false,
+  "reviewedHead": "1e707d58fc2148be3715d50616dfdb69dc82ae65",
+  "reviewedBase": "7b49513650665606e5f52fdc08c5831f60802dac",
+  "productSource": "f6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1",
+  "checks": {
+    "passivateOnTerminalDefaultTrue": true,
+    "baselineZero": true,
+    "eightRetainedBeforeRedrive": true,
+    "eightRetainedAfterRedrive": true,
+    "explicitPassivationReleasesAll": true,
+    "eightConsumedTerminalStartsWithEmptyQueues": true,
+    "eightAcceptedRedrivesWithoutTerminalSignal": true,
+    "eightRetainedReplaysWithoutMailbox": true,
+    "programCopiedByteExactly": true,
+    "freshResultByteEqualsOriginal": true,
+    "originalProductSourceRetained": true
+  },
+  "originalResult": "mailbox-probe/completed-models/result.json",
+  "resultSha256": "c490b461e579735efd637ca23f8a9fa9ca78a076eaeab0137fe6fb91b257f89c",
+  "programSha256": "6da30c5bebde48c1c8cd8f38010226dd245b75a95939cef6b93fb3c67b6a4553",
+  "buildExitCode": 0,
+  "producerExitCode": 0,
+  "sqliteNativeCopiedByGeneratedProject": true,
+  "manualNativeLibraryCopyNeeded": false,
+  "buildCommand": [
+    "dotnet",
+    "build",
+    "<generated>/Probe.csproj",
+    "--configuration",
+    "Release",
+    "--nologo",
+    "--verbosity",
+    "quiet"
+  ],
+  "runCommand": [
+    "dotnet",
+    "<generated>/bin/Release/net10.0/Probe.dll",
+    "<fresh-result-directory>"
+  ],
+  "scope": "Existing products were referenced without rebuilding product projects; only the temporary probe was built. No product or repository writes."
+}

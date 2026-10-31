@@ -1,0 +1,7 @@
+{
+  "file": "try1/0/_runnervmnwato_2026-10-31_02_56_54_net10.0.trx",
+  "passed": 42,
+  "failed": 0,
+  "skipped": 0,
+  "legacyTimerTest": "Elsa.Activities.Bpmn.Hosting.Tests.LegacyTimerAdmissionWorkbenchTests.An_actual_accepted_impossible_timer_gets_a_durable_fault_and_normal_work_recovers_after_process_loss"
+}

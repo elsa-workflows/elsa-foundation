@@ -1,0 +1,11 @@
+STORE /tmp/elsa-2898-full-pr-r5-acceptance/old-embedded/old.sqlite
+PRODUCT Elsa.Activities.Bpmn 1.0.0+e3ec219fcc3a93c949d2669fc585bd1e79152abe daca65277a4c7d554da6aaa76efa6585ccc7af435275503ac1c03f63fb0a90e7
+PRODUCT Elsa.Workflows.Runtime.Core 1.0.0+e3ec219fcc3a93c949d2669fc585bd1e79152abe c7b6b2e2384b26dddcd6ebf78d5f400df1a7a86638cad76b644e3ddc741eddf8
+PRODUCT Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore 1.0.0+e3ec219fcc3a93c949d2669fc585bd1e79152abe 6c8db6d09cd1c5ed3a523bb51e93939507402177821aebd8e28d994bf1ce1012
+PRODUCT Elsa.Activities.Testing 1.0.0+eef92c613853f80cb192a5fe462a1f929c3836a8 3f55d4989d4d91fa2baa8a998b711c3fc3bb67692b5bfc689cded5dfd216d35e
+Unhandled exception. System.InvalidOperationException: Start command was not accepted (status: AcceptedButFaulted). Reason: Elsa.Workflows.Runtime.Core.Exceptions.WorkflowExecutableNotFoundException: Workflow executable artifact 'review-parent-artifact' does not exist.
+   at Elsa.Activities.Testing.WorkflowExecutionHarness.StartPublishedAsync(WorkflowExecutableSourceReference reference, String workflowExecutionId, String correlationId, String tenantId, WorkflowExecutionPartition partition) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Testing/WorkflowExecutionHarness.cs:line 357
+   at Elsa.Activities.Testing.WorkflowExecutionHarness.StartPublishedAsync(WorkflowExecutableSourceReference reference, String workflowExecutionId, String correlationId, String tenantId, WorkflowExecutionPartition partition) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Testing/WorkflowExecutionHarness.cs:line 361
+   at Program.Main(String[] args) in /private/tmp/elsa-2898-full-pr-r5-acceptance/old-embedded/Program.cs:line 72
+   at Program.Main(String[] args) in /private/tmp/elsa-2898-full-pr-r5-acceptance/old-embedded/Program.cs:line 97
+   at Program.<Main>(String[] args)

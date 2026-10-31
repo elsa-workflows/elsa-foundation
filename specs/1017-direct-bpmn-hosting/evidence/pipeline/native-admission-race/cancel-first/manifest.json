@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-bpmn-native-admission-cancellation-race",
+  "sourceRevision": "54d8532b0a00c39626185a7d617790004b9f9448",
+  "assets": [
+    {
+      "path": "before-checked.json",
+      "sha256": "b39cbdbf8f0be395f78a2699c0a906e53c50aeb52f7130d0915e2bd56f267447"
+    },
+    {
+      "path": "before-elsa.sqlite.gz",
+      "sha256": "62ac4a662adf6561c77b03afaf8ba269f8b28a3f9a20447b72b68cffe2a642fd"
+    },
+    {
+      "path": "before-etl-design.sqlite.gz",
+      "sha256": "ea4f05458271b1dc1b1df77bb8128a9b6df8518506769f1bd9947824dcd09586"
+    },
+    {
+      "path": "before-etl-runtime.sqlite.gz",
+      "sha256": "e16f600bf779793dbc0ec18a87ff861cdb83fb72f8d1e5600ee6289c30779820"
+    },
+    {
+      "path": "before-wire.json",
+      "sha256": "bb01a430be9b5b5ac58aab228b67961967bbd8c40d8b519029a2c2313c1b1b42"
+    },
+    {
+      "path": "before.json",
+      "sha256": "e8c769d41cab66feb69f8ec5bd0204726e0f3296bdba9a41649457068bcab17d"
+    },
+    {
+      "path": "cancel-response.json",
+      "sha256": "d07caff0b95dc1c64008ab9ef3d5148565f0af680fba1575379d44eac9f985b5"
+    },
+    {
+      "path": "finished-checked.json",
+      "sha256": "08945034d54aac8f41a7740b3d9dc829c4a11cd907a125d970a2d668f18e4cec"
+    },
+    {
+      "path": "finished-elsa.sqlite.gz",
+      "sha256": "5765de2451017f30f948985c7e1ce6c69e512630b43b59a41730f7532997f131"
+    },
+    {
+      "path": "finished-etl-design.sqlite.gz",
+      "sha256": "238c904a006ec347a779a4eda2100e99f03ef32f9bd3f58f4fffe5136df38f7a"
+    },
+    {
+      "path": "finished-etl-runtime.sqlite.gz",
+      "sha256": "69f62d3f21b4756e957c9f0782e960efe3d64c5657f48a1dcda59b287e568cc8"
+    },
+    {
+      "path": "finished-wire.json",
+      "sha256": "bb01a430be9b5b5ac58aab228b67961967bbd8c40d8b519029a2c2313c1b1b42"
+    },
+    {
+      "path": "finished.json",
+      "sha256": "722db35241a730c3b41ace9d304d97d0c3986114b894c24dccbca7fd0a43e601"
+    },
+    {
+      "path": "pending-checked.json",
+      "sha256": "066e623a59c79397a1e1db2d5887daff19e4d35ab4da68bde871102d9caef3ec"
+    },
+    {
+      "path": "pending-elsa.sqlite.gz",
+      "sha256": "a6bc49a851cdfa7fa05897a37b58a919ab97dba1e12918e1901082fedfe58dbb"
+    },
+    {
+      "path": "pending-etl-design.sqlite.gz",
+      "sha256": "92dbdae2dd9b6dae4b99d0b9581ff757a34ab5c29d34f0aef65fb708f10dc645"
+    },
+    {
+      "path": "pending-etl-runtime.sqlite.gz",
+      "sha256": "c3068c46a41f2c6674991248f2e160052554523eba4cbcdaca9adb0a19bd7646"
+    },
+    {
+      "path": "pending.json",
+      "sha256": "c8deaf50d6f48068e946d81eb05d4778b4214a1c98c109f629d449cdb7d30ba8"
+    },
+    {
+      "path": "process.json",
+      "sha256": "cfe615f1f05bfe26a48e2a80a52c503bc6020f09297fd59f16a6fb14388f9fa8"
+    },
+    {
+      "path": "race-competing-checked.json",
+      "sha256": "066e623a59c79397a1e1db2d5887daff19e4d35ab4da68bde871102d9caef3ec"
+    },
+    {
+      "path": "race-competitor.json",
+      "sha256": "1af5c9dec9e7118e0628505a2c386bd6e3fc92be1b6391a4dacfba43c9da6b42"
+    },
+    {
+      "path": "race-gated.json",
+      "sha256": "67e4fbd6e5729c641a44184aa5b978d326cab83ed8a2aa6df6a0e1b4d12bec10"
+    },
+    {
+      "path": "race-proposal.json",
+      "sha256": "bdbe361b371bd7984b4532c2ea5552d1fcf100e05af15d0185d500456c74b848"
+    },
+    {
+      "path": "race-release.json",
+      "sha256": "85d7114bd3ed363aef0ab58d9eef18ef5672e60af00c442b28e97d5e79e9bc73"
+    },
+    {
+      "path": "retained-checked.json",
+      "sha256": "08945034d54aac8f41a7740b3d9dc829c4a11cd907a125d970a2d668f18e4cec"
+    },
+    {
+      "path": "retained-wire.json",
+      "sha256": "bb01a430be9b5b5ac58aab228b67961967bbd8c40d8b519029a2c2313c1b1b42"
+    },
+    {
+      "path": "retained.json",
+      "sha256": "722db35241a730c3b41ace9d304d97d0c3986114b894c24dccbca7fd0a43e601"
+    },
+    {
+      "path": "sdk-dispatch.json",
+      "sha256": "7e5deb0adc5185f2b3d0ef61a7ccc49d8ea4f205eb5eb8051f0f964ecc21e670"
+    }
+  ]
+}

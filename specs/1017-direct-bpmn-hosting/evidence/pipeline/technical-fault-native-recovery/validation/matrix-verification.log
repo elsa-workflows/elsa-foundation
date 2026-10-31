@@ -1,0 +1,13 @@
+{
+  "sourceRevision": "5533b8367c7fe78850677fcebf5c7fcb0f2e7e27",
+  "actualTechnicalFinalFaultJourneys": 5,
+  "wholeStoresVerified": 30,
+  "actualWorkbenchProcesses": 15,
+  "actualHttpProcesses": 5,
+  "technicalFinalFaultProved": true,
+  "technicalFaultRefusesCodedBusinessCatch": true,
+  "sameSourceInterpreterTechnicalFaultTracesCompared": true,
+  "modelHeldFaultRetryProved": false,
+  "finalFaultRetryRefusalProved": false,
+  "nativeCompositeFaultStatusDecisionResolved": false
+}

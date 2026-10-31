@@ -1,0 +1,341 @@
+{
+  "head": "d1449c0bff679212f8a64766a95b1c29cfadbcea",
+  "base": "d481d6a5e624e35bba9fbf32033ed02aff64cbef",
+  "auditKind": "read-only artifact/source/discovery verification; no host or suite rerun",
+  "manifests": [
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json",
+      "assets": 104,
+      "decodedChecks": 22,
+      "errors": []
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/manifest.json",
+      "assets": 179,
+      "decodedChecks": 103,
+      "errors": []
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/studio/manifest.json",
+      "assets": 66,
+      "decodedChecks": 2,
+      "errors": []
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/frontend-adoption/manifest.json",
+      "assets": 50,
+      "decodedChecks": 19,
+      "errors": []
+    }
+  ],
+  "wholeSuites": [
+    {
+      "suite": "architecture",
+      "executingSource": "04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+      "rawCounters": {
+        "total": "594",
+        "executed": "594",
+        "passed": "594",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawResultCount": 594,
+      "outcomes": {
+        "Passed": 594
+      },
+      "listedCaseCount": 585,
+      "missingMethods": [],
+      "extraMethods": [],
+      "errors": []
+    },
+    {
+      "suite": "bpmn",
+      "executingSource": "04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+      "rawCounters": {
+        "total": "492",
+        "executed": "492",
+        "passed": "492",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawResultCount": 492,
+      "outcomes": {
+        "Passed": 492
+      },
+      "listedCaseCount": 492,
+      "missingMethods": [],
+      "extraMethods": [],
+      "errors": []
+    },
+    {
+      "suite": "design",
+      "executingSource": "04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+      "rawCounters": {
+        "total": "655",
+        "executed": "655",
+        "passed": "655",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawResultCount": 655,
+      "outcomes": {
+        "Passed": 655
+      },
+      "listedCaseCount": 585,
+      "missingMethods": [],
+      "extraMethods": [],
+      "errors": []
+    },
+    {
+      "suite": "native-providers",
+      "executingSource": "04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+      "rawCounters": {
+        "total": "212",
+        "executed": "212",
+        "passed": "212",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawResultCount": 212,
+      "outcomes": {
+        "Passed": 212
+      },
+      "listedCaseCount": 212,
+      "missingMethods": [],
+      "extraMethods": [],
+      "errors": []
+    },
+    {
+      "suite": "publishing",
+      "executingSource": "04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+      "rawCounters": {
+        "total": "61",
+        "executed": "61",
+        "passed": "61",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawResultCount": 61,
+      "outcomes": {
+        "Passed": 61
+      },
+      "listedCaseCount": 61,
+      "missingMethods": [],
+      "extraMethods": [],
+      "errors": []
+    },
+    {
+      "suite": "runtime-ef",
+      "executingSource": "04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+      "rawCounters": {
+        "total": "1790",
+        "executed": "1790",
+        "passed": "1790",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawResultCount": 1790,
+      "outcomes": {
+        "Passed": 1790
+      },
+      "listedCaseCount": 1790,
+      "missingMethods": [],
+      "extraMethods": [],
+      "errors": []
+    },
+    {
+      "suite": "runtime",
+      "executingSource": "04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+      "rawCounters": {
+        "total": "3083",
+        "executed": "3083",
+        "passed": "3083",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawResultCount": 3083,
+      "outcomes": {
+        "Passed": 3083
+      },
+      "listedCaseCount": 3072,
+      "missingMethods": [],
+      "extraMethods": [],
+      "errors": []
+    },
+    {
+      "suite": "standard-host",
+      "executingSource": "04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+      "rawCounters": {
+        "total": "41",
+        "executed": "41",
+        "passed": "41",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "rawResultCount": 41,
+      "outcomes": {
+        "Passed": 41
+      },
+      "listedCaseCount": 41,
+      "missingMethods": [],
+      "extraMethods": [],
+      "errors": []
+    }
+  ],
+  "rawTotal": 6928,
+  "sourceEquivalence": [
+    {
+      "path": "Essentials",
+      "qualified": "df7b03f23ad25b8034aab67aa9dc54f599a4bb0d",
+      "reviewed": "df7b03f23ad25b8034aab67aa9dc54f599a4bb0d",
+      "equal": true,
+      "frontend": "df7b03f23ad25b8034aab67aa9dc54f599a4bb0d",
+      "frontendEqualsReviewed": true
+    },
+    {
+      "path": "Extensions",
+      "qualified": "00643492c3957f4e68963193b635a6c723847e7b",
+      "reviewed": "00643492c3957f4e68963193b635a6c723847e7b",
+      "equal": true,
+      "frontend": "00643492c3957f4e68963193b635a6c723847e7b",
+      "frontendEqualsReviewed": true
+    },
+    {
+      "path": "Directory.Build.props",
+      "qualified": "70a24aa63d9e977fe91829e6c32920e14ce80466",
+      "reviewed": "70a24aa63d9e977fe91829e6c32920e14ce80466",
+      "equal": true,
+      "frontend": "70a24aa63d9e977fe91829e6c32920e14ce80466",
+      "frontendEqualsReviewed": true
+    },
+    {
+      "path": "Directory.Packages.props",
+      "qualified": "ffae358e2e02d6dc9a7cc9ad16029ca4c454422d",
+      "reviewed": "ffae358e2e02d6dc9a7cc9ad16029ca4c454422d",
+      "equal": true,
+      "frontend": "ffae358e2e02d6dc9a7cc9ad16029ca4c454422d",
+      "frontendEqualsReviewed": true
+    },
+    {
+      "path": "tools/bpmn",
+      "qualified": "e29d352ac0e81c01e2d3bf8ec83749d9400fc4f3",
+      "reviewed": "e29d352ac0e81c01e2d3bf8ec83749d9400fc4f3",
+      "equal": true,
+      "frontend": "e29d352ac0e81c01e2d3bf8ec83749d9400fc4f3",
+      "frontendEqualsReviewed": true
+    },
+    {
+      "path": "e2e-tests/bpmn",
+      "qualified": "bd686e91e3ef3a7d744eb119536f40651780371e",
+      "reviewed": "bd686e91e3ef3a7d744eb119536f40651780371e",
+      "equal": true,
+      "frontend": "bd686e91e3ef3a7d744eb119536f40651780371e",
+      "frontendEqualsReviewed": true
+    },
+    {
+      "path": "tools/ef",
+      "qualified": "8ab762e9c20d70b4690d619fa8e0a80d25fd5deb",
+      "reviewed": "8ab762e9c20d70b4690d619fa8e0a80d25fd5deb",
+      "equal": true,
+      "frontend": "8ab762e9c20d70b4690d619fa8e0a80d25fd5deb",
+      "frontendEqualsReviewed": true
+    },
+    {
+      "path": "tools/ci/test-tiers.json",
+      "qualified": "62446f70173e22a1712b636ecd0a9d9c08688427",
+      "reviewed": "62446f70173e22a1712b636ecd0a9d9c08688427",
+      "equal": true,
+      "frontend": "62446f70173e22a1712b636ecd0a9d9c08688427",
+      "frontendEqualsReviewed": true
+    }
+  ],
+  "frontendSource": "9c7681c56c529c8a1a4ab4d9fc91934ec07d0448"
+}

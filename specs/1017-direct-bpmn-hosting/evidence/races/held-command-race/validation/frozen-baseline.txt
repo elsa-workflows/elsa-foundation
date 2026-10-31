@@ -1,0 +1,2 @@
+dict_keys(['path', 'sha256', 'role', 'executingSourceCommit'])
+All104 frozen baseline asset hashes and original manifest are unchanged.

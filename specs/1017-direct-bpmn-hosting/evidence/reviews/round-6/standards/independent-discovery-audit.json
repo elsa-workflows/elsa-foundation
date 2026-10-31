@@ -1,0 +1,66 @@
+[
+  {
+    "suite": "architecture",
+    "listedCases": 585,
+    "distinctListedMethods": 356,
+    "distinctExecutedMethods": 356,
+    "missing": [],
+    "extra": []
+  },
+  {
+    "suite": "bpmn",
+    "listedCases": 492,
+    "distinctListedMethods": 336,
+    "distinctExecutedMethods": 336,
+    "missing": [],
+    "extra": []
+  },
+  {
+    "suite": "design",
+    "listedCases": 585,
+    "distinctListedMethods": 404,
+    "distinctExecutedMethods": 404,
+    "missing": [],
+    "extra": []
+  },
+  {
+    "suite": "standard-host",
+    "listedCases": 41,
+    "distinctListedMethods": 20,
+    "distinctExecutedMethods": 20,
+    "missing": [],
+    "extra": []
+  },
+  {
+    "suite": "native-providers",
+    "listedCases": 212,
+    "distinctListedMethods": 136,
+    "distinctExecutedMethods": 136,
+    "missing": [],
+    "extra": []
+  },
+  {
+    "suite": "publishing",
+    "listedCases": 61,
+    "distinctListedMethods": 57,
+    "distinctExecutedMethods": 57,
+    "missing": [],
+    "extra": []
+  },
+  {
+    "suite": "runtime-ef",
+    "listedCases": 1790,
+    "distinctListedMethods": 914,
+    "distinctExecutedMethods": 914,
+    "missing": [],
+    "extra": []
+  },
+  {
+    "suite": "runtime",
+    "listedCases": 3072,
+    "distinctListedMethods": 2288,
+    "distinctExecutedMethods": 2288,
+    "missing": [],
+    "extra": []
+  }
+]

@@ -1,0 +1,29 @@
+{
+  "sourceRevision": "30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+  "requiredNativeProviders": true,
+  "clearedConnectionOverrideNames": [
+    "ELSA_RUNTIME_BOOKMARKS_EF_POSTGRES_CONNECTION_STRING",
+    "ELSA_RUNTIME_BOOKMARKS_EF_SQLSERVER_CONNECTION_STRING",
+    "ELSA_RUNTIME_BOOKMARKS_EF_MYSQL_CONNECTION_STRING"
+  ],
+  "projectGraphCount": 34,
+  "graphExcludesWorkbenchAndCli": true,
+  "workbenchSha256Before": "65ad2f7b9bb8f3256c0dacd903f9c1b58f78cacdc6260dacfb866aeae7a0924b",
+  "arguments": [
+    "dotnet",
+    "test",
+    "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+    "-c",
+    "Release",
+    "--no-restore",
+    "--logger",
+    "trx;LogFileName=native-providers.trx",
+    "--results-directory",
+    "/tmp/elsa-2898-round4-repairs/current-main/native-providers",
+    "--nologo",
+    "--verbosity",
+    "quiet"
+  ],
+  "exitCode": 0,
+  "workbenchSha256After": "65ad2f7b9bb8f3256c0dacd903f9c1b58f78cacdc6260dacfb866aeae7a0924b"
+}

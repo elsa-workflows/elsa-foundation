@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "0c419ca5f5fe494c802d062eff2512a2b7ab9f38",
+  "actualJourneys": 8,
+  "workbenchProcesses": 24,
+  "wholeStores": 32,
+  "rawAssets": 64,
+  "actualDirectCounterpartTraceComparisons": 4,
+  "manifestSha256": "f173c39c241a5e3db0d0bb48fe666c9e11651e7f155a0748401b19e33501cd16",
+  "checks": [
+    {
+      "name": "actual production Workbench RunBpmn recovery",
+      "passed": 8,
+      "skipped": 0,
+      "testedSource": "0c419ca5f5fe494c802d062eff2512a2b7ab9f38",
+      "trxSha256": "e33840c858339c9d43c4139d1c4053993550ee8d9227c774557b287644714fb9"
+    },
+    {
+      "name": "complete Runtime EF suite including actual parent admission CAS guards",
+      "passed": 1777,
+      "skipped": 0,
+      "testedSource": "0c419ca5f5fe494c802d062eff2512a2b7ab9f38",
+      "trxSha256": "e212f5dff599546caa8923522dfcb41b37b186ec87eb0d819a6cce6803bd777c"
+    },
+    {
+      "name": "BPMN library and adapter suite",
+      "passed": 381,
+      "skipped": 0,
+      "trxSha256": "226e06a2f5f2b74e0b78f9484b376df611903dd1d5cb64fa5f0e878fb5eba3fa",
+      "testedContentCommit": "80e6d5928",
+      "sourceBinding": "Pre-merge local test of the implementation content committed as80e6d5928; not an exact-head binary receipt."
+    },
+    {
+      "name": "native/model publication suite",
+      "passed": 61,
+      "skipped": 0,
+      "trxSha256": "a09fa26305b1f52617140766b9bc02b60a810012d6fd629958055a6d7009ab35",
+      "testedContentCommit": "80e6d5928",
+      "sourceBinding": "Pre-merge local test of the implementation content committed as80e6d5928; not an exact-head binary receipt."
+    },
+    {
+      "name": "portable comparison plus seven rehashed corrupt-copy controls",
+      "passed": 8,
+      "skipped": 0,
+      "logSha256": "625fd7b42288614316c004680c42372686c881211211d158bcaeba465c572acd"
+    }
+  ],
+  "implementationFindings": [
+    {
+      "problem": "Native-only default composition required an unavailable model reader.",
+      "fixCommit": "80e6d5928",
+      "verification": "The complete BPMN suite passes after making the embedding boundary reader optional."
+    },
+    {
+      "problem": "A real completed native parent clears its private activity state, so the first actual terminal remained pending.",
+      "fixCommit": "80e6d5928",
+      "verification": "Terminal proof now checks retained material and actual native responsibility; all eight actual journeys settle. Parent cancellation captures the committed predecessor before retirement."
+    }
+  ],
+  "scopeLimits": [
+    "Human-work foundation-direct-v1 only, with real RunBpmn root, Sequence, Flowchart and CompensationScope parents.",
+    "Same-source built-in single-node actor and EF SQLite; no upgraded-host ETL or final affected-source Studio qualification.",
+    "The actual SIGKILL cut is at the initial real native/model human wait; pending-result crash and cancellation-before-model-admission remain unproved.",
+    "Whole-parent cancellation is observed; subtree cancellation, service embedding, ETL cancellation and held terminal-fault retry remain open.",
+    "Direct and embedded released-interpreter states differ only at tokens.producingWorkHandle equal to their model execution identity; no other state or diagnostic normalization.",
+    "Earlier legacy, Studio and ETL evidence retains its own source identity. T027/T028/T029 and T031/T034-T041 remain incomplete.",
+    "CI at source0c419 is red for composition and activity/readability contract integration. These receipts do not authorize merge.",
+    "Captured private process identities and paths are historical provenance; reproduction creates new owned hosts/stores."
+  ],
+  "ownedProcessesStopped": 24,
+  "originalBaselineAssetsUnchanged": 104
+}

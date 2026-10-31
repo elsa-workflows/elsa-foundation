@@ -1,0 +1,154 @@
+{
+  "sourceRevision": "df053ce214c794e16685b0cfd15a890cabf7a0c5",
+  "results": [
+    {
+      "name": "bpmn",
+      "args": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+        "-c",
+        "Release",
+        "--logger",
+        "trx;LogFileName=bpmn.trx",
+        "--results-directory",
+        "/tmp/elsa-2898-round3-fixes/qualified-df053ce21/results",
+        "-p:RestoreLockedMode=true",
+        "--nologo",
+        "--verbosity",
+        "quiet"
+      ],
+      "startedAtUtc": "2026-10-30T20:15:38.190886+00:00",
+      "exitCode": 0,
+      "counters": {
+        "total": "473",
+        "executed": "473",
+        "passed": "473",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "name": "bpmn-discovery",
+      "args": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-build",
+        "--list-tests",
+        "--nologo",
+        "--verbosity",
+        "quiet"
+      ],
+      "startedAtUtc": "2026-10-30T20:16:11.081808+00:00",
+      "exitCode": 0
+    },
+    {
+      "name": "runtime",
+      "args": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "-c",
+        "Release",
+        "--logger",
+        "trx;LogFileName=runtime.trx",
+        "--results-directory",
+        "/tmp/elsa-2898-round3-fixes/qualified-df053ce21/results",
+        "-p:RestoreLockedMode=true",
+        "--nologo",
+        "--verbosity",
+        "quiet"
+      ],
+      "startedAtUtc": "2026-10-30T20:16:11.711711+00:00",
+      "exitCode": 0,
+      "counters": {
+        "total": "3083",
+        "executed": "3083",
+        "passed": "3083",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "name": "runtime-discovery",
+      "args": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "-c",
+        "Release",
+        "--no-build",
+        "--list-tests",
+        "--nologo",
+        "--verbosity",
+        "quiet"
+      ],
+      "startedAtUtc": "2026-10-30T20:16:18.963816+00:00",
+      "exitCode": 0
+    },
+    {
+      "name": "hosting",
+      "args": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+        "-c",
+        "Release",
+        "--logger",
+        "trx;LogFileName=hosting.trx",
+        "--results-directory",
+        "/tmp/elsa-2898-round3-fixes/qualified-df053ce21/results",
+        "-p:RestoreLockedMode=true",
+        "--nologo",
+        "--verbosity",
+        "quiet",
+        "-p:ElsaBpmnRecoveryProbe=false"
+      ],
+      "startedAtUtc": "2026-10-30T20:16:19.759698+00:00",
+      "exitCode": 1,
+      "counters": {
+        "total": "39",
+        "executed": "39",
+        "passed": "31",
+        "failed": "8",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    }
+  ]
+}

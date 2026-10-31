@@ -1,0 +1,71 @@
+- heading "Workflow definitions" [level=1]
+- paragraph: Create and organize workflow definitions, then open a definition to edit its behavior.
+- group "Workflow definition page actions":
+  - button "Create workflow":
+    - text: Create workflow
+  - button "Refresh workflow definitions": Refresh
+- complementary "Workflow folders":
+  - strong: Folders
+  - button "Create folder":
+  - tree "Workflow folders":
+    - treeitem "All workflows"
+    - treeitem "Unfiled"
+    - treeitem "Expand Operations Operations" [selected]:
+      - button "Expand Operations":
+      - text: Operations
+- navigation "Folder breadcrumb":
+  - button "All workflows"
+  - text: /
+  - button "Operations"
+- searchbox "Search selected folder": renewal
+- group "Definition state":
+  - button "Active"
+  - button "Deleted"
+  - button "All states" [pressed]
+- button "Search all workflows"
+- region "Workflow definitions table":
+  - table "Workflow definitions":
+    - row "Select visible workflow definitions Name Definition ID Identifiers Latest version Published version Modified Actions":
+      - columnheader "Select visible workflow definitions":
+        - checkbox "Select visible workflow definitions"
+      - columnheader "Name"
+      - columnheader "Definition ID"
+      - columnheader "Identifiers"
+      - columnheader "Latest version"
+      - columnheader "Published version"
+      - columnheader "Modified"
+      - columnheader "Actions"
+    - row "Open workflow definition First page renewal":
+      - cell "Select workflow definition First page renewal":
+        - checkbox "Select workflow definition First page renewal"
+      - cell "First page renewal":
+        - strong:
+          - link "First page renewal":
+            - /url: /?mode=workflow-definition-browse&theme=light&folderId=folder-operations&state=all&search=renewal&definition=workflow-page-one
+      - 'cell "Definition ID: workflow-page-one Copy Definition ID"':
+        - 'generic "Definition ID: workflow-page-one"': workflow-page-one
+        - button "Copy Definition ID":
+        - status
+      - cell "Identifiers for First page renewal":
+        - button "Identifiers for First page renewal":
+      - cell:
+        - generic "Draft details":
+          - text: Draft
+      - cell "Unavailable":
+        - generic: Unavailable
+      - cell "10/20/2026, 2:00:00 AM"
+      - cell "Actions for First page renewal":
+        - button "Actions for First page renewal":
+          - generic: ⋯
+- generic "Workflow definition pagination":
+  - generic: Showing 1 workflows
+  - text: Rows
+  - combobox "Rows":
+    - option "10" [selected]
+    - option "25"
+    - option "50"
+  - button "Previous page" [disabled]:
+    - text: Previous
+  - generic: Page 1
+  - button "Next page":
+    - text: Next

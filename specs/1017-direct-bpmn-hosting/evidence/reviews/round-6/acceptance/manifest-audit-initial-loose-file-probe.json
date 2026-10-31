@@ -1,0 +1,793 @@
+{
+  "reviewedHead": "d1449c0bff679212f8a64766a95b1c29cfadbcea",
+  "manifestAssets": 5576,
+  "uniqueAssets": 5576,
+  "gzipPayloadsChecked": 346,
+  "errors": [
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/archive-assets.json",
+      "path": "completed.sqlite.gz",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/completed.sqlite.gz'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/archive-assets.json",
+      "path": "direct-process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/direct-process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/archive-assets.json",
+      "path": "legacy-partial-forks/process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/legacy-partial-forks/process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/archive-assets.json",
+      "path": "legacy-partial-forks/upgraded-design.sqlite.gz",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/legacy-partial-forks/upgraded-design.sqlite.gz'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/archive-assets.json",
+      "path": "legacy-partial-forks/upgraded-runtime.sqlite.gz",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/legacy-partial-forks/upgraded-runtime.sqlite.gz'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/archive-assets.json",
+      "path": "template-design-upgrade/process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/template-design-upgrade/process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/archive-assets.json",
+      "path": "template-design-upgrade/upgraded-design.sqlite.gz",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/template-design-upgrade/upgraded-design.sqlite.gz'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/archive-assets.json",
+      "path": "template-design-upgrade/upgraded-runtime.sqlite.gz",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/template-design-upgrade/upgraded-runtime.sqlite.gz'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/archive-assets.json",
+      "path": "waiting.sqlite.gz",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/waiting.sqlite.gz'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "compensationscope/broadcast-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/compensationscope/broadcast-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "compensationscope/finished-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/compensationscope/finished-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "compensationscope/finished-parent.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/compensationscope/finished-parent.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "compensationscope/finished-workers.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/compensationscope/finished-workers.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "compensationscope/process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/compensationscope/process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "compensationscope/recovered-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/compensationscope/recovered-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "compensationscope/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/compensationscope/retained-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "compensationscope/waiting-api.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/compensationscope/waiting-api.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "compensationscope/waiting-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/compensationscope/waiting-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "compensationscope/waiting-workers.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/compensationscope/waiting-workers.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "compensationscope-cancel/case.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/compensationscope-cancel/case.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "compensationscope-cancel/completed-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/compensationscope-cancel/completed-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "compensationscope-cancel/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/compensationscope-cancel/retained-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "compensationscope-cancel/waiting-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/compensationscope-cancel/waiting-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "compensationscope-complete/case.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/compensationscope-complete/case.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "compensationscope-complete/completed-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/compensationscope-complete/completed-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "compensationscope-complete/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/compensationscope-complete/retained-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "compensationscope-complete/waiting-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/compensationscope-complete/waiting-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "direct/broadcast-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/direct/broadcast-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "direct/finished-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/direct/finished-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "direct/finished-workers.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/direct/finished-workers.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "direct/process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/direct/process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "direct/recovered-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/direct/recovered-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "direct/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/direct/retained-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "direct/waiting-api.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/direct/waiting-api.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "direct/waiting-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/direct/waiting-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "direct/waiting-workers.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/direct/waiting-workers.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "direct-process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/direct-process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "flowchart/broadcast-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/flowchart/broadcast-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "flowchart/finished-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/flowchart/finished-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "flowchart/finished-parent.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/flowchart/finished-parent.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "flowchart/finished-workers.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/flowchart/finished-workers.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "flowchart/process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/flowchart/process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "flowchart/recovered-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/flowchart/recovered-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "flowchart/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/flowchart/retained-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "flowchart/waiting-api.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/flowchart/waiting-api.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "flowchart/waiting-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/flowchart/waiting-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "flowchart/waiting-workers.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/flowchart/waiting-workers.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "flowchart-cancel/case.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/flowchart-cancel/case.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "flowchart-cancel/completed-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/flowchart-cancel/completed-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "flowchart-cancel/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/flowchart-cancel/retained-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "flowchart-cancel/waiting-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/flowchart-cancel/waiting-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "flowchart-complete/case.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/flowchart-complete/case.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "flowchart-complete/completed-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/flowchart-complete/completed-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "flowchart-complete/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/flowchart-complete/retained-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "flowchart-complete/waiting-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/flowchart-complete/waiting-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "human-first/before-api.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/human-first/before-api.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "human-first/before-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/human-first/before-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "human-first/decided-api.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/human-first/decided-api.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "human-first/decided-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/human-first/decided-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "human-first/finished-api.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/human-first/finished-api.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "human-first/finished-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/human-first/finished-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "human-first/process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/human-first/process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "human-first/recovered-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/human-first/recovered-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "human-first/retained-api.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/human-first/retained-api.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "human-first/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/human-first/retained-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "legacy-broadcast/process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/legacy-broadcast/process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "legacy-called-ack/process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/legacy-called-ack/process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "legacy-controls/process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/legacy-controls/process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "legacy-multi-instance/process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/legacy-multi-instance/process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "legacy-native-terminals/process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/legacy-native-terminals/process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "legacy-partial-forks/process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/legacy-partial-forks/process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "legacy-pending-parent/process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/legacy-pending-parent/process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "one-worker-cancel/after.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/one-worker-cancel/after.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "one-worker-cancel/before.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/one-worker-cancel/before.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "one-worker-cancel/process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/one-worker-cancel/process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "one-worker-cancel/retained.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/one-worker-cancel/retained.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-compensationscope/bothWaiting-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-compensationscope/bothWaiting-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-compensationscope/case.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-compensationscope/case.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-compensationscope/final-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-compensationscope/final-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-compensationscope/joined-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-compensationscope/joined-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-compensationscope/partial-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-compensationscope/partial-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-compensationscope/recovered-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-compensationscope/recovered-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-compensationscope/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-compensationscope/retained-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-flowchart/bothWaiting-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-flowchart/bothWaiting-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-flowchart/case.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-flowchart/case.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-flowchart/final-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-flowchart/final-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-flowchart/joined-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-flowchart/joined-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-flowchart/partial-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-flowchart/partial-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-flowchart/recovered-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-flowchart/recovered-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-flowchart/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-flowchart/retained-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-root/bothWaiting-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-root/bothWaiting-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-root/case.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-root/case.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-root/final-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-root/final-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-root/joined-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-root/joined-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-root/partial-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-root/partial-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-root/recovered-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-root/recovered-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-root/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-root/retained-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-sequence/bothWaiting-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-sequence/bothWaiting-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-sequence/case.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-sequence/case.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-sequence/final-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-sequence/final-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-sequence/joined-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-sequence/joined-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-sequence/partial-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-sequence/partial-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-sequence/recovered-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-sequence/recovered-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "parallel-sequence/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/parallel-sequence/retained-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root/broadcast-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root/broadcast-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root/finished-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root/finished-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root/finished-parent.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root/finished-parent.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root/finished-workers.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root/finished-workers.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root/process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root/process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root/recovered-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root/recovered-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root/retained-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root/waiting-api.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root/waiting-api.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root/waiting-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root/waiting-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root/waiting-workers.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root/waiting-workers.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root-cancel/case.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root-cancel/case.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root-cancel/completed-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root-cancel/completed-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root-cancel/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root-cancel/retained-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root-cancel/waiting-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root-cancel/waiting-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root-cancel-before-admission/cancelled-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root-cancel-before-admission/cancelled-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root-cancel-before-admission/case.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root-cancel-before-admission/case.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root-cancel-before-admission/completed-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root-cancel-before-admission/completed-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root-cancel-before-admission/prepared-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root-cancel-before-admission/prepared-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root-cancel-before-admission/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root-cancel-before-admission/retained-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root-complete/case.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root-complete/case.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root-complete/completed-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root-complete/completed-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root-complete/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root-complete/retained-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "root-complete/waiting-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/root-complete/waiting-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "runtime-only-parallel/process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/runtime-only-parallel/process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "sequence/broadcast-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/sequence/broadcast-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "sequence/finished-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/sequence/finished-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "sequence/finished-parent.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/sequence/finished-parent.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "sequence/finished-workers.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/sequence/finished-workers.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "sequence/process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/sequence/process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "sequence/recovered-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/sequence/recovered-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "sequence/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/sequence/retained-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "sequence/waiting-api.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/sequence/waiting-api.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "sequence/waiting-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/sequence/waiting-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "sequence/waiting-workers.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/sequence/waiting-workers.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "sequence-cancel/case.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/sequence-cancel/case.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "sequence-cancel/completed-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/sequence-cancel/completed-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "sequence-cancel/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/sequence-cancel/retained-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "sequence-cancel/waiting-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/sequence-cancel/waiting-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "sequence-complete/case.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/sequence-complete/case.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "sequence-complete/completed-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/sequence-complete/completed-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "sequence-complete/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/sequence-complete/retained-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "sequence-complete/waiting-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/sequence-complete/waiting-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "template-design-upgrade/process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/template-design-upgrade/process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "timer-first/before-api.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/timer-first/before-api.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "timer-first/before-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/timer-first/before-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "timer-first/decided-api.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/timer-first/decided-api.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "timer-first/decided-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/timer-first/decided-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "timer-first/finished-api.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/timer-first/finished-api.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "timer-first/finished-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/timer-first/finished-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "timer-first/process.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/timer-first/process.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "timer-first/recovered-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/timer-first/recovered-checked.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "timer-first/retained-api.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/timer-first/retained-api.json'"
+    },
+    {
+      "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+      "path": "timer-first/retained-checked.json",
+      "error": "[Errno 2] No such file or directory: '/Users/sipke/.codex/worktrees/f236/elsa-foundation/specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/timer-first/retained-checked.json'"
+    }
+  ]
+}

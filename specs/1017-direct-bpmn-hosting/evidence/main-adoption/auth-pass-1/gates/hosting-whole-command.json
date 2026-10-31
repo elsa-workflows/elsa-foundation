@@ -1,0 +1,18 @@
+{
+  "source": "8e9b31360d4c71c4cdd70f18cb93d70bedc57bb0",
+  "arguments": [
+    "dotnet",
+    "test",
+    "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+    "-c",
+    "Release",
+    "--no-restore",
+    "--logger",
+    "trx;LogFileName=hosting-whole.trx",
+    "--results-directory",
+    "/tmp/elsa-2898-auth-pass-1"
+  ],
+  "startedUtc": "2026-10-31T14:02:51.983903+00:00",
+  "elapsedSeconds": 945.7805709838867,
+  "exitCode": 0
+}

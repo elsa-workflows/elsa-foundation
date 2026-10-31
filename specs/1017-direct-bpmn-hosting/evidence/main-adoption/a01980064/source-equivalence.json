@@ -1,0 +1,88 @@
+{
+  "previousSource": "8504fbac779941eeef51c1ccdc1a36a07fceee88",
+  "candidateSource": "c9a4881f804997693160f70186602921340fa03d",
+  "adoptedMain": "a01980064aed293502b9ada57a682286d950c7fd",
+  "productionAndBuildInputsUnchanged": true,
+  "completeChangedFileSetVerified": true,
+  "entries": [
+    {
+      "path": "Essentials/src",
+      "tracked": true,
+      "previous": "040000 tree de653501310d569060a9feaabe9da52881a0a801\tEssentials/src",
+      "candidate": "040000 tree de653501310d569060a9feaabe9da52881a0a801\tEssentials/src"
+    },
+    {
+      "path": "Extensions",
+      "tracked": true,
+      "previous": "040000 tree 00643492c3957f4e68963193b635a6c723847e7b\tExtensions",
+      "candidate": "040000 tree 00643492c3957f4e68963193b635a6c723847e7b\tExtensions"
+    },
+    {
+      "path": "Studio/src",
+      "tracked": true,
+      "previous": "040000 tree 4844985f85a425b66ad9d0d35d1bc937db0d74a7\tStudio/src",
+      "candidate": "040000 tree 4844985f85a425b66ad9d0d35d1bc937db0d74a7\tStudio/src"
+    },
+    {
+      "path": "tools",
+      "tracked": true,
+      "previous": "040000 tree 3e9ab2543d8f4717a4e8e814251e5886f6948478\ttools",
+      "candidate": "040000 tree 3e9ab2543d8f4717a4e8e814251e5886f6948478\ttools"
+    },
+    {
+      "path": "Directory.Build.props",
+      "tracked": true,
+      "previous": "100644 blob 70a24aa63d9e977fe91829e6c32920e14ce80466\tDirectory.Build.props",
+      "candidate": "100644 blob 70a24aa63d9e977fe91829e6c32920e14ce80466\tDirectory.Build.props"
+    },
+    {
+      "path": "Directory.Build.targets",
+      "tracked": false,
+      "previous": "",
+      "candidate": ""
+    },
+    {
+      "path": "Directory.Packages.props",
+      "tracked": true,
+      "previous": "100644 blob ffae358e2e02d6dc9a7cc9ad16029ca4c454422d\tDirectory.Packages.props",
+      "candidate": "100644 blob ffae358e2e02d6dc9a7cc9ad16029ca4c454422d\tDirectory.Packages.props"
+    },
+    {
+      "path": "global.json",
+      "tracked": true,
+      "previous": "100644 blob 17d728e19dbc039eed57e148d65f7742d41474f1\tglobal.json",
+      "candidate": "100644 blob 17d728e19dbc039eed57e148d65f7742d41474f1\tglobal.json"
+    },
+    {
+      "path": "NuGet.Config",
+      "tracked": false,
+      "previous": "",
+      "candidate": ""
+    },
+    {
+      "path": "Studio/package.json",
+      "tracked": true,
+      "previous": "100644 blob 62a9ca57b17a4e4f5dae3c07fc1fb176fc659f89\tStudio/package.json",
+      "candidate": "100644 blob 62a9ca57b17a4e4f5dae3c07fc1fb176fc659f89\tStudio/package.json"
+    },
+    {
+      "path": "Studio/pnpm-lock.yaml",
+      "tracked": true,
+      "previous": "100644 blob 1b591451a9d59d0946e8f902837f6ea3b23182ef\tStudio/pnpm-lock.yaml",
+      "candidate": "100644 blob 1b591451a9d59d0946e8f902837f6ea3b23182ef\tStudio/pnpm-lock.yaml"
+    },
+    {
+      "path": ".github",
+      "tracked": true,
+      "previous": "040000 tree 6f886b8aabe78ff914426dddae6cd917fd73fd7b\t.github",
+      "candidate": "040000 tree 6f886b8aabe78ff914426dddae6cd917fd73fd7b\t.github"
+    }
+  ],
+  "changes": [
+    "Studio/tests/browser/compensation-scope.spec.ts",
+    "docs/program-goals/unified-execution.md",
+    "specs/1017-direct-bpmn-hosting/evidence/qualification.md"
+  ],
+  "initialDirectoryDiagnostic": "Initial optional path table was read from Studio; final proof uses repository-root full-tree entries plus the complete changed-file set.",
+  "gitScope": "repository-root --full-tree"
+}

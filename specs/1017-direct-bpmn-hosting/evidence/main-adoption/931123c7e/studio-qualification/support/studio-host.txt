@@ -1,0 +1,36 @@
+  Determining projects to restore...
+  Restored /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Modularity/Core/Elsa.Modularity.Core.csproj (in 28 ms).
+  Restored /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj (in 83 ms).
+  Restored /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Modularity/Nuplane/Elsa.Modularity.Nuplane.csproj (in 104 ms).
+  22 of 25 projects are up-to-date for restore.
+  Elsa.Studio.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/src/essentials/Elsa.Studio.Core/bin/Release/net10.0/Elsa.Studio.Core.dll
+  Elsa.Studio.Weaver.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Weaver/studio/Elsa.Studio.Weaver.Core/bin/Release/net10.0/Elsa.Studio.Weaver.Core.dll
+  Elsa.Architecture.Analyzers -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/build/Analyzers/bin/Release/netstandard2.0/Elsa.Architecture.Analyzers.dll
+  Elsa.Studio.Etl -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Etl/studio/Elsa.Studio.Etl/bin/Release/net10.0/Elsa.Studio.Etl.dll
+  Elsa.Modularity.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Modularity/Core/bin/Release/net10.0/Elsa.Modularity.Core.dll
+  Elsa.Studio.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/src/essentials/Elsa.Studio.Api/bin/Release/net10.0/Elsa.Studio.Api.dll
+  Elsa.Studio.ConsoleStream -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/bin/Release/net10.0/Elsa.Studio.ConsoleStream.dll
+  Elsa.Studio.Diagnostics.OpenTelemetry -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/bin/Release/net10.0/Elsa.Studio.Diagnostics.OpenTelemetry.dll
+  Elsa.Studio.ExpressionEditors.Liquid -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/bin/Release/net10.0/Elsa.Studio.ExpressionEditors.Liquid.dll
+  Elsa.Studio.FeatureManagement -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/bin/Release/net10.0/Elsa.Studio.FeatureManagement.dll
+  Elsa.Studio.Workflows.Dashboard -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/bin/Release/net10.0/Elsa.Studio.Workflows.Dashboard.dll
+  Elsa.Studio.Secrets -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Secrets/studio/Elsa.Studio.Secrets/bin/Release/net10.0/Elsa.Studio.Secrets.dll
+  Elsa.Studio.ExpressionEditors.JavaScript -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/bin/Release/net10.0/Elsa.Studio.ExpressionEditors.JavaScript.dll
+  Elsa.Studio.Diagnostics.StructuredLogs -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/bin/Release/net10.0/Elsa.Studio.Diagnostics.StructuredLogs.dll
+  Elsa.Studio.Connections -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Connections/studio/Elsa.Studio.Connections/bin/Release/net10.0/Elsa.Studio.Connections.dll
+  Elsa.Studio.Dashboard -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/src/essentials/Elsa.Studio.Dashboard/bin/Release/net10.0/Elsa.Studio.Dashboard.dll
+  Elsa.Modularity.Nuplane -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Modularity/Nuplane/bin/Release/net10.0/Elsa.Modularity.Nuplane.dll
+  Elsa.Studio.ExtensionBuilder -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/ExtensionBuilder/studio/Elsa.Studio.ExtensionBuilder/bin/Release/net10.0/Elsa.Studio.ExtensionBuilder.dll
+  Elsa.Studio.Hosting -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/src/essentials/Elsa.Studio.Hosting/bin/Release/net10.0/Elsa.Studio.Hosting.dll
+  Elsa.Studio.Hosting.Themes -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/src/essentials/Elsa.Studio.Hosting.Themes/bin/Release/net10.0/Elsa.Studio.Hosting.Themes.dll
+  Elsa.Studio.Weaver.Workflows -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Weaver/studio/Elsa.Studio.Weaver.Workflows/bin/Release/net10.0/Elsa.Studio.Weaver.Workflows.dll
+  Elsa.Studio.Hosting.Nuplane -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/src/essentials/Elsa.Studio.Hosting.Nuplane/bin/Release/net10.0/Elsa.Studio.Hosting.Nuplane.dll
+  Elsa.Studio.Workflows -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/src/essentials/Elsa.Studio.Workflows/bin/Release/net10.0/Elsa.Studio.Workflows.dll
+  Elsa.Studio.Attention -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Attention/studio/Elsa.Studio.Attention/bin/Release/net10.0/Elsa.Studio.Attention.dll
+  Elsa.Studio.Web -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/src/apps/Elsa.Studio.Web/bin/Release/net10.0/Elsa.Studio.Web.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:07.97

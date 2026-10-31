@@ -1,0 +1,21 @@
+test_a_graceful_exit_cannot_replace_original_process_loss (test_verify_held_command_race.ActualHeldCommandRaceControls) ... ok
+test_actual_both_orders_survive_stale_ownership_and_cold_recovery_for_every_parent (test_verify_held_command_race.ActualHeldCommandRaceControls) ... ok
+test_an_authoritative_proposal_cannot_be_omitted (test_verify_held_command_race.ActualHeldCommandRaceControls) ... ok
+test_an_order_or_parent_cannot_be_omitted (test_verify_held_command_race.ActualHeldCommandRaceControls) ... ok
+test_start_ack_must_follow_positive_retirement (test_verify_held_command_race.ActualHeldCommandRaceControls) ... ok
+test_the_actual_competitor_must_advance_the_ownership_fence (test_verify_held_command_race.ActualHeldCommandRaceControls) ... ok
+test_the_cancel_first_retry_cannot_be_relabelled_accepted (test_verify_held_command_race.ActualHeldCommandRaceControls) ... ok
+test_the_competitor_cannot_be_reported_consumed_before_recovery (test_verify_held_command_race.ActualHeldCommandRaceControls) ... ok
+test_the_hook_cannot_change_the_actual_proposal (test_verify_held_command_race.ActualHeldCommandRaceControls) ... ok
+test_the_native_parent_must_remain_physically_cancelled (test_verify_held_command_race.ActualHeldCommandRaceControls) ... ok
+test_the_original_fifo_cannot_be_reversed (test_verify_held_command_race.ActualHeldCommandRaceControls) ... ok
+test_the_original_result_receipt_cannot_disappear_physically (test_verify_held_command_race.ActualHeldCommandRaceControls) ... ok
+test_the_physical_failed_etl_cannot_be_relabelled_success (test_verify_held_command_race.ActualHeldCommandRaceControls) ... ok
+test_the_physical_model_cannot_change_its_pinned_attempt_budget (test_verify_held_command_race.ActualHeldCommandRaceControls) ... ok
+test_the_physical_original_worker_must_keep_its_pin (test_verify_held_command_race.ActualHeldCommandRaceControls) ... ok
+test_the_sdk_cannot_run_products_from_a_foreign_source (test_verify_held_command_race.ActualHeldCommandRaceControls) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 2.690s
+
+OK

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "executingSource": "b2251d591944fd89663748edac064b07cea89aa4",
+  "actualJourneysPassed": 2,
+  "actualPendingCancellationStages": [
+    "model-command",
+    "native-terminal"
+  ],
+  "rawAssets": 51,
+  "wholeStoresVerified": 18,
+  "ownedWorkbenchProcesses": 8,
+  "ownedHttpProcesses": 2,
+  "actualSigkillExits": 4,
+  "allQualifiedJourneyChildrenStopped": true,
+  "physicalOutputRecordsPerCase": 2,
+  "lateRetryRequestsPerCase": 0,
+  "standardHostBuild": {
+    "errors": 0,
+    "warnings": 261,
+    "logSha256": "b2aa8d588f8336b4bac397fec7f21f1b5433b3e22b7cba2ce1f9df770cc54ad9"
+  },
+  "portableChecks": {
+    "passed": 61,
+    "failed": 0,
+    "skipped": 0,
+    "newPositiveMatrix": 1,
+    "newRehashedNegativeControls": 9,
+    "verifierSha256": "9de2a510f06d5573e3d1bd51287e5ed7a196c76a88c139762d053eca1577316c",
+    "controlsSha256": "d71380854073b282573ed7ae0b457a18b5bb7594e75e13599801d0e451718cd9",
+    "logSha256": "515c4bbffa3a568e311d0fff53f2a5bd64e431c5c99aa53808de5224ca738927"
+  },
+  "unchangedProductionEarlierDotNetChecks": {
+    "executingSource": "54d8532b0a00c39626185a7d617790004b9f9448",
+    "receipt": "../native-admission-race/qualification.json",
+    "bpmnPassed": 384,
+    "efModelCheckpointPassed": 43,
+    "rerunAtThisSource": false
+  },
+  "frozenBaselineAssetsUnchanged": 104,
+  "pendingCancellationCrashProved": true,
+  "postConsumptionPreAckCrashProved": false,
+  "runBpmnEtlIntegrationProved": false,
+  "modelHeldFaultRetryProved": false,
+  "finalUpgradeAndStudioProved": false,
+  "fullPrReviewRounds": 0,
+  "scopeLimits": [
+    "Actual public model/native cancellation, actual second SIGKILL with retained pending sources and fresh third/fourth standard Workbench hosts.",
+    "Immutable real ETL invocation, same native/model pins and same-checkpoint native result/ETL cancellation are preserved; no state/clock/result is seeded.",
+    "A fourth host remains stable through the original HTTP429 retry deadline plus two seconds; two earlier effects remain and no new retry occurs.",
+    "Post-consumption/pre-ACK process loss, service embedding, held retry, other providers/rollback and final upgrade/Studio remain open."
+  ]
+}

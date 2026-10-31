@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-legacy-controls-upgrade",
+  "sourceRevision": "d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+  "baselineManifestSha256": "c2e5d9c8c2a001ff5141c2ca8eaaed097ec7c81d78d0180b6c7a4ecf5bed4153",
+  "baselineAssets": {
+    "legacy-controls/runtime.sqlite.gz": "4ed41b1ccdc6192b1327cc5f71bcb84a703c72c18575bcffe3374d45ace01a8a",
+    "legacy-controls/design.sqlite.gz": "76610a34315adb8ed910475353cf7878424e265552d5808705d3e63e9b317ee6",
+    "legacy-controls/called-control-prepare.json": "3177820ad8f68acc63452fdae4f78560f6d56d1ba1829b44326b9ae7528191d4",
+    "legacy-controls/concurrent-prepare.json": "746afddf7863eea07bba6e36475755fb6701101c5d687d1dd9ac6372dee93947",
+    "legacy-controls/compensation-handler-b.json": "3d125dbca327dcdad8f7163027d3bcdb23d65f90f475f09531e704fcb712a417",
+    "legacy-controls/escalations-checked.json": "bdec6f5ab8e0c6de9fbd4a5508516c609c58d6bdb3339c9794230efc1b078ba9",
+    "legacy-controls/concurrent-checked.json": "0b0dbd94e5b55989b2e6cc72478b76a8ccd8c108f94f9a0a765a82121758b942",
+    "legacy-controls/compensation-checked.json": "6a09f00ea71427db3969f5cee6df6a23499ca92e697617b91ea9331fc0f1ab1d"
+  },
+  "assets": [
+    {
+      "path": "legacy-controls/process.json.gz",
+      "sha256": "41dcc81a87e81962e44977117871624e995cacb3ee3c77f7c0ec0e775837cd25",
+      "encoding": "gzip",
+      "uncompressedSha256": "68bcb70fe57f50583b85115a566858d76dcf1a64dd4dbcb891580265bfdf5445"
+    },
+    {
+      "path": "legacy-controls/finished-design.sqlite.gz",
+      "sha256": "a4f6b48caf295e9b374bb91ee96ee7927b7e56e721c922dbbf5c88e0bcfa0d57"
+    },
+    {
+      "path": "frozen-contract.json",
+      "sha256": "ec28042d9a0db5d1d5a249d9dfe1cc6a63747ba039cc6fd1fa76e60f2ed9cacd"
+    },
+    {
+      "path": "legacy-controls/recovered.sqlite.gz",
+      "sha256": "cf7aa4de2aabeeb54b4fecc9c0b8e73d6b2d93aec6a90b98828b08fa80797181"
+    },
+    {
+      "path": "legacy-controls/intermediate.sqlite.gz",
+      "sha256": "7ef91f80c80e25d9ddfb1d013da3d0ac5a228ec67fc87d20eb3bd731e043b50f"
+    },
+    {
+      "path": "legacy-controls/resumed.sqlite.gz",
+      "sha256": "7ef91f80c80e25d9ddfb1d013da3d0ac5a228ec67fc87d20eb3bd731e043b50f"
+    },
+    {
+      "path": "legacy-controls/settled.sqlite.gz",
+      "sha256": "7a52ff635808b7b5118e47c99fd44f8bfd30657d61b1acc847ee225e9e66a56f"
+    },
+    {
+      "path": "legacy-controls/finished.sqlite.gz",
+      "sha256": "ab9af035f02ca38a3627a1aaefa18d8e05c84ef08e50a35c15a1bc4a2dae423c"
+    }
+  ]
+}

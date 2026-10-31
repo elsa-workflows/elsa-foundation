@@ -1,0 +1,586 @@
+{
+  "original": {
+    "native": {
+      "instance": {
+        "workflowExecutionId": "wfexec:start:v1:efa486f8db2efbce7033b13c01e57c752562e28f23c3dc24b286333862db0725",
+        "artifactId": "artifact-85028290ff42",
+        "definitionId": "14lAU0GANIY",
+        "definitionVersionId": "14lAU0HuzEP",
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:85028290ff420674171a3815357e565168f1575d21dec5a8905430d2e3feafe8",
+        "status": "Faulted",
+        "runKind": "PublishedRun",
+        "subStatus": null,
+        "createdAt": "2026-10-29T20:46:26.202534+00:00",
+        "startedAt": "2026-10-29T20:46:26.202534+00:00",
+        "updatedAt": "2026-10-29T20:46:47.607234+00:00",
+        "completedAt": "2026-10-29T20:46:47.607234+00:00",
+        "correlationId": null,
+        "parentWorkflowExecutionId": null,
+        "tenantId": "default",
+        "activityCount": 1,
+        "incidentCount": 1,
+        "sourceReferenceId": null,
+        "publicationId": null,
+        "slotId": null,
+        "sourceKind": null,
+        "sourceId": null,
+        "sourceVersion": null,
+        "activeIncidentCount": 1,
+        "blockingIncidentCount": 1
+      },
+      "activities": [
+        {
+          "activityExecutionId": "14lAU8YeTW2",
+          "workflowExecutionId": "wfexec:start:v1:efa486f8db2efbce7033b13c01e57c752562e28f23c3dc24b286333862db0725",
+          "executableNodeId": "etl",
+          "authoredActivityId": "etl",
+          "activityType": "Elsa.Etl.Workflows.Runtime.Activities.RunEtl",
+          "activityTypeVersion": "1.0.0+f781ae7750d1d21d55793e11a4a781fecf0c90a0",
+          "status": "Faulted",
+          "subStatus": "ActivityReturnedFault",
+          "executionSequence": 4765533539418806549,
+          "scheduledAt": "2026-10-29T20:46:26.214209+00:00",
+          "startedAt": "2026-10-29T20:46:26.22006+00:00",
+          "completedAt": "2026-10-29T20:46:47.536966+00:00",
+          "firstCheckpointId": "checkpoint:e0a17efaccf00e9c:schedule:etl:activity-scheduled:14lAU8YeTW2",
+          "lastCheckpointId": "checkpoint:14lAVhBhWqI:incident-recorded:incident:8302a8ceec7b2f3c:d845d698b75bb841:ActivityReturnedFault",
+          "lastCommittedAt": "2026-10-29T20:46:47.536966+00:00",
+          "provenance": {
+            "parentActivityExecutionId": null,
+            "schedulingActivityExecutionId": null,
+            "schedulingWorkflowExecutionId": "wfexec:start:v1:efa486f8db2efbce7033b13c01e57c752562e28f23c3dc24b286333862db0725",
+            "branchId": null,
+            "iterationId": null,
+            "executionPathId": null,
+            "executionScopeId": null,
+            "schedulingCause": "WorkflowStart",
+            "metadata": {}
+          },
+          "outcomeNames": [],
+          "bookmarkCount": 1,
+          "incidentCount": 1,
+          "valueSnapshotCount": 2,
+          "metadata": {}
+        }
+      ],
+      "incidents": [
+        {
+          "incidentId": "incident:8302a8ceec7b2f3c:d845d698b75bb841:ActivityReturnedFault",
+          "workflowExecutionId": "wfexec:start:v1:efa486f8db2efbce7033b13c01e57c752562e28f23c3dc24b286333862db0725",
+          "activityExecutionId": "14lAU8YeTW2",
+          "executableNodeId": "etl",
+          "severity": "Error",
+          "status": "Blocking",
+          "resolutionOutcome": {
+            "actionKind": "FaultWorkflow",
+            "appliedAt": "2026-10-29T20:46:47.607234+00:00",
+            "strategy": {
+              "alias": "Fault",
+              "version": "1"
+            },
+            "systemSource": null,
+            "metadata": {}
+          },
+          "failureType": "ActivityReturnedFault",
+          "message": "The ETL run failed.",
+          "createdAt": "2026-10-29T20:46:47.536966+00:00",
+          "resolvedAt": null,
+          "isBlocking": true,
+          "metadata": {
+            "runtime.bookmarkId": "14lAU8YeTW2:attempt:1:trigger:1",
+            "runtime.resumeTargetId": "etl:etl-completed",
+            "runtime.stimulusType": "elsa.etl.completed.v1",
+            "runtime.stimulusHash": "etl-43ab6a646a5a3006aa9ec59c15e2ba29f776a162c2a03a2bf7a2e10ceb9808be",
+            "runtime.schedulerWorkItemId": "14lAVhBhWqI",
+            "runtime.commandId": "14lAVhBEd9t",
+            "runtime.activityExecutionId": "14lAU8YeTW2",
+            "runtime.executableNodeId": "etl",
+            "runtime.faultSubStatus": "ActivityReturnedFault",
+            "runtime.faultType": "Elsa.Activities.Runtime.Services.ActivityTransitionFaultException",
+            "runtime.faultMessage": "The ETL run failed."
+          }
+        }
+      ],
+      "outputs": {},
+      "persistenceMode": "Balanced",
+      "inspectionGranularity": "boundary-level",
+      "activityNextContinuationToken": null,
+      "permissions": {
+        "canManage": true,
+        "canInspectValues": true
+      }
+    },
+    "run": {
+      "runId": "etl-43ab6a646a5a3006aa9ec59c15e2ba29f776a162c2a03a2bf7a2e10ceb9808be",
+      "selection": "etl1:recovery-5ab932fc8bb2:1:adaf9640b19394d45af380011a0750d7ebabe6cf5e1fa018a762b764e3055606",
+      "status": "faulted",
+      "sourceRecordCount": null,
+      "outstandingRecords": 0,
+      "outstandingBytes": 0,
+      "acceptedRecords": 2,
+      "rejectedRecords": 0,
+      "filteredRecords": 0,
+      "bindingAliases": {
+        "source": "http-source",
+        "lookup": "lookup",
+        "output": "http-output",
+        "errors": "errors"
+      },
+      "diagnostic": {
+        "code": "etl.snapshot-read-failed",
+        "recordOrdinal": 0,
+        "field": null
+      },
+      "terminalResult": {
+        "outcome": "faulted",
+        "acceptedRecords": 2,
+        "rejectedRecords": 0,
+        "filteredRecords": 0,
+        "diagnostic": {
+          "code": "etl.snapshot-read-failed",
+          "recordOrdinal": 0,
+          "field": null
+        },
+        "settledAt": "2026-10-29T20:46:47.042336+00:00"
+      },
+      "sourceInput": null,
+      "lookupInput": {
+        "bindingRevision": "lookup-v1",
+        "expectedSha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc",
+        "snapshotSha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc",
+        "snapshotByteLength": 34
+      },
+      "connector": {
+        "sourceKind": "http",
+        "mainKind": "http",
+        "errorKind": "jsonl",
+        "acceptedMainEffects": 2,
+        "acceptedErrorEffects": 0
+      },
+      "formatVersion": 2
+    },
+    "partitions": {
+      "items": [
+        {
+          "partitionOrdinal": 0,
+          "file": null,
+          "http": {
+            "pageSequence": 1,
+            "nextItem": 0,
+            "pageRecordCount": null,
+            "exhausted": true,
+            "fetch": {
+              "phase": "captured",
+              "attemptCount": 1,
+              "deadline": "2026-10-29T20:51:27.453153+00:00",
+              "notBefore": null,
+              "lastStatusCode": 200
+            }
+          },
+          "isClaimed": false,
+          "claimFence": null,
+          "claimExpiresAt": null,
+          "notBefore": null,
+          "owedBatch": null,
+          "acceptedMainEffects": 2,
+          "acceptedErrorEffects": 0
+        },
+        {
+          "partitionOrdinal": 1,
+          "file": null,
+          "http": {
+            "pageSequence": 0,
+            "nextItem": 0,
+            "pageRecordCount": null,
+            "exhausted": false,
+            "fetch": {
+              "phase": "waiting",
+              "attemptCount": 1,
+              "deadline": "2026-10-29T20:51:26.930546+00:00",
+              "notBefore": "2026-10-29T20:46:46.948197+00:00",
+              "lastStatusCode": 429
+            }
+          },
+          "isClaimed": true,
+          "claimFence": 2,
+          "claimExpiresAt": "2026-10-29T20:47:17.031607+00:00",
+          "notBefore": "2026-10-29T20:46:46.948197+00:00",
+          "owedBatch": null,
+          "acceptedMainEffects": 0,
+          "acceptedErrorEffects": 0
+        }
+      ],
+      "nextCursor": null
+    },
+    "model": {
+      "executionId": "bpmn-embedded:8b874f79f2628a62c77854ce44349f53fb512637bca87623885d20c3d26689cd",
+      "revision": 5,
+      "status": "TerminalSettled",
+      "protocol": {
+        "key": "elsa.bpmn",
+        "version": 1
+      },
+      "executable": {
+        "artifactId": "sha256:f7c64349f33809a7c1b6f0b84dd7ff4506d0c39679a9130223b9b79a51f6580c",
+        "definitionId": "bpmn-model:sha256:f7c64349f33809a7c1b6f0b84dd7ff4506d0c39679a9130223b9b79a51f6580c",
+        "definitionVersionId": "sha256:f7c64349f33809a7c1b6f0b84dd7ff4506d0c39679a9130223b9b79a51f6580c",
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:f7c64349f33809a7c1b6f0b84dd7ff4506d0c39679a9130223b9b79a51f6580c"
+      },
+      "materialIncarnationId": "bbd5d2e33e574cdc8718649501b78bc4",
+      "createdAt": "2026-10-29T20:46:25.932457+00:00",
+      "updatedAt": "2026-10-29T20:46:57.160061+00:00",
+      "result": {
+        "status": "Faulted",
+        "code": "bpmn.work.faulted",
+        "message": "BPMN process faulted because the work bound to 'pipeline' faulted (Native service work failed.): failed work cannot complete, so its token — and any downstream join that requires it — can no longer proceed.",
+        "errorCode": null
+      }
+    },
+    "embedding": {
+      "instance": {
+        "workflowExecutionId": "14lAU2fD5ex",
+        "artifactId": "artifact-8ae58bfe1140",
+        "definitionId": "14lAU2LzlOa",
+        "definitionVersionId": "14lAU2Ls1Jd",
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:8ae58bfe1140fd320f83253c910ab7d3109888314f87ab2941092da3581c36d2",
+        "status": "Completed",
+        "runKind": "PublishedRun",
+        "subStatus": null,
+        "createdAt": "2026-10-29T20:46:25.015679+00:00",
+        "startedAt": "2026-10-29T20:46:25.015679+00:00",
+        "updatedAt": "2026-10-29T20:46:57.127429+00:00",
+        "completedAt": "2026-10-29T20:46:57.127429+00:00",
+        "correlationId": null,
+        "parentWorkflowExecutionId": null,
+        "tenantId": "default",
+        "activityCount": 2,
+        "incidentCount": 1,
+        "sourceReferenceId": "activation-ref:publication-14lAU2PJt8r",
+        "publicationId": "publication-14lAU2PJt8r",
+        "slotId": "activation-slot:11:14lAU2LzlOa:7:default",
+        "sourceKind": "WorkflowDefinitionVersion",
+        "sourceId": "14lAU2Ls1Jd",
+        "sourceVersion": "1.0.0",
+        "activeIncidentCount": 0,
+        "blockingIncidentCount": 0
+      },
+      "activities": [
+        {
+          "activityExecutionId": "14lAU37erwR",
+          "workflowExecutionId": "14lAU2fD5ex",
+          "executableNodeId": "native-parent",
+          "authoredActivityId": "native-parent",
+          "activityType": "Elsa.Activities.Compensation.Activities.CompensationScope",
+          "activityTypeVersion": "1.0.0+f781ae7750d1d21d55793e11a4a781fecf0c90a0",
+          "status": "Completed",
+          "subStatus": null,
+          "executionSequence": 910502652044009166,
+          "scheduledAt": "2026-10-29T20:46:25.077465+00:00",
+          "startedAt": "2026-10-29T20:46:25.089596+00:00",
+          "completedAt": "2026-10-29T20:46:56.949594+00:00",
+          "firstCheckpointId": "checkpoint:e40c9aac9e26009c:schedule:native-parent:activity-scheduled:14lAU37erwR",
+          "lastCheckpointId": "checkpoint:0314797e8268f45a:checkpoint:WorkflowCompleted:14lAU37erwR",
+          "lastCommittedAt": "2026-10-29T20:46:57.127429+00:00",
+          "provenance": {
+            "parentActivityExecutionId": null,
+            "schedulingActivityExecutionId": null,
+            "schedulingWorkflowExecutionId": "14lAU2fD5ex",
+            "branchId": null,
+            "iterationId": null,
+            "executionPathId": null,
+            "executionScopeId": null,
+            "schedulingCause": "WorkflowStart",
+            "metadata": {}
+          },
+          "outcomeNames": [
+            "Compensated"
+          ],
+          "bookmarkCount": 0,
+          "incidentCount": 0,
+          "valueSnapshotCount": 12,
+          "metadata": {}
+        },
+        {
+          "activityExecutionId": "14lAU3umVNZ",
+          "workflowExecutionId": "14lAU2fD5ex",
+          "executableNodeId": "run-bpmn",
+          "authoredActivityId": "run-bpmn",
+          "activityType": "Elsa.Activities.Bpmn.Activities.RunBpmn",
+          "activityTypeVersion": "1.0.0+f781ae7750d1d21d55793e11a4a781fecf0c90a0",
+          "status": "Faulted",
+          "subStatus": "ActivityReturnedFault",
+          "executionSequence": 3125771304633387097,
+          "scheduledAt": "2026-10-29T20:46:25.193189+00:00",
+          "startedAt": "2026-10-29T20:46:25.201592+00:00",
+          "completedAt": "2026-10-29T20:46:56.904485+00:00",
+          "firstCheckpointId": "checkpoint:53d655a1f5672cee:schedule-child:run-bpmn:14lAU3umVNZ:activity-scheduled:14lAU3umVNZ",
+          "lastCheckpointId": "checkpoint:14lAWP3fT8h:incident-recorded:incident:1581c26095956881:890a6169bde45892:ActivityReturnedFault",
+          "lastCommittedAt": "2026-10-29T20:46:56.904485+00:00",
+          "provenance": {
+            "parentActivityExecutionId": "14lAU37erwR",
+            "schedulingActivityExecutionId": "14lAU37erwR",
+            "schedulingWorkflowExecutionId": "14lAU2fD5ex",
+            "branchId": null,
+            "iterationId": null,
+            "executionPathId": null,
+            "executionScopeId": null,
+            "schedulingCause": "ActivityCompletion",
+            "metadata": {}
+          },
+          "outcomeNames": [],
+          "bookmarkCount": 1,
+          "incidentCount": 1,
+          "valueSnapshotCount": 2,
+          "metadata": {}
+        }
+      ],
+      "incidents": [
+        {
+          "incidentId": "incident:1581c26095956881:890a6169bde45892:ActivityReturnedFault",
+          "workflowExecutionId": "14lAU2fD5ex",
+          "activityExecutionId": "14lAU3umVNZ",
+          "executableNodeId": "run-bpmn",
+          "severity": "Error",
+          "status": "Resolved",
+          "resolutionOutcome": {
+            "actionKind": "AbsorbFault",
+            "appliedAt": "2026-10-29T20:46:56.941151+00:00",
+            "strategy": null,
+            "systemSource": "StructuralFaultAbsorption",
+            "metadata": {}
+          },
+          "failureType": "ActivityReturnedFault",
+          "message": "The embedded BPMN model faulted.",
+          "createdAt": "2026-10-29T20:46:56.904485+00:00",
+          "resolvedAt": "2026-10-29T20:46:56.941151+00:00",
+          "isBlocking": false,
+          "metadata": {
+            "runtime.bookmarkId": "14lAU3umVNZ:attempt:1:trigger:1",
+            "runtime.resumeTargetId": "run-bpmn:bpmn-model-completed",
+            "runtime.stimulusType": "elsa.bpmn.model-completed.v1",
+            "runtime.stimulusHash": "bpmn-embedded:8b874f79f2628a62c77854ce44349f53fb512637bca87623885d20c3d26689cd",
+            "runtime.schedulerWorkItemId": "1581c26095956881:child-fault-parent:14lAU37erwR:child:14lAU3umVNZ",
+            "runtime.commandId": "14lAWP3hQNy",
+            "runtime.activityExecutionId": "14lAU3umVNZ",
+            "runtime.executableNodeId": "run-bpmn",
+            "runtime.faultSubStatus": "ActivityReturnedFault",
+            "runtime.faultType": "Elsa.Activities.Runtime.Services.ActivityTransitionFaultException",
+            "runtime.faultMessage": "The embedded BPMN model faulted.",
+            "runtime.faultAbsorbedBy": "14lAU37erwR",
+            "runtime.faultAbsorptionReason": "Compensation scope started recovery because step 'process' faulted."
+          }
+        }
+      ],
+      "outputs": {},
+      "persistenceMode": "Balanced",
+      "inspectionGranularity": "boundary-level",
+      "activityNextContinuationToken": null,
+      "permissions": {
+        "canManage": true,
+        "canInspectValues": true
+      }
+    }
+  },
+  "replacement": {
+    "native": {
+      "instance": {
+        "workflowExecutionId": "wfexec:start:v1:d40a4760fb50f5945336b4e118e2c8a2f0d37b8044d74f5f0b24516e22b2bcd0",
+        "artifactId": "artifact-85028290ff42",
+        "definitionId": "14lAU0GANIY",
+        "definitionVersionId": "14lAU0HuzEP",
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:85028290ff420674171a3815357e565168f1575d21dec5a8905430d2e3feafe8",
+        "status": "Faulted",
+        "runKind": "PublishedRun",
+        "subStatus": null,
+        "createdAt": "2026-10-29T20:46:55.652371+00:00",
+        "startedAt": "2026-10-29T20:46:55.652371+00:00",
+        "updatedAt": "2026-10-29T20:46:56.521522+00:00",
+        "completedAt": "2026-10-29T20:46:56.521522+00:00",
+        "correlationId": null,
+        "parentWorkflowExecutionId": null,
+        "tenantId": "default",
+        "activityCount": 1,
+        "incidentCount": 1,
+        "sourceReferenceId": null,
+        "publicationId": null,
+        "slotId": null,
+        "sourceKind": null,
+        "sourceId": null,
+        "sourceVersion": null,
+        "activeIncidentCount": 1,
+        "blockingIncidentCount": 1
+      },
+      "activities": [
+        {
+          "activityExecutionId": "14lAWJO6a99",
+          "workflowExecutionId": "wfexec:start:v1:d40a4760fb50f5945336b4e118e2c8a2f0d37b8044d74f5f0b24516e22b2bcd0",
+          "executableNodeId": "etl",
+          "authoredActivityId": "etl",
+          "activityType": "Elsa.Etl.Workflows.Runtime.Activities.RunEtl",
+          "activityTypeVersion": "1.0.0+f781ae7750d1d21d55793e11a4a781fecf0c90a0",
+          "status": "Faulted",
+          "subStatus": "ActivityReturnedFault",
+          "executionSequence": 3902733018504476448,
+          "scheduledAt": "2026-10-29T20:46:55.738998+00:00",
+          "startedAt": "2026-10-29T20:46:55.793304+00:00",
+          "completedAt": "2026-10-29T20:46:56.4969+00:00",
+          "firstCheckpointId": "checkpoint:b090652089c26850:schedule:etl:activity-scheduled:14lAWJO6a99",
+          "lastCheckpointId": "checkpoint:14lAWN4lYwy:incident-recorded:incident:030244d9d0903a18:1144abde2e1f1076:ActivityReturnedFault",
+          "lastCommittedAt": "2026-10-29T20:46:56.4969+00:00",
+          "provenance": {
+            "parentActivityExecutionId": null,
+            "schedulingActivityExecutionId": null,
+            "schedulingWorkflowExecutionId": "wfexec:start:v1:d40a4760fb50f5945336b4e118e2c8a2f0d37b8044d74f5f0b24516e22b2bcd0",
+            "branchId": null,
+            "iterationId": null,
+            "executionPathId": null,
+            "executionScopeId": null,
+            "schedulingCause": "WorkflowStart",
+            "metadata": {}
+          },
+          "outcomeNames": [],
+          "bookmarkCount": 1,
+          "incidentCount": 1,
+          "valueSnapshotCount": 2,
+          "metadata": {}
+        }
+      ],
+      "incidents": [
+        {
+          "incidentId": "incident:030244d9d0903a18:1144abde2e1f1076:ActivityReturnedFault",
+          "workflowExecutionId": "wfexec:start:v1:d40a4760fb50f5945336b4e118e2c8a2f0d37b8044d74f5f0b24516e22b2bcd0",
+          "activityExecutionId": "14lAWJO6a99",
+          "executableNodeId": "etl",
+          "severity": "Error",
+          "status": "Blocking",
+          "resolutionOutcome": {
+            "actionKind": "FaultWorkflow",
+            "appliedAt": "2026-10-29T20:46:56.521522+00:00",
+            "strategy": {
+              "alias": "Fault",
+              "version": "1"
+            },
+            "systemSource": null,
+            "metadata": {}
+          },
+          "failureType": "ActivityReturnedFault",
+          "message": "The ETL run failed.",
+          "createdAt": "2026-10-29T20:46:56.4969+00:00",
+          "resolvedAt": null,
+          "isBlocking": true,
+          "metadata": {
+            "runtime.bookmarkId": "14lAWJO6a99:attempt:1:trigger:1",
+            "runtime.resumeTargetId": "etl:etl-completed",
+            "runtime.stimulusType": "elsa.etl.completed.v1",
+            "runtime.stimulusHash": "etl-a3cb98ad6525296a332a8efb6c02bea4059bab96bc266d1da310e04844ae8317",
+            "runtime.schedulerWorkItemId": "14lAWN4lYwy",
+            "runtime.commandId": "14lAWN4QJ4W",
+            "runtime.activityExecutionId": "14lAWJO6a99",
+            "runtime.executableNodeId": "etl",
+            "runtime.faultSubStatus": "ActivityReturnedFault",
+            "runtime.faultType": "Elsa.Activities.Runtime.Services.ActivityTransitionFaultException",
+            "runtime.faultMessage": "The ETL run failed."
+          }
+        }
+      ],
+      "outputs": {},
+      "persistenceMode": "Balanced",
+      "inspectionGranularity": "boundary-level",
+      "activityNextContinuationToken": null,
+      "permissions": {
+        "canManage": true,
+        "canInspectValues": true
+      }
+    },
+    "run": {
+      "runId": "etl-a3cb98ad6525296a332a8efb6c02bea4059bab96bc266d1da310e04844ae8317",
+      "selection": "etl1:recovery-5ab932fc8bb2:1:adaf9640b19394d45af380011a0750d7ebabe6cf5e1fa018a762b764e3055606",
+      "status": "faulted",
+      "sourceRecordCount": null,
+      "outstandingRecords": 0,
+      "outstandingBytes": 0,
+      "acceptedRecords": 0,
+      "rejectedRecords": 0,
+      "filteredRecords": 0,
+      "bindingAliases": {
+        "source": "http-source",
+        "lookup": "lookup",
+        "output": "http-output",
+        "errors": "errors"
+      },
+      "diagnostic": {
+        "code": "etl.binding-read-failed",
+        "recordOrdinal": 0,
+        "field": null
+      },
+      "terminalResult": {
+        "outcome": "faulted",
+        "acceptedRecords": 0,
+        "rejectedRecords": 0,
+        "filteredRecords": 0,
+        "diagnostic": {
+          "code": "etl.binding-read-failed",
+          "recordOrdinal": 0,
+          "field": null
+        },
+        "settledAt": "2026-10-29T20:46:56.356671+00:00"
+      },
+      "sourceInput": null,
+      "lookupInput": {
+        "bindingRevision": "lookup-v1",
+        "expectedSha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc",
+        "snapshotSha256": null,
+        "snapshotByteLength": null
+      },
+      "connector": {
+        "sourceKind": "http",
+        "mainKind": "http",
+        "errorKind": "jsonl",
+        "acceptedMainEffects": 0,
+        "acceptedErrorEffects": 0
+      },
+      "formatVersion": 2
+    },
+    "partitions": {
+      "items": [],
+      "nextCursor": null
+    }
+  },
+  "incidents": {
+    "items": [
+      {
+        "incidentId": "bpmn-incident:88705e053c7b430f02678d195d7527e89584ddd580deb24b1ca40c792a25367a",
+        "elementId": "service",
+        "bindingId": "pipeline",
+        "invocationId": "bpmn-work:075e713e2dc6d823c999afdeb09acfa55ef8893720d6eaa6b71fd8a8759aa8ce",
+        "failedAttemptId": "attempt:2e2edaf533933588522e742616e398b21ed3241d3840c861cc987cc58a55a56c",
+        "workerExecutionId": "wfexec:start:v1:efa486f8db2efbce7033b13c01e57c752562e28f23c3dc24b286333862db0725",
+        "faultCode": "etl.snapshot-read-failed",
+        "failedAt": "2026-10-29T20:46:47.989138+00:00",
+        "attemptNumber": 1,
+        "maxAttempts": 2,
+        "status": "Retried",
+        "retryAttemptId": "attempt:507c696cbc5ecb6f84ba4b27d6bce72f5ab42f01b2c7db47bdc932e4f640e90b"
+      },
+      {
+        "incidentId": "bpmn-incident:91d7ac49c6dba27c8140e835c441fb43da56c8fbab61fbc1cd00e7c8b4883b1b",
+        "elementId": "service",
+        "bindingId": "pipeline",
+        "invocationId": "bpmn-work:075e713e2dc6d823c999afdeb09acfa55ef8893720d6eaa6b71fd8a8759aa8ce",
+        "failedAttemptId": "attempt:507c696cbc5ecb6f84ba4b27d6bce72f5ab42f01b2c7db47bdc932e4f640e90b",
+        "workerExecutionId": "wfexec:start:v1:d40a4760fb50f5945336b4e118e2c8a2f0d37b8044d74f5f0b24516e22b2bcd0",
+        "faultCode": "etl.binding-read-failed",
+        "failedAt": "2026-10-29T20:46:56.660857+00:00",
+        "attemptNumber": 2,
+        "maxAttempts": 2,
+        "status": "Final",
+        "retryAttemptId": null
+      }
+    ],
+    "nextContinuationToken": null
+  }
+}

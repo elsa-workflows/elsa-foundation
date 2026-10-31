@@ -1,0 +1,62 @@
+[
+  {
+    "name": "browser-affected",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "pnpm",
+      "exec",
+      "playwright",
+      "test",
+      "tests/browser/activity-definitions.spec.ts",
+      "tests/browser/activity-interface-layout.spec.ts",
+      "tests/browser/connection-secrets.spec.ts",
+      "tests/browser/creation-dialog-tokens.spec.ts",
+      "tests/browser/design-language.spec.ts",
+      "tests/browser/etl-connector-authoring.spec.ts",
+      "tests/browser/golden-runs.spec.ts",
+      "tests/browser/secret-scopes.spec.ts",
+      "tests/browser/workspace-appearance.spec.ts",
+      "tests/browser/workflow-run-deletion.spec.ts",
+      "tests/browser/activity-availability-layout.spec.ts",
+      "tests/browser/draft-validation-autosave.spec.ts",
+      "tests/browser/validation-labels.spec.ts",
+      "tests/browser/workflow-properties-scroll.spec.ts",
+      "--workers=2",
+      "--reporter=json"
+    ],
+    "exitCode": 1,
+    "elapsedSeconds": 385.06730103492737
+  },
+  {
+    "name": "browser-library",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "pnpm",
+      "exec",
+      "playwright",
+      "test",
+      "--config",
+      "tests/browser/playwright.workflow-library.config.ts",
+      "--reporter=json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 79.89266300201416,
+    "loadBeforeRun": "13:41  up 6 days, 23:07, 1 user, load averages: 14.96 40.61 33.35"
+  },
+  {
+    "name": "browser-canvas",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "pnpm",
+      "exec",
+      "playwright",
+      "test",
+      "--config",
+      "tests/browser/playwright.workflow-canvas.config.ts",
+      "--reporter=json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 55.83425998687744,
+    "loadBeforeRun": "13:43  up 6 days, 23:09, 1 user, load averages: 14.76 34.27 31.56"
+  }
+]

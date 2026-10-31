@@ -1,0 +1,20 @@
+{
+  "sourceRevision": "c34c1f4e1f279c66598a5ab83a8c2cc05e9b4a72",
+  "processId": 67974,
+  "command": [
+    "dotnet",
+    "test",
+    "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+    "-c",
+    "Release",
+    "--no-restore",
+    "-p:ElsaBpmnRecoveryProbe=false",
+    "--filter",
+    "FullyQualifiedName~RunBpmnParallelWorkbenchTests",
+    "--logger",
+    "trx;LogFileName=parallel.trx",
+    "--results-directory",
+    "/tmp/elsa-2898-parallel-c34c1f4e1"
+  ],
+  "evidenceDirectory": "/tmp/elsa-2898-parallel-c34c1f4e1/evidence"
+}

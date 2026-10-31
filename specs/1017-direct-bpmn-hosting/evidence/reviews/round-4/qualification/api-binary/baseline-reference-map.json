@@ -1,0 +1,202 @@
+{
+  "Cronos.dll": {
+    "package": "Cronos/0.13.0",
+    "file": "lib/net6.0/Cronos.dll",
+    "sha256": "e0ad7c799904f1b663ab090b32665e0e90ede27699937588900845383064ba03"
+  },
+  "CShells.dll": {
+    "package": "CShells/0.0.31",
+    "file": "lib/net10.0/CShells.dll",
+    "sha256": "b0afda775aa0c330f982856ebfaeb461c7ea1c5d201998351ba7ca105f69ebc0"
+  },
+  "CShells.Abstractions.dll": {
+    "package": "CShells.Abstractions/0.0.31",
+    "file": "lib/net10.0/CShells.Abstractions.dll",
+    "sha256": "dbcf0e5d572791124ac582e3a10519d80f01b9f2e4228cffadb61171f796b5a0"
+  },
+  "Elsa.Activities.Runtime.Core.dll": {
+    "package": "Elsa.Activities.Runtime.Core/4.0.23-preview",
+    "file": "lib/net10.0/Elsa.Activities.Runtime.Core.dll",
+    "sha256": "f086384fb6bf7105a5bccd4f36ad2456ca747e1527d17436204aba445b37a3f0"
+  },
+  "Elsa.Attention.Core.dll": {
+    "package": "Elsa.Attention.Core/4.0.14-preview",
+    "file": "lib/net10.0/Elsa.Attention.Core.dll",
+    "sha256": "28d69f384be0a3cc1b75dbf265fad413bb8ea6c73bdd6b407e88e47aeb75fe0b"
+  },
+  "Elsa.Events.Core.dll": {
+    "package": "Elsa.Events.Core/4.0.14-preview",
+    "file": "lib/net10.0/Elsa.Events.Core.dll",
+    "sha256": "ae352c84ba5cc664b7a89e6443a3b03251b5e6c819583d1455d8538c50119db7"
+  },
+  "Elsa.Expressions.Core.dll": {
+    "package": "Elsa.Expressions.Core/4.0.14-preview",
+    "file": "lib/net10.0/Elsa.Expressions.Core.dll",
+    "sha256": "645f03c550b21a05a28d105450cb342de3e51dc73a5dc9060df56559bdb0f209"
+  },
+  "Elsa.Persistence.EntityFramework.dll": {
+    "package": "Elsa.Persistence.EntityFramework/4.0.32-preview",
+    "file": "lib/net10.0/Elsa.Persistence.EntityFramework.dll",
+    "sha256": "a7627fd69b5c6d48ce0ebaf0f8e6eba0c33217ecee79c4e1f8eda740f92a29c1"
+  },
+  "Elsa.Persistence.Schema.dll": {
+    "package": "Elsa.Persistence.Schema/4.0.12-preview",
+    "file": "lib/net10.0/Elsa.Persistence.Schema.dll",
+    "sha256": "cbf6c4a3c1812a649156d53357bde5349837a73ba4c61f740cd711c50067daec"
+  },
+  "Elsa.Pipelines.Core.dll": {
+    "package": "Elsa.Pipelines.Core/4.0.14-preview",
+    "file": "lib/net10.0/Elsa.Pipelines.Core.dll",
+    "sha256": "69dee8289ccf6461327353c6c4e15e4ee83e740763b8e1121deddd115352cdd2"
+  },
+  "Elsa.Primitives.dll": {
+    "package": "Elsa.Primitives/4.0.14-preview",
+    "file": "lib/net10.0/Elsa.Primitives.dll",
+    "sha256": "2e74a2d06693db92566451007945429e23d47a5995be1bae53478217f008c585"
+  },
+  "Elsa.Serialization.Core.dll": {
+    "package": "Elsa.Serialization.Core/4.0.14-preview",
+    "file": "lib/net10.0/Elsa.Serialization.Core.dll",
+    "sha256": "bcc4941f07cadc60d7f97267ce44e822127d00d58e9f5df0938877ee56fba625"
+  },
+  "Elsa.Tasks.Core.dll": {
+    "package": "Elsa.Tasks.Core/4.0.14-preview",
+    "file": "lib/net10.0/Elsa.Tasks.Core.dll",
+    "sha256": "68b36327d98584dff8ca7906b2b4bc3ae858504b7687571298a5149046a28ef7"
+  },
+  "Elsa.Tasks.Schedules.dll": {
+    "package": "Elsa.Tasks.Schedules/4.0.9-preview",
+    "file": "lib/net10.0/Elsa.Tasks.Schedules.dll",
+    "sha256": "50f19975afebfc1062aa0b046d008c201800f43a8d61fe74cc325ae7bb832183"
+  },
+  "Elsa.Workflows.Runtime.dll": {
+    "package": "Elsa.Workflows.Runtime/4.0.69-preview",
+    "file": "lib/net10.0/Elsa.Workflows.Runtime.dll",
+    "sha256": "a5e86d52117881aef94bde22afcf26193652d495406d04f1c7dfd4d499759602"
+  },
+  "Elsa.Workflows.Runtime.Core.dll": {
+    "package": "Elsa.Workflows.Runtime.Core/4.0.55-preview",
+    "file": "lib/net10.0/Elsa.Workflows.Runtime.Core.dll",
+    "sha256": "b966bef99337d45bb771f4c748f6798165cb35bd489d331e6659cd8d46b9673b"
+  },
+  "JetBrains.Annotations.dll": {
+    "package": "JetBrains.Annotations/2025.2.4",
+    "file": "lib/netstandard2.0/JetBrains.Annotations.dll",
+    "sha256": "8f2c837af3f4f61b1726a2e67eafcf5bae23debd9e1de425bb5ce1d4837508d6"
+  },
+  "Microsoft.EntityFrameworkCore.dll": {
+    "package": "Microsoft.EntityFrameworkCore/10.0.10",
+    "file": "lib/net10.0/Microsoft.EntityFrameworkCore.dll",
+    "sha256": "acb89dff050d681fab6f86d2175929471200b9bed66ac9321cbe6a17eaa26933"
+  },
+  "Microsoft.EntityFrameworkCore.Abstractions.dll": {
+    "package": "Microsoft.EntityFrameworkCore.Abstractions/10.0.10",
+    "file": "lib/net10.0/Microsoft.EntityFrameworkCore.Abstractions.dll",
+    "sha256": "98c8252995283ef0884b904dbab03696ca7f71a05b8dde34dace5eeb9bf4382c"
+  },
+  "Microsoft.EntityFrameworkCore.Relational.dll": {
+    "package": "Microsoft.EntityFrameworkCore.Relational/10.0.10",
+    "file": "lib/net10.0/Microsoft.EntityFrameworkCore.Relational.dll",
+    "sha256": "ac1146e68d53d56b79e9473f68c557999de99674be392bbbbb02ae93a296b93e"
+  },
+  "Microsoft.Extensions.Caching.Abstractions.dll": {
+    "package": "Microsoft.Extensions.Caching.Abstractions/10.0.10",
+    "file": "lib/net10.0/Microsoft.Extensions.Caching.Abstractions.dll",
+    "sha256": "d82421a7036109556106414748a63425ca2aafa3e6b76669d41b74d625c66e7e"
+  },
+  "Microsoft.Extensions.Caching.Memory.dll": {
+    "package": "Microsoft.Extensions.Caching.Memory/10.0.10",
+    "file": "lib/net10.0/Microsoft.Extensions.Caching.Memory.dll",
+    "sha256": "d2d85721e191d9bc6f640da31311a32d19c684cab24ea22b0c1732578f23bc7d"
+  },
+  "Microsoft.Extensions.Configuration.dll": {
+    "package": "Microsoft.Extensions.Configuration/10.0.10",
+    "file": "lib/net10.0/Microsoft.Extensions.Configuration.dll",
+    "sha256": "82e24fb29ce626917e2061cb56bc45bbcd6df949c8c8a2ffa8e0d58131a57e5f"
+  },
+  "Microsoft.Extensions.Configuration.Abstractions.dll": {
+    "package": "Microsoft.Extensions.Configuration.Abstractions/10.0.10",
+    "file": "lib/net10.0/Microsoft.Extensions.Configuration.Abstractions.dll",
+    "sha256": "685493e38adb7e5d06bfcd93aa160fb8ce23aae80dadd1ff489e8cd4cfc6cafe"
+  },
+  "Microsoft.Extensions.Configuration.Binder.dll": {
+    "package": "Microsoft.Extensions.Configuration.Binder/10.0.0",
+    "file": "lib/net10.0/Microsoft.Extensions.Configuration.Binder.dll",
+    "sha256": "0637a0ab2b5a77b000c0d96c46573dae8c04fa86ae1374b5a1f00855a712d6f9"
+  },
+  "Microsoft.Extensions.Configuration.EnvironmentVariables.dll": {
+    "package": "Microsoft.Extensions.Configuration.EnvironmentVariables/10.0.10",
+    "file": "lib/net10.0/Microsoft.Extensions.Configuration.EnvironmentVariables.dll",
+    "sha256": "2b02bcce661642e4f74965b1a9be29e3ef9d97fcc6ac9e0a969d60497016ec67"
+  },
+  "Microsoft.Extensions.Configuration.FileExtensions.dll": {
+    "package": "Microsoft.Extensions.Configuration.FileExtensions/10.0.10",
+    "file": "lib/net10.0/Microsoft.Extensions.Configuration.FileExtensions.dll",
+    "sha256": "66c81c68358ad8e0845e89a42b0b90162d4796e6d9cf60de02a6828ed1285448"
+  },
+  "Microsoft.Extensions.Configuration.Json.dll": {
+    "package": "Microsoft.Extensions.Configuration.Json/10.0.10",
+    "file": "lib/net10.0/Microsoft.Extensions.Configuration.Json.dll",
+    "sha256": "bce587d4fda7a8d6bc3758f0670e5a6a7095be283b43a838a0e0ca054bad021c"
+  },
+  "Microsoft.Extensions.DependencyInjection.dll": {
+    "package": "Microsoft.Extensions.DependencyInjection/10.0.10",
+    "file": "lib/net10.0/Microsoft.Extensions.DependencyInjection.dll",
+    "sha256": "5af15e4b692dfa774550b0d506e3411f4a84ed1a757ff617016b6bd060e7b1dc"
+  },
+  "Microsoft.Extensions.DependencyInjection.Abstractions.dll": {
+    "package": "Microsoft.Extensions.DependencyInjection.Abstractions/10.0.10",
+    "file": "lib/net10.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll",
+    "sha256": "592c33e4bc20e041d6125b79a4311293540f30332495429241c3d7c7286c8e16"
+  },
+  "Microsoft.Extensions.DependencyModel.dll": {
+    "package": "Microsoft.Extensions.DependencyModel/10.0.1",
+    "file": "lib/net10.0/Microsoft.Extensions.DependencyModel.dll",
+    "sha256": "76f6e973e2dcb09a893745f4fb730863d55298e9485cc96e29b124a743ca795d"
+  },
+  "Microsoft.Extensions.Diagnostics.Abstractions.dll": {
+    "package": "Microsoft.Extensions.Diagnostics.Abstractions/10.0.10",
+    "file": "lib/net10.0/Microsoft.Extensions.Diagnostics.Abstractions.dll",
+    "sha256": "7a60eff59e2360136fb2696227c643ff6e3cde298fa010e3202151ac79bf55de"
+  },
+  "Microsoft.Extensions.FileProviders.Abstractions.dll": {
+    "package": "Microsoft.Extensions.FileProviders.Abstractions/10.0.10",
+    "file": "lib/net10.0/Microsoft.Extensions.FileProviders.Abstractions.dll",
+    "sha256": "670e6ccb7984ade31318af5db4fba19903174721d8e9f1fd3d5e64403ac05d87"
+  },
+  "Microsoft.Extensions.FileProviders.Physical.dll": {
+    "package": "Microsoft.Extensions.FileProviders.Physical/10.0.10",
+    "file": "lib/net10.0/Microsoft.Extensions.FileProviders.Physical.dll",
+    "sha256": "441746bddb3b418462a2edccdd1386a7740a70e4e2767b2ef603a7cd721e6668"
+  },
+  "Microsoft.Extensions.FileSystemGlobbing.dll": {
+    "package": "Microsoft.Extensions.FileSystemGlobbing/10.0.10",
+    "file": "lib/net10.0/Microsoft.Extensions.FileSystemGlobbing.dll",
+    "sha256": "fe9f4d6f98e15e7f2f2ad8db324b1ad5a7a2744d4bb3a5eaeb19f4a354bdae5c"
+  },
+  "Microsoft.Extensions.Hosting.Abstractions.dll": {
+    "package": "Microsoft.Extensions.Hosting.Abstractions/10.0.10",
+    "file": "lib/net10.0/Microsoft.Extensions.Hosting.Abstractions.dll",
+    "sha256": "55d316f9a8da2b2e91c50c75a92c44114eb23e4b796090008cfa4524fa082866"
+  },
+  "Microsoft.Extensions.Logging.dll": {
+    "package": "Microsoft.Extensions.Logging/10.0.10",
+    "file": "lib/net10.0/Microsoft.Extensions.Logging.dll",
+    "sha256": "14129c595b456ebfe99d0f04618247235043107b2159a772299ead894b5223ac"
+  },
+  "Microsoft.Extensions.Logging.Abstractions.dll": {
+    "package": "Microsoft.Extensions.Logging.Abstractions/10.0.10",
+    "file": "lib/net10.0/Microsoft.Extensions.Logging.Abstractions.dll",
+    "sha256": "46826fd3b68bd23028b274ff73ecc161088b53e41b4a7436e759de4d78143a43"
+  },
+  "Microsoft.Extensions.Options.dll": {
+    "package": "Microsoft.Extensions.Options/10.0.10",
+    "file": "lib/net10.0/Microsoft.Extensions.Options.dll",
+    "sha256": "e6e4183c67c8b265d852e40e6b873640371c4eb19f6268d4c4734c1aeba17dfb"
+  },
+  "Microsoft.Extensions.Primitives.dll": {
+    "package": "Microsoft.Extensions.Primitives/10.0.10",
+    "file": "lib/net10.0/Microsoft.Extensions.Primitives.dll",
+    "sha256": "149f0bb5fbbf39836f38f61ea24eee49d78bc62c63bdb3c462381bdffb1d3603"
+  }
+}

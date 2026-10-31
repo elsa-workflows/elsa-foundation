@@ -1,0 +1,14 @@
+[
+  {
+    "name": "bpmn",
+    "discovered": 507,
+    "executed": 507,
+    "allMethodsCovered": true
+  },
+  {
+    "name": "runtime-ef",
+    "discovered": 1811,
+    "executed": 1811,
+    "allMethodsCovered": true
+  }
+]

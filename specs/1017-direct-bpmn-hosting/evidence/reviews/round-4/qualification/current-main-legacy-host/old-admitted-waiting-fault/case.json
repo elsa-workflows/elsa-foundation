@@ -1,0 +1,91 @@
+{
+  "kind": "actual-old-final-fault-workbench-recovery",
+  "sourceRevision": "30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+  "admitted": true,
+  "waiting": true,
+  "modelExecutionId": "bpmn:759a49f25aafc2f18846e939615e947ade8ed03d0af813339db2423af2e4bc9e",
+  "fixtureSha256": "806f95b5242b70f68fa68c5550732b3339be5cb336f94414be7f0b15ac77b049",
+  "first": 75990,
+  "second": 76014,
+  "firstExit": 137,
+  "secondExit": 137,
+  "runtimeOnly": true,
+  "completedStore": {
+    "file": "completed-runtime.sqlite.gz",
+    "databaseSha256": "4f71db26c1d03a30a868ecd3cc3b44133b801b7a263f03b2998388b9769a3835",
+    "gzipSha256": "ff1f0d4ba2fb00de972c521142703c8b10158ebcb7f7fe49c5afcab6cd5d83eb"
+  },
+  "retainedStore": {
+    "file": "retained-runtime.sqlite.gz",
+    "databaseSha256": "4f71db26c1d03a30a868ecd3cc3b44133b801b7a263f03b2998388b9769a3835",
+    "gzipSha256": "ff1f0d4ba2fb00de972c521142703c8b10158ebcb7f7fe49c5afcab6cd5d83eb"
+  },
+  "binaries": [
+    {
+      "file": "Elsa.Workbench.dll",
+      "productVersion": "1.0.0\u002B30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+      "sha256": "b90d5fc10f8e456751eabdecc145845bedf07b8e89cdfc3d566ac8191d477c7a"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Core.dll",
+      "productVersion": "1.0.0\u002B30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+      "sha256": "7d66787d6fc79b36b2cbeb1b4bca9e112bfbff95d9d49a16963539ca3358dd11"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.dll",
+      "productVersion": "1.0.0\u002B30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+      "sha256": "a01e69685bd48387ca6c9fb53464a936c3326092495632a38f9904a99b5766be"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0\u002B30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+      "sha256": "856616d2e88cb946f7aff2d55e952da4c2f0cf2d6323f1cbcbea8afcca163d3e"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Core.dll",
+      "productVersion": "1.0.0\u002B30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+      "sha256": "cb7bf676e70f2e3667b4fbc62d852e231e3478de7c5caa9456cca212f71f8c9c"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.dll",
+      "productVersion": "1.0.0\u002B30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+      "sha256": "b721347d2b217bc862e6af3ee442b06233f8e8d5981359abdaaedde6d83d10bb"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Api.dll",
+      "productVersion": "1.0.0\u002B30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+      "sha256": "e83869c18946b17973ab70d18579c6deaa3436a7b3d64ac2dfda4b2035c03a4b"
+    },
+    {
+      "file": "Bpmn.Model.dll",
+      "productVersion": "0.5.0\u002B021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776"
+    },
+    {
+      "file": "Bpmn.Semantics.dll",
+      "productVersion": "0.5.0\u002B021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Core.dll",
+      "productVersion": "1.0.0\u002B30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+      "sha256": "601e0dac3f3affefcc334dc62fdd52be13ded296e8059369cb91c3c3aaf35378"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Api.dll",
+      "productVersion": "1.0.0\u002B30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+      "sha256": "432824d4aa11ca1ffd69b62beb697b6e9d66cbd5521a28375f2e2a2b55aefa3b"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0\u002B30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+      "sha256": "e6356f0d9352f695836da3eced94d6e8bce725d42d193eb289ac4ae91ef024be"
+    },
+    {
+      "file": "Elsa.Persistence.EntityFramework.dll",
+      "productVersion": "1.0.0\u002B30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+      "sha256": "3231257c4fd7654a1d7a404d95244bdeeab4d922091344a41b8bfd73a0d17486"
+    }
+  ],
+  "scopeLimit": "Actual normally produced old fault cuts over SQLite, standard runtime-only Workbench; no Studio, ETL or other-provider claim."
+}

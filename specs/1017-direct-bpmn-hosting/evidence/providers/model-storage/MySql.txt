@@ -1,0 +1,5 @@
+Test run for /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+Results File: /tmp/elsa-2898-model-storage-26aef9042/MySql.trx
+
+Passed!  - Failed:     0, Passed:     6, Skipped:     0, Total:     6, Duration: 8 s - Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.dll (net10.0)

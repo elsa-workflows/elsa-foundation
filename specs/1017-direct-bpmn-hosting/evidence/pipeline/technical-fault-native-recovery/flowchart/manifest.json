@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-native-runbpmn-etl-technical-fault",
+  "sourceRevision": "5533b8367c7fe78850677fcebf5c7fcb0f2e7e27",
+  "case": "capture",
+  "businessErrorBoundary": "matching",
+  "assets": [
+    {
+      "path": "capture/before-checked-embedding.json",
+      "sha256": "b7f6125c9e73d7ccdcb01105e36766e937482f53d81c1d0f5e061fe2148b8bec"
+    },
+    {
+      "path": "capture/before-checked-model.json",
+      "sha256": "88b949b2450db59599b560f94a4a4da4912da337f98df0ad68059e47f184d849"
+    },
+    {
+      "path": "capture/before-elsa.sqlite.gz",
+      "sha256": "c578b28977ca37a054112529cc6a07352dbf1999f81e747d35551aa9fcce9d2d"
+    },
+    {
+      "path": "capture/before-etl-design.sqlite.gz",
+      "sha256": "ecaa9f8fc8601824f3b76cbba75f6f5875e3b5cad0c79043767417088326e994"
+    },
+    {
+      "path": "capture/before-etl-runtime.sqlite.gz",
+      "sha256": "c0631fbaf6c00cffdbc399f5052f034116732e054ff1a773e6384094464adde6"
+    },
+    {
+      "path": "capture/before-wire.json",
+      "sha256": "1305d4e5ccfd8104ab4f145d48691eaed5552829c43d6f3bf19735f5dc457b4d"
+    },
+    {
+      "path": "capture/before.json",
+      "sha256": "2fb5ea7814765e53ca571c3321065d1192f966e30f35477f9c6352ee4fc06e70"
+    },
+    {
+      "path": "capture/finished-checked-embedding.json",
+      "sha256": "6629864ee603bf9f337d98ca5f3a02bbc5fef05a35f3198b99b789bedd22e8aa"
+    },
+    {
+      "path": "capture/finished-checked-model.json",
+      "sha256": "d52531f14f7d093cb1ffec62a1e075b20afdda6728cb4247ed492679880639b2"
+    },
+    {
+      "path": "capture/finished-elsa.sqlite.gz",
+      "sha256": "51192375239f741dc7feed5b45e366c556a9ed83408da84439758395bb889a79"
+    },
+    {
+      "path": "capture/finished-etl-design.sqlite.gz",
+      "sha256": "ccd3c75083aa856ac4a738c254da88dd2a592f6b6dcb0439f2a612bf7df83372"
+    },
+    {
+      "path": "capture/finished-etl-runtime.sqlite.gz",
+      "sha256": "48cab60c274b38990856856cef70b20e2694304afe0e288f1df944b277da4527"
+    },
+    {
+      "path": "capture/finished-wire.json",
+      "sha256": "1305d4e5ccfd8104ab4f145d48691eaed5552829c43d6f3bf19735f5dc457b4d"
+    },
+    {
+      "path": "capture/finished.json",
+      "sha256": "1cbbd43f622b577957a1ccd0d19d6dda87e0a6fdcd35ebae482388f6cd6077dd"
+    },
+    {
+      "path": "capture/lookup-snapshot.csv",
+      "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+    },
+    {
+      "path": "capture/lookup-source.csv",
+      "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+    },
+    {
+      "path": "capture/process.json",
+      "sha256": "91a22cc62e2a4c5e13168ac44f21216594f860a79c3e8f5c263fd7c6c844a379"
+    },
+    {
+      "path": "capture/recovered.json",
+      "sha256": "2fb5ea7814765e53ca571c3321065d1192f966e30f35477f9c6352ee4fc06e70"
+    },
+    {
+      "path": "capture/retained-checked-embedding.json",
+      "sha256": "6629864ee603bf9f337d98ca5f3a02bbc5fef05a35f3198b99b789bedd22e8aa"
+    },
+    {
+      "path": "capture/retained-checked-model.json",
+      "sha256": "d52531f14f7d093cb1ffec62a1e075b20afdda6728cb4247ed492679880639b2"
+    },
+    {
+      "path": "capture/retained-wire.json",
+      "sha256": "1305d4e5ccfd8104ab4f145d48691eaed5552829c43d6f3bf19735f5dc457b4d"
+    },
+    {
+      "path": "capture/retained.json",
+      "sha256": "1cbbd43f622b577957a1ccd0d19d6dda87e0a6fdcd35ebae482388f6cd6077dd"
+    },
+    {
+      "path": "capture/safe-errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "path": "capture/snapshot-unavailability.json",
+      "sha256": "96ebf34ed964c904965ecffbd502b824ce4474a09c41b051497ceab166bdb991"
+    }
+  ]
+}

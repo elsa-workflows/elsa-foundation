@@ -1,0 +1,92 @@
+{
+  "kind": "actual-old-final-fault-workbench-recovery",
+  "sourceRevision": "2191e3710d87a63ed2f3a3770c5df84084a369ad",
+  "admitted": true,
+  "waiting": true,
+  "pendingParent": false,
+  "modelExecutionId": "bpmn:759a49f25aafc2f18846e939615e947ade8ed03d0af813339db2423af2e4bc9e",
+  "fixtureSha256": "806f95b5242b70f68fa68c5550732b3339be5cb336f94414be7f0b15ac77b049",
+  "first": 49429,
+  "second": 49457,
+  "firstExit": 137,
+  "secondExit": 137,
+  "runtimeOnly": true,
+  "completedStore": {
+    "file": "completed-runtime.sqlite.gz",
+    "databaseSha256": "b9599a192a3e53a0a8aec093032d627600ea8c16f2aee550adf6a3abcf6c1149",
+    "gzipSha256": "65b9c457e88d38c2a604561069a1ddbfacde803dacb5e8d403aa8562226a0625"
+  },
+  "retainedStore": {
+    "file": "retained-runtime.sqlite.gz",
+    "databaseSha256": "b9599a192a3e53a0a8aec093032d627600ea8c16f2aee550adf6a3abcf6c1149",
+    "gzipSha256": "65b9c457e88d38c2a604561069a1ddbfacde803dacb5e8d403aa8562226a0625"
+  },
+  "binaries": [
+    {
+      "file": "Elsa.Workbench.dll",
+      "productVersion": "1.0.0\u002B2191e3710d87a63ed2f3a3770c5df84084a369ad",
+      "sha256": "61b53fe31d2a90a94ca989dc9ed313f8a4dfa0ffa96ed1c8e776589eef1e4f30"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Core.dll",
+      "productVersion": "1.0.0\u002B2191e3710d87a63ed2f3a3770c5df84084a369ad",
+      "sha256": "76644a9d1e00d8c54c0067bf8ef702279ee4702767663b6958f3c69820d512eb"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.dll",
+      "productVersion": "1.0.0\u002B2191e3710d87a63ed2f3a3770c5df84084a369ad",
+      "sha256": "c002385faf72430da75782b897a1cacc7a62fb1e4fead9ce9172535e4dfba185"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0\u002B2191e3710d87a63ed2f3a3770c5df84084a369ad",
+      "sha256": "a7f7f0f097ea5a0b25250482ad5b670b569f0d01a0688d1e1638bf54ad2e9d53"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Core.dll",
+      "productVersion": "1.0.0\u002B2191e3710d87a63ed2f3a3770c5df84084a369ad",
+      "sha256": "d20d44155fcb33f3853a200e7a4a5ce8474e80d638a4b90ba1394f4bc33dbd32"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.dll",
+      "productVersion": "1.0.0\u002B2191e3710d87a63ed2f3a3770c5df84084a369ad",
+      "sha256": "3d51dd76b403f8797c82a8417d52fad45dc7dfd075c9ccf3d576fa214db04e12"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Api.dll",
+      "productVersion": "1.0.0\u002B2191e3710d87a63ed2f3a3770c5df84084a369ad",
+      "sha256": "fc3316db5fe6d0f26f0144015d1d81b2e1754c710cf09b6a3ea4d77cacaf2e01"
+    },
+    {
+      "file": "Bpmn.Model.dll",
+      "productVersion": "0.5.0\u002B021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776"
+    },
+    {
+      "file": "Bpmn.Semantics.dll",
+      "productVersion": "0.5.0\u002B021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Core.dll",
+      "productVersion": "1.0.0\u002B2191e3710d87a63ed2f3a3770c5df84084a369ad",
+      "sha256": "415fc65cfa5c1c8e54fc8e8f784f549ee6e4113ba7df7a866ad42706f7be9b8c"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Api.dll",
+      "productVersion": "1.0.0\u002B2191e3710d87a63ed2f3a3770c5df84084a369ad",
+      "sha256": "3c3805c1dbc819e6804d65a409bccfd721bd8d8084181730a56d7e7cdf3bb7fb"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0\u002B2191e3710d87a63ed2f3a3770c5df84084a369ad",
+      "sha256": "2738e798f9516e2868a5e0a6bc2a829e2d0781868ddbc9739fc8c0be4a23673c"
+    },
+    {
+      "file": "Elsa.Persistence.EntityFramework.dll",
+      "productVersion": "1.0.0\u002B2191e3710d87a63ed2f3a3770c5df84084a369ad",
+      "sha256": "a52a428a2be38b4ed7628dfdafb503721be29207043d6634f64c9e7177bd0737"
+    }
+  ],
+  "scopeLimit": "Actual normally produced old fault cuts over SQLite, standard runtime-only Workbench; no Studio, ETL or other-provider claim."
+}

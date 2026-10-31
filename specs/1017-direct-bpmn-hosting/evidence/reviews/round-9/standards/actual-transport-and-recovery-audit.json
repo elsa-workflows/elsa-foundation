@@ -1,0 +1,22 @@
+{
+  "sameOriginalModelBeforeDelivery": true,
+  "redModelUnchanged": true,
+  "greenModelUnchanged": true,
+  "sameSourceId": true,
+  "sameIntent": true,
+  "redSourceStatus": 2,
+  "greenSourceStatus": 3,
+  "redWorkerStatus": 1,
+  "greenWorkerStatus": 1,
+  "greenDeliveredAt": null,
+  "finalWorkerStatus": 5,
+  "finalSourceStatus": 2,
+  "ackAfterWorkerCompletion": true,
+  "coldWholeStoreHashes": [
+    "00c8c6e1d77c5411b660f1fea70bf32400d36b909d629e7b3874a2593937214b",
+    "00c8c6e1d77c5411b660f1fea70bf32400d36b909d629e7b3874a2593937214b"
+  ],
+  "coldWholeStoreByteIdentical": true,
+  "differentColdHostPids": true,
+  "source": "20bca048737cdbcceb95cc4541643077d3a307a5"
+}

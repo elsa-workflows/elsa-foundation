@@ -1,0 +1,105 @@
+[
+  {
+    "name": "architecture-restore",
+    "repositorySource": "36831a014d621b76c863170dd84b87f171ea8b62",
+    "arguments": [
+      "bash",
+      "tools/architecture/restore-ci-project-graph.sh"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 8.508201125077903
+  },
+  {
+    "name": "architecture",
+    "repositorySource": "36831a014d621b76c863170dd84b87f171ea8b62",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-build",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=architecture.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-review9-resume/repository"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 32.991044166032225,
+    "unchangedCompiledGuardSource": "82f6202a5f2e56521525092f0d06698fdeb7d10c",
+    "counts": {
+      "total": "594",
+      "executed": "594",
+      "passed": "594",
+      "failed": "0",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    }
+  },
+  {
+    "name": "maps",
+    "repositorySource": "36831a014d621b76c863170dd84b87f171ea8b62",
+    "arguments": [
+      "dotnet",
+      "run",
+      "--project",
+      "tools/maps/Elsa.Maps.Generator",
+      "-c",
+      "Release",
+      "--",
+      "check"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.9602695000357926
+  },
+  {
+    "name": "tiers",
+    "repositorySource": "36831a014d621b76c863170dd84b87f171ea8b62",
+    "arguments": [
+      "dotnet",
+      "run",
+      "--project",
+      "tools/maps/Elsa.Maps.Generator",
+      "-c",
+      "Release",
+      "--no-build",
+      "--",
+      "test-tiers-check"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.5940240420168266
+  },
+  {
+    "name": "tier-docs",
+    "repositorySource": "36831a014d621b76c863170dd84b87f171ea8b62",
+    "arguments": [
+      "python3.14",
+      "tools/ci/test_tiers.py",
+      "check-docs"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.08162274991627783
+  },
+  {
+    "name": "tier-workflows",
+    "repositorySource": "36831a014d621b76c863170dd84b87f171ea8b62",
+    "arguments": [
+      "python3.14",
+      "tools/ci/test_tiers.py",
+      "check-workflows"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.03503925004042685
+  }
+]

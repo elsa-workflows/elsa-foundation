@@ -1,0 +1,52 @@
+{
+  "sourceRevision": "3ac1c675729c14b1c2ad7249f43c47d33d13e37e",
+  "entries": 9,
+  "wholeStoreArchives": 6,
+  "assets": [
+    {
+      "path": "completed.sqlite.gz",
+      "sha256": "b8ffc23b0692f45c02abdbb5b0e9d0ed7ffa0e4cab078b49c9b70e2579d57782",
+      "bytes": 125340
+    },
+    {
+      "path": "direct-process.json",
+      "sha256": "1a7ef72bccec220a1677b9768bef2d4862ed655dae8aa9cf18866d5bbf2eb3d5",
+      "bytes": 9199
+    },
+    {
+      "path": "legacy-partial-forks/process.json",
+      "sha256": "11425b4b28bf8262169d2aed6729ce8b5a51dfd671ac640833d244f343000a61",
+      "bytes": 152313
+    },
+    {
+      "path": "legacy-partial-forks/upgraded-design.sqlite.gz",
+      "sha256": "f5ca8017b40a68b3d22d12e74fb81246a450e50d38ac75640b3b50b1af0653a8",
+      "bytes": 286249
+    },
+    {
+      "path": "legacy-partial-forks/upgraded-runtime.sqlite.gz",
+      "sha256": "c74fcd488a35b1aa425ffa577a1b75a3b443b582f4dfae3f55d19c54dbde2818",
+      "bytes": 2226945
+    },
+    {
+      "path": "template-design-upgrade/process.json",
+      "sha256": "94159d26a2f7b7ed6fa516ff7dd35704067e15c5bd67a6c82af5a29502d10e48",
+      "bytes": 15323
+    },
+    {
+      "path": "template-design-upgrade/upgraded-design.sqlite.gz",
+      "sha256": "c426dab598f9418d4046c9b82e310f106d11ede33614a4d6a2e417e111344d65",
+      "bytes": 112423
+    },
+    {
+      "path": "template-design-upgrade/upgraded-runtime.sqlite.gz",
+      "sha256": "4bd202d3c12cb8491ea650890b446a60184e236b8ab49aa3a0bc3e71573f3a5a",
+      "bytes": 131951
+    },
+    {
+      "path": "waiting.sqlite.gz",
+      "sha256": "6d26debe0936ea4cc2e5931164319e664f54cd065c625698fc4332b660aa5f86",
+      "bytes": 120979
+    }
+  ]
+}

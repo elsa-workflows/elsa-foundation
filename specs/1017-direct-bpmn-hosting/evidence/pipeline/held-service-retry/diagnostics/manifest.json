@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "kind": "nonqualifying-held-retry-source-ack-cut",
+  "sourceRevision": "6f532c6edfe4931ce0d574e0c98c5d93cb012d81",
+  "reason": "The direct completed API/model view was captured before replacement native-result source ACK. Fourth standard host acknowledged it, so checked source views differ. This does not qualify the stable finished-source claim.",
+  "listedChildrenStopped": 5,
+  "assets": [
+    {
+      "path": "pending-source-ack/before-checked-model.json",
+      "sha256": "ec4b8eab29eb63de242b04fe6ecc01e9a0dda6b68f3fa1e446f363b499a975b1"
+    },
+    {
+      "path": "pending-source-ack/before-elsa.sqlite.gz",
+      "sha256": "ea3030cc0c53462d426fcee4b2e936e21817911709495049b72197ce25427ec0"
+    },
+    {
+      "path": "pending-source-ack/before-etl-design.sqlite.gz",
+      "sha256": "bb48c141b8321e364a686e22d128d61dc158fdc89a43d878ae9d16ebc5568954"
+    },
+    {
+      "path": "pending-source-ack/before-etl-runtime.sqlite.gz",
+      "sha256": "0ba2d6a1ac3c22b954b7f3fa0bcdb708f095df9979dc6f9c85e2e5eed3dc25f7"
+    },
+    {
+      "path": "pending-source-ack/before-wire.json",
+      "sha256": "2a30126eedf619e7c960a9c9962dd37961ad13c561ba666cfcea0df26e2fcd27"
+    },
+    {
+      "path": "pending-source-ack/before.json",
+      "sha256": "5a682295abd729d049fa772da23c3c52702d762737ffe4fe96ce53233a5bfc1e"
+    },
+    {
+      "path": "pending-source-ack/finished-checked-model.json",
+      "sha256": "d62529dffdd25b3a2c0116ecb5475b47a76adc987ad1c0ae2f15eb7c451655a7"
+    },
+    {
+      "path": "pending-source-ack/finished-checked-replacement.json",
+      "sha256": "e3ca27daefb4fb9e9c7f6362ae06c417fb12ac9e007c46b144eb696c9fbef1c7"
+    },
+    {
+      "path": "pending-source-ack/finished-elsa.sqlite.gz",
+      "sha256": "cb7bebb69f202ed2a556e1adef2c3fa2bdcda4b6e38e15b45340e70752a5c9e0"
+    },
+    {
+      "path": "pending-source-ack/finished-etl-design.sqlite.gz",
+      "sha256": "1246712f1c2705bbf03cc2a5ed93842383116e6130358bc3779cc9f779b29ff9"
+    },
+    {
+      "path": "pending-source-ack/finished-etl-runtime.sqlite.gz",
+      "sha256": "bca155b43855278e4e98313f7b336aab21e590cf1f4d9c02f24bd6d54179f511"
+    },
+    {
+      "path": "pending-source-ack/finished-wire.json",
+      "sha256": "4326e05f416fda50d1e7d4eb11b69982216d874fdd34107c8df123b506e941ff"
+    },
+    {
+      "path": "pending-source-ack/finished.json",
+      "sha256": "0c412a354cadb3f824841d2f61a2c967fe336f9ed684c485b20220222bffb307"
+    },
+    {
+      "path": "pending-source-ack/held-after-restart.json",
+      "sha256": "0b573b1b0c2af03e7a8b977b83729ee737a0b92c0b97ed5ac19fea679744feb5"
+    },
+    {
+      "path": "pending-source-ack/held-checked-model.json",
+      "sha256": "2d202739702971a4769e3feb273e0db3f0212275deb0251261dd514a658b375e"
+    },
+    {
+      "path": "pending-source-ack/held-elsa.sqlite.gz",
+      "sha256": "3fe590992b66ebf69aca2c6e3d1ff364a9482031a215bfaa1ec4cb2b0557ffc9"
+    },
+    {
+      "path": "pending-source-ack/held-etl-design.sqlite.gz",
+      "sha256": "a9d7bdcbfcc0deb5197c7d9ac38e43addd6a6812c9b9cba78a942ee1c126e67d"
+    },
+    {
+      "path": "pending-source-ack/held-etl-runtime.sqlite.gz",
+      "sha256": "26dd8b00243ef773958b20578c333cee2713e8192bb9444ef101f7d5a4a76a07"
+    },
+    {
+      "path": "pending-source-ack/held-wire.json",
+      "sha256": "2a30126eedf619e7c960a9c9962dd37961ad13c561ba666cfcea0df26e2fcd27"
+    },
+    {
+      "path": "pending-source-ack/held.json",
+      "sha256": "0b573b1b0c2af03e7a8b977b83729ee737a0b92c0b97ed5ac19fea679744feb5"
+    },
+    {
+      "path": "pending-source-ack/lookup-snapshot.csv",
+      "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+    },
+    {
+      "path": "pending-source-ack/lookup-source.csv",
+      "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+    },
+    {
+      "path": "pending-source-ack/process.json",
+      "sha256": "9b79353647e829e750a2ff44736426632854515c4862c2655bc5261c209ff9af"
+    },
+    {
+      "path": "pending-source-ack/recovered.json",
+      "sha256": "5a682295abd729d049fa772da23c3c52702d762737ffe4fe96ce53233a5bfc1e"
+    },
+    {
+      "path": "pending-source-ack/retained-checked-model.json",
+      "sha256": "d62529dffdd25b3a2c0116ecb5475b47a76adc987ad1c0ae2f15eb7c451655a7"
+    },
+    {
+      "path": "pending-source-ack/retained-checked-replacement.json",
+      "sha256": "3caff1e8afdcb4afb0b4a9e281fdb1df06628f8732d27c043f0add69e36c5888"
+    },
+    {
+      "path": "pending-source-ack/retained-wire.json",
+      "sha256": "4326e05f416fda50d1e7d4eb11b69982216d874fdd34107c8df123b506e941ff"
+    },
+    {
+      "path": "pending-source-ack/retained.json",
+      "sha256": "0c412a354cadb3f824841d2f61a2c967fe336f9ed684c485b20220222bffb307"
+    },
+    {
+      "path": "pending-source-ack/retry-command.json",
+      "sha256": "c70795b1129acfebd036a3964df5639cb0d904f3e3bc3f517662ed924f0785a0"
+    },
+    {
+      "path": "pending-source-ack/snapshot-unavailability.json",
+      "sha256": "ba7ef0f560927e0d2aee2f8a2d93ce0c55af0566c6e1151f6f742b499bf6fab0"
+    }
+  ]
+}

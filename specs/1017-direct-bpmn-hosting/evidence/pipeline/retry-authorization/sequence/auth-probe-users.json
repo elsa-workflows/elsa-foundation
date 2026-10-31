@@ -1,0 +1,69 @@
+{
+  "operation": "create-owned-auth-probe-users",
+  "users": [
+    {
+      "userId": "37657ac8-4cb0-4b3c-9ea9-ad795358d05a",
+      "userName": "bpmn-probe-reader",
+      "tenantId": "default",
+      "roleId": "f5813a25e2c347a3b8ecae3ede9320c6",
+      "permissions": [
+        "bpmn:read"
+      ]
+    },
+    {
+      "userId": "159d8dae-b84d-4efd-8f50-260b43a91557",
+      "userName": "bpmn-probe-retrier",
+      "tenantId": "default",
+      "roleId": "cf7c82055e4c4225851dafcd4e10bf4f",
+      "permissions": [
+        "bpmn:retry-service"
+      ]
+    },
+    {
+      "userId": "b7a6ada0-2323-40ba-84bb-8b6cbbabe438",
+      "userName": "bpmn-probe-nobody",
+      "tenantId": "default",
+      "roleId": "0ff7bb0a44314e8abdbf8b936caeaaa7",
+      "permissions": []
+    },
+    {
+      "userId": "145c916a-0581-41a6-9338-69872d99f4fe",
+      "userName": "bpmn-probe-foreign",
+      "tenantId": "bpmn-probe-foreign",
+      "roleId": "16ab6557a2a3464eba462648414356cb",
+      "permissions": [
+        "bpmn:read",
+        "bpmn:retry-service"
+      ]
+    }
+  ],
+  "credentialsIncluded": false,
+  "executionStateSeeded": false,
+  "products": [
+    {
+      "name": "NativeWorkDispatch",
+      "informationalVersion": "1.0.0+1a10565935b568e42c8431158bfafe77b571c775",
+      "sha256": "4e195680d066835a3a2e8b17354943255f05bba3dd7e0481e609fe3f0243b2a6"
+    },
+    {
+      "name": "Elsa.Foundation.Identity.AspNetCoreIdentity",
+      "informationalVersion": "1.0.0+1a10565935b568e42c8431158bfafe77b571c775",
+      "sha256": "ff59d385eff2e05048c93d9900a8d125a887a782dcaaaa04daa8a300568a9935"
+    },
+    {
+      "name": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore",
+      "informationalVersion": "1.0.0+1a10565935b568e42c8431158bfafe77b571c775",
+      "sha256": "0f69b16820666d3beb44c5dfbf9c470529bb26d2ad500bdb6a3aef5c1600dc90"
+    },
+    {
+      "name": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore",
+      "informationalVersion": "1.0.0+1a10565935b568e42c8431158bfafe77b571c775",
+      "sha256": "62187b3ba27bc0bf4077643945b67e35310a7e9f1c35e3bf746fc6eb932ba2ef"
+    },
+    {
+      "name": "Elsa.Foundation.Identity.Core",
+      "informationalVersion": "1.0.0+1a10565935b568e42c8431158bfafe77b571c775",
+      "sha256": "3d22b2c6f0568013e6d98d3460e59b4b1b2da59bfcc772ce8629d8b8b8800b45"
+    }
+  ]
+}

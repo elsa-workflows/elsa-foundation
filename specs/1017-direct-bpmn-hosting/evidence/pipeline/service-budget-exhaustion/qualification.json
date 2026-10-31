@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "executingSource": "f781ae7750d1d21d55793e11a4a781fecf0c90a0",
+  "productionRuntimeChanged": false,
+  "productionPolicyDriverApiSource": "6f532c6edfe4931ce0d574e0c98c5d93cb012d81",
+  "actualBudgetExhaustionJourneys": 5,
+  "rawAssets": 176,
+  "wholeStoresVerified": 45,
+  "actualWorkbenchProcesses": 20,
+  "actualHttpProcesses": 5,
+  "actualSigkillExits": 10,
+  "all25ListedChildrenStopped": true,
+  "maxTotalPhysicalAttempts": 2,
+  "physicalWorkerAndEtlAttemptsPerCase": 2,
+  "oldAttemptFaultCode": "etl.snapshot-read-failed",
+  "replacementPreparationFaultCode": "etl.binding-read-failed",
+  "bothFailedAttemptsPreserved": true,
+  "budgetExhaustionProved": true,
+  "furtherRetryRefusedWithoutNewAttempt": true,
+  "finalModelRevisionDirect": 4,
+  "finalModelRevisionEmbedded": 5,
+  "priorPhysicalHttpOutputRecordsPerCase": 2,
+  "additionalPhysicalHttpEffects": 0,
+  "exactNativeParentConsumptionSettlementAndSourcesAcknowledged": true,
+  "originalInputBytesRestoredAfterFailedHostStopped": true,
+  "sameSourceInterpreterHistoriesCompared": true,
+  "normalization": [
+    "producingWorkHandle only when it equals that model execution identity"
+  ],
+  "externalLibraryBinaryHashClaimed": false,
+  "portableControls": 176,
+  "newPortablePositiveAndNegativeControls": 15,
+  "skippedTests": 0,
+  "standardHostBuildErrors": 0,
+  "testTierRegistrations": 123,
+  "frozenBaselineAssetsVerifiedUnchanged": 104,
+  "frozenBaselineManifestUnchanged": true,
+  "earlierBpmn411AndHumanHost9ValidationSource": "d2e62a1abea349db6a401661ff0904c20d565843",
+  "earlierDotnetValidationRelabeledAsThisSource": false,
+  "nativeCompositeFaultStatusDecisionResolved": false,
+  "timerInterruptionProved": false,
+  "competingRetryCancelCommitOrdersProved": false,
+  "obsoleteResultControlsProved": false,
+  "authorizationBeforeReplayProved": false,
+  "finalAffectedSourceUpgradeAndStudioProved": false,
+  "fullPrReviewRounds": 0,
+  "completeTaskOrProgramAcceptance": false,
+  "validationLogs": [
+    {
+      "path": "validation/maps.txt",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+    },
+    {
+      "path": "validation/portable-tests.txt",
+      "sha256": "bd2734e6099e7529c954123b311381f286795f33f0a289b98ebe3accff128ffd"
+    },
+    {
+      "path": "validation/standard-host-build.txt",
+      "sha256": "5ee8c3db6ffaaca3c991624525ddb50ddf581493d58303d3b8ce7d71e1d6a708"
+    },
+    {
+      "path": "validation/test-tiers.txt",
+      "sha256": "91cc02f2f85c466bbc3d5d675d3bf055059b2c0e5e185229a4c4d99b174f25c4"
+    },
+    {
+      "path": "validation/whole-stores.json",
+      "sha256": "da19e5c6be61bfe35d5c1610d42df94bbac949b7a004dab712232cfeb2828482"
+    }
+  ]
+}

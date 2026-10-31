@@ -1,0 +1,51 @@
+{
+  "actualBudgetExhaustionJourneys": [
+    {
+      "parent": "direct",
+      "wholeStoresVerified": 9,
+      "physicalAttempts": 2,
+      "furtherRetryRefused": true,
+      "additionalPhysicalHttpEffects": 0
+    },
+    {
+      "parent": "root",
+      "wholeStoresVerified": 9,
+      "physicalAttempts": 2,
+      "furtherRetryRefused": true,
+      "additionalPhysicalHttpEffects": 0
+    },
+    {
+      "parent": "sequence",
+      "wholeStoresVerified": 9,
+      "physicalAttempts": 2,
+      "furtherRetryRefused": true,
+      "additionalPhysicalHttpEffects": 0
+    },
+    {
+      "parent": "flowchart",
+      "wholeStoresVerified": 9,
+      "physicalAttempts": 2,
+      "furtherRetryRefused": true,
+      "additionalPhysicalHttpEffects": 0
+    },
+    {
+      "parent": "compensationscope",
+      "wholeStoresVerified": 9,
+      "physicalAttempts": 2,
+      "furtherRetryRefused": true,
+      "additionalPhysicalHttpEffects": 0
+    }
+  ],
+  "wholeStoresVerified": 45,
+  "sourceRevision": "f781ae7750d1d21d55793e11a4a781fecf0c90a0",
+  "budgetExhaustionProved": true,
+  "bothFailedAttemptsPreserved": true,
+  "furtherRetryRefusedWithoutNewAttempt": true,
+  "sameSourceInterpreterTracesCompared": true,
+  "nativeCompositeFaultStatusDecisionResolved": false,
+  "timerInterruptionProved": false,
+  "competingRetryCancelCommitOrdersProved": false,
+  "obsoleteResultControlsProved": false,
+  "authorizationBeforeReplayProved": false,
+  "finalAffectedSourceUpgradeAndStudioProved": false
+}

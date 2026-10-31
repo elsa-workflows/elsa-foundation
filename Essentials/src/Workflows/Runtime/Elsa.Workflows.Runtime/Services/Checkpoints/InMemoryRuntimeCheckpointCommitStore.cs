@@ -154,6 +154,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     public async ValueTask<RuntimeCheckpointCommitStoreResult> CommitAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(commit);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (commit.ModelState is not null || commit.ExpectedModelExecution is not null)
+            throw new NotSupportedException("The in-memory checkpoint writer does not support model decisions or model-owned native worker admission.");
         try { return await CommitWithParticipantsAsync(commit, decision, cancellationToken); }
         catch (Exception exception) when (commit.ExpectedBookmarkResume is not null && exception is
             WorkflowExecutableRootWriteLeaseUnavailableException or WorkflowExecutableRootWriteLeaseLostException)
@@ -552,6 +555,30 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         if (item.StimulusDeliverySourceScope != scope)
             throw new InvalidDataException("The in-memory source has no matching committed scope witness.");
         return item;
+    }
+
+    public ValueTask<RuntimePostCommitOutboxItem?> FindUndeliveredDurableAsync(string workflowExecutionId,
+        string excludedIntentKind, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(excludedIntentKind);
+        cancellationToken.ThrowIfCancellationRequested();
+        var access = _persistenceAccessContextAccessor?.Current ??
+            throw new InvalidOperationException("A durable source read requires explicit persistence access.");
+        var scope = access.RequireScope();
+        if (System.Transactions.Transaction.Current is not null)
+            throw new InvalidOperationException("A durable source cannot be authorized inside a caller-owned transaction.");
+        lock (_state.SyncRoot)
+        {
+            foreach (var item in _state.OutboxItems.Values.Where(item => item.Intent.WorkflowExecutionId == workflowExecutionId &&
+                item.Intent.Kind != excludedIntentKind && item.Status != RuntimePostCommitOutboxStatus.Delivered))
+            {
+                if (item.StimulusDeliverySourceScope is null)
+                    throw new InvalidDataException("The in-memory source has no committed scope witness.");
+                if (item.StimulusDeliverySourceScope == scope) return ValueTask.FromResult<RuntimePostCommitOutboxItem?>(item);
+            }
+            return ValueTask.FromResult<RuntimePostCommitOutboxItem?>(null);
+        }
     }
 
     ValueTask IStimulusDeliveryStore.EnsureOrdinaryCollectionAllowedAsync(IRuntimePostCommitOutboxStore outbox, IWorkflowExecutableStore executables,

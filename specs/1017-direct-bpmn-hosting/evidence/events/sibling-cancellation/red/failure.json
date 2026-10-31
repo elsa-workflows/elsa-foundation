@@ -1,0 +1,59 @@
+{
+  "stage": "cancel-one-worker",
+  "sourceRevision": "8d5ed3e03b228d866b26606a81e063839af183f6",
+  "type": "Xunit.Sdk.AllException",
+  "modelExecutionId": "bpmn:544621739f8a063c30655c1d1e4e4718b5df061dc0885f7450df4577b1799063",
+  "workers": [
+    "wfexec:start:v1:9e7af01958137a055cdd67fa61d0c2215d594be546c002474f1e248a7536f7a1",
+    "wfexec:start:v1:5f7b808c76f4e7e4941be52db5c3cef390448237855012f87913a6584f757945"
+  ],
+  "inputs": [
+    {
+      "file": "retained-runtime.sqlite.gz",
+      "sha256": "5bbef921f9e729cf95389de2481dd1de36f814bdb1bd52eb523ce863e56d5d87"
+    },
+    {
+      "file": "retained-design.sqlite.gz",
+      "sha256": "a8955fb7f1f7da7e315958fac476e08bfe996a89bdce0dc53fdeccf4577214c2"
+    }
+  ],
+  "processes": [
+    {
+      "processId": 31078,
+      "controllerProcessId": 31077,
+      "startedAtUtc": "2026-10-30T02:08:56.802144Z"
+    },
+    {
+      "processId": 31112,
+      "controllerProcessId": 31077,
+      "startedAtUtc": "2026-10-30T02:09:01.082566Z"
+    }
+  ],
+  "exits": [
+    137,
+    137
+  ],
+  "stores": [
+    {
+      "file": "waiting-runtime.sqlite.gz",
+      "databaseSha256": "9bf187be44c5d1b5bc082df3c6158d929daf276260c73ae7270bce769c6cfafa",
+      "gzipSha256": "5bd1c9d73e172589ae7cb5deb05dfff9889f0dd25b468addebeff261f9e1b5b4"
+    },
+    {
+      "file": "waiting-design.sqlite.gz",
+      "databaseSha256": "9dc7c9792c39ac8d614fdd77ae4afa68de6b24de35c6d63c154bc3c764a9a83d",
+      "gzipSha256": "0fefa23782e36597e681295ac5b4bbadd532ae52ef202b37794a2e44838f354b"
+    },
+    {
+      "file": "finished-runtime.sqlite.gz",
+      "databaseSha256": "2c8d073ec0f0dc3c853436531f298aadcdf94d1d1a6f895c0e5c03c643407c4e",
+      "gzipSha256": "fad8abac2399ac4b11af1133c5f165e84e84764cae566b9f4bdf700598dcee48"
+    },
+    {
+      "file": "finished-design.sqlite.gz",
+      "databaseSha256": "9dc7c9792c39ac8d614fdd77ae4afa68de6b24de35c6d63c154bc3c764a9a83d",
+      "gzipSha256": "0fefa23782e36597e681295ac5b4bbadd532ae52ef202b37794a2e44838f354b"
+    }
+  ],
+  "qualifiesJourney": false
+}

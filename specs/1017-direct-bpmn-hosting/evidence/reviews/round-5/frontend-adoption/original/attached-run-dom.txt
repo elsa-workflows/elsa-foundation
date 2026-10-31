@@ -1,0 +1,170 @@
+- complementary:
+  - link "Elsa Studio Foundation":
+    - /url: /
+    - strong: Elsa Studio
+    - generic: Foundation
+  - button "Collapse navigation" [expanded]:
+  - searchbox "Search modules"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard
+      - generic: Home
+    - link "Workflows":
+      - /url: /workflows/definitions
+      - generic: Workflows
+    - link "Runs":
+      - /url: /workflows/instances
+      - generic: Runs
+  - navigation "More tools":
+    - button "More tools":
+      - generic: More tools
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings
+      - generic: Settings
+  - group "Environment and account":
+    - 'group "Configured backend endpoint: 127.0.0.1:58424"':
+      - strong: Backend API
+      - generic: 127.0.0.1:58424
+    - 'button "Account: Administrator"':
+      - generic: A
+      - generic: Administrator
+- banner:
+  - generic: Studio / Runs
+  - heading "Runs" [level=1]
+  - button "Weaver":
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation-studio
+  - link "Designer source":
+    - /url: https://github.com/elsa-workflows/elsa-foundation-designer
+  - radiogroup "Colour mode":
+    - radio "Light":
+    - radio "Dark" [checked]:
+    - radio "Dim":
+  - button "Select theme":
+- main:
+  - text: Workflow management
+  - heading "Run" [level=2]
+  - generic: Workflow Instance ID
+  - code: 14n6TRg1d9R
+  - button "Runs":
+    - text: Runs
+  - 'button "Open run incidents: No active incidents"':
+    - text: No active incidents
+  - button "Review workflow definition":
+    - text: Review workflow definition
+  - button "Refresh":
+    - text: Refresh
+  - button "Pause following" [pressed]
+  - status: Execution on this canvas
+  - button "Explain":
+    - text: Explain
+  - status
+  - region "Workflow run canvas":
+    - text: Pinned Runtime executable
+    - heading "BPMN execution model · reviewed host draft" [level=3]
+    - generic: Completed
+    - button "Root"
+    - navigation "Execution scope":
+      - button "All executions"
+    - application:
+      - 'button "Start. Node ID: start. Activity type: unknown. State: authoring. Not selected."':
+        - generic "Start event":
+          - generic: Start
+      - 'button "Reviewed default route. Node ID: route. Activity type: unknown. State: authoring. Not selected."':
+        - generic "Exclusive gateway":
+          - generic: ×
+          - generic: Reviewed default route
+      - 'button "Default timer. Node ID: wait. Activity type: unknown. Run state: Completed. Selected." [active] [pressed]':
+        - generic "Intermediate catch event":
+          - strong: Default timer
+          - generic: Intermediate catch event
+      - 'button "Default complete. Node ID: end. Activity type: unknown. State: authoring. Not selected."':
+        - generic "End event":
+          - generic: Default complete
+      - 'button "Other complete. Node ID: other-end. Activity type: unknown. State: authoring. Not selected."':
+        - generic "End event":
+          - generic: Other complete
+      - img "Mini Map"
+      - generic "Control Panel":
+        - button "Zoom In" [disabled]:
+        - button "Zoom Out":
+        - button "Fit View":
+        - button "Toggle Interactivity":
+      - link "React Flow attribution":
+        - /url: https://reactflow.dev
+        - text: React Flow
+  - separator "Resize run details panel"
+  - complementary "Run details panel":
+    - tablist "Run details tabs":
+      - tab "Timeline":
+        - generic: Timeline
+      - tab "Activity" [selected]:
+        - generic: Activity
+      - tab "Issues":
+        - generic: Issues
+      - tab "Details":
+        - generic: Details
+    - button "Collapse run details panel":
+    - button "Maximize run details panel":
+    - generic: Selected activity
+    - heading "Delay" [level=4]
+    - button "Copy activity name":
+    - generic "Elsa.Activities.Scheduling.Activities.Delay":
+      - text: Delay
+      - generic "1.0.0+81f6ae7a47497a9f1f5704bd6b5f9b21fa1566a0": v1.0.0
+    - generic: Completed
+    - button "Copy activity status":
+    - term: Started
+    - definition:
+      - generic: 10/31/2026, 1:45:34 AM
+      - button "Copy start time":
+    - term: Duration
+    - definition:
+      - generic: 1s
+      - button "Copy duration":
+    - term: Incidents
+    - definition:
+      - generic: "0"
+      - button "Copy incident count":
+    - region "Activity executions":
+      - button "Previous activity execution" [disabled]:
+      - button "Execution 1 of 1":
+        - text: Execution 1 of 1
+      - button "Next activity execution" [disabled]:
+    - region "Activity incidents":
+      - heading "Incidents" [level=4]
+      - paragraph: No incidents recorded for this execution.
+    - heading "Inputs 1 inputs" [level=4]:
+      - text: Inputs
+      - generic "1 inputs": "1"
+    - generic: Evaluated at runtime
+    - list:
+      - strong: Duration
+      - generic "TimeSpan"
+      - generic "Duration runtime value":
+        - code: 00:00:01
+      - generic "Source & diagnostics Literal":
+        - generic: Source & diagnostics
+        - generic: Literal
+    - heading "Outputs" [level=4]
+    - paragraph: No runtime output snapshots were recorded for this execution.
+    - heading "Outcomes 1 outcomes" [level=4]:
+      - text: Outcomes
+      - generic "1 outcomes": "1"
+    - list:
+      - listitem: Done
+    - generic "Execution details 5 values":
+      - generic: Execution details
+      - generic: 5 values
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - generic "Bottom panel controls":
+    - button "Expand bottom panel":
+    - button "Maximize bottom panel":
+  - option "All sources" [selected]
+  - option "Elsa Studio · Sipkes-Mac-Mini:99103"

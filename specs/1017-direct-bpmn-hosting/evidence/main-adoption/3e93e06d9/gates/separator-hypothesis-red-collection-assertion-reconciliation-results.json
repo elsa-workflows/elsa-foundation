@@ -1,0 +1,16 @@
+[
+  {
+    "name": "browser-root",
+    "source": "313e4cbb8b9ec3ecaa2e8dd8ee7f680d918e2c3a",
+    "arguments": [
+      "pnpm",
+      "exec",
+      "playwright",
+      "test",
+      "--config",
+      "/tmp/elsa-2898-main-3e93-qualification/playwright.root.config.ts"
+    ],
+    "exitCode": 1,
+    "elapsedSeconds": 135.54294395446777
+  }
+]

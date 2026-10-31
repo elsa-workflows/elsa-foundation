@@ -1,0 +1,44 @@
+{
+  "request": {
+    "requestId": "cancel-actual-held-service",
+    "reason": "Retire the actual held service failure."
+  },
+  "submitted": {
+    "executionId": "bpmn-embedded:cb761a84d5361fac9f9c81a21801628496e552dc48d3f6c710a810de89ee5401",
+    "inputId": "cancel-actual-held-service",
+    "replay": false,
+    "pending": false,
+    "result": {
+      "status": "Accepted",
+      "code": null,
+      "revision": 3,
+      "lifecycle": "TerminalPendingSettlement"
+    }
+  },
+  "accepted": {
+    "executionId": "bpmn-embedded:cb761a84d5361fac9f9c81a21801628496e552dc48d3f6c710a810de89ee5401",
+    "inputId": "cancel-actual-held-service",
+    "replay": true,
+    "pending": false,
+    "result": {
+      "status": "Accepted",
+      "code": null,
+      "revision": 3,
+      "lifecycle": "TerminalPendingSettlement"
+    }
+  },
+  "retiredIncident": {
+    "incidentId": "bpmn-incident:18d0750adeef0df9e95cdb60931d7d74241139a41e4aaf4710eb8c9f0b7f16ae",
+    "elementId": "service",
+    "bindingId": "pipeline",
+    "invocationId": "bpmn-work:8489a84bf7c2ede4f025b9a1daaef968b56916f4c70ef91d5686c3fb15653633",
+    "failedAttemptId": "attempt:5e2c786a370fd166effe14f9bde5cf8deacdfc97e7f580117fc688a209672f1b",
+    "workerExecutionId": "wfexec:start:v1:8145ffc7c131b4dfb50afc2c080724495d23114ff02acf0e6b3b3865c5a66955",
+    "faultCode": "etl.snapshot-read-failed",
+    "failedAt": "2026-10-29T20:34:29.342959+00:00",
+    "attemptNumber": 1,
+    "maxAttempts": 2,
+    "status": "Retired",
+    "retryAttemptId": null
+  }
+}

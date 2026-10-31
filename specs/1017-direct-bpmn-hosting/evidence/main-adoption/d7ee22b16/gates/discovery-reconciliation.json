@@ -1,0 +1,31 @@
+[
+  {
+    "name": "hosting",
+    "listed": 32,
+    "executed": 32,
+    "missingDiscoveries": [],
+    "unlistedExecutions": [],
+    "runtimeTheoryExpansions": [],
+    "trxSha256": "23e1bf7188bded9d229b618e14ec961c05cc6c17e6de875cb8c413130a3059b3"
+  },
+  {
+    "name": "architecture",
+    "listed": 585,
+    "executed": 594,
+    "missingDiscoveries": [],
+    "unlistedExecutions": [],
+    "runtimeTheoryExpansions": [
+      {
+        "test": "Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Canonical_domain_api_depends_on_capability_aggregation_and_registers_one_stable_declaration",
+        "listed": 1,
+        "executed": 5
+      },
+      {
+        "test": "Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_collectible_api_explorer_artifact_is_rejected",
+        "listed": 1,
+        "executed": 6
+      }
+    ],
+    "trxSha256": "333e1f0c3ba15ca84ef723b6db8fb631158dcd722f65a73dd22bb7c125578cdb"
+  }
+]

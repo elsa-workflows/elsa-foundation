@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "kind": "test-only-main-adoption",
+  "executingSource": "c9a4881f804997693160f70186602921340fa03d",
+  "adoptedMain": "a01980064aed293502b9ada57a682286d950c7fd",
+  "previousRemoteCIHead": "8504fbac779941eeef51c1ccdc1a36a07fceee88",
+  "productionAndBuildInputsUnchanged": true,
+  "browserSuite": "compensation-scope.spec.ts",
+  "browser": {
+    "startTime": "2026-10-31T03:03:59.532Z",
+    "duration": 71152.772,
+    "expected": 80,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "resultRecords": 80,
+  "retries": 0,
+  "commands": [
+    {
+      "cwd": "Studio",
+      "arguments": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "test",
+        "compensation-scope.spec.ts",
+        "--workers=2",
+        "--reporter=json"
+      ],
+      "environment": {
+        "CI": "1"
+      },
+      "exitCode": 0
+    },
+    {
+      "cwd": "Studio",
+      "arguments": [
+        "pnpm",
+        "typecheck"
+      ],
+      "exitCode": 0
+    },
+    {
+      "cwd": "Studio",
+      "arguments": [
+        "pnpm",
+        "lint"
+      ],
+      "exitCode": 0
+    }
+  ],
+  "actualHostStudioEvidenceRelabelled": false,
+  "completeReviewRounds": 6,
+  "cleanReviewRounds": 0,
+  "seventhRoundStarted": false,
+  "assets": [
+    {
+      "path": "browser.json.gz",
+      "sha256": "95a7f961e493031ac655bf9cd84369cdc9c81808f26b7a7aeb78d3bdf674501d",
+      "decodedSha256": "8e3ab39b0f071b6a7d5871ce5d5a2470f5fab5b439701be0afc407938adde13f",
+      "decodedBytes": 89700
+    },
+    {
+      "path": "browser.stderr.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "decodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "decodedBytes": 0
+    },
+    {
+      "path": "typecheck.log.gz",
+      "sha256": "84695eb9e4632241aeee41257856d6ae997e10877cb7186adce8729ce94abf21",
+      "decodedSha256": "bf9f9f9955e4401fa82c6b236f99a01f4359b16e9d8fe2799e3b1e01adc61f2d",
+      "decodedBytes": 1011
+    },
+    {
+      "path": "lint.log.gz",
+      "sha256": "f7a42d1471906d436992d014d95494f0effd3ed261003f40b484a0128f12df71",
+      "decodedSha256": "faad4c295953057fb701b6b3c253290223d5c4f3c3f5c3a36af90d5de95c2622",
+      "decodedBytes": 14444
+    },
+    {
+      "path": "source-equivalence.json",
+      "sha256": "e82164170a291a8030b541f64dd19ff8f7a37f8446bba80c2fc8987ca9c356db"
+    }
+  ],
+  "executedStatuses": {
+    "passed": 80
+  }
+}

@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "executingSource": "8dc088bae4463b8a9279a1f25036ac14b1715cd6",
+  "productionRuntimeChanged": false,
+  "earlierProductionDurationSource": "a2c2e47751d595c9489f889593ed4d7427ef6076",
+  "actualServiceDurationJourneys": 15,
+  "orders": [
+    "worker-first",
+    "timer-first",
+    "held-interruption"
+  ],
+  "parents": [
+    "direct",
+    "Root",
+    "Sequence",
+    "Flowchart",
+    "CompensationScope"
+  ],
+  "rawAssets": 488,
+  "wholeStoresVerified": 135,
+  "actualWorkbenchProcesses": 60,
+  "actualHttpProcesses": 15,
+  "all75ListedChildrenStopped": true,
+  "actualSigkillExits": 30,
+  "workerFirstDurationSeconds": 60,
+  "workerFirstHttpRetryAfterSeconds": 20,
+  "timerFirstDurationSeconds": 10,
+  "timerFirstHttpRetryAfterSeconds": 60,
+  "heldDurationSeconds": 90,
+  "heldHttpRetryAfterSeconds": 20,
+  "workerSuccessBeforeTimerRetained": true,
+  "timerCancelsOriginalNativeWorkerAndEtlRun": true,
+  "cancelledWorkerDoesNotRetryHttp": true,
+  "heldFaultRetiredWithoutNewAttempt": true,
+  "originalFaultSemanticSnapshotAndResultRetained": true,
+  "retryAfterTimerRetirementRefused": true,
+  "exactOriginalParentConsumptionSuccessorSettlementAndAck": true,
+  "fourthHostViewsAndPhysicalHttpStable": true,
+  "sameOrderInterpreterHistoriesComparedAcrossAllParents": true,
+  "normalization": [
+    "producingWorkHandle only when equal to that model execution identity",
+    "stoppedHandle only when equal to the independently checked original duration or native-work invocation"
+  ],
+  "sqlExecutionStateOrClockEdited": false,
+  "portableEtlControlsPassed": 224,
+  "newPositiveAndCorruptControls": 16,
+  "portableBpmnControlsPassed": 27,
+  "skippedTests": 0,
+  "standardHostBuildErrors": 0,
+  "testTierRegistrations": 123,
+  "frozenBaselineAssetsVerifiedUnchanged": 104,
+  "originalFrozenManifestUnchanged": true,
+  "diagnostic": {
+    "executingSource": "ffc00efa4512e798b23a3dfd7b8c3747e1751ca8",
+    "wholeStores": 15,
+    "listedChildrenStopped": 7,
+    "includedInQualifyingCounts": false,
+    "limits": [
+      "Held timer expired during third-host recovery; valid retirement completion retained.",
+      "Timer won model decision after physical HTTP retry became due; already-completed worker truth retained for settlement."
+    ]
+  },
+  "earlierBpmn431AndActualHumanDuration2HumanHost9NativeService1Source": "a2c2e47751d595c9489f889593ed4d7427ef6076",
+  "earlierDotnetResultsRelabelledAsThisSource": false,
+  "simultaneousCompetingCommitOrdersProved": false,
+  "directModelBroadcastProviderRetentionRollbackFinalUpgradeStudioProved": false,
+  "nativeCompositeFaultStatusDecisionResolved": false,
+  "fullPrReviewRounds": 0,
+  "completeTaskOrProgramAcceptance": false,
+  "validationLogs": [
+    {
+      "path": "validation/held-interruption-compensationscope-controller.txt",
+      "sha256": "d44e6465c96327aebe202429093fae9a9a31cfcc7fcc30938dfba836180adb5e"
+    },
+    {
+      "path": "validation/held-interruption-direct-controller.txt",
+      "sha256": "c35b1bb8064fb209cd54277fefaf6151747f919f0b7f7bb4532938ab1502f6a2"
+    },
+    {
+      "path": "validation/held-interruption-flowchart-controller.txt",
+      "sha256": "4e98ba4f570b192e1b181c1e1408e0bcd80e89f317976cc95f0328bbd6742136"
+    },
+    {
+      "path": "validation/held-interruption-root-controller.txt",
+      "sha256": "23fdb0d18620c7dae768f51d8f8c7d6169989f8557db50f11ff6ece11523a508"
+    },
+    {
+      "path": "validation/held-interruption-sequence-controller.txt",
+      "sha256": "cc0edaef8671fefa388facd30d79e84bfc10f7f273f3173f28362538a8cdecfc"
+    },
+    {
+      "path": "validation/maps.txt",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+    },
+    {
+      "path": "validation/new-controls.txt",
+      "sha256": "e2d09c26c6c232790882c6b7644da3440843903ca40a587a5bd875a85349d8d8"
+    },
+    {
+      "path": "validation/portable-bpmn.txt",
+      "sha256": "88961413a0192c1b08ff9b63ba6639723e02d75ffcb7ab2b370952b07d85a44c"
+    },
+    {
+      "path": "validation/portable-etl.txt",
+      "sha256": "f1cfaeab8544c056ec5b90504d2e76f16f13fbc235b85ee06482aa83a158d7f7"
+    },
+    {
+      "path": "validation/standard-host-build.txt",
+      "sha256": "77b33dd3c5914a76614fb7a0bb911e34f5c2f57107cade2ef013a351becd145f"
+    },
+    {
+      "path": "validation/test-tiers.txt",
+      "sha256": "91cc02f2f85c466bbc3d5d675d3bf055059b2c0e5e185229a4c4d99b174f25c4"
+    },
+    {
+      "path": "validation/timer-first-compensationscope-controller.txt",
+      "sha256": "53998113ccc0bcfbeeebc7a611c68c8fae79a14d1b8a0e07e3e67a0ce041777c"
+    },
+    {
+      "path": "validation/timer-first-direct-controller.txt",
+      "sha256": "0c021e3d1844eeaa438e8f682a188b3ba4050589eb1e2db4a13c87848e270bd5"
+    },
+    {
+      "path": "validation/timer-first-flowchart-controller.txt",
+      "sha256": "b93d1da621926d40f09c6236ef6a3d72c2090b9a87e005542bb6608b2edaa388"
+    },
+    {
+      "path": "validation/timer-first-root-controller.txt",
+      "sha256": "d80dadd8218b5bd205073d693cd98136168aa77a0501166c1cf05f4fcd4439f4"
+    },
+    {
+      "path": "validation/timer-first-sequence-controller.txt",
+      "sha256": "b283e1135de66175b89e8b953d1a3a964e2de99a200358cb1d9d71049b804153"
+    },
+    {
+      "path": "validation/whole-stores.json",
+      "sha256": "e018705f9430be88c6913d0478145274c84f98292ac6d64ce16395a65373aeea"
+    },
+    {
+      "path": "validation/worker-first-compensationscope-controller.txt",
+      "sha256": "e16114eff08611083ca98538f58a2994566a4c0a146e54d05855665fc5138473"
+    },
+    {
+      "path": "validation/worker-first-direct-controller.txt",
+      "sha256": "6e960b7ddd611e3469b39e4e2f0077c796ac47033605a6d35664d1ce1f50ff10"
+    },
+    {
+      "path": "validation/worker-first-flowchart-controller.txt",
+      "sha256": "bac07cc8b2a4858ecb2f8181a175927614ce1db104e67ec2405ca1f9770617ff"
+    },
+    {
+      "path": "validation/worker-first-root-controller.txt",
+      "sha256": "33abb8190d62c7b684966d92edc75eebb48c0e643c988c01ea1ff3e48d5da730"
+    },
+    {
+      "path": "validation/worker-first-sequence-controller.txt",
+      "sha256": "4ad34f470e07f915a6990c9ebe3f2e4002f6333de198087060fe6f2bac7d8f6c"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "sourceRevision": "0f5f6c6efaada666f40766478ef63ad488b28e58",
+  "configurationMismatch": "Owned random Studio port is missing from the copied default Identity AllowedReturnUrlOrigins. Login form redirects to backend root instead of the requested Studio callback.",
+  "observedAfterRestart": "Repeated supported UI login returns to login after navigating back to Studio, including fresh tab.",
+  "apiRecovery": "Both completed PublishedRun/TestRun views equal pre-restart observations.",
+  "firstOriginalUiRuns": {
+    "publishedRunId": "14nx3CzbvR6",
+    "testRunId": "14nxH9tOSAh"
+  },
+  "studioPostRestartAcceptanceProved": false,
+  "nextAction": "Set only the owned Studio origin on the existing Identity feature in the owned controller; rerun actual saved fixtures."
+}

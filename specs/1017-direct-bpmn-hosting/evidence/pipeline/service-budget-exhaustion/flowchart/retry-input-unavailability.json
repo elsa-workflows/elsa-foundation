@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-owned-bound-lookup-input-unavailability",
+  "sourceRevision": "f781ae7750d1d21d55793e11a4a781fecf0c90a0",
+  "sourceFile": "lookup.csv",
+  "unavailableFile": "lookup.csv.unavailable",
+  "sourceSha256Before": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc",
+  "sourceSha256WhileUnavailable": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc",
+  "originalBoundReadPathMissing": true,
+  "originalRetainedSnapshotStillAvailable": true,
+  "inducedAtUtc": "2026-10-29T20:46:55.318933+00:00",
+  "restoredAfterFailedHostStopped": true,
+  "restoredAtUtc": "2026-10-29T20:46:59.654141+00:00",
+  "restoredSha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+}

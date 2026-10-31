@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "18ac139e055b7e9af4573b720086c989884a9f48",
+  "actualJourneys": 2,
+  "workbenchProcesses": 6,
+  "ownedHttpFixtureProcesses": 2,
+  "wholeStores": 12,
+  "manifestSha256": "369365905d832805d24c4326ce4d139d466caf787bbd2b321280915a7a988c5a",
+  "originalBaselineAssetsUnchanged": 104,
+  "checks": [
+    {
+      "name": "actual production Workbench BPMN / native RunEtl / HTTP journeys",
+      "passed": 2,
+      "skipped": 0,
+      "cases": [
+        "direct service success",
+        "direct service unmatched modeled business error"
+      ]
+    },
+    {
+      "name": "DirectBpmnWorkbenchTests",
+      "passed": 2,
+      "skipped": 0,
+      "trxSha256": "90c2babcf293a67eb09f6d807dc867b99b63f7977a107502a3df84c102f1078b"
+    },
+    {
+      "name": "complete Runtime EF suite including folded-result guards",
+      "passed": 1770,
+      "skipped": 0,
+      "trxSha256": "ef601643acdb8e5ba6f36d059a33cf55382d1e8c08af12d2eb64cc8929490fa4"
+    },
+    {
+      "name": "portable comparisons and rehashed corrupt controls for native reference and direct bridge",
+      "passed": 10,
+      "skipped": 0,
+      "logSha256": "be0917f7e8be385c8bb4625cff37897e2cee439297fa132d510e75760948092a"
+    },
+    {
+      "name": "BPMN library/adapter suite",
+      "passed": 379,
+      "skipped": 0,
+      "trxSha256": "c26b9d5ada4540cae6813f361aed9a50301ac68697ae3d7ff455ed2cdf484308"
+    }
+  ],
+  "implementationFindings": [
+    {
+      "problem": "Physical outbox qualification rejected separate valid coalescing lookup/store wrappers.",
+      "fixCommit": "9a41eaa1c",
+      "verification": "Actual Workbench service execution and retained restart result."
+    },
+    {
+      "problem": "The direct runner retained a distributed actor outside this profile.",
+      "fixCommit": "0fd65dd5d",
+      "verification": "Both actual journeys use the built-in single-node actor."
+    },
+    {
+      "problem": "After actual ETL recovery the native terminal guard rejected already materialized Balanced outbox changes.",
+      "fixCommit": "18ac139e055b7e9af4573b720086c989884a9f48",
+      "verification": "Folded-outbox regression, intent-only and foreign-scope refusal, both actual recovery journeys."
+    }
+  ],
+  "scopeLimits": [
+    "One direct start/service/end and one closed published native RunEtl root on the built-in single-node actor / EF SQLite.",
+    "Same-source process-loss recovery; no upgraded-host ETL recovery or final affected-source Studio acceptance.",
+    "No native RunBpmn embedding, matched business-error catch, broader service/event shapes, cancellation propagation/settlement or held terminal-fault retry is proved.",
+    "External HTTP effects remain at least once; observed counts are not an exactly-once guarantee.",
+    "Existing Studio and native ETL reference receipts retain their own source identities; T027/T031/T034-T041 remain open.",
+    "Historical private paths and ports are comparison evidence; reproduction creates fresh owned resources."
+  ],
+  "guards": {
+    "maps": "Generated solution filters still describe the project graph.",
+    "testTiers": "Test tiers: 123 test projects, each in one tier and one shard."
+  },
+  "ownedProcessesStopped": 8
+}

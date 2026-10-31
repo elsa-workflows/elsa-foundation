@@ -1,0 +1,267 @@
+  Determining projects to restore...
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj : warning NU1902: Package 'System.Security.Cryptography.Pkcs' 9.0.13 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-2fmv-rv2c-59x7
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj : warning NU1903: Package 'System.Security.Cryptography.Pkcs' 9.0.13 has a known high severity vulnerability, https://github.com/advisories/GHSA-846f-f764-76mx
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj : warning NU1902: Package 'System.Security.Cryptography.Pkcs' 9.0.13 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-2fmv-rv2c-59x7 [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj : warning NU1903: Package 'System.Security.Cryptography.Pkcs' 9.0.13 has a known high severity vulnerability, https://github.com/advisories/GHSA-846f-f764-76mx [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj]
+  All projects are up-to-date for restore.
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj : warning NU1902: Package 'System.Security.Cryptography.Pkcs' 9.0.13 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-2fmv-rv2c-59x7
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj : warning NU1903: Package 'System.Security.Cryptography.Pkcs' 9.0.13 has a known high severity vulnerability, https://github.com/advisories/GHSA-846f-f764-76mx
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj : warning NU1902: Package 'System.Security.Cryptography.Pkcs' 9.0.13 has a known moderate severity vulnerability, https://github.com/advisories/GHSA-2fmv-rv2c-59x7
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj : warning NU1903: Package 'System.Security.Cryptography.Pkcs' 9.0.13 has a known high severity vulnerability, https://github.com/advisories/GHSA-846f-f764-76mx
+  Elsa.Architecture.Analyzers -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/build/Analyzers/bin/Release/netstandard2.0/Elsa.Architecture.Analyzers.dll
+  Elsa.Studio.Preferences.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Studio/Preferences/Core/bin/Release/net10.0/Elsa.Studio.Preferences.Core.dll
+  Elsa.Pipelines.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Pipelines/Core/bin/Release/net10.0/Elsa.Pipelines.Core.dll
+  Elsa.Modularity.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Modularity/Core/bin/Release/net10.0/Elsa.Modularity.Core.dll
+  Elsa.Tasks.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Tasks/Core/bin/Release/net10.0/Elsa.Tasks.Core.dll
+  Elsa.Diagnostics.StructuredLogs.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/StructuredLogs/Core/bin/Release/net10.0/Elsa.Diagnostics.StructuredLogs.Core.dll
+  Elsa.Primitives -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Primitives/Primitives/bin/Release/net10.0/Elsa.Primitives.dll
+  Elsa.Persistence.Schema -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/Schema/bin/Release/net10.0/Elsa.Persistence.Schema.dll
+  Elsa.Foundation.Identity.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/Core/bin/Release/net10.0/Elsa.Foundation.Identity.Core.dll
+  Elsa.Attention.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Attention/Core/bin/Release/net10.0/Elsa.Attention.Core.dll
+  Elsa.Diagnostics.OpenTelemetry.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/OpenTelemetry/Core/bin/Release/net10.0/Elsa.Diagnostics.OpenTelemetry.Core.dll
+  Elsa.Events.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Events/Core/bin/Release/net10.0/Elsa.Events.Core.dll
+  Elsa.Expressions.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/Core/bin/Release/net10.0/Elsa.Expressions.Core.dll
+  Elsa.Cluster.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/Core/bin/Release/net10.0/Elsa.Cluster.Core.dll
+  Elsa.Serialization.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Serialization/Core/bin/Release/net10.0/Elsa.Serialization.Core.dll
+  Elsa.Api.AspNetCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Api/AspNetCore/bin/Release/net10.0/Elsa.Api.AspNetCore.dll
+  Elsa.Activities.Design.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Core/bin/Release/net10.0/Elsa.Activities.Design.Core.dll
+  Elsa.Persistence.EntityFramework -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/bin/Release/net10.0/Elsa.Persistence.EntityFramework.dll
+  Elsa.Activities.Runtime.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Runtime/Core/bin/Release/net10.0/Elsa.Activities.Runtime.Core.dll
+  Elsa.Tasks.Schedules -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Tasks/Schedules/bin/Release/net10.0/Elsa.Tasks.Schedules.dll
+  Elsa.Diagnostics.Persistence -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/Persistence/bin/Release/net10.0/Elsa.Diagnostics.Persistence.dll
+  Elsa.Workflows.Design.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Core/bin/Release/net10.0/Elsa.Workflows.Design.Core.dll
+  Elsa.Studio.Preferences.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Studio/Preferences/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.dll
+  Elsa.Modularity.EntityFramework -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Modularity/EntityFramework/bin/Release/net10.0/Elsa.Modularity.EntityFramework.dll
+  Elsa.Foundation.Identity -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/bin/Release/net10.0/Elsa.Foundation.Identity.dll
+  Elsa.Workflows.Runtime.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Core/bin/Release/net10.0/Elsa.Workflows.Runtime.Core.dll
+  Elsa.Api.Capabilities -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Api/Capabilities/bin/Release/net10.0/Elsa.Api.Capabilities.dll
+  Elsa.Diagnostics.StructuredLogs -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs/bin/Release/net10.0/Elsa.Diagnostics.StructuredLogs.dll
+  Elsa.Diagnostics.OpenTelemetry -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry/bin/Release/net10.0/Elsa.Diagnostics.OpenTelemetry.dll
+  Elsa.Foundation.Identity.AspNetCoreIdentity -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity/bin/Release/net10.0/Elsa.Foundation.Identity.AspNetCoreIdentity.dll
+  Elsa.Foundation.Identity.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.dll
+  Elsa.Workflows.Runtime -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/bin/Release/net10.0/Elsa.Workflows.Runtime.dll
+  Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.dll
+  Elsa.Workflows.Runtime.Resumption -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Resumption/bin/Release/net10.0/Elsa.Workflows.Runtime.Resumption.dll
+  Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/bin/Release/net10.0/Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.dll
+  Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll
+  Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.dll
+  Elsa3.Models -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Models/bin/Release/net10.0/Elsa3.Models.dll
+  Elsa.Modularity.Planning -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Modularity/Planning/bin/Release/net10.0/Elsa.Modularity.Planning.dll
+  Elsa.Locking.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Locking/Core/bin/Release/net10.0/Elsa.Locking.Core.dll
+  Elsa.Events.Strategies -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Events/Strategies/bin/Release/net10.0/Elsa.Events.Strategies.dll
+  Elsa.Cluster.InProcess -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/InProcess/bin/Release/net10.0/Elsa.Cluster.InProcess.dll
+  Elsa.Secrets.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Core/bin/Release/net10.0/Elsa.Secrets.Core.dll
+  Elsa.Cli.Worker -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cli/Worker/bin/Release/net10.0/Elsa.Cli.Worker.dll
+  Elsa.Tasks -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Tasks/Elsa.Tasks/bin/Release/net10.0/Elsa.Tasks.dll
+  Elsa.Cluster.Readability -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/Readability/bin/Release/net10.0/Elsa.Cluster.Readability.dll
+  Elsa.Workflows.Runtime.Distributed -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/bin/Release/net10.0/Elsa.Workflows.Runtime.Distributed.dll
+  Elsa.Secrets.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Secrets/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Secrets.Persistence.EntityFrameworkCore.dll
+  Elsa.Cluster.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/EntityFrameworkCore/bin/Release/net10.0/Elsa.Cluster.EntityFrameworkCore.dll
+  Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.dll
+  Elsa.Foundation.DataProtection.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Foundation/DataProtection/EntityFrameworkCore/bin/Release/net10.0/Elsa.Foundation.DataProtection.EntityFrameworkCore.dll
+  Elsa.Events -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Events/Elsa.Events/bin/Release/net10.0/Elsa.Events.dll
+  Elsa.Mediator.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Mediator/Core/bin/Release/net10.0/Elsa.Mediator.Core.dll
+  Elsa.Workflows.Design.Validations.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Validations/Core/bin/Release/net10.0/Elsa.Workflows.Design.Validations.Core.dll
+  Elsa.Workflows.Design.Persistence.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Persistence/Core/bin/Release/net10.0/Elsa.Workflows.Design.Persistence.Core.dll
+  Elsa.Workflows.Design.Validations -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/bin/Release/net10.0/Elsa.Workflows.Design.Validations.dll
+  Elsa.Workflows.Publishing.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Core/bin/Release/net10.0/Elsa.Workflows.Publishing.Core.dll
+  Elsa.Workflows.Runtime.Api -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Api/bin/Release/net10.0/Elsa.Workflows.Runtime.Api.dll
+  Elsa.Workflows.Design.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll
+  Elsa.Workflows.Dashboard -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/bin/Release/net10.0/Elsa.Workflows.Dashboard.dll
+  Elsa.Activities.Design.Persistence.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/Core/bin/Release/net10.0/Elsa.Activities.Design.Persistence.Core.dll
+  Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Dashboard/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.dll
+  Elsa.Activities.Design.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Activities.Design.Persistence.EntityFrameworkCore.dll
+  Elsa.Workflows.Publishing -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/bin/Release/net10.0/Elsa.Workflows.Publishing.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cli/Elsa.Cli/CandidateWorkerProcess.cs(771,82): warning CS9107: Parameter 'int maximumBytes' is captured into the state of the enclosing type and its value is also passed to the base constructor. The value might be captured by the base class as well. [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cli/Elsa.Cli/Elsa.Cli.csproj]
+  Elsa.Cli -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cli/Elsa.Cli/bin/Release/net10.0/Elsa.Cli.dll
+  Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.dll
+  Elsa3.Activities.Design.Import -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/bin/Release/net10.0/Elsa3.Activities.Design.Import.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Migrations/Elsa3Import/MySql/20260928040645_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Migrations/Elsa3Import/PostgreSql/20260928040646_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Migrations/Elsa3Import/Sqlite/20260928040649_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj]
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Migrations/Elsa3Import/SqlServer/20260928040648_Initial.cs(5,11): warning IDE0161: Convert to file-scoped namespace (https://learn.microsoft.com/dotnet/fundamentals/code-analysis/style-rules/ide0161) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj]
+  Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.dll
+  Elsa.EntityFrameworkCore.Tooling -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/ef/Elsa.EntityFrameworkCore.Tooling/bin/Release/net10.0/Elsa.EntityFrameworkCore.Tooling.dll
+/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/ModuleMigrationTests.cs(193,28): warning xUnit2031: Do not use a Where clause to filter before calling Assert.Single. Use the overload of Assert.Single that accepts a filtering function. (https://xunit.net/xunit.analyzers/rules/xUnit2031) [/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj]
+  Elsa.Persistence.EntityFrameworkCore.Migrations.Tests -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/bin/Release/net10.0/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.dll
+Test run for /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/bin/Release/net10.0/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:01.58]     Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleSchemaTests.Every_module_migration_generates_its_sql_into_a_configured_schema(provider: "SqlServer") [FAIL]
+  Failed Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleSchemaTests.Every_module_migration_generates_its_sql_into_a_configured_schema(provider: "SqlServer") [1 ms]
+  Error Message:
+   System.InvalidOperationException : An error was generated for warning 'Microsoft.EntityFrameworkCore.Infrastructure.ManyServiceProvidersCreatedWarning': More than twenty 'IServiceProvider' instances have been created for internal use by Entity Framework. This is commonly caused by injection of a new singleton service instance into every DbContext instance. For example, calling 'UseLoggerFactory' passing in a new instance each time--see https://go.microsoft.com/fwlink/?linkid=869049 for more details. This may lead to performance issues, consider reviewing calls on 'DbContextOptionsBuilder' that may require new service providers to be built. This exception can be suppressed or logged by passing event ID 'CoreEventId.ManyServiceProvidersCreatedWarning' to the 'ConfigureWarnings' method in 'DbContext.OnConfiguring' or 'AddDbContext'.
+  Stack Trace:
+     at Microsoft.EntityFrameworkCore.Diagnostics.EventDefinition.Log[TLoggerCategory](IDiagnosticsLogger`1 logger, Exception exception)
+   at Microsoft.EntityFrameworkCore.Diagnostics.CoreLoggerExtensions.ManyServiceProvidersCreatedWarning(IDiagnosticsLogger`1 diagnostics, ICollection`1 serviceProviders)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<GetOrAdd>g__BuildServiceProvider|4_1(IDbContextOptions _, ValueTuple`2 arguments)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<>c.<GetOrAdd>b__4_0(IDbContextOptions contextOptions, ValueTuple`2 tuples)
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd[TArg](TKey key, Func`3 valueFactory, TArg factoryArgument)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.GetOrAdd(IDbContextOptions options, Boolean providerRequired)
+   at Microsoft.EntityFrameworkCore.DbContext..ctor(DbContextOptions options)
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignDbContext..ctor(DbContextOptions options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignDbContext.cs:line 23
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignSqlServerDbContext..ctor(DbContextOptions`1 options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignProviderDbContexts.cs:line 18
+   at InvokeStub_ActivitiesDesignSqlServerDbContext..ctor(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:01.59]     Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleSchemaTests.Every_module_migration_generates_its_sql_into_a_configured_schema(provider: "PostgreSql") [FAIL]
+[xUnit.net 00:00:01.59]     Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleSchemaTests.Every_scaffolded_migration_operation_is_qualified_with_the_configured_schema(provider: "PostgreSql") [FAIL]
+[xUnit.net 00:00:01.59]     Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleSchemaTests.Every_scaffolded_migration_operation_is_qualified_with_the_configured_schema(provider: "SqlServer") [FAIL]
+  Failed Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleSchemaTests.Every_module_migration_generates_its_sql_into_a_configured_schema(provider: "PostgreSql") [1 ms]
+  Error Message:
+   System.InvalidOperationException : An error was generated for warning 'Microsoft.EntityFrameworkCore.Infrastructure.ManyServiceProvidersCreatedWarning': More than twenty 'IServiceProvider' instances have been created for internal use by Entity Framework. This is commonly caused by injection of a new singleton service instance into every DbContext instance. For example, calling 'UseLoggerFactory' passing in a new instance each time--see https://go.microsoft.com/fwlink/?linkid=869049 for more details. This may lead to performance issues, consider reviewing calls on 'DbContextOptionsBuilder' that may require new service providers to be built. This exception can be suppressed or logged by passing event ID 'CoreEventId.ManyServiceProvidersCreatedWarning' to the 'ConfigureWarnings' method in 'DbContext.OnConfiguring' or 'AddDbContext'.
+  Stack Trace:
+     at Microsoft.EntityFrameworkCore.Diagnostics.EventDefinition.Log[TLoggerCategory](IDiagnosticsLogger`1 logger, Exception exception)
+   at Microsoft.EntityFrameworkCore.Diagnostics.CoreLoggerExtensions.ManyServiceProvidersCreatedWarning(IDiagnosticsLogger`1 diagnostics, ICollection`1 serviceProviders)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<GetOrAdd>g__BuildServiceProvider|4_1(IDbContextOptions _, ValueTuple`2 arguments)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<>c.<GetOrAdd>b__4_0(IDbContextOptions contextOptions, ValueTuple`2 tuples)
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd[TArg](TKey key, Func`3 valueFactory, TArg factoryArgument)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.GetOrAdd(IDbContextOptions options, Boolean providerRequired)
+   at Microsoft.EntityFrameworkCore.DbContext..ctor(DbContextOptions options)
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignDbContext..ctor(DbContextOptions options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignDbContext.cs:line 23
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignPostgreSqlDbContext..ctor(DbContextOptions`1 options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignProviderDbContexts.cs:line 52
+   at InvokeStub_ActivitiesDesignPostgreSqlDbContext..ctor(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleSchemaTests.Every_scaffolded_migration_operation_is_qualified_with_the_configured_schema(provider: "PostgreSql") [4 ms]
+  Error Message:
+   System.InvalidOperationException : An error was generated for warning 'Microsoft.EntityFrameworkCore.Infrastructure.ManyServiceProvidersCreatedWarning': More than twenty 'IServiceProvider' instances have been created for internal use by Entity Framework. This is commonly caused by injection of a new singleton service instance into every DbContext instance. For example, calling 'UseLoggerFactory' passing in a new instance each time--see https://go.microsoft.com/fwlink/?linkid=869049 for more details. This may lead to performance issues, consider reviewing calls on 'DbContextOptionsBuilder' that may require new service providers to be built. This exception can be suppressed or logged by passing event ID 'CoreEventId.ManyServiceProvidersCreatedWarning' to the 'ConfigureWarnings' method in 'DbContext.OnConfiguring' or 'AddDbContext'.
+  Stack Trace:
+     at Microsoft.EntityFrameworkCore.Diagnostics.EventDefinition.Log[TLoggerCategory](IDiagnosticsLogger`1 logger, Exception exception)
+   at Microsoft.EntityFrameworkCore.Diagnostics.CoreLoggerExtensions.ManyServiceProvidersCreatedWarning(IDiagnosticsLogger`1 diagnostics, ICollection`1 serviceProviders)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<GetOrAdd>g__BuildServiceProvider|4_1(IDbContextOptions _, ValueTuple`2 arguments)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<>c.<GetOrAdd>b__4_0(IDbContextOptions contextOptions, ValueTuple`2 tuples)
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd[TArg](TKey key, Func`3 valueFactory, TArg factoryArgument)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.GetOrAdd(IDbContextOptions options, Boolean providerRequired)
+   at Microsoft.EntityFrameworkCore.DbContext..ctor(DbContextOptions options)
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignDbContext..ctor(DbContextOptions options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignDbContext.cs:line 23
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignPostgreSqlDbContext..ctor(DbContextOptions`1 options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignProviderDbContexts.cs:line 52
+   at InvokeStub_ActivitiesDesignPostgreSqlDbContext..ctor(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleSchemaTests.Every_scaffolded_migration_operation_is_qualified_with_the_configured_schema(provider: "SqlServer") [6 ms]
+  Error Message:
+   System.InvalidOperationException : An error was generated for warning 'Microsoft.EntityFrameworkCore.Infrastructure.ManyServiceProvidersCreatedWarning': More than twenty 'IServiceProvider' instances have been created for internal use by Entity Framework. This is commonly caused by injection of a new singleton service instance into every DbContext instance. For example, calling 'UseLoggerFactory' passing in a new instance each time--see https://go.microsoft.com/fwlink/?linkid=869049 for more details. This may lead to performance issues, consider reviewing calls on 'DbContextOptionsBuilder' that may require new service providers to be built. This exception can be suppressed or logged by passing event ID 'CoreEventId.ManyServiceProvidersCreatedWarning' to the 'ConfigureWarnings' method in 'DbContext.OnConfiguring' or 'AddDbContext'.
+  Stack Trace:
+     at Microsoft.EntityFrameworkCore.Diagnostics.EventDefinition.Log[TLoggerCategory](IDiagnosticsLogger`1 logger, Exception exception)
+   at Microsoft.EntityFrameworkCore.Diagnostics.CoreLoggerExtensions.ManyServiceProvidersCreatedWarning(IDiagnosticsLogger`1 diagnostics, ICollection`1 serviceProviders)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<GetOrAdd>g__BuildServiceProvider|4_1(IDbContextOptions _, ValueTuple`2 arguments)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<>c.<GetOrAdd>b__4_0(IDbContextOptions contextOptions, ValueTuple`2 tuples)
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd[TArg](TKey key, Func`3 valueFactory, TArg factoryArgument)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.GetOrAdd(IDbContextOptions options, Boolean providerRequired)
+   at Microsoft.EntityFrameworkCore.DbContext..ctor(DbContextOptions options)
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignDbContext..ctor(DbContextOptions options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignDbContext.cs:line 23
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignSqlServerDbContext..ctor(DbContextOptions`1 options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignProviderDbContexts.cs:line 18
+   at InvokeStub_ActivitiesDesignSqlServerDbContext..ctor(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:01.59]     Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleSchemaTests.Every_module_context_puts_its_model_and_its_history_table_in_a_configured_schema(provider: "SqlServer") [FAIL]
+[xUnit.net 00:00:01.61]     Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleSchemaTests.Every_module_context_puts_its_model_and_its_history_table_in_a_configured_schema(provider: "PostgreSql") [FAIL]
+[xUnit.net 00:00:01.63]     Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleSchemaTests.One_context_type_bound_to_two_schemas_keeps_two_models [FAIL]
+  Failed Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleSchemaTests.Every_module_context_puts_its_model_and_its_history_table_in_a_configured_schema(provider: "SqlServer") [1 ms]
+  Error Message:
+   System.InvalidOperationException : An error was generated for warning 'Microsoft.EntityFrameworkCore.Infrastructure.ManyServiceProvidersCreatedWarning': More than twenty 'IServiceProvider' instances have been created for internal use by Entity Framework. This is commonly caused by injection of a new singleton service instance into every DbContext instance. For example, calling 'UseLoggerFactory' passing in a new instance each time--see https://go.microsoft.com/fwlink/?linkid=869049 for more details. This may lead to performance issues, consider reviewing calls on 'DbContextOptionsBuilder' that may require new service providers to be built. This exception can be suppressed or logged by passing event ID 'CoreEventId.ManyServiceProvidersCreatedWarning' to the 'ConfigureWarnings' method in 'DbContext.OnConfiguring' or 'AddDbContext'.
+  Stack Trace:
+     at Microsoft.EntityFrameworkCore.Diagnostics.EventDefinition.Log[TLoggerCategory](IDiagnosticsLogger`1 logger, Exception exception)
+   at Microsoft.EntityFrameworkCore.Diagnostics.CoreLoggerExtensions.ManyServiceProvidersCreatedWarning(IDiagnosticsLogger`1 diagnostics, ICollection`1 serviceProviders)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<GetOrAdd>g__BuildServiceProvider|4_1(IDbContextOptions _, ValueTuple`2 arguments)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<>c.<GetOrAdd>b__4_0(IDbContextOptions contextOptions, ValueTuple`2 tuples)
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd[TArg](TKey key, Func`3 valueFactory, TArg factoryArgument)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.GetOrAdd(IDbContextOptions options, Boolean providerRequired)
+   at Microsoft.EntityFrameworkCore.DbContext..ctor(DbContextOptions options)
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignDbContext..ctor(DbContextOptions options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignDbContext.cs:line 23
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignSqlServerDbContext..ctor(DbContextOptions`1 options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignProviderDbContexts.cs:line 18
+   at InvokeStub_ActivitiesDesignSqlServerDbContext..ctor(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleSchemaTests.Every_module_context_puts_its_model_and_its_history_table_in_a_configured_schema(provider: "PostgreSql") [4 ms]
+  Error Message:
+   System.InvalidOperationException : An error was generated for warning 'Microsoft.EntityFrameworkCore.Infrastructure.ManyServiceProvidersCreatedWarning': More than twenty 'IServiceProvider' instances have been created for internal use by Entity Framework. This is commonly caused by injection of a new singleton service instance into every DbContext instance. For example, calling 'UseLoggerFactory' passing in a new instance each time--see https://go.microsoft.com/fwlink/?linkid=869049 for more details. This may lead to performance issues, consider reviewing calls on 'DbContextOptionsBuilder' that may require new service providers to be built. This exception can be suppressed or logged by passing event ID 'CoreEventId.ManyServiceProvidersCreatedWarning' to the 'ConfigureWarnings' method in 'DbContext.OnConfiguring' or 'AddDbContext'.
+  Stack Trace:
+     at Microsoft.EntityFrameworkCore.Diagnostics.EventDefinition.Log[TLoggerCategory](IDiagnosticsLogger`1 logger, Exception exception)
+   at Microsoft.EntityFrameworkCore.Diagnostics.CoreLoggerExtensions.ManyServiceProvidersCreatedWarning(IDiagnosticsLogger`1 diagnostics, ICollection`1 serviceProviders)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<GetOrAdd>g__BuildServiceProvider|4_1(IDbContextOptions _, ValueTuple`2 arguments)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<>c.<GetOrAdd>b__4_0(IDbContextOptions contextOptions, ValueTuple`2 tuples)
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd[TArg](TKey key, Func`3 valueFactory, TArg factoryArgument)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.GetOrAdd(IDbContextOptions options, Boolean providerRequired)
+   at Microsoft.EntityFrameworkCore.DbContext..ctor(DbContextOptions options)
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignDbContext..ctor(DbContextOptions options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignDbContext.cs:line 23
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignPostgreSqlDbContext..ctor(DbContextOptions`1 options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignProviderDbContexts.cs:line 52
+   at InvokeStub_ActivitiesDesignPostgreSqlDbContext..ctor(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleSchemaTests.One_context_type_bound_to_two_schemas_keeps_two_models [1 ms]
+  Error Message:
+   System.InvalidOperationException : An error was generated for warning 'Microsoft.EntityFrameworkCore.Infrastructure.ManyServiceProvidersCreatedWarning': More than twenty 'IServiceProvider' instances have been created for internal use by Entity Framework. This is commonly caused by injection of a new singleton service instance into every DbContext instance. For example, calling 'UseLoggerFactory' passing in a new instance each time--see https://go.microsoft.com/fwlink/?linkid=869049 for more details. This may lead to performance issues, consider reviewing calls on 'DbContextOptionsBuilder' that may require new service providers to be built. This exception can be suppressed or logged by passing event ID 'CoreEventId.ManyServiceProvidersCreatedWarning' to the 'ConfigureWarnings' method in 'DbContext.OnConfiguring' or 'AddDbContext'.
+  Stack Trace:
+     at Microsoft.EntityFrameworkCore.Diagnostics.EventDefinition.Log[TLoggerCategory](IDiagnosticsLogger`1 logger, Exception exception)
+   at Microsoft.EntityFrameworkCore.Diagnostics.CoreLoggerExtensions.ManyServiceProvidersCreatedWarning(IDiagnosticsLogger`1 diagnostics, ICollection`1 serviceProviders)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<GetOrAdd>g__BuildServiceProvider|4_1(IDbContextOptions _, ValueTuple`2 arguments)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<>c.<GetOrAdd>b__4_0(IDbContextOptions contextOptions, ValueTuple`2 tuples)
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd[TArg](TKey key, Func`3 valueFactory, TArg factoryArgument)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.GetOrAdd(IDbContextOptions options, Boolean providerRequired)
+   at Microsoft.EntityFrameworkCore.DbContext..ctor(DbContextOptions options)
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignDbContext..ctor(DbContextOptions options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignDbContext.cs:line 23
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignPostgreSqlDbContext..ctor(DbContextOptions`1 options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignProviderDbContexts.cs:line 52
+   at InvokeStub_ActivitiesDesignPostgreSqlDbContext..ctor(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+[xUnit.net 00:00:02.80]     Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleMigrationTests.Every_module_context_gives_converted_collections_a_value_comparer(provider: "MySql") [FAIL]
+[xUnit.net 00:00:02.80]     Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleMigrationTests.Every_module_context_gives_converted_collections_a_value_comparer(provider: "Sqlite") [FAIL]
+[xUnit.net 00:00:02.80]     Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleMigrationTests.Every_module_context_gives_converted_collections_a_value_comparer(provider: "PostgreSql") [FAIL]
+[xUnit.net 00:00:02.80]     Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleMigrationTests.Every_module_context_gives_converted_collections_a_value_comparer(provider: "SqlServer") [FAIL]
+  Failed Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleMigrationTests.Every_module_context_gives_converted_collections_a_value_comparer(provider: "MySql") [1 ms]
+  Error Message:
+   System.InvalidOperationException : An error was generated for warning 'Microsoft.EntityFrameworkCore.Infrastructure.ManyServiceProvidersCreatedWarning': More than twenty 'IServiceProvider' instances have been created for internal use by Entity Framework. This is commonly caused by injection of a new singleton service instance into every DbContext instance. For example, calling 'UseLoggerFactory' passing in a new instance each time--see https://go.microsoft.com/fwlink/?linkid=869049 for more details. This may lead to performance issues, consider reviewing calls on 'DbContextOptionsBuilder' that may require new service providers to be built. This exception can be suppressed or logged by passing event ID 'CoreEventId.ManyServiceProvidersCreatedWarning' to the 'ConfigureWarnings' method in 'DbContext.OnConfiguring' or 'AddDbContext'.
+  Stack Trace:
+     at Microsoft.EntityFrameworkCore.Diagnostics.EventDefinition.Log[TLoggerCategory](IDiagnosticsLogger`1 logger, Exception exception)
+   at Microsoft.EntityFrameworkCore.Diagnostics.CoreLoggerExtensions.ManyServiceProvidersCreatedWarning(IDiagnosticsLogger`1 diagnostics, ICollection`1 serviceProviders)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<GetOrAdd>g__BuildServiceProvider|4_1(IDbContextOptions _, ValueTuple`2 arguments)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<>c.<GetOrAdd>b__4_0(IDbContextOptions contextOptions, ValueTuple`2 tuples)
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd[TArg](TKey key, Func`3 valueFactory, TArg factoryArgument)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.GetOrAdd(IDbContextOptions options, Boolean providerRequired)
+   at Microsoft.EntityFrameworkCore.DbContext..ctor(DbContextOptions options)
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignDbContext..ctor(DbContextOptions options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignDbContext.cs:line 23
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignMySqlDbContext..ctor(DbContextOptions`1 options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignProviderDbContexts.cs:line 64
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Constructor(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+  Failed Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleMigrationTests.Every_module_context_gives_converted_collections_a_value_comparer(provider: "Sqlite") [< 1 ms]
+  Error Message:
+   System.InvalidOperationException : An error was generated for warning 'Microsoft.EntityFrameworkCore.Infrastructure.ManyServiceProvidersCreatedWarning': More than twenty 'IServiceProvider' instances have been created for internal use by Entity Framework. This is commonly caused by injection of a new singleton service instance into every DbContext instance. For example, calling 'UseLoggerFactory' passing in a new instance each time--see https://go.microsoft.com/fwlink/?linkid=869049 for more details. This may lead to performance issues, consider reviewing calls on 'DbContextOptionsBuilder' that may require new service providers to be built. This exception can be suppressed or logged by passing event ID 'CoreEventId.ManyServiceProvidersCreatedWarning' to the 'ConfigureWarnings' method in 'DbContext.OnConfiguring' or 'AddDbContext'.
+  Stack Trace:
+     at Microsoft.EntityFrameworkCore.Diagnostics.EventDefinition.Log[TLoggerCategory](IDiagnosticsLogger`1 logger, Exception exception)
+   at Microsoft.EntityFrameworkCore.Diagnostics.CoreLoggerExtensions.ManyServiceProvidersCreatedWarning(IDiagnosticsLogger`1 diagnostics, ICollection`1 serviceProviders)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<GetOrAdd>g__BuildServiceProvider|4_1(IDbContextOptions _, ValueTuple`2 arguments)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<>c.<GetOrAdd>b__4_0(IDbContextOptions contextOptions, ValueTuple`2 tuples)
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd[TArg](TKey key, Func`3 valueFactory, TArg factoryArgument)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.GetOrAdd(IDbContextOptions options, Boolean providerRequired)
+   at Microsoft.EntityFrameworkCore.DbContext..ctor(DbContextOptions options)
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignDbContext..ctor(DbContextOptions options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignDbContext.cs:line 23
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignSqliteDbContext..ctor(DbContextOptions`1 options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignProviderDbContexts.cs:line 6
+   at InvokeStub_ActivitiesDesignSqliteDbContext..ctor(Object, Span`1)
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)
+  Failed Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleMigrationTests.Every_module_context_gives_converted_collections_a_value_comparer(provider: "PostgreSql") [2 ms]
+  Error Message:
+   System.InvalidOperationException : An error was generated for warning 'Microsoft.EntityFrameworkCore.Infrastructure.ManyServiceProvidersCreatedWarning': More than twenty 'IServiceProvider' instances have been created for internal use by Entity Framework. This is commonly caused by injection of a new singleton service instance into every DbContext instance. For example, calling 'UseLoggerFactory' passing in a new instance each time--see https://go.microsoft.com/fwlink/?linkid=869049 for more details. This may lead to performance issues, consider reviewing calls on 'DbContextOptionsBuilder' that may require new service providers to be built. This exception can be suppressed or logged by passing event ID 'CoreEventId.ManyServiceProvidersCreatedWarning' to the 'ConfigureWarnings' method in 'DbContext.OnConfiguring' or 'AddDbContext'.
+  Stack Trace:
+     at Microsoft.EntityFrameworkCore.Diagnostics.EventDefinition.Log[TLoggerCategory](IDiagnosticsLogger`1 logger, Exception exception)
+   at Microsoft.EntityFrameworkCore.Diagnostics.CoreLoggerExtensions.ManyServiceProvidersCreatedWarning(IDiagnosticsLogger`1 diagnostics, ICollection`1 serviceProviders)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<GetOrAdd>g__BuildServiceProvider|4_1(IDbContextOptions _, ValueTuple`2 arguments)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<>c.<GetOrAdd>b__4_0(IDbContextOptions contextOptions, ValueTuple`2 tuples)
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd[TArg](TKey key, Func`3 valueFactory, TArg factoryArgument)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.GetOrAdd(IDbContextOptions options, Boolean providerRequired)
+   at Microsoft.EntityFrameworkCore.DbContext..ctor(DbContextOptions options)
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignDbContext..ctor(DbContextOptions options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignDbContext.cs:line 23
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignPostgreSqlDbContext..ctor(DbContextOptions`1 options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignProviderDbContexts.cs:line 52
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Constructor(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+  Failed Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.ModuleMigrationTests.Every_module_context_gives_converted_collections_a_value_comparer(provider: "SqlServer") [1 ms]
+  Error Message:
+   System.InvalidOperationException : An error was generated for warning 'Microsoft.EntityFrameworkCore.Infrastructure.ManyServiceProvidersCreatedWarning': More than twenty 'IServiceProvider' instances have been created for internal use by Entity Framework. This is commonly caused by injection of a new singleton service instance into every DbContext instance. For example, calling 'UseLoggerFactory' passing in a new instance each time--see https://go.microsoft.com/fwlink/?linkid=869049 for more details. This may lead to performance issues, consider reviewing calls on 'DbContextOptionsBuilder' that may require new service providers to be built. This exception can be suppressed or logged by passing event ID 'CoreEventId.ManyServiceProvidersCreatedWarning' to the 'ConfigureWarnings' method in 'DbContext.OnConfiguring' or 'AddDbContext'.
+  Stack Trace:
+     at Microsoft.EntityFrameworkCore.Diagnostics.EventDefinition.Log[TLoggerCategory](IDiagnosticsLogger`1 logger, Exception exception)
+   at Microsoft.EntityFrameworkCore.Diagnostics.CoreLoggerExtensions.ManyServiceProvidersCreatedWarning(IDiagnosticsLogger`1 diagnostics, ICollection`1 serviceProviders)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<GetOrAdd>g__BuildServiceProvider|4_1(IDbContextOptions _, ValueTuple`2 arguments)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.<>c.<GetOrAdd>b__4_0(IDbContextOptions contextOptions, ValueTuple`2 tuples)
+   at System.Collections.Concurrent.ConcurrentDictionary`2.GetOrAdd[TArg](TKey key, Func`3 valueFactory, TArg factoryArgument)
+   at Microsoft.EntityFrameworkCore.Internal.ServiceProviderCache.GetOrAdd(IDbContextOptions options, Boolean providerRequired)
+   at Microsoft.EntityFrameworkCore.DbContext..ctor(DbContextOptions options)
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignDbContext..ctor(DbContextOptions options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignDbContext.cs:line 23
+   at Elsa.Activities.Design.Persistence.EntityFrameworkCore.ActivitiesDesignSqlServerDbContext..ctor(DbContextOptions`1 options) in /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignProviderDbContexts.cs:line 18
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Constructor(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)
+Results File: /tmp/elsa-2898-design-template-upgrade/fixed-38c402d31/migrations.trx
+
+Failed!  - Failed:    11, Passed:   496, Skipped:     0, Total:   507, Duration: 1 m 23 s - Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.dll (net10.0)

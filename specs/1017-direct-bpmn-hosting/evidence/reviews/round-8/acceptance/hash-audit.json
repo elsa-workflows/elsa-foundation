@@ -1,0 +1,17 @@
+[
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json",
+    "assetReferences": 104,
+    "errors": []
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/3e93e06d9/manifest.json",
+    "assetReferences": 174,
+    "errors": []
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-7/corrections/manifest.json",
+    "assetReferences": 17,
+    "errors": []
+  }
+]

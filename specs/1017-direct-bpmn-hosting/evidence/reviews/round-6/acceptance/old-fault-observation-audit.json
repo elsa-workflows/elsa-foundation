@@ -1,0 +1,90 @@
+[
+  {
+    "case": "old-admitted-fault",
+    "fixtureSha256": "ae0027de22b16b04912106623724207d493879fc96f195e61e87a42af9a1d683",
+    "executionId": "bpmn:29ce72ce3be41205dfa938e934fbac80cb4cca8c3508df1b2dd86fa94dfdc220",
+    "beforeRevision": 2,
+    "afterRevision": 4,
+    "checks": {
+      "source04c": true,
+      "originalModelIdentity": true,
+      "sameSemantics": true,
+      "sameFault": true,
+      "samePinsAuthority": true,
+      "terminalSettled": true,
+      "noRemainingWork": true,
+      "allCancellationsSettled": true,
+      "sourceAck": true,
+      "queuesEmpty": true,
+      "coldRepeatIdentical": true,
+      "twoSIGKILLExits": true
+    }
+  },
+  {
+    "case": "old-admitted-waiting-fault",
+    "fixtureSha256": "806f95b5242b70f68fa68c5550732b3339be5cb336f94414be7f0b15ac77b049",
+    "executionId": "bpmn:759a49f25aafc2f18846e939615e947ade8ed03d0af813339db2423af2e4bc9e",
+    "beforeRevision": 2,
+    "afterRevision": 4,
+    "checks": {
+      "source04c": true,
+      "originalModelIdentity": true,
+      "sameSemantics": true,
+      "sameFault": true,
+      "samePinsAuthority": true,
+      "terminalSettled": true,
+      "noRemainingWork": true,
+      "allCancellationsSettled": true,
+      "sourceAck": true,
+      "queuesEmpty": true,
+      "coldRepeatIdentical": true,
+      "twoSIGKILLExits": true,
+      "actualWorkerCancelled": true
+    }
+  },
+  {
+    "case": "old-pending-parent-fault",
+    "fixtureSha256": "c7e0247a7da55fdb73897c0be677eed7cbf9b1c54f365338ef33f84c064d3b13",
+    "executionId": "bpmn-embedded:e705a3456fd038bcff55bf21094de655bd89bf8b395c96a9fe14deca2d2cb44d",
+    "beforeRevision": 2,
+    "afterRevision": 4,
+    "checks": {
+      "source04c": true,
+      "originalModelIdentity": true,
+      "sameSemantics": true,
+      "sameFault": true,
+      "samePinsAuthority": true,
+      "terminalSettled": true,
+      "noRemainingWork": true,
+      "allCancellationsSettled": true,
+      "sourceAck": true,
+      "queuesEmpty": true,
+      "coldRepeatIdentical": true,
+      "twoSIGKILLExits": true,
+      "actualWorkerCancelled": true,
+      "parentAckConsumed": true,
+      "parentBookmarksGone": true
+    }
+  },
+  {
+    "case": "old-unadmitted-fault",
+    "fixtureSha256": "5676f8bd43eefe98333e97a6c231bc7f28d777656de58c71941cfe457e582170",
+    "executionId": "bpmn:29ce72ce3be41205dfa938e934fbac80cb4cca8c3508df1b2dd86fa94dfdc220",
+    "beforeRevision": 2,
+    "afterRevision": 4,
+    "checks": {
+      "source04c": true,
+      "originalModelIdentity": true,
+      "sameSemantics": true,
+      "sameFault": true,
+      "samePinsAuthority": true,
+      "terminalSettled": true,
+      "noRemainingWork": true,
+      "allCancellationsSettled": true,
+      "sourceAck": true,
+      "queuesEmpty": true,
+      "coldRepeatIdentical": true,
+      "twoSIGKILLExits": true
+    }
+  }
+]

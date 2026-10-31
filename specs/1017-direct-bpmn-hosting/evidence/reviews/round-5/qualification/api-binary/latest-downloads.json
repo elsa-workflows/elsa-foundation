@@ -1,0 +1,26 @@
+{
+  "packages": [
+    {
+      "package_id": "Elsa.Activities.Bpmn",
+      "version": "4.0.16-preview",
+      "commit": "d2f99623d4313b7e40ec0a67b492ca9883719e3d",
+      "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.activities.bpmn/4.0.16-preview/elsa.activities.bpmn.4.0.16-preview.nupkg",
+      "nupkgSha256": "f320d45e529fd3ff68cacf69b4478ac2bba7fe02a829513fd6e2802d341c2e76",
+      "nupkgBytes": 47412,
+      "exitCode": 0,
+      "leftAssemblySha256": "9ba34ec27fce1b957a723ef9accec4179690316f8840935b4260c993c80bc284",
+      "rightAssemblySha256": "7dcd54140f5aae19bacf1570e12e8599a32a17ffeece452770618f61e3effbf7"
+    },
+    {
+      "package_id": "Elsa.Workflows.Publishing",
+      "version": "4.0.37-preview",
+      "commit": "d2f99623d4313b7e40ec0a67b492ca9883719e3d",
+      "url": "https://f.feedz.io/elsa-workflows/elsa-4/nuget/v3/packages/elsa.workflows.publishing/4.0.37-preview/elsa.workflows.publishing.4.0.37-preview.nupkg",
+      "nupkgSha256": "58fc449e3d0d04fb024f469301c4584ecf02c243cf3f6bf788b754edf099b81f",
+      "nupkgBytes": 154522,
+      "exitCode": 0,
+      "leftAssemblySha256": "2ff96fcc35a97c278208aef3842fe0a4a08a2ded516b2a5bbb8c1404fd149aab",
+      "rightAssemblySha256": "a42b11bf9eeb153f6801366a989c479c69c5aebc60aa3cbd4e87e16de1e6bdec"
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-direct-bpmn-native-etl-pipeline-cancellation",
+  "sourceRevision": "b5c612276334d1d39aec827b85d12cb1021e5c38",
+  "assets": [
+    {
+      "path": "direct-cancel/before-checked-model.json",
+      "sha256": "f4c28533dbfa2b09cc25450acc6442c3ae4667e624b9a420ba0a06f36be75d44"
+    },
+    {
+      "path": "direct-cancel/before-elsa.sqlite.gz",
+      "sha256": "02c12f92669ee5a918922504f414eafa54218a45353a50908d87ed460f113332"
+    },
+    {
+      "path": "direct-cancel/before-etl-design.sqlite.gz",
+      "sha256": "7224b35ac1bc8d70a03efd0568facfe17932098fcb4cc8e2287226514bcced51"
+    },
+    {
+      "path": "direct-cancel/before-etl-runtime.sqlite.gz",
+      "sha256": "af5b0c873e6b3014b89d3217835c8927c22d1da8d3cf64618bb99fc81b0c65b8"
+    },
+    {
+      "path": "direct-cancel/before-wire.json",
+      "sha256": "ba338850ae8ed6dfa0041ae67da6799d2735cf56afe7a2ef05ad27efd20d51f7"
+    },
+    {
+      "path": "direct-cancel/before.json",
+      "sha256": "d27912c1d7ab0fbcd86636f8696c1c55d7dd252fd21d4190e9e6c08e258eeeef"
+    },
+    {
+      "path": "direct-cancel/cancel-response.json",
+      "sha256": "a9721afedd9e6953197cb13992eacff9128411ceb58c0934b28f7a1ece66754d"
+    },
+    {
+      "path": "direct-cancel/finished-checked-model.json",
+      "sha256": "ccfdc79d562c0bbd8c00e4feab7be6182cfdb6ac07d53c0625383b1c32f61b76"
+    },
+    {
+      "path": "direct-cancel/finished-elsa.sqlite.gz",
+      "sha256": "322e6aa21bf5cfd07c91389464480fef509bce48a30bd0b4da8717a46a300b95"
+    },
+    {
+      "path": "direct-cancel/finished-etl-design.sqlite.gz",
+      "sha256": "0ee268d243d3b41590335d905acfffa6172bae6b1e2d9681e1a91bcd505d81ec"
+    },
+    {
+      "path": "direct-cancel/finished-etl-runtime.sqlite.gz",
+      "sha256": "e981c7f9fdf1ff19a79701799f8c3233a7540c63935e6227edd87a2c326b788c"
+    },
+    {
+      "path": "direct-cancel/finished-wire.json",
+      "sha256": "ba338850ae8ed6dfa0041ae67da6799d2735cf56afe7a2ef05ad27efd20d51f7"
+    },
+    {
+      "path": "direct-cancel/finished.json",
+      "sha256": "1fde6a7aa916590b342a84ca2199b1a22368f96e7b82cf997d9f7650716d22ef"
+    },
+    {
+      "path": "direct-cancel/process.json",
+      "sha256": "5af113fca5a315642f3f965c53506374c39bc16b2ffcaadcf816a951dea7f8f2"
+    },
+    {
+      "path": "direct-cancel/recovered.json",
+      "sha256": "d27912c1d7ab0fbcd86636f8696c1c55d7dd252fd21d4190e9e6c08e258eeeef"
+    },
+    {
+      "path": "direct-cancel/retained-checked-model.json",
+      "sha256": "ccfdc79d562c0bbd8c00e4feab7be6182cfdb6ac07d53c0625383b1c32f61b76"
+    },
+    {
+      "path": "direct-cancel/retained-wire.json",
+      "sha256": "ba338850ae8ed6dfa0041ae67da6799d2735cf56afe7a2ef05ad27efd20d51f7"
+    },
+    {
+      "path": "direct-cancel/retained.json",
+      "sha256": "1fde6a7aa916590b342a84ca2199b1a22368f96e7b82cf997d9f7650716d22ef"
+    },
+    {
+      "path": "direct-cancel/safe-errors.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  ]
+}

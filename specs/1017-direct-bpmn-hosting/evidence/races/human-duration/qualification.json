@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "executingSource": "a2c2e47751d595c9489f889593ed4d7427ef6076",
+  "productionChange": "Duration bindings through the existing delayed outbox and exact model input/receipt path.",
+  "definitionFormat": 4,
+  "newPrivateStateFormats": [
+    11,
+    12
+  ],
+  "legacyMaterialAndStateWiresPreserved": true,
+  "deadlineAnchoredToAcceptingCheckpoint": true,
+  "outboxAndModelBothEnforceDeadline": true,
+  "timerCannotBeCompletedAsHumanWork": true,
+  "timerSourceAcknowledgmentRequiresExactReceipt": true,
+  "actualHumanDurationJourneys": 2,
+  "actualDurationSeconds": 30,
+  "rawAssets": 28,
+  "wholeRuntimeStoresVerified": 8,
+  "actualWorkbenchProcesses": 8,
+  "allEightListedWorkbenchChildrenStopped": true,
+  "actualSigkillExitCodes": [
+    137,
+    137,
+    137,
+    137,
+    137,
+    137,
+    137,
+    137
+  ],
+  "nativeWorkflowActivityBookmarkRows": 0,
+  "designStorageConfigured": false,
+  "executionStateSeeded": false,
+  "clockEdited": false,
+  "firstWinnerSurvivesSecondProcessLoss": true,
+  "lateInputRejectedAtUnchangedRevision": 2,
+  "fourthHostCheckedViewsIdentical": true,
+  "removedDeadlineGuardMakesEligibilityTestFail": true,
+  "originalGuardRestoredBeforeQualifyingSource": true,
+  "developmentCompositionAndTimedHumanAdmissionFailuresFixed": true,
+  "corePublicApiBuildErrors": 0,
+  "standardHostBuildErrors": 0,
+  "bpmnTestsPassed": 431,
+  "actualDurationHostTestsPassed": 2,
+  "existingHumanHostTestsPassed": 9,
+  "nativeServiceHostSmokePassed": 1,
+  "portableBpmnControlsPassed": 27,
+  "newDurationPositiveAndCorruptControls": 13,
+  "existingPortableEtlControlsPassed": 208,
+  "skippedTests": 0,
+  "testTierRegistrations": 123,
+  "frozenBaselineAssetsVerifiedUnchanged": 104,
+  "originalFrozenManifestUnchanged": true,
+  "actualWorkerTimerOrdersProved": false,
+  "heldServiceTimerInterruptionProved": false,
+  "simultaneousDecisionCommitsProved": false,
+  "directModelBroadcastProviderRetentionRollbackFinalUpgradeStudioProved": false,
+  "fullPrReviewRounds": 0,
+  "completeTaskOrProgramAcceptance": false,
+  "validationLogs": [
+    {
+      "path": "validation/actual-duration-hosts.txt",
+      "sha256": "082ae6a1868b9293d39ac556deafa9722f9d2540c07ef0c3210ceb55aa0ac4f9"
+    },
+    {
+      "path": "validation/bpmn-tests.txt",
+      "sha256": "34299e727492e0786fe4ce909b16d07bd472c5b6a110cc98bce4576f8957bd40"
+    },
+    {
+      "path": "validation/core-api-build.txt",
+      "sha256": "86ec65a0b7c283c9453f56c27b197e05fccf3de7c0767bac8022ede954a96c7e"
+    },
+    {
+      "path": "validation/human-host-regressions.txt",
+      "sha256": "10d9e9783a15a77c95f9a5ea3298ac0e44f54fbeaf80a04b78bebea307dfa13f"
+    },
+    {
+      "path": "validation/maps.txt",
+      "sha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+    },
+    {
+      "path": "validation/material-contract-red.txt",
+      "sha256": "1c86624695f6e2bc229ac85f25cf2f9cbf57270d500928f526d5dfa71d8b548b"
+    },
+    {
+      "path": "validation/native-only-composition-red.txt",
+      "sha256": "fd5c755fb8719d31d19c0a2abe0973594370e0715101d4d864e5dfd855801c85"
+    },
+    {
+      "path": "validation/native-service-host.txt",
+      "sha256": "1efd7be0507d8e6ca92f19d5366278e4df1e0bafeda3a7deb6d6264419ff6e37"
+    },
+    {
+      "path": "validation/portable-bpmn.txt",
+      "sha256": "8e73597d061d541bbdac82c44d24501ead12f0e603d3f22c1cd38972a7527785"
+    },
+    {
+      "path": "validation/portable-etl.txt",
+      "sha256": "e26d6402ac0e2142cb3f52aaa80fc03e11af21cb641ab553dc6eacd64cc8a72c"
+    },
+    {
+      "path": "validation/removed-deadline-guard-red.txt",
+      "sha256": "3ca2bdf99acd83bead7e092c68ba654a4891267032337fd0c9c590bf128eadb5"
+    },
+    {
+      "path": "validation/standard-host-build.txt",
+      "sha256": "ca1cacbe8b3f3f20e8d539a68eed7d02de7875bffa119002d67562400efff644"
+    },
+    {
+      "path": "validation/test-tiers.txt",
+      "sha256": "91cc02f2f85c466bbc3d5d675d3bf055059b2c0e5e185229a4c4d99b174f25c4"
+    },
+    {
+      "path": "validation/timed-human-admission-red.txt",
+      "sha256": "9ae672ee8896c2f8a37c8c5a9310b93c1517160dee161353c06e7d2c7c9c1639"
+    },
+    {
+      "path": "validation/whole-stores.json",
+      "sha256": "4f0d2b8c82dd858cb528a5f081cb213158ab49d3f37439f983a5606fada6c738"
+    }
+  ]
+}

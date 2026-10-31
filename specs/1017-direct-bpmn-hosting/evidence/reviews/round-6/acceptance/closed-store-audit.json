@@ -1,0 +1,221 @@
+{
+  "stores": [
+    {
+      "file": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/fault-recovery/old-admitted-fault/completed-runtime.sqlite.gz",
+      "databaseSha256": "1d35fd22a300361a1c809b976d7a9e0760a51bb9d72506622ac8753e7124a4b6",
+      "readOnly": true,
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "file": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/fault-recovery/old-admitted-fault/retained-runtime.sqlite.gz",
+      "databaseSha256": "1d35fd22a300361a1c809b976d7a9e0760a51bb9d72506622ac8753e7124a4b6",
+      "readOnly": true,
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "file": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/fault-recovery/old-pending-parent-fault/completed-runtime.sqlite.gz",
+      "databaseSha256": "01b9564b40419c402be6c71bb1edde9c9b200710a5ae121cadcc5cb3a18070a2",
+      "readOnly": true,
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "file": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/fault-recovery/old-pending-parent-fault/retained-runtime.sqlite.gz",
+      "databaseSha256": "01b9564b40419c402be6c71bb1edde9c9b200710a5ae121cadcc5cb3a18070a2",
+      "readOnly": true,
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "file": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/fault-recovery/old-admitted-waiting-fault/completed-runtime.sqlite.gz",
+      "databaseSha256": "11d38f755cdec56919a8e5df045ef850074173da5f7aba179a8a1d058e04501d",
+      "readOnly": true,
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "file": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/fault-recovery/old-admitted-waiting-fault/retained-runtime.sqlite.gz",
+      "databaseSha256": "11d38f755cdec56919a8e5df045ef850074173da5f7aba179a8a1d058e04501d",
+      "readOnly": true,
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "file": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/fault-recovery/old-unadmitted-fault/completed-runtime.sqlite.gz",
+      "databaseSha256": "1354bdf9c79de102aba51938466f1f91c8f3136d42b62227478b2ca8eefa8f1b",
+      "readOnly": true,
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "file": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/fault-recovery/old-unadmitted-fault/retained-runtime.sqlite.gz",
+      "databaseSha256": "1354bdf9c79de102aba51938466f1f91c8f3136d42b62227478b2ca8eefa8f1b",
+      "readOnly": true,
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "file": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/frontend-adoption/original/finished-runtime.sqlite.gz",
+      "databaseSha256": "6aa7e60254fffe0474b56327e1a285394aee5f9b29104d47d84106a5bf7e9f0b",
+      "readOnly": true,
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "file": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/frontend-adoption/original/finished-design.sqlite.gz",
+      "databaseSha256": "c3bc6f9a320e2e053868d6923e472c433b7b568afe08cbbe6a7650c1ce2e0c74",
+      "readOnly": true,
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "file": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/frontend-adoption/original/recovered-design.sqlite.gz",
+      "databaseSha256": "c3bc6f9a320e2e053868d6923e472c433b7b568afe08cbbe6a7650c1ce2e0c74",
+      "readOnly": true,
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "file": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/frontend-adoption/original/recovered-runtime.sqlite.gz",
+      "databaseSha256": "db02fe96f160073dc4681189f7d2f3e1117e1b901a7a3eddce6a5aceb9b29b2a",
+      "readOnly": true,
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "file": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/frontend-adoption/layout/finished-runtime.sqlite.gz",
+      "databaseSha256": "652fb1b9d2cf2c118a723d02efc6706a84c2b24531158306786211eacfaebcbe",
+      "readOnly": true,
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "file": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/frontend-adoption/layout/finished-design.sqlite.gz",
+      "databaseSha256": "e66b0a38ab58b7f1c547e7df74d121e13b8b27584cad0b422040e2d1dd42c124",
+      "readOnly": true,
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "file": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/frontend-adoption/layout/recovered-design.sqlite.gz",
+      "databaseSha256": "e66b0a38ab58b7f1c547e7df74d121e13b8b27584cad0b422040e2d1dd42c124",
+      "readOnly": true,
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "file": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/frontend-adoption/layout/recovered-runtime.sqlite.gz",
+      "databaseSha256": "deba03a083c7a6a4d375e7b119771c8e41e3aaea85a435bd3b77432abc66f0ab",
+      "readOnly": true,
+      "integrity": [
+        [
+          "ok"
+        ]
+      ],
+      "passed": true
+    }
+  ],
+  "source9cChecks": [
+    {
+      "family": "original",
+      "byteExactJsonTo04c": true,
+      "byteExactXmlTo04c": true,
+      "originalRunViewsStable": true,
+      "instanceStatus": "Completed",
+      "executionId": "14n6TRg1d9R",
+      "recordedBrowserCase": {
+        "source": "9c7681c56c529c8a1a4ab4d9fc91934ec07d0448",
+        "family": "original",
+        "testRunId": "14n6TQXRQlG",
+        "executionId": "14n6TRg1d9R",
+        "executionStatus": "Completed",
+        "selectedActivity": "Delay",
+        "incidents": 0,
+        "evaluatedDuration": "00:00:01",
+        "outcome": "Done"
+      }
+    },
+    {
+      "family": "layout",
+      "byteExactJsonTo04c": true,
+      "byteExactXmlTo04c": true,
+      "originalRunViewsStable": true,
+      "instanceStatus": "Completed",
+      "executionId": "14n6eTFVcMO",
+      "recordedBrowserCase": {
+        "source": "9c7681c56c529c8a1a4ab4d9fc91934ec07d0448",
+        "family": "layout",
+        "testRunId": "14n6eR3NshH",
+        "executionId": "14n6eTFVcMO",
+        "executionStatus": "Completed",
+        "selectedActivity": "Delay",
+        "incidents": 0,
+        "evaluatedDuration": "00:00:01",
+        "outcome": "Done",
+        "initialHeadingWait": "selector did not match; actual completed execution inspected without another start"
+      }
+    }
+  ]
+}

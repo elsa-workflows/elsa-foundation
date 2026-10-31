@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-fault-probe-counterexample",
+  "sourceRevision": "9c9a5d8618eae6c046782d193bf215db36a01d1b",
+  "qualifyingTechnicalRecovery": false,
+  "assets": [
+    {
+      "path": "capture/before-checked-model.json",
+      "sha256": "3d08cb2610c6e73365bad9348637c07e701d2c5fb68b7d10c5fd563488aeb2b2"
+    },
+    {
+      "path": "capture/before-elsa.sqlite.gz",
+      "sha256": "3e46952e49eb8378296a2e6ca837639412b01fbdac87b3b02928d8572fd1b955"
+    },
+    {
+      "path": "capture/before-etl-design.sqlite.gz",
+      "sha256": "321328fe3425da5933ff72ba60495216d52e11265141ab24a840c70ea8198722"
+    },
+    {
+      "path": "capture/before-etl-runtime.sqlite.gz",
+      "sha256": "014e755056b48b32a1635919b27e128ca70f503ce58c822c5e4742ca1fc87e8d"
+    },
+    {
+      "path": "capture/before-wire.json",
+      "sha256": "a44cde24dcca30b87bd4817033e890fbdb35b71a858ba7c41b743962e331f649"
+    },
+    {
+      "path": "capture/before.json",
+      "sha256": "4fd1869542d4c9fb557e685cbbc26dd2dc9bdde72c6ff2463a6ce4a755d53e34"
+    },
+    {
+      "path": "capture/failed-elsa.sqlite.gz",
+      "sha256": "4892a99bfc90cb97931c8f3ba78e9bdb253b77e0a697aff4b3854d56ac578978"
+    },
+    {
+      "path": "capture/failed-etl-design.sqlite.gz",
+      "sha256": "d9377f680589a987ac459bf818a0fa6a40d6033d096fd628f1f45bd7149c3632"
+    },
+    {
+      "path": "capture/failed-etl-runtime.sqlite.gz",
+      "sha256": "b48c5512554ced8b1a73dbf1b0efa82599ae8259faccd10776b74f50adb8b7e2"
+    },
+    {
+      "path": "capture/failure.json",
+      "sha256": "0cadc86d9280e41b65b6ff9da34f6717477a0e70de36a8ce8b8d1f7df0500343"
+    },
+    {
+      "path": "capture/finished-checked-model.json",
+      "sha256": "aa594cda9db5d8a2d37a78a85c0550240f1a686b1032e0f811bee14ccb3d6b80"
+    },
+    {
+      "path": "capture/lookup-snapshot.csv",
+      "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+    },
+    {
+      "path": "capture/lookup-source.csv",
+      "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+    },
+    {
+      "path": "capture/recovered.json",
+      "sha256": "4fd1869542d4c9fb557e685cbbc26dd2dc9bdde72c6ff2463a6ce4a755d53e34"
+    }
+  ]
+}

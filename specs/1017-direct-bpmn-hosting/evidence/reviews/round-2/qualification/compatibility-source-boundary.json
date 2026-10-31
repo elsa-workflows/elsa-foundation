@@ -1,0 +1,61 @@
+{
+  "executingSource": "e3ec219fcc3a93c949d2669fc585bd1e79152abe",
+  "actualStudioSource": "4f46ac55c482b3b68932ca74f147439bfdacda49",
+  "ledger": [
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnProcessRuntime.cs",
+      "unchangedFromActualStudioSource": true,
+      "sha256": "182b215fb8d37059a5d237dc218f20f1786779a558ccfc1d5db1b1e12e2cc610"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEvaluationComponent.cs",
+      "unchangedFromActualStudioSource": true,
+      "sha256": "515150fd09973b84678bdf51ad8640cf8a87d982bc77a6db21b514f3598c868f"
+    },
+    {
+      "path": "Essentials/src/Persistence/EntityFramework/EfMigrationHistoryRepository.cs",
+      "unchangedFromActualStudioSource": true,
+      "sha256": "fe1289ca0496e0f078126ae690e186b763b7a660e8c256953bee67ce84cdaa3f"
+    },
+    {
+      "path": "Essentials/src/Persistence/EntityFramework/EfMigrationIncludesAttribute.cs",
+      "unchangedFromActualStudioSource": true,
+      "sha256": "fa9ecdc93deda4e3bcc1b43a6132a43f5bde84a3e632650fd9524bf4c02aa69b"
+    },
+    {
+      "path": "Essentials/src/Persistence/EntityFramework/EfMigrationsHistory.cs",
+      "unchangedFromActualStudioSource": true,
+      "sha256": "47fece6687c46b3d98499ed7099ea4a9a2fb0a63bf569440e9e1a2925d665100"
+    },
+    {
+      "path": "Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/WorkflowsDesignDbContext.cs",
+      "unchangedFromActualStudioSource": true,
+      "sha256": "d3624e70674e24328a2a3a59172fc2360cd4832be571452f148ab7f9ba913fb2"
+    },
+    {
+      "oldPath": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/RuntimeNativeModelWorkWriteVersion.cs",
+      "newPath": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/ModelWorkWriteVersion.cs",
+      "onlyClrNameChanged": true,
+      "wireIdentifiersChanged": false
+    },
+    {
+      "oldPath": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfRuntimeModelCheckpointParticipantStaging.cs",
+      "newPath": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Stores/EfModelCheckpointStaging.cs",
+      "onlyClrNameChanged": true,
+      "wireIdentifiersChanged": false
+    },
+    {
+      "oldPath": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/RuntimeModelHostingServiceCollectionExtensions.cs",
+      "newPath": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Extensions/ModelHostingServiceCollectionExtensions.cs",
+      "onlyClrNameChanged": true,
+      "wireIdentifiersChanged": false
+    }
+  ],
+  "studioRepeatedAtCurrentSource": false,
+  "reason": "Changed direct-model API/driver and non-null new-model parent admission; existing Studio legacy adapter, authored material/layout, Design/shared-EF migration repair unchanged. Native writer/staging/container changes are CLR-only. Current37-host suite also repeats the actual legacy families. Earlier actual Studio remains source-qualified; direct-model Studio acceptance remains false.",
+  "unchangedSubtrees": {
+    "Studio": true,
+    "Essentials/src/Activities/Bpmn/Interchange": true,
+    "Essentials/src/Workflows/Design": true
+  }
+}

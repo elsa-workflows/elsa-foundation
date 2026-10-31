@@ -1,0 +1,19 @@
+{
+  "items": [
+    {
+      "incidentId": "bpmn-incident:8d1fcc4ec17c9aa5040059fb2e369a124e3a85dd8f235dbbbd0000a340204145",
+      "elementId": "service",
+      "bindingId": "pipeline",
+      "invocationId": "bpmn-work:22bceb0be042f12d02f1e465ea695c193498da6b7dded2a40b108a13f2d73053",
+      "failedAttemptId": "attempt:a10feeeb97f2cd79a523c51ee0448da71e475430bacf2011b550c1cfb78d3852",
+      "workerExecutionId": "wfexec:start:v1:0a8d8ccf83b73b138841c0c42632f93f01094a19dda3b1d57bafdfe812a5c363",
+      "faultCode": "etl.snapshot-read-failed",
+      "failedAt": "2026-10-29T20:34:28.350002+00:00",
+      "attemptNumber": 1,
+      "maxAttempts": 2,
+      "status": "Retired",
+      "retryAttemptId": null
+    }
+  ],
+  "nextContinuationToken": null
+}

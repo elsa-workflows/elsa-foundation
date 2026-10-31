@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "kind": "obsolete-result-observer-diagnostic",
+  "sourceRevision": "d64970a0d05eb9f33844defa3918b3a462f57eb6",
+  "scope": "Observer accessed a transient partition before fetch checkpoint existed. No SDK old-result probe ran. Not qualifying. Runtime state/clock untouched. All listed children stopped.",
+  "wholeStores": 9,
+  "listedChildrenStopped": 4,
+  "assets": [
+    {
+      "path": "partition-not-ready/before-checked-model.json",
+      "sha256": "454466939150b011ff3e7c3bc70ed5cd83737cfdbf277db1c034d3531953d32d"
+    },
+    {
+      "path": "partition-not-ready/before-elsa.sqlite.gz",
+      "sha256": "4735811c70eca681aa052aa5bb764c3c4b93f8a9f4e653fe72c5c1a32f8b00dd"
+    },
+    {
+      "path": "partition-not-ready/before-etl-design.sqlite.gz",
+      "sha256": "2c0e51c1da7f676430ba078463ab774c1d55310680367dabf2a77e0ede731b04"
+    },
+    {
+      "path": "partition-not-ready/before-etl-runtime.sqlite.gz",
+      "sha256": "93fa8e506cfade58761efd4a7dd79450c4b5bd2dee42abdf76fda4dbfa16dcd3"
+    },
+    {
+      "path": "partition-not-ready/before-wire.json",
+      "sha256": "84a4c8747db76639251506f1ec765b797d1a7c186ba591ea4c924308c12a2085"
+    },
+    {
+      "path": "partition-not-ready/before.json",
+      "sha256": "98ef2b8df43a2dafda08e265ff69e34d14f6f77b1763c9e6c8377a07915d58a6"
+    },
+    {
+      "path": "partition-not-ready/controller.txt",
+      "sha256": "2d6e8bbda968bd7e2319e1b8c3df658c50be797bfb41f747fa7fe0acc6fcef75"
+    },
+    {
+      "path": "partition-not-ready/failed-elsa.sqlite.gz",
+      "sha256": "0b387184d483206541f8467088e34c73f6891496aa67d8286f1aa728cea5634d"
+    },
+    {
+      "path": "partition-not-ready/failed-etl-design.sqlite.gz",
+      "sha256": "27351c4f2668caaa6bc79964a9e462c8a5959f9306e536cae1760d7c9df243e1"
+    },
+    {
+      "path": "partition-not-ready/failed-etl-runtime.sqlite.gz",
+      "sha256": "7b27db39543aa1b1f6da818617fb2b146a59a27311fc9a601c98eacfd149e7aa"
+    },
+    {
+      "path": "partition-not-ready/failure.json",
+      "sha256": "71db6b80a088a4cacb5ef26384aa61916a363df2dee2dbf266edfb88dbe19b8e"
+    },
+    {
+      "path": "partition-not-ready/held-after-restart.json",
+      "sha256": "8a6b15e5f848583f9ad86aed24f03c4b97d73d698d38f6f0b9cc7767ce74789f"
+    },
+    {
+      "path": "partition-not-ready/held-checked-model.json",
+      "sha256": "458f04fde4b0720771ce293ac02b4e87d05ef763bd0ce36de08b06c980de184f"
+    },
+    {
+      "path": "partition-not-ready/held-elsa.sqlite.gz",
+      "sha256": "ecd80c12ea8231844f8a93ca2259e6bd9510d1ffdeaec67227b64e79ffbe69aa"
+    },
+    {
+      "path": "partition-not-ready/held-etl-design.sqlite.gz",
+      "sha256": "6daf64f33736efebcb8b3ff8cece2d53cdf3b6114a9042f0f86c910eed55600f"
+    },
+    {
+      "path": "partition-not-ready/held-etl-runtime.sqlite.gz",
+      "sha256": "080cd7c275e87dd779ea8019115a241a00ed47e6940d88c287d6832fa4801319"
+    },
+    {
+      "path": "partition-not-ready/held-wire.json",
+      "sha256": "84a4c8747db76639251506f1ec765b797d1a7c186ba591ea4c924308c12a2085"
+    },
+    {
+      "path": "partition-not-ready/held.json",
+      "sha256": "8a6b15e5f848583f9ad86aed24f03c4b97d73d698d38f6f0b9cc7767ce74789f"
+    },
+    {
+      "path": "partition-not-ready/lookup-snapshot.csv",
+      "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+    },
+    {
+      "path": "partition-not-ready/lookup-source.csv",
+      "sha256": "170fa7b792c08c68f9a745772739587e4ca0b9a545ab15e977bf4457ce5830cc"
+    },
+    {
+      "path": "partition-not-ready/recovered.json",
+      "sha256": "98ef2b8df43a2dafda08e265ff69e34d14f6f77b1763c9e6c8377a07915d58a6"
+    },
+    {
+      "path": "partition-not-ready/retry-command.json",
+      "sha256": "c70795b1129acfebd036a3964df5639cb0d904f3e3bc3f517662ed924f0785a0"
+    },
+    {
+      "path": "partition-not-ready/retry-rearm.json",
+      "sha256": "9caf2f2316e2a304c9c2d6c81e99f540e4c920c749f2cfb55ee06303de2a3e61"
+    },
+    {
+      "path": "partition-not-ready/snapshot-unavailability.json",
+      "sha256": "63fba5e7235a3c6e7c5d8f42120206837156354e7c602807069d20566c4176db"
+    }
+  ]
+}

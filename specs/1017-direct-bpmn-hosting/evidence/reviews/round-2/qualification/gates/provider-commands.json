@@ -1,0 +1,68 @@
+{
+  "sourceRevision": "e3ec219fcc3a93c949d2669fc585bd1e79152abe",
+  "requiredNativeProviders": true,
+  "connectionOverrideNamesRemoved": [
+    "ELSA_RUNTIME_BOOKMARKS_EF_POSTGRESQL_TEST_CONNECTION_STRING",
+    "ELSA_RUNTIME_BOOKMARKS_EF_SQLSERVER_TEST_CONNECTION_STRING",
+    "ELSA_RUNTIME_BOOKMARKS_EF_MYSQL_TEST_CONNECTION_STRING"
+  ],
+  "configuredOverrideNamesBeforeRemoval": [],
+  "testOwnedContainersOnly": true,
+  "results": [
+    {
+      "name": "runtime-providers",
+      "args": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+        "-c",
+        "Release",
+        "--logger",
+        "trx;LogFileName=runtime-providers.trx",
+        "--results-directory",
+        "/tmp/elsa-2898-round2-fixes/qualified-e3ec219fc/results",
+        "-p:RestoreLockedMode=true",
+        "--nologo",
+        "--verbosity",
+        "quiet"
+      ],
+      "startedAtUtc": "2026-10-30T16:00:49.139130+00:00",
+      "exitCode": 0,
+      "counters": {
+        "total": "209",
+        "executed": "209",
+        "passed": "209",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "name": "runtime-providers-discovery",
+      "args": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+        "-c",
+        "Release",
+        "--no-build",
+        "--list-tests",
+        "--nologo",
+        "--verbosity",
+        "quiet"
+      ],
+      "startedAtUtc": "2026-10-30T16:01:17.501159+00:00",
+      "exitCode": 0
+    }
+  ]
+}

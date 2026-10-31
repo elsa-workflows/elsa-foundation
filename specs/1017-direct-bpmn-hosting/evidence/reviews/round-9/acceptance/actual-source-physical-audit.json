@@ -1,0 +1,209 @@
+{
+  "original": {
+    "modelLifecycle": "TerminalPendingSettlement",
+    "format": 5,
+    "revision": 2,
+    "work": 1,
+    "cancellations": null,
+    "workerStatus": "Running",
+    "workerCompletedAt": null,
+    "sourceStatus": null,
+    "sourceDeliveredAt": null,
+    "sourceId": null,
+    "modelStateHash": "f6dc9091541e22761dc76e590f50d470f464d3342cf17caaed71c0c94a65b88a",
+    "terminal": {
+      "status": "Faulted",
+      "code": "bpmn.work.faulted",
+      "message": "BPMN process faulted because the work bound to 'worker' faulted (Native service work failed.): failed work cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
+      "errorCode": null
+    },
+    "wholeDatabaseSha256": "1d238bcb72f0c64fb1f0ce5db78488673dcb05c2dda5ac140e5a8ecc8d2c4ac5"
+  },
+  "pending": {
+    "modelLifecycle": "TerminalPendingSettlement",
+    "format": 5,
+    "revision": 2,
+    "work": 1,
+    "cancellations": null,
+    "workerStatus": "Running",
+    "workerCompletedAt": null,
+    "sourceStatus": "Pending",
+    "sourceDeliveredAt": null,
+    "sourceId": "commit:14o86HjFlmv:cancel:bpmn-embedded-cancel:6dbf6394de58fcede5946e1a56176c130b2f988a5d61dc9d3fc639f69520cd4f",
+    "modelStateHash": "f6dc9091541e22761dc76e590f50d470f464d3342cf17caaed71c0c94a65b88a",
+    "terminal": {
+      "status": "Faulted",
+      "code": "bpmn.work.faulted",
+      "message": "BPMN process faulted because the work bound to 'worker' faulted (Native service work failed.): failed work cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
+      "errorCode": null
+    },
+    "wholeDatabaseSha256": "e3260801482ec542842552f9267a8fd66a35ac4be49bd228a1cc6bd2b6172e09"
+  },
+  "badAck": {
+    "modelLifecycle": "TerminalPendingSettlement",
+    "format": 5,
+    "revision": 2,
+    "work": 1,
+    "cancellations": null,
+    "workerStatus": "Running",
+    "workerCompletedAt": null,
+    "sourceStatus": "Delivered",
+    "sourceDeliveredAt": "2026-10-31T15:35:55.093845+00:00",
+    "sourceId": "commit:14o86HjFlmv:cancel:bpmn-embedded-cancel:6dbf6394de58fcede5946e1a56176c130b2f988a5d61dc9d3fc639f69520cd4f",
+    "modelStateHash": "f6dc9091541e22761dc76e590f50d470f464d3342cf17caaed71c0c94a65b88a",
+    "terminal": {
+      "status": "Faulted",
+      "code": "bpmn.work.faulted",
+      "message": "BPMN process faulted because the work bound to 'worker' faulted (Native service work failed.): failed work cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
+      "errorCode": null
+    },
+    "wholeDatabaseSha256": "53bcf02ad8ad487e45a195731c1462c5c6961c866b4fac5cce9182aac101f9f0"
+  },
+  "deferred": {
+    "modelLifecycle": "TerminalPendingSettlement",
+    "format": 5,
+    "revision": 2,
+    "work": 1,
+    "cancellations": null,
+    "workerStatus": "Running",
+    "workerCompletedAt": null,
+    "sourceStatus": "FailedRetryable",
+    "sourceDeliveredAt": null,
+    "sourceId": "commit:14o86HjFlmv:cancel:bpmn-embedded-cancel:6dbf6394de58fcede5946e1a56176c130b2f988a5d61dc9d3fc639f69520cd4f",
+    "modelStateHash": "f6dc9091541e22761dc76e590f50d470f464d3342cf17caaed71c0c94a65b88a",
+    "terminal": {
+      "status": "Faulted",
+      "code": "bpmn.work.faulted",
+      "message": "BPMN process faulted because the work bound to 'worker' faulted (Native service work failed.): failed work cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
+      "errorCode": null
+    },
+    "wholeDatabaseSha256": "98a5f63d9ffaa48615e086b88da09cb15455d77328bbcad4cbb6bbe009f3c9d7"
+  },
+  "completed": {
+    "modelLifecycle": "TerminalSettled",
+    "format": 14,
+    "revision": 4,
+    "work": 0,
+    "cancellations": [
+      {
+        "origin": {
+          "formatVersion": 1,
+          "scope": {
+            "value": "default"
+          },
+          "executionId": "bpmn-embedded:e705a3456fd038bcff55bf21094de655bd89bf8b395c96a9fe14deca2d2cb44d",
+          "protocol": {
+            "key": "elsa.bpmn",
+            "version": 1
+          },
+          "executable": {
+            "artifactId": "sha256:7c2c44efc18f98b9e435792a98a4fc2cc01e16ffce0e99faf28a190c1d214140",
+            "definitionId": "bpmn-model:sha256:7c2c44efc18f98b9e435792a98a4fc2cc01e16ffce0e99faf28a190c1d214140",
+            "definitionVersionId": "sha256:7c2c44efc18f98b9e435792a98a4fc2cc01e16ffce0e99faf28a190c1d214140",
+            "artifactVersion": "1.0.0",
+            "artifactHash": "sha256:7c2c44efc18f98b9e435792a98a4fc2cc01e16ffce0e99faf28a190c1d214140"
+          },
+          "materialIncarnationId": "5c9bb3e2800942e8be3aeea00e1a5e81",
+          "bindingId": "worker",
+          "invocationId": "bpmn-work:3f7af719c75da5d55f043bc85d2b686356ca631c1588a7b9e5b5ff624ea309d4",
+          "attemptId": "attempt:0385828475616965db071b47d17a27f10e726f5f799985d41fce9951c88f3ede",
+          "workerExecutable": {
+            "artifactId": "artifact-1",
+            "definitionId": "definition-1",
+            "definitionVersionId": "version-1",
+            "artifactVersion": "1.0.0",
+            "artifactHash": "sha256:test"
+          },
+          "workerExecutionId": "wfexec:start:v1:a7203484cd6ef8cf324a6db6e3f24d710a922645598845d5b95aba68ae70a121",
+          "sourceOutboxItemId": "model-input:a7f7f4b2734b428601d55c990f2277eddd5809c0bebd7bf80c7c9ca23b9cb071:bpmn-start-native:34f801f01ed176501c76259e731d806f3b41684dc2f2f0a4eae567b7c5ccee65",
+          "sourceIntentId": "bpmn-start-native:34f801f01ed176501c76259e731d806f3b41684dc2f2f0a4eae567b7c5ccee65",
+          "resultIntentKind": "Elsa.Bpmn.NativeWorkResult.v1",
+          "resultInputId": "native-result:5c68b8da1be57e19eab3f7cf53a1abf09920285af4f9da6137c776348beafc10"
+        },
+        "sourceOutboxItemId": "model-input:75d6841a544b1137386218f8cfe3d88e357f16e3048bf2f05da1b8741505ac0e:bpmn-cancel-native:34f801f01ed176501c76259e731d806f3b41684dc2f2f0a4eae567b7c5ccee65",
+        "settled": true
+      }
+    ],
+    "workerStatus": "Cancelled",
+    "workerCompletedAt": "2026-10-31T15:55:26.008923+00:00",
+    "sourceStatus": "Delivered",
+    "sourceDeliveredAt": "2026-10-31T15:55:26.613024+00:00",
+    "sourceId": "commit:14o86HjFlmv:cancel:bpmn-embedded-cancel:6dbf6394de58fcede5946e1a56176c130b2f988a5d61dc9d3fc639f69520cd4f",
+    "modelStateHash": "f6dc9091541e22761dc76e590f50d470f464d3342cf17caaed71c0c94a65b88a",
+    "terminal": {
+      "status": "Faulted",
+      "code": "bpmn.work.faulted",
+      "message": "BPMN process faulted because the work bound to 'worker' faulted (Native service work failed.): failed work cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
+      "errorCode": null
+    },
+    "wholeDatabaseSha256": "00c8c6e1d77c5411b660f1fea70bf32400d36b909d629e7b3874a2593937214b"
+  },
+  "retained": {
+    "modelLifecycle": "TerminalSettled",
+    "format": 14,
+    "revision": 4,
+    "work": 0,
+    "cancellations": [
+      {
+        "origin": {
+          "formatVersion": 1,
+          "scope": {
+            "value": "default"
+          },
+          "executionId": "bpmn-embedded:e705a3456fd038bcff55bf21094de655bd89bf8b395c96a9fe14deca2d2cb44d",
+          "protocol": {
+            "key": "elsa.bpmn",
+            "version": 1
+          },
+          "executable": {
+            "artifactId": "sha256:7c2c44efc18f98b9e435792a98a4fc2cc01e16ffce0e99faf28a190c1d214140",
+            "definitionId": "bpmn-model:sha256:7c2c44efc18f98b9e435792a98a4fc2cc01e16ffce0e99faf28a190c1d214140",
+            "definitionVersionId": "sha256:7c2c44efc18f98b9e435792a98a4fc2cc01e16ffce0e99faf28a190c1d214140",
+            "artifactVersion": "1.0.0",
+            "artifactHash": "sha256:7c2c44efc18f98b9e435792a98a4fc2cc01e16ffce0e99faf28a190c1d214140"
+          },
+          "materialIncarnationId": "5c9bb3e2800942e8be3aeea00e1a5e81",
+          "bindingId": "worker",
+          "invocationId": "bpmn-work:3f7af719c75da5d55f043bc85d2b686356ca631c1588a7b9e5b5ff624ea309d4",
+          "attemptId": "attempt:0385828475616965db071b47d17a27f10e726f5f799985d41fce9951c88f3ede",
+          "workerExecutable": {
+            "artifactId": "artifact-1",
+            "definitionId": "definition-1",
+            "definitionVersionId": "version-1",
+            "artifactVersion": "1.0.0",
+            "artifactHash": "sha256:test"
+          },
+          "workerExecutionId": "wfexec:start:v1:a7203484cd6ef8cf324a6db6e3f24d710a922645598845d5b95aba68ae70a121",
+          "sourceOutboxItemId": "model-input:a7f7f4b2734b428601d55c990f2277eddd5809c0bebd7bf80c7c9ca23b9cb071:bpmn-start-native:34f801f01ed176501c76259e731d806f3b41684dc2f2f0a4eae567b7c5ccee65",
+          "sourceIntentId": "bpmn-start-native:34f801f01ed176501c76259e731d806f3b41684dc2f2f0a4eae567b7c5ccee65",
+          "resultIntentKind": "Elsa.Bpmn.NativeWorkResult.v1",
+          "resultInputId": "native-result:5c68b8da1be57e19eab3f7cf53a1abf09920285af4f9da6137c776348beafc10"
+        },
+        "sourceOutboxItemId": "model-input:75d6841a544b1137386218f8cfe3d88e357f16e3048bf2f05da1b8741505ac0e:bpmn-cancel-native:34f801f01ed176501c76259e731d806f3b41684dc2f2f0a4eae567b7c5ccee65",
+        "settled": true
+      }
+    ],
+    "workerStatus": "Cancelled",
+    "workerCompletedAt": "2026-10-31T15:55:26.008923+00:00",
+    "sourceStatus": "Delivered",
+    "sourceDeliveredAt": "2026-10-31T15:55:26.613024+00:00",
+    "sourceId": "commit:14o86HjFlmv:cancel:bpmn-embedded-cancel:6dbf6394de58fcede5946e1a56176c130b2f988a5d61dc9d3fc639f69520cd4f",
+    "modelStateHash": "f6dc9091541e22761dc76e590f50d470f464d3342cf17caaed71c0c94a65b88a",
+    "terminal": {
+      "status": "Faulted",
+      "code": "bpmn.work.faulted",
+      "message": "BPMN process faulted because the work bound to 'worker' faulted (Native service work failed.): failed work cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
+      "errorCode": null
+    },
+    "wholeDatabaseSha256": "00c8c6e1d77c5411b660f1fea70bf32400d36b909d629e7b3874a2593937214b"
+  },
+  "assertions": {
+    "originalModelUnchangedBeforeRecovery": true,
+    "originalWorkerUnchangedBeforeRecovery": true,
+    "identicalOriginalSourceIntent": true,
+    "coldWholeDatabaseIdentical": true,
+    "exactSemanticStatePreserved": true,
+    "exactFaultPreserved": true,
+    "ackAfterWorkerCompletion": true
+  }
+}

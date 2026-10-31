@@ -1,0 +1,16 @@
+[
+  {
+    "family": "studio",
+    "readOnly": true,
+    "sourceIds": [
+      "/private/tmp/elsa-2735-review/t045-ack-standard-build/bin/Elsa.Workbench/release/"
+    ]
+  },
+  {
+    "family": "multi-instance-and-studio",
+    "readOnly": true,
+    "sourceIds": [
+      "/private/tmp/elsa-2735-review/t045-ack-standard-build/bin/Elsa.Workbench/release/"
+    ]
+  }
+]

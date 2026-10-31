@@ -1,0 +1,12 @@
+{
+  "adoptedMain": "d63e18a47a2a6ca3e67a49855639d16e66f1f958",
+  "adoptionCommit": "66de3eaef969d8af5b460d02ad45e34b8e2e8e68",
+  "unchangedFromQualified20bca": [
+    "Essentials",
+    "Extensions",
+    "Studio",
+    "tools/bpmn"
+  ],
+  "all104FrozenAssetsUnchanged": true,
+  "frozenManifestSha256": "c2e5d9c8c2a001ff5141c2ca8eaaed097ec7c81d78d0180b6c7a4ecf5bed4153"
+}

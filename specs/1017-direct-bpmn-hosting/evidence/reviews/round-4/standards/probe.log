@@ -1,0 +1,18 @@
+[
+  {
+    "corruptTypedPayload": false,
+    "type": "Elsa.Activities.Bpmn.Core.BpmnModelValidationException",
+    "message": "The duration timer delivery is missing its typed source.",
+    "inner": null,
+    "sourceOutboxId": "reviewed-commit:timer-source",
+    "executionId": "reviewed-model"
+  },
+  {
+    "corruptTypedPayload": true,
+    "type": "System.Text.Json.JsonException",
+    "message": "The JSON value could not be converted to Elsa.Activities.Bpmn.Internal.BpmnDurationTimer. Path: $ | LineNumber: 0 | BytePositionInLine: 20.",
+    "inner": null,
+    "sourceOutboxId": "reviewed-commit:timer-source",
+    "executionId": "reviewed-model"
+  }
+]

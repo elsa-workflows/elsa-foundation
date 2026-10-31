@@ -73,6 +73,11 @@ public abstract class EfDesignCommand(WorkflowsDesignDbContext db, IPersistenceA
 
 public sealed class EfAddWorkflowDefinitionCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access, IDesignAtomicWriter atomic, IPayloadSerializer serializer, IIdentityGenerator identities, IDistributedLockProvider? lockProvider = null) : EfDesignCommand(db, access, atomic), IAddWorkflowDefinitionCommand
 {
+    /// <summary>Preserves the published constructor for callers that do not use workflow folders.</summary>
+    public EfAddWorkflowDefinitionCommand(WorkflowsDesignDbContext db, IPersistenceAccessContextAccessor access,
+        IDesignAtomicWriter atomic, IPayloadSerializer serializer, IIdentityGenerator identities)
+        : this(db, access, atomic, serializer, identities, null) { }
+
     public Task<WorkflowDefinitionCreated> Execute(DesignOperationKey key, WorkflowDefinition definition, WorkflowDefinitionDraft draft, CancellationToken ct = default) => Execute(key, definition, draft, [], [], ct);
     public Task<WorkflowDefinitionCreated> Execute(DesignOperationKey key, WorkflowDefinition definition, WorkflowDefinitionDraft draft, IReadOnlyCollection<DesignMetadataRecord> layout, CancellationToken ct = default) => Execute(key, definition, draft, layout, [], ct);
     public Task<WorkflowDefinitionCreated> Execute(DesignOperationKey key, WorkflowDefinition definition, WorkflowDefinitionDraft draft, IReadOnlyCollection<DesignMetadataRecord> layout, IReadOnlyCollection<ActivityPresentationRecord> presentation, CancellationToken ct = default) =>

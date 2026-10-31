@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-direct-embedded-partial-fork-recovery",
+  "sourceRevision": "d7ee22b164bc04098bedde19e5b4722ed6f2b871",
+  "assets": [
+    {
+      "path": "parallel-compensationscope/bothWaiting-checked.json",
+      "sha256": "d10b734161b6c5105eee6eb481818eb2eaf40463a7f6677d37c134c841f031f2"
+    },
+    {
+      "path": "parallel-compensationscope/case.json",
+      "sha256": "4383c029c4f5b309db6943bb10246d460415a47c47e83004a53b9ca8072f897e"
+    },
+    {
+      "path": "parallel-compensationscope/final-checked.json",
+      "sha256": "4e2b5b5aa6bc1d96eb47bb99c798bb7b07fbaf5a94eb65f0236f9d3d1f5c0728"
+    },
+    {
+      "path": "parallel-compensationscope/final-design.sqlite.gz",
+      "sha256": "d710293d3c50156901fa099e2733fb5666d572a48213d06c4223f95cb6452d41"
+    },
+    {
+      "path": "parallel-compensationscope/final-runtime.sqlite.gz",
+      "sha256": "ae8e69b124d562195b0bfa07dfc9f0443a6d400a3fed9035b521d2de88405d8c"
+    },
+    {
+      "path": "parallel-compensationscope/joined-checked.json",
+      "sha256": "7b82b7febd8857a62c8c1fcd0ba1cb6322146330a811657dd37d90aaf1f2c482"
+    },
+    {
+      "path": "parallel-compensationscope/partial-checked.json",
+      "sha256": "9e5815ca9501f1336ce0a247e5a27d87666f0900a5963452a6e22a7b70c3f217"
+    },
+    {
+      "path": "parallel-compensationscope/partial-design.sqlite.gz",
+      "sha256": "d710293d3c50156901fa099e2733fb5666d572a48213d06c4223f95cb6452d41"
+    },
+    {
+      "path": "parallel-compensationscope/partial-runtime.sqlite.gz",
+      "sha256": "6dba37432b0141578c1b6c4147a6682903cc25bc3a15ec2387fa0c03140bf315"
+    },
+    {
+      "path": "parallel-compensationscope/recovered-checked.json",
+      "sha256": "9e5815ca9501f1336ce0a247e5a27d87666f0900a5963452a6e22a7b70c3f217"
+    },
+    {
+      "path": "parallel-compensationscope/retained-checked.json",
+      "sha256": "4e2b5b5aa6bc1d96eb47bb99c798bb7b07fbaf5a94eb65f0236f9d3d1f5c0728"
+    },
+    {
+      "path": "parallel-compensationscope/retained-design.sqlite.gz",
+      "sha256": "d710293d3c50156901fa099e2733fb5666d572a48213d06c4223f95cb6452d41"
+    },
+    {
+      "path": "parallel-compensationscope/retained-runtime.sqlite.gz",
+      "sha256": "ae8e69b124d562195b0bfa07dfc9f0443a6d400a3fed9035b521d2de88405d8c"
+    },
+    {
+      "path": "parallel-flowchart/bothWaiting-checked.json",
+      "sha256": "a9f724303f66a9a86d939e4d690f4a6c7d6747feb27498ffeb506be13e893024"
+    },
+    {
+      "path": "parallel-flowchart/case.json",
+      "sha256": "71b4251b00ae6378a03810fbbd574c4b57387d09552b06dea0471be5f6fea5db"
+    },
+    {
+      "path": "parallel-flowchart/final-checked.json",
+      "sha256": "ba00514b66dd09ae15fc84583d2310815cf4dfe59830683fb4165300ea9ec4b2"
+    },
+    {
+      "path": "parallel-flowchart/final-design.sqlite.gz",
+      "sha256": "48f17ca5495052271f73e26a76aca0b8c0dc04fffad4b850c7e2a52b980586f2"
+    },
+    {
+      "path": "parallel-flowchart/final-runtime.sqlite.gz",
+      "sha256": "f9441ba98bc9e8811903fd73c9215c5911edcff34a7c50a545cde36fb859947c"
+    },
+    {
+      "path": "parallel-flowchart/joined-checked.json",
+      "sha256": "610a742c2206d2ce677d77a76806ec74cf0db7cebb080cc8692909fde09d97e8"
+    },
+    {
+      "path": "parallel-flowchart/partial-checked.json",
+      "sha256": "4f14d37deb8d23f6963c797b1257ff92de95a388d9a998c8e1e1e9ea2616c97d"
+    },
+    {
+      "path": "parallel-flowchart/partial-design.sqlite.gz",
+      "sha256": "48f17ca5495052271f73e26a76aca0b8c0dc04fffad4b850c7e2a52b980586f2"
+    },
+    {
+      "path": "parallel-flowchart/partial-runtime.sqlite.gz",
+      "sha256": "e6919c1f2d180c131dd77257f82bc9d818ae548cfd59600701f233f228cf440b"
+    },
+    {
+      "path": "parallel-flowchart/recovered-checked.json",
+      "sha256": "4f14d37deb8d23f6963c797b1257ff92de95a388d9a998c8e1e1e9ea2616c97d"
+    },
+    {
+      "path": "parallel-flowchart/retained-checked.json",
+      "sha256": "ba00514b66dd09ae15fc84583d2310815cf4dfe59830683fb4165300ea9ec4b2"
+    },
+    {
+      "path": "parallel-flowchart/retained-design.sqlite.gz",
+      "sha256": "48f17ca5495052271f73e26a76aca0b8c0dc04fffad4b850c7e2a52b980586f2"
+    },
+    {
+      "path": "parallel-flowchart/retained-runtime.sqlite.gz",
+      "sha256": "f9441ba98bc9e8811903fd73c9215c5911edcff34a7c50a545cde36fb859947c"
+    },
+    {
+      "path": "parallel-root/bothWaiting-checked.json",
+      "sha256": "58bac764154428c1c07e4d119c3d74383079e30eec2fdad5f0d74a50cb5f00bf"
+    },
+    {
+      "path": "parallel-root/case.json",
+      "sha256": "ced23f4fb8d0bc7976b671070ca424af8929744ab2682783eb338f2c0ff6ed7a"
+    },
+    {
+      "path": "parallel-root/final-checked.json",
+      "sha256": "72bb6004ebcdf81ac06e720b2728478863779959aea186ff2f0d7e34b46fc695"
+    },
+    {
+      "path": "parallel-root/final-design.sqlite.gz",
+      "sha256": "499279d190c7e152c17f959cb639c5860a88c9c4b624b90f01f867cb739170a9"
+    },
+    {
+      "path": "parallel-root/final-runtime.sqlite.gz",
+      "sha256": "6c49f9715734d1af2536d8cef079474b0da2e2dfac11b94e452cdfa9d40958e5"
+    },
+    {
+      "path": "parallel-root/joined-checked.json",
+      "sha256": "f5d1d98d0c171f750015cebd711e646496f57cc877e2bfbcf394df509a0b6c15"
+    },
+    {
+      "path": "parallel-root/partial-checked.json",
+      "sha256": "dd23feea0cc4bb028be9f14d382d0b4de9d2b7451d899fdfa72d71dd834fbe34"
+    },
+    {
+      "path": "parallel-root/partial-design.sqlite.gz",
+      "sha256": "499279d190c7e152c17f959cb639c5860a88c9c4b624b90f01f867cb739170a9"
+    },
+    {
+      "path": "parallel-root/partial-runtime.sqlite.gz",
+      "sha256": "2d2bf51983ea52097aef634563873bf305d5549d1af6598162b7b027e815c932"
+    },
+    {
+      "path": "parallel-root/recovered-checked.json",
+      "sha256": "dd23feea0cc4bb028be9f14d382d0b4de9d2b7451d899fdfa72d71dd834fbe34"
+    },
+    {
+      "path": "parallel-root/retained-checked.json",
+      "sha256": "72bb6004ebcdf81ac06e720b2728478863779959aea186ff2f0d7e34b46fc695"
+    },
+    {
+      "path": "parallel-root/retained-design.sqlite.gz",
+      "sha256": "499279d190c7e152c17f959cb639c5860a88c9c4b624b90f01f867cb739170a9"
+    },
+    {
+      "path": "parallel-root/retained-runtime.sqlite.gz",
+      "sha256": "6c49f9715734d1af2536d8cef079474b0da2e2dfac11b94e452cdfa9d40958e5"
+    },
+    {
+      "path": "parallel-sequence/bothWaiting-checked.json",
+      "sha256": "4266c55eccc89eff674d87f01e20b75dbe1745578e3c6a09a04cc9de3296df64"
+    },
+    {
+      "path": "parallel-sequence/case.json",
+      "sha256": "d4fad4d0242a7a4d5b8f0a72121f52a93c9db0d73d6a1b9fd7b99925a82ded9a"
+    },
+    {
+      "path": "parallel-sequence/final-checked.json",
+      "sha256": "4a736aec4d5dc50885202cd3f984fd5f65679d8f0af40219793e5c91e77c7bde"
+    },
+    {
+      "path": "parallel-sequence/final-design.sqlite.gz",
+      "sha256": "e8e2cc1993377edeb27f742d2032b78fdc70fe86d6d0085c49c97db8e2a45bbc"
+    },
+    {
+      "path": "parallel-sequence/final-runtime.sqlite.gz",
+      "sha256": "3c71775031f80d5556595987a6b0cfbe618949647d4611fd28125a436283b69f"
+    },
+    {
+      "path": "parallel-sequence/joined-checked.json",
+      "sha256": "ae83c34ca95dfaec122c1035e1766fac0216195882e8edff5ab9b792fbd5cb8c"
+    },
+    {
+      "path": "parallel-sequence/partial-checked.json",
+      "sha256": "18916ecd97ec3879371d2f899a312314d1612814ead6bfee71d751f9cea2ed82"
+    },
+    {
+      "path": "parallel-sequence/partial-design.sqlite.gz",
+      "sha256": "e8e2cc1993377edeb27f742d2032b78fdc70fe86d6d0085c49c97db8e2a45bbc"
+    },
+    {
+      "path": "parallel-sequence/partial-runtime.sqlite.gz",
+      "sha256": "551c88b0a065b8dda1e3424675f984a0d8b50c40c77d8ce9c8db2f2eb63f9af8"
+    },
+    {
+      "path": "parallel-sequence/recovered-checked.json",
+      "sha256": "18916ecd97ec3879371d2f899a312314d1612814ead6bfee71d751f9cea2ed82"
+    },
+    {
+      "path": "parallel-sequence/retained-checked.json",
+      "sha256": "4a736aec4d5dc50885202cd3f984fd5f65679d8f0af40219793e5c91e77c7bde"
+    },
+    {
+      "path": "parallel-sequence/retained-design.sqlite.gz",
+      "sha256": "e8e2cc1993377edeb27f742d2032b78fdc70fe86d6d0085c49c97db8e2a45bbc"
+    },
+    {
+      "path": "parallel-sequence/retained-runtime.sqlite.gz",
+      "sha256": "3c71775031f80d5556595987a6b0cfbe618949647d4611fd28125a436283b69f"
+    }
+  ]
+}

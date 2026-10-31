@@ -1,0 +1,6 @@
+{
+  "initialHypothesis": "A newly generic header might explain the missing Published Run text.",
+  "verifiedCause": "The capture used Timeline instead of Details. Run Kind remains present in the actual source and UI.",
+  "correction": "Reopen the same private stores for read-only Details inspection; retain separate extra process provenance and unchanged API views.",
+  "verifierAndRuntimeChanged": false
+}

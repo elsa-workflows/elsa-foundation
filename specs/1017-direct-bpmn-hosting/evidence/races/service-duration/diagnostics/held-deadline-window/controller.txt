@@ -1,0 +1,8 @@
+Observed durable 429 and completed sibling; owned predecessor terminated.
+Owned private diagnostic root: /var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-etl-http-recovery-y_w9ybpf
+Traceback (most recent call last):
+  File "/Users/sipke/.codex/worktrees/f236/elsa-foundation/e2e-tests/etl/qualify_http_recovery.py", line 1200, in <module>
+    if __name__=="__main__":main()
+  File "/Users/sipke/.codex/worktrees/f236/elsa-foundation/e2e-tests/etl/qualify_http_recovery.py", line 581, in main
+    if after_restart!=middle:raise ValueError('The timed worker decision or held failure changed at process recovery.')
+ValueError: The timed worker decision or held failure changed at process recovery.

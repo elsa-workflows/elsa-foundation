@@ -1,0 +1,160 @@
+{
+  "reviewedHead": "1e707d58fc2148be3715d50616dfdb69dc82ae65",
+  "base": "7b49513650665606e5f52fdc08c5831f60802dac",
+  "currentSource": "1e707d58fc2148be3715d50616dfdb69dc82ae65",
+  "currentProducts": {
+    "sourceCommit": "1e707d58fc2148be3715d50616dfdb69dc82ae65",
+    "metadataOnly": true,
+    "actualProductVersions": [
+      {
+        "name": "Elsa.Workbench.dll",
+        "productVersion": "1.0.0+1e707d58fc2148be3715d50616dfdb69dc82ae65",
+        "sha256": "a5fa3dc22bd46f004091ff96b9cc8f28c8a3f1270a2f8a1168bc5599362ef696"
+      },
+      {
+        "name": "Elsa.Activities.Bpmn.dll",
+        "productVersion": "1.0.0+1e707d58fc2148be3715d50616dfdb69dc82ae65",
+        "sha256": "894713d05064d9c5d80dce98de0d0e0b749de2ad3ee99aa2551191b2c06858a3"
+      },
+      {
+        "name": "Elsa.Activities.Bpmn.Interchange.dll",
+        "productVersion": "1.0.0+1e707d58fc2148be3715d50616dfdb69dc82ae65",
+        "sha256": "a8b98631d5920c4b30e6718b4db69f6d2ba812b6942484d5d73aa3629da47969"
+      },
+      {
+        "name": "Elsa.Workflows.Runtime.Core.dll",
+        "productVersion": "1.0.0+1e707d58fc2148be3715d50616dfdb69dc82ae65",
+        "sha256": "085d31415f47ae11777a28610b4ff28a37770865aeb82a9525d130c6ba509eb6"
+      },
+      {
+        "name": "Elsa.Workflows.Runtime.dll",
+        "productVersion": "1.0.0+1e707d58fc2148be3715d50616dfdb69dc82ae65",
+        "sha256": "6801d9b8fc704a616501053705db889e0e68ee52ed45c66c604a2cd63bc471cd"
+      },
+      {
+        "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+        "productVersion": "1.0.0+1e707d58fc2148be3715d50616dfdb69dc82ae65",
+        "sha256": "b0a1ca2c6f9564fd98cec749e7e029aea97d5a4963f9c4cd7cd2756d399d0b06"
+      },
+      {
+        "name": "Elsa.Activities.Runtime.dll",
+        "productVersion": "1.0.0+1e707d58fc2148be3715d50616dfdb69dc82ae65",
+        "sha256": "69228a735cf3ffb1759b82d4929823676daba371985b26d01347a00cde74e40d"
+      },
+      {
+        "name": "Elsa.Activities.DispatchWorkflow.Runtime.dll",
+        "productVersion": "1.0.0+1e707d58fc2148be3715d50616dfdb69dc82ae65",
+        "sha256": "8c5efe0c0dabb5775478172420fc45bc92a083b62a2f2f0684922e7bf7f06e25"
+      },
+      {
+        "name": "Elsa.Serialization.SystemText.dll",
+        "productVersion": "1.0.0+1e707d58fc2148be3715d50616dfdb69dc82ae65",
+        "sha256": "39187324e7bc60403aac05a44c8779d6c0f29fa12995ebe4778b475ac7d741cb"
+      },
+      {
+        "name": "Elsa.Workflows.Design.Core.dll",
+        "productVersion": "1.0.0+1e707d58fc2148be3715d50616dfdb69dc82ae65",
+        "sha256": "895daced587fdff9de9a74ef7c573394c401aa599d19354b51a4a47cd5dec931"
+      },
+      {
+        "name": "Elsa.Workflows.Design.Api.dll",
+        "productVersion": "1.0.0+1e707d58fc2148be3715d50616dfdb69dc82ae65",
+        "sha256": "22d6ff7971d7b0e5902f043bcb93cb6f33be68f85c058aa0237cc12984209517"
+      },
+      {
+        "name": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll",
+        "productVersion": "1.0.0+1e707d58fc2148be3715d50616dfdb69dc82ae65",
+        "sha256": "86b9ba163560440ca8c782553b7d68d4791978958dc706eb11cdfc19ca2d8ebb"
+      },
+      {
+        "name": "Elsa.Persistence.EntityFramework.dll",
+        "productVersion": "1.0.0+1e707d58fc2148be3715d50616dfdb69dc82ae65",
+        "sha256": "9f0dceced47053289930848650c65feeaec532348301b1223c49ec0933f6289c"
+      }
+    ],
+    "releasedLibraryProducts": [
+      {
+        "name": "Bpmn.Model.dll",
+        "productVersion": "0.5.0+021d2c5bba494f17d346144d97763cd3b2a13a4b",
+        "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776"
+      },
+      {
+        "name": "Bpmn.Semantics.dll",
+        "productVersion": "0.5.0+021d2c5bba494f17d346144d97763cd3b2a13a4b",
+        "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+      },
+      {
+        "name": "Bpmn.Interchange.dll",
+        "productVersion": "0.5.0+021d2c5bba494f17d346144d97763cd3b2a13a4b",
+        "sha256": "4199d813b9e6dad4f0ec4f189b05b9084de86fb9a7d46233a85183072d88c6d9"
+      }
+    ]
+  },
+  "sourceEquivalence": [
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnLegacyFaultWorkRecovery.cs",
+      "executingBlob": "abfc0a5973ffec431ba62191592f0bb9c5839500",
+      "reviewedBlob": "abfc0a5973ffec431ba62191592f0bb9c5839500"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnDirectExecutionDriver.cs",
+      "executingBlob": "bc38ebe611edac43aad6f5daed3ef6c589db4a7e",
+      "reviewedBlob": "bc38ebe611edac43aad6f5daed3ef6c589db4a7e"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingDelivery.cs",
+      "executingBlob": "dcabfa84f064724ca59173f30fb04babd9e2e5dd",
+      "reviewedBlob": "dcabfa84f064724ca59173f30fb04babd9e2e5dd"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingBoundary.cs",
+      "executingBlob": "c2f0c94285ec01370d9aa7a6db6d089dc91c0658",
+      "reviewedBlob": "c2f0c94285ec01370d9aa7a6db6d089dc91c0658"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnNativeWorkDelivery.cs",
+      "executingBlob": "455e6af639964ae9c8170b0bf540a0a775081b2f",
+      "reviewedBlob": "455e6af639964ae9c8170b0bf540a0a775081b2f"
+    }
+  ],
+  "oldWriterProductionSource": "e3ec219fcc3a93c949d2669fc585bd1e79152abe",
+  "oldHarnessSource": "eef92c613853f80cb192a5fe462a1f929c3836a8",
+  "oldWriterProducts": [
+    {
+      "name": "Elsa.Activities.Bpmn.dll",
+      "sha256": "daca65277a4c7d554da6aaa76efa6585ccc7af435275503ac1c03f63fb0a90e7"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Core.dll",
+      "sha256": "c7b6b2e2384b26dddcd6ebf78d5f400df1a7a86638cad76b644e3ddc741eddf8"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.dll",
+      "sha256": "e6d155506758cccc8754872fbe855aa9055771124ed50b9de2c2ea3820533912"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "sha256": "6c8db6d09cd1c5ed3a523bb51e93939507402177821aebd8e28d994bf1ce1012"
+    },
+    {
+      "name": "Elsa.Activities.Testing.dll",
+      "sha256": "3f55d4989d4d91fa2baa8a998b711c3fc3bb67692b5bfc689cded5dfd216d35e"
+    },
+    {
+      "name": "Bpmn.Semantics.dll",
+      "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+    },
+    {
+      "name": "Bpmn.Model.dll",
+      "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776"
+    },
+    {
+      "name": "Elsa.Activities.Flowchart.dll",
+      "sha256": "065151b5d06b1bc1ed90c0e0daf52a80fb3cb382a6f84289c49705cf3c5ff7d5"
+    },
+    {
+      "name": "Elsa.Activities.Primitives.dll",
+      "sha256": "b3bee5983881048c87c736c28abf6f5a7bedae9868993e0b9150e44dce557cfd"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+[
+  {
+    "family": "original",
+    "ownedStudioUrl": "http://127.0.0.1:49798",
+    "allowedReturnUrlOrigins": [
+      "http://127.0.0.1:49798"
+    ],
+    "controllerSource": "39f9b48f277264dca8daf3f9c0a14457145eff4a"
+  },
+  {
+    "family": "layout",
+    "ownedStudioUrl": "http://127.0.0.1:49796",
+    "allowedReturnUrlOrigins": [
+      "http://127.0.0.1:49796"
+    ],
+    "controllerSource": "39f9b48f277264dca8daf3f9c0a14457145eff4a"
+  }
+]

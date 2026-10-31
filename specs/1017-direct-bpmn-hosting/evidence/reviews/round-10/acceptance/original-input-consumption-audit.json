@@ -1,0 +1,7 @@
+{
+  "sameOriginalInputId": "native-result:6532beb67e8086a03ac29a72aab36385cbb60d89f3f5db896b9031fd982745c5",
+  "accepted": "Accepted",
+  "acceptedRevision": 2,
+  "sameOriginalPayload": true,
+  "auditSetupDiagnostic": "Initial private audit looked for receipt revision; the actual DTO declares acceptedRevision. Corrected the field name without changing data or assertions."
+}

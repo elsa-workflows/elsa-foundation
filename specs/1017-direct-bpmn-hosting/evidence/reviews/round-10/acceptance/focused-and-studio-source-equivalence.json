@@ -1,0 +1,23 @@
+[
+  {
+    "from": "43741654e6b5fa99359910b12321d6a12179c996",
+    "to": "5ff0d52c6245ab89bc673e45da683a0f6c3cc141",
+    "paths": [
+      "Essentials/src",
+      "Essentials/tests/Activities/Bpmn/Tests",
+      "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests"
+    ],
+    "delta": "",
+    "identical": true
+  },
+  {
+    "from": "e26c11bd94bc7a99d6cd0c522ada89961ef72aa5",
+    "to": "5ff0d52c6245ab89bc673e45da683a0f6c3cc141",
+    "paths": [
+      "Studio",
+      ".github/workflows/studio-ci.yml"
+    ],
+    "delta": "",
+    "identical": true
+  }
+]

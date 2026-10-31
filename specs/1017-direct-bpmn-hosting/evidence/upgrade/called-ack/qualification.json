@@ -1,0 +1,31 @@
+{
+  "executingHostReaderSource": "4bba8f266327369608733fb4ee484e07a33bbf6a",
+  "actualLegacyCuts": 2,
+  "wholeHostingSuite": {
+    "passed": 7,
+    "failed": 0,
+    "skipped": 0,
+    "command": "dotnet test Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj -c Release --artifacts-path /private/tmp/elsa-2898-stale-input-host --no-build --no-restore --logger trx;LogFileName=called-ack-exact-source-whole-host.trx",
+    "trxSha256": "8b47bec3cae7f4bfff84fc1f4bbc16813bcbe800775fa587c40d14e7c6890ba6"
+  },
+  "verifierControls": {
+    "passed": 29,
+    "failed": 0,
+    "skipped": 0,
+    "newCalledAcknowledgmentRefusalControls": 6,
+    "command": "ELSA_BPMN_CAPTURE_MANIFEST=specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/manifest.json python3 -m unittest discover -s e2e-tests/bpmn -p test_qualify_hosting.py -v"
+  },
+  "projectGraphAndTierChecks": {
+    "solutionFilters": "pass",
+    "testTiers": "123 projects, each in one tier and one shard"
+  },
+  "originalCapturesUnchanged": true,
+  "frozenPublishedDescriptorsVerified": 2,
+  "fullPrReviewRounds": 0,
+  "limits": [
+    "Actual SQLite/native BpmnProcess notice and terminal pre-ACK cuts only.",
+    "New direct-model/RunBpmn settlement and native/ETL integration remain open.",
+    "Broadcasts, active MI/compensation/control, actual Studio and final-source qualification remain open.",
+    "This draft does not complete T030, #2898, #2907 or Program #2892."
+  ]
+}

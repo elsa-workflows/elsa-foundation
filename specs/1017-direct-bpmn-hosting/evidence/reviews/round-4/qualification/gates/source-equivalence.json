@@ -1,0 +1,17 @@
+{
+  "from": "f6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1",
+  "to": "30dfb0a9b7ee46b59ef90e18b548162fa5a96c3f",
+  "scopedPaths": [
+    "Essentials/src/Activities/Bpmn",
+    "Essentials/src/Workflows/Runtime",
+    "Essentials/src/Persistence/EntityFramework",
+    "Essentials/tests/Activities/Bpmn",
+    "Essentials/tests/Workflows/Runtime",
+    "Essentials/tests/Architecture/Tests",
+    "Directory.Build.props",
+    "Directory.Build.targets",
+    "Directory.Packages.props"
+  ],
+  "changedFiles": [],
+  "scope": "The unchanged core unit paths retain their as-built source. The integrated publishing startup and Studio changes receive fresh actual host/Studio qualification."
+}

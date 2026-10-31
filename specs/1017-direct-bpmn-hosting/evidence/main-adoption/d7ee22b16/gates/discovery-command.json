@@ -1,0 +1,13 @@
+{
+  "command": [
+    "dotnet",
+    "test",
+    "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+    "-c",
+    "Release",
+    "--no-build",
+    "--no-restore",
+    "--list-tests"
+  ],
+  "exitCode": 0
+}

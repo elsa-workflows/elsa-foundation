@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "executingSource": "fc03c3b96b99ae309a3763ecbae07562a237ade5",
+  "actualJourneysPassed": 2,
+  "actualStages": [
+    "start",
+    "checkpoint"
+  ],
+  "rawAssets": 46,
+  "wholeStoresVerified": 18,
+  "ownedWorkbenchProcesses": 6,
+  "ownedSdkProcesses": 2,
+  "ownedHttpProcesses": 2,
+  "allQualifiedJourneyChildrenStopped": true,
+  "checks": [
+    {
+      "name": "BPMN",
+      "passed": 384,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "0a6f1580e4d4e9b0705c100b0dc1cd1cb964485f132b2fcb78a5bf3c0e933fc3"
+    },
+    {
+      "name": "Runtime coalescing policy",
+      "passed": 23,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "ad29c1adf4fdf975b6cf56fe0ae4a6b697f9a7c79e51528fe51d59736d739240"
+    }
+  ],
+  "portableChecks": {
+    "passed": 40,
+    "failed": 0,
+    "skipped": 0,
+    "newPositiveMatrix": 1,
+    "newRehashedNegativeControls": 6,
+    "verifierSha256": "b0bec27750627d90cba773198d2a06f7fc5bec63c4872e5d81413c165c07d396",
+    "controlsSha256": "d41ddf9a1d24b90fc27ea57f3304f60c61938e27508e83f4e1bd58faba724fb0"
+  },
+  "actualPreFixCapturesRejected": {
+    "source": "b380ba617e2bb524c6861a0c713d4ff83e77bc30",
+    "stages": [
+      "start",
+      "checkpoint"
+    ],
+    "reason": "The actual original queued checkpoint was folded away or acquired root-work responsibility.",
+    "qualified": false
+  },
+  "mapsCheckPassed": true,
+  "testTiersPassed": true,
+  "frozenBaselineAssetsUnchanged": 104,
+  "queuedNativeStartRetirementProved": true,
+  "simultaneousAdmissionRaceProved": false,
+  "pendingNativeResultCrashProved": false,
+  "runBpmnEtlIntegrationProved": false,
+  "modelHeldFaultRetryProved": false,
+  "finalUpgradeAndStudioProved": false,
+  "fullPrReviewRounds": 0,
+  "scopeLimits": [
+    "Actual production-SDK enqueues a real published model-owned native Start/checkpoint using the existing drain-policy seam; standard Workbench hosts recover it after SIGKILL.",
+    "The real worker/pipeline remain unadmitted; no native carrier, invented worker result or HTTP effect is used as proof.",
+    "Simultaneous admission/cancellation, pending result/cancel, embedding, held retry and final upgrade/Studio remain open."
+  ]
+}

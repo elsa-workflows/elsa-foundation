@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "executingSource": "3e14b7ef7f90c8103e812eeeb21e20aeab9de56e",
+  "actualJourneyPassed": true,
+  "wholeStoresVerified": 9,
+  "rawAssets": 22,
+  "ownedWorkbenchProcesses": 3,
+  "ownedHttpProcesses": 1,
+  "allJourneyChildrenStopped": true,
+  "bpmnTests": {
+    "passed": 384,
+    "failed": 0,
+    "skipped": 0,
+    "trxSha256": "dbaab3cc4e8b3b46ad2fcb73ac94de9178a70351e790fd274dcafb0388e847ca",
+    "savedStateDispatcherCases": 2
+  },
+  "portableChecks": {
+    "passed": 33,
+    "failed": 0,
+    "skipped": 0,
+    "newPositiveFamilies": 1,
+    "newRehashedNegativeControls": 6,
+    "retirementVerifierSha256": "a45967b1e3c9dd6dd76c3cb04468ec4ad961af0ad986e8373d12ab8c18006fdc",
+    "retirementControlsSha256": "d6ff7c3f913ce69c16d510592fe5b19ea94badd63274e45d79af32b0dffc9846"
+  },
+  "frozenBaselineAssetsUnchanged": 104,
+  "originalUndeliveredStartRetirementProved": true,
+  "savedStateLateStartDispatcherProved": true,
+  "queuedNativeStartProcessRecoveryProved": false,
+  "simultaneousAdmissionRaceProved": false,
+  "pendingNativeResultCrashProved": false,
+  "runBpmnEtlIntegrationProved": false,
+  "modelHeldFaultRetryProved": false,
+  "finalUpgradeAndStudioProved": false,
+  "fullPrReviewRounds": 0,
+  "scopeLimits": [
+    "Original native start source owed before first delivery; positive model retirement across actual SIGKILL and fresh standard hosts.",
+    "The real ETL worker is published and pinned, but no native workflow, ETL run or HTTP effect is admitted.",
+    "Queued native-start checkpoint/admission races, pending result crashes, embedding, held retry and final upgrade/Studio remain separate gates."
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "executingSource": "ef833d12dc288202bf6e538884837b6e2526dc7e",
+  "actualJourneysPassed": 4,
+  "actualCancelledNativeParentShapes": [
+    "Root",
+    "Sequence",
+    "Flowchart",
+    "CompensationScope"
+  ],
+  "rawAssets": 120,
+  "wholeStoresVerified": 36,
+  "ownedWorkbenchProcesses": 16,
+  "ownedSdkProcesses": 4,
+  "ownedHttpProcesses": 4,
+  "actualSigkillExits": 8,
+  "allQualifiedJourneyChildrenStopped": true,
+  "physicalOutputRecordsPerCase": 2,
+  "lateRetryRequestsPerCase": 0,
+  "standardHostBuild": {
+    "errors": 0,
+    "warnings": 115,
+    "logSha256": "44d10dcb04cff044faf356eda6559eb4902e7fa6568b71714d43c9ab7e01f972"
+  },
+  "productionSdkBuild": {
+    "errors": 0,
+    "warnings": 158,
+    "logSha256": "7fa12118fb5626f3b9ba70dbdb99d40290138e697baa6c4a36ddba0355e1da9b"
+  },
+  "portableChecks": {
+    "passed": 94,
+    "failed": 0,
+    "skipped": 0,
+    "newPositiveMatrix": 1,
+    "newRehashedNegativeControls": 9,
+    "verifierSha256": "caf68e0343031497e126bc5689216f2f279304abd8cf918b1c56bb4ec3b3e972",
+    "controlsSha256": "db9b33f4e49c9f5e17b814ee0a2d0bc0b3ac59c42de8bdc0c654fb6c1f2fc7c3",
+    "logSha256": "f14ea3c6e77dcc2179ea3cd6fcc910979d0df4b81d1932e59cf41e1ab343ff77"
+  },
+  "frozenBaselineAssetsUnchanged": 104,
+  "pendingParentResultCrashProved": true,
+  "successParentResultCrashProved": false,
+  "modelHeldFaultRetryProved": false,
+  "finalUpgradeAndStudioProved": false,
+  "fullPrReviewRounds": 0,
+  "productionSemanticsChangedForThisIncrement": false,
+  "retainedEarlierChecks": {
+    "executingSource": "b6e7e1f0de7367f81d35aebc5016d4b91e2d7927",
+    "receipt": "../embedded-native-recovery/qualification.json",
+    "bpmnPassed": 391,
+    "actualHumanEmbeddingHostRegressionPassed": 8,
+    "mapsCheckPassed": true,
+    "testTiersPassed": 123,
+    "rerunAtThisSource": false,
+    "reason": "Only capture controller and production-SDK client changed; no production semantics, project graph or tier registration changed."
+  },
+  "scopeLimits": [
+    "Actual native parent cancellation, worker/ETL cancellation and exact model consumption use original production sources and recovery mailboxes; no state/result/receipt/ACK is seeded.",
+    "At the second crash, ETL/native/outer parent are Cancelled, model is TerminalPendingSettlement revision3, worker cancellation is settled and original native-parent result remains Pending without a native-parent-settled receipt.",
+    "Native-result, embedded-cancel and worker-cancel acknowledgments remain fenced and owed after actual consumption. Fresh standard hosts settle revision4 and acknowledge the original sources; interpreter payload and previous input receipts do not change.",
+    "Another standard host stays unchanged past the original HTTP429 retry deadline plus2 seconds, retaining2 previous HTTP effects and0 late retries.",
+    "Successful RunBpmn result consumption/pre-ACK crash, other outcome/cancellation/race arms, held retry, other providers/rollback and final affected-source upgrade/Studio remain open."
+  ]
+}

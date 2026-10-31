@@ -1,0 +1,10 @@
+{
+  "testCaseClass": "FinalActualStudioUpgradeControls",
+  "testSourceSha256": "b2b933c857e208881c7064ae83370f1aad003905eed030b3170d486993731214",
+  "verifierSha256": "901bb84aa7973ea12b111ec225793234487f03f7fea0e940132b7d0df9fc8e8d",
+  "actualEvidenceManifestSha256": "4b335144a42a4e83a8b831541dd86c871972fb0ef7d01307b90febddf8dfe2cd",
+  "testsRun": 13,
+  "skipped": 0,
+  "failures": 0,
+  "errors": 0
+}

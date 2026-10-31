@@ -1,0 +1,178 @@
+{
+  "native": {
+    "instance": {
+      "workflowExecutionId": "wfexec:start:v1:f7fa6a0bb42da83f486c5b5deee976084cfed853cab79126e6881daf040b2af1",
+      "artifactId": "artifact-0ab670414cb8",
+      "definitionId": "14mE8f3cn1n",
+      "definitionVersionId": "14mE8f6EVHe",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:0ab670414cb865ec76b703f739812217afb4e49cfac85c396313117446f67578",
+      "status": "Cancelled",
+      "runKind": "PublishedRun",
+      "subStatus": null,
+      "createdAt": "2026-10-30T12:05:11.281269+00:00",
+      "startedAt": "2026-10-30T12:05:11.281269+00:00",
+      "updatedAt": "2026-10-30T12:05:22.297765+00:00",
+      "completedAt": "2026-10-30T12:05:22.297765+00:00",
+      "correlationId": null,
+      "parentWorkflowExecutionId": null,
+      "tenantId": "default",
+      "activityCount": 1,
+      "incidentCount": 0,
+      "sourceReferenceId": null,
+      "publicationId": null,
+      "slotId": null,
+      "sourceKind": null,
+      "sourceId": null,
+      "sourceVersion": null,
+      "activeIncidentCount": 0,
+      "blockingIncidentCount": 0
+    },
+    "activities": [
+      {
+        "activityExecutionId": "14mE8k5H1CZ",
+        "workflowExecutionId": "wfexec:start:v1:f7fa6a0bb42da83f486c5b5deee976084cfed853cab79126e6881daf040b2af1",
+        "executableNodeId": "etl",
+        "authoredActivityId": "etl",
+        "activityType": "Elsa.Etl.Workflows.Runtime.Activities.RunEtl",
+        "activityTypeVersion": "1.0.0+fe8e77ce9f2b7734fad717d85a3183be180b6614",
+        "status": "Cancelled",
+        "subStatus": "BookmarkWaiting",
+        "executionSequence": 4308042297982345256,
+        "scheduledAt": "2026-10-30T12:05:11.381814+00:00",
+        "startedAt": "2026-10-30T12:05:11.444512+00:00",
+        "completedAt": "2026-10-30T12:05:22.297765+00:00",
+        "firstCheckpointId": "checkpoint:8317c16787e83d28:schedule:etl:activity-scheduled:14mE8k5H1CZ",
+        "lastCheckpointId": "checkpoint:alteration:alteration-job-e81b973fa2472ab1652ae353459c57c8:1",
+        "lastCommittedAt": "2026-10-30T12:05:22.297765+00:00",
+        "provenance": {
+          "parentActivityExecutionId": null,
+          "schedulingActivityExecutionId": null,
+          "schedulingWorkflowExecutionId": "wfexec:start:v1:f7fa6a0bb42da83f486c5b5deee976084cfed853cab79126e6881daf040b2af1",
+          "branchId": null,
+          "iterationId": null,
+          "executionPathId": null,
+          "executionScopeId": null,
+          "schedulingCause": "WorkflowStart",
+          "metadata": {}
+        },
+        "outcomeNames": [],
+        "bookmarkCount": 1,
+        "incidentCount": 0,
+        "valueSnapshotCount": 1,
+        "metadata": {}
+      }
+    ],
+    "incidents": [],
+    "outputs": {},
+    "persistenceMode": "Balanced",
+    "inspectionGranularity": "boundary-level",
+    "activityNextContinuationToken": null,
+    "permissions": {
+      "canManage": true,
+      "canInspectValues": true
+    }
+  },
+  "run": {
+    "runId": "etl-3c28f940ca98ec15653ca372dc8f347a31ed6740e10d1a5503c0f714e6f9fb01",
+    "selection": "etl1:recovery-ac5d62f7d410:1:c70ee1713d0e44b11081ef045964237a02b3bf268b63ddf707575635b0a5ac41",
+    "status": "running",
+    "sourceRecordCount": null,
+    "outstandingRecords": 0,
+    "outstandingBytes": 0,
+    "acceptedRecords": 2,
+    "rejectedRecords": 0,
+    "filteredRecords": 0,
+    "bindingAliases": {
+      "source": "http-source",
+      "lookup": null,
+      "output": "http-output",
+      "errors": "errors"
+    },
+    "diagnostic": null,
+    "terminalResult": null,
+    "sourceInput": null,
+    "lookupInput": null,
+    "connector": {
+      "sourceKind": "http",
+      "mainKind": "http",
+      "errorKind": "jsonl",
+      "acceptedMainEffects": 2,
+      "acceptedErrorEffects": 0
+    },
+    "formatVersion": 2
+  },
+  "partitions": {
+    "items": [
+      {
+        "partitionOrdinal": 0,
+        "file": null,
+        "http": {
+          "pageSequence": 1,
+          "nextItem": 0,
+          "pageRecordCount": null,
+          "exhausted": true,
+          "fetch": {
+            "phase": "captured",
+            "attemptCount": 1,
+            "deadline": "2026-10-30T12:10:12.299062+00:00",
+            "notBefore": null,
+            "lastStatusCode": 200
+          }
+        },
+        "isClaimed": false,
+        "claimFence": null,
+        "claimExpiresAt": null,
+        "notBefore": null,
+        "owedBatch": null,
+        "acceptedMainEffects": 2,
+        "acceptedErrorEffects": 0
+      },
+      {
+        "partitionOrdinal": 1,
+        "file": null,
+        "http": {
+          "pageSequence": 0,
+          "nextItem": 0,
+          "pageRecordCount": null,
+          "exhausted": false,
+          "fetch": {
+            "phase": "waiting",
+            "attemptCount": 1,
+            "deadline": "2026-10-30T12:10:12.317108+00:00",
+            "notBefore": "2026-10-30T12:06:12.319208+00:00",
+            "lastStatusCode": 429
+          }
+        },
+        "isClaimed": false,
+        "claimFence": null,
+        "claimExpiresAt": null,
+        "notBefore": "2026-10-30T12:06:12.319208+00:00",
+        "owedBatch": null,
+        "acceptedMainEffects": 0,
+        "acceptedErrorEffects": 0
+      }
+    ],
+    "nextCursor": null
+  },
+  "model": {
+    "executionId": "bpmn:94d326c7600e03ec080e794d1086a33ff6e283a70a40fe24c271caa728b1d9cb",
+    "revision": 1,
+    "status": "Running",
+    "protocol": {
+      "key": "elsa.bpmn",
+      "version": 1
+    },
+    "executable": {
+      "artifactId": "sha256:f9684cf6ca32d951e19d3e8de339c09ea0e293c4d207db884ca1d93cff7ec260",
+      "definitionId": "bpmn-model:sha256:f9684cf6ca32d951e19d3e8de339c09ea0e293c4d207db884ca1d93cff7ec260",
+      "definitionVersionId": "sha256:f9684cf6ca32d951e19d3e8de339c09ea0e293c4d207db884ca1d93cff7ec260",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:f9684cf6ca32d951e19d3e8de339c09ea0e293c4d207db884ca1d93cff7ec260"
+    },
+    "materialIncarnationId": "5f290f553afe494aae9a443d8472a22e",
+    "createdAt": "2026-10-30T12:05:10.874374+00:00",
+    "updatedAt": "2026-10-30T12:05:10.874374+00:00",
+    "result": null
+  }
+}

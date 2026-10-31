@@ -1,0 +1,68 @@
+[
+  {
+    "family": "original",
+    "role": "workbench",
+    "processId": 99457,
+    "controllerProcessId": 99447,
+    "started": "Fri Oct 30 21:53:38 2026",
+    "executable": "dotnet",
+    "assemblyName": "Elsa.Workbench.dll",
+    "assemblySha256": "87cf7ca7a82ec446b7b1abb8dd90333ef0cf87202b544e7ce8f6761da6740d10",
+    "originalProcessAbsent": true
+  },
+  {
+    "family": "original",
+    "role": "studio",
+    "processId": 99492,
+    "controllerProcessId": 99447,
+    "started": "Fri Oct 30 21:53:42 2026",
+    "executable": "dotnet",
+    "assemblyName": "Elsa.Studio.Web.dll",
+    "assemblySha256": "4aca8c2983bf86a97720133ea4bdb048228430d22479e33b554d104332149354",
+    "originalProcessAbsent": true
+  },
+  {
+    "family": "original",
+    "role": "workbench",
+    "processId": 4501,
+    "controllerProcessId": 99447,
+    "started": "Fri Oct 30 21:59:45 2026",
+    "executable": "dotnet",
+    "assemblyName": "Elsa.Workbench.dll",
+    "assemblySha256": "87cf7ca7a82ec446b7b1abb8dd90333ef0cf87202b544e7ce8f6761da6740d10",
+    "originalProcessAbsent": true
+  },
+  {
+    "family": "layout",
+    "role": "workbench",
+    "processId": 5558,
+    "controllerProcessId": 5520,
+    "started": "Fri Oct 30 22:00:17 2026",
+    "executable": "dotnet",
+    "assemblyName": "Elsa.Workbench.dll",
+    "assemblySha256": "87cf7ca7a82ec446b7b1abb8dd90333ef0cf87202b544e7ce8f6761da6740d10",
+    "originalProcessAbsent": true
+  },
+  {
+    "family": "layout",
+    "role": "studio",
+    "processId": 5698,
+    "controllerProcessId": 5520,
+    "started": "Fri Oct 30 22:00:22 2026",
+    "executable": "dotnet",
+    "assemblyName": "Elsa.Studio.Web.dll",
+    "assemblySha256": "4aca8c2983bf86a97720133ea4bdb048228430d22479e33b554d104332149354",
+    "originalProcessAbsent": true
+  },
+  {
+    "family": "layout",
+    "role": "workbench",
+    "processId": 10362,
+    "controllerProcessId": 5520,
+    "started": "Fri Oct 30 22:02:43 2026",
+    "executable": "dotnet",
+    "assemblyName": "Elsa.Workbench.dll",
+    "assemblySha256": "87cf7ca7a82ec446b7b1abb8dd90333ef0cf87202b544e7ce8f6761da6740d10",
+    "originalProcessAbsent": true
+  }
+]

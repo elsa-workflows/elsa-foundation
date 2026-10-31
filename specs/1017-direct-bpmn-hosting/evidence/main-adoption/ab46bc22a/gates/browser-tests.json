@@ -1,0 +1,1674 @@
+{
+  "config": {
+    "argv": [
+      "/Users/sipke/Library/Application Support/fnm/node-versions/v22.23.4/installation/bin/node",
+      "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/node_modules/@playwright/test/cli.js",
+      "test",
+      "activity-availability-layout.spec.ts",
+      "activity-definition-graph-authoring.spec.ts",
+      "activity-interface-layout.spec.ts",
+      "draft-validation-autosave.spec.ts",
+      "validation-labels.spec.ts",
+      "workflow-definition-browse-context.spec.ts",
+      "workflow-properties-scroll.spec.ts",
+      "--workers=2",
+      "--reporter=json"
+    ],
+    "configFile": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/playwright.config.ts",
+    "rootDir": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/tests/browser",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 2
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/tests/browser",
+        "testIgnore": [
+          "expression-code-intelligence-performance.spec.ts",
+          "weaver-contributions.spec.ts"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.61.1",
+    "workers": 2,
+    "webServer": {
+      "command": "pnpm exec vite --config tests/browser/vite.config.ts",
+      "url": "http://127.0.0.1:4179",
+      "reuseExistingServer": false,
+      "stdout": "pipe",
+      "stderr": "pipe"
+    }
+  },
+  "suites": [
+    {
+      "title": "activity-availability-layout.spec.ts",
+      "file": "activity-availability-layout.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "fills available height with a long availability list in light",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2630,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:09.466Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2765b3ae714ba7ed2814-e8a0e106265a83cff2ed",
+          "file": "activity-availability-layout.spec.ts",
+          "line": 12,
+          "column": 5
+        },
+        {
+          "title": "fills available height with a short availability list in light",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 2396,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:09.468Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2765b3ae714ba7ed2814-03e639eb34f8ba3a10d8",
+          "file": "activity-availability-layout.spec.ts",
+          "line": 12,
+          "column": 5
+        },
+        {
+          "title": "fills available height with a long availability list in dark",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 1461,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:12.079Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2765b3ae714ba7ed2814-78065cc7aecd9c1d3fad",
+          "file": "activity-availability-layout.spec.ts",
+          "line": 12,
+          "column": 5
+        },
+        {
+          "title": "fills available height with a short availability list in dark",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1155,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:12.314Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2765b3ae714ba7ed2814-8b2e3de4e43a7581149f",
+          "file": "activity-availability-layout.spec.ts",
+          "line": 12,
+          "column": 5
+        },
+        {
+          "title": "keeps availability controls and details reachable in a short 1280px workspace",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1472,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:13.474Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2765b3ae714ba7ed2814-53be82f53b29f00fca1c",
+          "file": "activity-availability-layout.spec.ts",
+          "line": 54,
+          "column": 3
+        },
+        {
+          "title": "keeps availability controls and details reachable in a short 390px workspace",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 1488,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:13.545Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "2765b3ae714ba7ed2814-4d0f0e97c34d2098f307",
+          "file": "activity-availability-layout.spec.ts",
+          "line": 54,
+          "column": 3
+        }
+      ]
+    },
+    {
+      "title": "activity-definition-graph-authoring.spec.ts",
+      "file": "activity-definition-graph-authoring.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Activity Definition graph authoring shares the designer without workflow lifecycle UI",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2420,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:14.954Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "84669f222faf93469063-a20da006afd86f5a2a5e",
+          "file": "activity-definition-graph-authoring.spec.ts",
+          "line": 6,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "activity-interface-layout.spec.ts",
+      "file": "activity-interface-layout.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "keeps interface editing and connections compact at 1920px in light",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 3030,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:15.043Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8d5407d0d19cae05b439-f1036497351ce166fdcd",
+          "file": "activity-interface-layout.spec.ts",
+          "line": 5,
+          "column": 5
+        },
+        {
+          "title": "keeps interface editing and connections compact at 390px in light",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3159,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:17.381Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8d5407d0d19cae05b439-9e2bad307c41875d4325",
+          "file": "activity-interface-layout.spec.ts",
+          "line": 5,
+          "column": 5
+        },
+        {
+          "title": "keeps immutable interface controls read-only in light",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 931,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:18.079Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8d5407d0d19cae05b439-9ccdfd7637ed7badb762",
+          "file": "activity-interface-layout.spec.ts",
+          "line": 48,
+          "column": 3
+        },
+        {
+          "title": "keeps interface editing and connections compact at 1920px in dark",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 2526,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:19.014Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8d5407d0d19cae05b439-0d5f47557f71f8a6d8da",
+          "file": "activity-interface-layout.spec.ts",
+          "line": 5,
+          "column": 5
+        },
+        {
+          "title": "keeps interface editing and connections compact at 390px in dark",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2626,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:20.545Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8d5407d0d19cae05b439-f50479fea6f16f4f2b5a",
+          "file": "activity-interface-layout.spec.ts",
+          "line": 5,
+          "column": 5
+        },
+        {
+          "title": "keeps immutable interface controls read-only in dark",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 844,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:21.544Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8d5407d0d19cae05b439-fad26c2eb4258a036fe3",
+          "file": "activity-interface-layout.spec.ts",
+          "line": 48,
+          "column": 3
+        }
+      ]
+    },
+    {
+      "title": "draft-validation-autosave.spec.ts",
+      "file": "draft-validation-autosave.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "deleted Run Etl diagnostics clear after normal autosave (light)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 6716,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:22.396Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "44931ca1e09d4692c9a2-2036a7db8c9bbceb9ede",
+          "file": "draft-validation-autosave.spec.ts",
+          "line": 9,
+          "column": 5
+        },
+        {
+          "title": "deleted Run Etl diagnostics clear after slow-save autosave (light)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 11954,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:23.177Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "44931ca1e09d4692c9a2-12d275e34ec6c08b8612",
+          "file": "draft-validation-autosave.spec.ts",
+          "line": 9,
+          "column": 5
+        },
+        {
+          "title": "deleted Run Etl diagnostics clear after normal autosave (dark)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 6542,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:29.116Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "44931ca1e09d4692c9a2-6304c2f80ea4261cbf8c",
+          "file": "draft-validation-autosave.spec.ts",
+          "line": 9,
+          "column": 5
+        },
+        {
+          "title": "deleted Run Etl diagnostics clear after slow-save autosave (dark)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 12012,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:35.135Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "44931ca1e09d4692c9a2-bb38f0f50ba587a21b35",
+          "file": "draft-validation-autosave.spec.ts",
+          "line": 9,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "validation-labels.spec.ts",
+      "file": "validation-labels.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "validation and rejection copy names activities by display name, not node id",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 654,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:35.664Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1251a9b4716fe2c9fac2-094319af92b305cb3cab",
+          "file": "validation-labels.spec.ts",
+          "line": 3,
+          "column": 1
+        },
+        {
+          "title": "captures Classic light before/after screenshots of named validation copy",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 867,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:36.323Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1251a9b4716fe2c9fac2-180df3a54ac85287ce2f",
+          "file": "validation-labels.spec.ts",
+          "line": 17,
+          "column": 1
+        },
+        {
+          "title": "compilation rejection retains its reason without execution requests or controls (light)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 883,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:37.194Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1251a9b4716fe2c9fac2-0721b319102812bcc739",
+          "file": "validation-labels.spec.ts",
+          "line": 38,
+          "column": 3
+        },
+        {
+          "title": "compilation rejection retains its reason without execution requests or controls (dark)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 875,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:38.080Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1251a9b4716fe2c9fac2-99008a5deb028463c38c",
+          "file": "validation-labels.spec.ts",
+          "line": 38,
+          "column": 3
+        }
+      ]
+    },
+    {
+      "title": "workflow-definition-browse-context.spec.ts",
+      "file": "workflow-definition-browse-context.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "narrow keyboard users preserve workflow browse context through global search, history, and reload",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 1061,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:38.963Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-2f9b8c8ada61c60bf129",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 67,
+          "column": 1
+        },
+        {
+          "title": "editor Back restores the later workflow page with its observed opaque cursor",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 2314,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:40.027Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-af463304aeb9c81e1a33",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 113,
+          "column": 1
+        },
+        {
+          "title": "workflow definition identifiers and copy controls fit the Workbench viewport at 320px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 1578,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:42.345Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-79428883bd30b43cbafb",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 143,
+          "column": 3
+        },
+        {
+          "title": "workflow definition identifiers and copy controls fit the Workbench viewport at 390px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 1542,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:43.927Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-91160305b8ee3557e03e",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 143,
+          "column": 3
+        },
+        {
+          "title": "Workflow Definitions groups its create and refresh actions above the collection filters",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 2319,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:45.472Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-d00eae5eb123f735c87e",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 212,
+          "column": 1
+        },
+        {
+          "title": "Activity and Workflow definition pages use the same content inset (1280px)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3700,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:47.158Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-ca1a8ecb20ef5cd94fbf",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 234,
+          "column": 3
+        },
+        {
+          "title": "Activity and Workflow definition pages use the same content inset (390px)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 3546,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:47.796Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-99b2a0e33fa0d041940b",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 234,
+          "column": 3
+        },
+        {
+          "title": "definition header actions use the shared button recipe in the custom material fixture and remain actionable",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5249,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:50.863Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-3f65d39c5853c16a49dd",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 266,
+          "column": 1
+        },
+        {
+          "title": "browser Back restores the later workflow page with its observed opaque cursor",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 2517,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:51.351Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-d39b093a9fd42a9bd1fe",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 346,
+          "column": 1
+        },
+        {
+          "title": "a full reload keeps URL filters and starts with the default page and page size",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 2707,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:53.877Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-5064e03c15343e4ad938",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 358,
+          "column": 1
+        },
+        {
+          "title": "search refresh keeps prior results truthful through failure, retry, and empty success (light laptop)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1638,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:56.117Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-eb88700ba044b8e4fbb3",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 381,
+          "column": 3
+        },
+        {
+          "title": "search refresh keeps prior results truthful through failure, retry, and empty success (dark narrow)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 1723,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:56.588Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-abad3f67b5d8518a6f8c",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 381,
+          "column": 3
+        },
+        {
+          "title": "workflow definition timestamps stay on one line in compact rows (light, 1280px, workspace false)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1413,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:57.759Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-c7a0f84849bd691a7142",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 463,
+          "column": 7
+        },
+        {
+          "title": "workflow definition timestamps stay on one line in compact rows (light, 1280px, workspace true)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 1401,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:58.315Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-0b3d86a0dbdf1ccfe212",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 463,
+          "column": 7
+        },
+        {
+          "title": "workflow definition timestamps stay on one line in compact rows (light, 1920px, workspace false)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1354,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:59.175Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-8e7f980d11a4b18968e8",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 463,
+          "column": 7
+        },
+        {
+          "title": "workflow definition timestamps stay on one line in compact rows (light, 1920px, workspace true)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 1408,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:12:59.721Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-3fe6008ecf8827647723",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 463,
+          "column": 7
+        },
+        {
+          "title": "workflow definition timestamps stay on one line in compact rows (dark, 1280px, workspace false)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1358,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:13:00.534Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-67ae4243053bbe563adc",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 463,
+          "column": 7
+        },
+        {
+          "title": "workflow definition timestamps stay on one line in compact rows (dark, 1280px, workspace true)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 1374,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:13:01.132Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-9bdec5e8c40843385fb9",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 463,
+          "column": 7
+        },
+        {
+          "title": "workflow definition timestamps stay on one line in compact rows (dark, 1920px, workspace false)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1359,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:13:01.896Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-0da4b26e2b34442da8e4",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 463,
+          "column": 7
+        },
+        {
+          "title": "workflow definition timestamps stay on one line in compact rows (dark, 1920px, workspace true)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 1423,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:13:02.509Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ee763971e705661a8557-c74240b4c1b86811fa62",
+          "file": "workflow-definition-browse-context.spec.ts",
+          "line": 463,
+          "column": 7
+        }
+      ]
+    },
+    {
+      "title": "workflow-properties-scroll.spec.ts",
+      "file": "workflow-properties-scroll.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "scrolls workflow Properties above the bottom panel at 1440px in light",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1097,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:13:03.262Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "b344ddf9a1e7862f8ff2-6ed7e457f332de554af6",
+          "file": "workflow-properties-scroll.spec.ts",
+          "line": 5,
+          "column": 5
+        },
+        {
+          "title": "scrolls workflow Properties above the bottom panel at 390px in light",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 1244,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:13:03.940Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "b344ddf9a1e7862f8ff2-3ae860ddc351a4b3ff19",
+          "file": "workflow-properties-scroll.spec.ts",
+          "line": 5,
+          "column": 5
+        },
+        {
+          "title": "scrolls workflow Properties above the bottom panel at 1440px in dark",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1246,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:13:04.364Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "b344ddf9a1e7862f8ff2-681bd12c91e0a9f44d63",
+          "file": "workflow-properties-scroll.spec.ts",
+          "line": 5,
+          "column": 5
+        },
+        {
+          "title": "scrolls workflow Properties above the bottom panel at 390px in dark",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 1153,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T07:13:05.187Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "b344ddf9a1e7862f8ff2-574bde2a376c54dc27bb",
+          "file": "workflow-properties-scroll.spec.ts",
+          "line": 5,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-31T07:12:08.258Z",
+    "duration": 58189.327000000005,
+    "expected": 45,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

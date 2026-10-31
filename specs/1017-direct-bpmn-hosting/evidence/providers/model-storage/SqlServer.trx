@@ -1,0 +1,82 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="6caa6823-d52f-4d9e-be30-1ec1d726a741" name="@Sipkes-Mac-Mini 2026-10-30 05:21:26" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-30T05:21:26.1627960+01:00" queuing="2026-10-30T05:21:26.1627960+01:00" start="2026-10-30T05:21:17.1921170+01:00" finish="2026-10-30T05:21:29.1163770+01:00" />
+  <TestSettings name="default" id="0c7b8cf7-4e5a-45c9-b25f-694e7c5c9a9d">
+    <Deployment runDeploymentRoot="_Sipkes-Mac-Mini_2026-10-30_05_21_26" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="442cc685-60d4-4866-9dfb-7980345b8c69" testId="01eed9b5-6c55-7dec-695a-07e875ca7b76" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelReceiptSqlServerSmokeTests.SqlServer_retained_model_receipt_compares_without_mutating_state" computerName="Sipkes-Mac-Mini" duration="00:00:01.4420110" startTime="2026-10-30T05:21:24.6511580+01:00" endTime="2026-10-30T05:21:26.0876980+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="442cc685-60d4-4866-9dfb-7980345b8c69" />
+    <UnitTestResult executionId="79338bed-389a-4f90-a85b-a49881909fbc" testId="7a92d177-edf1-a3bb-f2e8-d08bb3889d7f" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointSqlServerSmokeTests.SqlServer_model_checkpoint_participants_are_atomic(failMarker: False)" computerName="Sipkes-Mac-Mini" duration="00:00:00.0541292" startTime="2026-10-30T05:21:28.6796330+01:00" endTime="2026-10-30T05:21:28.7337500+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="79338bed-389a-4f90-a85b-a49881909fbc" />
+    <UnitTestResult executionId="0ca1d2dc-c539-4baf-ae18-39ff0838e080" testId="e859dc42-3b2a-9ccd-8a66-0815deefe1f0" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointSqlServerSmokeTests.SqlServer_model_checkpoint_fences_revisions_and_replay" computerName="Sipkes-Mac-Mini" duration="00:00:00.1311447" startTime="2026-10-30T05:21:28.7338610+01:00" endTime="2026-10-30T05:21:28.8651540+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0ca1d2dc-c539-4baf-ae18-39ff0838e080" />
+    <UnitTestResult executionId="ee6d6c54-ec0e-4bda-af7f-87ef937256b4" testId="913402ad-7883-0682-017b-b32707f5cba1" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointSqlServerSmokeTests.SqlServer_model_checkpoint_participants_are_atomic(failMarker: True)" computerName="Sipkes-Mac-Mini" duration="00:00:00.1686375" startTime="2026-10-30T05:21:28.5107020+01:00" endTime="2026-10-30T05:21:28.6794740+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ee6d6c54-ec0e-4bda-af7f-87ef937256b4" />
+    <UnitTestResult executionId="0c6b2288-c54d-4968-9180-e5a7427a235d" testId="09b78a6d-eb22-c4d4-d549-1cdce2e3e59a" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelMigrationSqlServerSmokeTests.SqlServer_model_migrations_install_or_preserve_captured_rows(retained: True)" computerName="Sipkes-Mac-Mini" duration="00:00:01.6877204" startTime="2026-10-30T05:21:26.0912630+01:00" endTime="2026-10-30T05:21:27.7767580+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0c6b2288-c54d-4968-9180-e5a7427a235d" />
+    <UnitTestResult executionId="864e9692-7514-4930-8500-2b29bf1d327f" testId="77e6da79-1a8d-f517-fa73-5c61b1d692aa" testName="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelMigrationSqlServerSmokeTests.SqlServer_model_migrations_install_or_preserve_captured_rows(retained: False)" computerName="Sipkes-Mac-Mini" duration="00:00:00.7336032" startTime="2026-10-30T05:21:27.7774560+01:00" endTime="2026-10-30T05:21:28.5105190+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="864e9692-7514-4930-8500-2b29bf1d327f" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointSqlServerSmokeTests.SqlServer_model_checkpoint_participants_are_atomic(failMarker: True)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/providertests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.providertests.dll" id="913402ad-7883-0682-017b-b32707f5cba1">
+      <Execution id="ee6d6c54-ec0e-4bda-af7f-87ef937256b4" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointSqlServerSmokeTests" name="SqlServer_model_checkpoint_participants_are_atomic" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelMigrationSqlServerSmokeTests.SqlServer_model_migrations_install_or_preserve_captured_rows(retained: False)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/providertests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.providertests.dll" id="77e6da79-1a8d-f517-fa73-5c61b1d692aa">
+      <Execution id="864e9692-7514-4930-8500-2b29bf1d327f" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelMigrationSqlServerSmokeTests" name="SqlServer_model_migrations_install_or_preserve_captured_rows" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointSqlServerSmokeTests.SqlServer_model_checkpoint_fences_revisions_and_replay" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/providertests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.providertests.dll" id="e859dc42-3b2a-9ccd-8a66-0815deefe1f0">
+      <Execution id="0ca1d2dc-c539-4baf-ae18-39ff0838e080" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointSqlServerSmokeTests" name="SqlServer_model_checkpoint_fences_revisions_and_replay" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointSqlServerSmokeTests.SqlServer_model_checkpoint_participants_are_atomic(failMarker: False)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/providertests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.providertests.dll" id="7a92d177-edf1-a3bb-f2e8-d08bb3889d7f">
+      <Execution id="79338bed-389a-4f90-a85b-a49881909fbc" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelCheckpointSqlServerSmokeTests" name="SqlServer_model_checkpoint_participants_are_atomic" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelReceiptSqlServerSmokeTests.SqlServer_retained_model_receipt_compares_without_mutating_state" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/providertests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.providertests.dll" id="01eed9b5-6c55-7dec-695a-07e875ca7b76">
+      <Execution id="442cc685-60d4-4866-9dfb-7980345b8c69" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelReceiptSqlServerSmokeTests" name="SqlServer_retained_model_receipt_compares_without_mutating_state" />
+    </UnitTest>
+    <UnitTest name="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelMigrationSqlServerSmokeTests.SqlServer_model_migrations_install_or_preserve_captured_rows(retained: True)" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/workflows/runtime/persistence/entityframeworkcore/providertests/bin/release/net10.0/elsa.workflows.runtime.persistence.entityframeworkcore.providertests.dll" id="09b78a6d-eb22-c4d4-d549-1cdce2e3e59a">
+      <Execution id="0c6b2288-c54d-4968-9180-e5a7427a235d" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.RuntimeModelMigrationSqlServerSmokeTests" name="SqlServer_model_migrations_install_or_preserve_captured_rows" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="01eed9b5-6c55-7dec-695a-07e875ca7b76" executionId="442cc685-60d4-4866-9dfb-7980345b8c69" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7a92d177-edf1-a3bb-f2e8-d08bb3889d7f" executionId="79338bed-389a-4f90-a85b-a49881909fbc" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e859dc42-3b2a-9ccd-8a66-0815deefe1f0" executionId="0ca1d2dc-c539-4baf-ae18-39ff0838e080" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="913402ad-7883-0682-017b-b32707f5cba1" executionId="ee6d6c54-ec0e-4bda-af7f-87ef937256b4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="09b78a6d-eb22-c4d4-d549-1cdce2e3e59a" executionId="0c6b2288-c54d-4968-9180-e5a7427a235d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="77e6da79-1a8d-f517-fa73-5c61b1d692aa" executionId="864e9692-7514-4930-8500-2b29bf1d327f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="6" executed="6" passed="6" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.03]   Discovering: Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests
+[xUnit.net 00:00:00.06]   Discovered:  Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests
+[xUnit.net 00:00:00.07]   Starting:    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests
+[testcontainers.org 00:00:00.05] Connected to Docker:
+  Host: unix:///var/run/docker.sock
+  Server Version: 29.8.2
+  Kernel Version: 7.2.12-orbstack-00394-gbecdd6130068
+  API Version: 1.56
+  Operating System: OrbStack
+  Total Memory: 15.66 GB
+[testcontainers.org 00:00:00.17] Docker container b10925f276e5 created
+[testcontainers.org 00:00:00.19] Start Docker container b10925f276e5
+[testcontainers.org 00:00:00.27] Wait for Docker container b10925f276e5 to complete readiness checks
+[testcontainers.org 00:00:01.28] Docker container b10925f276e5 ready
+[testcontainers.org 00:00:01.35] Docker container 4b3526673bb7 created
+[testcontainers.org 00:00:01.35] Start Docker container 4b3526673bb7
+[testcontainers.org 00:00:01.41] Wait for Docker container 4b3526673bb7 to complete readiness checks
+[testcontainers.org 00:00:01.42] Execute "/bin/sh -c find /opt/mssql-tools*/bin/sqlcmd -type f -print -quit" at Docker container 4b3526673bb7
+[testcontainers.org 00:00:01.47] Execute "/opt/mssql-tools18/bin/sqlcmd -C -b -r 1 -d master -Q SELECT 1;" at Docker container 4b3526673bb7
+[testcontainers.org 00:00:07.17] Docker container 4b3526673bb7 ready
+[testcontainers.org 00:00:11.40] Delete Docker container 4b3526673bb7
+[xUnit.net 00:00:11.74]   Finished:    Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

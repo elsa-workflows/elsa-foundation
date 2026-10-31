@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="c466d8e3-76c2-43be-8385-d4e4c43fa155" name="@Sipkes-Mac-Mini 2026-10-30 15:18:19" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-30T15:18:19.3456340+01:00" queuing="2026-10-30T15:18:19.3456340+01:00" start="2026-10-30T15:18:07.8233870+01:00" finish="2026-10-30T15:18:19.3495840+01:00" />
+  <TestSettings name="default" id="a606f927-d788-4049-9467-b4164c7636bf">
+    <Deployment runDeploymentRoot="_Sipkes-Mac-Mini_2026-10-30_15_18_19" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="c2c32976-8a13-4b66-893d-f4b4fbce3bff" testId="d052047d-f433-4fca-4e5c-b84f1f412a9b" testName="Elsa.Activities.Bpmn.Hosting.Tests.DirectBpmnWorkbenchTests.Authenticated_direct_execution_waits_restarts_resumes_and_completes_in_the_real_host" computerName="Sipkes-Mac-Mini" duration="00:00:11.1346681" startTime="2026-10-30T15:18:08.1439150+01:00" endTime="2026-10-30T15:18:19.2817300+01:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c2c32976-8a13-4b66-893d-f4b4fbce3bff" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Elsa.Activities.Bpmn.Hosting.Tests.DirectBpmnWorkbenchTests.Authenticated_direct_execution_waits_restarts_resumes_and_completes_in_the_real_host" storage="/users/sipke/.codex/worktrees/f236/elsa-foundation/essentials/tests/activities/bpmn/hosting/tests/bin/release/net10.0/elsa.activities.bpmn.hosting.tests.dll" id="d052047d-f433-4fca-4e5c-b84f1f412a9b">
+      <Execution id="c2c32976-8a13-4b66-893d-f4b4fbce3bff" />
+      <TestMethod codeBase="/Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Activities/Bpmn/Hosting/Tests/bin/Release/net10.0/Elsa.Activities.Bpmn.Hosting.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="Elsa.Activities.Bpmn.Hosting.Tests.DirectBpmnWorkbenchTests" name="Authenticated_direct_execution_waits_restarts_resumes_and_completes_in_the_real_host" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="d052047d-f433-4fca-4e5c-b84f1f412a9b" executionId="c2c32976-8a13-4b66-893d-f4b4fbce3bff" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="1" executed="1" passed="1" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v3.1.5+1b188a7b0a (64-bit .NET 10.0.13)
+[xUnit.net 00:00:00.05]   Discovering: Elsa.Activities.Bpmn.Hosting.Tests
+[xUnit.net 00:00:00.07]   Discovered:  Elsa.Activities.Bpmn.Hosting.Tests
+[xUnit.net 00:00:00.08]   Starting:    Elsa.Activities.Bpmn.Hosting.Tests
+[xUnit.net 00:00:11.24]   Finished:    Elsa.Activities.Bpmn.Hosting.Tests
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

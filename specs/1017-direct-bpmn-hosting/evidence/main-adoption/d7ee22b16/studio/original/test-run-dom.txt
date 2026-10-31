@@ -1,0 +1,143 @@
+Browser tab: 13, Title: "Elsa Studio", URL: "http://127.0.0.1:61934/workflows/instances/14lpeSdYYrg".
+1 AXWebArea Elsa Studio, URL: 127.0.0.1:61934/workflows/instances/14lpeSdYYrg
+	2 container root
+		3 container
+			4 link Description: Elsa Studio Foundation, Value: 127.0.0.1:61934/
+			5 button (expanded) Description: Collapse navigation, Secondary Actions: Collapse
+				6 image
+			7 search text field (settable) Search modules
+			8 container Main
+				9 link Description: Home, Value: 127.0.0.1:61934/dashboard
+				10 link Description: Workflows, Value: 127.0.0.1:61934/workflows/definitions
+				11 link Description: Runs, Value: 127.0.0.1:61934/workflows/instances
+			12 container More tools
+				13 button (collapsed) More tools, Secondary Actions: Expand
+			14 container Settings
+				15 link Description: Settings, Value: 127.0.0.1:61934/settings
+			16 container Environment and account
+				17 container Description: Configured backend endpoint: 127.0.0.1:61933, Help: Configured backend endpoint; connectivity is not measured
+					18 text Backend API
+					19 text 127.0.0.1:61933
+				20 pop up button (collapsed) Description: Account: Administrator, Help: Administrator, ID: radix-_r_0_, Secondary Actions: Expand
+		21 container
+			22 text Studio /  Runs
+			23 heading Runs, Value: 1
+				24 text Runs
+			25 button (collapsed) Weaver, Secondary Actions: Expand
+				26 image
+				27 text Weaver
+			28 link Description: GitHub, Value: github.com/elsa-workflows/elsa-foundation-studio
+			29 link Description: Designer source, Value: github.com/elsa-workflows/elsa-foundation-designer
+			30 Colour mode
+				31 radio button Description: Light, Help: Light mode, Value: 0
+				32 radio button Description: Dark, Help: Dark mode, Value: 1
+				33 radio button Description: Dim, Help: Dim mode, Value: 0
+			34 pop up button (collapsed) Description: Select theme, Help: Theme: Classic · Dark, ID: radix-_r_7_, Secondary Actions: Expand
+				35 image
+		311 container
+			312 text WORKFLOW MANAGEMENT
+			313 heading Run, Value: 2
+				314 text Run
+			315 text WORKFLOW INSTANCE ID 14lpeSdYYrg
+			316 button Runs
+				317 image
+				318 text Runs
+			319 button Open run incidents: No active incidents
+			320 button Review workflow definition
+				321 image
+				322 text Review workflow definition
+			323 button Refresh
+				324 image
+				325 text Refresh
+			326 checkbox Pause following, Value: 1, Help: Follow recorded updates without changing the inspected occurrence. Pausing observation does not stop execution.
+			327 text Execution on this canvas
+			328 button Explain
+				329 image
+				330 text Explain
+			331 container Workflow run canvas
+				332 container
+					333 text PINNED RUNTIME EXECUTABLE
+					334 heading BPMN execution model · reviewed host draft, Help: BPMN execution model · reviewed host (14iBsLEuiJS), Value: 3
+						335 text BPMN execution model · reviewed host draft
+					336 text COMPLETED
+				337 button Root
+				338 container Execution scope
+					339 button All executions
+				340 container
+					341 container
+						342 image
+							343 edge Description: Connection from Start (start), Done output, to Upgraded route original (route). Not selected., Value: 0
+						344 image
+							345 edge Description: Connection from Upgraded route original (route), Done output, to Default timer (wait). Not selected., Value: 0
+								346 text default
+						347 image
+							348 edge Value: 0, Description: Connection from Upgraded route original (route), Done output, to Other complete (other-end). Not selected.
+								349 text Never
+						350 image
+							351 edge Description: Connection from Default timer (wait), Done output, to Default complete (end). Not selected., Value: 0
+						352 node Description: Start. Node ID: start. Activity type: unknown. State: authoring. Not selected., Value: 0
+							353 container Start event
+								354 text Start
+						355 node Description: Upgraded route original. Node ID: route. Activity type: unknown. State: authoring. Not selected., Value: 0
+							356 container Exclusive gateway
+								357 text Upgraded route original
+						358 node Description: Default timer. Node ID: wait. Activity type: unknown. Run state: Completed. Not selected., Value: 0
+							359 container Intermediate catch event
+								360 text Default timer
+								361 text Intermediate catch event
+						362 node Description: Default complete. Node ID: end. Activity type: unknown. State: authoring. Not selected., Value: 0
+							363 container End event
+								364 text Default complete
+						365 node Description: Other complete. Node ID: other-end. Activity type: unknown. State: authoring. Not selected., Value: 0
+							366 container End event
+								367 text Other complete
+					368 image
+					369 image Mini Map
+					370 container Control Panel
+						371 button Zoom In
+							372 image
+						373 button Zoom Out
+							374 image
+						375 button Fit View
+							376 image
+						377 button Toggle Interactivity
+							378 image
+					379 link Description: React Flow attribution, Value: reactflow.dev/
+			380 splitter Description: Resize run details panel, Value: 400
+			381 container Run details panel
+				382 tab group Run details tabs
+					383 tab (selected, settable, boolean) TIMELINE, Help: Timeline, Value: 1
+					384 tab (selectable, settable, boolean) ACTIVITY, Help: Activity, Value: 0
+					385 tab (selectable, settable, boolean) ISSUES, Help: Issues, Value: 0
+					386 tab (selectable, settable, boolean) DETAILS, Help: Details, Value: 0
+				387 button Description: Collapse run details panel, Help: Collapse
+					388 image
+				389 button Description: Maximize run details panel, Help: Maximize
+					390 image
+				391 content list Execution timeline
+					392 button BPMN Process BpmnProcess 07:22:30 took 4s OK
+						393 text BPMN Process
+						394 text BpmnProcess
+						395 text 07:22:30
+						396 container
+							397 text took  4s
+						398 text OK
+					399 button Delay Delay 07:22:30 took 4s OK
+						400 text Delay
+						401 text Delay
+						402 text 07:22:30
+						403 container
+							404 text took  4s
+						405 text OK
+		301 container Bottom panel
+			302 tab group Bottom panels
+				303 tab (selected, settable, boolean) Console, Value: 1
+				304 tab (selectable, settable, boolean) Structured Logs, Value: 0
+				305 tab (selectable, settable, boolean) OpenTelemetry, Value: 0
+			306 container Bottom panel controls
+				307 button Description: Expand bottom panel, Help: Expand
+					308 image
+				309 button Description: Maximize bottom panel, Help: Maximize
+					310 image
+
+The focused UI element is 1 AXWebArea Elsa Studio, URL: 127.0.0.1:61934/workflows/instances/14lpeSdYYrg

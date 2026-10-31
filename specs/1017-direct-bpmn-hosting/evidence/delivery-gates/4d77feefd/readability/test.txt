@@ -1,0 +1,36 @@
+  Elsa.Architecture.Analyzers -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/build/Analyzers/bin/Release/netstandard2.0/Elsa.Architecture.Analyzers.dll
+  Elsa.Persistence.Schema -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/Schema/bin/Release/net10.0/Elsa.Persistence.Schema.dll
+  Elsa.Tasks.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Tasks/Core/bin/Release/net10.0/Elsa.Tasks.Core.dll
+  Elsa.Locking.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Locking/Core/bin/Release/net10.0/Elsa.Locking.Core.dll
+  Elsa.Attention.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Attention/Core/bin/Release/net10.0/Elsa.Attention.Core.dll
+  Elsa.Pipelines.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Pipelines/Core/bin/Release/net10.0/Elsa.Pipelines.Core.dll
+  Elsa.Primitives -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Primitives/Primitives/bin/Release/net10.0/Elsa.Primitives.dll
+  Elsa.Mediator.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Mediator/Core/bin/Release/net10.0/Elsa.Mediator.Core.dll
+  Elsa.Persistence.EntityFramework -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Persistence/EntityFramework/bin/Release/net10.0/Elsa.Persistence.EntityFramework.dll
+  Elsa.Events.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Events/Core/bin/Release/net10.0/Elsa.Events.Core.dll
+  Elsa.Cluster.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/Core/bin/Release/net10.0/Elsa.Cluster.Core.dll
+  Elsa.Expressions.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Expressions/Core/bin/Release/net10.0/Elsa.Expressions.Core.dll
+  Elsa.Testing -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Testing/bin/Release/net10.0/Elsa.Testing.dll
+  Elsa.Serialization.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Serialization/Core/bin/Release/net10.0/Elsa.Serialization.Core.dll
+  Elsa.Activities.Design.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Core/bin/Release/net10.0/Elsa.Activities.Design.Core.dll
+  Elsa.Tasks.Schedules -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Tasks/Schedules/bin/Release/net10.0/Elsa.Tasks.Schedules.dll
+  Elsa.Cluster.InProcess -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/InProcess/bin/Release/net10.0/Elsa.Cluster.InProcess.dll
+  Elsa.Activities.Runtime.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Runtime/Core/bin/Release/net10.0/Elsa.Activities.Runtime.Core.dll
+  Elsa.Workflows.Design.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Core/bin/Release/net10.0/Elsa.Workflows.Design.Core.dll
+  Elsa.Cluster.Readability -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Cluster/Readability/bin/Release/net10.0/Elsa.Cluster.Readability.dll
+  Elsa.Workflows.Design.Validations.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Validations/Core/bin/Release/net10.0/Elsa.Workflows.Design.Validations.Core.dll
+  Elsa.Workflows.Runtime.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Core/bin/Release/net10.0/Elsa.Workflows.Runtime.Core.dll
+  Elsa.Workflows.Design.Persistence.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Persistence/Core/bin/Release/net10.0/Elsa.Workflows.Design.Persistence.Core.dll
+  Elsa.Workflows.Publishing.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Core/bin/Release/net10.0/Elsa.Workflows.Publishing.Core.dll
+  Elsa.Workflows.Runtime -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/bin/Release/net10.0/Elsa.Workflows.Runtime.dll
+  Elsa.Activities.Design.Persistence.Core -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/Core/bin/Release/net10.0/Elsa.Activities.Design.Persistence.Core.dll
+  Elsa.Workflows.Design.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll
+  Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll
+  Elsa.Activities.Design.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Activities.Design.Persistence.EntityFrameworkCore.dll
+  Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/bin/Release/net10.0/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.dll
+  Elsa.Cluster.Readability.Tests -> /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Cluster/Readability/Tests/bin/Release/net10.0/Elsa.Cluster.Readability.Tests.dll
+Test run for /Users/sipke/.codex/worktrees/f236/elsa-foundation/Essentials/tests/Cluster/Readability/Tests/bin/Release/net10.0/Elsa.Cluster.Readability.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+Results File: /tmp/elsa-2898-extra-gates-4d77feefd/readability/whole.trx
+
+Passed!  - Failed:     0, Passed:   117, Skipped:     0, Total:   117, Duration: 5 s - Elsa.Cluster.Readability.Tests.dll (net10.0)

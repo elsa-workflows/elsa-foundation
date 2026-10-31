@@ -1,0 +1,20 @@
+{
+  "changedFiles": 7549,
+  "statuses": {
+    "M": 181,
+    "A": 7360,
+    "R086": 1,
+    "R099": 4,
+    "R091": 3
+  },
+  "groups": {
+    "other": 16,
+    "locks": 90,
+    "production": 117,
+    "migrations": 41,
+    "tests": 58,
+    "e2e": 58,
+    "evidence": 7142,
+    "tools": 27
+  }
+}

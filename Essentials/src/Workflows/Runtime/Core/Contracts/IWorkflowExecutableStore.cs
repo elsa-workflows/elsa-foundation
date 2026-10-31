@@ -9,6 +9,26 @@ namespace Elsa.Workflows.Runtime.Core.Contracts;
 /// </summary>
 public interface IWorkflowExecutableStore
 {
+    /// <summary>Whether this selected store preserves typed model material alongside native artifacts.</summary>
+    /// <remarks>Admission must additionally qualify the complete selected reference, closure, lease and retention path.
+    /// A legacy provider or decorator refuses by default; forwarding only the native boundary is insufficient.</remarks>
+    bool SupportsModelMaterial => false;
+
+    /// <summary>Reads exact native/model material and its physical incarnation without inventing a native root.</summary>
+    ValueTask<RuntimeExecutionMaterial?> FindMaterialAsync(string artifactId, CancellationToken cancellationToken = default) =>
+        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<RuntimeExecutionMaterial?>(cancellationToken) :
+            ValueTask.FromException<RuntimeExecutionMaterial?>(new NotSupportedException($"{GetType().Name} does not support runtime model material."));
+
+    /// <summary>Saves immutable versioned model material through this artifact provider's coordination boundary.</summary>
+    ValueTask SaveModelAsync(RuntimeModelMaterial material, CancellationToken cancellationToken = default) =>
+        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled(cancellationToken) :
+            ValueTask.FromException(new NotSupportedException($"{GetType().Name} does not support runtime model material."));
+
+    /// <summary>Pages both material kinds so retention cannot silently overlook a model artifact.</summary>
+    ValueTask<RuntimeStorePage<RuntimeExecutionMaterial>> ListMaterialPageAsync(RuntimeStorePageRequest request, CancellationToken cancellationToken = default) =>
+        cancellationToken.IsCancellationRequested ? ValueTask.FromCanceled<RuntimeStorePage<RuntimeExecutionMaterial>>(cancellationToken) :
+            ValueTask.FromException<RuntimeStorePage<RuntimeExecutionMaterial>>(new NotSupportedException($"{GetType().Name} does not support runtime model material paging."));
+
     /// <summary>The physical material/lease boundary used for provider coordination.</summary>
     /// <remarks>Returns this store unless an explicitly cooperating decorator forwards every material mutation,
     /// lease and deletion-guard operation unchanged to another boundary. Resolving it performs no I/O. Normal reads and writes must still use

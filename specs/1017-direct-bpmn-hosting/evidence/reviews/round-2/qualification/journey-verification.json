@@ -1,0 +1,38 @@
+{
+  "executingSource": "e3ec219fcc3a93c949d2669fc585bd1e79152abe",
+  "actualJourneys": [
+    {
+      "parent": "CompensationScope",
+      "actualCompleted": true,
+      "wholeStores": 4,
+      "ownedHosts": 3,
+      "syntheticObservationControlsRejected": 6
+    },
+    {
+      "parent": "Flowchart",
+      "actualCompleted": true,
+      "wholeStores": 4,
+      "ownedHosts": 3,
+      "syntheticObservationControlsRejected": 6
+    },
+    {
+      "parent": "Root",
+      "actualCompleted": true,
+      "wholeStores": 4,
+      "ownedHosts": 3,
+      "syntheticObservationControlsRejected": 6
+    },
+    {
+      "parent": "Sequence",
+      "actualCompleted": true,
+      "wholeStores": 4,
+      "ownedHosts": 3,
+      "syntheticObservationControlsRejected": 6
+    }
+  ],
+  "wholeStores": 16,
+  "coupledPairs": 8,
+  "ownedHosts": 12,
+  "syntheticObservationControlsRejected": 24,
+  "controlsAreRuntimeAcceptance": false
+}

@@ -1,0 +1,86 @@
+[
+  {
+    "package": "@elsa-workflows/studio-attention",
+    "path": "Extensions/Attention/studio/Elsa.Studio.Attention/Client",
+    "script": "vitest run --passWithNoTests",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-main-c4cfa-qualification/frontend/_elsa-workflows_studio-attention.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 1.6500651836395264,
+    "log": "_elsa-workflows_studio-attention.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-attention.json",
+    "counts": {
+      "numTotalTests": 9,
+      "numPassedTests": 9,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 4,
+      "numPassedTestSuites": 4,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/studio-connections",
+    "path": "Extensions/Connections/studio/Elsa.Studio.Connections/Client",
+    "script": "vitest run",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-main-c4cfa-qualification/frontend/_elsa-workflows_studio-connections.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 2.624760866165161,
+    "log": "_elsa-workflows_studio-connections.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-connections.json",
+    "counts": {
+      "numTotalTests": 58,
+      "numPassedTests": 58,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 10,
+      "numPassedTestSuites": 10,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/studio-console-stream",
+    "path": "Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Client",
+    "script": "vitest run",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-main-c4cfa-qualification/frontend/_elsa-workflows_studio-console-stream.json"
+    ],
+    "exitCode": 1,
+    "elapsedSeconds": 0.8858609199523926,
+    "log": "_elsa-workflows_studio-console-stream.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-console-stream.json",
+    "counts": {
+      "numTotalTests": 0,
+      "numPassedTests": 0,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 1,
+      "numPassedTestSuites": 0,
+      "numFailedTestSuites": 1
+    }
+  }
+]

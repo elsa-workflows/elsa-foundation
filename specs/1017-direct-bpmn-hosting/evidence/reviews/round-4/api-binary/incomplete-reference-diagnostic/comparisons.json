@@ -1,0 +1,187 @@
+{
+  "reviewedHead": "cdc02819f852684dc855ecb111bfa261171f40b6",
+  "currentProductMetadata": {
+    "sourceCommit": "76e8139dc7744781fba864f8247c180134eaaaed",
+    "metadataOnly": true,
+    "actualProductVersions": [
+      {
+        "name": "Elsa.Workbench.dll",
+        "productVersion": "1.0.0+76e8139dc7744781fba864f8247c180134eaaaed",
+        "sha256": "87cf7ca7a82ec446b7b1abb8dd90333ef0cf87202b544e7ce8f6761da6740d10"
+      },
+      {
+        "name": "Elsa.Activities.Bpmn.dll",
+        "productVersion": "1.0.0+76e8139dc7744781fba864f8247c180134eaaaed",
+        "sha256": "9097ede1cb8b542258e1bd2a6d03cd1bfef0e9f194d0d7c6073259202f959bdb"
+      },
+      {
+        "name": "Elsa.Activities.Bpmn.Interchange.dll",
+        "productVersion": "1.0.0+76e8139dc7744781fba864f8247c180134eaaaed",
+        "sha256": "308665fa7048ad7d3d0b78c9d2ffe7c3732df76d0a3cd8e9ff1402e20e7b3486"
+      },
+      {
+        "name": "Elsa.Workflows.Runtime.Core.dll",
+        "productVersion": "1.0.0+76e8139dc7744781fba864f8247c180134eaaaed",
+        "sha256": "0a9e42a7753314cc5026f9fcd90a76e63190cbb12f8cc92c05c471d110bac99b"
+      },
+      {
+        "name": "Elsa.Workflows.Runtime.dll",
+        "productVersion": "1.0.0+76e8139dc7744781fba864f8247c180134eaaaed",
+        "sha256": "4a26be6c4a8f6287e6c7b113c54783a564c646fd2fb33d2bd567bde5a2d53dd2"
+      },
+      {
+        "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+        "productVersion": "1.0.0+76e8139dc7744781fba864f8247c180134eaaaed",
+        "sha256": "55b9cdc47572fe125b0527f5e49ace851ed6f1d6cae63157a5eea0a9f18edf1b"
+      },
+      {
+        "name": "Elsa.Activities.Runtime.dll",
+        "productVersion": "1.0.0+76e8139dc7744781fba864f8247c180134eaaaed",
+        "sha256": "10688eefefa65fa6ff4ea39daeadd6c676b891338200813b83e00a2a56b6ff6c"
+      },
+      {
+        "name": "Elsa.Activities.DispatchWorkflow.Runtime.dll",
+        "productVersion": "1.0.0+76e8139dc7744781fba864f8247c180134eaaaed",
+        "sha256": "06792cb6c734d627b82146c1909422c2a57da1410b3634bc18d158c2a8c2cfa2"
+      },
+      {
+        "name": "Elsa.Serialization.SystemText.dll",
+        "productVersion": "1.0.0+76e8139dc7744781fba864f8247c180134eaaaed",
+        "sha256": "c8f3924e43aa45e68240b6c1f2a83f11f0fb97c0cc830baa743c9efd36225d30"
+      },
+      {
+        "name": "Elsa.Workflows.Design.Core.dll",
+        "productVersion": "1.0.0+76e8139dc7744781fba864f8247c180134eaaaed",
+        "sha256": "3efa2d38d11619c75e89eb1a6d515b025565a7190512a91c06afe161558c32b3"
+      },
+      {
+        "name": "Elsa.Workflows.Design.Api.dll",
+        "productVersion": "1.0.0+76e8139dc7744781fba864f8247c180134eaaaed",
+        "sha256": "57930238600c73ab2c9ad22b3f4d4a5ab088e0d1c200256f45f1a7bcc780ccfe"
+      },
+      {
+        "name": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll",
+        "productVersion": "1.0.0+76e8139dc7744781fba864f8247c180134eaaaed",
+        "sha256": "9e5c7af82c298a36a5e58d33f28e1643202eeb072a8af6990fd9970fa555e9c9"
+      },
+      {
+        "name": "Elsa.Persistence.EntityFramework.dll",
+        "productVersion": "1.0.0+76e8139dc7744781fba864f8247c180134eaaaed",
+        "sha256": "660631f8f580ef33d7ed880f56833752289203eaa9a1acae4c7c3b2807ed9c80"
+      }
+    ],
+    "releasedLibraryProducts": [
+      {
+        "name": "Bpmn.Model.dll",
+        "productVersion": "0.5.0+021d2c5bba494f17d346144d97763cd3b2a13a4b",
+        "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776"
+      },
+      {
+        "name": "Bpmn.Semantics.dll",
+        "productVersion": "0.5.0+021d2c5bba494f17d346144d97763cd3b2a13a4b",
+        "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+      },
+      {
+        "name": "Bpmn.Interchange.dll",
+        "productVersion": "0.5.0+021d2c5bba494f17d346144d97763cd3b2a13a4b",
+        "sha256": "4199d813b9e6dad4f0ec4f189b05b9084de86fb9a7d46233a85183072d88c6d9"
+      }
+    ]
+  },
+  "toolVersion": "10.0.403",
+  "results": [
+    {
+      "assembly": "Elsa.Workflows.Runtime.Core",
+      "args": [
+        "/tmp/elsa-2898-api-binary/tools/apicompat",
+        "-l",
+        "/tmp/elsa-2898-api-binary/published/elsa.workflows.runtime.core/lib/net10.0/Elsa.Workflows.Runtime.Core.dll",
+        "-r",
+        "/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.Core.dll",
+        "--lref",
+        "/tmp/elsa-2898-api-binary/baseline-references,/usr/local/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.13/ref/net10.0",
+        "--rref",
+        "/tmp/elsa-2898-api-binary/current,/usr/local/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.13/ref/net10.0",
+        "--enable-rule-cannot-change-parameter-name",
+        "--verbosity",
+        "High"
+      ],
+      "exitCode": 0,
+      "leftSha256": "b966bef99337d45bb771f4c748f6798165cb35bd489d331e6659cd8d46b9673b",
+      "rightSha256": "0a9e42a7753314cc5026f9fcd90a76e63190cbb12f8cc92c05c471d110bac99b",
+      "diagnosticLines": [
+        "Could not resolve reference 'Microsoft.Extensions.DependencyInjection.Abstractions.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.Core.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.DependencyInjection.Abstractions.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.Core.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.DependencyInjection.Abstractions.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.Core.dll' in any of the provided search directories."
+      ]
+    },
+    {
+      "assembly": "Elsa.Workflows.Runtime",
+      "args": [
+        "/tmp/elsa-2898-api-binary/tools/apicompat",
+        "-l",
+        "/tmp/elsa-2898-api-binary/published/elsa.workflows.runtime/lib/net10.0/Elsa.Workflows.Runtime.dll",
+        "-r",
+        "/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.dll",
+        "--lref",
+        "/tmp/elsa-2898-api-binary/baseline-references,/usr/local/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.13/ref/net10.0",
+        "--rref",
+        "/tmp/elsa-2898-api-binary/current,/usr/local/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.13/ref/net10.0",
+        "--enable-rule-cannot-change-parameter-name",
+        "--verbosity",
+        "High"
+      ],
+      "exitCode": 0,
+      "leftSha256": "a5e86d52117881aef94bde22afcf26193652d495406d04f1c7dfd4d499759602",
+      "rightSha256": "4a26be6c4a8f6287e6c7b113c54783a564c646fd2fb33d2bd567bde5a2d53dd2",
+      "diagnosticLines": [
+        "Could not resolve reference 'Microsoft.Extensions.Configuration.Abstractions.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.Configuration.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.DependencyInjection.Abstractions.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.Primitives.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.Options.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.DependencyInjection.Abstractions.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.DependencyInjection.Abstractions.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.DependencyInjection.Abstractions.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.DependencyInjection.Abstractions.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.Logging.Abstractions.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.Options.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.Logging.Abstractions.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Workflows.Runtime.dll' in any of the provided search directories."
+      ]
+    },
+    {
+      "assembly": "Elsa.Persistence.EntityFramework",
+      "args": [
+        "/tmp/elsa-2898-api-binary/tools/apicompat",
+        "-l",
+        "/tmp/elsa-2898-api-binary/published/elsa.persistence.entityframework/lib/net10.0/Elsa.Persistence.EntityFramework.dll",
+        "-r",
+        "/tmp/elsa-2898-api-binary/current/Elsa.Persistence.EntityFramework.dll",
+        "--lref",
+        "/tmp/elsa-2898-api-binary/baseline-references,/usr/local/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.13/ref/net10.0",
+        "--rref",
+        "/tmp/elsa-2898-api-binary/current,/usr/local/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.13/ref/net10.0",
+        "--enable-rule-cannot-change-parameter-name",
+        "--verbosity",
+        "High"
+      ],
+      "exitCode": 0,
+      "leftSha256": "a7627fd69b5c6d48ce0ebaf0f8e6eba0c33217ecee79c4e1f8eda740f92a29c1",
+      "rightSha256": "660631f8f580ef33d7ed880f56833752289203eaa9a1acae4c7c3b2807ed9c80",
+      "diagnosticLines": [
+        "Could not resolve reference 'Microsoft.Extensions.Logging.Abstractions.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Persistence.EntityFramework.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.Primitives.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Persistence.EntityFramework.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.Configuration.Abstractions.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Persistence.EntityFramework.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.DependencyInjection.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Persistence.EntityFramework.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.Hosting.Abstractions.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Persistence.EntityFramework.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.Options.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Persistence.EntityFramework.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.Logging.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Persistence.EntityFramework.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.Configuration.Binder.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Persistence.EntityFramework.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.Logging.Abstractions.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Persistence.EntityFramework.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.Configuration.Json.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Persistence.EntityFramework.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.Configuration.EnvironmentVariables.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Persistence.EntityFramework.dll' in any of the provided search directories.",
+        "Could not resolve reference 'Microsoft.Extensions.Primitives.dll' directly or transitively referenced by '/tmp/elsa-2898-api-binary/current/Elsa.Persistence.EntityFramework.dll' in any of the provided search directories."
+      ]
+    }
+  ]
+}

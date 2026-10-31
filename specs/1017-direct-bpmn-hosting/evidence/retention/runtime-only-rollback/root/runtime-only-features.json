@@ -1,0 +1,61 @@
+{
+  "ActivitiesBpmn": {},
+  "ActivitiesCompensation": {},
+  "ActivitiesControlFlow": {},
+  "ActivitiesDispatchWorkflowRuntime": {},
+  "ActivitiesFlowchart": {},
+  "ActivitiesPrimitives": {},
+  "ActivitiesGraphRuntime": {},
+  "ActivitiesRuntime": {},
+  "ActivitiesSequence": {},
+  "ApiCapabilities": {},
+  "Events": {},
+  "Expressions": {},
+  "FileSystemDistributedLocking": {},
+  "FoundationIdentityAbstractions": {},
+  "FoundationIdentityApi": {},
+  "FoundationIdentityAspNetCoreIdentity": {
+    "IsDefault": true,
+    "AllowedReturnUrlOrigins": [
+      "https://localhost:7030",
+      "http://localhost:5089"
+    ]
+  },
+  "IdentityIamEntityFrameworkCore": {},
+  "IdentityProviderConfigurationEntityFrameworkCore": {},
+  "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": {
+    "IsDevelopmentOrDemo": true,
+    "SeedAdminUserName": "admin",
+    "SeedAdminPassword": "Password123!",
+    "SeedAdminEmail": "admin@elsa.local",
+    "SeedAdminRoleName": "administrator"
+  },
+  "WorkflowsRuntimeEntityFrameworkCore": {
+    "CacheWorkflowExecutables": true,
+    "WorkflowExecutableCacheCapacity": 256,
+    "RecoveryContinuationSigningKey": "development-demo-only-recovery-continuation-key",
+    "HierarchyCursorSigningKey": "development-demo-only-hierarchy-cursor-signing-key",
+    "ConnectionString": "Data Source=elsa.db;Pooling=False"
+  },
+  "Primitives": {},
+  "Serialization": {},
+  "Tasks": {},
+  "WorkflowsRuntimeApi": {
+    "WorkflowAlterationPayloadProtectionActiveKeyId": "development-demo-only",
+    "WorkflowAlterationPayloadProtectionKeys": {
+      "development-demo-only": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    }
+  },
+  "WorkflowsRuntimeResumption": {
+    "SweepIntervalSeconds": 0.2
+  },
+  "WorkflowsRuntimeCheckpointPersistence": {
+    "Mode": "Balanced",
+    "MaxActivitiesPerCommit": 50
+  },
+  "WorkflowsRuntimeTriggers": {},
+  "ActivitiesBpmnHosting": {
+    "AdmitNewExecutions": false
+  },
+  "ActivitiesBpmnHostingApi": {}
+}

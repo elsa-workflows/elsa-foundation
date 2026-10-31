@@ -1,0 +1,91 @@
+{
+  "kind": "actual-old-final-fault-workbench-recovery",
+  "sourceRevision": "178154c1334a85ec3b06f0acf40360849c1f44c0",
+  "admitted": true,
+  "waiting": false,
+  "modelExecutionId": "bpmn:29ce72ce3be41205dfa938e934fbac80cb4cca8c3508df1b2dd86fa94dfdc220",
+  "fixtureSha256": "ae0027de22b16b04912106623724207d493879fc96f195e61e87a42af9a1d683",
+  "first": 57927,
+  "second": 58546,
+  "firstExit": 137,
+  "secondExit": 137,
+  "runtimeOnly": true,
+  "completedStore": {
+    "file": "completed-runtime.sqlite.gz",
+    "databaseSha256": "d87466e3348067aa84ce1a5142b7a1b067e86c75e65aa73882d57506bfaeacb5",
+    "gzipSha256": "3db159f0d589dce3cfeb90277a62a7a71e352cad95336b619e3fc8b05ef7e79d"
+  },
+  "retainedStore": {
+    "file": "retained-runtime.sqlite.gz",
+    "databaseSha256": "d87466e3348067aa84ce1a5142b7a1b067e86c75e65aa73882d57506bfaeacb5",
+    "gzipSha256": "3db159f0d589dce3cfeb90277a62a7a71e352cad95336b619e3fc8b05ef7e79d"
+  },
+  "binaries": [
+    {
+      "file": "Elsa.Workbench.dll",
+      "productVersion": "1.0.0\u002B178154c1334a85ec3b06f0acf40360849c1f44c0",
+      "sha256": "5b91f94e747137f506d9515763d6beeb1ede265519ad9376907a4887e0b8d04a"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Core.dll",
+      "productVersion": "1.0.0\u002B178154c1334a85ec3b06f0acf40360849c1f44c0",
+      "sha256": "0ddaaa0e9b867769f4465396291be2697a688b90a3c5774f1be872fec1f94f85"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.dll",
+      "productVersion": "1.0.0\u002B178154c1334a85ec3b06f0acf40360849c1f44c0",
+      "sha256": "26071d462b4eb8bb8512a51efa34fd1ab5e9d89534d7e80b591dad72ad4255aa"
+    },
+    {
+      "file": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0\u002B178154c1334a85ec3b06f0acf40360849c1f44c0",
+      "sha256": "cb2bce01db43d1861dea201447442325fabf549ee195ea5b205c633feac47dea"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Core.dll",
+      "productVersion": "1.0.0\u002B178154c1334a85ec3b06f0acf40360849c1f44c0",
+      "sha256": "5344eeca1b54183fac1c15043edf02fcdd8ebdb9dfdccdef19c16db1fb7b0dc4"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.dll",
+      "productVersion": "1.0.0\u002B178154c1334a85ec3b06f0acf40360849c1f44c0",
+      "sha256": "adf900b4dd1eec567ec01cd73ff5b7873208061c822bbbb8aa1e5b1ad2fe334c"
+    },
+    {
+      "file": "Elsa.Activities.Bpmn.Api.dll",
+      "productVersion": "1.0.0\u002B178154c1334a85ec3b06f0acf40360849c1f44c0",
+      "sha256": "6850d29c43d1bb4593fbd55c7ec1349ae736310373e19e67c39f0ab6cca53dce"
+    },
+    {
+      "file": "Bpmn.Model.dll",
+      "productVersion": "0.5.0\u002B021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776"
+    },
+    {
+      "file": "Bpmn.Semantics.dll",
+      "productVersion": "0.5.0\u002B021d2c5bba494f17d346144d97763cd3b2a13a4b",
+      "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Core.dll",
+      "productVersion": "1.0.0\u002B178154c1334a85ec3b06f0acf40360849c1f44c0",
+      "sha256": "cbbdea25dec10b82eb73de3b577880f1aba34eb275e51cbce4f5937e81b19303"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Api.dll",
+      "productVersion": "1.0.0\u002B178154c1334a85ec3b06f0acf40360849c1f44c0",
+      "sha256": "6802103b48d20f08177ec890746fbab048811a72db697228b1c7df70e05b61ff"
+    },
+    {
+      "file": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll",
+      "productVersion": "1.0.0\u002B178154c1334a85ec3b06f0acf40360849c1f44c0",
+      "sha256": "bbd23fc779a1c773fe2c2c3a5defc6009c2e11460d036de8e0fb1aef770bdd0e"
+    },
+    {
+      "file": "Elsa.Persistence.EntityFramework.dll",
+      "productVersion": "1.0.0\u002B178154c1334a85ec3b06f0acf40360849c1f44c0",
+      "sha256": "8774d38d55b91e555b0703953ebedd671299f3d98bd4aefec9428b09285afbc2"
+    }
+  ],
+  "scopeLimit": "Actual normally produced old fault cuts over SQLite, standard runtime-only Workbench; no Studio, ETL or other-provider claim."
+}

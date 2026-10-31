@@ -1,0 +1,329 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-direct-bpmn-native-etl-worker-cancellation",
+  "sourceRevision": "d1bd08c33f436764eaca5a5c69017f14a3ea85d5",
+  "products": {
+    "sourceCommit": "d1bd08c33f436764eaca5a5c69017f14a3ea85d5",
+    "metadataOnly": true,
+    "actualProductVersions": [
+      {
+        "name": "Elsa.Workbench.dll",
+        "productVersion": "1.0.0+d1bd08c33f436764eaca5a5c69017f14a3ea85d5",
+        "sha256": "d93a2a99735752ef56fff84dc413483d7334241d2118c72f31b66111fe679054"
+      },
+      {
+        "name": "Elsa.Activities.Bpmn.Core.dll",
+        "productVersion": "1.0.0+d1bd08c33f436764eaca5a5c69017f14a3ea85d5",
+        "sha256": "f255886cf40f26cb2316944a6f2d4947fda1d28e41a9fc5dea012d4dcb862cbf"
+      },
+      {
+        "name": "Elsa.Activities.Bpmn.dll",
+        "productVersion": "1.0.0+d1bd08c33f436764eaca5a5c69017f14a3ea85d5",
+        "sha256": "bf5eed0177c8ba002bb66ab69a2802ead8ec2b4548983a4033ab59259e242d7f"
+      },
+      {
+        "name": "Elsa.Activities.Bpmn.Api.dll",
+        "productVersion": "1.0.0+d1bd08c33f436764eaca5a5c69017f14a3ea85d5",
+        "sha256": "3cad71e33516fa7befe86a0580e9356b9dd03ff3a56dde4ca9305e14574e265f"
+      },
+      {
+        "name": "Elsa.Workflows.Runtime.Core.dll",
+        "productVersion": "1.0.0+d1bd08c33f436764eaca5a5c69017f14a3ea85d5",
+        "sha256": "8f876b13e4ab5f526953f4b921194d8a7dc750425f38be948951fd05fe71290d"
+      },
+      {
+        "name": "Elsa.Workflows.Runtime.dll",
+        "productVersion": "1.0.0+d1bd08c33f436764eaca5a5c69017f14a3ea85d5",
+        "sha256": "63253965b0e379d447e53414677da4dc55cd223e43266451c24c2953a64004cf"
+      },
+      {
+        "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+        "productVersion": "1.0.0+d1bd08c33f436764eaca5a5c69017f14a3ea85d5",
+        "sha256": "59b7a9481bd23cb0871196c9e570bd8d8a0134614ceba65326240aee85c72abe"
+      },
+      {
+        "name": "Elsa.Etl.Core.dll",
+        "productVersion": "1.0.0+d1bd08c33f436764eaca5a5c69017f14a3ea85d5",
+        "sha256": "f7080fdf550448c26909f429a0813668250fe398db856fdb0638b8a7c7a6bb54"
+      },
+      {
+        "name": "Elsa.Etl.Runtime.dll",
+        "productVersion": "1.0.0+d1bd08c33f436764eaca5a5c69017f14a3ea85d5",
+        "sha256": "af3adccb4f083fc26fe246bc1056c65de27b753a3bdebb0b7d108ad5cc641f83"
+      },
+      {
+        "name": "Elsa.Etl.Workflows.Runtime.dll",
+        "productVersion": "1.0.0+d1bd08c33f436764eaca5a5c69017f14a3ea85d5",
+        "sha256": "7d6363a187c7ece4137240923840d91e195bc6f28368f6b4b95f8f5616313b80"
+      },
+      {
+        "name": "Elsa.Etl.Persistence.EntityFrameworkCore.dll",
+        "productVersion": "1.0.0+d1bd08c33f436764eaca5a5c69017f14a3ea85d5",
+        "sha256": "cd330da75e27a7c8a1a3fd89da8400d681ff0e4806d6190c010f121bd6fa38ef"
+      },
+      {
+        "name": "Elsa.Etl.Runtime.Api.dll",
+        "productVersion": "1.0.0+d1bd08c33f436764eaca5a5c69017f14a3ea85d5",
+        "sha256": "29c1866f709f62df4d8ec54b0226cb5c69f2fe05e9935cf7f51c6a7c9bfa6776"
+      }
+    ]
+  },
+  "parent": "BpmnModel",
+  "processes": [
+    {
+      "role": "http-fixture",
+      "processId": 927,
+      "controllerProcessId": 906,
+      "started": "Thu Oct 29 17:47:08 2026"
+    },
+    {
+      "role": "workbench",
+      "processId": 930,
+      "controllerProcessId": 906,
+      "started": "Thu Oct 29 17:47:09 2026"
+    },
+    {
+      "role": "workbench",
+      "processId": 1000,
+      "controllerProcessId": 906,
+      "started": "Thu Oct 29 17:47:16 2026"
+    },
+    {
+      "role": "consumption-sdk",
+      "processId": 1052,
+      "controllerProcessId": 906,
+      "started": "Thu Oct 29 17:47:24 2026"
+    },
+    {
+      "role": "workbench",
+      "processId": 1066,
+      "controllerProcessId": 906,
+      "started": "Thu Oct 29 17:47:27 2026"
+    },
+    {
+      "role": "workbench",
+      "processId": 1096,
+      "controllerProcessId": 906,
+      "started": "Thu Oct 29 17:47:31 2026"
+    }
+  ],
+  "predecessorExitCode": -9,
+  "definition": "recovery-3dbd124ab3bb",
+  "selection": "etl1:recovery-3dbd124ab3bb:1:c70ee1713d0e44b11081ef045964237a02b3bf268b63ddf707575635b0a5ac41",
+  "workflowExecutionId": "wfexec:start:v1:b0d1c6cb7c06d8f56278f2a244862b2a90866680865e80877fb608195a8e1bb2",
+  "runId": "etl-4c06fb4df8eb7608d209063ea1aaf435867d3d0d28d294bd7a98b3634beedf95",
+  "publication": {
+    "publicationId": "publication-14ktOH7U9S2",
+    "definitionId": "14ktOGhNJOL",
+    "versionId": "14ktOGii76b",
+    "definitionVersionId": "14ktOGii76b",
+    "artifactId": "artifact-bd3c3ce63d30",
+    "slotName": "default",
+    "status": "active",
+    "sourceReferenceId": "activation-ref:publication-14ktOH7U9S2",
+    "createdAt": "2026-10-29T16:47:13.307006+00:00",
+    "activatedAt": "2026-10-29T16:47:13.498196+00:00",
+    "retiredAt": null,
+    "artifactVersion": "1.0.0",
+    "artifactHash": "sha256:bd3c3ce63d30bbc1e1d3e1c9bc685517023bbbc3c47b783187e785d1b106f879",
+    "rootActivityId": "etl",
+    "nodeCount": 1
+  },
+  "etlPublication": {
+    "status": "published",
+    "version": {
+      "definitionId": "recovery-3dbd124ab3bb",
+      "definitionVersion": 1,
+      "contentHash": "c70ee1713d0e44b11081ef045964237a02b3bf268b63ddf707575635b0a5ac41",
+      "selection": "etl1:recovery-3dbd124ab3bb:1:c70ee1713d0e44b11081ef045964237a02b3bf268b63ddf707575635b0a5ac41",
+      "publishedAt": null
+    }
+  },
+  "bindings": {
+    "items": [
+      {
+        "alias": "errors",
+        "role": "ErrorOutput",
+        "kind": "jsonl"
+      },
+      {
+        "alias": "http-output",
+        "role": "MainOutput",
+        "kind": "http"
+      },
+      {
+        "alias": "http-source",
+        "role": "Source",
+        "kind": "http"
+      }
+    ],
+    "nextCursor": null
+  },
+  "fixtureSha256": "28797c94de9f1adb7ef5f61bdd242ccc7ef26f734916bdce1866c6db0bf21e74",
+  "controllerSha256": "eb03771557c15948456ee146b92f802a5b7e16d43e2a8cf31cc7557b02b529bc",
+  "cutAtUtc": "2026-10-29T16:47:15.524183+00:00",
+  "businessError": false,
+  "pipelineCancel": false,
+  "nativeCancel": true,
+  "modelCancel": false,
+  "retryAfterSeconds": 60,
+  "beforeStores": {
+    "elsa": {
+      "file": "before-elsa.sqlite.gz",
+      "databaseSha256": "46da3a8c3c15d46f0bcf54de616e2a33a1d67466d607a7465fa334bc18c569cb",
+      "gzipSha256": "5300bb9316bc369b6f3ca37351a0dfb64f16f62163b1fd498c4076ed0ce1a8f5",
+      "observer": {
+        "readOnly": true,
+        "sourceMainSha256": "2c1e323f59e2a546a3e753cceaf8fb2b4d511fed43659f72231f5e67aa9d591f",
+        "snapshotSha256": "46da3a8c3c15d46f0bcf54de616e2a33a1d67466d607a7465fa334bc18c569cb"
+      }
+    },
+    "etl-runtime": {
+      "file": "before-etl-runtime.sqlite.gz",
+      "databaseSha256": "8cf3edffdeb4ffde855888f87aba47522e67bcbda988e0b2fbe44d2ae67f9cd9",
+      "gzipSha256": "e1c77e03e99a08eaa8b8f34bfedddfde532c2d33d11a1517d5e9e194d70947bd",
+      "observer": {
+        "readOnly": true,
+        "sourceMainSha256": "e54e249050da4274ea93d39fc294a946f3ab4cbd9df3858e7a71114ca23edf47",
+        "snapshotSha256": "8cf3edffdeb4ffde855888f87aba47522e67bcbda988e0b2fbe44d2ae67f9cd9"
+      }
+    },
+    "etl-design": {
+      "file": "before-etl-design.sqlite.gz",
+      "databaseSha256": "837a963d8da512cfcb4155da6e98ca53f7f7c5dab09731a8a74c5684844025e9",
+      "gzipSha256": "7ff2327ad130eb11c8461bcb5c57c234fe06b8852de48b56b410a6fb65e840e3",
+      "observer": {
+        "readOnly": true,
+        "sourceMainSha256": "e3a32076183de1eb112d58f207ca2f94c8dab2b284d3587d0f88aa87d21e80e3",
+        "snapshotSha256": "837a963d8da512cfcb4155da6e98ca53f7f7c5dab09731a8a74c5684844025e9"
+      }
+    }
+  },
+  "finishedStores": {
+    "elsa": {
+      "file": "finished-elsa.sqlite.gz",
+      "databaseSha256": "353fdf12aad57606090b79a4381632064f3cba3a94991149e09a570d3e84600e",
+      "gzipSha256": "4abe4921893483d250253b2719d039f326e430e56171104f30f431757e9fe798",
+      "observer": {
+        "readOnly": true,
+        "sourceMainSha256": "8482a88d74b52f0c25c17c61fcfb6d5b6bc2ee12778198ab649f47546cb2c7cf",
+        "snapshotSha256": "353fdf12aad57606090b79a4381632064f3cba3a94991149e09a570d3e84600e"
+      }
+    },
+    "etl-runtime": {
+      "file": "finished-etl-runtime.sqlite.gz",
+      "databaseSha256": "d9352cac21c4bcadff5bac05dd3e542f62521ba720708675424be81467ae6531",
+      "gzipSha256": "0ee952491f02078bf271ddcd2c160140539e424caeae09acb20c736a5fab502a",
+      "observer": {
+        "readOnly": true,
+        "sourceMainSha256": "e3d1c8ee5319bbfacc23816a703730207ce60342dcd3db74ab7a21a544d7fb13",
+        "snapshotSha256": "d9352cac21c4bcadff5bac05dd3e542f62521ba720708675424be81467ae6531"
+      }
+    },
+    "etl-design": {
+      "file": "finished-etl-design.sqlite.gz",
+      "databaseSha256": "837a963d8da512cfcb4155da6e98ca53f7f7c5dab09731a8a74c5684844025e9",
+      "gzipSha256": "644f518749e63e410a10fbcd680c78fb326575315e17543115ca4f26b3717ba0",
+      "observer": {
+        "readOnly": true,
+        "sourceMainSha256": "e3a32076183de1eb112d58f207ca2f94c8dab2b284d3587d0f88aa87d21e80e3",
+        "snapshotSha256": "837a963d8da512cfcb4155da6e98ca53f7f7c5dab09731a8a74c5684844025e9"
+      }
+    }
+  },
+  "observedCancelledAfterRetryDeadlineAtUtc": "2026-10-29T16:48:17.481459+00:00",
+  "modelPublication": {
+    "executable": {
+      "artifactId": "sha256:1d0eda1003ec8c2046b614e7c8b38ed01c9e85771dac7721d11d09a2b4ec5ac3",
+      "definitionId": "bpmn-model:sha256:1d0eda1003ec8c2046b614e7c8b38ed01c9e85771dac7721d11d09a2b4ec5ac3",
+      "definitionVersionId": "sha256:1d0eda1003ec8c2046b614e7c8b38ed01c9e85771dac7721d11d09a2b4ec5ac3",
+      "artifactVersion": "1.0.0",
+      "artifactHash": "sha256:1d0eda1003ec8c2046b614e7c8b38ed01c9e85771dac7721d11d09a2b4ec5ac3"
+    },
+    "incarnationId": "6ba0235c6aed49529031f884263782ab",
+    "sourceReferenceId": "bpmn-source:0a13573bec76afda013e2e76b18b05939c3b69507c7a3ddce4f67090da065a63",
+    "profile": "foundation-native-work-v1"
+  },
+  "modelExecutionId": "bpmn:94d326c7600e03ec080e794d1086a33ff6e283a70a40fe24c271caa728b1d9cb",
+  "pendingCancellationStage": "native-terminal",
+  "pendingStores": {
+    "elsa": {
+      "file": "pending-elsa.sqlite.gz",
+      "databaseSha256": "7725a5f830f4819c1578adec110ed5ba5bcb209db26dcc31ba44d74855fa8371",
+      "gzipSha256": "db34d1a0fe895e76bdb1fad85170f363bb94d972a7fe615782b1f6533f146f65",
+      "observer": {
+        "readOnly": true,
+        "sourceMainSha256": "2c1e323f59e2a546a3e753cceaf8fb2b4d511fed43659f72231f5e67aa9d591f",
+        "snapshotSha256": "7725a5f830f4819c1578adec110ed5ba5bcb209db26dcc31ba44d74855fa8371"
+      }
+    },
+    "etl-runtime": {
+      "file": "pending-etl-runtime.sqlite.gz",
+      "databaseSha256": "8cf3edffdeb4ffde855888f87aba47522e67bcbda988e0b2fbe44d2ae67f9cd9",
+      "gzipSha256": "73e45d710fac1e7cca13216cc16994fe3b44b4c9f9ce8fb14590045562d18e7d",
+      "observer": {
+        "readOnly": true,
+        "sourceMainSha256": "e54e249050da4274ea93d39fc294a946f3ab4cbd9df3858e7a71114ca23edf47",
+        "snapshotSha256": "8cf3edffdeb4ffde855888f87aba47522e67bcbda988e0b2fbe44d2ae67f9cd9"
+      }
+    },
+    "etl-design": {
+      "file": "pending-etl-design.sqlite.gz",
+      "databaseSha256": "837a963d8da512cfcb4155da6e98ca53f7f7c5dab09731a8a74c5684844025e9",
+      "gzipSha256": "404374864d7d374c51411fe9b5462bd07efa5232b3caf0f128965c151c2183ef",
+      "observer": {
+        "readOnly": true,
+        "sourceMainSha256": "e3a32076183de1eb112d58f207ca2f94c8dab2b284d3587d0f88aa87d21e80e3",
+        "snapshotSha256": "837a963d8da512cfcb4155da6e98ca53f7f7c5dab09731a8a74c5684844025e9"
+      }
+    }
+  },
+  "pendingCutAtUtc": "2026-10-29T16:47:24.066456+00:00",
+  "pendingPredecessorExitCode": -9,
+  "sweepIntervalsSeconds": [
+    0.2,
+    300,
+    0.2,
+    0.2
+  ],
+  "postConsumptionPreAck": true,
+  "consumedStores": {
+    "elsa": {
+      "file": "consumed-elsa.sqlite.gz",
+      "databaseSha256": "3cfa832e201ea9cd36385f8be1674a117e15be3cc7c3d293523698e083ed37a9",
+      "gzipSha256": "c12d50cdf3840a12c93828702c066a4c59548e5e4fac74c4f4f9f9f236111479",
+      "observer": {
+        "readOnly": true,
+        "sourceMainSha256": "2c1e323f59e2a546a3e753cceaf8fb2b4d511fed43659f72231f5e67aa9d591f",
+        "snapshotSha256": "3cfa832e201ea9cd36385f8be1674a117e15be3cc7c3d293523698e083ed37a9"
+      }
+    },
+    "etl-runtime": {
+      "file": "consumed-etl-runtime.sqlite.gz",
+      "databaseSha256": "d9352cac21c4bcadff5bac05dd3e542f62521ba720708675424be81467ae6531",
+      "gzipSha256": "e830742f2622c1090b10c0d4a07a35d8b41c72850de8669db88a23a7a6568221",
+      "observer": {
+        "readOnly": true,
+        "sourceMainSha256": "e3d1c8ee5319bbfacc23816a703730207ce60342dcd3db74ab7a21a544d7fb13",
+        "snapshotSha256": "d9352cac21c4bcadff5bac05dd3e542f62521ba720708675424be81467ae6531"
+      }
+    },
+    "etl-design": {
+      "file": "consumed-etl-design.sqlite.gz",
+      "databaseSha256": "837a963d8da512cfcb4155da6e98ca53f7f7c5dab09731a8a74c5684844025e9",
+      "gzipSha256": "b3ee0e516ce46210c3091586ab203cb7dc0b3350d768be5e26c5a1184338d158",
+      "observer": {
+        "readOnly": true,
+        "sourceMainSha256": "e3a32076183de1eb112d58f207ca2f94c8dab2b284d3587d0f88aa87d21e80e3",
+        "snapshotSha256": "837a963d8da512cfcb4155da6e98ca53f7f7c5dab09731a8a74c5684844025e9"
+      }
+    }
+  },
+  "consumedCutAtUtc": "2026-10-29T16:47:26.258197+00:00",
+  "dispatcherSha256": "fc72201303facfe39a186300afb8919cf5ebe3f0cff5d39ec4374e6e7cd70137",
+  "scopeLimits": [
+    "Actual model consumption of the original admitted RunEtl cancellation result, followed by second SIGKILL with native result/model-cancel ACK still owed; fresh standard hosts finish acknowledgment. Embedding, held retry, other providers and final upgrade/Studio remain open.",
+    "The crash cut uses SIGSTOP only to copy committed stores, then SIGKILL; no persisted state or clock is edited.",
+    "External HTTP effects remain at least once."
+  ]
+}

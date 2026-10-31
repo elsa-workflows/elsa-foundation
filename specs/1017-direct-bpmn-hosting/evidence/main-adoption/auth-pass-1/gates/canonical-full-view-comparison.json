@@ -1,0 +1,21 @@
+{
+  "source": "82f6202a5f2e56521525092f0d06698fdeb7d10c",
+  "rows": [
+    {
+      "family": "original",
+      "encoding": "Canonical UTF-8 JSON, sorted object keys, compact separators",
+      "beforeSha256": "4cdd4f7dccadb8f3ba7b34ced80567bd0b461fc608eebcc0247e6ea6ed5a4a8a",
+      "afterSha256": "4cdd4f7dccadb8f3ba7b34ced80567bd0b461fc608eebcc0247e6ea6ed5a4a8a",
+      "bytes": 6791,
+      "identical": true
+    },
+    {
+      "family": "layout",
+      "encoding": "Canonical UTF-8 JSON, sorted object keys, compact separators",
+      "beforeSha256": "688691ca5c8b126043c6398896e3ae646d22b83ca21b6314af2002274d0e7fda",
+      "afterSha256": "688691ca5c8b126043c6398896e3ae646d22b83ca21b6314af2002274d0e7fda",
+      "bytes": 6780,
+      "identical": true
+    }
+  ]
+}

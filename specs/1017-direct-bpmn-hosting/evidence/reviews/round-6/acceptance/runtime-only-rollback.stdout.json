@@ -1,0 +1,47 @@
+{
+  "kind": "actual-model-retention-and-rollback-matrix",
+  "sourceRevision": "2e142e51055aa2d84c0839dffb49b3621489d9ce",
+  "cases": [
+    {
+      "parent": "direct",
+      "wholeStores": 5,
+      "ownedHosts": 3,
+      "orphanCollected": true,
+      "acceptedWorkRecoveredWithAdmissionAndDesignOff": true
+    },
+    {
+      "parent": "root",
+      "wholeStores": 5,
+      "ownedHosts": 3,
+      "orphanCollected": true,
+      "acceptedWorkRecoveredWithAdmissionAndDesignOff": true
+    },
+    {
+      "parent": "sequence",
+      "wholeStores": 5,
+      "ownedHosts": 3,
+      "orphanCollected": true,
+      "acceptedWorkRecoveredWithAdmissionAndDesignOff": true
+    },
+    {
+      "parent": "flowchart",
+      "wholeStores": 5,
+      "ownedHosts": 3,
+      "orphanCollected": true,
+      "acceptedWorkRecoveredWithAdmissionAndDesignOff": true
+    },
+    {
+      "parent": "compensationscope",
+      "wholeStores": 5,
+      "ownedHosts": 3,
+      "orphanCollected": true,
+      "acceptedWorkRecoveredWithAdmissionAndDesignOff": true
+    }
+  ],
+  "wholeStores": 25,
+  "ownedHosts": 15,
+  "retiredPublicationRecoveryProved": true,
+  "admissionOffAndRuntimeOnlyRecoveryProved": true,
+  "nonSqlitePhysicalProviderQualificationProved": false,
+  "finalUpgradeAndStudioProved": false
+}

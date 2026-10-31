@@ -1,0 +1,26 @@
+{
+  "base": "e5df13ae16d9da2d421ec9aa66b9c477da99978b",
+  "scope": "Source hashes of the first repair implementation; development controls precede this commit, committed-source qualification remains due",
+  "sources": [
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnDirectExecutionDriver.cs",
+      "sha256": "39a81022b31d805ff37dc1e529e0d2f8eab672465f7275f0553410fa73d0af47"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnDurationTimer.cs",
+      "sha256": "ff7c2b5a1c019c71b316b7fc8580d1bf8c131dc8fbc445fcfdf9bc3503ec7731"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingBoundary.cs",
+      "sha256": "56e2d5a7198784e42bcfe6d160c9a0bcc959552773a20d5c6d481514d9bb9ea4"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingCheckpointEnricher.cs",
+      "sha256": "3fbeb4c8625473393bf21424b8a3185bf9aa5cedc1335d5c047b7e61d0c89102"
+    },
+    {
+      "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnModelRuntime.cs",
+      "sha256": "d2bf9bd7ae28bb70ebe391ee68e2d9c255f13c4a1affe94803df241628ba18eb"
+    }
+  ]
+}

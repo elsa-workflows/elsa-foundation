@@ -1,0 +1,51 @@
+[
+  {
+    "issue": 2892,
+    "body": 1,
+    "comments": 289,
+    "reportedComments": 289,
+    "authors": {
+      "elsa-workflows-codex[bot]": 288,
+      "sfmskywalker": 1
+    }
+  },
+  {
+    "issue": 2898,
+    "body": 1,
+    "comments": 97,
+    "reportedComments": 97,
+    "authors": {
+      "elsa-workflows-codex[bot]": 97
+    }
+  },
+  {
+    "issue": 2907,
+    "body": 1,
+    "comments": 13,
+    "reportedComments": 13,
+    "authors": {
+      "elsa-workflows-codex[bot]": 13
+    }
+  },
+  {
+    "issue": 2908,
+    "body": 1,
+    "comments": 25,
+    "reportedComments": 25,
+    "authors": {
+      "elsa-workflows-codex[bot]": 25
+    }
+  },
+  {
+    "issue": 3410,
+    "body": 1,
+    "comments": 244,
+    "reportedComments": 242,
+    "authors": {
+      "coderabbitai[bot]": 1,
+      "elsa-workflows-codex[bot]": 96,
+      "gitguardian[bot]": 1,
+      "dotnet-policy-service[bot]": 146
+    }
+  }
+]

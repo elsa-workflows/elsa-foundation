@@ -1,0 +1,53 @@
+{
+  "wholeProjectExecutingSource": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+  "correctedProductExecutingSource": "0f5f6c6efaada666f40766478ef63ad488b28e58",
+  "ownedOriginControllerExecutingSource": "39f9b48f277264dca8daf3f9c0a14457145eff4a",
+  "latestAdoptedMain": "a455c1299b91ce4961804ff1d3904c8eb4cc631a",
+  "latestProductionMain": "c4cfa0736a2216c924092d12a3ad432c6f05e8bb",
+  "publishState": "51337684e4fb18ec25549ae8ba3bef1f5a3cacb7",
+  "productSourceUnchangedAfterCorrection": true,
+  "fullHostingRun": {
+    "passed": 42,
+    "failed": 1,
+    "skipped": 0,
+    "failure": "Exact old template-history expectation did not allow the newly appended library row."
+  },
+  "correctedFocusedActualHost": {
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+      "original accepted impossible timer plus direct restart journey",
+      "actual pending nested cancellation",
+      "actual cumulative template writer upgrade"
+    ]
+  },
+  "correctedWholeDesignEf": 147,
+  "correctedWholeDesignApi": 233,
+  "publicBinaryComparisonsPassed": 15,
+  "frontendAssertionsPassed": 4058,
+  "browserUniqueCases": 321,
+  "browserFirstPass": 320,
+  "browserTimedOutThenIsolatedPass": 1,
+  "sharedEf": {
+    "passed": 710,
+    "notExecuted": 1,
+    "notExecutedReason": "Existing explicit ELSA_SQLITE_POOL_STRESS opt-in case"
+  },
+  "frozenAssetsUnchanged": 104,
+  "freshStudioAcceptanceProved": false,
+  "initialStudioOriginal": {
+    "publishedRunId": "14nx3CzbvR6",
+    "testRunId": "14nxH9tOSAh",
+    "bothCompleted": true,
+    "bothApiViewsIdenticalAfterRestart": true,
+    "browserPostRestartFailed": true
+  },
+  "reviewRoundsCompleted": 7,
+  "cleanReviewRounds": 0,
+  "authorizedReviewLimit": 16,
+  "round8Started": false,
+  "nextDecision": "Owner card: bounded auth/session diagnostic under repeated-check stop condition",
+  "programComplete": false,
+  "candidateSource": "39f9b48f277264dca8daf3f9c0a14457145eff4a"
+}

@@ -1,0 +1,21 @@
+{
+  "reviewRound": 7,
+  "completedPriorRounds": 6,
+  "authorizedTotal": 16,
+  "head": "9508e25e57672c569f462aff9a1e0282c5780eb9",
+  "base": "ab46bc22a52aa6e456bca6ac0e803c80904de081",
+  "capturedAtUtc": "2026-10-31T08:31:49.798763+00:00",
+  "issueNumbers": [
+    3410,
+    2898,
+    2892,
+    2907,
+    2908
+  ],
+  "discussionCount": 747,
+  "uniqueBodies": 423,
+  "submittedReviews": 0,
+  "inlineComments": 0,
+  "orgAgentsUnchanged": true,
+  "claim": 6461197535
+}

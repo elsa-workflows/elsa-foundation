@@ -1,0 +1,47 @@
+{
+  "actualHeldRetryJourneys": [
+    {
+      "parent": "direct",
+      "wholeStoresVerified": 12,
+      "physicalOutputRecords": 6,
+      "failedAttemptPreserved": true
+    },
+    {
+      "parent": "root",
+      "wholeStoresVerified": 12,
+      "physicalOutputRecords": 6,
+      "failedAttemptPreserved": true
+    },
+    {
+      "parent": "sequence",
+      "wholeStoresVerified": 12,
+      "physicalOutputRecords": 6,
+      "failedAttemptPreserved": true
+    },
+    {
+      "parent": "flowchart",
+      "wholeStoresVerified": 12,
+      "physicalOutputRecords": 6,
+      "failedAttemptPreserved": true
+    },
+    {
+      "parent": "compensationscope",
+      "wholeStoresVerified": 12,
+      "physicalOutputRecords": 6,
+      "failedAttemptPreserved": true
+    }
+  ],
+  "wholeStoresVerified": 60,
+  "sourceRevision": "9380009b86f3ceb383b7b58b6317b2a90f94b17d",
+  "oneAuthorizedPhysicalRetryProved": true,
+  "oldFailurePreserved": true,
+  "sameSourceInterpreterTracesCompared": true,
+  "budgetExhaustionProved": false,
+  "heldCancellationProved": false,
+  "obsoleteResultControlsProved": true,
+  "authorizationBeforeReplayProved": false,
+  "actualObsoleteResultTransportControls": 15,
+  "tenantIsolationBeforeReplayProved": false,
+  "actualAuthorizationHttpProbes": 0,
+  "finalUpgradeAndStudioProved": false
+}

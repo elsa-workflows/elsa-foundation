@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-old-cancel-source-deferred-by-corrected-production-handler",
+  "sourceRevision": "e83fc58f6fa84a7cbeb72678729aa1b78c6b1ca9",
+  "standardHostRecoveryProved": false,
+  "assets": [
+    {
+      "path": "result.json",
+      "sha256": "26159480e24c4e65450b4fd3b2c9a25e3014a6d2ed59114e5d2ec3c5c3f577b8",
+      "bytes": 805
+    },
+    {
+      "path": "delivery.stderr.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20,
+      "decodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "decodedBytes": 0
+    },
+    {
+      "path": "delivery.stdout.json",
+      "sha256": "fb4e7a73ce9ca3ed2d8fe052e11cc01e8507b5255da7fc04a89ae9e9f79b6ed0",
+      "bytes": 33728
+    },
+    {
+      "path": "command.json",
+      "sha256": "3570de4887bd5a1ca3e353780c25e1b2765002b9d74021cb68f66c508acf08df",
+      "bytes": 529
+    },
+    {
+      "path": "deferred-cancel-runtime.sqlite.gz",
+      "sha256": "2e1193f346b6393bce645ad9dde11f8c9c9e1aaf0e3a95bf7cfe5a1f20bcf90d",
+      "bytes": 126727
+    },
+    {
+      "path": "capture-legacy-cancel-fixed.py",
+      "sha256": "fa00f8c4765fee71b9ccf403fbaa7af45fc5e8274a93ce5fc115b9407f629eb5",
+      "bytes": 2927
+    }
+  ]
+}
