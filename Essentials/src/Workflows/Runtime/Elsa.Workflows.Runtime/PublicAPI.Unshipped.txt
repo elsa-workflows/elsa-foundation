@@ -1,4 +1,5 @@
 #nullable enable
+Elsa.Workflows.Runtime.Services.Values.RuntimeActivityInputMaterializer.RuntimeActivityInputMaterializer(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeInputBindingResolver! inputBindingResolver, System.Collections.Generic.IEnumerable<Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputMaterializationPolicy!>! structurePolicies, Elsa.Serialization.Core.IWellKnownTypeRegistry? wellKnownTypeRegistry = null, Elsa.Expressions.Core.Contracts.IPortableExpressionEvaluator? portableExpressionEvaluator = null, Elsa.Workflows.Runtime.Core.Contracts.IRuntimeValueConversionExecutor? valueConversionExecutor = null, Elsa.Workflows.Runtime.Core.Contracts.IExternalPayloadStore? externalPayloadStore = null) -> void
 Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature
 Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.AllowAdHocChannels.get -> bool
 Elsa.Workflows.Runtime.ActivationChannels.WorkflowsActivationChannelsFeature.AllowAdHocChannels.set -> void

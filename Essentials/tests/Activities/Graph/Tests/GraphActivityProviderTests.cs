@@ -27,6 +27,36 @@ public sealed partial class GraphActivityProviderTests
         new TestActivityStructureService(),
         new ActivityContractAuthoringValidator(new TestContractCapabilityCatalog()));
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Projects_structure_inputs_into_occurrences_and_closed_scope_reference_validation(bool unknownVariable)
+    {
+        var projection = new ActivityStructureInputProjection([
+            new("Case:a:Condition", new InputDefinition("Case:a:Condition", "Condition", new("Boolean"), null, "Condition", null, false),
+                new("foreign-key", unknownVariable ? new ArgumentValue(ParseJson("""{"referenceKey":"missing","declaringScopeId":"workflow"}"""), "Variable") : new ArgumentValue(true, "Literal"), null, null, null, null))], ["Value"]);
+        var provider = new GraphActivityProvider(new TestActivityStructureService { InputProjection = projection },
+            new ActivityContractAuthoringValidator(new TestContractCapabilityCatalog()));
+        var manifest = CreateManifest("""
+            {"variables":[],"rootActivity":{"nodeId":"graph-root","activityVersionId":"activity-ver-root","inputs":[{"referenceKey":"Value","value":{"expressionType":"Variable","value":{"referenceKey":"unused","declaringScopeId":"workflow"}}}],"outputs":[]},"outputMappings":[]}
+            """);
+        var result = await provider.CompileAsync(new("definition", "type", "draft", 1, "1.0.0", OutcomeContract(("done", "Done")), manifest,
+            [CreateDependency("graph-root", "activity-ver-root", "graph-root", OutcomeContract(("done", "Done")))], "fingerprint"));
+        if (unknownVariable)
+        {
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "activity.graph.body-variable-unknown" && diagnostic.Location?.ReferenceKey == "Case:a:Condition");
+            Assert.Null(result.ExecutableRoot);
+        }
+        else
+        {
+            Assert.Empty(result.Diagnostics);
+            var occurrence = Assert.Single(result.Occurrences);
+            Assert.Same(projection, occurrence.StructureInputs);
+            Assert.Equal("Case:a:Condition", occurrence.InputBindings[0].GetProperty("referenceKey").GetString());
+            Assert.Equal(1, occurrence.InputBindings.GetArrayLength());
+        }
+    }
+
     [Fact]
     public void Schema_one_round_trip_is_canonical_and_preserves_array_order()
     {
@@ -1209,6 +1239,8 @@ public sealed partial class GraphActivityProviderTests
     private sealed class TestActivityStructureService(bool hasHandlers = true) : IActivityStructureService
     {
         private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
+        public ActivityStructureInputProjection InputProjection { get; init; } = ActivityStructureInputProjection.Empty;
+        public ActivityStructureInputProjection ProjectInputs(ActivityNode activity) => InputProjection;
 
         public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)
         {

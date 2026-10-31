@@ -62,3 +62,16 @@
   margin: 0;
   overflow-wrap: anywhere;
 }
+
+.wf-slot-collection-priority {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.wf-slot-list .wf-slot-collection-priority > button {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  gap: 4px;
+}

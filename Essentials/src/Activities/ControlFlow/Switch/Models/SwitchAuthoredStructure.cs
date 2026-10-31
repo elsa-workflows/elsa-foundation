@@ -44,4 +44,13 @@ public sealed class SwitchAuthoredCase
 
     [JsonPropertyName("activity")]
     public ActivityNode? Activity { get; }
+
+    [JsonPropertyName("caseId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? CaseId { get; init; }
+
+    /// <summary>A present argument container is a predicate even when its value is unbound.</summary>
+    [JsonPropertyName("condition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ArgumentState? Condition { get; init; }
 }

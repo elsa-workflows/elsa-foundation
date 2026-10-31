@@ -120,6 +120,8 @@ export interface ChildSlot {
   slotNameTemplate?: string;
   collectionIndex?: number;
   collectionItemLabel?: string;
+  collectionItemId?: string;
+  itemIdProperty?: string;
 }
 
 export interface StructureDesignFacet {
@@ -144,6 +146,8 @@ export interface StructureDesignSlotDescriptor {
   childProperty?: string;
   labelProperty?: string;
   slotNameTemplate?: string;
+  itemIdProperty?: string;
+  conditionProperty?: string;
 }
 
 export type ActivityCatalogLookup = ActivityCatalogItem | ActivityCatalogItem[] | Map<string, ActivityCatalogItem> | null | undefined;
@@ -373,7 +377,7 @@ export function planSlotNavigation(
   if (ownerIsRoot) {
     const slots = getChildSlots(scopeOwner, catalog);
     if (!slots.some(candidate => candidate.id === slot.id)) return null;
-    const rootFrames: ScopeFrame[] = slots[0]?.id === slot.id ? [] : [{ kind: "root", ownerNodeId, slotId: slot.id, label: descend ? "" : label }];
+    const rootFrames: ScopeFrame[] = slots[0]?.id === slot.id && slot.collectionItemId === undefined ? [] : [{ kind: "root", ownerNodeId, slotId: slot.id, label: descend ? "" : label }];
     if (descend) {
       return { frames: [...rootFrames, { ownerNodeId: descend.child.nodeId, slotId: descend.childPrimary.id, label }], selectedNodeId: null };
     }
@@ -430,9 +434,17 @@ export function resolveScopeFrames(root: ActivityNode | null | undefined, frames
     const path = frames.slice(0, length);
     const scope = resolveScope(root, path, catalog);
     if (!scope) continue;
-    if (!path.at(-1)!.label) {
+    if (scope.slot.collectionItemId !== undefined || !path.at(-1)!.label) {
       const item = resolveCatalogItem(scope.owner, catalog);
       path[length - 1] = { ...path[length - 1], label: slotCrumbLabel(item ? getActivityDisplay(item) : scope.owner.nodeId, scope.slot) };
+    }
+    for (let index = 0; index < path.length; index++) {
+      const current = resolveScope(root, path.slice(0, index + 1), catalog);
+      if (!current || current.slot.collectionItemId === undefined) continue;
+      const item = resolveCatalogItem(current.owner, catalog);
+      const label = slotCrumbLabel(item ? getActivityDisplay(item) : current.owner.nodeId, current.slot);
+      if (path[index].label === "" && path[index + 1]) path[index + 1] = { ...path[index + 1], label };
+      else path[index] = { ...path[index], label };
     }
     return path;
   }
@@ -545,6 +557,8 @@ function readStructureDesignSlotDescriptor(value: unknown): StructureDesignSlotD
     collectionProperty: readOptionalString(value.collectionProperty),
     childProperty: readOptionalString(value.childProperty),
     labelProperty: readOptionalString(value.labelProperty),
+    itemIdProperty: readOptionalString(value.itemIdProperty),
+    conditionProperty: readOptionalString(value.conditionProperty),
     slotNameTemplate: readOptionalString(value.slotNameTemplate)
   };
 }
@@ -562,7 +576,7 @@ function getFacetChildSlots(structure: ActivityNodeStructure, facet: StructureDe
       return collection.flatMap((item, index) => {
         if (!isRecord(item)) return [];
         const labelValue = descriptor.labelProperty ? item[descriptor.labelProperty] : undefined;
-        return [createChildSlot(structure.kind, descriptor, item[childProperty], facet.payload.mode, index, typeof labelValue === "string" ? labelValue : undefined, fixedLabels)];
+        return [createChildSlot(structure.kind, descriptor, item[childProperty], facet.payload.mode, index, typeof labelValue === "string" ? labelValue : undefined, fixedLabels, descriptor.itemIdProperty && typeof item[descriptor.itemIdProperty] === "string" ? item[descriptor.itemIdProperty] as string : undefined)];
       });
     }
 
@@ -577,11 +591,12 @@ function createChildSlot(
   mode: ChildSlot["mode"],
   collectionIndex?: number,
   collectionItemLabel?: string,
-  fixedLabels?: ReadonlySet<string>
+  fixedLabels?: ReadonlySet<string>,
+  collectionItemId?: string
 ): ChildSlot {
   const collectionSuffix = collectionIndex === undefined
     ? ""
-    : `:${descriptor.collectionProperty}:${descriptor.childProperty}:${collectionIndex}`;
+    : `:${descriptor.collectionProperty}:${descriptor.childProperty}:${collectionItemId !== undefined ? `id:${encodeURIComponent(collectionItemId)}` : collectionIndex}`;
 
   return {
     id: `${structureKind}:${descriptor.property}${collectionSuffix}`,
@@ -595,6 +610,8 @@ function createChildSlot(
     labelProperty: descriptor.labelProperty,
     slotNameTemplate: descriptor.slotNameTemplate,
     collectionIndex,
+    itemIdProperty: descriptor.itemIdProperty,
+    collectionItemId,
     collectionItemLabel
   };
 }
@@ -620,6 +637,10 @@ function resolveCatalogItem(activity: ActivityNode, catalog: ActivityCatalogLook
 }
 
 function findCollectionItemIndex(collection: unknown[], slot: ChildSlot) {
+  if (slot.itemIdProperty && slot.collectionItemId !== undefined) {
+    const matches = collection.flatMap((item, index) => isRecord(item) && item[slot.itemIdProperty!] === slot.collectionItemId ? [index] : []);
+    return matches.length === 1 ? matches[0] : -1;
+  }
   if (slot.labelProperty && slot.collectionItemLabel !== undefined) {
     const matches = collection
       .map((item, index) => isRecord(item) && item[slot.labelProperty!] === slot.collectionItemLabel ? index : -1)

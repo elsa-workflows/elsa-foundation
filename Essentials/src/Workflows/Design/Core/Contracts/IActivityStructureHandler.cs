@@ -39,6 +39,9 @@ public interface IActivityStructureHandler
     /// </summary>
     IReadOnlyCollection<ActivityChildContractMemberUsage> ProjectChildContractMemberUsage(ActivityNode activity) => [];
 
+    /// <summary>Projects typed inputs consumed conditionally by this structure before activity activation.</summary>
+    ActivityStructureInputProjection ProjectInputs(ActivityNode activity) => ActivityStructureInputProjection.Empty;
+
     ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections);
 
     /// <summary>

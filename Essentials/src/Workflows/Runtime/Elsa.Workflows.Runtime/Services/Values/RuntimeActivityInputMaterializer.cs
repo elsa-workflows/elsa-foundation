@@ -22,6 +22,39 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
     private readonly IRuntimeValueConversionExecutor _valueConversionExecutor;
     private readonly RuntimePortableExpressionEvaluator _portableExpressionEvaluator;
     private readonly RuntimeExternalEnvelopeStorage _externalEnvelopeStorage;
+    private readonly IReadOnlyDictionary<(string Kind, string SchemaVersion), IRuntimeStructureInputMaterializationPolicy> _structurePolicies =
+        new Dictionary<(string, string), IRuntimeStructureInputMaterializationPolicy>();
+
+    public RuntimeActivityInputMaterializer(
+        IRuntimeInputBindingResolver inputBindingResolver,
+        IEnumerable<IRuntimeStructureInputMaterializationPolicy> structurePolicies,
+        IWellKnownTypeRegistry? wellKnownTypeRegistry = null,
+        IPortableExpressionEvaluator? portableExpressionEvaluator = null,
+        IRuntimeValueConversionExecutor? valueConversionExecutor = null,
+        IExternalPayloadStore? externalPayloadStore = null)
+    {
+        ArgumentNullException.ThrowIfNull(inputBindingResolver);
+        _inputBindingResolver = inputBindingResolver;
+        _wellKnownTypeRegistry = wellKnownTypeRegistry;
+        _externalPayloadStore = externalPayloadStore;
+        _valueConversionExecutor = valueConversionExecutor ?? new RuntimeValueConversionExecutor(wellKnownTypeRegistry);
+        _portableExpressionEvaluator = new RuntimePortableExpressionEvaluator(portableExpressionEvaluator, externalPayloadStore, _valueConversionExecutor);
+        _externalEnvelopeStorage = new RuntimeExternalEnvelopeStorage(externalPayloadStore);
+        _structurePolicies = IndexStructurePolicies(structurePolicies);
+    }
+
+    private static IReadOnlyDictionary<(string, string), IRuntimeStructureInputMaterializationPolicy> IndexStructurePolicies(
+        IEnumerable<IRuntimeStructureInputMaterializationPolicy> policies)
+    {
+        ArgumentNullException.ThrowIfNull(policies);
+        var result = new Dictionary<(string, string), IRuntimeStructureInputMaterializationPolicy>();
+        foreach (var policy in policies)
+        {
+            if (!result.TryAdd((policy.Kind, policy.SchemaVersion), policy))
+                throw new InvalidOperationException($"More than one structure input policy owns '{policy.Kind}@{policy.SchemaVersion}'.");
+        }
+        return result;
+    }
 
     public RuntimeActivityInputMaterializer()
         : this(new RuntimeInputBindingResolver())
@@ -122,7 +155,7 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         ValidateCompleteBindingSet(node, contract);
 
         var values = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
-        foreach (var input in contract.Inputs.Values.OrderBy(input => input.Key, StringComparer.Ordinal))
+        foreach (var input in contract.Inputs.Values.Where(input => !input.IsStructureInput).OrderBy(input => input.Key, StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (!node.InputBindings.TryGetValue(input.Key, out var binding))
@@ -142,12 +175,72 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             values.Add(input.Key, value);
         }
 
+        if (contract.Inputs.Values.Any(input => input.IsStructureInput))
+            await MaterializeStructureInputsAsync(node, invocationId, resolutionContext, contract, values, cancellationToken);
+
         return new ActivityInputSnapshot(
             invocationId,
             contract.SchemaFingerprint,
             ComputeBindingFingerprint(node),
             values,
             materializedAt);
+    }
+
+    private async ValueTask MaterializeStructureInputsAsync(
+        ExecutableNode node,
+        string invocationId,
+        RuntimeInputBindingResolutionContext resolutionContext,
+        ActivityContract contract,
+        Dictionary<string, ValueEnvelope> values,
+        CancellationToken cancellationToken)
+    {
+        if (node.Structure is not { } structure || !_structurePolicies.TryGetValue((structure.Kind, structure.SchemaVersion), out var policy))
+            throw new InvalidOperationException($"Executable node '{node.ExecutableNodeId}' requires a structure input policy for '{node.Structure?.Kind}@{node.Structure?.SchemaVersion}'.");
+
+        var readableValues = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
+        await policy.MaterializeAsync(new StructureInputContext(node, ReadAsync), cancellationToken);
+
+        async ValueTask<ValueEnvelope> ReadAsync(string key, CancellationToken requestedCancellation)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            requestedCancellation.ThrowIfCancellationRequested();
+            if (readableValues.TryGetValue(key, out var readable)) return readable;
+            if (!contract.Inputs.TryGetValue(key, out var input) || !node.InputBindings.TryGetValue(key, out var binding))
+                throw new InvalidOperationException($"Structure input policy for '{structure.Kind}' requested undeclared input '{key}' on node '{node.ExecutableNodeId}'.");
+
+            if (!values.TryGetValue(key, out var value))
+            {
+                if (!input.IsStructureInput)
+                    throw new InvalidOperationException($"Ordinary input '{key}' is absent from node '{node.ExecutableNodeId}' before structure input materialization.");
+                ValidatePortableType(input, binding, node.ExecutableNodeId);
+                ValidateEffectivePolicy(input, binding, node.ExecutableNodeId);
+                value = await MaterializeEnvelopeAsync(node, invocationId, input, binding, resolutionContext, cancellationToken);
+                ValidatePresence(input, value, node.ExecutableNodeId);
+                values.Add(key, value);
+            }
+
+            if (value.Presence == ValuePresence.Withheld)
+                throw SecretBindingDiagnostics.WithheldBindingNotResolved(binding);
+            readable = value;
+            if (value.ExternalReference is not null)
+            {
+                if (_externalPayloadStore is null)
+                    throw new InvalidOperationException($"VF-ACT-005: Structure input '{key}' requires an IExternalPayloadStore.");
+                var payload = await ReadExternalPayloadAsync(node, input, value, cancellationToken);
+                readable = ValueEnvelope.Inline(value.Type, payload, value.Policy);
+            }
+            readableValues.Add(key, readable);
+            return readable;
+        }
+    }
+
+    private sealed class StructureInputContext(
+        ExecutableNode node,
+        Func<string, CancellationToken, ValueTask<ValueEnvelope>> materialize) : IRuntimeStructureInputMaterializationContext
+    {
+        public ExecutableNode Node { get; } = node;
+        public ValueTask<ValueEnvelope> MaterializeAsync(string inputKey, CancellationToken cancellationToken) =>
+            materialize(inputKey, cancellationToken);
     }
 
     private async ValueTask<ValueEnvelope> MaterializeEnvelopeAsync(

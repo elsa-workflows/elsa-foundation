@@ -45,4 +45,8 @@ public sealed class SwitchExecutableCase
 
     [JsonPropertyName("activity")]
     public string? Activity { get; }
+
+    [JsonPropertyName("conditionInputKey")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ConditionInputKey { get; init; }
 }
