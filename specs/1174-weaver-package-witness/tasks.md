@@ -1,6 +1,6 @@
 # Tasks: Independent Weaver Package Witness
 
-Input: [plan.md](plan.md), [spec.md](spec.md), research/data model and contracts. Implementation and independent distribution qualification are complete at code baseline `76ec58d0061135cfa028e1bc47ec7639fd139e7f`; [curated evidence](evidence/qualification-76ec58d00.json) records all 38 cases. #3437 is verified Done. Final-source and integration tasks T026–T028 remain open.
+Input: [plan.md](plan.md), [spec.md](spec.md), research/data model and contracts. Implementation and independent distribution qualification are complete at code baseline `76ec58d0061135cfa028e1bc47ec7639fd139e7f`; [curated evidence](evidence/qualification-76ec58d00.json) records all 38 cases. #3437 is verified Done. This is the implementation preparation snapshot; [owning issue #3438](https://github.com/elsa-workflows/elsa-foundation/issues/3438) records current receipts and completion of final-source/integration tasks T026–T028.
 
 One implementation leaf; parallel work within it may own distinct fixture files. Greenfield cadence remains unspecified by Elsa (D9); use risk-based tests alongside code. A demonstrated common correction additionally needs causal failing-before/passing-after evidence. No task below is completion evidence until checked with an owning receipt.
 
@@ -81,7 +81,7 @@ T003–T025 are checked against the completed [76ec code-baseline witness](evide
 
 Authoritative receipts: [owning leaf #3438](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6538498830), [implementation PR #3497](https://github.com/elsa-workflows/elsa-foundation/pull/3497#issuecomment-6538499164), [M1 #3430](https://github.com/elsa-workflows/elsa-foundation/issues/3430#issuecomment-6538499535), and [Program #3428](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6538499883). The prerequisite [#3437 acceptance](https://github.com/elsa-workflows/elsa-foundation/issues/3437#issuecomment-6516702315) is complete.
 
-T026–T028 remain unchecked. The 98 driver tests and 135 stages belong to the 76ec baseline. Fresh final-source proof, affected-suite/API/architecture/budget checks, required exact-head CI, independent PR review, authorized merge and resulting-main qualification must be recorded on the owning PR/issue before those tasks complete. Authors of this implementation are ineligible to supply its final independent review. The spec's `Implemented` status is staged in the implementation PR under the lifecycle rule and becomes effective on merge; it does not assert that the PR is already merged or that M1/Program statuses are Done.
+This preparation snapshot leaves T026–T028 unchecked; use the owning issue/PR for their current fulfillment. The 98 driver tests and 135 stages belong to the 76ec baseline. Fresh final-source proof, affected-suite/API/architecture/budget checks, required exact-head CI, independent PR review, authorized merge and resulting-main qualification must be recorded on the owning PR/issue before those tasks complete. Authors of this implementation are ineligible to supply its final independent review. The spec's `Implemented` status is staged in the implementation PR under the lifecycle rule and becomes effective on merge; it does not assert that the PR is already merged or that M1/Program statuses are Done.
 
 ## Causal corrections retained for review
 
@@ -99,4 +99,4 @@ Earlier failures remain Failed in the private outputs and owning issue; later ru
 
 Later evidence-driver corrections are included in 76ec and documented on #3438: protected control paths, exact provider/native-result correlation, finite/aborted SSE capture, route-specific readiness, typed refusal versus proposal status, full manifest versus discovery summary, and serialized restore-path hash checks. They preserve strict identities, opaque payload comparison, expected Failed controls and retained originals. They introduce no new product contribution contract.
 
-All 16 functional requirements and five success criteria retain task coverage. M2–M5, durable recovery, broader current-module/workflow support and live-provider qualification remain open.
+All 16 functional requirements and five success criteria retain task coverage. These M1 tasks do not qualify M2–M5, durable recovery, broader current-module/workflow support or live providers.

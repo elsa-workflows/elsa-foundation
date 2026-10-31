@@ -4,7 +4,7 @@ The complete package witness at `76ec58d0061135cfa028e1bc47ec7639fd139e7f` quali
 
 The qualified code baseline has 80 product packages and a retained SDK tgz, external module authors, and two package-only consumers. All 155 backend and 10,108 Studio common baseline files remain identical through native add/remove/incompatible/restore transitions. Consumer product-source references and frontend invocations are zero. Both owned hosts exit 0 with empty runtime caches. This is deterministic provider-protocol evidence; live-provider success is unclaimed.
 
-Final-source qualification, required exact-head CI, independent review, merge and resulting-main verification remain open in [PR #3497](https://github.com/elsa-workflows/elsa-foundation/pull/3497#issuecomment-6538499164) and [T026–T028](../../../specs/1174-weaver-package-witness/tasks.md). The current proof does not close M2–M5 or establish durable recovery, full current-module/workflow coverage, or new binary compatibility.
+Follow [owning issue #3438](https://github.com/elsa-workflows/elsa-foundation/issues/3438) and [PR #3497](https://github.com/elsa-workflows/elsa-foundation/pull/3497) for current final-source qualification, required exact-head CI, independent review, merge and resulting-main verification. [T026–T028](../../../specs/1174-weaver-package-witness/tasks.md) define those mandatory integration gates. This M1 proof does not establish durable recovery, full current-module/workflow coverage, new binary compatibility or M2–M5 completion.
 
 ## Reproduce
 

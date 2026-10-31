@@ -10,7 +10,7 @@
 
 The qualified code baseline `76ec58d0061135cfa028e1bc47ec7639fd139e7f` completed all 38 cases and 135 stages, including the original and restored resource/workflow journeys through both actual provider adapters. The [curated receipt](evidence/qualification-76ec58d00.json), [owning issue evidence](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6538498830) and [validation guide](quickstart.md) record the exact artifacts and bounds. The [M1 contribution contract](../1018-weaver-module-contributions/contracts/contributions.md) records the demonstrated minimum.
 
-The terminal status is set in this implementation PR as the [spec lifecycle](../../docs/reference/spec-lifecycle.md#transition-rule) requires; it is not a claim that the open PR has merged. Final-source qualification, exact-head CI, independent review, merge and resulting-main verification remain unchecked in [T026–T028](tasks.md). Durable recovery, broader current-module/workflow participation and live providers remain outside this witness.
+The terminal status is set in the implementation PR as the [spec lifecycle](../../docs/reference/spec-lifecycle.md#transition-rule) requires. Follow [owning issue #3438](https://github.com/elsa-workflows/elsa-foundation/issues/3438) for current final-source qualification, exact-head CI, independent review, merge and resulting-main verification; [T026–T028](tasks.md) define those mandatory gates. Durable recovery, broader current-module/workflow participation and live providers remain outside this witness.
 
 ## User Scenarios & Testing *(mandatory)*
 

@@ -3,7 +3,7 @@
 **Branch**: `agent/codex/3438-weaver-package-proof` | **Date**: 2026-10-30 | **Spec**: [spec.md](spec.md)
 
 **Input**: #3438, Program #3428 / M1 #3430. Design baseline `c986f9ddfdec2c641b2f1c1f5d8f82f8dd19e529`; qualified code baseline `76ec58d0061135cfa028e1bc47ec7639fd139e7f`.
-**Status**: Implementation and independent package witness qualified at 76ec. Final-source checks, review, merge and resulting-main verification remain open in [T026–T028](tasks.md).
+**Status**: Implementation and independent package witness qualified at 76ec. [T026–T028](tasks.md) define final-source checks, review, merge and resulting-main verification; [owning issue #3438](https://github.com/elsa-workflows/elsa-foundation/issues/3438) records their current status and evidence.
 
 ## Summary
 
