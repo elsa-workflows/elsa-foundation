@@ -351,7 +351,7 @@ test.describe("shell user menu", () => {
     const workspaceGroup = themeMenu.getByRole("group", { name: "Workspace style", exact: true });
     const navigationGroup = themeMenu.getByRole("group", { name: "Navigation", exact: true });
     await expect(workspaceGroup.getByRole("menuitemradio", { name: "Linen", exact: true })).toBeFocused();
-    for (const name of ["Quiet Studio", "Focus Canvas", "Open Studio", "Theme default", "Light"]) {
+    for (const name of ["Minimal", "Quiet Studio", "Focus Canvas", "Open Studio", "Theme default", "Light"]) {
       await page.keyboard.press("ArrowDown");
       await expect((name === "Theme default" ? workspaceGroup : themeMenu).getByRole("menuitemradio", { name, exact: true })).toBeFocused();
     }
@@ -362,7 +362,7 @@ test.describe("shell user menu", () => {
 
     await page.keyboard.press("Home");
     await expect(workspaceGroup.getByRole("menuitemradio", { name: "Linen", exact: true })).toBeFocused();
-    for (const name of ["Quiet Studio", "Focus Canvas", "Open Studio", "Theme default", "Light", "Dark", "Dim", "High contrast"]) {
+    for (const name of ["Minimal", "Quiet Studio", "Focus Canvas", "Open Studio", "Theme default", "Light", "Dark", "Dim", "High contrast"]) {
       await page.keyboard.press("ArrowDown");
       await expect((name === "Theme default" ? workspaceGroup : themeMenu).getByRole("menuitemradio", { name, exact: true })).toBeFocused();
     }
