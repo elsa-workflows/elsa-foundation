@@ -948,68 +948,156 @@
   cursor: pointer;
 }
 
-/* One table controls column geometry for both headers and artifact rows. */
-.wf-executable-table-wrap {
+.wf-page:has(.wf-executables-list) {
+  height: 100%;
+  min-height: 0;
+}
+
+.wf-executables-list {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  margin: 14px 18px;
+  min-height: 0;
+  flex: 1;
+}
+
+.wf-executables-list .studio-table-container {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.wf-executables-list .studio-collection-footer {
+  flex: 0 0 auto;
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: var(--studio-surface);
+}
+
+.wf-executable-table-scroll {
+  container-type: inline-size;
   overflow-x: auto;
-  border: 1px solid var(--studio-border);
-  border-radius: var(--studio-radius);
+  min-width: 0;
 }
 
-.wf-executable-table {
-  width: 100%;
-  min-width: 1120px;
-  table-layout: fixed;
+.wf-executable-grid {
+  --wf-executable-actions-min: 12.25rem;
+  grid-template-columns: minmax(160px, 1.4fr) minmax(168px, 0.9fr) minmax(7.5rem, max-content) minmax(72px, 0.35fr) max-content minmax(var(--wf-executable-actions-min), max-content);
+  column-gap: 10px;
+  min-width: 920px;
 }
 
-.wf-executable-workflow-column { width: 24%; }
-.wf-executable-artifact-column { width: 22%; }
-.wf-executable-version-column,
-.wf-executable-root-column { width: 9%; }
-.wf-executable-date-column { width: 14%; }
-.wf-executable-actions-column { width: 22%; }
-
-.wf-executable-table th,
-.wf-executable-table td {
-  text-align: left;
-  vertical-align: top;
-  overflow-wrap: anywhere;
+.wf-executable-grid > .wf-grid-head,
+.wf-executable-grid > .wf-grid-row {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  column-gap: 10px;
 }
 
-.wf-executable-table th:last-child { text-align: right; }
-.wf-executable-table .wf-row-actions { justify-content: flex-end; flex-wrap: wrap; }
-.wf-executable-table .wf-cell-line > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wf-executable-grid > .wf-grid-row:last-child {
+  border-bottom: 0;
+}
 
-.wf-executable-workflow-cell,
-.wf-executable-origin {
+.wf-executable-grid > .wf-grid-row:focus-visible {
+  outline: 2px solid var(--studio-accent);
+  outline-offset: -2px;
+}
+
+.wf-executable-actions-header {
+  text-align: right;
+}
+
+.wf-executable-name,
+.wf-executable-identifiers,
+.wf-executable-grid > .wf-grid-row > span {
+  display: block;
+  min-width: 0;
+}
+
+.wf-executable-grid > .wf-grid-row > .wf-executable-root,
+.wf-executable-grid > .wf-grid-row > .wf-executable-published {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-executable-workflow-cell {
   display: grid;
   min-width: 0;
-  gap: 3px;
+  gap: 4px;
 }
 
-.wf-executable-workflow-cell { gap: 6px; }
-
 .wf-executable-workflow-name {
-  justify-self: start;
+  display: block;
+  min-width: 0;
   max-width: 100%;
+  overflow: hidden;
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--studio-accent);
+  color: var(--studio-text);
   text-align: left;
   font-size: 13px;
   font-weight: 650;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.wf-executable-table .wf-cell-line-muted {
-  color: var(--studio-text-muted);
-  font-size: 12px;
+.wf-executable-workflow-name:hover {
+  color: var(--studio-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
-.wf-executable-reference-row td {
+.wf-executable-workflow-name:focus-visible {
+  border-radius: var(--studio-radius-sm);
+  outline: 2px solid var(--studio-accent);
+  outline-offset: 2px;
+}
+
+.wf-executable-grid > .wf-grid-row > .wf-executable-identifiers {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.wf-executable-identifiers .wf-list-primary-id {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.wf-executable-identifiers .wf-definition-identifiers-trigger,
+.wf-executable-identifiers .wf-chip {
+  flex: 0 0 auto;
+}
+
+.wf-executable-grid > .wf-grid-row > .wf-executable-version-cell {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.wf-executable-grid > .wf-grid-row > .wf-row-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: var(--wf-executable-actions-min);
+  white-space: nowrap;
+}
+
+.wf-executable-grid > .wf-grid-row > .wf-row-actions > * {
+  flex: 0 0 auto;
+}
+
+.wf-executable-reference-row {
+  display: block;
+  grid-column: 1 / -1;
   background: var(--studio-surface-muted);
   padding: 12px 18px;
 }
@@ -5024,9 +5112,7 @@
 }
 
 .wf-executable-version-cell {
-  display: grid;
   min-width: 0;
-  gap: 4px;
 }
 
 .wf-executable-version-cell .wf-cell-line {

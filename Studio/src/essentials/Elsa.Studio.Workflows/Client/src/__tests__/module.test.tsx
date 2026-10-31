@@ -2058,7 +2058,7 @@ describe("workflows module", () => {
     expect(container.textContent).toContain("Executables");
     expect(container.querySelector("nav[aria-label='Workflow views']")).toBeNull();
     expect(container.textContent).toContain("Flowchart");
-    expect(container.querySelector(".wf-artifact-cell [title^='Definition version']")).not.toBeNull();
+    expect(container.querySelector('button[aria-label^="Identifiers for"]')).not.toBeNull();
     expect(container.textContent).not.toContain("WorkflowDefinitionVersion / version-1 / 1.0.0");
     expect(container.textContent).not.toContain("Elsa.Activities.Flowchart.Activities.Flowchart");
 
@@ -2111,11 +2111,11 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
     await waitForText(container, "Invoice archive");
 
-    const table = container.querySelector('table[aria-label="Workflow executables"]')!;
-    expect(Array.from(table.querySelectorAll("thead th"), cell => cell.textContent)).toEqual(["Workflow", "Artifact", "Version", "Root", "Published", "Actions"]);
-    expect(Array.from(table.querySelectorAll("tbody tr"), row => row.children.length)).toEqual([6, 6]);
-    expect(table.querySelector("tbody tr td")?.textContent).toContain("Order processing");
-    expect(table.querySelector("tbody tr td")?.textContent).toContain("Invoice archive");
+    const table = container.querySelector('[role="table"][aria-label="Workflow executables"]')!;
+    expect(Array.from(table.querySelectorAll('[role="columnheader"]'), cell => cell.textContent)).toEqual(["Workflow", "Identifiers", "Version", "Root", "Published", "Actions"]);
+    expect(Array.from(table.querySelectorAll(".wf-grid-row"), row => row.querySelectorAll('[role="cell"]').length)).toEqual([6, 6]);
+    expect(table.querySelector(".wf-grid-row [role='cell']")?.textContent).toContain("Order processing");
+    expect(table.querySelector(".wf-grid-row [role='cell']")?.textContent).toContain("Invoice archive");
     expect(Array.from(container.querySelectorAll("datalist option"), option => [option.getAttribute("value"), option.getAttribute("label")])).toEqual([
       ["definition-2", "Invoice archive · definition-2"],
       ["definition-1", "Order processing · definition-1"],
@@ -2132,7 +2132,7 @@ describe("workflows module", () => {
     expect(container.querySelector(".wf-reference-list")?.textContent).toContain("Invoice archive");
     expect(container.querySelector(".wf-reference-list")?.textContent).toContain("invoice-reference");
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(table.querySelector(".wf-executable-reference-row td")?.getAttribute("colspan")).toBe("6");
+    expect(table.querySelector(".wf-executable-reference-row .wf-reference-list")).not.toBeNull();
     await unmount();
   });
 
@@ -2144,7 +2144,8 @@ describe("workflows module", () => {
     await waitForText(container, "artifact-1");
     expect(buttonByLabel(container, "Open source definition definition-1: Workflow definition")).not.toBeNull();
     expect(buttonByLabel(container, "Inspect executable artifact-1")).not.toBeNull();
-    expect(buttonByLabel(container, "Copy source ID version-1")).not.toBeNull();
+    await click(buttonByLabel(container, "Identifiers for Workflow definition"));
+    expect(buttonByLabel(document.body, "Copy Source ID")).not.toBeNull();
     expect(container.textContent).not.toContain("Something went wrong");
     await fill(inputByLabel(container, "Filter executables by workflow definition"), "version-1");
     expect(container.textContent).toContain("artifact-1");
@@ -2799,10 +2800,10 @@ describe("workflows module", () => {
 
     try {
       await waitForText(container, "artifact-1");
-      await click(buttonByLabel(container, "Copy artifact ID artifact-1"));
+      await click(buttonByLabel(container, "Copy Artifact ID"));
 
       expect(writeText).toHaveBeenCalledWith("artifact-1");
-      expect(container.textContent).toContain("Copied artifact ID");
+      expect(container.textContent).toMatch(/Artifact ID copied/i);
     } finally {
       await unmount();
       if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
@@ -2830,7 +2831,8 @@ describe("workflows module", () => {
     });
 
     await waitForText(container, "artifact-1");
-    await click(buttonByText(container, "Explain"));
+    await click(container.querySelector<HTMLButtonElement>('button[aria-label^="Actions for"]'));
+    await click(buttonByText(document.body, "Explain"));
 
     expect(dispatchPrompt).toHaveBeenCalledWith(expect.objectContaining({
       message: "Explain this workflow executable.",
