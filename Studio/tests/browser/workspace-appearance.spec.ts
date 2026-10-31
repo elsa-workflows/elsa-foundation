@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import axe from "axe-core";
 
-const styles = ["linen", "quiet", "focus", "open"] as const;
+const styles = ["linen", "minimal", "quiet", "focus", "open"] as const;
 const modes = ["light", "dark", "dim", "high-contrast"] as const;
 
 async function open(page: Page, style: string, scheme: string, mode: string, view = "editor", width = 1440) {
@@ -42,7 +42,7 @@ for (const style of styles) for (const scheme of ["linen", "classic", "drift"]) 
 for (const style of styles) {
   test(`${style} preserves the semantic fill of danger and primary confirmations`, async ({ page }) => {
     await open(page, style, "classic", "light", "dialogs");
-    for (const [action, token] of [["Delete workflow", "--studio-danger"], ["Publish workflow", "--studio-accent"]]) {
+    for (const [action, token] of [["Delete workflow", "--studio-danger"], ["Publish workflow", style === "minimal" ? "--studio-action-primary-bg" : "--studio-accent"]]) {
       await page.getByRole("button", { name: action, exact: true }).click();
       const confirm = page.getByRole("dialog").getByRole("button", { name: "Confirm", exact: true });
       const colors = await confirm.evaluate((element, token) => {
@@ -183,7 +183,7 @@ test("live style and palette changes preserve the selected activity and unsaved 
   await page.getByRole("tab", { name: "Details", exact: true }).click();
   const name = page.getByRole("textbox", { name: /^Display name/ });
   await name.fill("Unsaved customer message");
-  for (const style of ["Focus Canvas", "Open Studio", "Quiet Studio"]) {
+  for (const style of ["Focus Canvas", "Open Studio", "Minimal", "Quiet Studio"]) {
     await chooseStyle(page, style);
     await expect(name).toHaveValue("Unsaved customer message");
     await expect(page.getByRole("tab", { name: "Details", exact: true })).toHaveAttribute("aria-selected", "true");

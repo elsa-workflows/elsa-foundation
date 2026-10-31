@@ -26,13 +26,15 @@ for (const theme of ["light", "dark"]) {
     await page.getByRole("button", { name: "Templates", exact: true }).click();
     const original = page.locator("article").filter({ has: page.getByRole("button", { name: "Order starter", exact: true }) });
     await expect(original).toBeVisible();
-    await original.getByRole("button", { name: "Copy", exact: true }).click();
+    await original.getByRole("button", { name: "Actions for Order starter", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Copy", exact: true }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Create template", exact: true }).click();
     await expect(page.getByRole("button", { name: "Templates", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Templates", exact: true }).click();
     const copy = page.locator("article").filter({ has: page.getByRole("button", { name: "Order starter copy", exact: true }) });
     await expect(copy).toBeVisible();
-    await copy.getByRole("button", { name: "Delete", exact: true }).click();
+    await copy.getByRole("button", { name: "Actions for Order starter copy", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
     await expect(copy).toHaveCount(0);
     await page.reload();
     await expect(original).toBeVisible();

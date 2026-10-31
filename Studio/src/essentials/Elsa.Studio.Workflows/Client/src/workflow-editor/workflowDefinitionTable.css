@@ -4,6 +4,18 @@
   min-width: 0;
 }
 
+.wf-definition-description { display: none; }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-description { display: block; color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid > .wf-grid-row { border-bottom-style: var(--studio-row-boundary-style); }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid > .wf-grid-row:hover { background: var(--studio-row-hover); }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid > .wf-grid-row[aria-selected="true"] { background: var(--studio-row-selected); box-shadow: inset 3px 0 0 var(--studio-selection-mark); }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-version .wf-status-badge { background: transparent; border-color: transparent; padding-inline: 0; }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid:not([data-library-columns]) { grid-template-columns: var(--wf-definition-selection-track) minmax(180px, 1fr) 132px 50px 106px 112px 132px 44px; min-width: 936px; }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modified { white-space: normal; }
+html[data-workspace-style="minimal"] .wf-definitions-list :is(.wf-definition-actions-header, .wf-row-actions) { position: sticky; right: 0; background: var(--studio-surface); }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-grid-row:hover .wf-row-actions { background: var(--studio-row-hover); }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-grid-row[aria-selected="true"] .wf-row-actions { background: var(--studio-row-selected); }
+
 .wf-definitions-list > .wf-toolbar {
   flex-wrap: wrap;
   gap: 8px;

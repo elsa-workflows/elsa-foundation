@@ -177,10 +177,10 @@
   display: flex;
   flex-direction: column;
   gap: 7px;
-  border: 1px solid var(--studio-border);
+  border: var(--studio-field-border-width) solid var(--studio-border);
   border-radius: var(--studio-radius-md);
-  background: var(--studio-surface);
-  padding: 10px 11px;
+  background: var(--studio-field-surface);
+  padding: var(--studio-field-padding);
 }
 
 .studio-field-label {
@@ -234,7 +234,7 @@
 .studio-data-grid-row {
   width: 100%;
   border: 0;
-  border-bottom: 1px solid var(--studio-border);
+  border-bottom: 1px var(--studio-row-boundary-style) var(--studio-border);
   border-radius: 0;
   background: transparent;
   color: var(--studio-text);
@@ -244,12 +244,12 @@
 }
 
 .studio-data-grid-row:hover {
-  background: var(--studio-accent-soft);
+  background: var(--studio-row-hover);
 }
 
 .studio-data-grid-row.selected {
-  background: color-mix(in srgb, var(--studio-accent) 12%, var(--studio-surface));
-  box-shadow: inset 3px 0 0 var(--studio-accent);
+  background: var(--studio-row-selected);
+  box-shadow: inset 3px 0 0 var(--studio-selection-mark);
 }
 
 .studio-data-grid-row:focus-visible {
@@ -266,7 +266,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 32px;
+  min-height: var(--studio-control-height);
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius);
   background: var(--studio-surface);
@@ -299,14 +299,14 @@
 }
 
 .studio-button.studio-button-primary {
-  background: var(--studio-accent);
-  border-color: var(--studio-accent);
-  color: var(--studio-accent-text);
+  background: var(--studio-action-primary-bg);
+  border-color: var(--studio-action-primary-bg);
+  color: var(--studio-action-primary-fg);
 }
 
 .studio-button.studio-button-primary:hover:not(:disabled) {
   filter: brightness(1.08);
-  color: var(--studio-accent-text);
+  color: var(--studio-action-primary-fg);
 }
 
 .studio-icon-button {
@@ -408,7 +408,7 @@ html[data-theme-material] .studio-button[data-variant="primary"] {
   gap: 10px;
   width: 100%;
   border: 0;
-  border-bottom: 1px solid var(--studio-border);
+  border-bottom: 1px var(--studio-row-boundary-style) var(--studio-border);
   background: transparent;
   color: var(--studio-text);
   font-size: var(--studio-body-size);
@@ -422,13 +422,13 @@ html[data-theme-material] .studio-button[data-variant="primary"] {
 }
 
 .studio-list-row[tabindex]:hover {
-  background: var(--studio-accent-soft);
+  background: var(--studio-row-hover);
   cursor: pointer;
 }
 
 .studio-list-row.selected {
-  background: color-mix(in srgb, var(--studio-accent) 12%, var(--studio-surface));
-  box-shadow: inset 3px 0 0 var(--studio-accent);
+  background: var(--studio-row-selected);
+  box-shadow: inset 3px 0 0 var(--studio-selection-mark);
 }
 
 .studio-list-row:focus-visible {

@@ -49,6 +49,11 @@ html[data-workspace-style][data-theme-appearance="high-contrast"] .wf-sequence-i
   border-color: var(--studio-border);
 }
 
+html[data-workspace-style="minimal"] .wf-sequence-item:not(.wf-sequence-runtime) { border-color: var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface); box-shadow: var(--studio-shadow-sm); }
+html[data-workspace-style="minimal"] .wf-sequence-item.is-selected:not(.wf-sequence-runtime) { border-color: var(--studio-selection-mark); background: var(--studio-surface); box-shadow: 0 0 0 1px var(--studio-selection-mark); }
+html[data-workspace-style="minimal"] .wf-sequence-item.wf-sequence-runtime:not(.faulted) { border-color: var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface); box-shadow: var(--studio-shadow-sm); }
+html[data-workspace-style="minimal"] .wf-sequence-item.wf-sequence-runtime.is-selected:not(.faulted) { border-color: var(--studio-selection-mark); box-shadow: 0 0 0 1px var(--studio-selection-mark); }
+
 .wf-sequence-heading {
   position: sticky;
   z-index: 2;

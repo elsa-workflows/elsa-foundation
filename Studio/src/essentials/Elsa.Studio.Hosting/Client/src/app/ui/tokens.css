@@ -87,6 +87,18 @@
   --studio-space-6: 24px;
   --studio-control-height: 32px;
   --studio-row-height: 48px;
+  --studio-table-header-height: var(--studio-row-height);
+  --studio-page-gap: var(--studio-space-4);
+  --studio-row-boundary-style: solid;
+  --studio-section-boundary-style: solid;
+  --studio-row-hover: var(--studio-accent-soft);
+  --studio-row-selected: var(--studio-accent-soft);
+  --studio-selection-mark: var(--studio-accent);
+  --studio-action-primary-bg: var(--studio-accent);
+  --studio-action-primary-fg: var(--studio-accent-text);
+  --studio-field-border-width: 1px;
+  --studio-field-padding: 10px 11px;
+  --studio-field-surface: var(--studio-surface);
 
   /* Disclosure motion. Caps enter/expand animation at 150ms; reduced-motion zeroes both. */
   --studio-disclosure-duration: 150ms;

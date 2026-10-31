@@ -22,7 +22,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     private bool _started;
     private readonly StudioThemeStoreOptions _themeConfig = new();
     private string? _rawMode;
-    private static readonly HashSet<string> BuiltInIds = new(StringComparer.OrdinalIgnoreCase) { "linen", "classic", "meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk" };
+    private static readonly HashSet<string> BuiltInIds = new(StringComparer.OrdinalIgnoreCase) { "linen", "builtin:porcelain", "builtin:atelier", "builtin:graphite", "classic", "meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk" };
     private HttpClient _client = null!;
 
     [Theory]
@@ -225,6 +225,9 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     [InlineData("elsa-cloud")]
     [InlineData("signal")]
     [InlineData("dusk")]
+    [InlineData("builtin:porcelain")]
+    [InlineData("builtin:atelier")]
+    [InlineData("builtin:graphite")]
     public async Task EverySignatureThemeCanBeSetAsTheDefaultBuiltInTheme(string themeId)
     {
         var response = await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = themeId });
@@ -244,7 +247,8 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
             Typography = new StudioThemeTypography("\"Geist Variable\", system-ui, sans-serif", null, "\"Instrument Serif\", serif"),
             // Incidental whitespace is accepted, matching the client-side validator.
             Shape = new StudioThemeShape("4px", " 6px ", null, null, "0.75rem"),
-            Layout = "editorial"
+            Layout = "editorial",
+            WorkspaceStyle = "minimal"
         };
 
         var response = await _client.PutAsJsonAsync($"/_elsa/theme-store/themes/{theme.Id}", theme);
@@ -257,12 +261,16 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
         Assert.Equal("\"Instrument Serif\", serif", saved?.Typography?.Display);
         Assert.Equal("0.75rem", saved?.Shape?.RadiusXl);
         Assert.Equal("editorial", saved?.Layout);
+        Assert.Equal("minimal", saved?.WorkspaceStyle);
     }
 
     [Theory]
     [InlineData("linen")]
     [InlineData("classic")]
     [InlineData("meridian")]
+    [InlineData("builtin:porcelain")]
+    [InlineData("builtin:atelier")]
+    [InlineData("builtin:graphite")]
     public async Task SavingACustomThemeWithABuiltInIdIsRejected(string themeId)
     {
         var theme = CustomTheme() with { Id = themeId };
@@ -292,6 +300,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     [InlineData("font-stack-breakout")]
     [InlineData("radius-with-expression")]
     [InlineData("unknown-layout")]
+    [InlineData("unknown-workspace")]
     public async Task CustomThemeRejectsUnsafeOrInconsistentAppearance(string defect)
     {
         var theme = defect switch
@@ -299,12 +308,62 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
             "supported-mode-without-palette" => CustomTheme() with { SupportedModes = ["light", "dark", "high-contrast"] },
             "font-stack-breakout" => CustomTheme() with { Typography = new StudioThemeTypography("x; background: url(https://evil.test)", null, null) },
             "radius-with-expression" => CustomTheme() with { Shape = new StudioThemeShape(null, "calc(100vw)", null, null, null) },
+            "unknown-workspace" => CustomTheme() with { WorkspaceStyle = "unknown" },
             _ => CustomTheme() with { Layout = "sidebar-on-the-right" }
         };
 
         var response = await _client.PutAsJsonAsync($"/_elsa/theme-store/themes/{theme.Id}", theme);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task MinimalWorkspaceSurvivesDuplicateExportAndImport()
+    {
+        var theme = CustomTheme() with { WorkspaceStyle = "minimal" };
+        (await _client.PutAsJsonAsync($"/_elsa/theme-store/themes/{theme.Id}", theme)).EnsureSuccessStatusCode();
+        (await _client.PostAsJsonAsync($"/_elsa/theme-store/themes/{theme.Id}/duplicate", new { Name = "Minimal copy" })).EnsureSuccessStatusCode();
+        var exported = await _client.GetFromJsonAsync<ThemePack>("/_elsa/theme-store/export");
+        Assert.NotNull(exported);
+        Assert.Equal(2, exported.Themes.Length);
+        Assert.All(exported.Themes, item => Assert.Equal("minimal", item.WorkspaceStyle));
+        var imported = exported with { Themes = exported.Themes.Select(item => item with { Id = "imported-" + item.Id }).ToArray() };
+        (await _client.PostAsJsonAsync("/_elsa/theme-store/import", imported)).EnsureSuccessStatusCode();
+        var roundtrip = (await GetStoreAsync()).Themes.Where(item => item.Id.StartsWith("imported-", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(2, roundtrip.Length);
+        Assert.All(roundtrip, item => Assert.Equal("minimal", item.WorkspaceStyle));
+    }
+
+    [Fact]
+    public async Task DirectoryThemeRetainsMinimalWorkspaceDefault()
+    {
+        var theme = CustomTheme() with { WorkspaceStyle = "minimal" };
+        var file = Path.Combine(_contentRoot, "minimal-themes.json");
+        await File.WriteAllTextAsync(file, JsonSerializer.Serialize(new { themes = new[] { theme } }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        _themeConfig.ThemesDirectory = file;
+        await RestartHostAsync();
+        Assert.Equal("minimal", (await GetStoreAsync()).Themes.Single(item => item.Id == theme.Id).WorkspaceStyle);
+    }
+
+    [Theory]
+    [InlineData("porcelain")]
+    [InlineData("atelier-minimal")]
+    [InlineData("graphite")]
+    public async Task ExistingCustomThemeIdentityRemainsWritableAndDirectorySelectable(string id)
+    {
+        var theme = CustomTheme() with { Id = id, Name = $"Acme {id}" };
+        (await _client.PutAsJsonAsync($"/_elsa/theme-store/themes/{id}", theme)).EnsureSuccessStatusCode();
+        (await _client.PutAsJsonAsync("/_elsa/theme-store/default", new { ThemeId = id })).EnsureSuccessStatusCode();
+        Assert.Equal(theme.Name, (await GetStoreAsync()).Themes.Single(item => item.Id == id).Name);
+        var file = Path.Combine(_contentRoot, "existing-theme.json");
+        await File.WriteAllTextAsync(file, JsonSerializer.Serialize(new { themes = new[] { theme } }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        _themeConfig.ThemesDirectory = file;
+        _themeConfig.ThemesMode = StudioThemeSourceMode.DirectoryOnly;
+        await RestartHostAsync();
+        var store = await GetStoreAsync();
+        Assert.Equal(id, store.DefaultThemeId);
+        Assert.Contains(id, store.DirectoryThemeIds!);
+        Assert.Equal(theme.Name, store.Themes.Single(item => item.Id == id).Name);
     }
 
     public static TheoryData<string> RetiredThemeIds => ["black-glass", "stone", "blueprint", "brass-instrument"];
