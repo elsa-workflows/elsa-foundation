@@ -96,6 +96,14 @@ describe("Switch case conditions", () => {
     expect(isPredicateOnlySwitch(current)).toBe(false);
   });
 
+  it("keeps an explicitly opened Default slot active when the first case is added", () => {
+    const node = empty();
+    const fallback = getChildSlots(node, catalog)[0];
+    const plan = planSlotNavigation([], node, node.nodeId, fallback, "Switch / Default", catalog)!;
+    const withCase = addCollectionItem(node, collection);
+    expect(resolveScope(withCase, plan.frames, catalog)!.slot.id).toBe(fallback.id);
+  });
+
   it("keeps explicit root case navigation and descendant breadcrumbs stable after reorder and rename", () => {
     let node = addCollectionItem(addCollectionItem(empty(), collection), collection);
     const slot = getChildSlots(node, catalog)[0];

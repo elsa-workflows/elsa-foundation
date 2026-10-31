@@ -377,7 +377,11 @@ export function planSlotNavigation(
   if (ownerIsRoot) {
     const slots = getChildSlots(scopeOwner, catalog);
     if (!slots.some(candidate => candidate.id === slot.id)) return null;
-    const rootFrames: ScopeFrame[] = slots[0]?.id === slot.id && slot.collectionItemId === undefined ? [] : [{ kind: "root", ownerNodeId, slotId: slot.id, label: descend ? "" : label }];
+    const facet = readStructureDesignFacet(resolveCatalogItem(scopeOwner, catalog));
+    // A v2 collection can insert a new primary slot before Default. Explicit navigation must pin
+    // fixed slots as well as cases, including while the collection is still empty.
+    const mutablePrimary = facet?.payload.slots.some(descriptor => descriptor.itemIdProperty) === true;
+    const rootFrames: ScopeFrame[] = slots[0]?.id === slot.id && slot.collectionItemId === undefined && !mutablePrimary ? [] : [{ kind: "root", ownerNodeId, slotId: slot.id, label: descend ? "" : label }];
     if (descend) {
       return { frames: [...rootFrames, { ownerNodeId: descend.child.nodeId, slotId: descend.childPrimary.id, label }], selectedNodeId: null };
     }
