@@ -132,6 +132,7 @@ public sealed class StudioModuleManifestProviderTests
             $"/_content/Elsa.Studio.Workflows/studio/modules/workflows/module3.css?v={module.Version}",
             $"/_content/Elsa.Studio.Workflows/studio/modules/workflows/module10.css?v={module.Version}"
         ], module.Styles);
+        Assert.False(module.StylesHaveContentHashes);
     }
 
     [Theory]
@@ -148,6 +149,7 @@ public sealed class StudioModuleManifestProviderTests
         });
         var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
         Assert.Equal(entryStyle is null ? [] : new[] { $"/{directory}/{entryStyle}" }, module.Styles);
+        Assert.True(module.StylesHaveContentHashes);
     }
 
     [Theory]
@@ -172,6 +174,22 @@ public sealed class StudioModuleManifestProviderTests
     }
 
     [Fact]
+    public void CustomManifestStylesRetainVersioningWithoutAnExplicitContentHashGuarantee()
+    {
+        // The existing eight-argument public constructor remains supported; names are unrestricted.
+        var manifest = new StudioModuleManifest("custom", "Custom", "2.0.0", "/custom/module.js",
+            ["/custom/module-standard.css"], "*", "*", []);
+        Assert.False(manifest.StylesHaveContentHashes);
+        var json = System.Text.Json.JsonSerializer.Serialize(manifest,
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        Assert.DoesNotContain("stylesHaveContentHashes", json);
+        Assert.Contains("/custom/module-standard.css", json);
+        var hashed = manifest with { StylesHaveContentHashes = true };
+        Assert.Contains("\"stylesHaveContentHashes\":true", System.Text.Json.JsonSerializer.Serialize(hashed,
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)));
+    }
+
+    [Fact]
     public async Task GetModules_FallsBackToConventionalStylesheetWhenAssetsCannotBeEnumerated()
     {
         // A web host environment is registered but the module's asset directory is not served from it.
@@ -179,6 +197,7 @@ public sealed class StudioModuleManifestProviderTests
 
         var module = Assert.Single(response.Modules, x => x.Id == "Elsa.Studio.Workflows");
         Assert.Equal([$"/_content/Elsa.Studio.Workflows/studio/modules/workflows/module.css?v={module.Version}"], module.Styles);
+        Assert.False(module.StylesHaveContentHashes);
     }
 
     [Fact]

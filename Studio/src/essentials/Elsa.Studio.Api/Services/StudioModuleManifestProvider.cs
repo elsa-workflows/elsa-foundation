@@ -108,10 +108,10 @@ public sealed class StudioModuleManifestProvider(
             // exactly when the module's own files do. An explicit [StudioModule(Version = …)] wins.
             var version = attr.Version ?? StudioApiOptions.ResolveAssemblyVersion(featureType.Assembly);
             var entry = $"/_content/{assemblyName}/studio/modules/{attr.Slug}/module.js?v={version}";
-            string[] styles;
+            (string[] Styles, bool HaveContentHashes) styles;
             try
             {
-                styles = attr.HasStyles ? ResolveStyles(assemblyName, attr.Slug, version) : [];
+                styles = attr.HasStyles ? ResolveStyles(assemblyName, attr.Slug, version) : ([], false);
             }
             catch (Exception exception) when (exception is JsonException or InvalidDataException or
                                                KeyNotFoundException or InvalidOperationException or FormatException or IOException)
@@ -126,11 +126,11 @@ public sealed class StudioModuleManifestProvider(
                 attr.DisplayName,
                 version,
                 entry,
-                styles,
+                styles.Styles,
                 attr.RequiredHostVersion,
                 attr.RequiredSdkVersion,
                 attr.Capabilities,
-                descriptor.Id));
+                descriptor.Id) { StylesHaveContentHashes = styles.HaveContentHashes });
 
             handlerIds.Add(moduleId);
         }
@@ -174,14 +174,14 @@ public sealed class StudioModuleManifestProvider(
     /// styles load with their Vite chunks using content-hashed URLs. Legacy producers retain
     /// the numbered-stylesheet enumeration contract, including the conventional URL fallback.
     /// </summary>
-    private string[] ResolveStyles(string assemblyName, string slug, string version)
+    private (string[] Styles, bool HaveContentHashes) ResolveStyles(string assemblyName, string slug, string version)
     {
         var basePath = $"/_content/{assemblyName}/studio/modules/{slug}";
         var fallback = new[] { $"{basePath}/module.css?v={version}" };
         var webRoot = serviceProvider.GetService<IWebHostEnvironment>()?.WebRootFileProvider;
 
         if (webRoot is null)
-            return fallback;
+            return (fallback, false);
 
         var directory = $"_content/{assemblyName}/studio/modules/{slug}";
         var entryStyles = webRoot.GetFileInfo($"{directory}/entry-styles.json");
@@ -200,13 +200,13 @@ public sealed class StudioModuleManifestProvider(
                 names.Distinct(StringComparer.Ordinal).Count() != names.Length)
                 throw new InvalidDataException($"Invalid entry stylesheet contract for {assemblyName}.");
 
-            return names.Select(name => $"{basePath}/{name}").ToArray();
+            return (names.Select(name => $"{basePath}/{name}").ToArray(), true);
         }
 
         var contents = webRoot.GetDirectoryContents(directory);
 
         if (!contents.Exists)
-            return fallback;
+            return (fallback, false);
 
         var styles = contents
             .Select(file => (file, match: ModuleStylePattern.Match(file.Name)))
@@ -215,7 +215,7 @@ public sealed class StudioModuleManifestProvider(
             .Select(x => $"{basePath}/{x.file.Name}?v={version}")
             .ToArray();
 
-        return styles.Length > 0 ? styles : fallback;
+        return (styles.Length > 0 ? styles : fallback, false);
     }
 
     private static readonly Regex HashedModuleStylePattern = new(@"^module-[A-Za-z0-9_-]+\.css$", RegexOptions.Compiled);

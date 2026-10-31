@@ -40,8 +40,11 @@ chunks/styles in the module's static web assets.
 An explicit empty `styles` array is valid. Invalid contracts disable that module
 with a diagnostic. Modules built before this contract retain the host's numbered
 `module.css`, `module2.css`, … fallback. New builds also retain these aliases for
-older hosts, which continue loading all styles eagerly. Content-hashed styles use
-their exact URLs so Vite can reuse entry styles when opening a deferred route.
+older hosts, which continue loading all styles eagerly. The generated manifest explicitly sets `stylesHaveContentHashes` so the loader keeps
+those exact URLs and Vite can reuse entry styles when opening a deferred route.
+Legacy and imperative custom manifests omit that optional flag and retain module-version
+cache busting regardless of their stylesheet names. Only opt in when every listed
+stylesheet URL contains an immutable content hash; names alone do not establish that guarantee.
 
 ## A collection page
 
