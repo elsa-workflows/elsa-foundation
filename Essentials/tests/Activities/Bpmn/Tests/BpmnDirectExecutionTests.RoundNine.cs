@@ -61,7 +61,8 @@ public sealed partial class BpmnDirectExecutionTests
         var final = (await reader.FindAsync(outer))!;
         Assert.Equal(RuntimeModelLifecycle.TerminalSettled, final.Lifecycle);
         Assert.Equal("Cancelled", final.TerminalResult!.Value.GetProperty("status").GetString());
-        Assert.Equal(before.Authority, final.Authority);
+        Assert.True(WorkflowExecutionAuthoritySnapshot.Matches(final.Authority,
+            before.Authority.SystemIdentity, before.Authority.RootInitiator, before.Authority.Metadata));
         Assert.Equal(before.Executable, final.Executable);
         Assert.Equal(before.MaterialIncarnationId, final.MaterialIncarnationId);
         Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await lookup.FindDurableAsync(source))!.Status);
