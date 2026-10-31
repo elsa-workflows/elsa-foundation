@@ -214,7 +214,7 @@ class Qualification:
                  ("hosting-restored", [], None)]
         for label, flags, error in cases:
             child = self.root / label
-            code = self.run(label, [sys.executable, str(hosting), "--packages", str(self.studio), "--output", str(child), *flags], expected=None)
+            code = self.run(label, [sys.executable, str(hosting), "--packages", str(self.studio), "--support-packages", str(self.all), "--output", str(child), *flags], expected=None)
             data = self.record(label, code, child)
             result_gate(code, data, sha(hosting), "standard-runtime" if error else "complete", error)
             check(data["browserDriverSha256"] == sha(hosting.with_name("browser.mjs")), "Hosting browser driver differs")
