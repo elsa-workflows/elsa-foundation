@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -90,7 +91,7 @@ public sealed class ActivityContract
         ContractVersion = contractVersion;
         DescriptorKind = descriptorKind;
         DescriptorPayload = descriptorPayload.Clone();
-        Inputs = inputArray.ToDictionary(x => x.Key, StringComparer.Ordinal);
+        Inputs = new ReadOnlyDictionary<string, ActivityInputContract>(inputArray.ToDictionary(x => x.Key, StringComparer.Ordinal));
         Result = result;
         Outcomes = outcomeArray.ToArray();
         Activation = activation;

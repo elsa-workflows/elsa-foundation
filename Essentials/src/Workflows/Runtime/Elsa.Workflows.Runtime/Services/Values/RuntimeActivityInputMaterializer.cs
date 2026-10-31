@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
@@ -16,6 +17,9 @@ namespace Elsa.Workflows.Runtime.Services.Values;
 
 public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMaterializer
 {
+    // Preparation is a pure function of immutable node content. Weak ownership lets executable
+    // eviction release it; no execution values, services or registry-dependent resolutions are retained.
+    private static readonly ConditionalWeakTable<ExecutableNode, PreparedInputs> Preparation = new();
     private readonly IRuntimeInputBindingResolver _inputBindingResolver;
     private readonly IWellKnownTypeRegistry? _wellKnownTypeRegistry;
     private readonly IExternalPayloadStore? _externalPayloadStore;
@@ -119,10 +123,10 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
 
         var contract = node.ActivityContract
             ?? throw new InvalidOperationException($"Executable node '{node.ExecutableNodeId}' has no pinned activity contract.");
-        ValidateCompleteBindingSet(node, contract);
+        var prepared = Preparation.GetValue(node, static key => new PreparedInputs(key));
 
         var values = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
-        foreach (var input in contract.Inputs.Values.OrderBy(input => input.Key, StringComparer.Ordinal))
+        foreach (var input in prepared.Inputs)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (!node.InputBindings.TryGetValue(input.Key, out var binding))
@@ -145,9 +149,25 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
         return new ActivityInputSnapshot(
             invocationId,
             contract.SchemaFingerprint,
-            ComputeBindingFingerprint(node),
+            prepared.BindingFingerprint.Value,
             values,
             materializedAt);
+    }
+
+    private sealed class PreparedInputs
+    {
+        public PreparedInputs(ExecutableNode node)
+        {
+            var contract = node.ActivityContract!;
+            ValidateCompleteBindingSet(node, contract);
+            Inputs = contract.Inputs.Values.OrderBy(input => input.Key, StringComparer.Ordinal).ToArray();
+            // Compute only after successful materialization, as on the uncached path. Lazy also
+            // coalesces concurrent first invocations of the same materialized executable.
+            BindingFingerprint = new Lazy<string>(() => ComputeBindingFingerprint(node));
+        }
+
+        public ActivityInputContract[] Inputs { get; }
+        public Lazy<string> BindingFingerprint { get; }
     }
 
     private async ValueTask<ValueEnvelope> MaterializeEnvelopeAsync(

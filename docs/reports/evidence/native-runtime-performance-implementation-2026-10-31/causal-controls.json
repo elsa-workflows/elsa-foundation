@@ -1,0 +1,176 @@
+[
+  {
+    "file": "runtime-negative.trx",
+    "counts": {
+      "total": "3",
+      "executed": "3",
+      "passed": "0",
+      "failed": "3",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "failures": [
+      {
+        "name": "Elsa.Workflows.Runtime.Tests.ActivityInputSnapshotCheckpointTests.Preparation_reuses_fingerprint_but_not_invocation_snapshot_across_materializers",
+        "message": "Assert.Same() Failure: Values are not the same instance\nExpected: \"sha256:00332057bfb42f9310ff80783d98053e0501d943535\"\u00b7\u00b7\u00b7\nActual:   \"sha256:00332057bfb42f9310ff80783d98053e0501d943535\"\u00b7\u00b7\u00b7"
+      },
+      {
+        "name": "Elsa.Workflows.Runtime.Tests.ActivityInputSnapshotCheckpointTests.Empty_default_snapshot_does_not_read_execution_history_or_values",
+        "message": "Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   1"
+      },
+      {
+        "name": "Elsa.Workflows.Runtime.Tests.RuntimeCheckpointCoalescingTests.Large_overlay_page_has_a_linear_allocation_budget",
+        "message": "Assert.InRange() Failure: Value not in range\nRange:  (0 - 2097152)\nActual: 4401544"
+      }
+    ]
+  },
+  {
+    "file": "provider-negative.trx",
+    "counts": {
+      "total": "1",
+      "executed": "1",
+      "passed": "0",
+      "failed": "1",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "failures": [
+      {
+        "name": "Elsa.Persistence.EntityFramework.BindingDriftTests.EfRelationalProviderBindingDriftTests.Warm_provider_binding_does_not_pay_expression_compilation_allocations_each_time",
+        "message": "Assert.InRange() Failure: Value not in range\nRange:  (0 - 2097152)\nActual: 2315320"
+      }
+    ]
+  },
+  {
+    "file": "immutable-before.trx",
+    "counts": {
+      "total": "2",
+      "executed": "2",
+      "passed": "1",
+      "failed": "1",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "failures": [
+      {
+        "name": "Elsa.Workflows.Runtime.Tests.ActivityInputSnapshotCheckpointTests.Pinned_input_contract_cannot_be_mutated_after_preparation",
+        "message": "Assert.Throws() Failure: No exception was thrown\nExpected: typeof(System.NotSupportedException)"
+      }
+    ]
+  },
+  {
+    "file": "review/custom-values-negative.trx",
+    "counts": {
+      "total": "2",
+      "executed": "2",
+      "passed": "0",
+      "failed": "2",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "failures": [
+      {
+        "name": "Elsa.Workflows.Runtime.Tests.ActivityInputSnapshotCheckpointTests.Custom_materializer_receives_live_context_even_when_contract_has_no_inputs(hasInput: True)",
+        "message": "System.Collections.Generic.KeyNotFoundException : The given key 'request' was not present in the dictionary."
+      },
+      {
+        "name": "Elsa.Workflows.Runtime.Tests.ActivityInputSnapshotCheckpointTests.Custom_materializer_receives_live_context_even_when_contract_has_no_inputs(hasInput: False)",
+        "message": "System.Collections.Generic.KeyNotFoundException : The given key 'request' was not present in the dictionary."
+      }
+    ]
+  },
+  {
+    "file": "review/provider-retention-negative.trx",
+    "counts": {
+      "total": "1",
+      "executed": "1",
+      "passed": "0",
+      "failed": "1",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "failures": [
+      {
+        "name": "Elsa.Persistence.EntityFramework.BindingDriftTests.EfRelationalProviderBindingDriftTests.Provider_types_in_separate_load_contexts_are_isolated_and_collectible",
+        "message": "Assert.All() Failure: 2 out of 2 items in the collection did not pass.\n[0]: Item:  WeakReference { IsAlive = True, Target = \"\" Elsa.Persistence.EntityFramework.BindingDriftTests.EfRelationalProviderBindingDriftTests+ProviderLoadContext #2, TrackResurrection = False }\n     Error: Assert.False() Failure\n            Expected: False\n            Actual:   True\n[1]: Item:  WeakReference { IsAlive = True, Target = \"\" Elsa.Persistence.EntityFramework.BindingDriftTests.EfRelationalProviderBindingDriftTests+ProviderLoadContext #3, TrackResurrection = False }\n     Error: Assert.False() Failure\n            Expected: False\n            Actual:   True"
+      }
+    ]
+  },
+  {
+    "file": "review/workflow-read-negative.trx",
+    "counts": {
+      "total": "1",
+      "executed": "1",
+      "passed": "0",
+      "failed": "1",
+      "error": "0",
+      "timeout": "0",
+      "aborted": "0",
+      "inconclusive": "0",
+      "passedButRunAborted": "0",
+      "notRunnable": "0",
+      "notExecuted": "0",
+      "disconnected": "0",
+      "warning": "0",
+      "completed": "0",
+      "inProgress": "0",
+      "pending": "0"
+    },
+    "failures": [
+      {
+        "name": "Elsa.Workflows.Runtime.Tests.ActivityInputSnapshotCheckpointTests.Empty_default_snapshot_does_not_read_execution_history_or_values",
+        "message": "Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   1"
+      }
+    ]
+  }
+]
