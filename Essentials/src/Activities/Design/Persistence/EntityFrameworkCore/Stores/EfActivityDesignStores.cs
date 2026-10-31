@@ -296,7 +296,18 @@ public sealed class EfActivityDesignStores(
         rows = ApplyVisibility(rows, query.TenantId);
         if (!string.IsNullOrWhiteSpace(query.Search)) rows = rows.Where(x => x.SearchText.Contains(query.Search.Trim().ToUpperInvariant()));
         if (query.Authority is { } authority) rows = rows.Where(x => x.ContentAuthorityKind == authority);
-        if (!string.IsNullOrWhiteSpace(query.ProviderKey)) rows = rows.Where(x => x.HeadProviderKey == query.ProviderKey.Trim() || x.RecommendationProviderKey == query.ProviderKey.Trim());
+        if (!string.IsNullOrWhiteSpace(query.ProviderKey))
+        {
+            var providerKey = query.ProviderKey.Trim();
+            var drafts = Access(db.ActivityDraftManagementProjections.AsNoTracking()).Where(x =>
+                x.ValidFromSequence <= snapshot.Sequence && x.ValidToSequenceExclusive > snapshot.Sequence &&
+                x.Status == ActivityDefinitionDraftStatus.Active && x.ProviderKey == providerKey);
+            rows = rows.Where(x => x.HeadProviderKey == providerKey || x.RecommendationProviderKey == providerKey ||
+                drafts.Any(draft => draft.TenantId == x.TenantId &&
+                    EF.Property<string>(draft, "TenantScopeKey") == EF.Property<string>(x, "TenantScopeKey") &&
+                    EF.Property<string>(draft, "DefinitionIdIdentityHash") == EF.Property<string>(x, "ResourceIdIdentityHash") &&
+                    draft.DefinitionId == x.ResourceId));
+        }
         // The marker rejects malformed and structurally inconsistent rows in SQL. The digest
         // itself is intentionally provider-neutral (it is defined over UTF-16 material), so
         // validate full material in bounded, stable-order batches before applying page bounds.

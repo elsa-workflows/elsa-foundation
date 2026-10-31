@@ -3645,7 +3645,7 @@
 }
 
 .wf-palette-activity,
-.wf-slot-list button {
+.wf-slot-list :where(.wf-slot-row, .wf-slot-collection-heading, .wf-slot-collection-label-row, .wf-slot-collection-priority) > button {
   width: 100%;
   border: 1px solid transparent;
   border-radius: var(--wf-radius);
@@ -3664,7 +3664,7 @@
   padding: 6px 7px;
 }
 
-.wf-slot-list button {
+.wf-slot-list :where(.wf-slot-row, .wf-slot-collection-heading, .wf-slot-collection-label-row, .wf-slot-collection-priority) > button {
   display: block;
   border-color: var(--wf-border);
   background: var(--wf-row);
@@ -3674,7 +3674,7 @@
 
 .wf-palette-activity:hover,
 .wf-palette-activity:focus-visible,
-.wf-slot-list button:hover {
+.wf-slot-list :where(.wf-slot-row, .wf-slot-collection-heading, .wf-slot-collection-label-row, .wf-slot-collection-priority) > button:hover {
   background: var(--wf-accent-soft);
   border-color: color-mix(in srgb, var(--wf-accent) 45%, var(--wf-border));
 }

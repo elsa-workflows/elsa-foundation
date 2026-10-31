@@ -163,3 +163,7 @@ activation claims do not promise that callback code executes only once across su
 existing consumed markers and fenced final commit prevent repeating accepted effects. Background
 admission retains its separate atomic claim/publication path. Clean activation disposal preserves
 the typed unavailable signal; disposal failure follows the ordinary fault path with both causes.
+
+### Collection child-slot input metadata *(Core — `Elsa.Activities.Runtime.Core`)*
+
+`ActivityChildSlotAttribute.ItemIdProperty` optionally names a stable collection-item identity and `ConditionProperty` names its structure-owned argument. CLR reconciliation carries both into optional `ActivityChildSlotDesignDescriptor` members. Studio uses stable identities for case rows, expression documents and child navigation while retaining the current index for immutable mutations. Omitted metadata preserves legacy slot behavior. Structure inputs activate through [`IRuntimeStructureInputConsumer`](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#iruntimestructureinputconsumer-core--elsaworkflowsruntimecore), rather than CLR input properties.

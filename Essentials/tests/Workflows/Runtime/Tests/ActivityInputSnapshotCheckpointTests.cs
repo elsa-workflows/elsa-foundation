@@ -28,9 +28,65 @@ public sealed class ActivityInputSnapshotCheckpointTests : IDisposable
     private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
     private readonly InMemoryDurableValueStateStore _durableValueStateStore = new();
     private readonly InMemoryWorkflowExecutionStateStore _workflowStateStore = new();
-    private readonly ServiceProvider _serviceProvider = new ServiceCollection()
-        .AddScoped<IRuntimeActivityInputMaterializer>(_ => new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver()))
-        .BuildServiceProvider();
+    private readonly FirstStructureInputPolicy _structurePolicy = new();
+    private readonly ServiceProvider _serviceProvider;
+
+    public ActivityInputSnapshotCheckpointTests()
+    {
+        _serviceProvider = new ServiceCollection()
+            .AddScoped<IRuntimeActivityInputMaterializer>(_ => new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), [_structurePolicy]))
+            .BuildServiceProvider();
+    }
+
+    [Fact]
+    public async Task A_fresh_start_handler_reuses_structure_snapshot_after_running_even_when_source_variable_changes()
+    {
+        var binding = new RuntimeInputBinding("message", StringType, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.VariableRead,
+            variable: new RuntimeVariableReference("choice", "workflow"));
+        var neverRead = new RuntimeInputBinding("recipient", StringType, ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding("missing-evaluator", "must never run"));
+        var executable = NewExecutable(true, ("message", binding), ("recipient", neverRead));
+        await _executableStore.SaveAsync(executable);
+        var workflow = await SaveWorkflowStateAsync(executable.Identity);
+        await SetVariable("before");
+        await _activityStateStore.SaveAsync(NewScheduledState());
+        var commitStore = NewCommitStore();
+        await NewHandler(commitStore).HandleAsync(NewStartWorkItem(executable.Identity));
+        var original = (await _activityStateStore.FindAsync("wfexec-1", "actexec-1"))!.InputSnapshot!;
+        Assert.Equal("before", original.Values["message"].InlineValue!.Value.GetString());
+        Assert.Single(original.Values);
+        Assert.Equal(1, _structurePolicy.Calls);
+
+        await SetVariable("after");
+        // Recreate the handler as on worker redelivery, over the committed Running state.
+        await NewHandler(commitStore).HandleAsync(NewStartWorkItem(executable.Identity));
+        var resumed = (await _activityStateStore.FindAsync("wfexec-1", "actexec-1"))!.InputSnapshot!;
+        Assert.Equal("before", resumed.Values["message"].InlineValue!.Value.GetString());
+        Assert.Equal(original.BindingFingerprint, resumed.BindingFingerprint);
+        Assert.Equal(1, _structurePolicy.Calls);
+        Assert.Single(commitStore.ListCommits());
+
+        async ValueTask SetVariable(string value)
+        {
+            await _workflowStateStore.SaveAsync(workflow with
+        {
+            RootVariableFrame = new VariableFrameFactory().CreateRoot("wfexec-1", "workflow", new Dictionary<string, ValueEnvelope>
+            { ["choice"] = ValueEnvelope.Inline(StringType, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline) })
+        });
+        }
+    }
+
+    private sealed class FirstStructureInputPolicy : IRuntimeStructureInputMaterializationPolicy
+    {
+        public string Kind => "test.ordered";
+        public string SchemaVersion => "1";
+        public int Calls { get; private set; }
+        public async ValueTask MaterializeAsync(IRuntimeStructureInputMaterializationContext context, CancellationToken cancellationToken)
+        {
+            Calls++;
+            await context.MaterializeAsync("message", cancellationToken);
+        }
+    }
 
     [Fact]
     public async Task ActivityStarted_checkpoint_commits_complete_input_snapshot_and_first_attempt_before_invoke_intent()
@@ -126,7 +182,9 @@ public sealed class ActivityInputSnapshotCheckpointTests : IDisposable
     private InMemoryRuntimeCheckpointCommitStore NewCommitStore() =>
         new(activityExecutionStateStore: _activityStateStore, activityExecutionInspectionWriter: _inspectionStore);
 
-    private static WorkflowExecutable NewExecutable(params (string Key, RuntimeInputBinding Binding)[] inputs)
+    private static WorkflowExecutable NewExecutable(params (string Key, RuntimeInputBinding Binding)[] inputs) => NewExecutable(false, inputs);
+
+    private static WorkflowExecutable NewExecutable(bool structureInputs, params (string Key, RuntimeInputBinding Binding)[] inputs)
     {
         using var descriptor = JsonDocument.Parse("""{"type":"test"}""");
         var contractInputs = inputs.Select(input => new ActivityInputContract(
@@ -137,7 +195,7 @@ public sealed class ActivityInputSnapshotCheckpointTests : IDisposable
             isNullable: false,
             hasDefault: false,
             defaultValue: null,
-            ActivityValuePolicy.Default));
+            ActivityValuePolicy.Default) { IsStructureInput = structureInputs });
         var contract = new ActivityContract(
             "test/activity",
             "1.0.0",
@@ -156,6 +214,7 @@ public sealed class ActivityInputSnapshotCheckpointTests : IDisposable
             descriptor.RootElement,
             inputs.ToDictionary(input => input.Key, input => input.Binding, StringComparer.Ordinal),
             new Dictionary<string, string>(),
+            structure: structureInputs ? new ExecutableActivityStructure("test.ordered", "1", descriptor.RootElement) : null,
             activityContract: contract);
 
         return new WorkflowExecutable(
