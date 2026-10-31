@@ -45,14 +45,26 @@ internal sealed class SwitchStructureHandler(string schemaVersion = SwitchActivi
             // A present container remains a predicate when cleared. Lower its unbound/null value to
             // the Boolean default without mutating the authored payload or its storage policy.
             var state = item.Condition!;
-            if (state.Value?.Value is null or JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined })
-                state = state with { Value = new(false, "Literal") };
+            if (IsUnboundPredicate(state))
+                state = state with { Value = new(false, "Literal"), Conversion = null };
             inputs.Add(new(key, definition, state));
         }
         if (structure.Cases.Any(item => item.Condition is null))
             inputs.Add(new(nameof(SwitchActivity.Value), null,
                 activity.Inputs.FirstOrDefault(input => input.ReferenceKey == nameof(SwitchActivity.Value))));
         return new(inputs, [nameof(SwitchActivity.Value)]);
+    }
+
+    private static bool IsUnboundPredicate(ArgumentState state)
+    {
+        if (!state.IsBound()) return true;
+        // Text editors retain a portable definition when the user clears its source. Keep that
+        // authored shape for undo, while the effective predicate is the unbound Boolean default.
+        return state.Value.Value is JsonElement { ValueKind: JsonValueKind.Object } value
+            && value.TryGetProperty("language", out var language) && language.ValueKind == JsonValueKind.String
+            && string.Equals(language.GetString(), state.Value.ExpressionType, StringComparison.OrdinalIgnoreCase)
+            && value.TryGetProperty("source", out var source) && source.ValueKind == JsonValueKind.String
+            && string.IsNullOrEmpty(source.GetString());
     }
 
     public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity)

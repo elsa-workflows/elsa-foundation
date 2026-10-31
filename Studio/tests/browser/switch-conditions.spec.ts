@@ -45,6 +45,17 @@ for (const host of ["activity", "workflow"]) for (const composition of ["sequenc
     await page.getByRole("tab", { name: "Slots", exact: true }).click();
     await expect(cases(page).locator(".wf-slot-collection-item").nth(1).getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true })).toContainText("1 + 1 === 2");
     expect(await saved(page)).toEqual(before);
+    const approvedRow = cases(page).locator(".wf-slot-collection-item").nth(1);
+    await approvedRow.getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true }).click();
+    await approvedRow.locator(".cm-content").first().fill("");
+    await approvedRow.locator(".cm-content").first().press("Escape");
+    if (host === "workflow") await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect.poll(async () => (await saved(page)).structure.payload.cases[1].condition.value.value).toBe("");
+    await page.reload();
+    await owner(page).click();
+    await page.getByRole("tab", { name: "Slots", exact: true }).click();
+    await expect(cases(page).locator(".wf-slot-collection-item").nth(1).getByRole("button", { name: /Condition expression syntax: JavaScript/ })).toBeVisible();
+    expect((await saved(page)).structure.payload.cases[1].caseId).toBe(before.structure.payload.cases[1].caseId);
     expect(errors).toEqual([]);
   });
 }

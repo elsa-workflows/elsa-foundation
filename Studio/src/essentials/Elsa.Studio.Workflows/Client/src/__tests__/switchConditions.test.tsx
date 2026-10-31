@@ -145,6 +145,13 @@ it("uses the standard syntax selector and commits only the case argument", () =>
     value: { expressionType: "JavaScript", value: { source: "args.approved === true" } } });
   expect(current.inputs).toEqual([]);
   expect(current[key]).toBeUndefined();
+  const clearedEditor = element.querySelector("textarea")!;
+  flushSync(() => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(clearedEditor, "");
+    clearedEditor.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(collectionSlotItems(current, collection)![0].condition).toMatchObject({ referenceKey: key,
+    value: { expressionType: "JavaScript", value: { source: "" } } });
 });
 
 

@@ -47,6 +47,26 @@ public sealed class SwitchStructureHandlerTests : IDisposable
         Assert.Equal(input.ReferenceKey, compiled.Payload.GetProperty("cases")[0].GetProperty("conditionInputKey").GetString());
     }
 
+    [Theory]
+    [InlineData("Literal", false)]
+    [InlineData("JavaScript", false)]
+    [InlineData("JavaScript", true)]
+    [InlineData("Liquid", true)]
+    public void Empty_editor_values_lower_to_false_without_reusing_a_previous_conversion(string syntax, bool portable)
+    {
+        var value = portable ? JsonSerializer.SerializeToElement(new { language = syntax, source = "", resultType = new { alias = "Boolean" }, parameters = new { }, options = new { }, capabilityProfile = "binding-pure-v1" })
+            : JsonSerializer.SerializeToElement("");
+        var condition = new ArgumentState("foreign", new(value, syntax), null, null, null, null,
+            new(AuthoredValueConversionMode.Profile, new("unused-profile", "1")));
+        var node = NewNode() with { Structure = new(SwitchActivity.StructureKind, SwitchActivity.StructureSchemaVersion,
+            JsonSerializer.SerializeToElement(new { cases = new[] { new { caseId = "clear", match = "Approved", condition } } }, new JsonSerializerOptions(JsonSerializerDefaults.Web))) };
+        var original = node.Structure!.Payload.GetRawText();
+        var input = Assert.Single(_handler.ProjectInputs(node).Inputs);
+        Assert.False(Assert.IsType<bool>(input.State!.Value.Value));
+        Assert.Null(input.State.Conversion);
+        Assert.Equal(original, node.Structure.Payload.GetRawText());
+    }
+
     [Fact]
     public void Replacing_children_preserves_condition_identity_and_forward_compatible_members()
     {
