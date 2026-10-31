@@ -45,13 +45,16 @@ afterEach(async () => {
 describe("independent workspace appearance", () => {
   it("keeps a host palette default unpersisted so a later host default can apply", async () => {
     window.__ELSA_STUDIO_RUNTIME__ = { appearance: { paletteId: "drift" } };
+    const context = { http: { getJson: async () => normalizeThemeStore({ defaultThemeId: "meridian" }) } } as unknown as StudioEndpointContext;
     try {
-      await render();
+      await render(context);
+      await vi.waitFor(() => expect(appearance.store.defaultThemeId).toBe("meridian"));
       await vi.waitFor(() => expect(html().getAttribute("data-color-scheme")).toBe("drift"));
       expect(localStorage.getItem("elsa-studio-color-scheme")).toBeNull();
       window.__ELSA_STUDIO_RUNTIME__ = { appearance: { paletteId: "signal" } };
       await update(() => root.render(<div />));
-      await render();
+      await render(context);
+      await vi.waitFor(() => expect(appearance.store.defaultThemeId).toBe("meridian"));
       await vi.waitFor(() => expect(html().getAttribute("data-color-scheme")).toBe("signal"));
       expect(localStorage.getItem("elsa-studio-color-scheme")).toBeNull();
     } finally { delete window.__ELSA_STUDIO_RUNTIME__; }

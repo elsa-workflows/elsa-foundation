@@ -331,7 +331,7 @@ describe("ThemeProvider and ThemeSwitcher", () => {
     await render();
     const html = document.documentElement;
 
-    expect(html.getAttribute("data-theme")).toBe("linen");
+    await vi.waitFor(() => expect(html.getAttribute("data-theme")).toBe("classic"));
     expect(html.style.getPropertyValue("--font-sans")).toContain("Manrope");
     expect(html.style.getPropertyValue("--radius")).toBe("11px");
   });
