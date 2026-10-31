@@ -1,0 +1,21 @@
+{
+  "correctionSource": "e83fc58f6fa84a7cbeb72678729aa1b78c6b1ca9",
+  "actualStandardHostSource": "20bca048737cdbcceb95cc4541643077d3a307a5",
+  "sameOriginalClaimedSourceIdAndIntent": true,
+  "sourceOutboxItemId": "commit:14o86HjFlmv:cancel:bpmn-embedded-cancel:6dbf6394de58fcede5946e1a56176c130b2f988a5d61dc9d3fc639f69520cd4f",
+  "sameOriginalModelBeforeDelivery": true,
+  "originalFaultAndSemanticSnapshotPreserved": true,
+  "originalWorkerCancelled": true,
+  "sourceAckAt": "2026-10-31T15:55:26.613024+00:00",
+  "workerCompletedAt": "2026-10-31T15:55:26.008923+00:00",
+  "ackNotBeforePhysicalWorkerCompletionObserved": true,
+  "sourceDeliveredOnlyAfterDeferredTransportAndNormalRecovery": true,
+  "coldWholeRuntimeStoreByteIdentical": true,
+  "runtimeStoreSha256": "00c8c6e1d77c5411b660f1fea70bf32400d36b909d629e7b3874a2593937214b",
+  "secondColdHostHasDifferentProcessId": true,
+  "productionChangesSinceE726": [
+    "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Internal/BpmnEmbeddingDelivery.cs"
+  ],
+  "studioTreeUnchangedSinceE726": true,
+  "limits": "One actual legacy format5 fault/native-parent cancellation cut over SQLite; not a new nested A/ETL/Studio or other-provider run. Existing saved Studio sources retain b7 and0model executions/inputs."
+}

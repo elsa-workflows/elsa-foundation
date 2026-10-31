@@ -1,0 +1,19 @@
+{
+  "source": "600f0a4eb1c673c3529175192d9c328c14df8bf7",
+  "arguments": [
+    "dotnet",
+    "test",
+    "Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+    "-c",
+    "Release",
+    "--no-restore",
+    "--filter",
+    "FullyQualifiedName~Actual_old_fault_work_keeps_embedded_cancel_owed_without_blocking_start_replay",
+    "--logger",
+    "trx;LogFileName=legacy-cancel-red.trx",
+    "--results-directory",
+    "/tmp/elsa-2898-review8-closeout"
+  ],
+  "exitCode": 1,
+  "elapsedSeconds": 5.615530014038086
+}

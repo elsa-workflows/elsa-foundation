@@ -1,0 +1,18 @@
+{
+  "original": {
+    "actualSource": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+    "storeSha256": "b913f440826fdc8c4e0f038d109ef52ac28783480d9ce897be1d2f678fbc6ebb",
+    "modelTableCounts": {
+      "elsa_runtime_model_execution": 0,
+      "elsa_runtime_model_input": 0
+    }
+  },
+  "layout": {
+    "actualSource": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+    "storeSha256": "a1b4980f232b96b98dadef3b05e84befb3572453f715fec5799ec5edfb776e30",
+    "modelTableCounts": {
+      "elsa_runtime_model_execution": 0,
+      "elsa_runtime_model_input": 0
+    }
+  }
+}
