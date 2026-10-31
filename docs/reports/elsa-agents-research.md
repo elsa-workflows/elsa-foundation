@@ -1,6 +1,6 @@
 # Elsa Agents integration research
 
-Status: M0 research in progress under [#3529](https://github.com/elsa-workflows/elsa-foundation/issues/3529),
+Status: bounded SDK/source-compatibility research under [#3529](https://github.com/elsa-workflows/elsa-foundation/issues/3529),
 [Program #3519](https://github.com/elsa-workflows/elsa-foundation/issues/3519). Findings inform design;
 they do not establish product delivery or freeze a public contract.
 
@@ -126,6 +126,10 @@ not establish an atomic Elsa checkpoint or crash-after-external-effect recovery.
 These are candidate recommendations for review, not accepted architecture decisions.
 
 ## Remaining M0 gates
+
+The remaining publication/lifecycle research is owned by
+[#3533](https://github.com/elsa-workflows/elsa-foundation/issues/3533). Completing the bounded SDK spike
+does not complete M0. Full host/provider qualification remains M7.
 
 - Normal packaged/custom-host dependency and compatibility qualification, plus the existing-provider
   behavioral regression suites. The bounded source-project CShells composition above is only partial evidence.
