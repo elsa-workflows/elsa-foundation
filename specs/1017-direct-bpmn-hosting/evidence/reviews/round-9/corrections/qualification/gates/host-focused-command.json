@@ -1,0 +1,18 @@
+{
+  "source": "d21f5131ce7920be180788d03de0eab28bbfc713",
+  "command": [
+    "dotnet",
+    "test",
+    "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+    "-c",
+    "Release",
+    "--no-restore",
+    "--filter",
+    "FullyQualifiedName~PriorScopeCancellationWorkbenchTests",
+    "--results-directory",
+    "/tmp/elsa-2898-review9-resume/host-focused",
+    "--logger",
+    "trx;LogFileName=prior-scope-host.trx"
+  ],
+  "evidence": "/tmp/elsa-2898-review9-resume/host-evidence"
+}

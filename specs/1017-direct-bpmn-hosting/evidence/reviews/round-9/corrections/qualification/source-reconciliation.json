@@ -1,0 +1,46 @@
+{
+  "candidateSource": "36831a014d621b76c863170dd84b87f171ea8b62",
+  "currentMain": "e26c11bd94bc7a99d6cd0c522ada89961ef72aa5",
+  "publishState": "51337684e4fb18ec25549ae8ba3bef1f5a3cacb7",
+  "hardenedBackendSource": "43741654e6b5fa99359910b12321d6a12179c996",
+  "hardenedHostSource": "36831a014d621b76c863170dd84b87f171ea8b62",
+  "earlierWholeHostSource": "d21f5131ce7920be180788d03de0eab28bbfc713",
+  "wholeHostCount": 45,
+  "currentAffectedHostCount": 6,
+  "runtimeSource": "d21f5131ce7920be180788d03de0eab28bbfc713",
+  "sourceRelations": [
+    {
+      "from": "43741654e6b5fa99359910b12321d6a12179c996",
+      "to": "36831a014d621b76c863170dd84b87f171ea8b62",
+      "paths": [
+        "Essentials/src",
+        "Essentials/tests",
+        "Studio/src",
+        "Studio/tests",
+        "tools/bpmn"
+      ],
+      "unchanged": true,
+      "meaning": "Hardened backend to current host: incoming Agents documentation only"
+    },
+    {
+      "from": "d21f5131ce7920be180788d03de0eab28bbfc713",
+      "to": "36831a014d621b76c863170dd84b87f171ea8b62",
+      "paths": [
+        "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services",
+        "Essentials/tests/Workflows/Runtime/Tests"
+      ],
+      "unchanged": true,
+      "meaning": "Runtime3083 source unchanged; default API signatures unchanged"
+    },
+    {
+      "from": "d21f5131ce7920be180788d03de0eab28bbfc713",
+      "to": "36831a014d621b76c863170dd84b87f171ea8b62",
+      "paths": [
+        "Studio/src",
+        "Studio/tests"
+      ],
+      "unchanged": true,
+      "meaning": "Studio2812/browser59 source unchanged"
+    }
+  ]
+}

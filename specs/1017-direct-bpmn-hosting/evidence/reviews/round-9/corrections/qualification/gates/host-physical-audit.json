@@ -1,0 +1,13 @@
+{
+  "source": "d21f5131ce7920be180788d03de0eab28bbfc713",
+  "firstPid": 77105,
+  "secondPid": 78426,
+  "cancelDeliveredAt": "2026-10-31T17:27:53.210379+00:00",
+  "modelUpdatedAt": "2026-10-31T17:28:53.054388+00:00",
+  "resultDeliveredAt": "2026-10-31T17:28:53.272803+00:00",
+  "coldRuntimeSha256": "4fbec462750d923b0f495eee16e42b48eaf83f9b8e2ea25c43234d52389301d5",
+  "wholeRuntimeEqual": true,
+  "modelObservationsEqual": true,
+  "fixtureSha256": "87a7a76fdc45f7cc7c2c0a4f1ac94361c8108a33c1cc1633cafcc49f7487773c",
+  "scopeLimit": "Standard runtime-only SQLite host recovers a derived published SDK fixture's original queued result. No new ETL, Studio, other-provider or broader program acceptance."
+}

@@ -1,0 +1,39 @@
+[
+  {
+    "project": "bpmn",
+    "discoveredCases": 507,
+    "executedCases": 507,
+    "allDiscoveredMethodsExecuted": true,
+    "expansions": []
+  },
+  {
+    "project": "runtime",
+    "discoveredCases": 3072,
+    "executedCases": 3083,
+    "allDiscoveredMethodsExecuted": true,
+    "expansions": [
+      {
+        "method": "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident",
+        "discovered": 1,
+        "executed": 2
+      },
+      {
+        "method": "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches",
+        "discovered": 1,
+        "executed": 8
+      },
+      {
+        "method": "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running",
+        "discovered": 1,
+        "executed": 4
+      }
+    ]
+  },
+  {
+    "project": "runtime-ef",
+    "discoveredCases": 1806,
+    "executedCases": 1806,
+    "allDiscoveredMethodsExecuted": true,
+    "expansions": []
+  }
+]

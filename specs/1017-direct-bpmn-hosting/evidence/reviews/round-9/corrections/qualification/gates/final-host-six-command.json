@@ -1,0 +1,17 @@
+{
+  "source": "36831a014d621b76c863170dd84b87f171ea8b62",
+  "arguments": [
+    "dotnet",
+    "test",
+    "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+    "-c",
+    "Release",
+    "--no-restore",
+    "--filter",
+    "FullyQualifiedName~PriorScopeCancellationWorkbenchTests|FullyQualifiedName~LegacyFaultSettlementWorkbenchTests",
+    "--results-directory",
+    "/tmp/elsa-2898-review9-resume/final-host-six",
+    "--logger",
+    "trx;LogFileName=hosting-six.trx"
+  ]
+}

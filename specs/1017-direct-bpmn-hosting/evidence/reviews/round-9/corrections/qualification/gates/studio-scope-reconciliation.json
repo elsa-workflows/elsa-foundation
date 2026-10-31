@@ -1,0 +1,28 @@
+{
+  "savedStudioActualSource": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+  "currentRuntimeCandidate": "43741654e6b5fa99359910b12321d6a12179c996",
+  "savedStores": {
+    "original": {
+      "actualSource": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+      "modelTableCounts": {
+        "elsa_runtime_model_execution": 0,
+        "elsa_runtime_model_input": 0
+      },
+      "decodedRuntimeSha256": "4b8aa0721e45519f9b70e045ee353997d63536861930b7bc1824fdc0bf8723a5",
+      "compressedAssetSha256": "b913f440826fdc8c4e0f038d109ef52ac28783480d9ce897be1d2f678fbc6ebb"
+    },
+    "layout": {
+      "actualSource": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+      "modelTableCounts": {
+        "elsa_runtime_model_execution": 0,
+        "elsa_runtime_model_input": 0
+      },
+      "decodedRuntimeSha256": "299239c3507d1dacc361a642308ecd33658bded19b563832dc78465fcadf201e",
+      "compressedAssetSha256": "a1b4980f232b96b98dadef3b05e84befb3572453f715fec5799ec5edfb776e30"
+    }
+  },
+  "changedStudioSourcePaths": [
+    "Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/workflowDefinitionTable.css"
+  ],
+  "scope": "Saved Studio verifier and13 controls revalidate original live b7 evidence. Current59 list/account/theme browser cases and2812 Workflows frontend tests cover the changed CSS; no new current-source live Studio/direct-model acceptance is claimed. Changed native-model result guard is not reached by these saved native-only stores."
+}
