@@ -95,6 +95,8 @@ interface InspectorPanelProps {
   activeTabId?: ActivityInspectorTabId;
   onActiveTabChange?(tabId: ActivityInspectorTabId): void;
   onSelectedActivityChange(activity: ActivityNode): void;
+  /** Discrete collection operations end the previous property-edit history group. */
+  onSelectedStructureChange?(activity: ActivityNode): void;
   onSelectedPresentationChange?(presentation: Pick<ActivityPresentationRecord, "displayName" | "description">): void;
   onChangeReusableVersion?(activity: ActivityNode, version: ActivityDefinitionVersionView): void;
   onEnterSlot(ownerNodeId: string, slot: ChildSlot, label: string): void;
@@ -150,6 +152,7 @@ export function InspectorPanel({
   activeTabId,
   onActiveTabChange,
   onSelectedActivityChange,
+  onSelectedStructureChange,
   onSelectedPresentationChange,
   onChangeReusableVersion,
   onEnterSlot,
@@ -349,7 +352,7 @@ export function InspectorPanel({
           {switchUpgradeTarget ? <div className="wf-slot-collection-item">
             <p className="wf-muted">Use a separate Boolean expression for each case. Existing matches and branches are preserved.</p>
             {!canUpgradeSwitch(selectedNode) ? <p className="wf-muted" role="note">This Switch cannot be upgraded while Value uses an activation-only Secret reference or its cases have an unsupported shape. Replace the Secret Value binding or correct the case data first.</p> : null}
-            <button type="button" disabled={readOnly || !canUpgradeSwitch(selectedNode)} onClick={() => onSelectedActivityChange(upgradeSwitch(selectedNode, switchUpgradeTarget))}>Upgrade to case conditions</button>
+            <button type="button" disabled={readOnly || !canUpgradeSwitch(selectedNode)} onClick={() => (onSelectedStructureChange ?? onSelectedActivityChange)(upgradeSwitch(selectedNode, switchUpgradeTarget))}>Upgrade to case conditions</button>
           </div> : null}
           {predicateOnly ? <p className="wf-muted">Set each case condition in the Slots tab.</p> : null}
           {propertiesPanel}
@@ -390,7 +393,7 @@ export function InspectorPanel({
             <div className="wf-slot-list">
               {collections.map(collection => <CollectionSlotEditor
                 key={collection.property} activity={selectedNode} collection={collection} readOnly={readOnly}
-                onChange={next => { setSlotPicker(null); onSelectedActivityChange(next); }}
+                onChange={next => { setSlotPicker(null); (onSelectedStructureChange ?? onSelectedActivityChange)(next); }}
                 renderCondition={item => <CaseConditionEditor
                   collection={collection} item={item} activity={selectedNode} readOnly={readOnly}
                   context={context} draftId={draftId} expressionTooling={expressionTooling} expressionEditorSessionScope={expressionEditorSessionScope}
