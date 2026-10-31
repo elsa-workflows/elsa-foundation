@@ -582,7 +582,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 .Select(x => x.Target).Distinct().ToList();
             if (targets.Count == 0) targets.Add(null);
             foreach (var target in targets)
-                if ((await authorizer.AuthorizeAsync(descriptor, session.ActorId, session.TenantId, target, token)).Allowed)
+                if ((await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, target, token)).Allowed)
                 {
                     // Availability is a preflight hint. Preparation/execution recheck the exact
                     // target; ordering a guidance attachment first cannot suppress a valid target.

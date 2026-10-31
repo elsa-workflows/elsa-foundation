@@ -78,6 +78,15 @@ public interface IAgentTool
     Task<AgentResult<AgentToolResult>> ExecuteAsync(AgentPreparedToolInvocation invocation, CancellationToken cancellationToken = default);
 }
 
+/// <summary>Optional owner-authority companion on the same installed tool; it adds domain checks to host authority.</summary>
+/// <remarks>Invoked for advertisement and concrete execution, including reviewed operations.
+/// A null target is an availability hint; a concrete preparation is checked again. Register only the tool, not a second authority registry.</remarks>
+public interface IAgentToolAuthorization
+{
+    ValueTask<AgentPolicyDecision> AuthorizeAsync(string actorId, string tenantId, AgentResourceTarget? target,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>Catalog of registered tools.</summary>
 public interface IAgentToolRegistry
 {

@@ -15,3 +15,9 @@ Current context and retained results are re-admitted by `workflows.context` unde
 `workflows/design:read` permission. Both tools link explicitly to that disclosure source. An
 accepted working-state receipt remains a historical effect observation; later permission changes
 can withhold its disclosure and never authorize a repeat. See the [disclosure rules](EXTENSION_POINTS.md#current-disclosure-ownership-3439).
+
+Concrete workflow authority also comes from Workflow Design Core's `IWorkflowDefinitionAuthorizer`.
+Its native API adapter checks definition existence in the current tenant and the same typed definition,
+folder and ancestor decisions as owning reads. Both tools contribute their read/manage decision through
+`IAgentToolAuthorization`, including reviewed dispatch after approval. An unsaved editor revision
+is preserved; reading persisted metadata never replaces the working-state graph.

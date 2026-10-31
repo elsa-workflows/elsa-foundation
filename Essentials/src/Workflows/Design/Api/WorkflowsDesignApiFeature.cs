@@ -60,6 +60,7 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
         // Publishing replaces this with the slot/journal lookup.
         services.TryAddScoped<IWorkflowDefinitionPublicationStateLookup, NullWorkflowDefinitionPublicationStateLookup>();
         services.TryAddScoped<Endpoints.Definitions.IWorkflowDefinitionDetailsReader, Endpoints.Definitions.WorkflowDefinitionDetailsReader>();
+        services.TryAddScoped<IWorkflowDefinitionAuthorizer, HttpWorkflowDefinitionAuthorizer>();
         services.TryAddScoped<Endpoints.Versions.IWorkflowVersionDetailsReader, Endpoints.Versions.WorkflowVersionDetailsReader>();
         services.TryAddScoped<IExpressionAuthoringAuthorizationPolicy, DefaultExpressionAuthoringAuthorizationPolicy>();
         services.TryAddScoped<IExpressionAuthoringContextSource>(serviceProvider =>
@@ -71,6 +72,7 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
         services.AddScoped<IStartupTask, ValidateActivityInputOptionsProvidersStartupTask>();
         services.TryAddSingleton<IServiceCollection>(services);
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, LibraryVisibilityStartupTask>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, WorkflowDefinitionAuthorizationStartupTask>());
         services.AddHttpContextAccessor();
         services.AddApiCapability(WorkflowDesignApiCapabilities.StaticDeclaration);
         services.AddApiCapabilitySource<WorkflowDesignOperationalCapabilitySource>();

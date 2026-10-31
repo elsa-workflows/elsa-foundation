@@ -72,6 +72,13 @@ Known provider implementations:
 - **Ownership:** the module validates canonical arguments, exact target/revision, required context and risk during side-effect-free preparation. It supplies versioned preview/result schemas and renderer identity, applies through its owning service/native transaction, rechecks resource constraints and returns actual read-back evidence. `AgentToolPreparation`, `AgentPreparedToolInvocation`, `AgentPayload`, `AgentResourceTarget` and `AgentEffectReceipt` are defined in [Core contribution models](../Core/Models/AgentContributionModels.cs); the generic engine freezes and binds preparation rather than defining module payload meaning. Both provider paths use the existing thin `AgentToolAIFunctions` bridge.
 - **Known implementations:** `WorkflowReadGraphTool` and `WorkflowSetDesignerPositionTool` (`Elsa.Agent.Workflows`) *(cross-domain)*; external `ReadWidgetTool` / `SetWidgetVisibilityTool` (`Acme.Home.Weaver`) *(cross-domain — qualified package fixture, not shipped)*; private journey `SetNoteTool` (`Weaver.Journey.Backend`) *(cross-domain — source-composed fixture, not shipped)*.
 
+### `IAgentToolAuthorization` *(Core — `Elsa.Agent.Core`)*
+
+- **Kind:** Optional owner-authority companion on the same installed tool. [Signature](../Core/Contracts/AgentToolContracts.cs): `AuthorizeAsync(actorId, tenantId, target, cancellationToken)` returns `ValueTask<AgentPolicyDecision>`.
+- **Register:** implement on the existing `IAgentTool`; no additional registry or fan-in. The shared engine requires host authority first, then this owner decision for advertisement, concrete dispatch, duplicate outcome delivery and reviewed execution/completion.
+- **Ownership:** use the owning resource's native authorization and current scope. A null target is an availability hint; concrete preparation is checked again. It cannot grant authority denied by the host. Context and historical-result disclosure still use the original installed source's admission hook.
+- **Known implementations:** workflow graph/read and layout tools delegate to the workflow domain's selected `IWorkflowDefinitionAuthorizer`. Other modules can contribute their own rules without changes to Weaver, hosts or provider adapters.
+
 ### `IAgentClientTool` *(Core — `Elsa.Agent.Core`)*
 
 - **Kind:** Optional completion contract on the same installed `IAgentTool`. [Signature](../Core/Contracts/AgentContributionContracts.cs): `CompleteAsync(AgentPreparedToolInvocation, AgentClientAcknowledgement): Task<AgentResult<AgentToolResult>>`.

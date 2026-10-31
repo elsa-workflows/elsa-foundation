@@ -7,6 +7,7 @@ using Elsa.Agent.Workflows.Models;
 using Elsa.Agent.Workflows.Services;
 using Elsa.Agent.Workflows.Contracts;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Elsa.Workflows.Design.Core.Contracts;
 
 namespace Elsa.Agent.Tests;
 
@@ -125,7 +126,7 @@ public sealed class WorkflowAgentTests
     public async Task Real_collection_redacts_restricted_workflow_data_and_metadata_before_provider_use(string kind, AgentContextSensitivity sensitivity)
     {
         const string secret = "UNIQUE-WORKFLOW-SECRET-7319";
-        using var root = AgentTestServices.Create(services => new FoundationWorkflowsAgentFeature().ConfigureServices(services));
+        using var root = WorkflowServices();
         using var scope = root.CreateScope();
         var caller = ClassifiedCaller(kind, sensitivity, secret);
 
@@ -150,7 +151,7 @@ public sealed class WorkflowAgentTests
     [InlineData("workflow.definition")]
     public async Task Real_collection_preserves_sensitive_classification_and_enforces_internal_host_ceiling(string kind)
     {
-        using var root = AgentTestServices.Create(services => new FoundationWorkflowsAgentFeature().ConfigureServices(services));
+        using var root = WorkflowServices();
         using var scope = root.CreateScope();
         var caller = ClassifiedCaller(kind, AgentContextSensitivity.Sensitive, "SENSITIVE-WORKFLOW-DATA-8642");
 
@@ -287,6 +288,7 @@ public sealed class WorkflowAgentTests
         using var root = AgentTestServices.Create(services =>
         {
             new FoundationWorkflowsAgentFeature().ConfigureServices(services);
+            services.AddSingleton<IWorkflowDefinitionAuthorizer>(new FixtureWorkflowDefinitionAuthorizer());
             services.Replace(ServiceDescriptor.Scoped<IWorkflowRevisionProvider>(_ => new UnexpectedPersistedRevisionRead()));
         });
         using var scope = root.CreateScope();
@@ -435,9 +437,21 @@ public sealed class WorkflowAgentTests
     private static ServiceProvider WorkflowServices(DisclosureAuthority? authority = null) => AgentTestServices.Create(services =>
     {
         new FoundationWorkflowsAgentFeature().ConfigureServices(services);
+        services.AddSingleton<IWorkflowDefinitionAuthorizer>(new FixtureWorkflowDefinitionAuthorizer());
         if (authority is not null)
             services.Replace(ServiceDescriptor.Scoped<IAgentToolAuthorizer>(_ => authority));
     });
+
+    private sealed class FixtureWorkflowDefinitionAuthorizer : IWorkflowDefinitionAuthorizer
+    {
+        public ValueTask<bool> CanReadAsync(string definitionId, CancellationToken cancellationToken = default)
+            // These three additional identities are the owned definitions whose identity,
+            // metadata and client binding the classification/redaction cases deliberately vary.
+            => ValueTask.FromResult(definitionId is "wf-1" or "UNIQUE-WORKFLOW-SECRET-7319"
+                or "SENSITIVE-WORKFLOW-DATA-8642" or "PUBLIC-WORKFLOW-DATA-3157");
+        public ValueTask<bool> CanManageAsync(string definitionId, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(definitionId == "wf-1");
+    }
 
     private static DefaultWorkflowAgentContextProvider Provider(IServiceProvider services)
         => Assert.Single(services.GetServices<IAgentContextProvider>().OfType<DefaultWorkflowAgentContextProvider>());

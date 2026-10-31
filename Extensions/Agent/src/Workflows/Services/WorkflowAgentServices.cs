@@ -5,6 +5,7 @@ using Elsa.Agent.Core.Services;
 using Elsa.Agent.Workflows.Contracts;
 using Elsa.Agent.Workflows.Models;
 using Elsa.Agent.Workflows.Tools;
+using Elsa.Workflows.Design.Core.Contracts;
 
 namespace Elsa.Agent.Workflows.Services;
 
@@ -29,7 +30,8 @@ public sealed class DefaultWorkflowAgentContextProvider(
     IWorkflowRevisionProvider revisionProvider,
     IWorkflowActivityCatalogProvider activityCatalogProvider,
     IAgentSessionService sessions,
-    IAgentToolAuthorizer authorizer) : IWorkflowAgentContextProvider, IAgentContextProvider
+    IAgentToolAuthorizer authorizer,
+    IEnumerable<IWorkflowDefinitionAuthorizer>? resourceAuthorizers = null) : IWorkflowAgentContextProvider, IAgentContextProvider
 {
     private static readonly AgentToolDescriptor ReadDescriptor = new WorkflowReadGraphTool().Descriptor;
     public AgentContextProviderDescriptor Descriptor { get; } = new(
@@ -146,7 +148,13 @@ public sealed class DefaultWorkflowAgentContextProvider(
     }
 
     private async Task<bool> CanDiscloseAsync(AgentSession session, AgentResourceTarget? target, CancellationToken cancellationToken)
-        => (await authorizer.AuthorizeAsync(ReadDescriptor, session.ActorId, session.TenantId, target, cancellationToken)).Allowed;
+    {
+        if (!(await authorizer.AuthorizeAsync(ReadDescriptor, session.ActorId, session.TenantId, target, cancellationToken)).Allowed) return false;
+        // Supplemental caller request metadata and public installed guidance do not claim a live
+        // resource. Concrete snapshots/results require the owner domain's current read decision.
+        return target is null || (await WorkflowResourceAuthority.AuthorizeAsync(resourceAuthorizers,
+            session.ActorId, session.TenantId, target, false, cancellationToken)).Allowed;
+    }
 
     private AgentContextContribution SessionDenied() => new([], [new(Descriptor.Id, "agent.workflow.session_denied",
         "A current workflow session with an authenticated actor and tenant is required.", true)]);

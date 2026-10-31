@@ -68,7 +68,7 @@ internal sealed class DefaultAgentToolInvoker(
                 var existing = await proposals.FindAsync(existingId, cancellationToken);
                 if (existing?.PreparedInvocation is not { } original)
                     return await DeniedAsync("agent.tool.duplicate_unavailable", "The original prepared call is unavailable; it cannot be replayed.", 409);
-                if (!(await authorizer.AuthorizeAsync(descriptor, session.ActorId, session.TenantId, original.Target, cancellationToken)).Allowed)
+                if (!(await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, original.Target, cancellationToken)).Allowed)
                     return await DeniedAsync("agent.tool.forbidden", "Current server authority does not permit access to this prepared operation.", 403);
                 if (await proposals.FindResultAsync(existingId, cancellationToken) is { } retained)
                     return AgentToolDispatch.Executed(AgentResultProvenance.Stamp(retained, original));
@@ -107,7 +107,7 @@ internal sealed class DefaultAgentToolInvoker(
                     || invocation.Client is not null && binding != invocation.Client || !matchingSnapshot)
                     return await DeniedAsync("agent.tool.client_binding_missing", "The view that created this proposal is no longer available for the exact target.", 409);
             }
-            var admission = await authorizer.AuthorizeAsync(descriptor, session.ActorId, session.TenantId, module.Target, cancellationToken);
+            var admission = await AgentToolAccess.AuthorizeAsync(tool, authorizer, session.ActorId, session.TenantId, module.Target, cancellationToken);
             if (!admission.Allowed)
                 return await DeniedAsync("agent.tool.forbidden", "Current server authority does not permit the prepared target.", 403);
 
