@@ -1,5 +1,5 @@
 import {
-  createAuthenticatedHttpClient, createBackendAuthProviderManager, createEndpointContext, getBackendCapabilities, invalidateBackendCapabilities,
+  createAuthenticatedHttpClient, createBackendAuthProviderManager, createEndpointContext, createHttpClient, getBackendCapabilities, invalidateBackendCapabilities,
   requestStudioNavigation, resolveBackendPath, StudioHttpError, studioBackendCapabilitiesChangedEvent,
   type AuthProviderManager, type AuthSession, type StudioApiCapabilityDocument, type StudioBackendProfile,
   type StudioBackendSession, type StudioEndpointContext, type StudioHttpClient, type StudioRequestInit
@@ -70,7 +70,10 @@ export class PreparedBackend implements StudioBackendSession {
       getAccessToken:async () => {this.assertActive();const token = await manager.getAccessToken();this.assertActive();return token;},
       refresh:async () => {this.assertActive();const session = await manager.refresh();this.assertActive();return session;}
     } : null;
-    const raw = manager ? createStudioEndpointContext(profile.baseUrl,manager) : createEndpointContext(profile.baseUrl,{fetch:(input,init) => fetch(input,{...init,credentials:"omit"})});
+    const raw = manager ? createStudioEndpointContext(profile.baseUrl,manager) : {
+      ...createEndpointContext(profile.baseUrl),
+      http:createHttpClient(profile.baseUrl,{fetch:(input,init) => fetch(input,{...init,credentials:"omit"})})
+    };
     if (manager) raw.http = createAuthenticatedHttpClient(profile.baseUrl,boundAuth!,{requireAuthorization:true,notifySessionLoss:false});
     const run = async <T>(url: string, init: StudioRequestInit | undefined, write: boolean, action: (url:string,init:StudioRequestInit) => Promise<T>, hostAction=false): Promise<T> => {
       this.assertActive();

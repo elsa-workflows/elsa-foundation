@@ -234,3 +234,14 @@ it("canonicalizes the tab-restored Home backend before resource links are render
   expect(qualifyStudioBackendPath("/workflows/instances/shared-id")).toBe("/workflows/instances/shared-id?backend=b");
   expect(window.location.search).toContain("filter=mine");expect(window.location.hash).toBe("#overview");
 });
+
+it("omits ambient cookies on every anonymous backend request",async()=>{
+  const request=vi.fn(async(_input:RequestInfo|URL,_init?:RequestInit)=>response({}));vi.stubGlobal("fetch",request);
+  const selected=new PreparedBackend(a,null,{status:"anonymous",roles:[],permissions:[]});
+  try {
+    await selected.context.http.getJson("/capabilities");
+    await selected.context.http.postJson("/changes",{});
+    expect(request).toHaveBeenCalledTimes(2);
+    for (const call of request.mock.calls) expect(call[1]?.credentials).toBe("omit");
+  } finally {selected.dispose();}
+});

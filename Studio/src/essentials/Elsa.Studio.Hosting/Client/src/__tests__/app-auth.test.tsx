@@ -21,7 +21,8 @@ describe("studio auth mounting", () => {
     const initialPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
     const component = vi.fn(() => <div>Disallowed route content</div>);
     const loader = vi.spyOn(moduleLoader, "loadStudioModules").mockImplementation(async (_manifests, api) => {
-      api.routes.add({ id: path, path, label: "Module policy", component, requiresBackend: [{ id: "elsa.api.runtime", contractVersion: "1" }], availability: { state, reason: "Blocked by module policy" } });
+      const route = { id: path, path, label: "Module policy", component, requiresBackend: [{ id: "elsa.api.runtime", contractVersion: "1" }], availability: { state, reason: "Blocked by module policy" } };
+      api.routes.add(route);
       api.navigation.add({ id: "module-policy", path: "/settings/module-policy", label: "Module policy", placement: "settings" });
       return [];
     });
