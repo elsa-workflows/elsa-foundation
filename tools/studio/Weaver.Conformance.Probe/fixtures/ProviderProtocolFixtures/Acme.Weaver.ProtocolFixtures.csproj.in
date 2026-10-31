@@ -14,7 +14,7 @@
     <PackageReference Include="CShells.Abstractions" Version="__CSHELLS_VERSION__" />
     <PackageReference Include="Elsa.Agent.Anthropic" Version="__PRODUCT_VERSION__" />
     <PackageReference Include="Elsa.Agent.GitHubCopilot" Version="__PRODUCT_VERSION__" />
-    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.5.1" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="__AI_ABSTRACTIONS_VERSION__" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
   </ItemGroup>
   <ItemGroup>
