@@ -8,6 +8,7 @@
     <ProjectReference Include="..\..\..\..\src\Workflows\Publishing\Elsa.Workflows.Publishing\Elsa.Workflows.Publishing.csproj" />
     <EmbeddedResource Include="Fixtures/LegacyCompensationState.json" LogicalName="Bpmn.LegacyCompensationState.json" />
     <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-8/correctness/legacy-pending-fault-model.json" Link="Fixtures/ActualLegacyPendingParentFaultModel.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-9/correctness/prior-cancellation/deliver-worker-result.sqlite.gz" Link="Fixtures/ActualPriorScopeCancellation.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/pipeline/native-start-retirement/pending-elsa.sqlite.gz" Link="Fixtures/ActualNativeStartRetirement.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/pipeline/pending-cancellation/native-terminal/native-cancel/pending-elsa.sqlite.gz" Link="Fixtures/ActualIndependentNativeCancellation.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../../../../specs/1017-direct-bpmn-hosting/evidence/embedding/human-native-recovery/root-complete/waiting-checked.json" Link="Fixtures/ActualHumanEmbedding.json" CopyToOutputDirectory="PreserveNewest" />
