@@ -320,6 +320,178 @@ class ProtocolCorrelationTests(unittest.TestCase):
 
 
 class BrowserCaptureTests(unittest.TestCase):
+    def run_capture_controls(self, body):
+        source = Path(__file__).with_name("browser.mjs").read_text()
+        helper = source[source.index("async function captureNativeStreams("):source.index("function command(")]
+        script = 'import assert from "node:assert/strict";\nconst backend="http://127.0.0.1:49123"; let context;\n' + \
+            'const diagnosticUrl=value=>{const url=new URL(value);return url.origin+url.pathname;};\n' + helper + body
+        result = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_finished_sse_race_retrieves_only_same_retained_response_without_duplicate_bytes(self):
+        self.run_capture_controls(r'''
+for (const encoded of [false,true]) {
+  const handlers=new Map(),calls=[],raw='data: {"id":"unit","kind":"completed"}\n\n';
+  const cdp={on:(kind,callback)=>handlers.set(kind,callback),send:async(kind,args)=>{
+    if(kind==='Network.enable')return {};
+    calls.push({kind,args});
+    if(kind==='Network.streamResourceContent')throw new Error('Request with the provided ID has already finished loading');
+    assert.equal(kind,'Network.getResponseBody');assert.equal(args.requestId,'same-native-request');
+    return {body:encoded?Buffer.from(raw).toString('base64'):raw,base64Encoded:encoded};
+  }};
+  context={newCDPSession:async()=>cdp};const capture=await captureNativeStreams({});
+  handlers.get('Network.responseReceived')({requestId:'same-native-request',response:{url:backend+'/_elsa/agent/sessions/s1/stream',status:200,mimeType:'text/event-stream',charset:'',headers:{'Content-Type':'text/event-stream'}}});
+  handlers.get('Network.dataReceived')({requestId:'same-native-request',data:Buffer.from(raw.slice(0,8)).toString('base64')});
+  handlers.get('Network.loadingFinished')({requestId:'same-native-request'});
+  const [row]=await capture();
+  assert.equal(row.rawBody,raw);assert.equal(row.captureError,null);
+  assert.equal(row.captureMethod,'getResponseBody');assert.equal(row.requestId,'same-native-request');
+  assert.equal(row.completeBodyBytes,Buffer.byteLength(raw));assert.equal(row.termination,'loadingFinished');
+  assert.match(row.streamResourceContentError,/already finished/);
+  assert.deepEqual(calls.map(value=>value.kind),['Network.streamResourceContent','Network.getResponseBody']);
+}
+''')
+
+    def test_finished_body_fallback_refuses_aborted_missing_failed_or_oversize_evidence(self):
+        self.run_capture_controls(r'''
+for(const scenario of ['aborted','open','non-sse','no-body','empty-body','body-error','oversize-body','stream-size-error','prefix-size-error','combined-size-error','missing-prefix','aborted-during-body']) {
+  const handlers=new Map(),calls=[],limit=8*1024*1024;
+  const cdp={on:(kind,callback)=>handlers.set(kind,callback),send:async(kind,args)=>{
+    if(kind==='Network.enable')return {};
+    calls.push(kind);
+    if(kind==='Network.streamResourceContent') {
+      if(scenario==='prefix-size-error')return {bufferedData:Buffer.alloc(limit+1).toString('base64')};
+      if(scenario==='combined-size-error')return {bufferedData:Buffer.alloc(limit/2+1).toString('base64')};
+      if(scenario==='missing-prefix')return {};
+      throw new Error('stream enable failed');
+    }
+    assert.equal(kind,'Network.getResponseBody');assert.equal(args.requestId,'native-request');
+    if(scenario==='body-error')throw new Error('No retained response body');
+    if(scenario==='no-body')return {base64Encoded:false};
+    if(scenario==='oversize-body')return {body:'x'.repeat(limit+1),base64Encoded:false};
+    if(scenario==='aborted-during-body') {
+      handlers.get('Network.loadingFailed')({requestId:'native-request',errorText:'net::ERR_ABORTED',canceled:true});
+      return {body:'data: {}\n\n',base64Encoded:false};
+    }
+    return {body:'',base64Encoded:false};
+  }};
+  context={newCDPSession:async()=>cdp};const capture=await captureNativeStreams({});
+  handlers.get('Network.responseReceived')({requestId:'native-request',response:{url:backend+'/_elsa/agent/sessions/s1/stream',status:scenario==='non-sse'?204:200,mimeType:'text/event-stream',charset:'',headers:scenario==='non-sse'?{}:{'Content-Type':'text/event-stream'}}});
+  if(scenario==='stream-size-error')handlers.get('Network.dataReceived')({requestId:'native-request',data:Buffer.alloc(limit+1).toString('base64')});
+  if(scenario==='combined-size-error')handlers.get('Network.dataReceived')({requestId:'native-request',data:Buffer.alloc(limit/2+1).toString('base64')});
+  if(scenario==='aborted')handlers.get('Network.loadingFailed')({requestId:'native-request',errorText:'net::ERR_ABORTED',canceled:true});
+  else if(scenario!=='open')handlers.get('Network.loadingFinished')({requestId:'native-request'});
+  const [row]=await capture();
+  assert.equal(row.rawBody,'');
+  const eligible=['no-body','empty-body','body-error','oversize-body','aborted-during-body'].includes(scenario);
+  assert.equal(calls.filter(kind=>kind==='Network.getResponseBody').length,eligible?1:0,scenario);
+  if(scenario!=='non-sse')assert.ok(row.captureError,scenario);
+  if(scenario==='aborted'){assert.equal(row.termination,'loadingFailed');assert.equal(row.canceled,true);}
+  if(['stream-size-error','prefix-size-error','combined-size-error'].includes(scenario))assert.match(row.captureError,/bounded evidence size/);
+}
+''')
+
+    def test_finished_cdp_text_reverses_only_verified_decoder_and_preserves_unicode_bytes(self):
+        self.run_capture_controls(r'''
+const raw='data: {"id":"unit","kind":"contributedResult","payload":{"opaque":"café € 😀 𝄞"}}\n\n';
+const wire=Buffer.from(raw,'utf8'),legacy=new TextDecoder('windows-1252',{fatal:true,ignoreBOM:true});
+for(const mode of ['default-text','utf8-text','raw-base64']) {
+  const headers={'Content-Type':mode==='utf8-text'?'text/event-stream; charset=utf-8':'text/event-stream'};
+  const response={url:backend+'/_elsa/agent/sessions/s1/stream',status:200,mimeType:'text/event-stream',charset:mode==='utf8-text'?'utf-8':'',headers};
+  const body=mode==='default-text'?legacy.decode(wire):mode==='raw-base64'?wire.toString('base64'):raw;
+  const handlers=new Map(),calls=[];
+  const cdp={on:(kind,callback)=>handlers.set(kind,callback),send:async(kind,args)=>{
+    calls.push({kind,args});if(kind==='Network.enable')return {};
+    if(kind==='Network.streamResourceContent')throw new Error('already finished loading');
+    assert.equal(kind,'Network.getResponseBody');assert.equal(args.requestId,'native');
+    return {body,base64Encoded:mode==='raw-base64'};
+  }};
+  context={newCDPSession:async()=>cdp};const capture=await captureNativeStreams({});
+  handlers.get('Network.responseReceived')({requestId:'native',response});handlers.get('Network.loadingFinished')({requestId:'native'});
+  const [row]=await capture();assert.equal(row.captureError,null,mode);assert.equal(row.rawBody,raw,mode);
+  assert.deepEqual(Buffer.from(row.rawBody,'utf8'),wire);
+  const hash=async bytes=>Buffer.from(await crypto.subtle.digest('SHA-256',bytes)).toString('hex');
+  assert.equal(row.cdpBodySha256,await hash(Buffer.from(body,'utf8')));
+  assert.equal(row.reconstructedBodySha256,await hash(wire));
+  assert.equal(row.reportedCharset,response.charset);assert.equal(row.reportedMimeType,'text/event-stream');
+  assert.equal(row.bodyProfile,'native-agent-api-utf8-no-bom-data-lines');
+  assert.equal(row.encodingMethod,mode==='default-text'?'chromium-149-default-windows-1252-inverse':mode==='utf8-text'?'declared-utf8-text-roundtrip':'cdp-base64-bytes');
+  assert.equal(calls.filter(call=>call.kind==='Network.getResponseBody').length,1);
+}
+''')
+
+    def test_finished_cdp_decoding_refuses_unknown_lossy_unmappable_and_invalid_utf8(self):
+        self.run_capture_controls(r'''
+const legacy=new TextDecoder('windows-1252',{fatal:true,ignoreBOM:true});
+for(const scenario of ['missing-charset','unknown-charset','unsupported-legacy','header-conflict','missing-mime','unmappable','lossy','surrogate','invalid-default-utf8','invalid-base64-utf8','bom']) {
+  const response={url:backend+'/_elsa/agent/sessions/s1/stream',status:200,mimeType:'text/event-stream',charset:'',headers:{'Content-Type':'text/event-stream'}};
+  let body='data: {}\n\n',encoded=false;
+  if(scenario==='missing-charset')delete response.charset;
+  if(scenario==='unknown-charset')response.charset='utf-16le';
+  if(scenario==='unsupported-legacy')response.charset='windows-1252';
+  if(scenario==='header-conflict')response.headers['Content-Type']='text/event-stream; charset=utf-8';
+  if(scenario==='missing-mime')delete response.mimeType;
+  if(scenario==='unmappable')body='data: {"opaque":"😀"}\n\n';
+  if(scenario==='lossy'){response.charset='utf-8';body='data: {"opaque":"\ufffd"}\n\n';}
+  if(scenario==='surrogate'){response.charset='utf-8';body='data: {"opaque":"\ud800"}\n\n';}
+  if(scenario==='invalid-default-utf8')body=legacy.decode(Buffer.concat([Buffer.from('data: '),Buffer.from([0xc3,0x28]),Buffer.from('\n\n')]));
+  if(scenario==='invalid-base64-utf8'){body=Buffer.concat([Buffer.from('data: '),Buffer.from([0xc3,0x28]),Buffer.from('\n\n')]).toString('base64');encoded=true;}
+  if(scenario==='bom'){body=Buffer.from('\ufeffdata: {}\n\n').toString('base64');encoded=true;}
+  const handlers=new Map();
+  const cdp={on:(kind,callback)=>handlers.set(kind,callback),send:async kind=>{
+    if(kind==='Network.enable')return {};
+    if(kind==='Network.streamResourceContent')throw new Error('already finished loading');
+    assert.equal(kind,'Network.getResponseBody');return {body,base64Encoded:encoded};
+  }};
+  context={newCDPSession:async()=>cdp};const capture=await captureNativeStreams({});
+  handlers.get('Network.responseReceived')({requestId:'native',response});handlers.get('Network.loadingFinished')({requestId:'native'});
+  const [row]=await capture();assert.ok(row.captureError,scenario);assert.equal(row.rawBody,'',scenario);
+}
+''')
+
+    def test_open_and_aborted_stream_keep_complete_frame_before_incomplete_utf8_tail(self):
+        self.run_capture_controls(r'''
+const frame='data: {"id":"native","kind":"contributedResult","resultKind":"moduleResult","payload":{"toolCallId":"call","toolName":"opaque_read","succeeded":true,"payload":{"opaque":"€ 😀"}}}\n\n';
+for(const state of ['open','aborted','finished']) {
+  const handlers=new Map(),tail=Buffer.concat([Buffer.from('data: {"unfinished":"'),Buffer.from('😀').subarray(0,3)]);
+  const observed=Buffer.concat([Buffer.from(frame),tail]);
+  const cdp={on:(kind,callback)=>handlers.set(kind,callback),send:async kind=>{
+    if(kind==='Network.enable')return {};
+    assert.equal(kind,'Network.streamResourceContent');return {bufferedData:observed.toString('base64')};
+  }};
+  context={newCDPSession:async()=>cdp};const capture=await captureNativeStreams({});
+  handlers.get('Network.responseReceived')({requestId:'native',response:{url:backend+'/_elsa/agent/sessions/s1/stream',status:200,headers:{'Content-Type':'text/event-stream'}}});
+  if(state==='aborted')handlers.get('Network.loadingFailed')({requestId:'native',errorText:'net::ERR_ABORTED',canceled:true});
+  if(state==='finished')handlers.get('Network.loadingFinished')({requestId:'native'});
+  const [row]=await capture();
+  if(state!=='finished')assert.equal(row.captureError,null,state);
+  assert.equal(row.observedBodyBytes,observed.length);
+  assert.equal(row.reconstructedBodySha256,Buffer.from(await crypto.subtle.digest('SHA-256',observed)).toString('hex'));
+  if(state==='finished'){assert.ok(row.captureError);assert.equal(row.rawBody,'');continue;}
+  assert.equal(row.captureError,null,state);assert.equal(row.trailingIncompleteUtf8Bytes,3);
+  assert.equal(row.textDecoding,'utf8-fatal-stream-prefix');assert.equal(row.textTruncation,'trailing-incomplete-utf8');
+  assert.equal(row.rawBody,frame+'data: {"unfinished":"');
+  const complete=row.rawBody.split('\n\n').slice(0,-1);assert.equal(complete.length,1);
+  assert.equal(JSON.parse(complete[0].slice(6)).payload.toolCallId,'call');
+}
+''')
+
+    def test_partial_stream_still_refuses_malformed_interior_utf8(self):
+        self.run_capture_controls(r'''
+const frame=Buffer.from('data: {"id":"complete","kind":"contributedResult"}\n\n');
+for(const state of ['open','aborted']) {
+  const handlers=new Map(),observed=Buffer.concat([frame,Buffer.from('data: '),Buffer.from([0xc3,0x28]),Buffer.from('\n\n')]);
+  const cdp={on:(kind,callback)=>handlers.set(kind,callback),send:async kind=>{
+    if(kind==='Network.enable')return {};assert.equal(kind,'Network.streamResourceContent');return {bufferedData:observed.toString('base64')};
+  }};
+  context={newCDPSession:async()=>cdp};const capture=await captureNativeStreams({});
+  handlers.get('Network.responseReceived')({requestId:'native',response:{url:backend+'/_elsa/agent/sessions/s1/stream',status:200,headers:{'Content-Type':'text/event-stream'}}});
+  if(state==='aborted')handlers.get('Network.loadingFailed')({requestId:'native',errorText:'net::ERR_ABORTED',canceled:true});
+  const [row]=await capture();assert.ok(row.captureError,state);assert.equal(row.rawBody,'');
+  assert.equal(row.observedBodyBytes,observed.length);
+}
+''')
+
     def test_buffer_prefix_and_streaming_chunks_preserve_aborted_bytes_once(self):
         # Exercise the actual capture helper with synthetic CDP notifications.
         # This checks its byte boundary only, never a native browser journey.

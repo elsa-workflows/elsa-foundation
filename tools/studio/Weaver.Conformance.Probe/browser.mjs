@@ -47,6 +47,7 @@ function retain(name, value) {
 const result = { journey: config.journey, provider: config.provider, evidenceCategory: "deterministic-provider-protocol", liveProvider: false,
   status: "running", observations: {}, evidence: [], startedAt: new Date().toISOString(), noFabricatedResponses: true };
 const browser = await chromium.launch({ headless: true });
+result.browserVersion = browser.version();
 const context = await browser.newContext({ storageState: config.storageState, viewport: { width: 1920, height: 1080 } });
 const page = await context.newPage();
 const streamCapture = await captureNativeStreams(page);
@@ -138,35 +139,134 @@ async function captureNativeStreams(target) {
   // stream consumption, and response.body() loses bytes when Studio aborts it.
   const cdp = await context.newCDPSession(target);
   const streams = new Map(), pending = [];
+  const limit = 8 * 1024 * 1024, sizeError = "Native SSE capture exceeded its bounded evidence size.";
+  const hash = async value => Buffer.from(await globalThis.crypto.subtle.digest("SHA-256", value)).toString("hex");
+  function sseText(value, allowTrailingIncomplete = false) {
+    const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(value, { stream: allowTrailingIncomplete });
+    // This observer qualifies AgentApi.WriteEventAsync's UTF-8/no-BOM data lines,
+    // not arbitrary SSE encodings or original compressed/network-wire bytes.
+    if (text.startsWith("\ufeff") || text && !text.startsWith("data: "))
+      throw new Error("Response bytes do not match the native Agent SSE framing profile.");
+    return text;
+  }
+  function bytes(body, encoded, allowEmpty = false) {
+    if (typeof body !== "string" || typeof encoded !== "boolean" || !allowEmpty && !body.length)
+      throw new Error("Native SSE response body was absent or empty.");
+    if ((encoded ? body.length > 4 * Math.ceil(limit / 3) : Buffer.byteLength(body, "utf8") > limit)) throw new Error(sizeError);
+    const value = Buffer.from(body, encoded ? "base64" : "utf8");
+    if (value.length > limit) throw new Error(sizeError);
+    if (encoded && value.toString("base64") !== body) throw new Error("Native SSE body is not canonical base64.");
+    return value;
+  }
+  async function finishedBytes(response, stream) {
+    const { body, base64Encoded } = response;
+    if (typeof body !== "string" || typeof base64Encoded !== "boolean" || !body.length || !body.isWellFormed())
+      throw new Error("Native SSE response body was absent, empty or lossy Unicode.");
+    if (body.length > (base64Encoded ? 4 * Math.ceil(limit / 3) : limit)) throw new Error(sizeError);
+    stream.responseBodyBase64Encoded = base64Encoded;
+    stream.cdpBodyRepresentation = base64Encoded ? "base64-field-utf8-text" : "decoded-field-utf8-text";
+    stream.cdpBodySha256 = await hash(Buffer.from(body, "utf8"));
+    const charsetParameters = stream.contentType.split(";").slice(1).map(value => value.trim()).filter(value => /^charset\s*=/i.test(value));
+    if (charsetParameters.length > 1) throw new Error("Conflicting native SSE charset metadata.");
+    const header = charsetParameters[0]?.match(/^charset\s*=\s*(?:"([^"]*)"|([^\s"]+))$/i);
+    if (charsetParameters.length && !header) throw new Error("Unsupported native SSE charset metadata.");
+    const headerCharset = header ? (header[1] ?? header[2]).toLowerCase() : null;
+    if (typeof stream.reportedCharset !== "string" || typeof stream.reportedMimeType !== "string"
+      || stream.reportedMimeType.toLowerCase() !== "text/event-stream") throw new Error("Missing native SSE decoder metadata.");
+    const charset = stream.reportedCharset.toLowerCase();
+    if (!(charset === "" && headerCharset === null || ["utf-8", "utf8"].includes(charset)
+      && (headerCharset === null || ["utf-8", "utf8"].includes(headerCharset))))
+      throw new Error("Unsupported or conflicting native SSE charset metadata.");
+    let complete;
+    if (base64Encoded) {
+      complete = bytes(body, true);
+      stream.encodingMethod = "cdp-base64-bytes";
+    } else if (charset) {
+      // U+FFFD may already hide a CDP decoding loss; refuse that ambiguous text.
+      if (body.includes("\ufffd")) throw new Error("CDP UTF-8 text may contain a lossy replacement.");
+      complete = bytes(body, false);
+      if (sseText(complete) !== body) throw new Error("CDP UTF-8 text did not roundtrip exactly.");
+      stream.encodingMethod = "declared-utf8-text-roundtrip";
+    } else {
+      // Chromium 149 InspectorPageAgent defaults unlabelled plaintext to
+      // ISO-8859-1; TextCodecLatin1 aliases it to this bijective Windows-1252 table.
+      const decoder = new TextDecoder("windows-1252", { fatal: true, ignoreBOM: true });
+      const inverse = new Map(Array.from({ length: 256 }, (_, byte) => [decoder.decode(Uint8Array.of(byte)), byte]));
+      if (inverse.size !== 256 || inverse.has("\ufffd") || inverse.get("€") !== 0x80 || inverse.get("‚") !== 0x82)
+        throw new Error("The Chromium plaintext inverse is not lossless.");
+      complete = Buffer.alloc(body.length);
+      let index = 0;
+      for (const character of body) {
+        if (!inverse.has(character)) throw new Error("CDP plaintext contains an unmappable character.");
+        complete[index++] = inverse.get(character);
+      }
+      if (index !== body.length || decoder.decode(complete) !== body) throw new Error("CDP plaintext did not roundtrip exactly.");
+      stream.encodingMethod = "chromium-149-default-windows-1252-inverse";
+    }
+    sseText(complete); // Fatal UTF-8 validation after decoder reversal, without JSON coercion.
+    return complete;
+  }
+  function finishedBody(stream) {
+    if (stream.termination !== "loadingFinished" || !stream.streamResourceContentError || stream.captureValidationError || stream.sizeExceeded
+      || stream.responseBodyAttempted || stream.status !== 200 || stream.contentType.split(";", 1)[0].trim() !== "text/event-stream") return;
+    stream.responseBodyAttempted = true;
+    // Retrieve the existing response for this exact CDP request, never replay it.
+    pending.push(cdp.send("Network.getResponseBody", { requestId: stream.requestId }).then(async response => {
+      const complete = await finishedBytes(response, stream);
+      if (stream.sizeExceeded) throw new Error(sizeError);
+      if (stream.termination !== "loadingFinished") throw new Error("Native SSE response did not remain finished during body retrieval.");
+      stream.completeBody = complete;
+      stream.captureMethod = "getResponseBody";
+      stream.captureError = null;
+    }).catch(error => { stream.responseBodyError = error.message; stream.captureError = error.message; }));
+  }
   cdp.on("Network.responseReceived", event => {
     const url = new URL(event.response.url);
     if (url.origin !== backend || !/^\/_elsa\/agent\/sessions\/[^/]+\/stream$/.test(url.pathname)) return;
     const contentType = Object.entries(event.response.headers).find(([key]) => key.toLowerCase() === "content-type")?.[1] ?? "";
-    const stream = { url: diagnosticUrl(url.href), status: event.response.status, contentType,
-      termination: "open", captureError: null, prefix: Buffer.alloc(0), chunks: [], streamedBytes: 0 };
+    const isSse = event.response.status === 200 && contentType.split(";", 1)[0].trim() === "text/event-stream";
+    const stream = { requestId: event.requestId, url: diagnosticUrl(url.href), status: event.response.status, contentType,
+      reportedCharset: event.response.charset ?? null, reportedMimeType: event.response.mimeType ?? null,
+      bodyProfile: "native-agent-api-utf8-no-bom-data-lines", bodyByteRepresentation: "response-body-after-content-decoding",
+      termination: "open", captureError: null, captureMethod: isSse ? "streamResourceContent" : "not-sse",
+      streamResourceContentError: null, responseBodyError: null, captureValidationError: null, responseBodyAttempted: false,
+      prefix: Buffer.alloc(0), chunks: [], streamedBytes: 0, completeBody: null, sizeExceeded: false };
     streams.set(event.requestId, stream);
+    if (!isSse) return;
     pending.push(cdp.send("Network.streamResourceContent", { requestId: event.requestId }).then(response => {
       // CDP bufferedData ends precisely where dataReceived.data starts. Events
       // can arrive before this promise resolves, so prepend this prefix once.
-      stream.prefix = Buffer.from(response.bufferedData, "base64");
-      if (stream.prefix.length + stream.streamedBytes > 8 * 1024 * 1024)
-        stream.captureError = "Native SSE capture exceeded its bounded evidence size.";
-    }).catch(error => { stream.captureError = error.message; }));
+      try {
+        const buffered = bytes(response.bufferedData, true, true);
+        if (buffered.length + stream.streamedBytes > limit) throw new Error(sizeError);
+        stream.prefix = buffered;
+      } catch (error) {
+        stream.captureValidationError = error.message; stream.captureError = error.message;
+        if (error.message === sizeError) stream.sizeExceeded = true;
+      }
+    }).catch(error => {
+      stream.streamResourceContentError = error.message;
+      if (error.message === sizeError) stream.sizeExceeded = true;
+      if (!stream.captureValidationError) stream.captureError = error.message;
+      finishedBody(stream);
+    }));
   });
   cdp.on("Network.dataReceived", event => {
     const stream = streams.get(event.requestId);
-    if (!stream || !event.data || stream.captureError) return;
-    const bytes = Buffer.from(event.data, "base64");
-    stream.streamedBytes += bytes.length;
-    if (stream.prefix.length + stream.streamedBytes > 8 * 1024 * 1024) {
-      stream.captureError = "Native SSE capture exceeded its bounded evidence size.";
-      return;
+    if (!stream || stream.captureMethod === "not-sse" || !event.data || stream.captureError || stream.completeBody) return;
+    try {
+      const received = bytes(event.data, true, true);
+      stream.streamedBytes += received.length;
+      if (stream.prefix.length + stream.streamedBytes > limit) throw new Error(sizeError);
+      stream.chunks.push(received);
+    } catch (error) {
+      stream.captureValidationError = error.message; stream.captureError = error.message;
+      if (error.message === sizeError) stream.sizeExceeded = true;
     }
-    stream.chunks.push(bytes);
   });
   cdp.on("Network.loadingFinished", event => {
     const stream = streams.get(event.requestId);
-    if (stream) stream.termination = "loadingFinished";
+    if (stream) { stream.termination = "loadingFinished"; finishedBody(stream); }
   });
   cdp.on("Network.loadingFailed", event => {
     const stream = streams.get(event.requestId);
@@ -178,8 +278,24 @@ async function captureNativeStreams(target) {
       const batch = pending.slice(settled); settled = pending.length;
       await Promise.all(batch);
     }
-    return [...streams.values()].map(({ prefix, chunks, ...stream }) => ({ ...stream, bufferedBytes: prefix.length,
-      rawBody: Buffer.concat([prefix, ...chunks]).toString("utf8") }));
+    return Promise.all([...streams.values()].map(async ({ prefix, chunks, completeBody, sizeExceeded, ...stream }) => {
+      const observed = completeBody ?? Buffer.concat([prefix, ...chunks]);
+      const partial = completeBody === null && ["open", "loadingFailed"].includes(stream.termination);
+      let rawBody = "", trailingIncompleteUtf8Bytes = null;
+      try {
+        rawBody = sseText(observed, partial);
+        const textBytes = Buffer.from(rawBody, "utf8");
+        trailingIncompleteUtf8Bytes = observed.length - textBytes.length;
+        if (trailingIncompleteUtf8Bytes < 0 || trailingIncompleteUtf8Bytes > (partial ? 3 : 0)
+          || !observed.subarray(0, textBytes.length).equals(textBytes)) throw new Error("Native SSE UTF-8 prefix did not roundtrip exactly.");
+      }
+      catch (error) { stream.captureValidationError ??= error.message; stream.captureError ??= error.message; }
+      return { ...stream, bufferedBytes: prefix.length, completeBodyBytes: completeBody?.length ?? 0,
+        observedBodyBytes: observed.length, textDecoding: partial ? "utf8-fatal-stream-prefix" : "utf8-fatal-complete",
+        trailingIncompleteUtf8Bytes, textTruncation: trailingIncompleteUtf8Bytes === null ? "unavailable"
+          : trailingIncompleteUtf8Bytes ? "trailing-incomplete-utf8" : "none",
+        reconstructedBodySha256: await hash(observed), rawBody };
+    }));
   };
 }
 function command(toolName, args) {
