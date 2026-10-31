@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ReactFlow, Background, Controls, MiniMap, type Edge, type Node } from "@xyflow/react";
+import { ReactFlow, Background, Controls, type Edge, type Node } from "@xyflow/react";
 import { ChevronLeft, ChevronRight, Fingerprint, ListTree, Maximize2, Minimize2, RotateCcw, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioAgentRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
 import { getDefinition } from "../api/workflowDesign";
@@ -55,6 +55,8 @@ import {
 } from "./useExecutableWorkflowRun";
 import { ExecutableRunButton } from "./ExecutableRunButton";
 import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
+import { readOnlyMinimapFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
+import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
 
 // The Executable Inspector (studio ADR 0010, plan §3): the routed read-only surface for one
 // content-addressed artifact. Structure comes from the Execution Material tree, geometry from the
@@ -349,6 +351,7 @@ function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenRefere
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             fitView
+            fitViewOptions={shouldShowReadOnlyMiniMap(canvas.nodes.length) ? readOnlyMinimapFitViewOptions : undefined}
             nodesDraggable={false}
             nodesConnectable={false}
             elementsSelectable
@@ -356,7 +359,7 @@ function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenRefere
             onPaneClick={() => onSelectNode(null)}
           >
             <Background />
-            <MiniMap pannable zoomable />
+            <WorkflowReadOnlyMiniMap nodeCount={canvas.nodes.length} />
             <Controls />
           </ReactFlow>
         )}

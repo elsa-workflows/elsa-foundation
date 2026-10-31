@@ -22,4 +22,15 @@ describe("run workbench responsive layout styles", () => {
     expect(workbench).toMatch(/min-width:\s*0;/);
     expect(toolbar).toMatch(/flex-wrap:\s*wrap;/);
   });
+
+  it("styles the shared read-only MiniMap as a compact tokenized overview", () => {
+    const minimap = ruleBody(styles, ".wf-instance-canvas .react-flow__minimap");
+
+    expect(minimap).toMatch(/width:\s*120px;/);
+    expect(minimap).toMatch(/height:\s*80px;/);
+    expect(minimap).toMatch(/background:\s*var\(--studio-surface\);/);
+    expect(minimap).toMatch(/border:\s*1px solid var\(--studio-border\);/);
+    expect(minimap).toMatch(/border-radius:\s*var\(--studio-radius-sm\);/);
+    expect(styles).toMatch(/html\[data-theme-material\][\s\S]*\.react-flow__minimap/);
+  });
 });

@@ -146,7 +146,7 @@ export function WorkflowExecutableInspectorPage({ context, ai, runInputEditors }
   }, []);
 
   return (
-    <WorkflowsPageFrame title="Executable Inspector">
+    <WorkflowsPageFrame title="Executable Inspector" workbench>
       <WorkflowLazyBoundary label="executable inspector">
         <WorkflowExecutableInspectorWorkbench
           context={context}

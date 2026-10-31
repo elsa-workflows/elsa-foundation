@@ -8,7 +8,7 @@ import { useScopedCanvasActivities } from "./scopedExecutionEvidence";
 import { browseActivityExecutions, supportsActivityExecutionBrowsing, type ActivityExecutionBrowseEntry } from "../api/runtime";
 import { createCursorHistory, getPreviousCursor, moveCursorHistoryNext, moveCursorHistoryPrevious, reconcileCursorHistory } from "./cursorHistory";
 import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import { applyNodeChanges, ReactFlow, Background, Controls, MiniMap, type Edge, type Node, type NodeChange, type ReactFlowInstance } from "@xyflow/react";
+import { applyNodeChanges, ReactFlow, Background, Controls, type Edge, type Node, type NodeChange, type ReactFlowInstance } from "@xyflow/react";
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityInputDescriptor, StudioAgentRegistry, StudioEndpointContext, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
@@ -66,6 +66,8 @@ import {
 } from "./editorHelpers";
 import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMode } from "./useRunDetailLayout";
 import { activateWorkflowCanvasNode, decorateWorkflowCanvasElements } from "./workflowAccessibility";
+import { readOnlyMinimapFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
+import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
 import { AdvancedSection, CopyableIdentifier, OverflowMenu, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import { RunWorkflowPicker } from "./RunWorkflowPicker";
 import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
@@ -2093,6 +2095,7 @@ function ReadOnlyWorkflowFlow({
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
       fitView
+      fitViewOptions={shouldShowReadOnlyMiniMap(flowNodes.length) ? readOnlyMinimapFitViewOptions : undefined}
       onInit={onInit}
       onNodesChange={onNodesChange}
       nodesDraggable={false}
@@ -2102,7 +2105,7 @@ function ReadOnlyWorkflowFlow({
       onPaneClick={() => onSelectEvidence(null)}
     >
       <Background />
-      <MiniMap pannable zoomable />
+      <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
       <Controls />
     </ReactFlow>
   );

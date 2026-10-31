@@ -1296,6 +1296,15 @@
   flex: 1;
 }
 
+.wf-instance-canvas .react-flow__minimap {
+  width: 120px;
+  height: 80px;
+  overflow: hidden;
+  background: var(--studio-surface);
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+}
+
 .wf-instance-inspector {
   grid-column: 3;
   display: flex;
