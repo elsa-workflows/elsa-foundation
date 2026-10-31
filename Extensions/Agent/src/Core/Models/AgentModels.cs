@@ -260,6 +260,8 @@ public sealed record AgentMessage(
     public IReadOnlyList<AgentToolResult> ToolResults { get; init; } = [];
     /// <summary>The engine tracks this message and the resource/result disclosures of its turn.</summary>
     public bool HasDisclosureProvenance { get; init; }
+    /// <summary>Complete immutable disclosure snapshots behind generated transcript content; null denotes an older/incomplete journal.</summary>
+    public IReadOnlyList<AgentDisclosureSnapshot>? DisclosureHistory { get; init; }
 }
 
 public sealed record AgentContextAttachment(
@@ -380,6 +382,8 @@ public sealed record AgentMessageCreateRequest(
     public string? DeliveryFingerprint { get; init; }
     public IReadOnlyList<AgentToolResult> ToolResults { get; init; } = [];
     public bool HasDisclosureProvenance { get; init; }
+    /// <summary>Complete disclosure dependencies for generated content, preserved unchanged by the owning session store.</summary>
+    public IReadOnlyList<AgentDisclosureSnapshot>? DisclosureHistory { get; init; }
 }
 
 public sealed record AgentContextRequest(

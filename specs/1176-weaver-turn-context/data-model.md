@@ -12,5 +12,6 @@ Reuse existing Agent context, request, target, client binding, diagnostic, propo
 | Prepared invocation | Owning tool plus generic review lifecycle | Original target/revision/client generation persist; navigation and changed authority cause explicit refusal when required. |
 | Accepted effect receipt | Owning tool/result persistence | Effect truth stays immutable; later disclosure is authorized separately. Continuation is mutation-free and never repeats execution. |
 | Resource-derived history | Agent messages with originating evidence | Current disclosure must be established before provider use; unavailable authority produces bounded withholding/refusal without rewriting truthful audit. |
+| Cumulative disclosure snapshots | Generic session and paused-turn provenance | Retain each distinct context/result snapshot disclosed during the turn and inherited from its transcript. Reauthorize snapshots separately so an omitted detail or reused attachment ID cannot erase an older dependency; keep current invocation context separate. |
 
 Installed module guidance remains distinct from resource data; only the installed source can confer that provenance. Module-specific data stays opaque in shared presentation and transport.

@@ -80,7 +80,8 @@ internal sealed class InMemoryAgentSessionService(IAgentAuditSink auditSink) : I
             PromptMode = request.PromptMode,
             DeliveryFingerprint = request.DeliveryFingerprint,
             ToolResults = Array.AsReadOnly(request.ToolResults.ToArray()),
-            HasDisclosureProvenance = request.HasDisclosureProvenance || request.Role == AgentRole.User
+            HasDisclosureProvenance = request.HasDisclosureProvenance || request.Role == AgentRole.User,
+            DisclosureHistory = request.DisclosureHistory is null ? null : AgentDisclosureHistory.Freeze(request.DisclosureHistory)
         };
         var messages = _messages.GetOrAdd(sessionId, _ => []);
 

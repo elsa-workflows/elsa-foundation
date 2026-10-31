@@ -140,6 +140,30 @@ projection that removes a scope cannot leave an older callback authorized. A cha
 identity or revision requires fresh intent rather than silently moving the accepted turn. Adding
 authorized detail targets while retaining the original binding is permitted.
 
+Generated transcript and paused state retain the complete disclosure history separately from the
+original request target and the current executable projection. The additive Core value
+`AgentDisclosureSnapshot(Context, ToolResults)` preserves each whole snapshot, including different
+versions with the same attachment ID. `AgentMessage`, `AgentMessageCreateRequest` and `AgentPausedTurn`
+add nullable `IReadOnlyList<AgentDisclosureSnapshot> DisclosureHistory`. Historical source hooks
+authorize those originals unchanged before later provider handoffs and callbacks; their returned
+historical projection never replaces retained dependencies. Inherited result dependencies do not
+become fresh execution results or change receipt-continuation semantics.
+
+Custom session stores must round-trip this field and existing provenance. Generated assistant
+`DeliveryFingerprint` covers content, original context, outcomes and disclosure history. Paused
+state also adds nullable `DisclosureHistoryFingerprint`, a canonical checksum of its complete state
+excluding the checksum itself. These checks detect incomplete or changed storage; they are not
+authorization, signatures or protection against a malicious store recomputing them. Missing legacy
+protected assistant/pause history refuses further provider use while accepted effect receipts remain
+retained. Empty unprotected legacy messages remain supported. A turn with resource evidence but no
+visible answer still retains a metadata-only journal, omitted from chat and provider message text.
+
+The generic engine bounds retained disclosure history to 64 distinct complete snapshots and 8 MiB
+of serialized evidence. It deep-copies snapshots and deduplicates by their complete canonical value,
+never by attachment ID. A bound refuses another disclosure before handoff; it never evicts a prior
+dependency to continue. These constants bound repeated SDK callbacks as well as host-driven turns;
+they do not introduce durable retention or recovery guarantees.
+
 `AgentContextOptions.SourceTimeout` defaults to10seconds and requires a positive finite supported
 timer interval. Backend descriptors default `Required=true`. Optional collection faults/deadlines
 produce bounded diagnostics; missing required evidence blocks use, and required unexpected faults

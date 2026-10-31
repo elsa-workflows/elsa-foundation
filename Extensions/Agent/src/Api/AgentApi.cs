@@ -173,7 +173,9 @@ public static class AgentApi
         var sessions = context.RequestServices.GetRequiredService<IAgentSessionService>();
         var data = new AgentSessionDetailsResponse(session!.Id, session.Status.ToContractString(), session.Title,
             (await sessions.ListContextAsync(sessionId, context.RequestAborted)).Select(x => x.ToResponse()).ToList(),
-            (await sessions.ListMessagesAsync(sessionId, context.RequestAborted)).Select(x => x.ToViewModel()).ToList());
+            (await sessions.ListMessagesAsync(sessionId, context.RequestAborted))
+                .Where(x => x.Role != AgentRole.Assistant || x.Content.Length > 0 || x.DisclosureHistory is null)
+                .Select(x => x.ToViewModel()).ToList());
         await WriteAsync(context, AgentApiResponse<AgentSessionDetailsResponse>.Success(data), AgentJsonContext.Default.AgentApiResponseAgentSessionDetailsResponse);
     }
 

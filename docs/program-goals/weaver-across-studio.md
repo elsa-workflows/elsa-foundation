@@ -46,6 +46,11 @@ The [31 October context-verification exception](https://github.com/elsa-workflow
 authorizes bounded resumption of #3439 after its compilation stop. The original failed attempts remain
 recorded; no acceptance, review, package or resulting-main gate is waived.
 
+The [31 October review-cap amendment](https://github.com/elsa-workflows/elsa-foundation/issues/3428#issuecomment-6546731187)
+reaffirms full end-to-end delivery and extends the review ceiling to 20 total rounds per Program PR.
+Completed rounds remain counted: #3514 resumes at round 7. Independent review, exact-head checks,
+authorized merge, resulting-main verification and all charter boundaries remain required.
+
 [M1 is verified Done](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143),
 merged through #3497 and qualified on resulting main `ab46bc22a`. Its package-only workflow and
 separate-resource journeys establish the bounded minimum, with deterministic provider-protocol

@@ -12,6 +12,12 @@ public sealed record AgentResourceTarget(string ModuleId, string ResourceType, s
 /// <summary>A module-defined JSON payload. Shared orchestration and providers preserve its meaning opaquely.</summary>
 public sealed record AgentPayload(string TypeId, string SchemaVersion, JsonElement Data);
 
+/// <summary>One complete context/result disclosure whose originals remain dependencies of a provider transcript.</summary>
+/// <remarks>Snapshots preserve grouping and distinct versions of the same attachment identity. They do not authorize execution.</remarks>
+public sealed record AgentDisclosureSnapshot(
+    IReadOnlyCollection<AgentContextAttachment> Context,
+    IReadOnlyList<AgentToolResult> ToolResults);
+
 /// <summary>Caller attribution retained through admission; these fields never grant tool authority.</summary>
 public sealed record AgentPromptSource(string? ModuleId, string? ActionId, string? Label);
 
