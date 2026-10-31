@@ -603,7 +603,9 @@ async function workflow() {
     expect(actualAck).toMatchObject({ outcome: "refused", summary: "The originating workflow editor is unavailable." });
     need(actualAck.result == null && actualAck.after == null, "Removed editor unexpectedly returned an applied observation.");
     observedLifecycle(ack, "refused", "The originating client refused the operation before application.");
-    await expect(proposal).toHaveAttribute("data-status", "refused");
+    // "refused" is the typed operation outcome; a non-executed refusal maps to
+    // the proposal's Failed status in both the owning store and Studio client.
+    await expect(proposal).toHaveAttribute("data-status", "failed");
     await expect(proposal).toContainText(ack.value.data.summary);
     const after = await owner("owner-after", definitionPath);
     expect(after.value.draft).toEqual(before.value.draft);
