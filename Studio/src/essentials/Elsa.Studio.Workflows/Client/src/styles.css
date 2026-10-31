@@ -156,9 +156,15 @@
   min-height: 0;
   min-width: 0;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(0, 1fr);
+  /* Header, toolbar, and optional run status/error stay auto. The workbench is
+     pinned to the last track so a status line cannot steal minmax(0, 1fr). */
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
   border: 0;
   border-radius: 0;
+}
+
+.wf-page--run-workbench > .wf-instance-detail-workbench {
+  grid-row: -2 / -1;
 }
 
 .wf-page--run-workbench > .wf-lazy-state {
@@ -1297,9 +1303,6 @@
 }
 
 .wf-instance-canvas .react-flow__minimap {
-  width: 120px;
-  height: 80px;
-  overflow: hidden;
   background: var(--studio-surface);
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius-sm);

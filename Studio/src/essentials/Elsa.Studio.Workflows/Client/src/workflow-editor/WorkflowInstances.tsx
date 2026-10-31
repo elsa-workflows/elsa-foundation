@@ -8,7 +8,7 @@ import { useScopedCanvasActivities } from "./scopedExecutionEvidence";
 import { browseActivityExecutions, supportsActivityExecutionBrowsing, type ActivityExecutionBrowseEntry } from "../api/runtime";
 import { createCursorHistory, getPreviousCursor, moveCursorHistoryNext, moveCursorHistoryPrevious, reconcileCursorHistory } from "./cursorHistory";
 import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import { applyNodeChanges, ReactFlow, Background, Controls, type Edge, type Node, type NodeChange, type ReactFlowInstance } from "@xyflow/react";
+import { ReactFlow, Background, Controls, type Edge, type Node, type ReactFlowInstance } from "@xyflow/react";
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityInputDescriptor, StudioAgentRegistry, StudioEndpointContext, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
@@ -67,6 +67,7 @@ import {
 import { runDetailMinInspectorWidth, useRunDetailLayout, type RunDetailLayoutMode } from "./useRunDetailLayout";
 import { activateWorkflowCanvasNode, decorateWorkflowCanvasElements } from "./workflowAccessibility";
 import { readOnlyMinimapFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
+import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
 import { AdvancedSection, CopyableIdentifier, OverflowMenu, StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import { RunWorkflowPicker } from "./RunWorkflowPicker";
@@ -2068,25 +2069,7 @@ function ReadOnlyWorkflowFlow({
   onSelectActivity(nodeId: string): void;
   onSelectEvidence(evidenceId: string | null): void;
 }) {
-  const [measuredNodes, setMeasuredNodes] = useState<Node<WorkflowNodeData>[]>([]);
-  const flowNodes = useMemo(() => mergeMeasuredNodeDimensions(nodes, measuredNodes), [measuredNodes, nodes]);
-
-  useEffect(() => {
-    setMeasuredNodes(current => {
-      const activeTypes = new Map(nodes.map(node => [node.id, node.type]));
-      const next = current.filter(node => activeTypes.get(node.id) === node.type);
-      return next.length === current.length ? current : next;
-    });
-  }, [nodes]);
-
-  const onNodesChange = useCallback((changes: NodeChange<Node<WorkflowNodeData>>[]) => {
-    const dimensionChanges = changes.filter(change => change.type === "dimensions");
-    if (dimensionChanges.length === 0) return;
-
-    setMeasuredNodes(current => {
-      return applyNodeChanges(dimensionChanges, mergeMeasuredNodeDimensions(nodes, current));
-    });
-  }, [nodes]);
+  const { flowNodes, onNodesChange } = useReadOnlyFlowNodes(nodes);
 
   return (
     <ReactFlow
@@ -2105,23 +2088,11 @@ function ReadOnlyWorkflowFlow({
       onPaneClick={() => onSelectEvidence(null)}
     >
       <Background />
+      <FitReadOnlyFlowView nodeCount={flowNodes.length} />
       <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
       <Controls />
     </ReactFlow>
   );
-}
-
-function mergeMeasuredNodeDimensions(
-  nodes: Node<WorkflowNodeData>[],
-  measuredNodes: Node<WorkflowNodeData>[]
-) {
-  const measuredById = new Map(measuredNodes.map(node => [node.id, node]));
-  return nodes.map(node => {
-    const measuredNode = measuredById.get(node.id);
-    return measuredNode && measuredNode.type === node.type && measuredNode.measured
-      ? { ...node, measured: measuredNode.measured }
-      : node;
-  });
 }
 
 // Builds the read-only run-inspection canvas for the scope addressed by `frames`. Slot badges navigate

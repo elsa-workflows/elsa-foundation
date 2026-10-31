@@ -56,6 +56,7 @@ import {
 import { ExecutableRunButton } from "./ExecutableRunButton";
 import { decorateWorkflowCanvasElements } from "./workflowAccessibility";
 import { readOnlyMinimapFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
+import { FitReadOnlyFlowView, useReadOnlyFlowNodes } from "./useReadOnlyFlowCanvas";
 import { WorkflowReadOnlyMiniMap } from "./WorkflowReadOnlyMiniMap";
 
 // The Executable Inspector (studio ADR 0010, plan §3): the routed read-only surface for one
@@ -326,6 +327,7 @@ function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenRefere
     () => buildExecutableInspectorCanvas(graph, activityCatalog, detail.chosenReference?.layout ?? [], frames, onNavigateToScope, selectedNodeId),
     [activityCatalog, detail, frames, graph, onNavigateToScope, selectedNodeId]
   );
+  const { flowNodes, onNodesChange } = useReadOnlyFlowNodes(canvas.nodes);
   const scopeKey = frames.length === 0 ? "root" : frames.map(frame => `${frame.ownerNodeId}:${frame.slotId}`).join("/");
 
   return (
@@ -346,12 +348,13 @@ function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenRefere
         {canvas.nodes.length === 0 ? <div className="wf-empty">This executable has no renderable activities.</div> : (
           <ReactFlow
             key={scopeKey}
-            nodes={canvas.nodes}
+            nodes={flowNodes}
             edges={canvas.edges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             fitView
-            fitViewOptions={shouldShowReadOnlyMiniMap(canvas.nodes.length) ? readOnlyMinimapFitViewOptions : undefined}
+            fitViewOptions={shouldShowReadOnlyMiniMap(flowNodes.length) ? readOnlyMinimapFitViewOptions : undefined}
+            onNodesChange={onNodesChange}
             nodesDraggable={false}
             nodesConnectable={false}
             elementsSelectable
@@ -359,7 +362,8 @@ function WorkflowExecutableCanvas({ detail, activityCatalog, graph, chosenRefere
             onPaneClick={() => onSelectNode(null)}
           >
             <Background />
-            <WorkflowReadOnlyMiniMap nodeCount={canvas.nodes.length} />
+            <FitReadOnlyFlowView nodeCount={flowNodes.length} />
+            <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
             <Controls />
           </ReactFlow>
         )}

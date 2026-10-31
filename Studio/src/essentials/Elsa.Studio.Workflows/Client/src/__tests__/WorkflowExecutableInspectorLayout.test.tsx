@@ -9,6 +9,8 @@ vi.mock("../workflow-editor/WorkflowExecutableInspector", () => ({
   WorkflowExecutableInspectorWorkbench: () => (
     <>
       <div className="wf-toolbar">toolbar</div>
+      <div className="studio-result-state" data-tone="danger" role="alert">The executable could not be run</div>
+      <div className="wf-status-line">Started artifact-1</div>
       <div className="wf-instance-detail-workbench">inspector workbench</div>
     </>
   )
@@ -49,6 +51,31 @@ describe("Executable Inspector page layout", () => {
     expect(page).toBeTruthy();
     expect(page?.querySelector(":scope > .wf-toolbar")).toBeTruthy();
     expect(page?.querySelector(":scope > .wf-instance-detail-workbench")).toBeTruthy();
+  });
+
+  it("keeps the workbench in the last grid track when a run status and run error are present", async () => {
+    window.history.replaceState({}, "", "/workflows/executables/artifact-1");
+    flushSync(() => root.render(
+      <WorkflowExecutableInspectorPage
+        context={{} as StudioEndpointContext}
+        ai={{} as StudioAgentRegistry}
+        runInputEditors={[]}
+      />
+    ));
+
+    await vi.waitFor(() => expect(container.textContent).toContain("inspector workbench"));
+    const page = container.querySelector(".wf-page.wf-page--run-workbench");
+    const workbench = page?.querySelector(":scope > .wf-instance-detail-workbench");
+    const status = page?.querySelector(":scope > .wf-status-line");
+    const runError = page?.querySelector(":scope > .studio-result-state[data-tone='danger']");
+    const children = [...(page?.children ?? [])];
+
+    expect(status?.textContent).toContain("Started artifact-1");
+    expect(runError?.textContent).toContain("The executable could not be run");
+    expect(workbench).toBeTruthy();
+    expect(children.at(-1)).toBe(workbench);
+    expect(children.indexOf(status as Element)).toBeLessThan(children.indexOf(workbench as Element));
+    expect(children.indexOf(runError as Element)).toBeLessThan(children.indexOf(workbench as Element));
   });
 
   it("does not put the executables list on the workbench grid", async () => {

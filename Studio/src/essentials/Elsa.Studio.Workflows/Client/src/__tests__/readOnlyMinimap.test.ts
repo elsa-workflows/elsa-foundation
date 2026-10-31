@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   READ_ONLY_MINIMAP_MAX_HIDDEN_NODES,
   readOnlyMinimapFitViewOptions,
+  readOnlyMinimapMaskColor,
+  readOnlyMinimapNodeColor,
   shouldShowReadOnlyMiniMap
 } from "../workflow-editor/readOnlyMinimap";
 
@@ -26,5 +28,12 @@ describe("readOnlyMinimapFitViewOptions", () => {
       bottom: 0.24,
       left: 0.12
     });
+  });
+});
+
+describe("read-only MiniMap token colors", () => {
+  it("uses studio text for node rects and a translucent text wash for the viewport mask", () => {
+    expect(readOnlyMinimapNodeColor).toBe("var(--studio-text)");
+    expect(readOnlyMinimapMaskColor).toMatch(/--studio-text/);
   });
 });
