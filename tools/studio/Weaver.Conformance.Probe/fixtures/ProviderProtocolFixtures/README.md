@@ -2,7 +2,7 @@
 
 This independently packed fixture replaces only the public client factories used by the real Elsa Copilot and Anthropic adapters. It adds no agent provider, orchestrator, tool registry or resource implementation. Every run is **deterministic provider-protocol evidence**, never live-provider evidence.
 
-Materialize this directory outside the repository. Replace `__PRODUCT_VERSION__`, `__CSHELLS_VERSION__` and `__FIXTURE_VERSION__`, rename `.csproj.in` files to `.csproj` and test `.cs.in` files to `.cs`, then restore/pack against the retained feed. Microsoft.Extensions.AI.Abstractions is explicitly pinned to central's current `10.5.1`. Product dependencies are PackageReferences only. Keep both adapter artifacts and this fixture package in the consumer's baseline. The independently authored resource is not a dependency.
+Materialize this directory outside the repository. Replace `__PRODUCT_VERSION__`, `__CSHELLS_VERSION__`, `__AI_ABSTRACTIONS_VERSION__` and `__FIXTURE_VERSION__`, rename `.csproj.in` files to `.csproj` and test `.cs.in` files to `.cs`, then restore/pack against the retained feed. The driver substitutes the actual central `Microsoft.Extensions.AI.Abstractions` pin through `artifacts.pin(...)`, so the fixture follows the product package minimum. Product dependencies are PackageReferences only. Keep both adapter artifacts and this fixture package in the consumer's baseline. The independently authored resource is not a dependency.
 
 ## Exact composition
 

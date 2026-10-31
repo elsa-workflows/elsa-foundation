@@ -43,7 +43,10 @@ provider/compiler and runtime; retain MAF inside the first concrete runtime impl
 **Evidence**: Elsa constitution §E2.1 pins `Elsa.Agent`, not `Elsa.Agents`. Existing
 `FoundationAgentAbstractionsFeature`/`AnthropicAgentFeature` and provider registry implement the
 single active Weaver harness. M0 pinned MAF 1.27.0 and demonstrated actual source composition,
-but the repository MEAI abstractions pin is 10.5.1 while MAF requires 10.10.1.
+but M0/M1 observed a repository MEAI abstractions pin of 10.5.1 while MAF requires 10.10.1.
+The normal central dependency enabler [#3544](https://github.com/elsa-workflows/elsa-foundation/issues/3544)
+now promotes 10.10.1 with affected locks and current Agent composition checks; this does not by itself
+qualify the later production specialist runtime/package closure.
 
 **Implementation consequence**: Review a normal central dependency upgrade, locks and nuspec graph;
 run existing Agent provider/turn/tool suites and normal CShells/Nuplane package composition. Core
