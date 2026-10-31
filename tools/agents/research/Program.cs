@@ -33,11 +33,14 @@ var schema = JsonSerializer.SerializeToElement(new
     type = "object", properties = new { article = new { type = "string" } },
     required = new[] { "article" }, additionalProperties = false
 });
-var format = ChatResponseFormat.ForJsonSchema(schema, "article");
+var requestedSchema = args.Contains("--replace-schema") ? JsonSerializer.SerializeToElement(new { type = "object" }) : schema;
+var format = ChatResponseFormat.ForJsonSchema(requestedSchema, "article");
 var options = new ChatClientAgentRunOptions(new ChatOptions { ResponseFormat = format, ModelId = "fixture-model" });
 var session = await agent.CreateSessionAsync();
 var response = await agent.RunAsync("First brief: moss gardens.", session, options);
-Check(client.Calls[0].Options?.ResponseFormat is ChatResponseFormatJson, "dynamic schema reaches model client");
+Check(client.Calls[0].Options?.ResponseFormat is ChatResponseFormatJson sent
+    && sent.Schema is { } forwardedSchema && JsonElement.DeepEquals(forwardedSchema, schema)
+    && sent.SchemaName == "article", "dynamic schema reaches model client");
 Check(client.Calls[0].Options?.ModelId == "fixture-model", "model selection reaches model client");
 Check(JsonDocument.Parse(response.Text).RootElement.GetProperty("article").GetString() == "draft", "structured result returned");
 Check(response.Usage?.InputTokenCount == 5 && response.Usage?.OutputTokenCount == 3, "usage returned");

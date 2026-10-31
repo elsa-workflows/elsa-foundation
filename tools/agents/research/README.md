@@ -35,6 +35,14 @@ The continuity negative control deliberately drops the restored session. It must
 bash tools/agents/research/run.sh --drop-continuity
 ```
 
+The schema negative control substitutes an unconstrained object schema. It must fail at
+`dynamic schema reaches model client`; the normal assertion compares the complete schema and name,
+including required members and `additionalProperties`:
+
+```bash
+bash tools/agents/research/run.sh --replace-schema
+```
+
 For the bounded source-project compatibility probe:
 
 ```bash

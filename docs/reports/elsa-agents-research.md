@@ -99,6 +99,12 @@ It must fail at `restored session sends previous user message`. This verifies th
 history continuity rather than only a successful SDK response. A separate-process restore still does
 not establish an atomic Elsa checkpoint or crash-after-external-effect recovery.
 
+The schema control `--replace-schema` substitutes an unconstrained object schema and must fail at
+`dynamic schema reaches model client`. Independent review identified that the initial assertion
+checked only the response-format type. The replacement schema passed that old guard, demonstrating
+the gap; the corrected guard compares the complete forwarded schema and name against the intended
+contract, and rejects the same substitution.
+
 ## Recommendations for M1
 
 1. Prefer a narrow MAF-backed specialist runner. Keep Foundation/Studio contracts free of SDK runtime
