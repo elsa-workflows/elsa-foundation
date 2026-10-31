@@ -196,7 +196,7 @@
 }
 
 .ad-draft-editor .ad-interface-suggestions {
-  margin: 16px 0;
+  margin: 0;
   padding: 12px 0;
   border: 0;
   border-top: 1px solid var(--studio-border);
@@ -210,15 +210,54 @@
 .ad-proposal-technical .ad-publication-summary { margin-top: 12px; }
 .ad-interface-connections-header h2 { margin: 0 0 4px; font-size: var(--studio-section-title-size); }
 .ad-interface-connections-header p { margin: 0; color: var(--studio-text-muted); }
-.ad-draft-editor .ad-graph-public-interface { display: grid; gap: 16px; margin: 24px 0 0; }
+.ad-public-interface-view { display: grid; gap: 24px; width: 100%; max-width: 84rem; min-width: 0; margin-inline: auto; }
+.ad-public-interface-view .ad-contract-editor { gap: 24px; margin: 0; padding: 24px; }
+.ad-public-interface-view .ad-contract-header { padding: 0; border: 0; }
+.ad-public-interface-view .ad-contract-header p { margin: 0; color: var(--studio-text-muted); }
+.ad-public-interface-view .ad-contract-advanced > summary { color: var(--studio-text-muted); font-weight: 600; }
+.ad-draft-editor .ad-graph-public-interface {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 24px;
+  margin: 0;
+  padding: 24px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+}
+.ad-interface-connections-header { grid-column: 1 / -1; }
 .ad-draft-editor .ad-graph-output-mappings,
-.ad-draft-editor .ad-graph-outcome-mappings { gap: 12px; padding: 16px 0; border: 0; border-top: 1px solid var(--studio-border); border-radius: 0; background: transparent; }
-.ad-draft-editor .ad-graph-output-mapping { padding: 12px; border-radius: var(--studio-radius-sm); background: var(--studio-surface); }
+.ad-draft-editor .ad-graph-outcome-mappings { min-width: 0; gap: 12px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.ad-draft-editor .ad-graph-output-mapping { padding: 12px; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-sm); background: transparent; }
 .ad-draft-editor .ad-graph-output-mapping > header strong { font-weight: 600; }
-.ad-draft-editor .ad-graph-outcome-mapping-add { gap: 12px; }
-.ad-draft-editor .ad-graph-outcome-mapping-add label { min-width: 0; }
+.ad-draft-editor .ad-graph-outcome-mappings li { align-items: center; padding: 8px 12px; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-sm); }
+.ad-draft-editor .ad-graph-outcome-mappings li > span { min-width: 0; overflow-wrap: anywhere; }
+.ad-draft-editor .ad-graph-outcome-mapping-add { gap: 12px; margin-top: 4px; }
+.ad-draft-editor .ad-graph-outcome-mapping-add label { display: grid; gap: 6px; min-width: 0; color: var(--studio-text-muted); font-size: var(--studio-label-size); }
+.ad-graph-outcome-mapping-add select,
+.ad-graph-output-mapping > label select {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  font: inherit;
+}
+.ad-graph-outcome-mapping-add select:focus-visible,
+.ad-graph-output-mapping > label select:focus-visible { outline: 2px solid var(--studio-focus); outline-offset: 2px; }
+
+@media (max-width: 1100px) {
+  .ad-draft-editor .ad-graph-public-interface { grid-template-columns: minmax(0, 1fr); }
+}
 
 @media (max-width: 760px) {
+  .ad-public-interface-view .ad-contract-editor,
+  .ad-draft-editor .ad-graph-public-interface { padding: 16px; }
   .ad-draft-editor .ad-graph-outcome-mapping-add { grid-template-columns: 1fr; }
+  .ad-draft-editor .ad-graph-outcome-mapping-add > button { justify-self: start; }
   .ad-draft-editor .ad-graph-outcome-mappings li { grid-template-columns: minmax(0, 1fr) auto; }
 }
