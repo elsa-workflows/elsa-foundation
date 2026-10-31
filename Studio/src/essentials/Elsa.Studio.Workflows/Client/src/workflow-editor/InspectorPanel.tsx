@@ -13,6 +13,8 @@ import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, Activity
 import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
 import type { ScopedVariableAnalysis } from "../api/workflowDesign";
 import { slotCrumbLabel, type ChildSlot } from "../workflowAdapter";
+import { getCollectionSlots } from "../collectionSlots";
+import { CollectionSlotEditor } from "./CollectionSlotEditor";
 import { HttpEndpointResponseWarning } from "../HttpEndpointResponseWarning";
 import { withHttpEndpointResponseMode } from "../httpEndpointResponseMode";
 import { isHttpEndpointType } from "./httpTestRequest";
@@ -35,6 +37,7 @@ import { StudioLink } from "../StudioLink";
 interface SlotPickerState {
   nodeId: string;
   slotId: string;
+  collectionItemLabel?: string;
   clientX: number;
   clientY: number;
 }
@@ -156,7 +159,10 @@ export function InspectorPanel({
   const [slotPicker, setSlotPicker] = useState<SlotPickerState | null>(null);
   const [localActiveTabId, setLocalActiveTabId] = useState<ActivityInspectorTabId>("inputs");
   const tabBaseId = useId();
-  const hasSlots = selectedSlots.length > 0;
+  const selectedCatalogItem = catalogByVersion?.get(selectedNode?.activityVersionId ?? "")
+    ?? catalog.find(item => item.activityVersionId === selectedNode?.activityVersionId);
+  const collections = selectedNode ? getCollectionSlots(selectedNode, selectedCatalogItem) : [];
+  const hasSlots = selectedSlots.length > 0 || collections.length > 0;
   const requestedTabId = activeTabId ?? localActiveTabId;
   const effectiveActiveTabId = resolveActivityInspectorTabId(requestedTabId, selectedSupportsScopedVariables, hasSlots);
   const inspectorTabs: StudioTabItem[] = [
@@ -187,7 +193,8 @@ export function InspectorPanel({
 
   // Adjust-during-render: an open picker belongs to the node it was opened for; drop it the moment the
   // selection moves, so it neither survives a selection change nor resurrects on reselection.
-  if (slotPicker && slotPicker.nodeId !== selectedNode?.nodeId) {
+  if (slotPicker && (slotPicker.nodeId !== selectedNode?.nodeId || !selectedSlots.some(slot =>
+    slot.id === slotPicker.slotId && slot.collectionItemLabel === slotPicker.collectionItemLabel))) {
     setSlotPicker(null);
   }
 
@@ -249,8 +256,20 @@ export function InspectorPanel({
       onChange={onSelectedActivityChange}
     />
   );
-  const selectedCatalogItem = catalogByVersion?.get(selectedNode.activityVersionId)
-    ?? catalog.find(item => item.activityVersionId === selectedNode.activityVersionId);
+  const renderSlot = (slot: ChildSlot) => {
+    const label = slotCrumbLabel(selectedNodeLabel, slot);
+    return <div className="wf-slot-row" key={slot.id}>
+      <button type="button" onClick={() => onEnterSlot(selectedNode.nodeId, slot, label)}>
+        {slot.label}<small>{describeSlotContents(slot, catalogByVersion)}</small>
+      </button>
+      {!readOnly && slot.cardinality === "single" ? <button
+        type="button" className="wf-slot-change"
+        aria-label={`${slot.activities.length > 0 ? "Change" : "Choose"} ${slot.label} activity`}
+        title={slot.activities.length > 0 ? "Change activity" : "Choose activity"}
+        onClick={event => setSlotPicker({ nodeId: selectedNode.nodeId, slotId: slot.id, collectionItemLabel: slot.collectionItemLabel, clientX: event.clientX, clientY: event.clientY })}
+      ><Repeat2 size={14} /></button> : null}
+    </div>;
+  };
 
   return (
     <div className="wf-inspector-content">
@@ -354,28 +373,15 @@ export function InspectorPanel({
         {hasSlots ? (
           <StudioTabPanel {...tabPanelProps("slots")}>
             <div className="wf-slot-list">
-              {selectedSlots.map(slot => {
-                const label = slotCrumbLabel(selectedNodeLabel, slot);
-                return (
-                  <div className="wf-slot-row" key={slot.id}>
-                    <button type="button" onClick={() => onEnterSlot(selectedNode.nodeId, slot, label)}>
-                      {slot.label}
-                      <small>{describeSlotContents(slot, catalogByVersion)}</small>
-                    </button>
-                    {slot.cardinality === "single" ? (
-                      <button
-                        type="button"
-                        className="wf-slot-change"
-                        aria-label={`${slot.activities.length > 0 ? "Change" : "Choose"} ${slot.label} activity`}
-                        title={slot.activities.length > 0 ? "Change activity" : "Choose activity"}
-                        onClick={event => setSlotPicker({ nodeId: selectedNode.nodeId, slotId: slot.id, clientX: event.clientX, clientY: event.clientY })}
-                      >
-                        <Repeat2 size={14} />
-                      </button>
-                    ) : null}
-                  </div>
-                );
-              })}
+              {collections.map(collection => <CollectionSlotEditor
+                key={collection.property} activity={selectedNode} collection={collection} readOnly={readOnly}
+                onChange={next => { setSlotPicker(null); onSelectedActivityChange(next); }}
+                renderBranch={index => {
+                  const slot = selectedSlots.find(candidate => candidate.collectionProperty === collection.property && candidate.collectionIndex === index);
+                  return slot ? renderSlot(slot) : null;
+                }}
+              />)}
+              {selectedSlots.filter(slot => !collections.some(collection => collection.property === slot.collectionProperty)).map(renderSlot)}
             </div>
             {slotPicker ? (
               <ConnectMenu

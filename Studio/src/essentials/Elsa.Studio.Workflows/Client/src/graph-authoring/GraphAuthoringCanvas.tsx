@@ -3,12 +3,13 @@ import { Background, Controls, ReactFlow, type Node, type ReactFlowProps } from 
 import { GraphOverflowMiniMap } from "./GraphOverflowMiniMap";
 import type { WorkflowEdge, WorkflowNodeAvailabilityLookup } from "../workflow-editor/editorTypes";
 import type { WorkflowNodeData } from "../workflowAdapter";
-import type { WorkflowSlotNavigation } from "../workflow-editor/contexts";
+import type { CollectionSlotAction, WorkflowSlotNavigation } from "../workflow-editor/contexts";
 import {
   WorkflowEdgeActionsContext,
   WorkflowNodeActionsContext,
   WorkflowNodeAvailabilityContext,
-  WorkflowSlotNavigationContext
+  WorkflowSlotNavigationContext,
+  CollectionSlotActionsContext
 } from "../workflow-editor/contexts";
 import type { WorkflowEdgeActions, WorkflowNodeActions } from "../workflow-editor/contexts";
 import { edgeTypes, nodeTypes } from "../workflow-editor/graph";
@@ -22,6 +23,7 @@ export interface GraphAuthoringCanvasProps {
   nodeActions?: WorkflowNodeActions | null;
   availabilityLookup?: WorkflowNodeAvailabilityLookup | null;
   slotNavigation?: WorkflowSlotNavigation | null;
+  collectionAction?: CollectionSlotAction | null;
   overlays?: ReactNode;
 }
 
@@ -37,6 +39,7 @@ export function GraphAuthoringCanvas({
   nodeActions = null,
   availabilityLookup = null,
   slotNavigation = null,
+  collectionAction = null,
   overlays
 }: GraphAuthoringCanvasProps) {
   const className = ["wf-canvas", canvasProps?.className].filter(Boolean).join(" ");
@@ -46,6 +49,7 @@ export function GraphAuthoringCanvas({
         <WorkflowNodeActionsContext.Provider value={nodeActions}>
           <WorkflowNodeAvailabilityContext.Provider value={availabilityLookup}>
             <WorkflowSlotNavigationContext.Provider value={slotNavigation}>
+              <CollectionSlotActionsContext.Provider value={collectionAction}>
               <ReactFlow<Node<WorkflowNodeData>, WorkflowEdge>
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
@@ -63,6 +67,7 @@ export function GraphAuthoringCanvas({
                 <Controls />
                 <GraphOverflowMiniMap />
               </ReactFlow>
+              </CollectionSlotActionsContext.Provider>
             </WorkflowSlotNavigationContext.Provider>
           </WorkflowNodeAvailabilityContext.Provider>
         </WorkflowNodeActionsContext.Provider>

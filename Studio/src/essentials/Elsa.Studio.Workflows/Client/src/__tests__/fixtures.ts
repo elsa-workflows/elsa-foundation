@@ -117,6 +117,26 @@ export function ifNode(nodeId: string, then: ActivityNode | null = null, otherwi
   };
 }
 
+export function collectionActivity(kind: "switch" | "parallel"): ActivityCatalogItem {
+  const isSwitch = kind === "switch";
+  const name = isSwitch ? "Switch" : "Parallel";
+  const property = isSwitch ? "cases" : "branches";
+  const label = isSwitch ? "match" : "name";
+  return {
+    ...writeLine,
+    activityVersionId: `activity-${kind}-v1`, activityTypeKey: `Elsa.Activities.${name}.Activities.${name}`,
+    category: "Control Flow", displayName: name,
+    designFacets: [{ kind: `elsa.${kind}.structure`, schemaVersion: "1.0.0", payload: {
+      mode: "generic", supportsScopedVariables: false,
+      slots: [{ name: `${name}.${isSwitch ? "Case" : "Branch"}`, property,
+        displayName: isSwitch ? "Cases" : "Branches", cardinality: "single", collectionProperty: property,
+        childProperty: "activity", labelProperty: label, slotNameTemplate: `${name}.${isSwitch ? "Case" : "Branch"}[{${label}}]` },
+      ...(isSwitch ? [{ name: "Switch.Default", property: "default", displayName: "Default", cardinality: "single" }] : [])],
+      initialPayload: { [property]: [], ...(isSwitch ? { default: null } : {}) }
+    } }]
+  };
+}
+
 export const whileActivity: ActivityCatalogItem = {
   ...writeLine,
   activityVersionId: "activity-while-v1",
