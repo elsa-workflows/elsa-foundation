@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Workflows.Design.Api.Services;
 
 /// <summary>Rejects ambiguous query visibility before a shell starts accepting requests.</summary>
-internal sealed class ValidateWorkflowLibraryVisibilityPolicyStartupTask(IServiceCollection services) : IStartupTask
+internal sealed class LibraryVisibilityStartupTask(IServiceCollection services) : IStartupTask
 {
     public Task ExecuteAsync(CancellationToken cancellationToken)
     {

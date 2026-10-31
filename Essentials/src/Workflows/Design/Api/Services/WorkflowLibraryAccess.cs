@@ -46,7 +46,7 @@ internal static class WorkflowLibraryAccess
 
     public static async ValueTask<WorkflowLibraryReadScope> ReadScopeAsync(HttpContext context, CancellationToken cancellationToken)
     {
-        ValidateWorkflowLibraryVisibilityPolicyStartupTask.Validate(context.RequestServices.GetRequiredService<IServiceCollection>());
+        LibraryVisibilityStartupTask.Validate(context.RequestServices.GetRequiredService<IServiceCollection>());
         var policy = context.RequestServices.GetService<IWorkflowLibraryVisibilityPolicy>();
         if (policy is null)
         {

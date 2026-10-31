@@ -343,7 +343,7 @@ public sealed class WorkflowLibraryApiContractTests
             services.AddSingleton<IWorkflowLibraryVisibilityPolicy>(new FixedVisibility(new("broader")));
         });
         var validator = Assert.Single(host.Services.GetServices<IStartupTask>(), task =>
-            task.GetType().Name == "ValidateWorkflowLibraryVisibilityPolicyStartupTask");
+            task.GetType().Name == "LibraryVisibilityStartupTask");
         var startupException = await Assert.ThrowsAsync<InvalidOperationException>(() => validator.ExecuteAsync(CancellationToken.None));
         Assert.Contains(nameof(IWorkflowLibraryVisibilityPolicy), startupException.Message, StringComparison.Ordinal);
         Assert.Contains("multiple registrations", startupException.Message, StringComparison.Ordinal);
