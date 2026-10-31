@@ -95,7 +95,7 @@ import "./themes/workspaceStyles.css";
 import { AgentLauncher, createAgentClient, type AgentSessionIndicatorSession } from "./agent";
 import "./agent/agent.css";
 import "./weaver/weaver.css";
-import { BackendConnections, PreparedBackend, reloadRetiredBackendOnPageRestore } from "./backends/connections";
+import { BackendConnections, PreparedBackend, reloadBackendOnPageRestore } from "./backends/connections";
 import { BackendConnectionNotice, BackendSwitcher, backendNavigation } from "./backends/BackendsPage";
 import { HostAuthContext } from "./backends/HostAuthContext";
 
@@ -1615,7 +1615,7 @@ function BackendApplication({authManager}:{authManager:AuthProviderManager|null}
   const hostAuth = useAuthContext();
   const [connections] = useState(() => new BackendConnections(getStudioRuntimeConfig(),createStudioEndpointContext(window.location.origin,authManager),authManager,hostAuth.session));
   const snapshot = useSyncExternalStore(connections.subscribe,connections.getSnapshot);
-  useEffect(() => {void connections.initialize();return reloadRetiredBackendOnPageRestore(connections);},[connections]);
+  useEffect(() => {void connections.initialize();return reloadBackendOnPageRestore(connections);},[connections]);
   if (!snapshot.active) return <ThemeProvider storeContext={connections.hostContext}><ShellFrame navigation={[backendNavigation,appearanceNavigation]} panels={[]} path="/settings/backends" title="Backends" backendBaseUrl={resolveRuntimeBaseUrl(getStudioRuntimeConfig().backendBaseUrl,window.location.origin)} backendAction={<BackendSwitcher connections={connections} onNavigate={path => window.location.assign(path)} />} onNavigate={path => window.location.assign(path)} accountAction={<UserMenu />}><BackendConnectionNotice connections={connections} /><Suspense fallback={<SkeletonRows rows={3} />}><BackendsPage connections={connections} navigate={path => window.location.assign(path)} /></Suspense></ShellFrame></ThemeProvider>;
   const content = <SelectedBackendApplication authManager={authManager} backendSession={snapshot.active} connections={connections} />;
   return <HostAuthContext.Provider value={hostAuth}>{snapshot.active.manager === authManager ? content : snapshot.active.manager ? <AuthProvider manager={snapshot.active.manager}>{content}</AuthProvider> : <AnonymousAuthProvider>{content}</AnonymousAuthProvider>}</HostAuthContext.Provider>;

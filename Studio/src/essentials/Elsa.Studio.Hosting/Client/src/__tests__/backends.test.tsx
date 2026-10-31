@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BackendConnections, PreparedBackend, canonicalBackendUrl, validatePersonalProfiles, reloadRetiredBackendOnPageRestore } from "../app/backends/connections";
+import { BackendConnections, PreparedBackend, canonicalBackendUrl, validatePersonalProfiles, reloadBackendOnPageRestore } from "../app/backends/connections";
 import {
   evaluateBackendRequirements, getBackendCapabilities, resolveBackendPath, qualifyStudioBackendPath, validateApiCapabilities,
   createEndpointContext, StudioHttpError, studioNavigationRequestedEvent,
@@ -183,9 +183,9 @@ describe("resource navigation lifetime admission",()=>{
   it("reloads a retired connection restored from the browser cache",async()=>{
     vi.stubGlobal("fetch",vi.fn(async()=>response(document)));
     const {connections}=controller();await connections.initialize();
-    const reload=vi.fn();const cleanup=reloadRetiredBackendOnPageRestore(connections,reload);
+    const reload=vi.fn();const cleanup=reloadBackendOnPageRestore(connections,reload);
     try {
-      window.dispatchEvent(new PageTransitionEvent("pageshow",{persisted:true}));expect(reload).not.toHaveBeenCalled();
+      window.dispatchEvent(new PageTransitionEvent("pageshow",{persisted:false}));expect(reload).not.toHaveBeenCalled();
       connections.getSnapshot().active!.dispose();
       window.dispatchEvent(new PageTransitionEvent("pageshow",{persisted:false}));expect(reload).not.toHaveBeenCalled();
       window.dispatchEvent(new PageTransitionEvent("pageshow",{persisted:true}));expect(reload).toHaveBeenCalledTimes(1);

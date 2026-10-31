@@ -90,6 +90,10 @@ test.describe("backend connections against composed hosts",()=>{
     await expect(page.getByRole("link",{name:"Runs",exact:true})).toHaveAttribute("href",/backend=runtime/);
     expect(secondaryBearers.size>0).toBe(true);
     expect([...secondaryBearers].every(bearer=>!primaryBearers.has(bearer))).toBe(true);
+    await page.goBack();
+    await expect(page.getByRole("button",{name:/Select backend\. Current: Authoring/})).toBeVisible();
+    await page.goForward();
+    await expect(page.getByRole("button",{name:/Select backend\. Current: Runtime/})).toBeVisible();
     await page.goto(`/workflows/definitions?definition=shared-resource-id&backend=${secondary}`);
     await expect(page.getByText("This backend does not support elsa.api.workflow-design.",{exact:true})).toBeVisible();
     await page.reload();

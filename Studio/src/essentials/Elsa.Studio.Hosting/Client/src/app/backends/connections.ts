@@ -342,9 +342,9 @@ export class BackendConnections {
 }
 
 
-/** A retired document can return from the browser's back-forward cache with its old JavaScript state intact. */
-export function reloadRetiredBackendOnPageRestore(connections:BackendConnections,reload=()=>window.location.reload()) {
-  const restore=(event:PageTransitionEvent)=>{if(event.persisted && connections.getSnapshot().active?.disposed) reload();};
+/** A cached document must rediscover identity and capabilities before showing retained backend data. */
+export function reloadBackendOnPageRestore(connections:BackendConnections,reload=()=>window.location.reload()) {
+  const restore=(event:PageTransitionEvent)=>{if(event.persisted && connections.getSnapshot().active) reload();};
   window.addEventListener("pageshow",restore);
   return ()=>window.removeEventListener("pageshow",restore);
 }
