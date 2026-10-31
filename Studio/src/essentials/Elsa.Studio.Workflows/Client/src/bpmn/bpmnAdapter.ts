@@ -4,6 +4,7 @@ import { indexActivityPresentation, resolveActivityLabel } from "../activityPres
 import type { WorkflowRuntimeNodeOverlay } from "../workflowAdapter";
 import { resolveActivityIcon, resolveActivityIconTone } from "../activityIcons";
 import { collectActivityNodeIds, getActivityDisplay, getChildSlots, readStructureDesignFacet, type ActivityCatalogLookup, type ActivityIconTone, type CanvasScope, type ChildSlot, type WorkflowNodeIcon } from "../workflowAdapter";
+import { getCollectionSlots, type CollectionSlot } from "../collectionSlots";
 import {
   bpmnElementTypes,
   bpmnStructureKind,
@@ -32,6 +33,7 @@ export interface BpmnNodeData extends Record<string, unknown> {
   // (empty for events, gateways, unbound tasks, and tasks bound to a leaf). Slot entry addresses
   // `boundActivity.nodeId`, never the element id — see NodeSlotBadges.
   childSlots: ChildSlot[];
+  collectionSlots?: CollectionSlot[];
   runtimeNodeId?: string;
   runtime?: WorkflowRuntimeNodeOverlay;
   executionPulse?: string;
@@ -126,7 +128,8 @@ function createBpmnNode(
       label: element.name?.trim() || boundActivity?.label || "",
       boundActivity,
       runtimeNodeId: boundActivity?.nodeId ?? element.elementId,
-      childSlots: boundActivityNode ? getChildSlots(boundActivityNode, catalogByVersion) : []
+      childSlots: boundActivityNode ? getChildSlots(boundActivityNode, catalogByVersion) : [],
+      collectionSlots: boundActivityNode ? getCollectionSlots(boundActivityNode, catalogItem) : []
     }
   };
 }
@@ -258,7 +261,8 @@ export function createBpmnBoundNode(
         icon: resolveActivityIcon(catalogItem),
         iconTone: resolveActivityIconTone(catalogItem)
       },
-      childSlots: getChildSlots(activityNode, catalogItem)
+      childSlots: getChildSlots(activityNode, catalogItem),
+      collectionSlots: getCollectionSlots(activityNode, catalogItem)
     }
   };
 }

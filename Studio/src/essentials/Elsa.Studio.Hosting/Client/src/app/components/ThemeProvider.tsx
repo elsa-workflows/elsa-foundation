@@ -18,6 +18,7 @@ import {
 } from "../themes/navMode";
 import {
   readAppearancePreferences,
+  hasStoredAppearancePreference,
   resetAppearancePreferences,
   resolveModePreference,
   watchSystemThemeMode,
@@ -76,10 +77,11 @@ export function ThemeProvider({
   const storeLoaded = loadedStore !== undefined;
   const [baseTheme, setCurrentTheme] = useState<Theme>(builtInThemeDefinitions[0]);
   const [preview, setPreview] = useState<Theme>();
-  const [workspaceStyle, setWorkspaceStyleState] = useState<WorkspaceStyle | null>(null);
+  const [workspaceStyle, setWorkspaceStyleState] = useState<WorkspaceStyle | null>("linen");
   const [colorSchemeId, setColorSchemeId] = useState<string | null>(null);
   const currentTheme = preview ?? baseTheme;
-  const activeStyle = preview ? null : workspaceStyle;
+  const inheritedStyle = currentTheme.id === "linen" ? "linen" : null;
+  const activeStyle = preview ? inheritedStyle : workspaceStyle ?? inheritedStyle;
   const currentColorScheme = preview ?? (colorSchemeId === null ? baseTheme : findSelectableTheme(store, colorSchemeId));
   const styledTheme = React.useMemo(() => applyWorkspaceStyle(currentTheme, activeStyle), [currentTheme, activeStyle]);
   // The preferred mode survives theme switches: picking High contrast, visiting a light/dark-only
@@ -114,7 +116,7 @@ export function ThemeProvider({
     if (storeLoaded && saved.themeId !== null) {
       writeAppearancePreferences({ themeId: nextTheme.id });
     }
-    if (storeLoaded && saved.colorSchemeId !== null) {
+    if (storeLoaded && saved.colorSchemeId !== null && hasStoredAppearancePreference("colorSchemeId")) {
       writeAppearancePreferences({ colorSchemeId: nextColorSchemeId });
     }
     setMounted(true);
@@ -171,6 +173,17 @@ export function ThemeProvider({
       }
     });
 
+    // Navigation is a separate surface. In light Linen use the palette's dark navigation
+    // pair; custom light-only palettes retain their own coherent pair.
+    const navigationColors = activeStyle === "linen" && activeMode === "light"
+      ? getThemeModeDefinition(currentColorScheme, "dark") ?? colors
+      : colors;
+    for (const [role, value] of Object.entries({
+      bg: navigationColors.sidebar, text: navigationColors.sidebarForeground,
+      active: navigationColors.sidebarActive, "active-text": navigationColors.sidebarActiveForeground,
+      muted: navigationColors.sidebarForeground
+    })) root.style.setProperty(`--studio-nav-${role}`, value);
+
     // `data-theme-mode` stays the light/dark colour scheme — the contract module CSS keys on — and
     // `data-theme-appearance` carries the exact mode (light, dark, dim, high-contrast).
     root.setAttribute("data-theme", currentTheme.id);
@@ -226,8 +239,8 @@ export function ThemeProvider({
     setModePreferenceState(defaults.mode);
     setNavModePreferenceState(defaults.navigation);
     setPreview(undefined);
-    setWorkspaceStyleState(null);
-    setColorSchemeId(null);
+    setWorkspaceStyleState(defaults.workspaceStyle);
+    setColorSchemeId(defaults.colorSchemeId);
     // Not persisted: the configured default theme applies until the user picks one again.
     setCurrentTheme(findSelectableTheme(store, defaults.themeId));
   };

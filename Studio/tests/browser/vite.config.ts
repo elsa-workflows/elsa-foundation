@@ -4,6 +4,9 @@ import { resolve } from "node:path";
 
 export default defineConfig({
   root: __dirname,
+  // Keep the fixture optimizer separate from package builds and other Vite entry points.
+  // Sharing their cache invalidates dependency URLs in already-open browser sessions.
+  cacheDir: resolve(__dirname, "../../node_modules/.vite/browser"),
   plugins: [react()],
   // A first-use optimizer reload discards in-flight mocked authoring sessions.
   optimizeDeps: { include: ["lucide-react/dynamicIconImports"] },

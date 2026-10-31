@@ -9,3 +9,13 @@ Quiet Studio, Focus Canvas and Open Studio are supported workspace compositions.
 The host publishes separate style and palette identities. Modules read semantic tokens and the existing structural-layout contract; a palette name never selects behavior. Surface-owned styles remain deferred with their owning components. Live appearance updates preserve resource component instances and authoring/inspection state.
 
 Navigation remains independently overridable under ADR 0022. Workspace defaults are left for Quiet/Focus and top for Open. Floating tools retain keyboard-accessible sizing and use adaptive docked behavior on narrow displays. Reset clears both new overrides with the existing appearance/chrome keys. Pending custom identities remain protected until a successful store load; preview is transient and does not replace persisted choices.
+
+
+## Linen follow-up, 31 October 2026
+
+The owner selected Linen and authorized end-to-end delivery under Foundation #3496 (spec 1172).
+Linen becomes the fresh-profile workspace and palette default; existing explicit presets/arrangements,
+palettes, modes and navigation remain valid. Missing preferences follow host defaults, while explicit
+preset choices are persisted distinctly. Linen's original presentation also resolves through its
+workspace treatment. Host branding and identity-owned login presentation are documented in the
+[branding guide](../branding.md); this does not change authentication behavior or theme-pack schema.

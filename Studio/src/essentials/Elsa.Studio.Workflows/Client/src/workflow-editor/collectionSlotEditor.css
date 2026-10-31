@@ -1,0 +1,64 @@
+.wf-slot-collection-slots {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+
+.wf-slot-collection-heading,
+.wf-slot-collection-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wf-slot-collection-heading {
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.wf-slot-collection-heading h4 {
+  margin: 0;
+}
+
+.wf-slot-collection-heading button,
+.wf-slot-collection-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.wf-slot-collection-item {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--studio-border);
+  border-radius: 6px;
+}
+
+.wf-slot-collection-label-row input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+.wf-slot-collection-remove {
+  flex: 0 0 auto;
+}
+
+.wf-slot-list .wf-slot-collection-heading > button,
+.wf-slot-list button.wf-slot-collection-remove {
+  width: auto;
+}
+
+.wf-slot-collection-slots .wf-slot-row > button:first-child {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.wf-slot-collection-error {
+  color: var(--studio-danger);
+  margin: 0;
+  overflow-wrap: anywhere;
+}

@@ -7,7 +7,7 @@
   flex-direction: column;
   overflow: auto;
   color: var(--studio-text);
-  background: var(--studio-bg);
+  background: var(--studio-canvas);
   font-family: var(--studio-font-ui);
 }
 
@@ -219,6 +219,7 @@ html[data-workspace-style][data-theme-appearance="high-contrast"] .wf-sequence-i
   gap: .375rem;
   padding: .625rem .75rem;
   border-top: 1px solid var(--studio-border);
+  border-radius: 0 0 var(--studio-radius) var(--studio-radius);
   background: color-mix(in srgb, var(--studio-surface-muted) 48%, var(--studio-surface));
 }
 

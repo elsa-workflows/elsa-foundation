@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import axe from "axe-core";
 
-const styles = ["quiet", "focus", "open"] as const;
+const styles = ["linen", "quiet", "focus", "open"] as const;
 const modes = ["light", "dark", "dim", "high-contrast"] as const;
 
 async function open(page: Page, style: string, scheme: string, mode: string, view = "editor", width = 1440) {
@@ -16,7 +16,7 @@ async function open(page: Page, style: string, scheme: string, mode: string, vie
   await expect(page.locator("html")).toHaveAttribute("data-color-scheme", scheme);
 }
 
-for (const style of styles) for (const scheme of ["classic", "drift"]) for (const mode of modes) {
+for (const style of styles) for (const scheme of ["linen", "classic", "drift"]) for (const mode of modes) {
   test(`${style} with ${scheme} ${mode} keeps the authoring tools usable`, async ({ page }) => {
     await open(page, style, scheme, mode);
     await expect(page.getByRole("list", { name: "Sequence steps" })).toBeVisible();
@@ -69,7 +69,7 @@ for (const style of styles) {
       const surfaces = [element.closest(".wf-dialog"), element.closest(".wf-dialog-backdrop")];
       await Promise.all(surfaces.flatMap(surface => surface?.getAnimations() ?? []).map(animation => animation.finished));
     });
-    await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "linen");
     await page.addScriptTag({ content: axe.source });
     const violations = await publish.evaluate(async element => {
       const result = await (window as Window & { axe: { run: (root: Element, options: object) => Promise<{ violations: Array<{ id: string; nodes: Array<{ failureSummary?: string }> }> }> } }).axe.run(element, { runOnly: ["color-contrast"] });

@@ -201,7 +201,7 @@ public sealed class StudioHostingTests
         var script = await host.Client.GetStringAsync("/studio-runtime.js");
         using var json = JsonDocument.Parse(script[(script.IndexOf('=') + 1)..].Trim().TrimEnd(';'));
         Assert.False(json.RootElement.GetProperty("auth").GetProperty("enabled").GetBoolean());
-        Assert.Equal(new[] { "activityDefinitions", "attention", "auth", "backendBaseUrl", "dashboard", "hostId", "workflows" }, json.RootElement.EnumerateObject().Select(property => property.Name).Order().ToArray());
+        Assert.Equal(new[] { "activityDefinitions", "appearance", "attention", "auth", "backendBaseUrl", "branding", "dashboard", "hostId", "workflows" }, json.RootElement.EnumerateObject().Select(property => property.Name).Order().ToArray());
     }
 
     [Theory]
