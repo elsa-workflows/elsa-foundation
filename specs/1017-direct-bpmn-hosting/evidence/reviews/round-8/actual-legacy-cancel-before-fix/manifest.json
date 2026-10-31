@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "kind": "actual-old-store-native-cancel-production-port-counterexample",
+  "sourceRevision": "1380608ead98dabf0f2e90576bdcd6f8f6444aaa",
+  "originalInput": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/acceptance/old-embedded/old-pending-parent.snapshot.sqlite.gz",
+  "originalDecodedSha256": "0a5ea64058dcdb950fdda9e5b792264ceec2f6ca19fa9398a7733f6c62ea097e",
+  "executionStateSeeded": false,
+  "sourceOutboxItemId": "commit:14o86HjFlmv:cancel:bpmn-embedded-cancel:6dbf6394de58fcede5946e1a56176c130b2f988a5d61dc9d3fc639f69520cd4f",
+  "prematureCancelSourceDelivered": true,
+  "originalWorkerStillRunning": true,
+  "modelUnchanged": true,
+  "newActualNestedHostOrEtlRunClaimed": false,
+  "snapshots": {
+    "original": {
+      "path": "original.sqlite.gz",
+      "sha256": "4825b207ede2857392381a39d0f767efa0e7298791ff032d98261af181c16ea8",
+      "decodedSha256": "1d238bcb72f0c64fb1f0ce5db78488673dcb05c2dda5ac140e5a8ecc8d2c4ac5"
+    },
+    "parent-cancel-queued": {
+      "path": "parent-cancel-queued.sqlite.gz",
+      "sha256": "8027d47f4df7873bbb1ed862bf88e2d28ac1bc7cc0d5ad924a05f33d690de355",
+      "decodedSha256": "797f374eb37d6bc8d06461bd08fcc3da4ace6b80b4452853c302a09ec5575666"
+    },
+    "parent-cancel-consumed": {
+      "path": "parent-cancel-consumed.sqlite.gz",
+      "sha256": "fc03a92050b899601744a2096b6b63c50d3d8895390aebe8152b251b5465c2b5",
+      "decodedSha256": "e3260801482ec542842552f9267a8fd66a35ac4be49bd228a1cc6bd2b6172e09"
+    },
+    "embedded-cancel-delivered": {
+      "path": "embedded-cancel-delivered.sqlite.gz",
+      "sha256": "2044721008ae3df10d0936e07929180d7575846e18515e7a082ec81cc3c0aa43",
+      "decodedSha256": "53bcf02ad8ad487e45a195731c1462c5c6961c866b4fac5cce9182aac101f9f0"
+    }
+  },
+  "assets": [
+    {
+      "path": "parent-cancel-consumed.sqlite.gz",
+      "sha256": "fc03a92050b899601744a2096b6b63c50d3d8895390aebe8152b251b5465c2b5",
+      "bytes": 126880
+    },
+    {
+      "path": "result.json",
+      "sha256": "db3eb0455249cbe1b1f4b5fa5f7266bc38e65fe2c5e3cc2a7119e4d69a1d84a7",
+      "bytes": 45736
+    },
+    {
+      "path": "embedded-cancel-delivered.stdout.json",
+      "sha256": "3bbedbd4c8f4315bd49e10237570c6afb10e3ece9784ad6ca53a909f5fd40328",
+      "bytes": 33593
+    },
+    {
+      "path": "parent-cancel-consumed.stdout.json",
+      "sha256": "24ad2132985ae070f0544d375d23f51a7b320c3b3ed49c720bad3aafcebf1b2d",
+      "bytes": 33279
+    },
+    {
+      "path": "snapshots.json",
+      "sha256": "fad0441b740ae6659eb28b2ed5413af37c2a6f99758004395f4cba040416fa25",
+      "bytes": 989
+    },
+    {
+      "path": "parent-cancel-consumed.stderr.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20,
+      "decodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "decodedBytes": 0
+    },
+    {
+      "path": "parent-cancel-queued.stderr.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20,
+      "decodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "decodedBytes": 0
+    },
+    {
+      "path": "commands.json",
+      "sha256": "f4f74cc74f97a3126f40f8d66c5b908897943fe187806679cbd9f9dbb9f8368d",
+      "bytes": 1680
+    },
+    {
+      "path": "original.sqlite.gz",
+      "sha256": "4825b207ede2857392381a39d0f767efa0e7298791ff032d98261af181c16ea8",
+      "bytes": 125629
+    },
+    {
+      "path": "parent-cancel-queued.stdout.json",
+      "sha256": "06d649905a60d864bc897cc7de0bb4a16fb2ddef0e9c301b86e8e244adae6bf2",
+      "bytes": 29596
+    },
+    {
+      "path": "bad-ack-embedding.json",
+      "sha256": "ebee8fca63caccec315ca40726b9120db5cdba00674a250dfe02522a79b03087",
+      "bytes": 37496
+    },
+    {
+      "path": "embedded-cancel-delivered.sqlite.gz",
+      "sha256": "2044721008ae3df10d0936e07929180d7575846e18515e7a082ec81cc3c0aa43",
+      "bytes": 126633
+    },
+    {
+      "path": "embedded-cancel-delivered.stderr.log.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "bytes": 20,
+      "decodedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "decodedBytes": 0
+    },
+    {
+      "path": "parent-cancel-queued.sqlite.gz",
+      "sha256": "8027d47f4df7873bbb1ed862bf88e2d28ac1bc7cc0d5ad924a05f33d690de355",
+      "bytes": 125302
+    },
+    {
+      "path": "capture-legacy-cancel.py",
+      "sha256": "c540613f3cb0bd53966664d99e13b7f50b48c070dbce099e7b7502e93ad35846",
+      "bytes": 3116
+    }
+  ]
+}

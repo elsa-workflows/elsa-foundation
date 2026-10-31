@@ -1,0 +1,41 @@
+[
+  {
+    "source": "1380608ead98dabf0f2e90576bdcd6f8f6444aaa",
+    "arguments": [
+      "dotnet",
+      "/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/bpmn/NativeWorkDispatch/bin/Release/net10.0/NativeWorkDispatch.dll",
+      "--enqueue-legacy-parent-cancel",
+      "/tmp/elsa-2898-review8-closeout/actual-legacy-cancel-before-fix/owned-root",
+      "bpmn-embedded:e705a3456fd038bcff55bf21094de655bd89bf8b395c96a9fe14deca2d2cb44d",
+      "12593c91-87d0-4dc8-b73e-4b23a6eb56fc"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.8197448253631592
+  },
+  {
+    "source": "1380608ead98dabf0f2e90576bdcd6f8f6444aaa",
+    "arguments": [
+      "dotnet",
+      "/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/bpmn/NativeWorkDispatch/bin/Release/net10.0/NativeWorkDispatch.dll",
+      "--drain-legacy-parent-cancel",
+      "/tmp/elsa-2898-review8-closeout/actual-legacy-cancel-before-fix/owned-root",
+      "bpmn-embedded:e705a3456fd038bcff55bf21094de655bd89bf8b395c96a9fe14deca2d2cb44d",
+      "12593c91-87d0-4dc8-b73e-4b23a6eb56fc"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 1.1987340450286865
+  },
+  {
+    "source": "1380608ead98dabf0f2e90576bdcd6f8f6444aaa",
+    "arguments": [
+      "dotnet",
+      "/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/bpmn/NativeWorkDispatch/bin/Release/net10.0/NativeWorkDispatch.dll",
+      "--deliver-legacy-embedded-cancel",
+      "/tmp/elsa-2898-review8-closeout/actual-legacy-cancel-before-fix/owned-root",
+      "bpmn-embedded:e705a3456fd038bcff55bf21094de655bd89bf8b395c96a9fe14deca2d2cb44d",
+      "12593c91-87d0-4dc8-b73e-4b23a6eb56fc"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.7712037563323975
+  }
+]
