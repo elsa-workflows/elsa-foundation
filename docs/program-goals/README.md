@@ -58,6 +58,7 @@ superseded.
 | [Groundwork Persistence Readiness](groundwork-persistence-readiness.md) | Completed |
 | [EF Core Persistence](ef-core-persistence.md) | Completed |
 | [Studio Hosting and Package Reuse](studio-hosting-package-reuse.md) | Completed; Program #3340 / final delivery receipt |
+| [Workflow Library Organization](workflow-library-organization.md) | Completed; Program #3499 / delivery #3503 |
 | [Unified Workflow Authoring and Execution](unified-workflow-workspace.md) | Delivered; Program #3392 / final qualification #3399 |
 | [Zero-EF Persistence](zero-ef-persistence.md) | Superseded |
 | [Constitution Readiness](constitution-readiness.md) | Parked |

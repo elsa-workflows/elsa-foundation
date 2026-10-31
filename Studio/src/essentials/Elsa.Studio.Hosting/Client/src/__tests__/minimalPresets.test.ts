@@ -6,7 +6,7 @@ import { appearanceStorageKeys, readAppearancePreferences } from "../app/themes/
 
 describe("minimal Studio theme definitions", () => {
   it.each(["porcelain", "atelier-minimal", "graphite"])("preserves an existing custom identity %s in every source mode", id => {
-    const custom = createCustomThemeFrom(getTheme("classic")!, id, `Acme ${id}`);
+    const custom = { ...createCustomThemeFrom(getTheme("classic")!, id, `Acme ${id}`), published: true };
     expect(validateThemeDefinition(custom).valid).toBe(true);
     for (const themesMode of ["AddToBuiltIns", "DirectoryOnly"] as const) {
       const store = normalizeThemeStore({ themes: [custom], defaultThemeId: id, directoryThemeIds: [id], themesMode });

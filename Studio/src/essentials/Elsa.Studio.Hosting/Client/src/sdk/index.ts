@@ -14,6 +14,8 @@ export interface StudioModuleManifest {
   version: string;
   entry: string;
   styles: string[];
+  /** Explicit producer guarantee; omitted legacy/custom manifests retain version cache busting. */
+  stylesHaveContentHashes?: boolean;
   requiredHostVersion: string;
   requiredSdkVersion: string;
   capabilities: string[];

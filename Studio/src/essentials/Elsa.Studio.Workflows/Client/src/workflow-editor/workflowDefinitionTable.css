@@ -104,6 +104,17 @@ html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-version
   column-gap: 10px;
 }
 
+.wf-definitions-list .wf-definition-grid[data-library-columns="tags"],
+.wf-definitions-list .wf-definition-grid[data-library-columns="location"] {
+  grid-template-columns: var(--wf-definition-selection-track) minmax(220px, 1fr) 180px 76px 126px 132px max-content 180px 60px;
+  min-width: 1310px;
+}
+
+.wf-definitions-list .wf-definition-grid[data-library-columns="both"] {
+  grid-template-columns: var(--wf-definition-selection-track) minmax(220px, 1fr) 180px 76px 126px 132px max-content 180px 180px 60px;
+  min-width: 1500px;
+}
+
 .wf-definitions-list .wf-definition-grid > .wf-grid-row:last-child {
   border-bottom: 0;
 }

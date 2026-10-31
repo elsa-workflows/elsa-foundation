@@ -69,9 +69,13 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
         services.TryAddScoped<IActivityInputOptionsProviderResolver, ActivityInputOptionsProviderResolver>();
         services.TryAddScoped<ActivityInputOptionsAuthoringService>();
         services.AddScoped<IStartupTask, ValidateActivityInputOptionsProvidersStartupTask>();
+        services.TryAddSingleton<IServiceCollection>(services);
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, LibraryVisibilityStartupTask>());
+        services.AddHttpContextAccessor();
         services.AddApiCapability(WorkflowDesignApiCapabilities.StaticDeclaration);
         services.AddApiCapabilitySource<WorkflowDesignOperationalCapabilitySource>();
         services.AddApiCapabilitySource<WorkflowTemplateCapabilitySource>();
+        services.AddApiCapabilitySource<WorkflowLibraryCapabilitySource>();
         services.AddPermissionContributor<WorkflowDesignPermissionContributor>();
         services.ConfigureHttpJsonOptions(options =>
         {

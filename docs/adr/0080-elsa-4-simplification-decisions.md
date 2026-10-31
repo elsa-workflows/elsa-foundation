@@ -177,6 +177,17 @@ independent subagents may support investigation and review. Routine decisions an
 transitions proceed without renewed permission. The module ownership, independent-package witness
 before contract freeze, sequencing and existing scope/credential/release boundaries remain.
 
+**Owner amendment, 31 October 2026:** [Workflow Library Organization #3499](../program-goals/workflow-library-organization.md)
+is authorized for program establishment and end-to-end delivery. After the folders/tags/saved-views proposal,
+the owner instructed: "Turn this into a Program, then deliver it end to end. Use a separate work tree."
+Sequencing: establish the reviewed requirements, restore folders and bounded browsing in the current EF host,
+deliver classification and private/shared views with Studio journeys, then qualify providers, packages and the
+normal composed host through review, required CI and resulting main. Run beside the active programs, displace
+none, preserve consolidation's first priority and coordinate shared Studio paths. This activates only the
+organization scope adopted from historical #790 and parked #792; other parked objectives remain parked.
+Timing benchmarks remain retired; deterministic bounded query work is the scale gate under D2. Releases and
+production deployment are not included. The remaining decisions in this ADR apply.
+
 ### D1 — Risk-based testing
 
 - Test observable behaviour at the cheapest level that proves it; unit-test logic that carries real risk.

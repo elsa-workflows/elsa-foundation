@@ -26,6 +26,7 @@ import {
   hasCapabilityLink,
   resolveCapabilityLink
 } from "./capabilities";
+import type { WorkflowTagFilter } from "./workflowOrganization";
 
 export interface DefinitionListRequest {
   search: string;
@@ -37,6 +38,11 @@ export interface DefinitionListRequest {
   continuationToken?: string;
   folderId?: string | null;
   unfiled?: boolean;
+  includeDescendants?: boolean;
+  favoritesOnly?: boolean;
+  sort?: "name" | "name-desc" | "modified";
+  tagFilters?: WorkflowTagFilter[];
+  publicationState?: string;
 }
 
 type WorkflowDraftResponse = Omit<WorkflowDraft, "validationErrors"> & {
@@ -182,22 +188,22 @@ export async function createWorkflowFolder(context: StudioEndpointContext, reque
   return "folder" in response ? response.folder : response;
 }
 
-export async function renameWorkflowFolder(context: StudioEndpointContext, folderId: string, name: string) {
+export async function renameWorkflowFolder(context: StudioEndpointContext, folderId: string, name: string, revision?: string) {
   const path = await optionalWorkflowFolderMutationPath(context, "workflow-folder-rename", folderId);
   if (!path) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folder-rename");
-  await context.http.postJson<unknown>(path, { name });
+  await context.http.postJson<unknown>(path, { name, ...(revision ? { revision } : {}) });
 }
 
-export async function moveWorkflowFolder(context: StudioEndpointContext, folderId: string, parentId: string | null) {
+export async function moveWorkflowFolder(context: StudioEndpointContext, folderId: string, parentId: string | null, revision?: string) {
   const path = await optionalWorkflowFolderMutationPath(context, "workflow-folder-move", folderId);
   if (!path) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folder-move");
-  await context.http.postJson<unknown>(path, { parentId });
+  await context.http.postJson<unknown>(path, { parentId, ...(revision ? { revision } : {}) });
 }
 
-export async function deleteEmptyWorkflowFolder(context: StudioEndpointContext, folderId: string) {
+export async function deleteEmptyWorkflowFolder(context: StudioEndpointContext, folderId: string, revision?: string) {
   const path = await optionalWorkflowFolderMutationPath(context, "workflow-folder-delete-empty", folderId);
   if (!path) throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-folder-delete-empty");
-  await context.http.deleteJson<unknown>(path);
+  await context.http.deleteJson<unknown>(revision ? `${path}?${new URLSearchParams({ revision })}` : path);
 }
 
 /** Moves one or more definitions to a persisted folder, or to Unfiled when folderId is null. */
@@ -210,7 +216,7 @@ export async function moveWorkflowDefinitions(
   await context.http.postJson<unknown>(path, request);
 }
 
-export async function listDefinitions(context: StudioEndpointContext, request: DefinitionListRequest, signal?: AbortSignal) {
+export async function listDefinitions(context: StudioEndpointContext, request: DefinitionListRequest, signal?: AbortSignal): Promise<WorkflowDefinitionsResponse> {
   const requestOptions: [options?: { signal: AbortSignal }] = signal ? [{ signal }] : [];
   const parameters = new URLSearchParams({
     state: request.state ?? "active"
@@ -218,23 +224,45 @@ export async function listDefinitions(context: StudioEndpointContext, request: D
   const search = request.search.trim();
   if (search) parameters.set("searchTerm", search);
 
+  // Older paged hosts can ignore unknown query parameters. Never turn an unsupported
+  // organization predicate into a broader apparently successful result.
+  if (request.tagFilters?.length || request.includeDescendants || request.publicationState || (request.sort && request.sort !== "name")) {
+    if (!await hasCapabilityLink(context, capabilityIds.workflowDesign, "workflow-organization")) {
+      throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-organization");
+    }
+  }
+  if (request.favoritesOnly && !await hasCapabilityLink(context, capabilityIds.workflowDesign, "workflow-favorites")) {
+    throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-favorites");
+  }
+
   const pagedPath = await definitionPagePath(context);
   if (pagedPath) {
     parameters.set("pageSize", String(request.pageSize));
     if (request.continuationToken) parameters.set("continuationToken", request.continuationToken);
     if (request.folderId) parameters.set("folderId", request.folderId);
     if (request.unfiled) parameters.set("unfiled", "true");
+    if (request.includeDescendants) parameters.set("includeDescendants", "true");
+    if (request.favoritesOnly) parameters.set("favoritesOnly", "true");
+    if (request.sort) parameters.set("sort", request.sort);
+    if (request.tagFilters?.length) parameters.set("tagFilters", JSON.stringify(request.tagFilters));
+    if (request.publicationState) parameters.set("publicationState", request.publicationState);
     const response = await context.http.getJson<{
       items: WorkflowDefinitionsResponse["definitions"];
       nextContinuationToken?: string | null;
+      totalCount?: number;
     }>(`${pagedPath}?${parameters.toString()}`, ...requestOptions);
     return {
       definitions: response.items ?? [],
       page: request.page,
       pageSize: request.pageSize,
       nextContinuationToken: response.nextContinuationToken ?? null,
+      ...(typeof response.totalCount === "number" ? { totalCount: response.totalCount } : {}),
       isPaged: true
     } satisfies WorkflowDefinitionsResponse;
+  }
+
+  if (request.includeDescendants || request.favoritesOnly || request.tagFilters?.length || request.publicationState || (request.sort && request.sort !== "name")) {
+    throw new ApiCapabilityUnavailableError(capabilityIds.workflowDesign, "workflow-definitions-page");
   }
 
   const response = await context.http.getJson<{ items: WorkflowDefinitionsResponse["definitions"] }>(

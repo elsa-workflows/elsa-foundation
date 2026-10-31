@@ -34,6 +34,26 @@ instead of overriding row borders, selection fills or primary actions with liter
 Keep owner-specific graph geometry, runtime state and permissions in the module; a presentation
 change must preserve those behaviors. Do not select behavior using palette IDs.
 
+## Module stylesheet loading
+
+Use the shared `defineModuleConfig` for installed module builds. It emits an ESM
+`module.js`, content-hashed CSS and `entry-styles.json` (version 1 with an ordered
+`styles` array). The host loads only the entry's static CSS closure; Vite loads
+route and renderer CSS with their deferred chunks. Keep a renderer's stylesheet
+import at its rendering boundary to avoid downloading it on unrelated list pages.
+The build guard requires application-mode ESM output and `cssCodeSplit` so deferred
+CSS is loaded automatically. Preserve the generated contract and all emitted
+chunks/styles in the module's static web assets.
+
+An explicit empty `styles` array is valid. Invalid contracts disable that module
+with a diagnostic. Modules built before this contract retain the host's numbered
+`module.css`, `module2.css`, … fallback. New builds also retain these aliases for
+older hosts, which continue loading all styles eagerly. The generated manifest explicitly sets `stylesHaveContentHashes` so the loader keeps
+those exact URLs and Vite can reuse entry styles when opening a deferred route.
+Legacy and imperative custom manifests omit that optional flag and retain module-version
+cache busting regardless of their stylesheet names. Only opt in when every listed
+stylesheet URL contains an immutable content hash; names alone do not establish that guarantee.
+
 ## A collection page
 
 This example searches an already loaded collection. A server-paged module should
