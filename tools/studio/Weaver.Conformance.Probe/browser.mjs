@@ -802,9 +802,29 @@ async function consumedIntentRemount() {
   expect(appliedValue.catalog.features.find(feature => feature.id === target.id)?.enabled).toBe(false);
   await expect.poll(() => moduleEvents.length).toBe(1);
   await expect.poll(() => oldDock.evaluate(element => element.isConnected)).toBe(false);
-  await bootstrap;
+  const bootstrapResponse = await bootstrap;
+  need(bootstrapResponse.status() === 200, "The remounted assistant bootstrap failed.");
+  const bootstrapValue = await bootstrapResponse.json();
+  expect(bootstrapValue).toMatchObject({ error: null, data: { enabled: true, providerStatus: "available", provider: { isAvailable: true } } });
+  result.evidence.push(retain("remount-bootstrap", { url: diagnosticUrl(bootstrapResponse.url()), status: bootstrapResponse.status(),
+    enabled: bootstrapValue.data.enabled, providerStatus: bootstrapValue.data.providerStatus,
+    providerId: bootstrapValue.data.provider.providerId, isAvailable: bootstrapValue.data.provider.isAvailable }));
+  // Features contributes no Weaver capability. Verify that policy before moving
+  // this same remounted dock to a route where an old retained intent could run.
+  await expect(page).toHaveURL(studio + "/features");
+  await expect(dock().getByTestId("weaver-provider-status")).toContainText("No Weaver capabilities are enabled for this screen.");
+  await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeDisabled();
+  await expect(dock()).toHaveAttribute("aria-busy", "false");
+  const featuresState = { url: diagnosticUrl(page.url()), providerStatus: await dock().getByTestId("weaver-provider-status").innerText(),
+    composerDisabled: await dock().getByLabel("Ask Weaver", { exact: true }).isDisabled(), busy: await dock().getAttribute("aria-busy") };
+  result.evidence.push(retain("remount-features-state", featuresState));
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Workflows", exact: true }).click();
+  await expect(page).toHaveURL(studio + "/workflows/definitions");
   await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
   await expect(dock()).toHaveAttribute("aria-busy", "false");
+  const workflowsState = { url: diagnosticUrl(page.url()), providerStatus: await dock().getByTestId("weaver-provider-status").innerText(),
+    composerEnabled: await dock().getByLabel("Ask Weaver", { exact: true }).isEnabled(), busy: await dock().getAttribute("aria-busy") };
+  result.evidence.push(retain("remount-workflows-ready", workflowsState));
   const windowStartedAt = Date.now();
   await page.waitForTimeout(1000);
   const generationAfter = await hostRead("/__qualification/generation");
@@ -823,7 +843,7 @@ async function consumedIntentRemount() {
   result.evidence.push(retain("native-intent-remount", { nativeOperation: "Studio feature apply", featureId: target.id,
     enabledBefore: target.enabled, enabledAfter: false, catalogRevisionBefore: catalog.revision,
     catalogRevisionAfter: appliedValue.catalog.revision, reloadedShellCount: appliedValue.reloadedShellCount,
-    generationBefore, generationAfter, moduleEvents, originalRequestId: original.requestId, originalSource: original.source,
+    generationBefore, generationAfter, moduleEvents, featuresState, workflowsState, originalRequestId: original.requestId, originalSource: original.source,
     commandId: selected.commandId, providerCalls: callsFor(selected.commandId), observationWindowMilliseconds: Date.now() - windowStartedAt }));
   result.observations = { nativeReconciliation: true, noResubmission: true };
   await screenshot("native-remount-without-replay");
