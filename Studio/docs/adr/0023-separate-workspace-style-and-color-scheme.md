@@ -13,7 +13,7 @@ Navigation remains independently overridable under ADR 0022. Workspace defaults 
 
 ## Linen follow-up, 31 October 2026
 
-The owner selected Linen and authorized end-to-end delivery under Foundation #3496 (spec 1171).
+The owner selected Linen and authorized end-to-end delivery under Foundation #3496 (spec 1172).
 Linen becomes the fresh-profile workspace and palette default; existing explicit presets/arrangements,
 palettes, modes and navigation remain valid. Missing preferences follow host defaults, while explicit
 preset choices are persisted distinctly. Linen's original presentation also resolves through its

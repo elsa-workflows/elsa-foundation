@@ -2,7 +2,7 @@
 
 ## Setup and foundation
 
-- [x] T001 Record accepted scope, research and contracts in specs/1171-linen-studio/.
+- [x] T001 Record accepted scope, research and contracts in specs/1172-linen-studio/.
 - [x] T002 Add navigation/background roles and document additive contract in Studio/docs/design-tokens.md.
 
 ## US1 — Work in Linen
@@ -40,10 +40,10 @@ Independent check: documented example uses public configuration/replacement seam
 
 ## Qualification and delivery
 
-- [ ] T016 Run full affected suites, red/green bite proof and browser qualification; record evidence in specs/1171-linen-studio/quickstart.md.
-- [ ] T017 Run architecture/maps, public API checks and review constitutional constraints.
-- [ ] T018 Commit, open/attach draft PR and complete three independent review perspectives, fixing verified findings in new commits.
-- [ ] T019 Prepare reviewed exact-head delivery evidence and resulting-main verification steps on the PR; mark specs/1171-linen-studio/spec.md Implemented.
+- [x] T016 Run full affected suites, red/green bite proof and browser qualification; record evidence in specs/1172-linen-studio/quickstart.md.
+- [x] T017 Run architecture/maps, public API checks and review constitutional constraints.
+- [x] T018 Commit, open/attach draft PR and complete three independent review perspectives, fixing verified findings in new commits.
+- [x] T019 Prepare reviewed exact-head delivery evidence and resulting-main verification steps on the PR; mark specs/1172-linen-studio/spec.md Implemented.
 
 Merge and resulting-main status are recorded on the PR/issue after the implementation checklist; this checklist does not claim a merge has already happened.
 

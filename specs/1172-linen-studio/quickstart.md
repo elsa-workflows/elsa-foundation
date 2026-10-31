@@ -21,4 +21,25 @@ The PR comments are authoritative for the reviewed/CI head and merge status. Ini
 - Designer-only decoration was moved into its deferred stylesheet. Definitions landing measured 387.24 kB against the unchanged 387.50 kB budget; all heavy-surface exclusions remained in place.
 - One local .NET validation attempt overlapped frontend output regeneration and failed on a missing generated asset; subsequent build/test qualification is sequential. It is not a product-test pass.
 
-Additional diagnostic: a strict direct host-tsconfig probe reports 103 existing diagnostics in both the base and candidate, with no added diagnostics. The repository's standard frontend typecheck is the supported gate and passes; this additional diagnostic probe is not described as green.
+Additional initial diagnostic against baseline `7b4951365`: a strict direct host-tsconfig probe reported 103 existing diagnostics in both that base and candidate, with no added diagnostics. This was not repeated as a final gate. The repository's standard frontend typecheck is the supported gate and passes; this additional diagnostic probe is not described as green.
+
+
+The work unit was renumbered from 1171 to 1172 before delivery because the earlier concurrent
+Switch-authoring PR #3495 already uses 1171. The issue/branch/PR identities are unchanged.
+
+The final whole-workspace frontend run passed 3,996 cases in 306 files; three package scripts contain
+no test files and are not counted as passed tests. Studio TRX reconciliation covers all 638 discovered
+descriptors with 645 executed/passed cases (runtime theory expansion accounts for the difference),
+zero uncovered descriptors and zero skipped/aborted cases. Final architecture and map checks passed.
+
+
+The callback seam also has mutation bite proof: temporarily ignoring configured LoginPageOptions in
+the real GET endpoint made the replacement/security-context integration test fail (`Assert.NotNull`,
+1 failed / 0 passed). Restoring the endpoint passed the full Identity suite, 532/532 with zero skips.
+The final browser rerun after designer-style deferral passed all 118 cases again. Temporary browser
+qualification files live outside the committed tree; canonical appearance tests remain in Studio/tests/browser.
+
+Supported lint/typecheck, all-workspace frontend tests, production frontend builds/budgets, whole
+Studio/Identity/architecture suites, map checks and the branded published host are the local gate set.
+Required exact-head CI and merge/resulting-main results are recorded on PR #3498; local passes do not
+replace pending CI. Verify descendant main after merge and post its check state before reporting delivery.
