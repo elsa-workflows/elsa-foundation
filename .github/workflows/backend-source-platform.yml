@@ -36,6 +36,12 @@ on:
 permissions:
   contents: read
 
+# Only the latest head of a PR needs the two platform journeys. Manual runs
+# have separate groups so a PR update cannot cancel an explicitly requested proof.
+concurrency:
+  group: backend-source-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   backend-source:
     name: Backend source (${{ matrix.runner }})
