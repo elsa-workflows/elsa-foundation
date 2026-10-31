@@ -21,38 +21,23 @@ html[data-workspace-style] :is(.wf-page-header, .wf-toolbar, .wf-editor-top, .wf
 
 html[data-workspace-style] .wf-kicker { display: none; }
 
-html[data-workspace-style] :is(.wf-grid, .wf-pagination) {
+html[data-workspace-style] :is(.wf-grid:not(.studio-collection-table), .wf-pagination) {
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
 
-html[data-workspace-style] .wf-grid-head {
+html[data-workspace-style] .wf-grid:not(.studio-collection-table) > .wf-grid-head {
   border-color: var(--studio-edge-subtle);
   background: transparent;
   font-weight: 500;
 }
 
-html[data-workspace-style] .wf-grid-row {
+html[data-workspace-style] .wf-grid:not(.studio-collection-table) > .wf-grid-row {
   min-height: 64px;
   border-bottom-color: transparent;
   padding-block: 14px;
-}
-
-html[data-workspace-style] .wf-definitions-list .wf-definition-grid > .wf-grid-row {
-  min-height: 44px;
-  padding-block: 6px;
-}
-
-html[data-workspace-style] .wf-definitions-list > .wf-toolbar {
-  border: 0;
-  padding-block: 18px;
-}
-
-html[data-workspace-style] .wf-definitions-list .wf-search {
-  flex: 0 1 360px;
-  margin-left: auto;
 }
 
 html[data-workspace-style] :is(.wf-segmented, .wf-search) {
@@ -114,11 +99,7 @@ html[data-workspace-style][data-theme-appearance="high-contrast"] :is(.wf-grid-r
   border-color: var(--studio-edge-control);
 }
 
-@media (max-width: 600px) {
-  html[data-workspace-style] .wf-definitions-list .wf-search { flex: 1 1 180px; margin-left: 0; }
-}
-
-html[data-workspace-style="linen"] .wf-grid {
+html[data-workspace-style="linen"] .wf-grid:not(.studio-collection-table) {
   overflow: hidden;
   border: 1px solid var(--studio-edge-subtle);
   border-radius: var(--studio-radius-lg);

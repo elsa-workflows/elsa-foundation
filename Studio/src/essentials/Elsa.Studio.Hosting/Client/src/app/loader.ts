@@ -35,7 +35,7 @@ export async function loadStudioModules(
     try {
       const moduleVersion = manifest.version;
       for (const style of manifest.styles) {
-        await loadStyle(addModuleVersion(style, moduleVersion));
+        await loadStyle(manifest.stylesHaveContentHashes === true ? style : addModuleVersion(style, moduleVersion));
       }
 
       const module = await importModule(addModuleVersion(manifest.entry, moduleVersion));

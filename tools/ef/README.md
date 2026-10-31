@@ -48,7 +48,9 @@ same October ID for the additive template migration. Its four template migration
 history decorator reads this metadata per context, including the guards in offline idempotent SQL. The provider
 binding installs the same service before pooling freezes options; module-specific service registrations must
 not split EF's internal provider cache.
-It leaves every physical history row unchanged; a database created by the cumulative writer must not recreate
+The workflow-library change #3503 wrote a further cumulative October Initial. The retained chain appends its generated library delta under that same ID, with metadata naming the template predecessor. Logical history and offline guards follow the declared September → templates → library lineage, so all three already-written histories are recognized. The generated final model snapshots match upstream exactly.
+
+It leaves every physical history row unchanged; a database created by either cumulative writer must not recreate
 its existing tables. A fresh installation records both migrations normally, while an original September store
 applies only the template addition. This narrowly scoped preview bridge is not a general baseline-alias API.
 

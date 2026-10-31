@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
-import "@xyflow/react/dist/style.css";
 import { ShellFrame, getStudioNavigation } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/App";
 import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeProvider";
 import { ThemeSwitcher } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeSwitcher";

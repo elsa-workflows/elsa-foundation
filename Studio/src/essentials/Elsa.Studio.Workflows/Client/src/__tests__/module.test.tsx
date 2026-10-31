@@ -3244,7 +3244,7 @@ describe("workflows module", () => {
     await waitForText(container, "Review workflow definition");
     expect(container.textContent).toContain("Run");
     expect(container.textContent).toContain("Workflow Instance ID");
-    expect(container.querySelector(".wf-page-header .wf-page-context")?.textContent).toContain("wfexec-1");
+    expect(container.querySelector(".studio-page-header .wf-page-context")?.textContent).toContain("wfexec-1");
     const runInspector = container.querySelector(".wf-instance-inspector");
     expect(runInspector).not.toBeNull();
     expect(runInspector?.textContent).not.toContain("Workflow Instance ID");
@@ -3653,7 +3653,7 @@ describe("workflows module", () => {
     expect(container.querySelector("[role='status']")?.textContent).toContain(
       "Workflow folders are unavailable. Showing all workflows while preserving the requested folder context."
     );
-    expect(container.querySelector<HTMLInputElement>(".wf-search input")?.getAttribute("aria-label")).toBe("Search all workflows");
+    expect(container.querySelector<HTMLInputElement>(".studio-search input")?.getAttribute("aria-label")).toBe("Search all workflows");
     expect(buttonByText(container, "Search all workflows")).toBeNull();
     expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes("/folders"))).toBe(false);
     await unmount();
@@ -3780,7 +3780,7 @@ describe("workflows module", () => {
     expect(definitionPageRequests).toEqual([
       "https://server.example/design/workflows/definition-pages?state=all&searchTerm=invoice+approval&pageSize=10&folderId=folder%2Fopaque"
     ]);
-    expect(container.querySelector<HTMLInputElement>(".wf-search input")?.value).toBe("invoice approval");
+    expect(container.querySelector<HTMLInputElement>(".studio-search input")?.value).toBe("invoice approval");
     expect(buttonByText(container, "All states")?.getAttribute("aria-pressed")).toBe("true");
     expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Operations");
     await unmount();
@@ -3905,7 +3905,7 @@ describe("workflows module", () => {
     );
 
     await waitForText(container, "Scoped approval");
-    expect(container.querySelector<HTMLInputElement>(".wf-search input")?.getAttribute("aria-label")).toBe("Search selected folder");
+    expect(container.querySelector<HTMLInputElement>(".studio-search input")?.getAttribute("aria-label")).toBe("Search selected folder");
     await click(buttonByText(container, "Search all workflows"));
     await waitForText(container, "Global approval");
 
@@ -3914,7 +3914,7 @@ describe("workflows module", () => {
     expect(parameters.has("unfiled")).toBe(false);
     expect(parameters.get("state")).toBe("deleted");
     expect(parameters.get("search")).toBe("approval");
-    expect(container.querySelector<HTMLInputElement>(".wf-search input")?.getAttribute("aria-label")).toBe("Search all workflows");
+    expect(container.querySelector<HTMLInputElement>(".studio-search input")?.getAttribute("aria-label")).toBe("Search all workflows");
     await unmount();
   });
 
@@ -3940,7 +3940,7 @@ describe("workflows module", () => {
 
     await waitForText(container, "No workflows match “missing”");
     expect(container.textContent).toContain("No workflow definitions in any lifecycle state in Unfiled match this search.");
-    expect(container.querySelector<HTMLInputElement>(".wf-search input")?.getAttribute("aria-label")).toBe("Search Unfiled");
+    expect(container.querySelector<HTMLInputElement>(".studio-search input")?.getAttribute("aria-label")).toBe("Search Unfiled");
     await unmount();
   });
 
@@ -4525,7 +4525,7 @@ describe("workflows module", () => {
 
     expect(container.textContent).toContain("Current B workflow");
     expect(container.textContent).not.toContain("Stale A workflow");
-    expect(container.querySelector<HTMLInputElement>(".wf-search input")?.value).toBe("current");
+    expect(container.querySelector<HTMLInputElement>(".studio-search input")?.value).toBe("current");
     expect(buttonByText(container, "All states")?.getAttribute("aria-pressed")).toBe("true");
     expect(new URLSearchParams(window.location.search).get("folderId")).toBe("folder-b");
     await unmount();

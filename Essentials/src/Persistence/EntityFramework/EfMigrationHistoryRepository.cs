@@ -27,8 +27,9 @@ internal sealed class EfMigrationHistoryRepository(IHistoryRepository inner, IRe
         if (cumulativeInitials.Count == 0)
             return rows;
         var result = rows.ToList();
-        foreach (var (baseline, cumulative) in cumulativeInitials)
-            if (!rows.Any(row => row.MigrationId == baseline) && rows.FirstOrDefault(row => row.MigrationId == cumulative) is { } applied)
+        foreach (var baseline in cumulativeInitials.Keys)
+            if (!rows.Any(row => row.MigrationId == baseline) && MigrationLineage(baseline).Skip(1)
+                .Select(id => rows.FirstOrDefault(row => row.MigrationId == id)).FirstOrDefault(row => row is not null) is { } applied)
                 result.Add(new HistoryRow(baseline, applied.ProductVersion));
         return result.OrderBy(row => row.MigrationId, StringComparer.Ordinal).ToArray();
     }
@@ -37,7 +38,7 @@ internal sealed class EfMigrationHistoryRepository(IHistoryRepository inner, IRe
 
     private string IncludeCumulativeGuard(string script, string migrationId)
     {
-        if (!cumulativeInitials.TryGetValue(migrationId, out var cumulative))
+        if (!cumulativeInitials.ContainsKey(migrationId))
             return script;
         // Preserve the provider's quoting, configured history schema and block syntax. Both IDs mean this
         // baseline's tables already exist. Refuse an unexpected provider shape instead of emitting unsafe SQL.
@@ -47,7 +48,20 @@ internal sealed class EfMigrationHistoryRepository(IHistoryRepository inner, IRe
         var index = script.IndexOf(comparison, StringComparison.Ordinal);
         if (index < 0 || index != script.LastIndexOf(comparison, StringComparison.Ordinal))
             throw new NotSupportedException("The cumulative migration baseline guard does not recognize this provider's migration-history predicate.");
-        return script.Replace(comparison, $"IN ({baselineLiteral}, {mapping.GenerateSqlLiteral(cumulative)})", StringComparison.Ordinal);
+        var representedIds = string.Join(", ", MigrationLineage(migrationId).Select(id => mapping.GenerateSqlLiteral(id)));
+        return script.Replace(comparison, $"IN ({representedIds})", StringComparison.Ordinal);
+    }
+
+    private IReadOnlyList<string> MigrationLineage(string migrationId)
+    {
+        List<string> ids = [migrationId];
+        while (cumulativeInitials.TryGetValue(ids[^1], out var cumulative))
+        {
+            if (ids.Contains(cumulative, StringComparer.Ordinal))
+                throw new InvalidOperationException("Cumulative migration metadata contains a cycle.");
+            ids.Add(cumulative);
+        }
+        return ids;
     }
 
     public bool Exists() => inner.Exists();

@@ -35,6 +35,7 @@ export function defineModuleConfig({
   ];
 
   return defineConfig({
+    base: "./",
     server: {
       fs: {
         // Optional Studio module sources live in the sibling Extensions tree after consolidation.
@@ -48,15 +49,20 @@ export function defineModuleConfig({
     build: {
       outDir,
       emptyOutDir: true,
-      lib: {
-        entry: resolve(root, "src/module.tsx"),
-        formats: ["es"],
-        fileName: () => "module.js"
-      },
+      cssCodeSplit: true,
+      // App-mode ESM output retains Vite's deferred CSS loader (library mode disables it).
+      // Keep the public entry/externals contract used by the host's import map.
       rollupOptions: {
+        input: resolve(root, "src/module.tsx"),
+        preserveEntrySignatures: "strict",
         external: [...sharedExternals, ...extraExternals],
         output: {
-          assetFileNames: "module[extname]"
+          format: "es",
+          entryFileNames: "module.js",
+          chunkFileNames: "[name]-[hash].js",
+          assetFileNames: asset => asset.names.some(name => name.endsWith(".css"))
+            ? "module-[hash][extname]"
+            : "module[extname]"
         }
       }
     },

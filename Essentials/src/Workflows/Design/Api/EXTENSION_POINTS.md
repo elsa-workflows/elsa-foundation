@@ -24,6 +24,70 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 | Command interfaces (`IUpdateDraftCommand` + 5 lifecycle) | Core — `Elsa.Workflows.Design.Persistence.Core` | EF Core command implementations (`.Persistence.EntityFrameworkCore`) | You want different mutation/lifecycle behaviour while keeping the built-in `IWorkflowDefinitionLookup`. |
 | `IDraftStateDiffEngine` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `DraftStateDiffEngine` (`.Persistence.Core`) | You want to change which mutation events are emitted or the match-key semantics. |
 | `IWorkflowDefinitionPublicationStateLookup` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `NullWorkflowDefinitionPublicationStateLookup` (`Elsa.Workflows.Design.Api.Services`); Publishing replaces with `WorkflowDefinitionPublicationStateLookup` | Publishing is composed and definition list/detail views should distinguish Retracted and Retired from Published. Design-only hosts keep the null-object and leave `publicationState` unset. |
+| `IWorkflowLibraryStore` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `EfWorkflowLibraryStore` (`Elsa.Workflows.Design.Persistence.EntityFrameworkCore`) | A host replaces the durable, tenant-scoped organization and bounded workflow-library read/write backend. |
+| `IWorkflowLibraryVisibilityPolicy` | Contract — `Elsa.Workflows.Design.Persistence.Core` | Host-supplied optional replacement; at most one implementation, duplicates fail shell startup | A host registers any permission resource handlers and must provide their complete workflow query visibility before counts and paging. |
+
+### `IWorkflowLibraryStore` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
+
+The scoped optional port owns catalog organization independently of authored workflow state.
+Startup permits an omitted library port for existing backends and rejects multiple registrations;
+backend ownership still rejects an implicit second owner of a selected port.
+Consumers are the capability-discovered folder, paged-definition, organization, tag, saved-view and
+favorite endpoints. `WorkflowLibraryCapabilitySource` advertises those relations only when the port
+is registered. Omission retains legacy flat browsing and yields a truthful unsupported response on
+direct requests to optional routes.
+
+**Signatures:** `ListFoldersAsync(parentId, pageSize, cursor)`, `GetFolderAsync(id)`,
+`CreateFolderAsync(name, parentId, actorId)`, `RenameFolderAsync(id, name, revision, actorId)`,
+`MoveFolderAsync(id, parentId, revision, actorId)`, `DeleteEmptyFolderAsync(id, revision, actorId)`,
+`MoveDefinitionsAsync(ids, folderId, actorId, operationKey)`,
+`ListDefinitionsAsync(query, subjectId, readScope)`, `GetVersionLabelsAsync(versionIds)`, `GetOrganizationAsync(definitionId)`,
+`ReplaceTagsAsync(definitionId, revision, tags, actorId, operationKey)`,
+`EditTagsAsync(edit, actorId)`, `ListTagsAsync(search, pageSize, cursor)`, `GetTagAsync(id)`,
+`CreateTagAsync(input, actorId)`, `UpdateTagAsync(id, input, actorId)`,
+`ListViewsAsync(subjectId)`, `SaveViewAsync(id, input, subjectId, canShare)`,
+`DeleteViewAsync(id, revision, subjectId, canShare)` and `SetFavoriteAsync(definitionId, favorite, subjectId)`;
+all operations are asynchronous and accept cancellation.
+
+**Override obligations:** replace one scoped implementation deliberately. Enforce the immutable
+ordinary tenant persistence scope for every identity and query; bind cursors to scope, actor and
+query; apply every membership predicate before bounded paging/counting; preserve hierarchy,
+revision, retry, lifecycle and source-reconciliation guarantees. Folder moves are atomic across
+the explicit selection; bulk tag outcomes are atomic per target. Views/favorites are isolated by
+server-derived subject. Folder placement during creation participates in
+`IAddWorkflowDefinitionCommand.Execute(..., folderId, actorId, cancellationToken)` in the same
+committing operation as definition/draft creation. No organization operation changes authored
+state or runtime behavior.
+
+The API derives actors through `IAuthSessionService` and evaluates permissions through
+`IPermissionAuthorizationService`, including per-target host resource handlers. Host handlers receive
+`WorkflowLibraryResource` with a definition or folder identity. Before querying the library, the API
+obtains `WorkflowLibraryReadScope` from the host's `IWorkflowLibraryVisibilityPolicy.GetScopeAsync(
+ClaimsPrincipal, CancellationToken)`. The scope has a nonblank revision (at most 256 characters), an
+optional allow-list and an optional deny-list (each at most 10,000 bounded definition identities).
+The persistence query applies this trusted scope before counts, ordering, page selection and cursor
+generation. The provider binds the policy revision and identity membership into continuation tokens.
+Clients and saved views cannot supply or replace the scope.
+
+The host policy must cover all current resource visibility rules for the normalized principal and
+change revision when its meaning or result changes. If any `IPermissionResourceHandler` is registered
+and no query visibility policy is composed, the API refuses the page before invoking the store and
+returns neither rows, counts nor cursors. Hosts with only tenant/action authorization and no resource
+handlers use an unrestricted tenant query scope. Per-item authorization remains a second defense;
+filtering an already completed page is not a supported substitute for query visibility.
+
+Paged rows retain the library query's membership/count and enrich only that bounded page through
+`IWorkflowDefinitionPublicationStateLookup`. `GetVersionLabelsAsync` resolves at most 100 explicitly
+referenced version identities to labels without loading authored payloads or complete history.
+Publication membership indexes are not a substitute for current lifecycle evidence; absent lookup
+evidence leaves publication state unknown. Soft-deleted organization remains readable, with
+assignment and placement action hints disabled.
+
+The permission contributor owns separate `workflows/design/tag-assignments:manage`,
+`workflows/design/tags:manage` and `workflows/design/views:share` catalog entries. Ordinary workflow
+read permission supports private views and personal favorites. Shared-view permission grants no
+workflow visibility. Permission hints in library responses are advisory; each endpoint and target
+is authorized again on the server. No new event contributor or periodic task is introduced here.
 
 ### `IWorkflowDefinitionLookup` *(Core — `Elsa.Workflows.Design.Core`)*
 - **Signature:** `GetDefinition(id)`, `ListDefinitions(searchTerm?)`, `GetVersion(versionId)`, `FindLatestVersion(definitionId)`, `ListVersions(definitionId)` — all `Task`-returning reads.

@@ -79,6 +79,15 @@
   --studio-body-size: 13px;
   --studio-label-size: 12px;
 
+  /* Shared content rhythm. Modules own domain layout, not competing chrome scales. */
+  --studio-space-1: 4px;
+  --studio-space-2: 8px;
+  --studio-space-3: 12px;
+  --studio-space-4: 16px;
+  --studio-space-6: 24px;
+  --studio-control-height: 32px;
+  --studio-row-height: 48px;
+
   /* Disclosure motion. Caps enter/expand animation at 150ms; reduced-motion zeroes both. */
   --studio-disclosure-duration: 150ms;
   --studio-disclosure-distance: 4px;

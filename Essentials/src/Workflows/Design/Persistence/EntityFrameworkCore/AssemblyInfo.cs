@@ -4,6 +4,8 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities;
 
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests")]
+
 // The single, discoverable declaration of this module. EfModuleCatalog.Discover reads this,
 // and EfModuleBinding.For derives the registration class's binding from it (#1872).
 [assembly: EfModule(
@@ -38,3 +40,6 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Entities;
 [assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(DesignOperationEntity), nameof(DesignOperationEntity.ResultJson))]
 
 [assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(WorkflowTemplateEntity), nameof(WorkflowTemplateEntity.ContentJson))]
+[assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(WorkflowTagEntity), nameof(WorkflowTagEntity.ValuesJson))]
+[assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(WorkflowLibraryViewEntity), nameof(WorkflowLibraryViewEntity.ContentJson))]
+[assembly: EfSchemaContent(WorkflowsDesignEfModule.SchemaFamily, typeof(WorkflowLibraryAuditEntity), nameof(WorkflowLibraryAuditEntity.BeforeJson), nameof(WorkflowLibraryAuditEntity.AfterJson))]

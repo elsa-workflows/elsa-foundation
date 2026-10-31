@@ -2,10 +2,6 @@
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
-  padding: 1.5rem;
-  color: var(--studio-text);
-  background: var(--studio-bg);
-  font-family: var(--studio-font-ui);
 }
 
 .ad-page *, .ad-page *::before, .ad-page *::after { box-sizing: border-box; }
@@ -14,8 +10,10 @@
 .ad-page button:focus-visible, .ad-page input:focus-visible, .ad-page select:focus-visible, .ad-page textarea:focus-visible { outline: 3px solid var(--studio-focus); outline-offset: 2px; }
 
 .ad-page-header, .ad-workbench-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
-.ad-page h1, .ad-workbench h1 { margin: .2rem 0 .35rem; font-family: var(--studio-font-display); font-size: var(--studio-page-title-size); font-weight: var(--studio-title-weight, 700); }
-.ad-page p { margin: 0; color: var(--studio-text-muted); line-height: 1.55; }
+/* Exclude shared headers without raising specificity above the compact editor rules. */
+.ad-page h1:not(:where(.studio-page-header h1)),
+.ad-workbench h1 { margin: .2rem 0 .35rem; font-family: var(--studio-font-display); font-size: var(--studio-page-title-size); font-weight: var(--studio-title-weight, 700); }
+.ad-page p:not(:where(.studio-page-header p)) { margin: 0; color: var(--studio-text-muted); line-height: 1.55; }
 .ad-kicker { color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 
 .ad-primary-action, .ad-filters button, .ad-empty button, .ad-failure button, .ad-stale-warning button, .ad-inline-error button, .ad-pager button, .ad-back, .ad-tabs button, .ad-overview-grid button, .ad-child-pager button, .ad-relationship-entrypoints button {
@@ -49,11 +47,11 @@
 .ad-stale-warning div { display: grid; gap: .15rem; }
 .ad-stale-warning span { color: var(--studio-text-muted); }
 
-.ad-collection { overflow: hidden; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface); box-shadow: var(--studio-shadow-sm); }
-.ad-collection-head, .ad-collection-row { display: grid; grid-template-columns: minmax(15rem, 2fr) minmax(8rem, .8fr) minmax(9rem, 1fr) minmax(10rem, 1fr) minmax(7rem, .7fr); align-items: center; gap: .75rem; padding: .85rem 1rem; }
-.ad-collection-head { color: var(--studio-text-muted); background: var(--studio-surface-muted); font-size: var(--studio-label-size); font-weight: 700; }
-.ad-collection-row { border-top: 1px solid var(--studio-border); cursor: pointer; }
-.ad-collection-row:hover, .ad-collection-row:focus-visible { background: var(--studio-accent-soft); }
+.ad-collection { overflow: hidden; }
+.ad-collection-head,
+.ad-collection-row { display: grid; grid-template-columns: minmax(15rem, 2fr) minmax(8rem, .8fr) minmax(9rem, 1fr) minmax(10rem, 1fr) minmax(7rem, .7fr); align-items: center; gap: .75rem; }
+.ad-collection-row { cursor: pointer; }
+.ad-collection-row:focus-visible { background: var(--studio-accent-soft); }
 .ad-collection-row > span { min-width: 0; overflow-wrap: anywhere; }
 .ad-collection-row > span:first-child { display: grid; gap: .2rem; }
 .ad-collection-row small { color: var(--studio-text-muted); font-family: var(--studio-font-mono); }
@@ -402,8 +400,12 @@
   border-radius: 0;
 }
 
-html[data-theme-material] .ad-collection, html[data-theme-material] .ad-filters, html[data-theme-material] .ad-overview-grid article, html[data-theme-material] .ad-relationship-entrypoints article, html[data-theme-material] .ad-child-list, html[data-theme-material] .ad-publication-review { background: var(--studio-material-panel-bg); background-size: var(--studio-material-panel-bg-size); }
-html[data-theme-material] .ad-collection-row, html[data-theme-material] .ad-child-list > button { background: var(--studio-material-row-bg); background-size: var(--studio-material-row-bg-size); }
+html[data-theme-material] .ad-filters,
+html[data-theme-material] .ad-overview-grid article,
+html[data-theme-material] .ad-relationship-entrypoints article,
+html[data-theme-material] .ad-child-list,
+html[data-theme-material] .ad-publication-review { background: var(--studio-material-panel-bg); background-size: var(--studio-material-panel-bg-size); }
+html[data-theme-material] .ad-child-list > button { background: var(--studio-material-row-bg); background-size: var(--studio-material-row-bg-size); }
 html[data-theme-material] .ad-filters input, html[data-theme-material] .ad-filters select, html[data-theme-material] .ad-input-shell { background: var(--studio-material-well-bg); background-size: var(--studio-material-well-bg-size); box-shadow: var(--studio-material-well-shadow); }
 
 @media (max-width: 980px) {
@@ -417,7 +419,6 @@ html[data-theme-material] .ad-filters input, html[data-theme-material] .ad-filte
 }
 
 @media (max-width: 600px) {
-  .ad-page { padding: 1rem; }
   .ad-page-header, .ad-workbench-header { display: grid; }
   .ad-primary-action { width: 100%; }
   .ad-filters, .ad-overview-grid, .ad-relationship-entrypoints, .ad-collection-row, .ad-child-list > button, .ad-identity-strip { grid-template-columns: 1fr; }

@@ -151,7 +151,7 @@ describe("workflow definition route browse session", () => {
     await click(button(container, "Next"));
     await waitForCondition(() => expect(new URL(pageRequests.at(-1)!).searchParams.get("continuationToken")).toBe("opaque-page-two"));
     await waitForText(container, "deleted page two");
-    await fill(container.querySelector<HTMLInputElement>(".wf-search input"), "new search");
+    await fill(container.querySelector<HTMLInputElement>(".studio-search input"), "new search");
     await waitForCondition(() => expect(new URL(pageRequests.at(-1)!).searchParams.get("searchTerm")).toBe("new search"));
     expect(new URL(pageRequests.at(-1)!).searchParams.has("continuationToken")).toBe(false);
     await waitForText(container, "new search page one");

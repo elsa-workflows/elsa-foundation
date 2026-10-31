@@ -1,3 +1,4 @@
+import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
@@ -137,7 +138,7 @@ export function StructuredLogsPage() {
   const selectedEntry = state.rows.find(row => row.id === state.selectedEntryId) ?? null;
 
   return (
-    <section className="structured-logs-page">
+    <section className="studio-page structured-logs-page">
       <StructuredLogsHeader state={state} />
       <div className={selectedEntry ? "structured-logs-workbench" : "structured-logs-workbench no-selection"}>
         <StructuredLogRows state={state} />
@@ -406,12 +407,7 @@ function StructuredLogsHeader({ state, compactControls = false }: { state: Struc
   );
 
   return (
-    <header className="structured-logs-header">
-      <div>
-        <h2>Structured logs</h2>
-        <p>{state.queuedCount > 0 ? `${state.queuedCount} buffered while paused` : state.detail}</p>
-      </div>
-      <div className="structured-logs-tools">
+    <StudioPageHeader className={compactControls ? "studio-page-header--compact" : undefined} headingLevel={2} title={<>Structured logs</>} description={<>{state.queuedCount > 0 ? `${state.queuedCount} buffered while paused` : state.detail}</>} actions={<><div className="structured-logs-tools">
         {!compactControls ? (
           <>
             {levelSelect}
@@ -439,30 +435,29 @@ function StructuredLogsHeader({ state, compactControls = false }: { state: Struc
         <span>{statusLabel}</span>
         {state.upstreamDroppedCount > 0 ? <span>{state.upstreamDroppedCount} dropped upstream</span> : null}
         {state.localDiscardedCount > 0 ? <span>{state.localDiscardedCount} discarded locally</span> : null}
-        <button type="button" className={state.paused ? "active" : ""} onClick={state.togglePaused} aria-pressed={state.paused}>
+        <StudioButton type="button" className={state.paused ? "active" : ""} onClick={state.togglePaused} aria-pressed={state.paused}>
           {state.paused ? "Resume" : "Pause"}
-        </button>
-        <button type="button" className={state.autoScroll ? "active" : ""} onClick={() => state.setAutoScroll(current => !current)} aria-pressed={state.autoScroll}>
+        </StudioButton>
+        <StudioButton type="button" className={state.autoScroll ? "active" : ""} onClick={() => state.setAutoScroll(current => !current)} aria-pressed={state.autoScroll}>
           Autoscroll
-        </button>
+        </StudioButton>
         {!compactControls ? (
           <>
-            <button type="button" className={state.wrapMessages ? "active" : ""} onClick={() => state.setWrapMessages(current => !current)} aria-pressed={state.wrapMessages}>
+            <StudioButton type="button" className={state.wrapMessages ? "active" : ""} onClick={() => state.setWrapMessages(current => !current)} aria-pressed={state.wrapMessages}>
               Wrap
-            </button>
-            <button type="button" className={state.compact ? "active" : ""} onClick={() => state.setCompact(current => !current)} aria-pressed={state.compact}>
+            </StudioButton>
+            <StudioButton type="button" className={state.compact ? "active" : ""} onClick={() => state.setCompact(current => !current)} aria-pressed={state.compact}>
               Compact
-            </button>
-            <button type="button" onClick={() => void state.copyRows(selectedRows)} disabled={selectedRows.length === 0}>Copy selected</button>
-            <button type="button" onClick={() => void state.copyRows(state.rows)}>Copy visible</button>
-            <button type="button" onClick={() => state.downloadRows(state.rows)} disabled={state.rows.length === 0}>Download visible</button>
+            </StudioButton>
+            <StudioButton type="button" onClick={() => void state.copyRows(selectedRows)} disabled={selectedRows.length === 0}>Copy selected</StudioButton>
+            <StudioButton type="button" onClick={() => void state.copyRows(state.rows)}>Copy visible</StudioButton>
+            <StudioButton type="button" onClick={() => state.downloadRows(state.rows)} disabled={state.rows.length === 0}>Download visible</StudioButton>
           </>
         ) : (
-          <button type="button" onClick={() => state.downloadRows(state.rows)} disabled={state.rows.length === 0}>Download</button>
+          <StudioButton type="button" onClick={() => state.downloadRows(state.rows)} disabled={state.rows.length === 0}>Download</StudioButton>
         )}
-        <button type="button" onClick={state.clear}>Clear</button>
-      </div>
-    </header>
+        <StudioButton type="button" onClick={state.clear}>Clear</StudioButton>
+      </div></>} />
   );
 }
 
