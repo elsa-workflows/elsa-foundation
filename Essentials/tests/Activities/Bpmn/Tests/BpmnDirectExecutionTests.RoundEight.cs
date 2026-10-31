@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Bpmn.Internal;
+using Elsa.Activities.Bpmn.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -19,7 +20,7 @@ public sealed partial class BpmnDirectExecutionTests
             Path.Combine(AppContext.BaseDirectory, "Fixtures", "ActualLegacyPendingParentFaultModel.json")), Web)!;
         var document = BpmnDirectExecutionDriver.Read(model);
         Assert.Equal(5, document.FormatVersion);
-        Assert.Single(document.Work.Where(item => item.NativeWork is not null));
+        Assert.Single(document.Work, item => item.NativeWork is not null);
         Assert.Null(document.Cancellations);
         var invocation = BpmnEmbeddingBoundary.Read(new RunBpmnState(1, document.NativeParent!.Invocation));
         var now = DateTimeOffset.UtcNow;
