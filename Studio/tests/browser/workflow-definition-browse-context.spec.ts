@@ -146,7 +146,7 @@ for (const width of [320, 390]) {
     await page.goto(`${browseUrl}&long-identities=1&workbench-shell=1`);
     await page.getByRole("button", { name: "Next page" }).click();
     const row = page.getByRole("row", { name: /Second page renewal/ });
-    await expect(row.locator(".wf-definition-name")).toHaveText("Second page renewal");
+    await expect(row.locator(".wf-definition-name strong")).toHaveText("Second page renewal");
     await expect(page.getByRole("columnheader", { name: "Definition ID", exact: true })).toBeAttached();
 
     const tracks = await row.evaluate(element => {
@@ -473,7 +473,8 @@ for (const theme of ["light", "dark"]) {
           range.selectNodeContents(modified);
           return {
             timestampLines: range.getClientRects().length,
-            rowHeight: element.getBoundingClientRect().height,
+            // The compact content budget excludes the collection's one-pixel row separator.
+            rowHeight: element.clientHeight,
             timestampWidth: range.getBoundingClientRect().width,
             columnWidth: modified.getBoundingClientRect().width
           };
