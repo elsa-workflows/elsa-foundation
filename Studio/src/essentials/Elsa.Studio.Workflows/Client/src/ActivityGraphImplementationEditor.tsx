@@ -50,6 +50,8 @@ import {
 } from "./graph-authoring/useGraphCanvasInteractions";
 import {
   buildBpmnCanvas,
+  bindBpmnDecision,
+  bpmnGatewayConversionBlocker,
   collectRemovedGraphNodeIds,
   createBpmnBoundNode,
   createBpmnFlowEdge,
@@ -63,10 +65,10 @@ import {
   updateBpmnFlow,
   type BpmnNodeData
 } from "./bpmn/bpmnAdapter";
-import { BpmnElementInspector } from "./bpmn/BpmnElementInspector";
+import { BpmnElementInspector, BpmnElementConfiguration } from "./bpmn/BpmnElementInspector";
 import { bpmnPaletteElements } from "./bpmn/bpmnPaletteElements";
 import { emptyGraphElements } from "./graph-authoring/graphPaletteElements";
-import { bpmnElementTypeLabel, type BpmnElement, type BpmnSequenceFlow } from "./bpmn/bpmnTypes";
+import { bpmnElementTypeLabel, isBpmnDecisionType, type BpmnElement, type BpmnSequenceFlow } from "./bpmn/bpmnTypes";
 import { filterGraphAuthoringContributions } from "./graph-authoring/graphAuthoringContributions";
 import { ScopedVariablesEditor } from "./WorkflowPropertiesView";
 import { toActivityDescriptor } from "./workflow-editor/useWorkflowEditorData";
@@ -570,6 +572,24 @@ export function ActivityGraphImplementationEditor({
     const target = findBpmnElement(owner, flow.targetRef);
     return target ? target.name?.trim() || bpmnElementTypeLabel(target) : flow.targetRef;
   }, [owner]);
+  const decisionCatalogItem = availableActivities.find(item => isBpmnDecisionType(item.activityTypeKey));
+  const addBpmnDecision = () => {
+    if (readOnly || !selectedBpmnElement || !decisionCatalogItem) return;
+    const decision = createActivityNode(decisionCatalogItem, createNodeId(decisionCatalogItem));
+    updateScopeOwnerBpmnPayload(current => bindBpmnDecision(current, selectedBpmnElement.elementId, decision));
+  };
+  const bpmnInspectorProps = selectedBpmnElement ? {
+    element: selectedBpmnElement,
+    outboundFlows: selectedBpmnElementFlows,
+    onChangeElement: changeBpmnElement,
+    onChangeFlow: changeBpmnFlow,
+    onSetDefaultFlow: setBpmnDefaultFlow,
+    targetLabelFor: bpmnFlowTargetLabel,
+    readOnly,
+    isDecision: isBpmnDecisionType(selected ? catalogByVersion.get(selected.activityVersionId)?.activityTypeKey : undefined),
+    conversionBlockedReason: bpmnGatewayConversionBlocker(owner, selectedBpmnElement),
+    onAddDecision: decisionCatalogItem ? addBpmnDecision : undefined
+  } : null;
 
   // The provider-owned diagnostic focus seam addresses canvas nodes by document node id, which React
   // Flow does not put on the DOM.
@@ -823,15 +843,8 @@ export function ActivityGraphImplementationEditor({
           </div> : null}
           {!selectedSupported ? <span role="alert">This existing nested structure is preserved but cannot be structurally edited here.</span> : null}
           {!ownerSupported ? <span role="alert">This existing multi-slot structure is preserved but cannot be structurally edited by this graph host.</span> : null}
-          {selectedBpmnElement && !selected ? <BpmnElementInspector
-            element={selectedBpmnElement}
-            outboundFlows={selectedBpmnElementFlows}
-            onChangeElement={changeBpmnElement}
-            onChangeFlow={changeBpmnFlow}
-            onSetDefaultFlow={setBpmnDefaultFlow}
-            targetLabelFor={bpmnFlowTargetLabel}
-            readOnly={readOnly}
-          /> : <InspectorPanel
+          {bpmnInspectorProps && !selected ? <BpmnElementInspector {...bpmnInspectorProps} /> : <InspectorPanel
+            bpmnRoutingPanel={bpmnInspectorProps && selected ? <BpmnElementConfiguration {...bpmnInspectorProps} /> : undefined}
             key={`${inspectedNode?.nodeId ?? "no-activity"}:${selected ? "selected" : "owner"}`}
             context={context}
             workflowState={workflowState}

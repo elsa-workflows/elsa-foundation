@@ -26,7 +26,7 @@ Its internal contributor registers exact protocol `elsa.bpmn/1` through Runtime'
 
 | Surface | Owner and behavior |
 |---|---|
-| Authored structure | `BpmnStructureHandler` retains the Foundation DTO/schema/child-slot envelope and variable declarations. |
+| Authored structure | `BpmnStructureHandler` retains the Foundation DTO/schema/child-slot envelope and variable declarations. Through `IActivityStructureHandler.ProjectChildren`, it supplies typed per-child Decision outcomes derived from outgoing non-default sequence flows; generic Publishing consumes those projections without reading BPMN fields. |
 | Graph binding | `BpmnGraphAdapter` translates complete pinned work inventories to the released graph; structural failures retain a host exception with the original library validation cause. |
 | State compatibility | `BpmnStateCodec` preserves accepted alias/version/wire names; legacy/current documents remain distinct. |
 | Exact work | `BpmnWorkLedger` checks complete committed child history, parent/node/element/token/iteration identity and legacy stopped handles before library pruning. |

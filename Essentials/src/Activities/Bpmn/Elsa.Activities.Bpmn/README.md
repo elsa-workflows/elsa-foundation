@@ -39,3 +39,5 @@ The [post-deletion standard-host and Studio qualification](../../../../../specs/
 ## Cross-domain contributions
 
 `ActivitiesBpmnHostingFeature` supplies the Runtime Core `IRuntimeExecutionProtocolSource` contract with the exact `elsa.bpmn` protocol, input kinds and scoped driver. Runtime owns the public Core `RuntimeExecutionProtocolsInitializing` event, its single Sequential aggregator and the frozen registry. The BPMN feature registers a source; it does not register a second aggregator. See the [Runtime contribution catalog](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#model-protocol-drivers-and-contributions-core-contracts-implementation-owned-dispatch) for ownership and refusal checks.
+
+`BpmnStructureHandler` implements the Design Core `IActivityStructureHandler` contract. Its child-slot projection includes `ActivityChildOutcomeProjection` records for the built-in Decision type: named conditional flows and the optional literal `Outcome` input are owned here. Publishing pins matching child invocation contracts through that generic projection. The authored BPMN schema and activity fingerprint remain unchanged.
