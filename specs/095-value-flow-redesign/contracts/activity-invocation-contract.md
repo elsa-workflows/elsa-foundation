@@ -238,7 +238,8 @@ Generated, manual, and reflection-based hydrators MUST produce identical observa
 - distinguish omitted, explicit `null`, and pinned default;
 - preserve CLR nullable-reference intent independently of requiredness in the pinned input contract;
 - reject a missing required input;
-- reject `null` for a non-nullable input;
+- reject `null` for a non-nullable input, unless the pinned default-on-null policy applies (ADR 0045 §2
+  amendment, D-10), in which case assign the default that policy selects;
 - reject unknown or duplicate input keys;
 - perform no service lookup and no expression evaluation;
 - assign each property at most once.
