@@ -460,7 +460,7 @@ export function WorkflowInstances({ context, navigate }: {
           </div>
         </AdvancedSection>
       </form>
-      {state === "failed" ? <WfErrorCard message={error} action={<button type="button" onClick={() => void load()}>Retry</button>} /> : null}
+      {state === "failed" ? <WfErrorCard headingLevel={3} message={error} action={<StudioButton type="button" onClick={() => void load()}>Retry</StudioButton>} /> : null}
       {state === "unsupported" ? <p className="wf-run-health-unavailable" role="status">{error} No workflow runs were loaded. Clear the incident-health filter to search without it.</p> : null}
       {state === "loading" ? <div role="status" aria-live="polite" aria-label="Loading workflow runs"><WfListSkeleton /></div> : null}
       {canDeleteRuns && state === "ready" && selectedRunIds.size > 0 ? (
@@ -486,7 +486,7 @@ export function WorkflowInstances({ context, navigate }: {
       ) : null}
       {state === "ready" && instances.length === 0 ? (
         <div role="status" aria-live="polite">
-          <WfEmptyState
+          <WfEmptyState headingLevel={3}
             icon={<Boxes size={22} />}
             title={activeFilterCount ? "No workflow runs match these filters" : "No workflow runs yet"}
             description={activeFilterCount

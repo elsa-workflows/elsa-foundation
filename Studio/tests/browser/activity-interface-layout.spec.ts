@@ -10,17 +10,22 @@ for (const theme of ["light", "dark"]) {
       const outputs = page.getByRole("region", { name: "Output values", exact: true });
       const paths = page.getByRole("region", { name: "Completion paths", exact: true });
       await expect(page.getByRole("region", { name: "Done", exact: true })).toBeVisible();
+      await expect(outputs).toBeVisible();
       if (width > 1100) {
         expect((await members.boundingBox())!.width).toBeLessThanOrEqual(320);
-        const outputBox = (await outputs.boundingBox())!;
-        const pathBox = (await paths.boundingBox())!;
+        // Read both rectangles in one frame while the tab's entrance animation is running.
+        const [outputBox, pathBox] = await page.locator(".ad-graph-output-mappings, .ad-graph-outcome-mappings").evaluateAll(elements =>
+          elements.map(element => { const box = element.getBoundingClientRect(); return { x: box.x, y: box.y, width: box.width }; }));
         expect(pathBox.x).toBeGreaterThan(outputBox.x + outputBox.width);
         expect(Math.abs(pathBox.y - outputBox.y)).toBeLessThan(2);
       }
       const connections = page.getByRole("region", { name: "Provider boundary mappings" });
       const suggestions = page.locator("details.ad-interface-suggestions");
-      const connectionBox = (await connections.boundingBox())!;
-      expect((await suggestions.boundingBox())!.y).toBeGreaterThanOrEqual(connectionBox.y + connectionBox.height);
+      await expect(connections).toBeVisible();
+      await expect(suggestions).toBeVisible();
+      const [connectionBox, suggestionBox] = await page.locator(".ad-provider-public-interface, details.ad-interface-suggestions").evaluateAll(elements =>
+        elements.map(element => { const box = element.getBoundingClientRect(); return { y: box.y, height: box.height }; }));
+      expect(suggestionBox.y).toBeGreaterThanOrEqual(connectionBox.y + connectionBox.height);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
 
       await paths.getByRole("button", { name: "Remove connection", exact: true }).click();

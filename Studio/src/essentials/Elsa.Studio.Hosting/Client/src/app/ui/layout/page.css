@@ -139,7 +139,7 @@
   color: var(--studio-text-muted);
   font-size: var(--studio-body-size);
 }
-.studio-result-state > h2 { margin: 0; color: var(--studio-text); font-size: var(--studio-section-title-size); font-weight: 600; }
+.studio-result-state > :is(h2, h3) { margin: 0; color: var(--studio-text); font-size: var(--studio-section-title-size); font-weight: 600; }
 .studio-result-state > p { max-width: 60ch; margin: 0; line-height: 1.5; }
 .studio-result-state-icon { display: inline-flex; }
 .studio-result-state[data-tone="danger"] > .studio-result-state-icon { color: var(--studio-danger-fg); }

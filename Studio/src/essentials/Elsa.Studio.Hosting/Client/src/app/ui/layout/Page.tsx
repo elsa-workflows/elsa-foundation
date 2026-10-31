@@ -51,13 +51,16 @@ export interface StudioResultStateProps extends Omit<React.ComponentPropsWithout
   actions?: React.ReactNode;
   icon?: React.ReactNode;
   tone?: "neutral" | "danger";
+  /** Use 3 beneath an embedded page whose title is h2. */
+  headingLevel?: 2 | 3;
 }
 
 /** Initial empty/error/no-match state. Use StudioAlert for feedback above existing results. */
-export function StudioResultState({ title, description, actions, icon, tone = "neutral", className, children, ...props }: StudioResultStateProps) {
+export function StudioResultState({ title, description, actions, icon, tone = "neutral", headingLevel = 2, className, children, ...props }: StudioResultStateProps) {
+  const Heading = headingLevel === 3 ? "h3" : "h2";
   return <div className={["studio-result-state", className].filter(Boolean).join(" ")} data-tone={tone} role={tone === "danger" ? "alert" : "status"} {...props}>
     {icon ? <span aria-hidden="true" className="studio-result-state-icon">{icon}</span> : null}
-    <h2>{title}</h2>
+    <Heading>{title}</Heading>
     {description ? <p>{description}</p> : null}
     {children}
     {actions ? <div className="studio-page-actions">{actions}</div> : null}

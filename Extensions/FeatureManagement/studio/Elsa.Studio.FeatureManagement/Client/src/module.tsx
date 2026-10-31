@@ -762,8 +762,8 @@ export function FeatureManagementPage() {
             <StudioButton type="button" className="studio-icon-button" aria-label="Refresh features" title="Refresh" onClick={() => refreshHost()} disabled={loading || applying}>
               <RefreshCcw size={15} />
             </StudioButton>
-            <StudioButton type="button" className="studio-button" onClick={reset} disabled={!dirty || loading || applying || readOnly}>Reset</StudioButton>
-            <StudioButton type="button" className="studio-button studio-button-primary" onClick={openReview} disabled={!dirty || loading || applying || readOnly}>
+            <StudioButton type="button" onClick={reset} disabled={!dirty || loading || applying || readOnly}>Reset</StudioButton>
+            <StudioButton type="button" variant="primary" onClick={openReview} disabled={!dirty || loading || applying || readOnly}>
               Review changes
             </StudioButton>
           </StudioToolbarGroup>

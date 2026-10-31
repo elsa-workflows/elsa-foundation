@@ -21,7 +21,7 @@ export function ConnectionList({ items, descriptors, loading, error, searched, o
         <thead><tr><th>Name</th><th>Service</th><th>Authentication</th><th>Status</th><th>Last tested</th><th><span className="connections-sr-only">Actions</span></th></tr></thead>
         <tbody>
           {loading || error || empty ? <tr><td colSpan={6} className="connections-empty-cell">
-            <StudioResultState tone={error ? "danger" : "neutral"}
+            <StudioResultState headingLevel={3} tone={error ? "danger" : "neutral"}
               icon={error ? <AlertCircle size={24} /> : searched ? <Search size={24} /> : <Cable size={24} />}
               title={loading ? "Loading connections…" : error ? "Connections could not be loaded" : searched ? "No matching connections" : "No connections yet"}
               description={loading ? undefined : error ? "Try loading the list again." : searched ? "Try a different name or clear your search." : "Connect a service to use it in your workflows."}

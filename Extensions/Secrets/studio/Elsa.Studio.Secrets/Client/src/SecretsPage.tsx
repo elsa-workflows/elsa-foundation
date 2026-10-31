@@ -283,12 +283,12 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
               ) : null}
               {!loading && loadError ? (
                 <tr><td colSpan={7} className="secrets-empty">
-                  <StudioResultState tone="danger" title="Secrets could not be loaded." description="Check your connection and try again." icon={<AlertCircle size={20} />} actions={<StudioButton onClick={() => void load(attemptedSearch.current)}><RefreshCw size={14} aria-hidden /> Retry</StudioButton>} />
+                  <StudioResultState headingLevel={3} tone="danger" title="Secrets could not be loaded." description="Check your connection and try again." icon={<AlertCircle size={20} />} actions={<StudioButton onClick={() => void load(attemptedSearch.current)}><RefreshCw size={14} aria-hidden /> Retry</StudioButton>} />
                 </td></tr>
               ) : null}
               {!loading && !loadError && filteredSecrets.length === 0 ? (
                 <tr><td colSpan={7} className="secrets-empty">
-                  <StudioResultState title={emptyTitle} description={emptyDescription} icon={<KeyRound size={20} />} actions={hasActiveFilters ? <StudioButton onClick={clearFilters}>Clear filters</StudioButton> : <StudioButton onClick={() => setDialog({ kind: "create" })} disabled={!descriptors}><Plus size={14} aria-hidden /> Create secret</StudioButton>} />
+                  <StudioResultState headingLevel={3} title={emptyTitle} description={emptyDescription} icon={<KeyRound size={20} />} actions={hasActiveFilters ? <StudioButton onClick={clearFilters}>Clear filters</StudioButton> : <StudioButton variant="primary" onClick={() => setDialog({ kind: "create" })} disabled={!descriptors}><Plus size={14} aria-hidden /> Create secret</StudioButton>} />
                 </td></tr>
               ) : null}
               {!loading && filteredSecrets.map(secret => (

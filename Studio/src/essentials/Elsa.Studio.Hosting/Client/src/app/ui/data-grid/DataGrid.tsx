@@ -67,7 +67,9 @@ export function StudioDataGrid<T>({
             aria-selected={selectable ? selected : undefined}
             tabIndex={selectable ? (key === rovingKey ? 0 : -1) : undefined}
             onClick={selectable ? event => {
-              if (event.defaultPrevented || (event.target instanceof Element && event.target.closest("button, a, input, select, textarea, label, summary, [contenteditable='true'], [role='button'], [role='link']"))) return;
+              if (event.defaultPrevented) return;
+              const control = event.target instanceof Element ? event.target.closest("button, a, input, select, textarea, label, summary, [contenteditable='true'], [role='button'], [role='link']") : null;
+              if (control && control !== event.currentTarget && event.currentTarget.contains(control)) return;
               activate?.();
             } : undefined}
             onKeyDown={selectable ? event => {

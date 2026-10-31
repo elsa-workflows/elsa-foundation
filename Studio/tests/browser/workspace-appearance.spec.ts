@@ -121,6 +121,7 @@ for (const style of styles) {
     await expect(page.getByRole("tab", { name: "Activity", exact: true })).toHaveAttribute("aria-selected", "true");
     const details = page.getByRole("complementary", { name: "Run details panel", exact: true });
     await expect(details).toContainText("Notify buyer");
+    await expect(page).toHaveURL(/selected=activity-exec-write-one/);
     const url = page.url();
     await chooseStyle(page, style === "focus" ? "Quiet Studio" : "Focus Canvas");
     await expect(details).toContainText("Notify buyer");

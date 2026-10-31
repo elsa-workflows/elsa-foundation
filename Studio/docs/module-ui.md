@@ -91,7 +91,8 @@ export function ServicesPage(props: Props) {
 The host owns the main landmark and outer content gutter. `StudioPage` is a section,
 not a second main landmark or a whole-page card. Use a page title, short description
 and at most one filled primary header action. `headingLevel={2}` is available when
-the embedding surface already supplies an h1. Icons and eyebrows are optional;
+the embedding surface already supplies an h1; use `headingLevel={3}` on its
+`StudioResultState` to keep feedback below that title. Icons and eyebrows are optional;
 they should add information rather than repeat navigation.
 
 `StudioCollectionToolbar` wraps controls and retains native Tab order. Put search

@@ -531,8 +531,8 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
             title={errorTitle}
             action={(
               <div className="wf-definition-search-actions">
-                <button type="button" className="wf-link-button" onClick={retry}>Retry current search</button>
-                {page > 1 ? <button type="button" className="wf-link-button" onClick={() => rebase()}>Restart from first page</button> : null}
+                <StudioButton onClick={retry}>Retry current search</StudioButton>
+                {page > 1 ? <StudioButton onClick={() => rebase()}>Restart from first page</StudioButton> : null}
               </div>
             )}
           />
@@ -554,7 +554,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
             icon={<Package size={22} />}
             title={emptyTitle}
             description={emptyDescription}
-            action={<button type="button" className="wf-link-button" onClick={openCreateDialog}><Plus size={15} /> Create workflow</button>}
+            action={<StudioButton variant="primary" onClick={openCreateDialog}><Plus size={15} /> Create workflow</StudioButton>}
           />
         ) : null}
         {renderResultRows && definitions.length > 0 ? (

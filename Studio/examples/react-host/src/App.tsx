@@ -136,7 +136,7 @@ function PrimitivesSection() {
           gridColumns="minmax(160px, 2fr) minmax(180px, 1fr) minmax(120px, 1fr)"
           selectedKey={selected}
           onSelect={row => setSelected(row.id)}
-          emptyState={<StudioResultState title="No matching workflows" description="Change the search or status filter." />}
+          emptyState={<StudioResultState headingLevel={3} title="No matching workflows" description="Change the search or status filter." />}
         />
         <StudioCollectionFooter>{visibleRows.length} of {rows.length} loaded workflows</StudioCollectionFooter>
       </StudioPage>

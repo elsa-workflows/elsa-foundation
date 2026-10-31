@@ -183,15 +183,15 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
           <StudioButton onClick={() => onDefinitionFilterChange(null)}><X size={13} /> Clear</StudioButton>
         ) : null}
       </div>
-      {state === "failed" ? <WfErrorCard message={error} /> : null}
-      {state === "ready" && error ? <WfErrorCard message={error} /> : null}
+      {state === "failed" ? <WfErrorCard headingLevel={3} message={error} /> : null}
+      {state === "ready" && error ? <WfErrorCard headingLevel={3} message={error} /> : null}
       {status ? <ExecutableRunStatusLine status={status} run={lastRun} /> : null}
       {state === "loading" ? <WfListSkeleton /> : null}
       {state === "ready" && visibleExecutables.length === 0 ? (
         definitionNamesLoading ? (
-          <WfEmptyState icon={<Search size={22} />} title="Loading workflow names" description="Checking definition names for matching executables." />
+          <WfEmptyState headingLevel={3} icon={<Search size={22} />} title="Loading workflow names" description="Checking definition names for matching executables." />
         ) : (
-          <WfEmptyState
+          <WfEmptyState headingLevel={3}
             icon={<Play size={22} />}
             title="No workflow executables"
             description={definitionFilter ? "No executables match this definition filter." : "Publish a workflow definition to make it executable."}
