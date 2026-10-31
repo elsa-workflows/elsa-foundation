@@ -1,0 +1,24 @@
+{
+  "source": "committed actual old writer capture; no state edits",
+  "databaseSha256": "0a5ea64058dcdb950fdda9e5b792264ceec2f6ca19fa9398a7733f6c62ea097e",
+  "integrity": "ok",
+  "modelExecutionId": "bpmn-embedded:e705a3456fd038bcff55bf21094de655bd89bf8b395c96a9fe14deca2d2cb44d",
+  "originalOutstandingWorker": "wfexec:start:v1:a7203484cd6ef8cf324a6db6e3f24d710a922645598845d5b95aba68ae70a121",
+  "nativeExecutions": [
+    {
+      "executionId": "review-native-parent",
+      "status": "Running",
+      "isOriginalOutstandingWorker": false
+    },
+    {
+      "executionId": "wfexec:start:v1:a7203484cd6ef8cf324a6db6e3f24d710a922645598845d5b95aba68ae70a121",
+      "status": "Running",
+      "isOriginalOutstandingWorker": true
+    },
+    {
+      "executionId": "wfexec:start:v1:2ab73941fff9227256a24a97adb1a321a68f6a3f3872852b575a09b66aa5819c",
+      "status": "Faulted",
+      "isOriginalOutstandingWorker": false
+    }
+  ]
+}

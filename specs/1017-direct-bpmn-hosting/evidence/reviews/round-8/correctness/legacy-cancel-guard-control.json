@@ -1,0 +1,20 @@
+{
+  "executionId": "bpmn-embedded:e705a3456fd038bcff55bf21094de655bd89bf8b395c96a9fe14deca2d2cb44d",
+  "revision": 2,
+  "lifecycle": "TerminalPendingSettlement",
+  "terminal": {
+    "status": "Faulted",
+    "code": "bpmn.work.faulted",
+    "message": "BPMN process faulted because the work bound to \u0027worker\u0027 faulted (Native service work failed.): failed work cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
+    "errorCode": null
+  },
+  "formatVersion": 5,
+  "nativeWork": 1,
+  "cancellations": null,
+  "queueCalls": 0,
+  "result": "Elsa.Workflows.Runtime.Core.Exceptions.RuntimeSchedulerWorkUnavailableException: Review8 causal control: original native work is not yet settled.",
+  "syntheticSource": true,
+  "actualLegacyFrame": true,
+  "bpmnAssembly": "1.0.0\u002Beef92c613853f80cb192a5fe462a1f929c3836a8",
+  "bpmnAssemblySha256": "21d2eb8d6774a0d3ef66b80c79b6b6b7d7405c6876c34d12340b0c1257492122"
+}

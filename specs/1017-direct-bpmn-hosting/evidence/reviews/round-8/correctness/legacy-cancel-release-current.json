@@ -1,0 +1,20 @@
+{
+  "executionId": "bpmn-embedded:e705a3456fd038bcff55bf21094de655bd89bf8b395c96a9fe14deca2d2cb44d",
+  "revision": 2,
+  "lifecycle": "TerminalPendingSettlement",
+  "terminal": {
+    "status": "Faulted",
+    "code": "bpmn.work.faulted",
+    "message": "BPMN process faulted because the work bound to \u0027worker\u0027 faulted (Native service work failed.): failed work cannot complete, so its token \u2014 and any downstream join that requires it \u2014 can no longer proceed.",
+    "errorCode": null
+  },
+  "formatVersion": 5,
+  "nativeWork": 1,
+  "cancellations": null,
+  "queueCalls": 0,
+  "result": "Acknowledged",
+  "syntheticSource": true,
+  "actualLegacyFrame": true,
+  "bpmnAssembly": "1.0.0\u002B1cee5acd4e7d7adb01dd467342641a108e349d60",
+  "bpmnAssemblySha256": "3c7512b9f2d8b4d7b2368e41a1716ba5facd7d60959512547e4e04f5ff728d0c"
+}
