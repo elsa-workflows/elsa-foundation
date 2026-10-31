@@ -189,6 +189,17 @@
       "medianMinutes": 0.02
     },
     {
+      "project": "Essentials/tests/Connections/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Connections.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "tier": "integration",
+      "trait": "testcontainers",
+      "medianMinutes": null
+    },
+    {
+      "project": "Essentials/tests/Connections/Persistence/EntityFrameworkCore/Tests/Elsa.Connections.Persistence.EntityFrameworkCore.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": 0.1
+    },
+    {
       "project": "Essentials/tests/Connections/Tests/Elsa.Connections.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.02
@@ -797,7 +808,8 @@
           "Essentials/tests/Workbench/BackgroundActivities/Tests/Elsa.Workbench.BackgroundActivities.Tests.csproj",
           "Essentials/tests/Modularity/Planning/Tests/Elsa.Modularity.Planning.Tests.csproj",
           "Essentials/tests/Expressions/Tests/Elsa.Expressions.Tests.csproj",
-          "Essentials/tests/Activities/Design/Api/Tests/Elsa.Activities.Design.Api.Tests.csproj"
+          "Essentials/tests/Activities/Design/Api/Tests/Elsa.Activities.Design.Api.Tests.csproj",
+          "Essentials/tests/Connections/Persistence/EntityFrameworkCore/Tests/Elsa.Connections.Persistence.EntityFrameworkCore.Tests.csproj"
         ]
       },
       {
@@ -872,7 +884,8 @@
           "rules",
           "runtime-distributed",
           "transaction-topology",
-          "workbench-openiddict"
+          "workbench-openiddict",
+          "connections"
         ]
       },
       {
@@ -1030,6 +1043,11 @@
       "suite": "rules",
       "project": "Extensions/Rules/tests/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Rules.Persistence.EntityFrameworkCore.ProviderTests.csproj",
       "require": "ELSA_RULES_EF_REQUIRE_NATIVE_PROVIDERS"
+    },
+    {
+      "suite": "connections",
+      "project": "Essentials/tests/Connections/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Connections.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+      "require": "ELSA_CONNECTIONS_EF_REQUIRE_NATIVE_PROVIDERS"
     }
   ],
   "secretsCompositionSuite": {

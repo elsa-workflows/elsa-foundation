@@ -7,6 +7,12 @@ namespace Elsa.Connections.Services;
 
 internal sealed class InMemoryConnectionRepository : IConnectionRepository
 {
+    public ValueTask<ConnectionRepositoryCapabilities> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(new ConnectionRepositoryCapabilities("in-memory", false));
+    }
+
     private readonly ConcurrentDictionary<string, ConnectionDocument> _documents = new(StringComparer.OrdinalIgnoreCase);
 
     public ValueTask<ConnectionDocument?> FindAsync(string tenantId, string name, CancellationToken cancellationToken = default)

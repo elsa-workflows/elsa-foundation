@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\Essentials\src\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\Essentials\src\Cluster\EntityFrameworkCore\Elsa.Cluster.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\Essentials\src\Connections\Persistence\EntityFrameworkCore\Elsa.Connections.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\Extensions\Elsa3\src\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\Essentials\src\Diagnostics\OpenTelemetry\Persistence\EntityFrameworkCore\Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\Essentials\src\Diagnostics\StructuredLogs\Persistence\EntityFrameworkCore\Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.csproj" />

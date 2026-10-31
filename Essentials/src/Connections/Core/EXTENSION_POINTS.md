@@ -13,7 +13,9 @@ database connection string, or `RuntimeConnectionToken`.
 ## Override
 
 - `IConnectionRepository`: persistence of connection definition and state. The default is in-memory;
-  a durable package replaces it.
+  [EF persistence](../Persistence/EntityFrameworkCore/README.md) replaces it. `GetCapabilitiesAsync`
+  returns the configured metadata provider and its durability; existing contributions default to
+  unspecified/non-durable until they explicitly supply `ConnectionRepositoryCapabilities`.
 - `IConnectionManager`: lifecycle facade (create, update, test, revoke, delete).
 - `IConnectionResolver`: point-of-use resolution. Tenant-scoped; owner/run-as is reserved and only
   `tenant` is valid in v1.

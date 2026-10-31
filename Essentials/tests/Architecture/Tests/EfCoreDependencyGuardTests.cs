@@ -112,6 +112,10 @@ public sealed class EfCoreDependencyGuardTests
     public void Every_admitted_ETL_project_resolves_only_its_reviewed_EF_closure() =>
         AssertReviewedModuleClosure(Adr0087FiniteEtlEf.ExpectedEfPackagesByProject, "finite ETL");
 
+    [Fact]
+    public void Every_admitted_Connections_project_resolves_only_its_reviewed_EF_closure() =>
+        AssertReviewedModuleClosure(Spec1179ConnectionsEf.ExpectedEfPackagesByProject, "Connections metadata (#3578)");
+
     private static void AssertReviewedModuleClosure(IReadOnlyDictionary<string, string[]> projects, string module)
     {
         var offenders = projects.SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
@@ -705,6 +709,7 @@ public sealed class EfCoreDependencyGuardTests
                         StringComparer.Ordinal),
                     Adr0072SecretsEfPilot.IsProjectPath(relativePath) ||
                     Adr0073RepositoryFirstEf.IsProjectPath(relativePath) ||
+                    Spec1179ConnectionsEf.IsProjectPath(relativePath) ||
                     Adr0073StructuredLogsEf.IsProjectPath(relativePath) ||
                     Adr0073OpenTelemetryEf.IsProjectPath(relativePath) ||
                     Adr0073IdentityEf.IsProjectPath(relativePath) ||
@@ -958,6 +963,26 @@ public sealed class EfCoreDependencyGuardTests
             "Microsoft.EntityFrameworkCore.Analyzers",
             "Microsoft.EntityFrameworkCore.Relational"
         ];
+    }
+
+    /// <summary>
+    /// Spec 1179 T014-T015, implemented by #3578 under the existing Connections owner #2854:
+    /// one provider-neutral metadata repository, SQLite behavior/restart tests and the native provider matrix.
+    /// </summary>
+    internal static class Spec1179ConnectionsEf
+    {
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["Essentials/src/Connections/Persistence/EntityFrameworkCore/Elsa.Connections.Persistence.EntityFrameworkCore.csproj"] = CorePackages(),
+                ["Essentials/tests/Connections/Persistence/EntityFrameworkCore/Tests/Elsa.Connections.Persistence.EntityFrameworkCore.Tests.csproj"] = SqlitePackages(),
+                ["Essentials/tests/Connections/Persistence/EntityFrameworkCore/RestartProbe/Elsa.Connections.Persistence.EntityFrameworkCore.RestartProbe.csproj"] = SqlitePackages(),
+                ["Essentials/tests/Connections/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Connections.Persistence.EntityFrameworkCore.ProviderTests.csproj"] =
+                [.. CorePackages(), "Microsoft.EntityFrameworkCore.SqlServer", "MySql.EntityFrameworkCore", "Npgsql.EntityFrameworkCore.PostgreSQL"]
+            };
+        public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
+        private static string[] CorePackages() => ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational"];
+        private static string[] SqlitePackages() => [.. CorePackages(), "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"];
     }
 
     /// <summary>

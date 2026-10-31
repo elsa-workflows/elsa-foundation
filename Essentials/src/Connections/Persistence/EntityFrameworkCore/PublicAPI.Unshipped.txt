@@ -1,0 +1,67 @@
+#nullable enable
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsModelBuilderExtensions
+static Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsModelBuilderExtensions.AddConnectionsModel(this Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder, string! providerName) -> Microsoft.EntityFrameworkCore.ModelBuilder!
+static Elsa.Connections.Persistence.EntityFrameworkCore.DependencyInjection.ConnectionsEntityFrameworkCoreRegistration.AddConnectionsRepository<TContext>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsDbContext
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature.ConnectionName.get -> string?
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature.ConnectionName.set -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature.ConnectionString.get -> string?
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature.ConnectionString.set -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature.ConnectionsEntityFrameworkCoreFeature() -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature.Pooling.get -> bool
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature.Pooling.set -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature.Provider.get -> string!
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature.Provider.set -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature.Schema.get -> string?
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature.Schema.set -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsMySqlDbContext
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsMySqlDbContext.ConnectionsMySqlDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsMySqlDbContext!>! options) -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsPostgreSqlDbContext
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsPostgreSqlDbContext.ConnectionsPostgreSqlDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsPostgreSqlDbContext!>! options) -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsSqlServerDbContext
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsSqlServerDbContext.ConnectionsSqlServerDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsSqlServerDbContext!>! options) -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsSqliteDbContext
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsSqliteDbContext.ConnectionsSqliteDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsSqliteDbContext!>! options) -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.DependencyInjection.ConnectionsEntityFrameworkCoreOptions
+Elsa.Connections.Persistence.EntityFrameworkCore.DependencyInjection.ConnectionsEntityFrameworkCoreOptions.ConnectionName.get -> string?
+Elsa.Connections.Persistence.EntityFrameworkCore.DependencyInjection.ConnectionsEntityFrameworkCoreOptions.ConnectionName.set -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.DependencyInjection.ConnectionsEntityFrameworkCoreOptions.ConnectionString.get -> string?
+Elsa.Connections.Persistence.EntityFrameworkCore.DependencyInjection.ConnectionsEntityFrameworkCoreOptions.ConnectionString.set -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.DependencyInjection.ConnectionsEntityFrameworkCoreOptions.ConnectionsEntityFrameworkCoreOptions() -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.DependencyInjection.ConnectionsEntityFrameworkCoreOptions.Pooling.get -> bool
+Elsa.Connections.Persistence.EntityFrameworkCore.DependencyInjection.ConnectionsEntityFrameworkCoreOptions.Pooling.set -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.DependencyInjection.ConnectionsEntityFrameworkCoreOptions.Provider.get -> string!
+Elsa.Connections.Persistence.EntityFrameworkCore.DependencyInjection.ConnectionsEntityFrameworkCoreOptions.Provider.set -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.DependencyInjection.ConnectionsEntityFrameworkCoreOptions.Schema.get -> string?
+Elsa.Connections.Persistence.EntityFrameworkCore.DependencyInjection.ConnectionsEntityFrameworkCoreOptions.Schema.set -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.DependencyInjection.ConnectionsEntityFrameworkCoreRegistration
+abstract Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsDbContext.ConfigureProvider(Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder) -> void
+const Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsMySqlDbContext.ExpectedProviderName = "MySql.EntityFrameworkCore" -> string!
+const Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsPostgreSqlDbContext.ExpectedProviderName = "Npgsql.EntityFrameworkCore.PostgreSQL" -> string!
+const Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsSqlServerDbContext.ExpectedProviderName = "Microsoft.EntityFrameworkCore.SqlServer" -> string!
+const Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsSqliteDbContext.ExpectedProviderName = "Microsoft.EntityFrameworkCore.Sqlite" -> string!
+override Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsDbContext.OnModelCreating(Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder) -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsDbContext.ConnectionsDbContext(Microsoft.EntityFrameworkCore.DbContextOptions! options) -> void
+static Elsa.Connections.Persistence.EntityFrameworkCore.DependencyInjection.ConnectionsEntityFrameworkCoreRegistration.AddConnectionsEntityFrameworkCore(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Elsa.Connections.Persistence.EntityFrameworkCore.DependencyInjection.ConnectionsEntityFrameworkCoreOptions! options) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+virtual Elsa.Connections.Persistence.EntityFrameworkCore.ConnectionsEntityFrameworkCoreFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.MySql.Initial
+Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.MySql.Initial.Initial() -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.PostgreSql.Initial
+Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.PostgreSql.Initial.Initial() -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.SqlServer.Initial
+Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.SqlServer.Initial.Initial() -> void
+Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.Sqlite.Initial
+Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.Sqlite.Initial.Initial() -> void
+~override Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.MySql.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.MySql.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.MySql.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.PostgreSql.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.PostgreSql.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.PostgreSql.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.SqlServer.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.SqlServer.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.SqlServer.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.Sqlite.Initial.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder modelBuilder) -> void
+~override Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.Sqlite.Initial.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void
+~override Elsa.Connections.Persistence.EntityFrameworkCore.Migrations.Connections.Sqlite.Initial.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder migrationBuilder) -> void

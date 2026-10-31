@@ -116,6 +116,7 @@ not automatic constitution violations.
 |---|---|
 | Connections core (provider-neutral contracts — repository, manager, resolver, credential sources, auth schemes, `SensitiveValue`) | [`Essentials/src/Connections/Core/EXTENSION_POINTS.md`](Essentials/src/Connections/Core/EXTENSION_POINTS.md) |
 | Connections (default services, http type, built-in schemes, named credentials) | [`Essentials/src/Connections/Elsa.Connections/EXTENSION_POINTS.md`](Essentials/src/Connections/Elsa.Connections/EXTENSION_POINTS.md) |
+| Connections EF persistence (scoped metadata, version checks, secret references and consumer-owned contexts) | [`Essentials/src/Connections/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Connections/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Connections API (CRUD, picker, OAuth callback) | [`Essentials/src/Connections/Api/EXTENSION_POINTS.md`](Essentials/src/Connections/Api/EXTENSION_POINTS.md) |
 | Connections Design (publish gate) | [`Essentials/src/Connections/Design/EXTENSION_POINTS.md`](Essentials/src/Connections/Design/EXTENSION_POINTS.md) |
 | Connections Workflows (http applicator + secret mask) | [`Essentials/src/Connections/Workflows/EXTENSION_POINTS.md`](Essentials/src/Connections/Workflows/EXTENSION_POINTS.md) |
