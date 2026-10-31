@@ -76,6 +76,7 @@ These steps restate [Issue Bus Lite][org-agents-review] for convenience; the org
 - After 6 rounds with blocking findings left, comment `blocked: review loop exhausted` and add `needs:decision`; that escalates to Sipke.
 - Owner exception: an explicit instruction from Sipke in an agent session counts for that one action only. Record it in the PR, for example `merged on Sipke's instruction`.
 - Fallback: while Code Review is unavailable, Sipke may approve and merge manually; agents wait, and no author merges its own PR.
+- An ADR PR in an initiative's scope (it changes `docs/adr/` and says `Part of #N` for an `initiative`-labelled issue) is merged only after every approver in its approval plan has approved it ([initiatives](initiatives.md#how-work-flows)). Until then it stays a draft. Code Review does not approve or merge it while an approver's approval is missing, bot approvals never count, and a manual merge follows the same rule.
 - When a stop condition in the org file applies, comment `blocked: <reason>`, add `blocked` (or `needs:decision` when a decision is missing) and unassign yourself. Red checks on the base branch count only when they are required checks.
 
 ## Post-merge gates
