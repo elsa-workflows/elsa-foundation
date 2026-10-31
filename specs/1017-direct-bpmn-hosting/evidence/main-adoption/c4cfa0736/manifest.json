@@ -679,9 +679,11 @@
       "decodedBytes": 103233
     },
     {
-      "path": "initial/browser-timeout-attachments/error-context.md",
-      "sha256": "712d928b742ce3d7edab165a15e7b5dd4be2a8973963b23c3fa69aa96134cb9f",
-      "bytes": 141850
+      "path": "initial/browser-timeout-attachments/error-context.md.gz",
+      "sha256": "2b4906cc07390551d956e0ddf009bc78f86f5198ee6019671c7ade5e2b4712d3",
+      "bytes": 15576,
+      "decodedSha256": "712d928b742ce3d7edab165a15e7b5dd4be2a8973963b23c3fa69aa96134cb9f",
+      "decodedBytes": 141850
     },
     {
       "path": "initial/browser-timeout-attachments/trace.zip",
