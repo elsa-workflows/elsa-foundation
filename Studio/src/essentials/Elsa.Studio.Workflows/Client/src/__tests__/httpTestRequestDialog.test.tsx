@@ -7,7 +7,7 @@ import { capabilityIds, clearApiCapabilityCache } from "../api/capabilities";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
 import type { WorkflowExecutableDetails, WorkflowExecutableInputSources } from "../workflowTypes";
 import { HttpTestRequestDialog } from "../workflow-editor/HttpTestRequestDialog";
-import { workflowHttpBasePathCapabilityRelation, workflowHttpBasePathUnavailableMessage } from "../workflow-editor/httpTestRequest";
+import { publishedHttpEndpointLiteralsMissingMessage, workflowHttpBasePathCapabilityRelation, workflowHttpBasePathUnavailableMessage } from "../workflow-editor/httpTestRequest";
 
 vi.mock("../api/runtime", () => ({ getExecutable: vi.fn(), getExecutableInputSources: vi.fn() }));
 
@@ -507,6 +507,47 @@ describe("HTTP test request dialog", () => {
     );
   });
 
+  it("shows the request form for the published HttpEndpoint input-sources payload", async () => {
+    advertiseWorkflowHttpBasePath();
+    vi.mocked(getExecutable).mockResolvedValue(publishedHttpPingExecutable());
+    vi.mocked(getExecutableInputSources).mockResolvedValue(publishedHttpPingInputs());
+
+    const container = await renderDialog(undefined, { authoredActivityId: "root", artifactId: "artifact-ca2981d0ace2" });
+    await waitFor(() => expect(container.querySelector("select[aria-label='HTTP method']")).not.toBeNull());
+
+    const send = container.querySelector<HTMLButtonElement>("button[type='submit']")!;
+    expect(container.querySelector<HTMLInputElement>("input[aria-label='Endpoint path']")!.value).toBe("/ux-qa-ping");
+    expect([...container.querySelectorAll<HTMLOptionElement>("select[aria-label='HTTP method'] option")].map(option => option.value))
+      .toEqual(["GET", "POST", "PUT", "HEAD", "DELETE"]);
+    expect(send.textContent).toContain("Send request");
+    expect(send.dataset.variant).toBe("primary");
+    expect(container.querySelector(".wf-http-test-error")).toBeNull();
+  });
+
+  it("offers Publish draft when published literals are missing instead of a bare error", async () => {
+    const onPublishDraft = vi.fn();
+    advertiseWorkflowHttpBasePath();
+    vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
+    vi.mocked(getExecutableInputSources).mockResolvedValue({
+      artifactId: "artifact-1",
+      sourceReferenceId: "reference-1",
+      accessState: "allowed",
+      authoredInputs: [],
+      compiledInputs: []
+    });
+
+    const container = await renderDialog(undefined, { onPublishDraft });
+    await waitFor(() => expect(container.textContent).toContain(publishedHttpEndpointLiteralsMissingMessage));
+
+    expect(container.querySelector("button[type='submit']")).toBeNull();
+    expect(container.querySelector(".wf-http-test-error")).toBeNull();
+    expect(container.querySelector(".studio-result-state")?.textContent).toContain("Cannot build a test request");
+    const publish = [...container.querySelectorAll("button")].find(button => button.textContent === "Publish draft")!;
+    expect(publish.dataset.variant).toBe("primary");
+    await click(publish);
+    expect(onPublishDraft).toHaveBeenCalledOnce();
+  });
+
   it("does not render a sendable request when the server omits the workflow mount capability", async () => {
     getJson.mockResolvedValue({ capabilities: [] });
     vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
@@ -527,7 +568,12 @@ function advertiseWorkflowHttpBasePath(basePath = "workflows/http") {
   }] });
 }
 
-async function renderDialog(onClose = () => undefined) {
+async function renderDialog(onClose = () => undefined, extras: {
+  artifactId?: string;
+  authoredActivityId?: string;
+  onPublishDraft?(): void;
+  onOpenPublishedVersion?(): void;
+} = {}) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -536,9 +582,11 @@ async function renderDialog(onClose = () => undefined) {
     <HttpTestRequestDialog
       context={context}
       open
-      artifactId="artifact-1"
-      authoredActivityId="endpoint-1"
+      artifactId={extras.artifactId ?? "artifact-1"}
+      authoredActivityId={extras.authoredActivityId ?? "endpoint-1"}
       onClose={onClose}
+      onPublishDraft={extras.onPublishDraft}
+      onOpenPublishedVersion={extras.onOpenPublishedVersion}
     />
   ));
   return container;
@@ -631,6 +679,69 @@ function publishedExecutable(): WorkflowExecutableDetails {
         }]
       }]
     }
+  };
+}
+
+function publishedHttpPingExecutable(): WorkflowExecutableDetails {
+  return {
+    artifactId: "artifact-ca2981d0ace2",
+    artifactHash: "hash",
+    createdAt: "2026-10-31T00:00:00Z",
+    rootActivityType: "Elsa.HttpEndpoint",
+    rootActivityVersion: "1.1.0",
+    nodeCount: 1,
+    resumeTargetCount: 0,
+    chosenReference: { sourceReferenceId: "publication-1", selection: "newest-live", layout: [] },
+    references: [],
+    rootActivity: {
+      executableNodeId: "root",
+      authoredActivityId: "root",
+      activityType: "Elsa.HttpEndpoint",
+      activityTypeVersion: "1.1.0",
+      inputBindings: [
+        { inputName: "Path", inputKey: "Path", source: "Literal", literalValue: null },
+        { inputName: "SupportedMethods", inputKey: "SupportedMethods", source: "Literal", literalValue: null }
+      ],
+      childSlots: []
+    }
+  };
+}
+
+function publishedHttpPingInputs(): WorkflowExecutableInputSources {
+  return {
+    artifactId: "artifact-ca2981d0ace2",
+    sourceReferenceId: "publication-1",
+    accessState: "allowed",
+    authoredInputs: [
+      { executableNodeId: "root", inputKey: "Path", expressionType: "Literal", value: "/ux-qa-ping", accessState: "allowed" },
+      { executableNodeId: "root", inputKey: "SupportedMethods", expressionType: "Object", value: '["GET","POST","PUT","HEAD","DELETE"]', accessState: "allowed" }
+    ],
+    compiledInputs: [
+      {
+        executableNodeId: "root",
+        accessState: "allowed",
+        binding: {
+          inputName: "Path",
+          inputKey: "Path",
+          source: "Literal",
+          summary: '"/ux-qa-ping"',
+          literalValue: { valueKind: 3 },
+          metadata: { referenceKey: "Path" }
+        }
+      },
+      {
+        executableNodeId: "root",
+        accessState: "allowed",
+        binding: {
+          inputName: "SupportedMethods",
+          inputKey: "SupportedMethods",
+          source: "Literal",
+          summary: '["GET","POST","PUT","HEAD","DELETE"]',
+          literalValue: { valueKind: 2 },
+          metadata: { referenceKey: "SupportedMethods" }
+        }
+      }
+    ]
   };
 }
 
