@@ -1,4 +1,3 @@
-import "@xyflow/react/dist/style.css";
 import { ActivityIconsFixture } from "./activityIconsFixture";
 import { ActivityInputEvidenceFixture } from "./activityInputEvidenceFixture";
 import React, { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1815,6 +1814,11 @@ async function renderRequestedFixture() {
   if (searchParams.get("mode") === "workflow-definition-browse") {
     const { WorkflowDefinitionBrowseFixture } = await import("./workflowDefinitionBrowseFixture");
     root.render(<WorkflowDefinitionBrowseFixture />);
+    return;
+  }
+  if (searchParams.get("mode") === "workflow-library") {
+    const { WorkflowLibraryFixture } = await import("./workflowLibraryFixture");
+    root.render(<WorkflowLibraryFixture />);
     return;
   }
   if (navBeforeFixture) {

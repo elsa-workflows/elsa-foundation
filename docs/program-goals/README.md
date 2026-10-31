@@ -36,6 +36,7 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 | [Elsa 3.8/3.9 Parity](elsa3-parity.md) | Active; owner exception, 15 October | Identity administration, then tenancy, Elsa 3 import, operations, modules | Sipke | Program #2771, ADR 0085; Phase 1 users and roles |
 | [Studio Expression Developer Experience](studio-expression-developer-experience.md) | Active; owner authorization, 23 October | Studio activity-input code authoring and Foundation expression tooling | Sipke | Program #2310; plan #2367 and the permission-hash fix first; milestones 2 and 3 wait on the #3204 read-model ADR |
 | [Weaver across Studio](weaver-across-studio.md) | Active; owner authorization, 29 October | Module-owned assistant context, tools, review and effects across Studio | Sipke | Program #3428; M0 baseline, then M1 contribution contract and independent module witness; Project #65 |
+| [Workflow Library Organization](workflow-library-organization.md) | Active; owner authorization, 31 October | Workflow folders, tags, saved views and large-library browsing | Sipke | Program #3499; current-host folders, classification/views, then integrated qualification under #3500 |
 
 The Active table above is the complete list of active programs. The
 [19 October owner amendment to ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) replaced the

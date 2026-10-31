@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronRight, Folder, LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { moveWorkflowFolder, renameWorkflowFolder } from "../api/workflowDesign";
+import { getWorkflowFolder, moveWorkflowFolder, renameWorkflowFolder } from "../api/workflowDesign";
 import type { WorkflowFolder } from "../workflowTypes";
 import { useDialogFocus } from "./useDialogFocus";
 import { useWorkflowFolderTree, workflowFolderTreeKey } from "./useWorkflowFolderTree";
@@ -15,6 +15,7 @@ export function RenameWorkflowFolderDialog({ context, folder, onClose, onRenamed
   const titleId = useId();
   const ref = useRef<HTMLElement>(null);
   const [name, setName] = useState(folder.name);
+  const [expectedRevision, setExpectedRevision] = useState(folder.revision);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useDialogFocus(ref, busy ? null : onClose);
@@ -26,7 +27,7 @@ export function RenameWorkflowFolderDialog({ context, folder, onClose, onRenamed
     setBusy(true);
     setError(null);
     try {
-      await renameWorkflowFolder(context, folder.id, normalized);
+      await renameWorkflowFolder(context, folder.id, normalized, expectedRevision);
       await onRenamed();
       onClose();
     } catch (caught) {
@@ -35,13 +36,19 @@ export function RenameWorkflowFolderDialog({ context, folder, onClose, onRenamed
       setBusy(false);
     }
   };
+  const reload = async () => {
+    setBusy(true); setError(null);
+    try { const current = await getWorkflowFolder(context, folder.id); if (!current) throw new Error("Folder unavailable"); setName(current.folder.name); setExpectedRevision(current.folder.revision); }
+    catch (caught) { setError(`Couldn't reload the folder. ${caught instanceof Error ? caught.message : "Try again."}`); }
+    finally { setBusy(false); }
+  };
 
   return <div className="wf-dialog-backdrop" role="presentation">
     <section ref={ref} className="wf-dialog wf-folder-mutation-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
       <form onSubmit={submit}>
         <div className="wf-dialog-heading"><div><h3 id={titleId}>Rename folder</h3><p>The folder keeps its existing identity and contents.</p></div></div>
         <div className="wf-folder-mutation-content">
-          {error ? <p className="wf-dialog-error" role="alert">{error}</p> : null}
+          {error ? <p className="wf-dialog-error" role="alert">{error} <button type="button" disabled={busy} onClick={() => void reload()}>Reload folder</button></p> : null}
           <label className="wf-form-field"><span>Name</span><input aria-label="Folder name" value={name} onChange={event => setName(event.target.value)} disabled={busy} /></label>
         </div>
         <div className="wf-dialog-actions"><button type="button" onClick={onClose} disabled={busy}>Cancel</button><button type="submit" disabled={busy || !name.trim()}>{busy ? "Renaming…" : "Rename"}</button></div>
@@ -65,6 +72,7 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [eligibility, setEligibility] = useState<Record<string, Eligibility>>({});
   const [destinationId, setDestinationId] = useState<string | null>(folder.parentId ?? null);
+  const [expectedRevision, setExpectedRevision] = useState(folder.revision);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useDialogFocus(ref, busy ? null : onClose);
@@ -116,7 +124,7 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
     setBusy(true);
     setError(null);
     try {
-      await moveWorkflowFolder(context, folder.id, destinationId);
+      await moveWorkflowFolder(context, folder.id, destinationId, expectedRevision);
       await onMoved(destinationId, previousParentId.current);
       onClose();
     } catch (caught) {
@@ -132,6 +140,16 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
     if (loadErrors.has(key)) return <p role="alert" className="wf-folder-load-error">{loadErrors.get(key)} <button type="button" onClick={() => void loadPage(parentId)}>Retry loading folders</button></p>;
     if (continuations.get(key)) return <button type="button" className="wf-folder-load-more" onClick={() => void loadPage(parentId, continuations.get(key), { append: true })}>Load more folders</button>;
     return null;
+  };
+  const reload = async () => {
+    setBusy(true); setError(null);
+    try {
+      const current = await getWorkflowFolder(context, folder.id);
+      if (!current) throw new Error("Folder unavailable");
+      setExpectedRevision(current.folder.revision); previousParentId.current = current.folder.parentId ?? null;
+      await loadPage(undefined, undefined, { force: true });
+    } catch (caught) { setError(`Couldn't reload the folder. ${caught instanceof Error ? caught.message : "Try again."}`); }
+    finally { setBusy(false); }
   };
 
   const rows = (items: WorkflowFolder[]): ReactNode => items.map(candidate => {
@@ -155,7 +173,7 @@ export function MoveWorkflowFolderDialog({ context, folder, onClose, onMoved }: 
       <form onSubmit={submit}>
         <div className="wf-dialog-heading"><div><h3 id={titleId}>Move folder</h3><p>Choose a new parent for {folder.name}. The folder keeps its identity.</p></div></div>
         <div className="wf-folder-mutation-content">
-          {error ? <p className="wf-dialog-error" role="alert">{error}</p> : null}
+          {error ? <p className="wf-dialog-error" role="alert">{error} <button type="button" disabled={busy} onClick={() => void reload()}>Reload folder</button></p> : null}
           <fieldset className="wf-move-destination" disabled={busy}><legend>New parent</legend><div className="wf-move-folder-list">
             <label className="wf-move-folder-row"><input type="radio" name="folder-parent" checked={destinationId === null} onChange={() => setDestinationId(null)} /> Top level</label>
             {rows(roots)}{controls()}

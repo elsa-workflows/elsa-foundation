@@ -6,6 +6,7 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Commands;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -50,6 +51,9 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         addContext(services, options);
         services.TryAddScoped<IDesignAtomicWriter, EfDesignAtomicWriter>();
         services.AddScoped<IWorkflowTemplateStore, EfWorkflowTemplateStore>();
+        services.AddScoped<EfWorkflowLibraryStore>();
+        services.AddScoped<IWorkflowLibraryStore>(provider => provider.GetRequiredService<EfWorkflowLibraryStore>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerIndexObserver, WorkflowLibraryPublicationObserver>());
         services.TryAddScoped<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
         services.TryAddScoped<IWorkflowDefinitionDraftFactory, WorkflowDefinitionDraftFactory>();
         services.TryAddScoped<IWorkflowDefinitionVersionFactory, WorkflowDefinitionVersionFactory>();
@@ -69,13 +73,16 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         // Capture the exact descriptors emitted by this registration, including the provider's
         // closed DbContextOptions descriptor. Tracking by service type would leave stale provider
         // options behind when an application intentionally switches EF providers.
+        var emitted = services.Skip(registrationStart).ToArray();
         DesignPersistenceBackend.Register(services, new DesignPersistenceBackend(
             DesignPersistenceBackend.EntityFramework,
-            services.Skip(registrationStart)
-                // Startup tasks are additive host services. The validator is idempotent, but the
-                // selected persistence backend must never claim exclusive ownership of the type.
-                .Where(descriptor => descriptor.ServiceType != typeof(IStartupTask))
-                .ToArray()));
+            emitted
+                // The provider-neutral startup validator survives backend replacement. The EF
+                // observer is owned as an exact additive contribution and leaves with this backend.
+                .Where(descriptor => descriptor.ServiceType != typeof(IStartupTask) &&
+                    descriptor.ServiceType != typeof(IWorkflowTriggerIndexObserver))
+                .ToArray(),
+            emitted.Where(descriptor => descriptor.ServiceType == typeof(IWorkflowTriggerIndexObserver))));
         return services;
     }
 
@@ -113,6 +120,8 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         typeof(WorkflowsDesignPostgreSqlDbContext),
         typeof(WorkflowsDesignMySqlDbContext),
         typeof(IWorkflowTemplateStore),
+        typeof(IWorkflowLibraryStore),
+        typeof(EfWorkflowLibraryStore),
         typeof(IDesignAtomicWriter),
         typeof(IWorkflowDefinitionLookup),
         typeof(EfWorkflowDefinitionStore),

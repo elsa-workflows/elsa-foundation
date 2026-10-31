@@ -1,3 +1,5 @@
+import "@xyflow/react/dist/style.css";
+import "./graphCanvas.css";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { BaseEdge, EdgeLabelRenderer, Handle, getBezierPath, getSmoothStepPath, type EdgeProps, type NodeProps } from "@xyflow/react";
 import { useStudioThemeLayout, type StudioThemeLayout } from "@elsa-workflows/studio-sdk";

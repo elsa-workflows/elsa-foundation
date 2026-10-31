@@ -8,4 +8,5 @@
   * [Undo completed steps with a compensation scope](essentials/compensation.md)
 * [Optional modules](extensions/README.md)
 * [Elsa Studio](studio/README.md)
+  * [Organizing workflows](studio/organizing-workflows.md)
 * [Contribute documentation](contributing/README.md)

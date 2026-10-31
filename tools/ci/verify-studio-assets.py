@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import json
+import re
 import tempfile
 from pathlib import Path
 
@@ -38,6 +40,25 @@ EXPECTED_ASSETS = (
 )
 
 
+# The producer contract is part of each module's static-web-asset package payload.
+EXPECTED_ASSETS += tuple(path.rsplit("/", 1)[0] + "/entry-styles.json"
+                         for path in EXPECTED_ASSETS if path.endswith("/module.js"))
+
+
+def verify_entry_styles(root: Path) -> None:
+    for path in EXPECTED_ASSETS:
+        if not path.endswith("/entry-styles.json"):
+            continue
+        contract = root / path
+        data = json.loads(contract.read_text())
+        styles = data.get("styles")
+        if data.get("version") != 1 or not isinstance(styles, list) or any(
+            not isinstance(name, str) or not re.fullmatch(r"module-[A-Za-z0-9_-]+\.css", name)
+            or not (contract.parent / name).is_file() for name in styles
+        ) or len(styles) != len(set(styles)):
+            raise ValueError(f"Invalid module entry stylesheet contract: {path}")
+
+
 def missing_assets(root: Path) -> list[str]:
     return [path for path in EXPECTED_ASSETS if not (root / path).is_file()]
 
@@ -48,15 +69,26 @@ def self_test() -> None:
         for path in EXPECTED_ASSETS:
             asset = root / path
             asset.parent.mkdir(parents=True, exist_ok=True)
-            asset.touch()
+            asset.write_text('{"version":1,"styles":[]}' if path.endswith("/entry-styles.json") else "")
         if missing_assets(root):
             raise AssertionError("Complete fixture was reported as missing assets.")
+        verify_entry_styles(root)
         for path in EXPECTED_ASSETS:
             removed = root / path
             removed.unlink()
             if missing_assets(root) != [path]:
                 raise AssertionError(f"Missing asset was not reported precisely: {path}")
-            removed.touch()
+            removed.write_text('{"version":1,"styles":[]}' if path.endswith("/entry-styles.json") else "")
+        contract = root / next(path for path in EXPECTED_ASSETS if path.endswith("/entry-styles.json"))
+        for data in [{"version": 2, "styles": []}, {"version": 1, "styles": ["../outside.css"]},
+                     {"version": 1, "styles": ["module-missing.css"]}]:
+            contract.write_text(json.dumps(data))
+            try:
+                verify_entry_styles(root)
+            except ValueError:
+                pass
+            else:
+                raise AssertionError("Invalid entry stylesheet contract was accepted: " + str(data))
 
 
 def main() -> None:
@@ -73,6 +105,7 @@ def main() -> None:
         for path in missing:
             print(f"Missing generated Studio asset: {path}")
         raise SystemExit(1)
+    verify_entry_styles(args.root.resolve())
     print(f"Verified {len(EXPECTED_ASSETS)} generated Studio host and RCL assets.")
 
 
