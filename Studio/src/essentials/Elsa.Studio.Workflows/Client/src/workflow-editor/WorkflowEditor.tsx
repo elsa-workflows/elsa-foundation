@@ -1519,6 +1519,14 @@ export function WorkflowEditor({
             artifactId={publishedRuntimeExecutable?.artifactId ?? null}
             authoredActivityId={httpTestRequestActivityId}
             onClose={() => setHttpTestRequestActivityId(null)}
+            onPublishDraft={() => {
+              setHttpTestRequestActivityId(null);
+              void preparePublication("review");
+            }}
+            onOpenPublishedVersion={() => {
+              setHttpTestRequestActivityId(null);
+              openPublishedExecutable();
+            }}
           />
         </React.Suspense>
       ) : null}
