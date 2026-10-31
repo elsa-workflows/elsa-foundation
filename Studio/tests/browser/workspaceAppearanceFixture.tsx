@@ -21,11 +21,15 @@ const navigation = getStudioNavigation([
   { id: "executables", label: "Executables", path: "/workflows/executables", placement: "more" }
 ], { includeThemeBuilder: false });
 
+const panels = new URLSearchParams(location.search).has("bottom-panel")
+  ? [{ id: "fixture-logs", title: "Structured Logs", component: () => <p>Structured log stream connected.</p> }]
+  : [];
+
 function Fixture() {
   const [view, setView] = useState(new URLSearchParams(location.search).get("view") ?? "editor");
   const path = view === "appearance" ? "/settings/appearance" : "/workflows/definitions";
   return <ThemeProvider>
-    <ShellFrame navigation={navigation} panels={[]} path={path} title={view === "appearance" ? "Appearance" : "Workflows"}
+    <ShellFrame navigation={navigation} panels={panels} path={path} title={view === "appearance" ? "Appearance" : "Workflows"}
       backendBaseUrl="https://backend.example/" themeAction={<ThemeSwitcher />}
       onNavigate={next => setView(next.startsWith("/settings") ? "appearance" : "list")}>
       {view === "appearance" ? <AppearancePage onNavigate={() => {}} /> : view === "list" ? <WorkflowDefinitionBrowseFixture /> : view === "publication" ? <WorkflowPublishChoiceFixture /> : view === "dialogs" ? <>
