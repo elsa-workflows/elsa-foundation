@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 internal static class LegacyEmbeddedCancellationProbe
 {
-    public static async Task RunAsync(IServiceProvider sdk, RuntimeModelExecutionState before, string operation, JsonSerializerOptions json)
+    public static async Task RunAsync(IServiceProvider sdk, RuntimeModelExecutionState before, JsonElement owner, string operation, JsonSerializerOptions json)
     {
         if (before.Payload.GetProperty("formatVersion").GetInt32() != 5 ||
             before.TerminalResult?.GetProperty("status").GetString() != "Faulted" ||
@@ -16,7 +16,12 @@ internal static class LegacyEmbeddedCancellationProbe
             before.Payload.TryGetProperty("cancellations", out var cancellations) && cancellations.ValueKind != JsonValueKind.Null && cancellations.GetArrayLength() != 0)
             throw new InvalidOperationException("The probe requires the unchanged actual old format5 fault and retained native work.");
         var invocation = before.Payload.GetProperty("nativeParent").GetProperty("invocation");
-        var parentId = invocation.GetProperty("nativeExecutionId").GetString()!;
+        var parentId = owner.GetProperty("nativeParentExecutionId").GetString()!;
+        var parentBytes = new byte[parentId.Length * 2];
+        for (var index = 0; index < parentId.Length; index++)
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(parentBytes.AsSpan(index * 2, 2), parentId[index]);
+        if (invocation.GetProperty("nativeExecutionId").GetString() != "u16:" + Convert.ToBase64String(parentBytes))
+            throw new InvalidOperationException("The owned marker must identify the exact retained native parent.");
         var origin = before.Payload.GetProperty("work")[0].GetProperty("nativeWork").Deserialize<RuntimeModelNativeWorkOrigin>(json)!;
         var executions = sdk.GetRequiredService<IWorkflowExecutionStateStore>();
         var models = sdk.GetRequiredService<IRuntimeModelExecutionReader>();
@@ -24,7 +29,7 @@ internal static class LegacyEmbeddedCancellationProbe
         var outbox = sdk.GetRequiredService<IRuntimePostCommitOutboxStore>();
         var parentBefore = await executions.FindAsync(parentId) ?? throw new InvalidOperationException("The actual native parent is absent.");
         var workerBefore = await executions.FindAsync(origin.WorkerExecutionId) ?? throw new InvalidOperationException("The original native worker is absent.");
-        if (workerBefore.Status != WorkflowExecutionStatus.Running)
+        if (workerBefore.Status != WorkflowExecutionStatus.Running || !origin.MatchesModel(before) || !origin.IsEquivalentTo(workerBefore.ModelWorkOrigin))
             throw new InvalidOperationException("The actual outstanding native worker must still be Running.");
         var now = DateTimeOffset.UtcNow;
         object? dispatch = null;

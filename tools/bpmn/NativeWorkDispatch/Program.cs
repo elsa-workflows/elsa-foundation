@@ -137,7 +137,7 @@ try
     var model = await models.FindAsync(args[2]) ?? throw new InvalidOperationException("The actual model execution is absent.");
     if (legacyCancellation)
     {
-        await LegacyEmbeddedCancellationProbe.RunAsync(sdk, model, args[0], json);
+        await LegacyEmbeddedCancellationProbe.RunAsync(sdk, model, owner, args[0], json);
         return 0;
     }
     if (retention)
