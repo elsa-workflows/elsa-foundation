@@ -1,6 +1,6 @@
 # Native runtime performance implementation — 31 October 2026
 
-Status: implementation and controlled comparison qualified locally; CI and final Code Review remain pending. Issue [#3542](https://github.com/elsa-workflows/elsa-foundation/issues/3542), PR [#3545](https://github.com/elsa-workflows/elsa-foundation/pull/3545), [spec 1180](../../specs/1180-native-runtime-performance/spec.md). This follows the [baseline assessment](native-runtime-performance-2026-10-31.md); it is owner-requested evidence, not a new CI timing gate.
+Qualification record: implementation, controlled comparison and subsequent main integration verified locally. Delivery status and exact-head CI are recorded on the PR. Issue [#3542](https://github.com/elsa-workflows/elsa-foundation/issues/3542), PR [#3545](https://github.com/elsa-workflows/elsa-foundation/pull/3545), [spec 1180](../../specs/1180-native-runtime-performance/spec.md). This follows the [baseline assessment](native-runtime-performance-2026-10-31.md); it is owner-requested evidence, not a new CI timing gate.
 
 ## Implementation
 
@@ -33,6 +33,16 @@ Workbench Debug and the Release probe build passed. Generated-map/solution-filte
 Rebuilt Workbench processes with isolated SQLite stores passed all ten JSON capture/default/typed-variable HTTP cases, a JavaScript loop printing exactly 1 through 10 with no incidents, and suspension followed by an actual process restart and resume. The restart retained the variable and executed Set once, with no duplicate effect. Each fixture stopped only its owned process and removed its disposable content root. An initial e2e launch failed before host startup because an older temporary PowerShell installation lacked a working `Resolve-Path`; the complete runs used the verified 7.6.9 installation.
 
 Causal controls failed with the relevant optimization removed: zero-input store reads, repeated fingerprint allocation, repeated overlay reconstruction and repeated EF expression compilation. The read-only contract assertion failed before its fix. Additional mutations caused the intended failures for an injected workflow-state read, omitted custom request inputs and strongly retained collectible provider delegate types. Production sources were restored before the final complete-suite runs. Two independent review rounds covered correctness, repository standards and acceptance; the second left no actionable findings.
+
+## Main integration qualification
+
+After integrating main `0870a6740dac5e4e78d7b72a15e1dcb0177a4e5a`, code head `74d22c11432b1d5495803031b36a7d7406524ff5` preserves the newly added lazy structure-input evaluation. Cached preparation contains ordinary inputs only and an immutable flag indicating structure inputs; policy selection, ordering, short-circuiting and evaluated values remain invocation-specific. A regression sharing one executable node across three materializers proves each uses its own policy and current values. It failed against the naive merge by attempting to read an unselected input, then passed with the correction.
+
+The integrated whole-project runs passed **8,216 tests**, with **one optional SQLite stress case skipped**. These comprise Runtime 3,073; EF BindingDrift 23; Activities.Runtime 722; Sequence 22; ControlFlow 254; Flowchart 121; Persistence.EntityFramework 710; Runtime.Persistence.EntityFrameworkCore 1,729; Publishing 61; Publishing.Api 909; Architecture 592. Discovery reconciled with every result, including expanded theories. Workbench Debug, the Release probe, architecture graph restore and generated-map checks passed. Independent correctness, standards and acceptance reviews found no actionable integration issue.
+
+Rebuilt real-host JSON binding cases, the JavaScript variable loop and actual process restart/resume all passed again. A fresh PostgreSQL correctness smoke completed 95 workflows across Balanced 1/10/100 leaves and Durable 10 leaves, with exact leaf/state counts and no queued work, incidents or pending outbox. Untimed accounting retained respectively 45/65/290/275 EF commands, 1/1/3/12 checkpoints and 2/2/7/25 transaction commits. Owned fixture roots, PostgreSQL container and its anonymous volume were removed. This short smoke was run under shared-machine load and supplies no new comparative timing claim.
+
+[Integration test accounting and PostgreSQL audit](evidence/native-runtime-performance-implementation-2026-10-31/integration-qualification.json) record the checked code head and command provenance. The controlled timing cohort below remains tied to its original frozen binaries; it is not presented as a fresh benchmark of the integrated head.
 
 ## Controlled comparison
 
