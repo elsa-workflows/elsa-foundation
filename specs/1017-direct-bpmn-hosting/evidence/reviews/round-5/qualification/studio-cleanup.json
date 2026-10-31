@@ -1,0 +1,75 @@
+{
+  "source": "04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+  "processes": [
+    {
+      "role": "workbench",
+      "processId": 78738,
+      "controllerProcessId": 78686,
+      "started": "Sat Oct 31 01:24:59 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Workbench.dll",
+      "assemblySha256": "61a0a147edc9f6dcfe2e7a033ebd7fb9cb8268677c03a10e22b1c734a99df7fd",
+      "sameRecordedProcessPresent": false
+    },
+    {
+      "role": "studio",
+      "processId": 78871,
+      "controllerProcessId": 78686,
+      "started": "Sat Oct 31 01:25:07 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Studio.Web.dll",
+      "assemblySha256": "47f1ccb579b2d4c1c52dcd78dd5195fe6d46a9e859342ff3fe64d0dbeb549d3c",
+      "sameRecordedProcessPresent": false
+    },
+    {
+      "role": "workbench",
+      "processId": 83160,
+      "controllerProcessId": 78686,
+      "started": "Sat Oct 31 01:29:04 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Workbench.dll",
+      "assemblySha256": "61a0a147edc9f6dcfe2e7a033ebd7fb9cb8268677c03a10e22b1c734a99df7fd",
+      "sameRecordedProcessPresent": false
+    },
+    {
+      "role": "workbench",
+      "processId": 84593,
+      "controllerProcessId": 84582,
+      "started": "Sat Oct 31 01:30:33 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Workbench.dll",
+      "assemblySha256": "61a0a147edc9f6dcfe2e7a033ebd7fb9cb8268677c03a10e22b1c734a99df7fd",
+      "sameRecordedProcessPresent": false
+    },
+    {
+      "role": "studio",
+      "processId": 84614,
+      "controllerProcessId": 84582,
+      "started": "Sat Oct 31 01:30:37 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Studio.Web.dll",
+      "assemblySha256": "47f1ccb579b2d4c1c52dcd78dd5195fe6d46a9e859342ff3fe64d0dbeb549d3c",
+      "sameRecordedProcessPresent": false
+    },
+    {
+      "role": "workbench",
+      "processId": 86093,
+      "controllerProcessId": 84582,
+      "started": "Sat Oct 31 01:32:52 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Workbench.dll",
+      "assemblySha256": "61a0a147edc9f6dcfe2e7a033ebd7fb9cb8268677c03a10e22b1c734a99df7fd",
+      "sameRecordedProcessPresent": false
+    }
+  ],
+  "ownedTabsClosed": [
+    "26",
+    "27"
+  ],
+  "userTabsRetained": [
+    "4",
+    "11"
+  ],
+  "all104FrozenAssetsUnchanged": true,
+  "hostProductBytesUnchanged": true
+}

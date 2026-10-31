@@ -1,0 +1,208 @@
+{
+  "references": [
+    {
+      "package": "Bpmn.Model/0.5.0",
+      "asset": "lib/net10.0/Bpmn.Model.dll",
+      "file": "Bpmn.Model.dll",
+      "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776"
+    },
+    {
+      "package": "Bpmn.Semantics/0.5.0",
+      "asset": "lib/net10.0/Bpmn.Semantics.dll",
+      "file": "Bpmn.Semantics.dll",
+      "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+    },
+    {
+      "package": "Cronos/0.13.0",
+      "asset": "lib/net6.0/Cronos.dll",
+      "file": "Cronos.dll",
+      "sha256": "e0ad7c799904f1b663ab090b32665e0e90ede27699937588900845383064ba03"
+    },
+    {
+      "package": "CShells.Abstractions/0.0.31",
+      "asset": "lib/net10.0/CShells.Abstractions.dll",
+      "file": "CShells.Abstractions.dll",
+      "sha256": "dbcf0e5d572791124ac582e3a10519d80f01b9f2e4228cffadb61171f796b5a0"
+    },
+    {
+      "package": "Elsa.Activities.Bpmn/4.0.16-preview",
+      "asset": "lib/net10.0/Elsa.Activities.Bpmn.dll",
+      "file": "Elsa.Activities.Bpmn.dll",
+      "sha256": "9ba34ec27fce1b957a723ef9accec4179690316f8840935b4260c993c80bc284"
+    },
+    {
+      "package": "Elsa.Activities.Design.Core/4.0.12-preview",
+      "asset": "lib/net10.0/Elsa.Activities.Design.Core.dll",
+      "file": "Elsa.Activities.Design.Core.dll",
+      "sha256": "7c2b78a19fde737a5068b54512340b642564c6cc03bce29f6f15281f3f474f2e"
+    },
+    {
+      "package": "Elsa.Activities.Design.Persistence.Core/4.0.13-preview",
+      "asset": "lib/net10.0/Elsa.Activities.Design.Persistence.Core.dll",
+      "file": "Elsa.Activities.Design.Persistence.Core.dll",
+      "sha256": "1868321552d27b1c0e7ca7e2cbdae9254bf0f9fb9231a3e689223cfd41ecdb97"
+    },
+    {
+      "package": "Elsa.Activities.Runtime.Core/4.0.24-preview",
+      "asset": "lib/net10.0/Elsa.Activities.Runtime.Core.dll",
+      "file": "Elsa.Activities.Runtime.Core.dll",
+      "sha256": "3471e898cf113cb019b1bf98c56b0b534a36509d457c149f1c03c64326bd7896"
+    },
+    {
+      "package": "Elsa.Attention.Core/4.0.14-preview",
+      "asset": "lib/net10.0/Elsa.Attention.Core.dll",
+      "file": "Elsa.Attention.Core.dll",
+      "sha256": "28d69f384be0a3cc1b75dbf265fad413bb8ea6c73bdd6b407e88e47aeb75fe0b"
+    },
+    {
+      "package": "Elsa.Events.Core/4.0.14-preview",
+      "asset": "lib/net10.0/Elsa.Events.Core.dll",
+      "file": "Elsa.Events.Core.dll",
+      "sha256": "ae352c84ba5cc664b7a89e6443a3b03251b5e6c819583d1455d8538c50119db7"
+    },
+    {
+      "package": "Elsa.Expressions.Core/4.0.14-preview",
+      "asset": "lib/net10.0/Elsa.Expressions.Core.dll",
+      "file": "Elsa.Expressions.Core.dll",
+      "sha256": "645f03c550b21a05a28d105450cb342de3e51dc73a5dc9060df56559bdb0f209"
+    },
+    {
+      "package": "Elsa.Locking.Core/4.0.14-preview",
+      "asset": "lib/net10.0/Elsa.Locking.Core.dll",
+      "file": "Elsa.Locking.Core.dll",
+      "sha256": "3627779304e5726e740a2a648b37211d2086a25f29dae50fdd9ef78a586bc0c1"
+    },
+    {
+      "package": "Elsa.Mediator.Core/4.0.14-preview",
+      "asset": "lib/net10.0/Elsa.Mediator.Core.dll",
+      "file": "Elsa.Mediator.Core.dll",
+      "sha256": "494359bc4433246b5a714b2ba222d413c949e02eb56e8db85da13fbd89160f2d"
+    },
+    {
+      "package": "Elsa.Pipelines.Core/4.0.14-preview",
+      "asset": "lib/net10.0/Elsa.Pipelines.Core.dll",
+      "file": "Elsa.Pipelines.Core.dll",
+      "sha256": "69dee8289ccf6461327353c6c4e15e4ee83e740763b8e1121deddd115352cdd2"
+    },
+    {
+      "package": "Elsa.Primitives/4.0.14-preview",
+      "asset": "lib/net10.0/Elsa.Primitives.dll",
+      "file": "Elsa.Primitives.dll",
+      "sha256": "2e74a2d06693db92566451007945429e23d47a5995be1bae53478217f008c585"
+    },
+    {
+      "package": "Elsa.Serialization.Core/4.0.14-preview",
+      "asset": "lib/net10.0/Elsa.Serialization.Core.dll",
+      "file": "Elsa.Serialization.Core.dll",
+      "sha256": "bcc4941f07cadc60d7f97267ce44e822127d00d58e9f5df0938877ee56fba625"
+    },
+    {
+      "package": "Elsa.Tasks.Core/4.0.14-preview",
+      "asset": "lib/net10.0/Elsa.Tasks.Core.dll",
+      "file": "Elsa.Tasks.Core.dll",
+      "sha256": "68b36327d98584dff8ca7906b2b4bc3ae858504b7687571298a5149046a28ef7"
+    },
+    {
+      "package": "Elsa.Tasks.Schedules/4.0.10-preview",
+      "asset": "lib/net10.0/Elsa.Tasks.Schedules.dll",
+      "file": "Elsa.Tasks.Schedules.dll",
+      "sha256": "3458b8c41b80efd68b1e07c5964d22c493e818aff43efcb576a759f1b061d6dc"
+    },
+    {
+      "package": "Elsa.Workflows.Design.Core/4.0.14-preview",
+      "asset": "lib/net10.0/Elsa.Workflows.Design.Core.dll",
+      "file": "Elsa.Workflows.Design.Core.dll",
+      "sha256": "bf4ed873780bb7643680489c64ec3c7023f25dc4c31cf6749689b233f0dd8407"
+    },
+    {
+      "package": "Elsa.Workflows.Design.Persistence.Core/4.0.12-preview",
+      "asset": "lib/net10.0/Elsa.Workflows.Design.Persistence.Core.dll",
+      "file": "Elsa.Workflows.Design.Persistence.Core.dll",
+      "sha256": "69b598460ae9d9fef7128ca6e3a70c6d77ee0a075610d4e4b9b514ecd2216db8"
+    },
+    {
+      "package": "Elsa.Workflows.Design.Validations/4.0.14-preview",
+      "asset": "lib/net10.0/Elsa.Workflows.Design.Validations.dll",
+      "file": "Elsa.Workflows.Design.Validations.dll",
+      "sha256": "c32f2abce00acbec88266a470b6a8a9595cc6dc1a66ce6b8405a7162d4404d46"
+    },
+    {
+      "package": "Elsa.Workflows.Design.Validations.Core/4.0.10-preview",
+      "asset": "lib/net10.0/Elsa.Workflows.Design.Validations.Core.dll",
+      "file": "Elsa.Workflows.Design.Validations.Core.dll",
+      "sha256": "d844b4c08ed29096d7aecb36af6bc5ce516344d7f8a235d569f54eb093ddc3f8"
+    },
+    {
+      "package": "Elsa.Workflows.Publishing/4.0.37-preview",
+      "asset": "lib/net10.0/Elsa.Workflows.Publishing.dll",
+      "file": "Elsa.Workflows.Publishing.dll",
+      "sha256": "2ff96fcc35a97c278208aef3842fe0a4a08a2ded516b2a5bbb8c1404fd149aab"
+    },
+    {
+      "package": "Elsa.Workflows.Publishing.Core/4.0.17-preview",
+      "asset": "lib/net10.0/Elsa.Workflows.Publishing.Core.dll",
+      "file": "Elsa.Workflows.Publishing.Core.dll",
+      "sha256": "a8fe431c022058543facee6cdad96f618430a6298066925cbfc09f3b1c35549c"
+    },
+    {
+      "package": "Elsa.Workflows.Runtime/4.0.70-preview",
+      "asset": "lib/net10.0/Elsa.Workflows.Runtime.dll",
+      "file": "Elsa.Workflows.Runtime.dll",
+      "sha256": "c9574bdcf1d701ef64cfb79ebf27992c958dc62b20953b54a8da55c14aabe329"
+    },
+    {
+      "package": "Elsa.Workflows.Runtime.Core/4.0.56-preview",
+      "asset": "lib/net10.0/Elsa.Workflows.Runtime.Core.dll",
+      "file": "Elsa.Workflows.Runtime.Core.dll",
+      "sha256": "51729832b0f58044dc39fbce1b762f4b05ac8712d89e5a89683903c35de4ebeb"
+    },
+    {
+      "package": "JetBrains.Annotations/2025.2.4",
+      "asset": "lib/netstandard2.0/JetBrains.Annotations.dll",
+      "file": "JetBrains.Annotations.dll",
+      "sha256": "8f2c837af3f4f61b1726a2e67eafcf5bae23debd9e1de425bb5ce1d4837508d6"
+    },
+    {
+      "package": "Microsoft.Extensions.Configuration/10.0.10",
+      "asset": "lib/net10.0/Microsoft.Extensions.Configuration.dll",
+      "file": "Microsoft.Extensions.Configuration.dll",
+      "sha256": "82e24fb29ce626917e2061cb56bc45bbcd6df949c8c8a2ffa8e0d58131a57e5f"
+    },
+    {
+      "package": "Microsoft.Extensions.Configuration.Abstractions/10.0.10",
+      "asset": "lib/net10.0/Microsoft.Extensions.Configuration.Abstractions.dll",
+      "file": "Microsoft.Extensions.Configuration.Abstractions.dll",
+      "sha256": "685493e38adb7e5d06bfcd93aa160fb8ce23aae80dadd1ff489e8cd4cfc6cafe"
+    },
+    {
+      "package": "Microsoft.Extensions.DependencyInjection/10.0.10",
+      "asset": "lib/net10.0/Microsoft.Extensions.DependencyInjection.dll",
+      "file": "Microsoft.Extensions.DependencyInjection.dll",
+      "sha256": "5af15e4b692dfa774550b0d506e3411f4a84ed1a757ff617016b6bd060e7b1dc"
+    },
+    {
+      "package": "Microsoft.Extensions.DependencyInjection.Abstractions/10.0.10",
+      "asset": "lib/net10.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll",
+      "file": "Microsoft.Extensions.DependencyInjection.Abstractions.dll",
+      "sha256": "592c33e4bc20e041d6125b79a4311293540f30332495429241c3d7c7286c8e16"
+    },
+    {
+      "package": "Microsoft.Extensions.Logging.Abstractions/10.0.10",
+      "asset": "lib/net10.0/Microsoft.Extensions.Logging.Abstractions.dll",
+      "file": "Microsoft.Extensions.Logging.Abstractions.dll",
+      "sha256": "46826fd3b68bd23028b274ff73ecc161088b53e41b4a7436e759de4d78143a43"
+    },
+    {
+      "package": "Microsoft.Extensions.Options/10.0.10",
+      "asset": "lib/net10.0/Microsoft.Extensions.Options.dll",
+      "file": "Microsoft.Extensions.Options.dll",
+      "sha256": "e6e4183c67c8b265d852e40e6b873640371c4eb19f6268d4c4734c1aeba17dfb"
+    },
+    {
+      "package": "Microsoft.Extensions.Primitives/10.0.10",
+      "asset": "lib/net10.0/Microsoft.Extensions.Primitives.dll",
+      "file": "Microsoft.Extensions.Primitives.dll",
+      "sha256": "149f0bb5fbbf39836f38f61ea24eee49d78bc62c63bdb3c462381bdffb1d3603"
+    }
+  ]
+}

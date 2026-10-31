@@ -1,0 +1,13 @@
+{
+  "source": "04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+  "projects": {
+    "bpmn": "Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+    "runtime": "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+    "runtime-ef": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+    "architecture": "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+    "native-providers": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests.csproj",
+    "hosting": "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+    "publishing": "Essentials/tests/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj",
+    "design": "Essentials/tests/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj"
+  }
+}

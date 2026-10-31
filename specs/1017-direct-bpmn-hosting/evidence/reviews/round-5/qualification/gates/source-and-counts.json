@@ -1,0 +1,189 @@
+{
+  "executingSource": "04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+  "passed": 6928,
+  "failed": 0,
+  "skipped": 0,
+  "wholeSuites": [
+    {
+      "name": "architecture",
+      "counters": {
+        "total": "594",
+        "executed": "594",
+        "passed": "594",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trx": "architecture.trx.gz"
+    },
+    {
+      "name": "bpmn",
+      "counters": {
+        "total": "492",
+        "executed": "492",
+        "passed": "492",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trx": "bpmn.trx.gz"
+    },
+    {
+      "name": "design",
+      "counters": {
+        "total": "655",
+        "executed": "655",
+        "passed": "655",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trx": "design.trx.gz"
+    },
+    {
+      "name": "native-providers",
+      "counters": {
+        "total": "212",
+        "executed": "212",
+        "passed": "212",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trx": "native-providers.trx.gz"
+    },
+    {
+      "name": "publishing",
+      "counters": {
+        "total": "61",
+        "executed": "61",
+        "passed": "61",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trx": "publishing.trx.gz"
+    },
+    {
+      "name": "runtime-ef",
+      "counters": {
+        "total": "1790",
+        "executed": "1790",
+        "passed": "1790",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trx": "runtime-ef.trx.gz"
+    },
+    {
+      "name": "runtime",
+      "counters": {
+        "total": "3083",
+        "executed": "3083",
+        "passed": "3083",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trx": "runtime.trx.gz"
+    },
+    {
+      "name": "standard-host",
+      "counters": {
+        "total": "41",
+        "executed": "41",
+        "passed": "41",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "trx": "standard-host.trx.gz"
+    }
+  ],
+  "actualHostProductBytesUnchanged": true,
+  "frontendPassed": 52,
+  "frontendFailed": 0,
+  "frontendSkipped": 0,
+  "scope": "Local source-bound qualification; exact final-head required CI remains separate"
+}

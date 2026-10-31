@@ -55,3 +55,6 @@ All three round4 findings have corrections: C1/S1 inee345b602 and A1 in178154c13
 
 
 All four round5 findings have [worktree correction controls](evidence/reviews/round-5/corrections/README.md):5 shared-envelope/mailbox,47 model-checkpoint and4 actual old-fault host cases pass. The old pending-parent cleanup is initiated in its consumed ACK decision, preserving the cancellation guard and avoiding the demonstrated FIFO cycle. These are precommit controls; affected committed-source qualification and final round6 remain due. Five full rounds completed, none clean; one remains.
+
+
+Round5 fixes are qualified at04c2b53ad in [the source-bound receipt](evidence/reviews/round-5/qualification/README.md):6928 whole-suite passes,4 actual old-fault cuts/8 stores, both full actual Studio families/13 controls and12 public binary API comparisons. All104 original assets unchanged. Main d481d6a5 frontend adoption/affected smoke is next, then full-PR round6. Five completed rounds, none clean; the final round has not started. Owner/scan/exact-CI/protected/post-main holds unchanged.
