@@ -81,9 +81,9 @@ BPMN package coupling remains a production obligation. M1 must resolve the packa
 contract freeze, and M4 must implement/qualify it. Resulting-main qualification remains distinct from
 the merged research receipt.
 
-M0 is complete after fresh SDK/package/lifecycle receipts and core/Studio CI on main45b5347.
-[Dependency enabler#3544](https://github.com/elsa-workflows/elsa-foundation/issues/3544) promotes the
-normal MEAI10.10.1 graph while the remaining specialist runtime/package work stays open.
+M0 is complete after fresh SDK/package/lifecycle receipts and core/Studio CI on main 45b5347.
+[Dependency enabler #3544](https://github.com/elsa-workflows/elsa-foundation/issues/3544) promotes the
+normal MEAI 10.10.1 graph while the remaining specialist runtime/package work stays open.
 
 [M1 design leaf #3538](https://github.com/elsa-workflows/elsa-foundation/issues/3538) is preparing
 [spec 1179](../../specs/1179-specialist-agents/spec.md), its architecture/state/support/UX packet and
