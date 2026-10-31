@@ -4,6 +4,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
 namespace Elsa.Activities.Bpmn.Hosting.Tests;
@@ -11,15 +12,16 @@ namespace Elsa.Activities.Bpmn.Hosting.Tests;
 public sealed class LegacyFaultSettlementWorkbenchTests
 {
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public async Task The_standard_runtime_only_host_settles_actual_old_fault_responsibility_and_retains_it_after_process_loss(bool admitted, bool waiting)
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public async Task The_standard_runtime_only_host_settles_actual_old_fault_responsibility_and_retains_it_after_process_loss(bool admitted, bool waiting, bool pendingParent)
     {
         var temporary = Directory.CreateTempSubdirectory("elsa-old-fault-upgrade-");
         try
         {
-            var fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "legacy-fault", waiting ? "old-waiting.snapshot.sqlite.gz" :
+            var fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "legacy-fault", pendingParent ? "old-pending-parent.snapshot.sqlite.gz" : waiting ? "old-waiting.snapshot.sqlite.gz" :
                 admitted ? "concurrent-admitted-terminal.sqlite.gz" : "concurrent-terminal.sqlite.gz");
             var original = Path.Combine(temporary.FullName, "original.sqlite");
             await using (var input = File.OpenRead(fixture))
@@ -30,10 +32,11 @@ public sealed class LegacyFaultSettlementWorkbenchTests
             LegacyUpgradeInspection.AssertStandardHost(host);
             const string model = "bpmn:29ce72ce3be41205dfa938e934fbac80cb4cca8c3508df1b2dd86fa94dfdc220";
             // Retain the exact normally captured identity; the stores remain isolated.
+            string? parentExecutionId = null;
             var id = admitted ? await CapturedIdAsync() : model;
             var before = await ObserveAsync("--read-bpmn-direct", original, id);
             Assert.Equal(2, before["model"]!["revision"]!.GetValue<long>());
-            Assert.Equal(3, before["model"]!["lifecycle"]!.GetValue<int>());
+            Assert.Equal(pendingParent ? 2 : 3, before["model"]!["lifecycle"]!.GetValue<int>());
             Assert.Single(before["model"]!["payload"]!["work"]!.AsArray());
             await host.LoginAsync();
             var first = host.ProcessId;
@@ -50,12 +53,21 @@ public sealed class LegacyFaultSettlementWorkbenchTests
                 await Task.Delay(200);
             }
             var truth = await ObserveAsync("--read-bpmn-retirement", host.RuntimeDatabase, id);
+            var embedding = pendingParent ? await host.ReadEmbeddingAsync(id,
+                parentExecutionId ?? throw new InvalidDataException("The captured producer lacks its parent identity.")) : null;
+            if (embedding is not null)
+            {
+                Assert.Equal((int)WorkflowExecutionStatus.Faulted, embedding["nativeParent"]!["status"]!.GetValue<int>());
+                Assert.Contains(truth["inputs"]!.AsArray(), input => input!["inputKind"]!.GetValue<string>() == "native-parent-settled" &&
+                    input["result"]!["status"]!.GetValue<string>() == "Accepted");
+                Assert.Empty(embedding["bookmarks"]!.AsArray());
+            }
             // The normal producer used probe-user, which is not this host's logged-in owner.
             // Preserve that authorization boundary while the standard background host settles its stored work.
             var api = await host.GetAsync("/bpmn/executions/" + id, HttpStatusCode.NotFound);
             Assert.Equal(404, api["status"]!.GetValue<int>());
             Assert.Equal("Faulted", final["model"]!["terminalResult"]!["status"]!.GetValue<string>());
-            Assert.Equal(admitted ? 2 : 1, final["nativeWorkflowRows"]!.GetValue<int>());
+            Assert.Equal(pendingParent ? 3 : admitted ? 2 : 1, final["nativeWorkflowRows"]!.GetValue<int>());
             Assert.Empty(final["model"]!["payload"]!["work"]!.AsArray());
             foreach (var field in new[] { "scope", "authority", "executable", "materialIncarnationId", "terminalResult" })
                 Assert.True(JsonNode.DeepEquals(before["model"]![field], final["model"]![field]), field);
@@ -65,8 +77,9 @@ public sealed class LegacyFaultSettlementWorkbenchTests
             var receiptKind = admitted ? "native-result" : "native-start-retired";
             Assert.Contains(truth["inputs"]!.AsArray(), input => input!["inputKind"]!.GetValue<string>() == receiptKind && input["result"]!["status"]!.GetValue<string>() == "Accepted");
             Assert.Empty(truth["queuedNativeWork"]!.AsArray());
+            if (waiting) Assert.Equal((int)WorkflowExecutionStatus.Cancelled, truth["worker"]!["status"]!.GetValue<int>());
             Assert.False(File.Exists(host.DesignDatabase));
-            var name = waiting ? "old-admitted-waiting-fault" : admitted ? "old-admitted-fault" : "old-unadmitted-fault";
+            var name = pendingParent ? "old-pending-parent-fault" : waiting ? "old-admitted-waiting-fault" : admitted ? "old-admitted-fault" : "old-unadmitted-fault";
             await host.StopAsync(); var firstExit = host.LastStoppedExitCode;
             var completedStore = await host.SnapshotAsync("completed-runtime.sqlite.gz", name);
             await host.RestartAsync(recoverySweepSeconds: 0.2); await host.LoginAsync();
@@ -76,6 +89,8 @@ public sealed class LegacyFaultSettlementWorkbenchTests
             var retainedTruth = await ObserveAsync("--read-bpmn-retirement", host.RuntimeDatabase, id);
             Assert.True(JsonNode.DeepEquals(final, retained));
             Assert.True(JsonNode.DeepEquals(truth, retainedTruth));
+            if (embedding is not null)
+                Assert.True(JsonNode.DeepEquals(embedding, await host.ReadEmbeddingAsync(id, parentExecutionId!)));
             Assert.True(JsonNode.DeepEquals(api, await host.GetAsync("/bpmn/executions/" + id, HttpStatusCode.NotFound)));
             Assert.False(File.Exists(host.DesignDatabase));
             await host.StopAsync(); var secondExit = host.LastStoppedExitCode;
@@ -88,8 +103,10 @@ public sealed class LegacyFaultSettlementWorkbenchTests
                 var folder = Path.Combine(evidence, name); Directory.CreateDirectory(folder);
                 foreach (var item in new[] { ("before.json", before), ("completed.json", final), ("retained.json", retained), ("truth.json", truth), ("retained-truth.json", retainedTruth), ("api.json", api) })
                     await File.WriteAllTextAsync(Path.Combine(folder, item.Item1), item.Item2.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+                if (embedding is not null)
+                    await File.WriteAllTextAsync(Path.Combine(folder, "embedding.json"), embedding.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
                 await File.WriteAllTextAsync(Path.Combine(folder, "case.json"), JsonSerializer.Serialize(new { kind = "actual-old-final-fault-workbench-recovery", sourceRevision = source,
-                    admitted, waiting, modelExecutionId = id, fixtureSha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(fixture))),
+                    admitted, waiting, pendingParent, modelExecutionId = id, fixtureSha256 = Convert.ToHexStringLower(SHA256.HashData(await File.ReadAllBytesAsync(fixture))),
                     first, second, firstExit, secondExit, runtimeOnly = true, completedStore, retainedStore,
                     binaries = host.DescribeBinaries(source), scopeLimit = "Actual normally produced old fault cuts over SQLite, standard runtime-only Workbench; no Studio, ETL or other-provider claim." }, new JsonSerializerOptions { WriteIndented = true }));
             }
@@ -104,19 +121,21 @@ public sealed class LegacyFaultSettlementWorkbenchTests
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                 try { await reader.WaitForExitAsync(timeout.Token); }
                 catch { if (!reader.HasExited) { reader.Kill(entireProcessTree: true); await reader.WaitForExitAsync(); } throw; }
-                if (reader.ExitCode != 0) throw new InvalidOperationException(await error);
+                if (reader.ExitCode != 0) throw new InvalidOperationException($"The checked observer {mode} exited {reader.ExitCode}: " + await error + await output);
                 return JsonNode.Parse(await output)!;
             }
             async Task<string> CapturedIdAsync()
             {
                 // This fixture's model key is bound to the producer's ordinary start request and material.
                 // The producer logs are retained with the whole snapshot; no database row is changed here.
-                var log = Path.Combine(AppContext.BaseDirectory, "Fixtures", "legacy-fault", waiting ? "waiting-old-writer.log" : "admitted-old-writer.log.gz");
+                var log = Path.Combine(AppContext.BaseDirectory, "Fixtures", "legacy-fault", pendingParent ? "pending-parent-old-writer.log" : waiting ? "waiting-old-writer.log" : "admitted-old-writer.log.gz");
                 await using var input = File.OpenRead(log);
                 using var gzip = waiting ? null : new GZipStream(input, CompressionMode.Decompress, leaveOpen: true);
                 using var text = new StreamReader(gzip is null ? input : gzip);
                 while (await text.ReadLineAsync() is { } line)
                 {
+                    if (pendingParent && line.StartsWith("PARENT START ", StringComparison.Ordinal))
+                        parentExecutionId = JsonNode.Parse(line["PARENT START ".Length..])!["workflowExecutionId"]!.GetValue<string>();
                     if (waiting && line.StartsWith("FINAL MODEL ", StringComparison.Ordinal))
                         return JsonNode.Parse(line["FINAL MODEL ".Length..])!["executionId"]!.GetValue<string>();
                     if (!waiting && line.StartsWith("START ", StringComparison.Ordinal))

@@ -374,7 +374,8 @@ public sealed class EfRuntimeModelCheckpointTests
             revision = (await context.ExecutionLivenessStates.SingleAsync()).Revision;
         }
         await using (var context = database.Open(new FailMarker()))
-            await Assert.ThrowsAsync<DbUpdateException>(() => Store(context).CommitAsync(Retained(1), Immediate).AsTask());
+            Assert.IsType<DbUpdateException>((await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() =>
+                Store(context).CommitAsync(Retained(1), Immediate).AsTask())).InnerException);
         await using var restarted = database.Open();
         Assert.Null(await Reader(restarted).FindInputAsync("execution", "obsolete"));
         Assert.Equal(revision, (await restarted.ExecutionLivenessStates.SingleAsync()).Revision);
@@ -453,8 +454,16 @@ public sealed class EfRuntimeModelCheckpointTests
         await using (var before = database.Open()) fenceRevision = (await before.ExecutionLivenessStates.SingleAsync()).Revision;
         await using (var context = database.Open(new FailMarker()))
         {
-            var failure = await Assert.ThrowsAsync<DbUpdateException>(() => Store(context).CommitAsync(Commit(1), Immediate).AsTask());
-            Assert.Equal("Injected final-marker failure.", failure.InnerException!.Message);
+            var commit = Commit(1);
+            var failure = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => Store(context).CommitAsync(commit, Immediate).AsTask());
+            Assert.Equal("Injected final-marker failure.", Assert.IsType<DbUpdateException>(failure.InnerException).InnerException!.Message);
+            Assert.Contains("tenant-a", failure.Message);
+            Assert.Contains(commit.WorkflowExecutionId, failure.Message);
+            Assert.Contains(commit.ModelState!.Input.InputId, failure.Message);
+            Assert.Contains(commit.CommitId, failure.Message);
+            using var cancelled = new CancellationTokenSource();
+            cancelled.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Store(context).CommitAsync(commit, Immediate, cancelled.Token).AsTask());
         }
         await using var restarted = database.Open();
         Assert.Empty(await restarted.Set<RuntimeModelExecutionEntity>().ToArrayAsync());
@@ -505,7 +514,8 @@ public sealed class EfRuntimeModelCheckpointTests
                     .WithPostCommitOutbox([new(outboxId, RuntimeStateChangeOperation.Upsert, item, new Dictionary<string, string>())])
             };
             if (failMarker)
-                await Assert.ThrowsAsync<DbUpdateException>(() => Store(context).CommitAsync(commit, Immediate).AsTask());
+                Assert.IsType<DbUpdateException>((await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() =>
+                    Store(context).CommitAsync(commit, Immediate).AsTask())).InnerException);
             else
             {
                 var accepted = await Store(context).CommitAsync(commit, Immediate);

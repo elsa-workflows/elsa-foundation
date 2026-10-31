@@ -224,3 +224,6 @@ Adopted-template qualification is complete for its declared affected sources: [r
 
 
 [Complete-PR round5](evidence/reviews/round-5/README.md) adopts four P2 findings at1e707d58. The actual old pending-parent whole input is retained before affected writer changes, together with current cold-host failure and normal second-start control. Mailbox eviction and contextual envelope/model-provider errors also need red-to-green controls. T041/T043/T044 reopen. Five rounds completed, none clean; one remains. Earlier positive receipts retain their scopes. No human hold, version decision, scan or merge/CI safeguard is cleared.
+
+
+[Round5 correction controls](evidence/reviews/round-5/corrections/README.md) now pass the five shared-envelope/mailbox cases, all47 model checkpoint tests and four actual old-fault cold-host cases. The initial startup ordering cycle and observer-argument diagnostic remain distinct failed attempts. Affected committed-source qualification, source-bound portable new recovery stores and final round6 remain due; T041/T043/T044 stay open. No owner/scan/CI/protected/post-main gate is cleared.

@@ -148,6 +148,11 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         if (command.InputKind == "native-parent-settled")
         {
             if (current?.Lifecycle != RuntimeModelLifecycle.TerminalPendingSettlement) rejection = "parent-already-settled";
+            else if (current.TerminalResult is { } result && result.GetProperty("status").GetString() == "Faulted" &&
+                document.Work.Any(work => work.NativeWork is not null))
+                // An old fault can still owe its parent when this host starts. Consume the real parent ACK
+                // before introducing cleanup debt, otherwise that ACK can block its own worker-result FIFO.
+                document = CancelRemainingWork(document, commitId, command.InputId, timedFrame, policyFrame, faulted: true);
         }
         else if (command.InputKind is "cancel-embedded" or "cancel")
         {

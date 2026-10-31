@@ -166,6 +166,15 @@ public sealed class EfRuntimeCheckpointCommitStore(
             throw new RuntimeSchedulerWorkUnavailableException("runtime.bookmark.admission-unavailable",
                 "Exact bookmark admission is unavailable.", exception);
         }
+        catch (Exception exception) when (commit.ModelState is not null && exception is not DbUpdateConcurrencyException &&
+            (exception is IOException or TimeoutException ||
+             exception is OperationCanceledException && !cancellationToken.IsCancellationRequested ||
+             EfRelationalExceptionClassifier.IsProviderFailure(exception)))
+        {
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.model.checkpoint-unavailable",
+                $"Model checkpoint '{commit.CommitId}' for execution '{commit.WorkflowExecutionId}', input '{commit.ModelState.Input.InputId}' " +
+                $"in scope '{commit.ModelState.State.Scope.Value}' is unavailable.", exception);
+        }
     }
 
     private async ValueTask<RuntimeCheckpointCommitStoreResult> CommitCoreAsync(

@@ -52,3 +52,6 @@ All three round4 findings have corrections: C1/S1 inee345b602 and A1 in178154c13
 
 
 [Complete-PR round5](evidence/reviews/round-5/README.md) on exact1e707d58 retains four P2 findings: terminal mailbox eviction, shared owned-envelope JSON context, model-only EF failure context and actual old pending-parent fault cleanup. All four are adopted, none dropped. The actual old input and both coherent upgraded stores are preserved before corrections. T041/T043/T044 and In progress reopen; five full rounds completed, none clean, one remains. The PR conversation remains authoritative. Existing owner/scan/CI/protected/post-main holds and broader program acceptance remain open.
+
+
+All four round5 findings have [worktree correction controls](evidence/reviews/round-5/corrections/README.md):5 shared-envelope/mailbox,47 model-checkpoint and4 actual old-fault host cases pass. The old pending-parent cleanup is initiated in its consumed ACK decision, preserving the cancellation guard and avoiding the demonstrated FIFO cycle. These are precommit controls; affected committed-source qualification and final round6 remain due. Five full rounds completed, none clean; one remains.

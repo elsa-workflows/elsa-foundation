@@ -17,6 +17,9 @@ internal sealed class RuntimeExecutionProtocolSelector(RuntimeExecutionProtocolR
     private readonly HashSet<string> selected = new(StringComparer.Ordinal);
     public bool IsSelectedModel(string executionId) => selected.Contains(executionId);
 
+    public async ValueTask<bool> IsTerminalSettledAsync(string executionId, CancellationToken cancellationToken) =>
+        stateReader is not null && (await stateReader.FindAsync(executionId, cancellationToken))?.Lifecycle == RuntimeModelLifecycle.TerminalSettled;
+
     public async ValueTask<bool> IsModelAsync(WorkflowExecutionCommandEnvelope envelope, CancellationToken cancellationToken)
     {
         if (envelope.Command.Kind == WorkflowExecutionCommandKind.ExecuteModel) return true;
@@ -39,8 +42,17 @@ internal sealed class RuntimeExecutionProtocolSelector(RuntimeExecutionProtocolR
         if (stateReader is null || !materialStore.SupportsModelMaterial || !checkpointStore.SupportsModelCheckpoint ||
             !checkpointStore.CanCommitModelState(stateReader))
             throw Unavailable("The selected physical stores do not support atomic model execution.");
-        var command = work.Payload.Value.Deserialize<RuntimeModelExecutionCommand>(Web)
-            ?? throw Unavailable("The model input envelope is missing.");
+        RuntimeModelExecutionCommand command;
+        try
+        {
+            command = work.Payload.Value.Deserialize<RuntimeModelExecutionCommand>(Web)
+                ?? throw Unavailable($"Model input '{work.CommandId}' for execution '{work.WorkflowExecutionId}' in work '{work.WorkItemId}' is missing.");
+        }
+        catch (Exception exception) when (exception is JsonException or ArgumentException)
+        {
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.model.input-unreadable",
+                $"Model input '{work.CommandId}' for execution '{work.WorkflowExecutionId}' in work '{work.WorkItemId}' cannot be decoded.", exception);
+        }
         if (command.InputId != work.CommandId) throw Unavailable("The model input differs from its durable command identity.");
         var scope = access.Current.Scope ?? throw Unavailable("A model execution requires a physical persistence scope.");
         access.Current.EnsureTenantScope(command.TenantId);

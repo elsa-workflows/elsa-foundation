@@ -1,0 +1,97 @@
+{
+  "kind": "pr3410-round5-independent-correctness-portable-evidence-receipt",
+  "reviewedHead": "1e707d58fc2148be3715d50616dfdb69dc82ae65",
+  "reviewedBase": "7b49513650665606e5f52fdc08c5831f60802dac",
+  "verdictUnchanged": "one actionable P2; model terminal mailbox eviction",
+  "sameRoundEvidenceSeal": true,
+  "productSource": "f6d3c370e5c3295bb9ea0499b0ea6adbc533b8a1",
+  "portableVerification": "portable-verification/validation.json",
+  "hashNote": "Assets include every allowlisted file except this self-describing manifest; no bin/obj, live database/sidecars, generated machine-bound project, native binary copy or setup-only diagnostics are allowed.",
+  "assets": [
+    {
+      "path": "report.md",
+      "sha256": "37838de5b20bdc8214165cae101ef983544ea5645bff3ceb506a426ea3d07593",
+      "bytes": 10366
+    },
+    {
+      "path": "generate-mailbox-probe.py",
+      "sha256": "e82396bc1ab5f6026e95af205a87e73f6571ea5110362f51d93e67e905f8ad9f",
+      "bytes": 6898
+    },
+    {
+      "path": "portable-reproduction.md",
+      "sha256": "c42f9b26e38090d496da3f35fd404767c5982b49dd72a8f6478fe50385ef9785",
+      "bytes": 2966
+    },
+    {
+      "path": "products.json",
+      "sha256": "7652426d0217d618d8b1665bc7393ec412bf8db01647068aa63b8713c50f1e13",
+      "bytes": 4285
+    },
+    {
+      "path": "provenance.json",
+      "sha256": "cfdeb58d9ea8e7a7f1aeb6cc67237594097427f7968fd20e52872eba84892f1d",
+      "bytes": 28998
+    },
+    {
+      "path": "conversation-index.json",
+      "sha256": "6c4d1c5c496523861d064d0eff2e0393cabc6f165595113618962ca14120c0ac",
+      "bytes": 577269
+    },
+    {
+      "path": "mailbox-probe/Program.cs",
+      "sha256": "6da30c5bebde48c1c8cd8f38010226dd245b75a95939cef6b93fb3c67b6a4553",
+      "bytes": 5602
+    },
+    {
+      "path": "mailbox-probe/completed-models/result.json",
+      "sha256": "c490b461e579735efd637ca23f8a9fa9ca78a076eaeab0137fe6fb91b257f89c",
+      "bytes": 5464
+    },
+    {
+      "path": "mailbox-probe/completed-models-closed.sqlite.gz",
+      "sha256": "7e47a97d96b3d37c3be852dcf5205e6257ad3a0ad95b3603f3fbfc69a6d1bc29",
+      "bytes": 48850
+    },
+    {
+      "path": "mailbox-probe/snapshot.json",
+      "sha256": "cc6fae4dd30fd25f9805b21d41610ad90ba71ef7bf8b5e2be22910727d21c93a",
+      "bytes": 602
+    },
+    {
+      "path": "mailbox-probe/closed-counts.json",
+      "sha256": "dfb8b0a25ef918dac837df1d23b39dbb9b96863585050b97ea6372ba8eb60052",
+      "bytes": 160
+    },
+    {
+      "path": "portable-verification/build.log",
+      "sha256": "313c9e0eaa817a379f75ebbbad8cd713db385d83644cb3a85f4cbc70937cb71a",
+      "bytes": 76
+    },
+    {
+      "path": "portable-verification/generation.json",
+      "sha256": "14e883115e0a754498df7fc91632ff79c2cb6a5ea3130f6da2e7fc87e51dc05a",
+      "bytes": 24109
+    },
+    {
+      "path": "portable-verification/validation.json",
+      "sha256": "8ab7921c6d7d5bb302b33f61240feda0a82d15d6ce2f47df8ab62f9512bc3d94",
+      "bytes": 1588
+    },
+    {
+      "path": "bpmn/_Sipkes-Mac-Mini_2026-10-31_00_36_28_net10.0.trx",
+      "sha256": "f6dd02fcc8c5652b5aebac4ece53e0d4e74329682089cb23ffd131d3daae3a0d",
+      "bytes": 744427
+    },
+    {
+      "path": "runtime-ef/_Sipkes-Mac-Mini_2026-10-31_00_37_40_net10.0.trx",
+      "sha256": "66e17ca2aaa32eb0b9776c26c65c8b1fcdecd1cb399382ddde352345519eadf7",
+      "bytes": 92633
+    },
+    {
+      "path": "receipt-allowlist.txt",
+      "sha256": "518dde4d4fe08afd014d61421149c96891918a19ccc497062d3a6c9aabdaf271",
+      "bytes": 558
+    }
+  ]
+}

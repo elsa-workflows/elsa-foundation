@@ -14,6 +14,8 @@
     <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-3/correctness/legacy-checkpoint/*.sqlite.gz;../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-3/correctness/legacy-checkpoint/admitted-old-writer.log.gz" Link="Fixtures/legacy-fault/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-4/acceptance/waiting-old-writer/old-waiting.snapshot.sqlite.gz" Link="Fixtures/legacy-fault/old-waiting.snapshot.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-4/acceptance/waiting-old-writer/producer-ready.log" Link="Fixtures/legacy-fault/waiting-old-writer.log" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/acceptance/old-embedded/old-pending-parent.snapshot.sqlite.gz" Link="Fixtures/legacy-fault/old-pending-parent.snapshot.sqlite.gz" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/acceptance/old-embedded/producer-partition.log" Link="Fixtures/legacy-fault/pending-parent-old-writer.log" CopyToOutputDirectory="PreserveNewest" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />

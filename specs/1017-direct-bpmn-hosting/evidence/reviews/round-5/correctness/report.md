@@ -21,7 +21,7 @@ Expose model terminality to the mailbox cleanup decision after the permitted inp
 
 `mailbox-probe/Program.cs` uses the actual compiled `ActivitiesBpmnHostingFeature`, public `IBpmnModelRuntime`, built-in actor provider, EF SQLite checkpoint/material/queue providers, runtime ownership and released BPMN interpreter. It uses the repository's existing `WorkflowExecutionHarness` only to compose that production graph, as the existing direct-driver tests do. It does not stub the driver, decision result, state reader, ownership or actor provider.
 
-The final run (`mailbox-probe/completed-models.log`, `mailbox-probe/completed-models/result.json`):
+The final run (`mailbox-probe/completed-models/result.json`):
 
 1. Enable the supported hosting feature and leave the registered `RuntimeActorEvictionOptions.PassivateOnTerminal` at its actual default, true.
 2. Publish one valid format-1 start → end model through `IBpmnModelRuntime.PublishAsync`.
@@ -32,7 +32,7 @@ The final run (`mailbox-probe/completed-models.log`, `mailbox-probe/completed-mo
 
 The closed final SQLite backup has **8 model headers, 8 input receipts, 0 native execution headers and 0 scheduler items**, with `integrity_check=ok` (`mailbox-probe/closed-counts.json`, `mailbox-probe/snapshot.json`, `mailbox-probe/completed-models-closed.sqlite.gz`). The backup was taken only after the producer exited; no persisted state, receipt, clock or authority was seeded or modified by SQL. A read-only immutable SQLite connection was used after plain read-only mode could not open the closed WAL-mode database without its removed sidecars.
 
-The first probe setup lacked its copied SQLite native library; that setup-only failure is retained. Initial diagnostic runs included a native harness run and are retained under `observed`/`observed-final`; they are not used as a positive native-eviction control. The final model-only run starts with zero mailboxes and zero native headers.
+The first probe setup lacked its copied SQLite native library. Initial diagnostic runs also included a native harness run. Those setup-only diagnostics are not behavioral evidence and are excluded from the portable receipt; no positive native-eviction control is claimed. The final model-only run starts with zero mailboxes and zero native headers.
 
 ## Independent verification and source boundary
 
@@ -48,3 +48,11 @@ Current org protocol, repository AGENTS/contributing/review requirements, releva
 Existing owner API/version-magnitude decision (`needs:decision` on issue/PR), GitGuardian39189012 deferred with Handle it later, exact required CI, branch protection/protected merge and resulting-main qualification remain **open delivery gates**, not additional new code findings. No human hold was treated as withdrawn or overridden. Broader program/direct-model Studio/non-SQLite actual-host qualification remains separate.
 
 I did not rerun process-host/Studio journeys, external provider tests or whole-solution tests in this review. Their committed evidence retains its original executing-source limits. No GitHub writes, repository edits, commits, branch changes, product rebuilds, user-host operations or browser actions were performed. Only temporary probe/test outputs were written; the worktree remains clean.
+
+## Portable evidence seal within the same round
+
+`generate-mailbox-probe.py` accepts explicit coherent products/test-harness directories and a new temporary output directory. It copies the final `mailbox-probe/Program.cs` byte-for-byte, generates its project from those supplied DLLs, resolves the platform-specific SQLite native library and makes the build copy it beside the executable. It refuses mismatched dependency copies. No historical absolute path is used to find products or source. See `portable-reproduction.md`.
+
+The generator was verified once through the normal dotnet build wrapper: zero warnings/errors, producer exit0, all eleven validation predicates pass. Fresh output is byte-identical to the original final model-only result: mailbox counts0 → 8 → 8 → 0, eight settled/consumed starts, eight accepted redrives without terminal metadata and eight retained replays without mailbox activation. `portable-verification/generation.json` records supplied dependency/native/source hashes; `portable-verification/validation.json` binds the repeat to the original result without duplicating it. This seals reproduction evidence only; it is not a new review round, a product correction or a changed verdict.
+
+`receipt-allowlist.txt` and `receipt-manifest.json` name the exact files needed for the portable committed receipt. They exclude temporary projects with local HintPaths, bin/obj/native binary copies, live SQLite files/sidecars, earlier setup-only diagnostics and duplicate successful result output.

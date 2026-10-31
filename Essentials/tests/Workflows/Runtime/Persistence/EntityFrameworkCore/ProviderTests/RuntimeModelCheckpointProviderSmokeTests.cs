@@ -114,7 +114,12 @@ internal static class RuntimeModelCheckpointProviderSmoke
             probe.Delimit = context.GetService<ISqlGenerationHelper>().DelimitIdentifier;
             if (failMarker)
             {
-                var failure = await Assert.ThrowsAsync<DbUpdateException>(() => Store(context, access).CommitAsync(commit, Immediate).AsTask());
+                var failure = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() => Store(context, access).CommitAsync(commit, Immediate).AsTask());
+                Assert.IsType<DbUpdateException>(failure.InnerException);
+                Assert.Contains(commit.ModelState!.State.Scope.Value, failure.Message);
+                Assert.Contains(commit.WorkflowExecutionId, failure.Message);
+                Assert.Contains(commit.ModelState.Input.InputId, failure.Message);
+                Assert.Contains(commit.CommitId, failure.Message);
                 Assert.Equal(BeforeMarker.Failure, failure.GetBaseException().Message);
             }
             else

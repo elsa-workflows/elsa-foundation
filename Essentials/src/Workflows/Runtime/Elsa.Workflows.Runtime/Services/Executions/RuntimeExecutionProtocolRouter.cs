@@ -30,8 +30,18 @@ internal sealed class RuntimeExecutionProtocolRouter(RuntimeExecutionProtocolSel
             return WorkflowExecutionCommandProcessResult.FromShed(admission.Reason!, admission.RetryAfter, workQueued: false);
         if (envelope.Command.Kind == WorkflowExecutionCommandKind.ExecuteModel)
         {
-            var input = envelope.Command.Payload?.Deserialize<RuntimeModelExecutionCommand>(new JsonSerializerOptions(JsonSerializerDefaults.Web))
-                ?? throw new InvalidOperationException("A model command requires its typed payload.");
+            RuntimeModelExecutionCommand input;
+            try
+            {
+                input = envelope.Command.Payload?.Deserialize<RuntimeModelExecutionCommand>(new JsonSerializerOptions(JsonSerializerDefaults.Web))
+                    ?? throw new RuntimeSchedulerWorkUnavailableException("runtime.model.input-unreadable",
+                        $"Model input '{envelope.Command.CommandId}' for execution '{envelope.WorkflowExecutionId}' in envelope '{envelope.EnvelopeId}' is missing.");
+            }
+            catch (Exception exception) when (exception is JsonException or ArgumentException)
+            {
+                throw new RuntimeSchedulerWorkUnavailableException("runtime.model.input-unreadable",
+                    $"Model input '{envelope.Command.CommandId}' for execution '{envelope.WorkflowExecutionId}' in envelope '{envelope.EnvelopeId}' cannot be decoded.", exception);
+            }
             var work = new RuntimeSchedulerWorkItem(RuntimeModelExecutionCommand.CreateSchedulerWorkItemId(input.InputId), envelope.WorkflowExecutionId,
                 envelope.Command.CommandId, envelope.Command.Kind, envelope.EnvelopeId, envelope.IdempotencyKey,
                 envelope.EnqueuedAt, timeProvider.GetUtcNow(), envelope.Sequence, envelope.Command.Payload,
@@ -52,9 +62,14 @@ internal sealed class RuntimeExecutionProtocolRouter(RuntimeExecutionProtocolSel
                 throw new RuntimeCheckpointReplayConflictException(selected.Context.Command.InputId);
         }
         // Recovery never adds a native RunSchedulerWork item to the model's durable input stream.
-        var result = await leaseRunner.RunAsync(envelope.WorkflowExecutionId, envelope.Partition,
-            token => drainer.DrainAsync(new(envelope.WorkflowExecutionId, ambientServices: options.AmbientServices), token), cancellationToken);
-        return WorkflowExecutionCommandProcessResult.FromDrain(result);
+        return await leaseRunner.RunAsync(envelope.WorkflowExecutionId, envelope.Partition, async token =>
+        {
+            var drain = await drainer.DrainAsync(new(envelope.WorkflowExecutionId, ambientServices: options.AmbientServices), token);
+            // Mailbox lifetime follows the committed model after its permitted drain. The native terminal
+            // stop/purge guard stays separate so late receipts and settlement inputs can still be consumed.
+            return WorkflowExecutionCommandProcessResult.FromDrain(drain) with
+                { WorkflowTerminated = await selector.IsTerminalSettledAsync(envelope.WorkflowExecutionId, token) };
+        }, cancellationToken);
     }
 
 }
