@@ -19,16 +19,18 @@ const debounceMs = 600;
 
 /**
  * Fetches the server-derived draft validations (foundation #937) after the draft settles, keyed off the
- * draft signature so it re-runs when the (auto)saved state changes. Degrades gracefully: when the
- * relation is absent the endpoint returns null, we mark it unavailable, and the caller hides the panel.
+ * draft signature and save acknowledgement, so reads only start after that state is persisted.
+ * When the relation is absent the endpoint returns null, we mark it unavailable, and the caller hides the panel.
  */
 export function useDraftValidations({
   context,
   draft,
+  persistedDraft,
   enabled = true
 }: {
   context: StudioEndpointContext;
   draft: WorkflowDraft | null;
+  persistedDraft: WorkflowDraft | null;
   enabled?: boolean;
 }): DraftValidationsState {
   const [state, setState] = useState<DraftValidationsState>({ status: "idle", available: null, errors: [] });
@@ -41,9 +43,14 @@ export function useDraftValidations({
   const baseUrl = context.baseUrl ?? "";
   const signature = draft ? getDraftSignature(draft) : "";
   const draftId = draft?.id ?? "";
+  // The endpoint validates stored state. A faster debounce alone can read the old draft before
+  // autosave finishes, then never refresh because saving does not change the authored signature.
+  const persisted = !!draft && persistedDraft?.id === draft.id
+    && persistedDraft.definitionId === draft.definitionId
+    && getDraftSignature(persistedDraft) === signature;
 
   useEffect(() => {
-    if (!enabled || !draftId) {
+    if (!enabled || !draftId || !persisted) {
       setState({ status: "idle", available: availableRef.current, errors: [] });
       return;
     }
@@ -78,7 +85,7 @@ export function useDraftValidations({
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [baseUrl, draftId, signature, enabled]);
+  }, [baseUrl, draftId, signature, persisted, enabled]);
 
   return state;
 }
