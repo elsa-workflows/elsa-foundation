@@ -72,10 +72,19 @@ class CaseRecords:
 
 
 def _normalized_result(value):
-    """The native DTO and adapter use different casing for the same generic enum."""
+    """Normalize only the public receipt enum, never module-owned JSON values."""
     result = copy.deepcopy(value)
     if result.get("receipt"):
-        result["receipt"]["scope"] = result["receipt"]["scope"].lower()
+        scope = result["receipt"]["scope"]
+        # AgentEffectScope declares ClientWorkingState=0, ServerPersisted=1.
+        # Agent API uses camelCase; SDK/ordinary JSON uses PascalCase or numbers.
+        if type(scope) is int and scope in (0, 1):
+            canonical = scope
+        elif type(scope) is str and scope in ("clientWorkingState", "ClientWorkingState", "serverPersisted", "ServerPersisted"):
+            canonical = 0 if scope in ("clientWorkingState", "ClientWorkingState") else 1
+        else:
+            check(False, "Unsupported generic receipt effect scope")
+        result["receipt"]["scope"] = canonical
     return result
 
 
@@ -84,6 +93,17 @@ def _same_json(left, right):
     # those coercions while crossing the evidence boundary.
     return json.dumps(left, sort_keys=True, separators=(",", ":"), allow_nan=False) == json.dumps(
         right, sort_keys=True, separators=(",", ":"), allow_nan=False)
+
+
+def _current_function_results(request):
+    """Mirror the fixture's actual turn boundary, not a module payload schema."""
+    messages = request.get("messages", [])
+    check(isinstance(messages, list) and all(isinstance(message, dict) and isinstance(message.get("contents"), list)
+                                           for message in messages), "Missing actual Anthropic transcript")
+    last_user = max((index for index, message in enumerate(messages) if message.get("role") == "user"), default=-1)
+    check(last_user >= 0, "Anthropic request has no actual current user turn")
+    return [content for message in messages[last_user + 1:] for content in message["contents"]
+            if isinstance(content, dict) and content.get("kind") == "functionResult"]
 
 
 def _native_reads(output, requests):
@@ -160,6 +180,12 @@ def correlate_browser_protocol(transport, browser_output, provider, *, offset=0)
         rows = [row for row in trace["records"] if row.get("data", {}).get("commandId") == command["commandId"]]
         offered = [row["data"] for row in rows if row["kind"] == provider + ".request" and row["data"]["tools"]]
         calls = [row["data"] for row in rows if row["kind"] == provider + ".call"]
+        if provider == "anthropic":
+            lifecycle = [row for row in rows if row["kind"] in ("anthropic.request", "anthropic.call", "anthropic.continuation")]
+            check([row["kind"] for row in lifecycle] == ["anthropic.request", "anthropic.call", "anthropic.request", "anthropic.continuation"],
+                  "Anthropic needs one initial advertisement/call and one actual result request/continuation")
+            offered = [lifecycle[0]["data"]]
+            check(not _current_function_results(offered[0]), "Initial advertisement already contains a current tool completion")
         check(len(offered) == len(calls) == 1, "The actual adapter did not advertise and call exactly once")
         check(sum(tool["name"] == command["toolName"] for tool in offered[0]["tools"]) == 1
               and calls[0]["toolName"] == command["toolName"] and _same_json(calls[0]["arguments"], command["arguments"]),
@@ -178,6 +204,8 @@ def correlate_browser_protocol(transport, browser_output, provider, *, offset=0)
                 items = continuations[0]["results"]
                 check(len(items) == 1 and items[0]["kind"] == "functionResult"
                       and items[0]["callId"] == command["commandId"], "Anthropic function-result correlation changed")
+                check(_same_json(_current_function_results(lifecycle[2]["data"]), items),
+                      "Anthropic continuation differs from its actual current function-result request")
                 # The actual Anthropic adapter puts its serialized generic tool
                 # result in FunctionResultContent as a string. Decode that envelope
                 # once; module payload data remains opaque.

@@ -105,8 +105,12 @@ class ProtocolCorrelationTests(unittest.TestCase):
                 row("return", result={"status": "awaiting-approval", "executed": False, "proposalId": "proposal"}),
                 row("continuation", sessionId="session-a", results=[adapter_result])])
         else:
-            rows += [row("continuation", results=[{"kind": "functionResult", "callId": command["commandId"],
-                                                    "result": json.dumps(adapter_result) if serialized else adapter_result}])]
+            item = {"kind": "functionResult", "callId": command["commandId"],
+                    "result": json.dumps(adapter_result) if serialized else adapter_result}
+            rows[0]["data"]["messages"] = [{"role": "user", "contents": [{"kind": "text", "text": "Synthetic request"}]}]
+            rows += [row("request", tools=copy.deepcopy(rows[0]["data"]["tools"]) if read else [], messages=[
+                *copy.deepcopy(rows[0]["data"]["messages"]), {"role": "tool", "contents": [copy.deepcopy(item)]}]),
+                row("continuation", results=[item])]
         trace = root / "trace.jsonl"
         transport = AgentTransport(SimpleNamespace(bearer=None), root / "transport", trace_file=trace)
         response = {"url": "http://127.0.0.1:49123/_elsa/agent/proposals/proposal/execute", "status": 200,
@@ -168,6 +172,58 @@ class ProtocolCorrelationTests(unittest.TestCase):
         fixture = self.fixture("anthropic", serialized=True)
         self.assertIn("receipt", self.correlate(fixture, "anthropic"))
 
+    def scoped_fixture(self, provider, native_scope, adapter_scope):
+        fixture = self.fixture(provider, serialized=True)
+        native = fixture.response["response"]["data"]["toolResult"]
+        native["receipt"]["scope"] = native_scope
+        adapter = copy.deepcopy(native); adapter["receipt"]["scope"] = adapter_scope
+        self.store_adapter_result(fixture, provider, adapter)
+        self.sync(fixture)
+        return fixture
+
+    def store_adapter_result(self, fixture, provider, adapter):
+        if provider == "anthropic":
+            fixture.rows[-1]["data"]["results"][0]["result"] = json.dumps(adapter)
+            fixture.rows[-2]["data"]["messages"][-1]["contents"][0]["result"] = json.dumps(adapter)
+        else: fixture.rows[-1]["data"]["results"][0] = adapter
+
+    def test_receipt_scope_matches_actual_numeric_and_named_wire_forms_for_both_scopes(self):
+        # AgentEffectScope: ClientWorkingState=0, ServerPersisted=1. The native
+        # API emits camelCase; Anthropic's real JSON string emits the number.
+        for provider in ("copilot", "anthropic"):
+            for numeric, camel, pascal in ((0, "clientWorkingState", "ClientWorkingState"),
+                                           (1, "serverPersisted", "ServerPersisted")):
+                for native, adapter in ((camel, numeric), (numeric, camel), (camel, pascal), (numeric, numeric)):
+                    with self.subTest(provider=provider, native=native, adapter=adapter):
+                        self.assertIn("receipt", self.correlate(self.scoped_fixture(provider, native, adapter), provider))
+
+    def test_receipt_scope_rejects_boolean_float_unknown_and_wrong_actual_scope(self):
+        for provider in ("copilot", "anthropic"):
+            for scope in (False, True, 0.0, 1.0, -1, 2, "unknown", "0", "serverpersisted", None, {}, []):
+                with self.subTest(provider=provider, unsupported=scope):
+                    with self.assertRaises(RuntimeError): self.correlate(self.scoped_fixture(provider, scope, scope), provider)
+            for native, adapter in ((0, 1), (1, 0)):
+                with self.subTest(provider=provider, wrongScope=(native, adapter)):
+                    with self.assertRaises(RuntimeError): self.correlate(self.scoped_fixture(provider, native, adapter), provider)
+
+    def test_module_payload_scope_is_opaque_even_when_generic_receipt_scopes_are_equivalent(self):
+        for provider in ("copilot", "anthropic"):
+            for location in ("payload", "receipt-evidence"):
+                with self.subTest(provider=provider, location=location):
+                    fixture = self.scoped_fixture(provider, "serverPersisted", 1)
+                    native = fixture.response["response"]["data"]["toolResult"]
+                    adapter = (fixture.rows[-1]["data"]["results"][0] if provider == "copilot" else
+                               json.loads(fixture.rows[-1]["data"]["results"][0]["result"]))
+                    if location == "payload":
+                        native["payload"]["data"]["scope"] = 1
+                        adapter["payload"]["data"]["scope"] = "serverPersisted"
+                    else:
+                        native["receipt"]["evidence"] = {"scope": 1}
+                        adapter["receipt"]["evidence"] = {"scope": "serverPersisted"}
+                    self.store_adapter_result(fixture, provider, adapter)
+                    self.sync(fixture)
+                    with self.assertRaises(RuntimeError): self.correlate(fixture, provider)
+
     def test_both_provider_read_shapes_match_complete_native_frame_in_aborted_stream(self):
         for provider in ("copilot", "anthropic"):
             with self.subTest(provider=provider):
@@ -184,7 +240,7 @@ class ProtocolCorrelationTests(unittest.TestCase):
                               json.loads(fixture.rows[-1]["data"]["results"][0]["result"]))
                     if field == "payload": result["payload"]["data"]["opaque"] = 1  # True is not JSON 1.
                     else: result["content"] = "changed provider result"
-                    if provider == "anthropic": fixture.rows[-1]["data"]["results"][0]["result"] = json.dumps(result)
+                    if provider == "anthropic": self.store_adapter_result(fixture, provider, result)
                     self.sync(fixture)
                     self.assertEqual(fixture.streams[0]["rawBody"], native_bytes)
                     with self.assertRaises(RuntimeError): self.correlate(fixture, provider)
@@ -205,6 +261,34 @@ class ProtocolCorrelationTests(unittest.TestCase):
                     fixture.streams[0]["rawBody"] = "data: " + json.dumps(event) + "\n\n"
                 self.sync(fixture)
                 with self.assertRaises(RuntimeError): self.correlate(fixture)
+
+    def test_anthropic_read_continuation_can_retain_tools_without_another_actual_call(self):
+        fixture = self.fixture("anthropic", serialized=True, read=True)
+        self.assertTrue(fixture.rows[-2]["data"]["tools"])
+        self.assertIn("receipt", self.correlate(fixture, "anthropic"))
+
+    def test_anthropic_requires_unique_ordered_advertisement_call_and_current_result_request(self):
+        for kind in ("duplicate-initial", "duplicate-post", "extra-call", "missing-post", "missing-initial",
+                     "missing-continuation", "duplicate-continuation", "orphan-command", "wrong-result-id",
+                     "historical-result", "altered-result"):
+            with self.subTest(kind=kind):
+                fixture = self.fixture("anthropic", serialized=True, read=True)
+                if kind == "duplicate-initial": fixture.rows.insert(0, copy.deepcopy(fixture.rows[0]))
+                elif kind == "duplicate-post": fixture.rows.insert(2, copy.deepcopy(fixture.rows[2]))
+                elif kind == "extra-call": fixture.rows.insert(2, copy.deepcopy(fixture.rows[1]))
+                elif kind == "missing-post": del fixture.rows[2]
+                elif kind == "missing-initial": del fixture.rows[0]
+                elif kind == "missing-continuation": fixture.rows.pop()
+                elif kind == "duplicate-continuation": fixture.rows.append(copy.deepcopy(fixture.rows[-1]))
+                elif kind == "orphan-command": fixture.rows[2]["data"]["commandId"] = "other-command"
+                elif kind == "wrong-result-id": fixture.rows[2]["data"]["messages"][-1]["contents"][0]["callId"] = "other-call"
+                elif kind == "historical-result": fixture.rows[2]["data"]["messages"].append({"role": "user", "contents": []})
+                else:
+                    item = fixture.rows[2]["data"]["messages"][-1]["contents"][0]
+                    value = json.loads(item["result"]); value["payload"]["data"]["opaque"] = "changed"
+                    item["result"] = json.dumps(value)
+                self.sync(fixture)
+                with self.assertRaises(RuntimeError): self.correlate(fixture, "anthropic")
 
     def test_anthropic_malformed_nonobject_and_double_encoded_results_are_rejected(self):
         for value in ("{broken", "null", '{"toolName":"sample_change","toolName":"duplicate"}', json.dumps("{}"), {}):
