@@ -56,13 +56,23 @@ for (const item of presets) test(`${item.name} is a complete, persistent preset 
 
 for (const item of presets) test(`${item.name} keeps workflow headings inside their tracks at desktop and narrow widths`, async ({ page }) => {
   await preset(page, item.name, 1280);
-  await view(page, "list");
+  await view(page, "list", "&saved-version=1");
   const table = page.getByRole("table", { name: "Workflow definitions", exact: true });
   await expect(table).toBeVisible();
   await expect(table.locator(".wf-definition-description").first()).toBeVisible();
+  const row = table.getByRole("row").nth(1);
+  const latest = row.locator(".wf-definition-version").first();
+  await expect(latest.locator(".wf-definition-version-number")).toHaveText("1.0.0");
   await page.evaluate(() => document.fonts.ready);
   for (const width of [1280, 1440, 320]) {
     await page.setViewportSize({ width, height: 960 });
+    const versionCenters = await latest.evaluate(element => [...element.children].map(child => {
+      const box = child.getBoundingClientRect();
+      return box.y + box.height / 2;
+    }));
+    expect(versionCenters).toHaveLength(2);
+    expect(Math.abs(versionCenters[0] - versionCenters[1])).toBeLessThanOrEqual(1);
+    expect(await row.evaluate(element => element.getBoundingClientRect().height)).toBe(56);
     const overflowing = await table.getByRole("columnheader").evaluateAll(headers => headers.flatMap(header => {
       const label = header.textContent?.trim();
       if (!label) return [];
