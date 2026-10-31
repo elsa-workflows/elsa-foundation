@@ -67,3 +67,5 @@
 .wf-run-activity-indicator {
   position: relative;
 }
+
+html[data-workspace-style="minimal"] .wf-instance-grid .wf-grid-row { font-size: var(--studio-body-size); }

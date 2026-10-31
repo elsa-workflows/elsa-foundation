@@ -190,6 +190,6 @@ console.log(
 );
 
 // Ship the real primitive rules; external modules must never copy host CSS.
-const componentSources = ["components.css", "layout/page.css", "disclosure/disclosure.css"];
+const componentSources = ["components.css", "layout/page.css", "disclosure/disclosure.css", "minimal.css"];
 const componentCss = componentSources.map(name => readFileSync(resolve(pkgRoot, "../Client/src/app/ui", name), "utf8")).join("\n");
 writeFileSync(resolve(pkgRoot, "dist/styles.css"), `${output}\n${componentCss}`, "utf8");

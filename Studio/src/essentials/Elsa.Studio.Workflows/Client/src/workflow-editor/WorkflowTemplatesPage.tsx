@@ -1,10 +1,10 @@
-import { StudioPageHeader, StudioButton, StudioSearchInput } from "@elsa-workflows/studio-ui";
+import { OverflowMenu, StudioPageHeader, StudioButton, StudioSearchInput } from "@elsa-workflows/studio-ui";
 import { builtInWorkflowTemplates } from "../builtInWorkflowTemplates";
 import "./WorkflowTemplatesPage.css";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps } from "react";
-import { Plus, RefreshCw, Copy, Trash2 } from "lucide-react";
+import { Plus, RefreshCw, Copy } from "lucide-react";
 import { listActivities } from "../api/activityDesign";
 import { createDefinition } from "../api/workflowDesign";
 import type { ActivityCatalogItem } from "../workflowTypes";
@@ -84,20 +84,36 @@ export function WorkflowTemplatesPage(props: Props) {
     {loading ? <p role="status">Loading templates…</p> : null}
     {!loading && !supported ? <p role="status">Saved template management is unavailable on this server. Built-in starters are still available when creating workflows.</p> : null}
     {error && !dialog ? <p className="wf-alert" role="alert">{error}</p> : null}
-    <div className="wf-template-grid">
+    <section className="wf-template-section" aria-labelledby="builtin-templates-title">
+      <h2 id="builtin-templates-title">Built-in starters</h2>
+      <div className="wf-template-grid">
       {builtInWorkflowTemplates.filter(item => `${item.name} ${item.description}`.toLowerCase().includes(search.toLowerCase())).map(item => {
         const reason = item.id === "http" ? getHttpStarterAvailabilityReason(catalog) : undefined;
-        return <article key={item.id} className="wf-template-card"><span className="wf-chip">Built-in · read only</span><h2>{item.name}</h2><p>{item.description}</p>{reason ? <p className="wf-muted">{reason}</p> : null}
-          <div className="wf-template-actions wf-actions"><button type="button" disabled={loading || !!reason} onClick={() => begin("workflow", undefined, item.id === "http" ? "http" : undefined)}>Use template</button><button type="button" disabled={loading || !supported || !!reason} onClick={() => begin("template", undefined, item.id === "http" ? "http" : undefined)}><Copy size={14} /> Copy</button></div>
+        return <article key={item.id} className="wf-template-card"><span className="wf-chip">Built-in · read only</span><h3>{item.name}</h3><p>{item.description}</p>{reason ? <p className="wf-muted">{reason}</p> : null}
+          <div className="wf-template-preview" aria-hidden="true">{item.id === "http" ? <><span>HTTP endpoint</span><i>→</i><span>HTTP response</span></> : <span className="wf-template-preview-empty"><Plus size={18} /> Choose a root activity</span>}</div>
+          <div className="wf-template-actions wf-actions"><StudioButton variant="primary" disabled={loading || !!reason} onClick={() => begin("workflow", undefined, item.id === "http" ? "http" : undefined)}>Use template</StudioButton><StudioButton disabled={loading || !supported || !!reason} onClick={() => begin("template", undefined, item.id === "http" ? "http" : undefined)}><Copy size={14} /> Copy</StudioButton></div>
         </article>;
       })}
+      </div>
+    </section>
+    <section className="wf-template-section" aria-labelledby="custom-templates-title">
+      <h2 id="custom-templates-title">Your templates</h2>
+      <div className="wf-template-grid">
       {templates.filter(item => `${item.name} ${item.description ?? ""}`.toLowerCase().includes(search.toLowerCase())).map(template => {
         const reason = templateAvailabilityReason(template, catalog);
-        return <article key={template.id} className="wf-template-card"><span className="wf-chip">Custom</span><h2><button className="wf-link-button" onClick={() => open(template.id)}>{template.name}</button></h2><p>{template.description || "No description"}</p>{reason ? <p role="status" className="wf-muted">{reason}</p> : null}
-          <div className="wf-template-actions wf-actions"><button type="button" disabled={loading || !!reason} onClick={() => begin("workflow", template)}>Use template</button><button type="button" disabled={busy} onClick={() => open(template.id)}>Edit</button><button type="button" disabled={busy} onClick={() => begin("template", template)}><Copy size={14} /> Copy</button><button type="button" disabled={busy} onClick={() => void remove(template)}><Trash2 size={14} /> Delete</button></div>
+        const root = template.content.state.rootActivity;
+        const rootName = root ? template.content.activityPresentation?.find(item => item.nodeId === root.nodeId)?.displayName ?? catalog.find(item => item.activityVersionId === root.activityVersionId)?.displayName ?? "Root activity" : "No root activity";
+        return <article key={template.id} className="wf-template-card"><span className="wf-chip">Custom</span><h3><button className="wf-link-button" onClick={() => open(template.id)}>{template.name}</button></h3><p>{template.description || "No description"}</p>{reason ? <p role="status" className="wf-muted">{reason}</p> : null}
+          <div className="wf-template-preview" aria-hidden="true"><span>{rootName}</span></div>
+          <div className="wf-template-actions wf-actions"><StudioButton variant="primary" disabled={loading || !!reason} onClick={() => begin("workflow", template)}>Use template</StudioButton><StudioButton disabled={busy} onClick={() => open(template.id)}>Edit</StudioButton><OverflowMenu ariaLabel={`Actions for ${template.name}`} items={[
+            { id: "copy", label: "Copy", disabled: busy, onSelect: () => begin("template", template) },
+            { id: "delete", label: "Delete", destructive: true, disabled: busy, onSelect: () => void remove(template) }
+          ]} /></div>
         </article>;
       })}
-    </div>
+      {supported ? <button type="button" className="wf-template-add" disabled={loading || busy} onClick={() => begin("template")}><Plus size={22} /> Create a template</button> : null}
+      </div>
+    </section>
     {!loading && supported && !templates.length ? <p className="wf-muted">No custom templates yet. Create one here or choose “Save as template” in a workflow.</p> : null}
     {dialog ? <Suspense fallback={<p role="status">Loading template dialog…</p>}><CreateWorkflowDialog context={context} title={dialog.kind === "template" ? "Create template" : "Create Workflow"} submitLabel={dialog.kind === "template" ? "Create template" : "Create"} draft={dialog.draft} catalog={catalog} creating={busy} submitError={error} ai={ai} onChange={draft => setDialog({ ...dialog, draft })} onClose={() => setDialog(null)} onSubmit={() => void submit()} /></Suspense> : null}
   </section>;
