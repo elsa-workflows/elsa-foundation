@@ -3,12 +3,17 @@ using System.Text.Json;
 using Bpmn.Model;
 using Elsa.Activities.Bpmn.Core;
 using Elsa.Activities.Bpmn.Internal;
+using Elsa.Activities.Bpmn.Activities;
+using RunBpmnState = Elsa.Activities.Bpmn.Models.RunBpmnState;
+using Elsa.Primitives.Models;
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Events;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -16,6 +21,48 @@ namespace Elsa.Activities.Bpmn.Tests;
 
 public sealed partial class BpmnDirectExecutionTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Owned_embedding_wrapper_errors_keep_the_public_checkpoint_and_retained_invocation_context(bool cancellation, bool wrongFormat)
+    {
+        var at = DateTimeOffset.UtcNow;
+        var payload = wrongFormat ? JsonSerializer.SerializeToElement(new { FormatVersion = "bad", Invocation = new { } })
+            : JsonSerializer.SerializeToElement("malformed-wrapper");
+        var retained = new ActivityExecutionState(new("wrapper-invocation", "wrapper-execution", "wrapper-node", "wrapper-authored", RunBpmn.ActivityType, "1.0.0"),
+            ActivityExecutionStatus.Suspended, null, at, at, null, null, null, null, null, null, [], [], 0, 0, new Dictionary<string, string>())
+        {
+            PrivateState = new("wrapper-invocation", 1, ValueEnvelope.Inline(new(typeof(RunBpmnState).FullName!, schemaVersion: 1),
+                payload, ValueProtectionPolicy.InstanceInline), "wrapper-attempt", at)
+        };
+        var reads = 0;
+        var persisted = 0;
+        var activities = DeliveryFake<IActivityExecutionStateStore>((method, _) => method.Name == "FindAsync"
+            ? ValueTask.FromResult<ActivityExecutionState?>(ReadRetained()) : throw new InvalidOperationException(method.Name));
+        ActivityExecutionState ReadRetained() { reads++; return retained; }
+        var native = new BpmnNativeWorkBoundary(null!, null!, null!, activities, null!, null!, null!, TimeProvider.System, null!);
+        var enricher = new BpmnEmbeddingCheckpointEnricher(activities, native);
+        var proposed = cancellation ? retained with { Status = ActivityExecutionStatus.Cancelled, PrivateState = null } : retained;
+        var bookmark = new BookmarkState("wrapper-bookmark", "wrapper-execution", "wrapper-invocation", "wrapper-node", "wrapper-resume",
+            "wrapper-stimulus", "wrapper-hash", null, new Dictionary<string, string>(), at, null);
+        var changes = new RuntimeCheckpointStateChangeSet(null, null,
+            [new(proposed.InvocationId, RuntimeStateChangeOperation.Upsert, proposed, new Dictionary<string, string>())],
+            cancellation ? [] : [new(bookmark.BookmarkId, RuntimeStateChangeOperation.Upsert, bookmark, new Dictionary<string, string>())], [], [], []);
+        var commit = new RuntimeCheckpointCommit("wrapper-commit", new("wrapper-checkpoint", cancellation ? "ActivityCancelled" : RuntimeCheckpointNames.BookmarkCreated,
+            "wrapper-execution", at, [], new Dictionary<string, string>()), changes, [], new Dictionary<string, string>());
+        var store = DeliveryFake<IRuntimeCheckpointCommitStore>((method, _) => { persisted++; throw new InvalidOperationException(method.Name); });
+        var committer = new RuntimeCheckpointCommitter(DeliveryFake<IRuntimeCheckpointPersistencePolicy>(), store,
+            DeliveryFake<IRuntimeExecutionOwnershipContextAccessor>(), [enricher], []);
+        var error = await Assert.ThrowsAsync<BpmnModelValidationException>(() => committer.CommitAsync(commit).AsTask());
+        Assert.IsAssignableFrom<JsonException>(error.InnerException);
+        foreach (var identity in new[] { "wrapper-execution", "wrapper-invocation", "wrapper-node", "wrapper-commit" })
+            Assert.Contains(identity, error.Message, StringComparison.Ordinal);
+        Assert.Equal(cancellation ? 1 : 0, reads);
+        Assert.Equal(0, persisted);
+    }
+
     [Fact]
     public async Task Accepted_start_replays_after_publication_retirement_without_admitting_new_work()
     {

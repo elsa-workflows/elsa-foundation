@@ -5,6 +5,8 @@
     <SnapshotReaderProject>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../../../../../../tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj'))</SnapshotReaderProject>
   </PropertyGroup>
   <ItemGroup>
+    <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/reviews/round-6/corrections/inputs/*"
+          Link="Fixtures/legacy-timer/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/current-writer/*.json;../../../../../../specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/current-writer/*.sqlite.gz"
           Link="Fixtures/templates-current-writer/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../../../../specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/manifest.json"

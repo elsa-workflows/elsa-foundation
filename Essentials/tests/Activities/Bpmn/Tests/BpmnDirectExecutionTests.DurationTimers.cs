@@ -12,6 +12,72 @@ namespace Elsa.Activities.Bpmn.Tests;
 
 public sealed partial class BpmnDirectExecutionTests
 {
+    [Fact]
+    public async Task An_unrepresentable_deadline_refuses_publication_before_new_material_is_admitted()
+    {
+        await using var host = await OpenAsync();
+        await using var scope = await ScopeAsync(host);
+        var definition = TimedHumanMaterial("P3000000D").Definition.Deserialize<BpmnModelDefinition>(Web)!;
+        var runtime = scope.ServiceProvider.GetRequiredService<IBpmnModelRuntime>();
+        var error = await Assert.ThrowsAsync<BpmnModelValidationException>(() =>
+            runtime.PublishAsync(definition, "unrepresentable-deadline", new("operator", null)).AsTask());
+        Assert.IsType<ArgumentOutOfRangeException>(error.InnerException);
+        Assert.Empty((await scope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>().ListPageAsync(new())).Items);
+    }
+
+    [Fact]
+    public async Task An_old_material_with_an_unrepresentable_deadline_cannot_enqueue_a_fresh_start()
+    {
+        await using var host = await OpenAsync();
+        await using var scope = await ScopeAsync(host);
+        // This storage-contract fixture represents retained old material. Actual old-host recovery
+        // uses the independently captured source9c whole store, not this constructed fixture.
+        var definition = TimedHumanMaterial("P3000000D");
+        var store = scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>();
+        await store.SaveModelAsync(definition);
+        var material = (await store.FindMaterialAsync(definition.Identity.ArtifactId))!;
+        var error = await Assert.ThrowsAsync<BpmnModelValidationException>(() => SendAsync(host, material, "start", "start", new { }));
+        Assert.IsType<ArgumentOutOfRangeException>(error.InnerException);
+        Assert.Empty((await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAsync(new("direct-execution"))).Items);
+        Assert.Null(await scope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>().FindAsync("direct-execution"));
+    }
+
+    [Fact]
+    public async Task A_timer_that_becomes_unrepresentable_after_admission_commits_a_visible_fault()
+    {
+        var clock = new DurationClock(DateTimeOffset.UtcNow);
+        var duration = System.Xml.XmlConvert.ToString(DateTimeOffset.MaxValue - clock.GetUtcNow() - TimeSpan.FromDays(2));
+        var seed = TimedHumanMaterial(duration);
+        var timed = seed.Definition.Deserialize<BpmnModelDefinition>(Web)!;
+        var process = timed.Process.Deserialize<BpmnProcessDefinition>(Web)!;
+        process = new(process.ProcessId, Elements: [.. process.Elements, new("first-review", BpmnElementTypes.UserTask, bindingRef: "first-review-work")],
+            SequenceFlows: [new("start-first", "start", "first-review"), new("first-second", "first-review", "review"),
+                .. process.SequenceFlows.Where(flow => flow.SourceRef != "start")]);
+        var definition = new BpmnModelDefinition(4, JsonSerializer.SerializeToElement(process, Web), ["first-review-work", "review-work"], null, ["timeout-work"]);
+        var value = new RuntimeModelMaterial(1, seed.Identity, seed.Protocol, seed.Profile, JsonSerializer.SerializeToElement(definition, Web), seed.InputContract, [], [], []);
+        var materialDefinition = new RuntimeModelMaterial(1, seed.Identity with { ArtifactHash = value.ComputeContentHash() },
+            value.Protocol, value.Profile, value.Definition, value.InputContract, [], [], []);
+        await using var host = await OpenAsync(configure: services => services.Replace(ServiceDescriptor.Singleton<TimeProvider>(clock)));
+        await using var scope = await ScopeAsync(host);
+        var store = scope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>();
+        await store.SaveModelAsync(materialDefinition);
+        var material = (await store.FindMaterialAsync(materialDefinition.Identity.ArtifactId))!;
+        await SendAsync(host, material, "start", "start", new { });
+        var reader = scope.ServiceProvider.GetRequiredService<IRuntimeModelExecutionReader>();
+        var started = (await reader.FindAsync("direct-execution"))!;
+        var first = Assert.Single(BpmnDirectExecutionDriver.Read(started).Work);
+        clock.Advance(TimeSpan.FromDays(4));
+        await SendAsync(host, material, "first-complete", "complete-human", new { first.InvocationId, first.AttemptId });
+        var faulted = (await reader.FindAsync("direct-execution"))!;
+        Assert.Equal(2, faulted.Revision);
+        Assert.Equal(RuntimeModelLifecycle.TerminalSettled, faulted.Lifecycle);
+        Assert.Equal("Faulted", faulted.TerminalResult!.Value.GetProperty("status").GetString());
+        Assert.Equal("bpmn.duration-deadline-unrepresentable", faulted.TerminalResult.Value.GetProperty("code").GetString());
+        Assert.Empty(BpmnDirectExecutionDriver.Read(faulted).Work);
+        Assert.NotNull(await reader.FindInputAsync("direct-execution", "first-complete"));
+        Assert.Empty((await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>().ListAsync(new("direct-execution"))).Items);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

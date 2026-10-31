@@ -42,6 +42,18 @@ internal sealed record BpmnDurationTimer(int FormatVersion, PersistenceScope Sco
         catch (Exception exception) when (exception is FormatException or OverflowException or ArgumentNullException)
         { throw new BpmnModelValidationException("The duration timer interval is not representable.", exception); }
     }
+
+    internal static DateTimeOffset Deadline(BpmnElement element, DateTimeOffset at)
+    {
+        var duration = Duration(element);
+        try { return at.ToUniversalTime().Add(duration); }
+        catch (ArgumentOutOfRangeException exception) { throw new DeadlineOverflowException(element.ElementId, at, exception); }
+    }
+
+    // Distinguish this deterministic host-binding failure from unrelated evaluation failures.
+    // Fresh admission refuses it; an already accepted input still needs a durable outcome.
+    internal sealed class DeadlineOverflowException(string elementId, DateTimeOffset at, ArgumentOutOfRangeException cause)
+        : Exception($"The duration timer '{elementId}' deadline from '{at:O}' is not representable.", cause);
 }
 
 /// <summary>Uses the existing delayed outbox and protected model queue; acknowledgment requires its exact input receipt.</summary>

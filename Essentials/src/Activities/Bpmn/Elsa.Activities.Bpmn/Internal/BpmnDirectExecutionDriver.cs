@@ -43,8 +43,30 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
     {
         if (context.Command.InputKind == "start" && context.State is null && !options.AdmitNewExecutions)
             throw new RuntimeSchedulerWorkUnavailableException("bpmn.admission-disabled", "New BPMN execution admission is disabled.");
-        try { await ValidateShapeAndReplayAsync(context, cancellationToken); }
+        try
+        {
+            await ValidateShapeAndReplayAsync(context, cancellationToken);
+            // An embedded start already owes its committed native parent a result. New parents
+            // are checked in PrepareAsync; retained sources must reach a durable decision here.
+            if (context.State is null && context.Command.InputKind == "start")
+                ValidateTimerDeadlines(context.Material.Model!, clock.GetUtcNow());
+        }
         catch (JsonException exception) { throw InvalidCommandJson(context, exception); }
+    }
+
+    internal static void ValidateTimerDeadlines(RuntimeModelMaterial material, DateTimeOffset at)
+    {
+        var definition = Definition(material);
+        if (definition.FormatVersion != 4) return;
+        var process = definition.Process.Deserialize<BpmnProcessDefinition>(Strict)!;
+        try
+        {
+            foreach (var element in process.Elements.Where(element => element.BindingRef is not null &&
+                         definition.TimerBindings?.Contains(element.BindingRef, StringComparer.Ordinal) == true))
+                _ = BpmnDurationTimer.Deadline(element, at);
+        }
+        catch (BpmnDurationTimer.DeadlineOverflowException exception)
+        { throw new BpmnModelValidationException($"BPMN material '{material.Identity.ArtifactId}': {exception.Message}", exception.InnerException); }
     }
 
     private async ValueTask ValidateShapeAndReplayAsync(RuntimeModelExecutionContext context, CancellationToken cancellationToken)
@@ -293,17 +315,27 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
         }
         if (evaluation is not null)
         {
-            document = Apply(context, document, evaluation, commitId, timerDecisionAt ?? clock.GetUtcNow());
+            try { document = Apply(context, document, evaluation, commitId, timerDecisionAt ?? clock.GetUtcNow()); }
+            catch (BpmnDurationTimer.DeadlineOverflowException exception)
+            {
+                // A prior writer may already have accepted this input, or a valid timer may be
+                // reached later than admission. Commit a visible host fault and settle existing
+                // native responsibility instead of throwing forever at the FIFO head.
+                lifecycle = RuntimeModelLifecycle.TerminalSettled;
+                terminal = JsonSerializer.SerializeToElement(new { status = "Faulted", code = "bpmn.duration-deadline-unrepresentable", message = exception.Message }, Web);
+                document = CancelRemainingWork(document, commitId, command.InputId, timedFrame, policyFrame, faulted: true);
+                evaluation = null;
+            }
             if (timedFrame && document.Failures is not null)
                 document = document with { Failures = document.Failures.Select(failure => failure.Status == "Open" &&
                     !document.Work.Any(work => work.InvocationId == failure.InvocationId && work.AttemptId == failure.FailedAttemptId)
                         ? failure with { Status = "Retired", ResolutionInputId = command.InputId } : failure).ToArray() };
-            if (evaluation.Continuation is BpmnContinuation.Complete complete)
+            if (evaluation?.Continuation is BpmnContinuation.Complete complete)
             {
                 lifecycle = RuntimeModelLifecycle.TerminalSettled;
                 terminal = JsonSerializer.SerializeToElement(new { status = "Completed", outcome = complete.Outcome }, Web);
             }
-            else if (evaluation.Continuation is BpmnContinuation.Fault fault)
+            else if (evaluation?.Continuation is BpmnContinuation.Fault fault)
             {
                 lifecycle = RuntimeModelLifecycle.TerminalSettled;
                 terminal = JsonSerializer.SerializeToElement(new { status = "Faulted", fault.Code, fault.Message, fault.ErrorCode }, Web);
@@ -591,9 +623,7 @@ internal sealed class BpmnDirectExecutionDriver(RuntimeCheckpointCommitter commi
             if (definition.TimerBindings?.Contains(active.NodeId, StringComparer.Ordinal) == true)
             {
                 var element = definition.Process.Deserialize<BpmnProcessDefinition>(Strict)!.Elements.Single(item => item.ElementId == active.ElementId);
-                DateTimeOffset due;
-                try { due = at.ToUniversalTime().Add(BpmnDurationTimer.Duration(element)); }
-                catch (ArgumentOutOfRangeException exception) { throw new BpmnModelValidationException("The duration timer deadline is not representable.", exception); }
+                var due = BpmnDurationTimer.Deadline(element, at);
                 var intent = "bpmn-duration:" + BpmnModelIdentity.Create(context.Scope.Value, context.WorkItem.WorkflowExecutionId, invocation, attempt);
                 timer = new(1, context.Scope, context.WorkItem.WorkflowExecutionId, context.Material.Identity, context.Material.IncarnationId,
                     active.NodeId, invocation, attempt, due, RuntimePostCommitOutboxItems.OutboxItemId(commitId, intent));

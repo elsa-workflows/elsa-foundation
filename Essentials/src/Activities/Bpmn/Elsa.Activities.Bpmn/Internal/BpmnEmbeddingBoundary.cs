@@ -48,18 +48,20 @@ internal sealed class BpmnEmbeddingBoundary(BpmnNativeWorkBoundary native, IWork
         var pin = BpmnEmbeddingJson.Read<BpmnEmbeddingPin>(pinJson);
         if (pin.SourceReferenceId != selection || !executable.Dependencies.Any(edge => edge.ArtifactId == pin.Executable.ArtifactId && edge.ArtifactHash == pin.Executable.ArtifactHash))
             throw BpmnEmbeddingJson.Invalid();
-        await RequireMaterialAsync(pin, context.CancellationToken);
+        var model = await RequireMaterialAsync(pin, context.CancellationToken);
+        BpmnDirectExecutionDriver.ValidateTimerDeadlines(model, clock.GetUtcNow());
         var target = WorkflowExecutableResumeTarget.FindForNode(executable, node.ExecutableNodeId, ResumeKey) ?? throw BpmnEmbeddingJson.Invalid();
         if (target.HandlerKey != "ResumeAsync" || target.ExecutableNodeId != node.ExecutableNodeId) throw BpmnEmbeddingJson.Invalid();
         return new(1, scope, "bpmn-embedded:" + BpmnModelIdentity.Create(scope.Value, context.WorkflowExecutionId, context.InvocationId), pin,
             workflow.PinnedExecutable, context.WorkflowExecutionId, context.InvocationId, context.ExecutableNodeId, target.ResumeTargetId, null);
     }
 
-    internal async ValueTask RequireMaterialAsync(BpmnEmbeddingPin pin, CancellationToken token)
+    internal async ValueTask<RuntimeModelMaterial> RequireMaterialAsync(BpmnEmbeddingPin pin, CancellationToken token)
     {
         var material = await materials.FindMaterialAsync(pin.Executable.ArtifactId, token);
         if (material?.Model is not { Profile: BpmnModelProtocol.Profile or BpmnModelProtocol.NativeWorkProfile } model || model.Protocol != new RuntimeExecutionProtocol(BpmnModelProtocol.Key, BpmnModelProtocol.Version) || material.IncarnationId != pin.MaterialIncarnationId ||
             !WorkflowExecutableIdentityComparer.MatchesPinnedSnapshot(material.Identity, pin.Executable)) throw BpmnEmbeddingJson.Invalid();
+        return model;
     }
 
     internal static BpmnEmbeddedInvocation Read(RunBpmnState state)
@@ -72,7 +74,19 @@ internal sealed class BpmnEmbeddingBoundary(BpmnNativeWorkBoundary native, IWork
         return invocation;
     }
 
-    internal static BpmnEmbeddedInvocation Read(ActivityExecutionState activity)
+    internal static BpmnEmbeddedInvocation Read(ActivityExecutionState activity, string? commitId = null)
+    {
+        try { return ReadActivity(activity); }
+        catch (Exception exception) when (exception is JsonException or BpmnModelValidationException)
+        {
+            var cause = exception is BpmnModelValidationException { InnerException: { } inner } ? inner : exception;
+            throw new BpmnModelValidationException($"Native BPMN execution '{activity.Execution.WorkflowExecutionId}', invocation '{activity.InvocationId}', " +
+                $"node '{activity.Execution.ExecutableNodeId}'" + (commitId is null ? "" : $", checkpoint commit '{commitId}'") +
+                " has invalid owned embedding state.", cause);
+        }
+    }
+
+    private static BpmnEmbeddedInvocation ReadActivity(ActivityExecutionState activity)
     {
         if (activity.Execution.ActivityType != RunBpmn.ActivityType || activity.PrivateState is not { StateVersion: 1 } state ||
             state.InvocationId != activity.InvocationId || state.Value.Type != new ValueTypeDescriptor(typeof(RunBpmnState).FullName!, schemaVersion: 1) ||

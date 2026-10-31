@@ -61,6 +61,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
         var material = new RuntimeModelMaterial(1, seed, new(BpmnModelProtocol.Key, BpmnModelProtocol.Version), profile,
             JsonSerializer.SerializeToElement(definition, Web), new(1, []), [], dependencies, []);
         await driver.ValidateMaterialAsync(material, cancellationToken);
+        BpmnDirectExecutionDriver.ValidateTimerDeadlines(material, clock.GetUtcNow());
         var hash = material.ComputeContentHash();
         var pin = new WorkflowExecutableIdentity(hash, "bpmn-model:" + hash, hash, "1.0.0", hash);
         material = new(1, pin, material.Protocol, material.Profile, material.Definition, material.InputContract, [], dependencies, []);

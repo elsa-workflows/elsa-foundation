@@ -1,0 +1,21 @@
+{
+  "mutation": "Remove only the newly added durable timer-fault disposition guard; keep admission guards unchanged",
+  "productionSourceRestoredByteExactly": true,
+  "originalSha256": "b8e2896b8034fbd386cbcd2dd03e2fee4bddc9ed0f08fd8e501394bf2e20478c",
+  "mutatedSha256": "4d2ffb667381d620003a0871854946e5e91abe181c4ff8353fbed43cc4da4648",
+  "exitCode": 1,
+  "command": [
+    "dotnet",
+    "test",
+    "Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+    "-c",
+    "Release",
+    "--no-restore",
+    "--filter",
+    "FullyQualifiedName~A_timer_that_becomes_unrepresentable_after_admission",
+    "--logger",
+    "trx;LogFileName=late-guard-removed.trx",
+    "--results-directory",
+    "/tmp/elsa-2898-round6-corrections"
+  ]
+}

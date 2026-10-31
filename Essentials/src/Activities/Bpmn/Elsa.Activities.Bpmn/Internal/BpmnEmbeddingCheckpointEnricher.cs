@@ -20,7 +20,7 @@ internal sealed class BpmnEmbeddingCheckpointEnricher(IActivityExecutionStateSto
             {
                 if (!changes.TryGetValue(bookmark.State.ActivityExecutionId, out var change) || change.State.Execution.ActivityType != RunBpmn.ActivityType) continue;
                 var activity = change.State;
-                var invocation = BpmnEmbeddingBoundary.Read(activity);
+                var invocation = BpmnEmbeddingBoundary.Read(activity, commit.CommitId);
                 var registration = activity.TriggerRegistrations?.SingleOrDefault() ?? throw BpmnEmbeddingJson.Invalid();
                 if (activity.Status != ActivityExecutionStatus.Suspended || registration.ResumeTargetKey != invocation.ResumeTargetId ||
                     registration.InvocationId != invocation.NativeInvocationId || registration.PayloadType != BpmnEmbeddingBoundary.CompletionType ||
@@ -57,7 +57,7 @@ internal sealed class BpmnEmbeddingCheckpointEnricher(IActivityExecutionStateSto
             var retained = activity.PrivateState is not null ? activity :
                 await native.PhysicalActivities.FindAsync(activity.Execution.WorkflowExecutionId, activity.InvocationId, cancellationToken);
             if (retained?.PrivateState is null) continue; // No committed RunBpmn wait was accepted.
-            var invocation = BpmnEmbeddingBoundary.Read(retained);
+            var invocation = BpmnEmbeddingBoundary.Read(retained, commit.CommitId);
             if (invocation.RegistrationId is not null) Add(Intent(invocation, true, retained.PrivateState.CommittedAt));
         }
         return commit with { StateChanges = commit.StateChanges.WithActivityExecutions(changes.Values.ToArray()), PostCommitIntents = intents };
