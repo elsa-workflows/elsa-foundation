@@ -136,7 +136,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-executables", requiresBackend: [{id:"elsa.api.runtime",contractVersion:"1"}],
         path: "/workflows/executables",
         label: "Workflow executables",
-        component: () => deferred("workflow executables", <WorkflowExecutablesPage context={api.backend} ai={api.agent} runInputEditors={runInputEditors()} />)
+        component: () => deferred("workflow executables", <WorkflowExecutablesPage canBrowseDefinitions={evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.workflow-design",contractVersion:"1"}]).state === "available"} context={api.backend} ai={api.agent} runInputEditors={runInputEditors()} />)
       },
       {
         id: "workflows-executable-inspector", requiresBackend:[{id:"elsa.api.runtime",contractVersion:"1"}],

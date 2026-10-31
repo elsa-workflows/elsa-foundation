@@ -91,7 +91,7 @@ export function WorkflowManagementPage({
     );
 }
 
-export function WorkflowExecutablesPage({ context, ai, runInputEditors }: { context: StudioEndpointContext; ai: StudioAgentRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[] }) {
+export function WorkflowExecutablesPage({ context, ai, runInputEditors, canBrowseDefinitions }: { context: StudioEndpointContext; ai: StudioAgentRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; canBrowseDefinitions?: boolean }) {
   const [definitionFilter, setDefinitionFilter] = useState(readExecutableDefinitionFilterFromUrl);
 
   useEffect(() => {
@@ -117,7 +117,7 @@ export function WorkflowExecutablesPage({ context, ai, runInputEditors }: { cont
   return (
     <WorkflowsPageFrame>
       <WorkflowLazyBoundary label="workflow executables">
-        <WorkflowExecutables context={context} ai={ai} runInputEditors={runInputEditors} definitionFilter={definitionFilter} onDefinitionFilterChange={updateDefinitionFilter} />
+        <WorkflowExecutables context={context} ai={ai} runInputEditors={runInputEditors} canBrowseDefinitions={canBrowseDefinitions} definitionFilter={definitionFilter} onDefinitionFilterChange={updateDefinitionFilter} />
       </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );

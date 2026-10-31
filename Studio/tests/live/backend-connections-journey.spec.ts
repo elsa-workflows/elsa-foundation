@@ -96,6 +96,10 @@ test.describe("backend connections against composed hosts",()=>{
     await expect(page.getByRole("button",{name:/Select backend\. Current: Authoring/})).toBeVisible();
     await page.goForward();
     await expect(page.getByRole("button",{name:/Select backend\. Current: Runtime/})).toBeVisible();
+    await page.goto(`/workflows/executables?backend=${secondary}`);
+    await expect(page.getByRole("heading",{name:"No workflow executables",exact:true})).toBeVisible();
+    await expect(page.getByText("This backend has no executables in the selected scope.",{exact:true})).toBeVisible();
+    await expect(page.getByRole("button",{name:"Open workflow definitions",exact:true})).toHaveCount(0);
     await page.goto(`/workflows/definitions?definition=shared-resource-id&backend=${secondary}`);
     await expect(page.getByRole("status").filter({hasText:"This backend does not support elsa.api.workflow-design."})).toBeVisible();
     await page.reload();

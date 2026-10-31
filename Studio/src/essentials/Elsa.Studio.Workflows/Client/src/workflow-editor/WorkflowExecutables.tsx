@@ -47,7 +47,7 @@ export function openExecutableInspector(artifactId: string, sourceReferenceId?: 
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
-export function WorkflowExecutables({ context, ai, runInputEditors, definitionFilter, onDefinitionFilterChange }: { context: StudioEndpointContext; ai: StudioAgentRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; definitionFilter: string | null; onDefinitionFilterChange(filter: string | null): void }) {
+export function WorkflowExecutables({ context, ai, runInputEditors, definitionFilter, onDefinitionFilterChange, canBrowseDefinitions = true }: { context: StudioEndpointContext; ai: StudioAgentRegistry; runInputEditors: StudioWorkflowRunInputEditorContribution[]; definitionFilter: string | null; onDefinitionFilterChange(filter: string | null): void; canBrowseDefinitions?: boolean }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [definitionNamesLoading, setDefinitionNamesLoading] = useState(false);
   const [error, setError] = useState("");
@@ -209,10 +209,10 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
           <WfEmptyState headingLevel={3}
             icon={<Play size={22} />}
             title="No workflow executables"
-            description={definitionFilter ? "No executables match this definition filter." : "Publish a workflow definition to make it executable."}
+            description={definitionFilter ? "No executables match this definition filter." : "This backend has no executables in the selected scope."}
             action={definitionFilter
               ? <StudioButton onClick={() => onDefinitionFilterChange(null)}><X size={13} /> Clear filter</StudioButton>
-              : <StudioButton variant="primary" onClick={openDefinitions}>Open workflow definitions</StudioButton>}
+              : canBrowseDefinitions ? <StudioButton variant="primary" onClick={openDefinitions}>Open workflow definitions</StudioButton> : undefined}
           />
         )
       ) : null}

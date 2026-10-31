@@ -21,6 +21,32 @@ import { capabilityDocument, definition, renderRegisteredRoute, response, runJav
 // Per-test teardown lives in the shared afterEach in routeRenderingHelpers.tsx.
 
 describe("workflows module", () => {
+  for (const authoring of [false, true]) it(`adapts the executable empty-state authoring action when workflow design is ${authoring ? "available" : "absent"}`, async () => {
+    const capabilities = capabilityDocument();
+    if (!authoring) capabilities.capabilities = capabilities.capabilities.filter(item => item.id !== "elsa.api.workflow-design");
+    vi.stubGlobal("fetch", vi.fn(async () => response({ executables: [] })));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables?backend=selected", api => {
+      api.backendSession = {
+        key: "selected-lifetime", profile: { id: "selected", name: "Selected", baseUrl: api.backend.baseUrl, environment: "Test", source: "configuration" },
+        context: api.backend, identity: { status: "anonymous", roles: [], permissions: [] }, capabilities,
+        pendingWrites: 0, disposed: false, refreshCapabilities: async () => capabilities
+      };
+    }, false, capabilities);
+    await waitForText(container, "No workflow executables");
+    const action = buttonByText(container, "Open workflow definitions");
+    if (authoring) {
+      expect(action).toBeTruthy();
+      await click(action);
+      expect(window.location.pathname).toBe("/workflows/definitions");
+      expect(window.location.search).toBe("?backend=selected");
+    } else {
+      expect(action).toBeNull();
+      expect(container.textContent).not.toContain("Publish a workflow definition");
+      expect(container.textContent).toContain("This backend has no executables in the selected scope.");
+    }
+    await unmount();
+  });
+
   it("retries failed workflow metadata through the toolbar Save before releasing navigation", async () => {
     let metadataWrites = 0;
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
