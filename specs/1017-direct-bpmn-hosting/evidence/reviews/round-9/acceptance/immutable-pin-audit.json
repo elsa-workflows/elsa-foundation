@@ -1,0 +1,19 @@
+{
+  "modelImmutableFields": {
+    "scope": true,
+    "executionId": true,
+    "tenantId": true,
+    "protocol": true,
+    "executable": true,
+    "materialIncarnationId": true,
+    "authority": true,
+    "createdAt": true
+  },
+  "workerImmutableFields": {
+    "pinnedExecutable": true,
+    "modelWorkOrigin": true,
+    "authority": true,
+    "tenantId": true,
+    "partition": true
+  }
+}

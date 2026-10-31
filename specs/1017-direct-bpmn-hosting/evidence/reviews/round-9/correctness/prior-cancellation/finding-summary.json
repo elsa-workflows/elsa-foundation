@@ -1,0 +1,123 @@
+{
+  "outerExecutionId": "bpmn:723068f9ada40fbde52746a0678a2f5c65e61ef6831c683f85b0098a3daaa044",
+  "middleExecutionId": "wfexec:start:v1:d02cb25356a4825ec03647642c84fc5028d20300f53f65d3b8ea86a6a5044794",
+  "innerExecutionId": "bpmn-embedded:57443f3f73b36e4b4cb155ba015275d92664c3a3637cfa4d77f7be40c2f1bcfc",
+  "outerRevision": 2,
+  "outerLifecycle": 3,
+  "outerResult": {
+    "status": "Cancelled"
+  },
+  "innerRevision": 2,
+  "innerLifecycle": 2,
+  "innerCancellationSettled": false,
+  "earlierCancellationSourceId": "commit:round9:0ce3b59c12b34687b8e8c9af19979c01:activity-scope-cancelled:14oD2dLayY2:bpmn-embedded-cancel:e8559ceb6650ed55da14d57a1e5f6fae28b2a9393e60180403bb40be41374a16",
+  "earlierCancellationStatus": 3,
+  "earlierCancellationDeliveredAt": null,
+  "earlierDeliveryAttempt": {
+    "items": [
+      {
+        "outboxItemId": "commit:round9:0ce3b59c12b34687b8e8c9af19979c01:activity-scope-cancelled:14oD2dLayY2:bpmn-embedded-cancel:e8559ceb6650ed55da14d57a1e5f6fae28b2a9393e60180403bb40be41374a16",
+        "intentId": "bpmn-embedded-cancel:e8559ceb6650ed55da14d57a1e5f6fae28b2a9393e60180403bb40be41374a16",
+        "requestedDeliveryResultStatus": 3,
+        "failureMessage": "Runtime post-commit intent delivery deferred pending acknowledgement.",
+        "outcome": 0,
+        "isSuperseded": false
+      }
+    ],
+    "attemptedCount": 1,
+    "deliveredCount": 0,
+    "failedCount": 1,
+    "supersededCount": 0
+  },
+  "finalWorkerResult": {
+    "origin": {
+      "formatVersion": 1,
+      "scope": {
+        "value": "default"
+      },
+      "executionId": "bpmn:723068f9ada40fbde52746a0678a2f5c65e61ef6831c683f85b0098a3daaa044",
+      "protocol": {
+        "key": "elsa.bpmn",
+        "version": 1
+      },
+      "executable": {
+        "artifactId": "sha256:653bdfa77d5e382b1e8057418c17898e27c57f25f7ce8f6bd1c6b61012e9db80",
+        "definitionId": "bpmn-model:sha256:653bdfa77d5e382b1e8057418c17898e27c57f25f7ce8f6bd1c6b61012e9db80",
+        "definitionVersionId": "sha256:653bdfa77d5e382b1e8057418c17898e27c57f25f7ce8f6bd1c6b61012e9db80",
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:653bdfa77d5e382b1e8057418c17898e27c57f25f7ce8f6bd1c6b61012e9db80"
+      },
+      "materialIncarnationId": "8731d2f644b649ec91393396d66234df",
+      "bindingId": "worker",
+      "invocationId": "bpmn-work:a189fb74e94eecdc80c524c7b0674873dc101aa9d3554e9119fc3d1a04d0d684",
+      "attemptId": "attempt:85e8e34b45dc55e085c3dc839a657d20cf32a8d0d724ed5a8481c96f2f37d16c",
+      "workerExecutable": {
+        "artifactId": "review9-native-scope-worker",
+        "definitionId": "review9-native-scope-definition",
+        "definitionVersionId": "review9-native-scope-v1",
+        "artifactVersion": "1.0.0",
+        "artifactHash": "sha256:b16c88048bea417ecc77e6d6d5438a22e7d17c7a468349facc4fe5e0382e636c"
+      },
+      "workerExecutionId": "wfexec:start:v1:d02cb25356a4825ec03647642c84fc5028d20300f53f65d3b8ea86a6a5044794",
+      "sourceOutboxItemId": "model-input:86ce8ed0dba84ed22fe4fbcf31e010729ed8d8790971eeeadcfd91ab78992695:bpmn-start-native:e1046ee93296ebbe4ca2297aad44f50fb5bbeeb4da5594b7dfabbf8250b06807",
+      "sourceIntentId": "bpmn-start-native:e1046ee93296ebbe4ca2297aad44f50fb5bbeeb4da5594b7dfabbf8250b06807",
+      "resultIntentKind": "Elsa.Bpmn.NativeWorkResult.v1",
+      "resultInputId": "native-result:6532beb67e8086a03ac29a72aab36385cbb60d89f3f5db896b9031fd982745c5"
+    },
+    "sourceOutboxItemId": "commit:round9:29de29f42f844e75b3126deca1c07ac2:cancel:bpmn-native-result:66ce17694808bc66206aafde3d48cf03e9321f06258488a39f2c45fb9717ce0f",
+    "status": 5,
+    "completion": null,
+    "faultCode": null,
+    "cancellationSources": []
+  },
+  "snapshots": [
+    {
+      "path": "scope-cancel.sqlite.gz",
+      "sha256": "15009c33d33f2950595037008a9f8bd37d7e75303eb6298cf9427b86939ac07e",
+      "decodedSha256": "2621cbb6578427390b22a9c5beab486dc50c90784bc3e5dd7ed341f306874e92",
+      "integrity": "ok"
+    },
+    {
+      "path": "drain-inner-cancel.sqlite.gz",
+      "sha256": "06830ca0fd051c9131e9eeaab9c290f9800323e39d8444754e87b548516087d9",
+      "decodedSha256": "c14f36da5d62adb8170bd63e8c2a9cd1091118dc6726787516b71082df85cb54",
+      "integrity": "ok"
+    },
+    {
+      "path": "defer-scope-cancel.sqlite.gz",
+      "sha256": "c2c897a3fa660831b5217991db67ab4501933209fda83cb883f464d5c2ee12ff",
+      "decodedSha256": "66acf95b47081d07f31b6a126abc00a2a10a9a844eac87b8eee3efee449d726a",
+      "integrity": "ok"
+    },
+    {
+      "path": "deliver-worker-result.sqlite.gz",
+      "sha256": "87a7a76fdc45f7cc7c2c0a4f1ac94361c8108a33c1cc1633cafcc49f7487773c",
+      "decodedSha256": "f19abce8444b42284483f511018039a48e39dd4d9cd6a53ab348a55191f4ecb4",
+      "integrity": "ok"
+    },
+    {
+      "path": "whole-worker-cancel.sqlite.gz",
+      "sha256": "1bcc1c37d664356275f33b7ea7922aba34a68220a38156f0e47096d0d45081fd",
+      "decodedSha256": "a601e40cb1624b64d7590c7410ce2ece28d12070737a5dded5f1f273e7a1acff",
+      "integrity": "ok"
+    },
+    {
+      "path": "drain-outer-result.sqlite.gz",
+      "sha256": "0260da83d0e3025fc683762bbbc5764269e9655eb0b0e2c0b6ccf1f2d1732d65",
+      "decodedSha256": "ac61c1b7416d4ae195a2cbeb4975bb85cb817b91a802c8e941f985285af51b75",
+      "integrity": "ok"
+    },
+    {
+      "path": "deliver-scope-cancel.sqlite.gz",
+      "sha256": "94c7d47b8d2bd1eaa2d5fb7ff346e1303b6d77957f13e89b052cc98678956c5e",
+      "decodedSha256": "34f79570f4799ec9aa258d6fff3a49ab26f6e86a9094f9efd6a54cb1fce2080d",
+      "integrity": "ok"
+    },
+    {
+      "path": "before.sqlite.gz",
+      "sha256": "b3fedbb55edef97cd7e24834e13f9b0d730974e46739059112947b7e2d539a72",
+      "decodedSha256": "079ac47d8c9b1ef90a48390604e852d680d2079487e6378a2ad5d1083de79491",
+      "integrity": "ok"
+    }
+  ]
+}

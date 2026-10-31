@@ -1,0 +1,27 @@
+[
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-8/actual-legacy-cancel-before-fix/manifest.json",
+    "assets": 15,
+    "mismatches": []
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-8/corrections/transport/manifest.json",
+    "assets": 6,
+    "mismatches": []
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-8/corrections/qualification/manifest.json",
+    "assets": 98,
+    "mismatches": []
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/3e93e06d9/manifest.json",
+    "assets": 174,
+    "mismatches": []
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json",
+    "assets": 104,
+    "mismatches": []
+  }
+]

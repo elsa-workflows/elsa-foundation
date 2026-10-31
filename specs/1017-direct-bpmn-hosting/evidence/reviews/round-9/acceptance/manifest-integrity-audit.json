@@ -1,0 +1,260 @@
+[
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/baseline/manifest.json",
+    "assetReferences": 104,
+    "closedStores": [
+      {
+        "path": "partial-forks/design.sqlite",
+        "gzipLayers": 0,
+        "sha256": "73984412998c1f418f52b422e279402e2e9b01cd240c50d67dcb8efd5c306d6e"
+      },
+      {
+        "path": "partial-forks/runtime.sqlite",
+        "gzipLayers": 0,
+        "sha256": "494db0de530ad83335c7ba5c9bb65b2fd2bff9f2ae3cd2cdef6dac8baa6fa5cb"
+      },
+      {
+        "path": "legacy-controls/runtime.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "c4dcab66a693e1e28520f81df287200b3d91324290e386222c7d6ff539e307bc"
+      },
+      {
+        "path": "legacy-controls/design.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "fdd2380accab14587c603a635a84df404ae0d9306bcd8f2892560e78c18e1be5"
+      },
+      {
+        "path": "native-parents/runtime.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "8a903ba228baca4c815843e23686ecdc6c789739373e7c8986a60efeadacf0e7"
+      },
+      {
+        "path": "native-parents/design.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "083a15d0b0c8b5693448ae650f1e134aec4ad66ee8d1e533367f4ce18e4f7366"
+      },
+      {
+        "path": "called-ack/notice-held.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "b65fb08f0195855d245a4e49fc37cbb1d0fee8ecdf8aa5b373df6571d7ac9f23"
+      },
+      {
+        "path": "called-ack/terminal-held.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "1a3ef138229fd69f06c4d27eb6ecaf61157895a4faf134e6bb3171d48a37a647"
+      },
+      {
+        "path": "broadcast/after-cohort.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "311ba0112bdd16d5230b7db16f583c3116e9245e4b71004893610e5e5b1cb420"
+      },
+      {
+        "path": "broadcast/before-selection.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "4e0196ca97faa9cda136f320c7b2c6581c353593593fc78f1fccd5906c45b7ec"
+      },
+      {
+        "path": "broadcast/empty-cohort.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "750e5fa8db93ac6aa1c0d1f6893aa9525e16c314ee3b69ed5b69767687720b72"
+      },
+      {
+        "path": "broadcast/after-resume.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "cccc0662754866a6cd76cf805d29198306638552297a67b69cfc75dba54c5a52"
+      },
+      {
+        "path": "studio/runtime.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "4a46cf7dd2ba7a9a3c3a482b5afe5dc84d3c6951575849c5ed9efb913252f0b1"
+      },
+      {
+        "path": "studio/design.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "5cc4ec0511e723cb27a679e22e53945860d66d7c5b30949399f9ae289a569afd"
+      },
+      {
+        "path": "multi-instance-and-studio/runtime.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "c62347ebb3cde510f07c2848eaf0b58c403c92ac605d23f78dfffcb167ea7540"
+      },
+      {
+        "path": "multi-instance-and-studio/design.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "b4dabf4f0a1c8bb03ec598023af350d59318fba4db472ab85f0dfc773aef0a0f"
+      },
+      {
+        "path": "native-parent-pending/sequence-durable.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "42ba933efd4f8e8d75bec9df2bfdcf5c9e97a36fa8baa5173c45e62fffa7ea95"
+      },
+      {
+        "path": "native-parent-pending/flowchart-durable.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "c498006eb9f5a6abddbb6f56ca921f072b8847556cbd3de2f4b74a5b19704422"
+      },
+      {
+        "path": "native-parent-pending/compensationscope-durable.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "01a653c07564b12377fb10b92f37b1a01e5081bc6ca718753fb6ebf4b8ce804e"
+      },
+      {
+        "path": "native-parent-pending/sequence-balanced.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "0b6952d80b42b5e79e2f00389dd5185af09096074a913769d01b7ee00008ab3e"
+      },
+      {
+        "path": "native-parent-pending/flowchart-balanced.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "1c32b03bf03848bfd7bd35e6c3e8e6b1c7ae237cb6e5321dd1ae1333d288c703"
+      },
+      {
+        "path": "native-parent-pending/compensationscope-balanced.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "f38f7fef99755d53994805f78de33de002d65c8bf771cf7dd6472fd0f7a4c580"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-8/actual-legacy-cancel-before-fix/manifest.json",
+    "assetReferences": 15,
+    "closedStores": [
+      {
+        "path": "parent-cancel-consumed.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "e3260801482ec542842552f9267a8fd66a35ac4be49bd228a1cc6bd2b6172e09"
+      },
+      {
+        "path": "original.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "1d238bcb72f0c64fb1f0ce5db78488673dcb05c2dda5ac140e5a8ecc8d2c4ac5"
+      },
+      {
+        "path": "embedded-cancel-delivered.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "53bcf02ad8ad487e45a195731c1462c5c6961c866b4fac5cce9182aac101f9f0"
+      },
+      {
+        "path": "parent-cancel-queued.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "797f374eb37d6bc8d06461bd08fcc3da4ace6b80b4452853c302a09ec5575666"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-8/corrections/transport/manifest.json",
+    "assetReferences": 6,
+    "closedStores": [
+      {
+        "path": "deferred-cancel-runtime.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "98a5f63d9ffaa48615e086b88da09cb15455d77328bbcad4cbb6bbe009f3c9d7"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-8/corrections/qualification/manifest.json",
+    "assetReferences": 98,
+    "closedStores": [
+      {
+        "path": "actual-five/old-admitted-fault/completed-runtime.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "92f8aeed4a76ac8fbb18db0632676fd76bf443bc8549decd193573db97fb9340"
+      },
+      {
+        "path": "actual-five/old-admitted-fault/retained-runtime.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "92f8aeed4a76ac8fbb18db0632676fd76bf443bc8549decd193573db97fb9340"
+      },
+      {
+        "path": "actual-five/old-admitted-waiting-fault/completed-runtime.sqlite.gz.gz",
+        "gzipLayers": 2,
+        "sha256": "480e1ffe7a207b9d7f9604ca377c8383398c862ec1258fdd9fd61abe45dba16c"
+      },
+      {
+        "path": "actual-five/old-admitted-waiting-fault/retained-runtime.sqlite.gz.gz",
+        "gzipLayers": 2,
+        "sha256": "480e1ffe7a207b9d7f9604ca377c8383398c862ec1258fdd9fd61abe45dba16c"
+      },
+      {
+        "path": "actual-five/old-cancel-before-parent-ack-fault/completed-runtime.sqlite.gz.gz",
+        "gzipLayers": 2,
+        "sha256": "00c8c6e1d77c5411b660f1fea70bf32400d36b909d629e7b3874a2593937214b"
+      },
+      {
+        "path": "actual-five/old-cancel-before-parent-ack-fault/retained-runtime.sqlite.gz.gz",
+        "gzipLayers": 2,
+        "sha256": "00c8c6e1d77c5411b660f1fea70bf32400d36b909d629e7b3874a2593937214b"
+      },
+      {
+        "path": "actual-five/old-pending-parent-fault/completed-runtime.sqlite.gz.gz",
+        "gzipLayers": 2,
+        "sha256": "0aab1f5cd69287898a0a3a47ccb4788692fa3ace96cd3a486e4562a3867960ff"
+      },
+      {
+        "path": "actual-five/old-pending-parent-fault/retained-runtime.sqlite.gz.gz",
+        "gzipLayers": 2,
+        "sha256": "0aab1f5cd69287898a0a3a47ccb4788692fa3ace96cd3a486e4562a3867960ff"
+      },
+      {
+        "path": "actual-five/old-unadmitted-fault/completed-runtime.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "ddb56affaf6d1fcf7e5027e82acde268e30af8601e7f9ce07d5aadca598d20e8"
+      },
+      {
+        "path": "actual-five/old-unadmitted-fault/retained-runtime.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "ddb56affaf6d1fcf7e5027e82acde268e30af8601e7f9ce07d5aadca598d20e8"
+      },
+      {
+        "path": "whole44-selected/old-cancel-before-parent-ack-fault/completed-runtime.sqlite.gz.gz",
+        "gzipLayers": 2,
+        "sha256": "9f767f8c444bd7a05659e1e0a6b4e2a1240567061f91a4b655cf851bb9966d00"
+      },
+      {
+        "path": "whole44-selected/old-cancel-before-parent-ack-fault/retained-runtime.sqlite.gz.gz",
+        "gzipLayers": 2,
+        "sha256": "9f767f8c444bd7a05659e1e0a6b4e2a1240567061f91a4b655cf851bb9966d00"
+      },
+      {
+        "path": "whole44-selected/nested-cancel/recovered-runtime.sqlite.gz.gz",
+        "gzipLayers": 2,
+        "sha256": "7ff3aca364e9eba5cf46af641eafa754afd61ab4f9f4877b89bfcacffac6a5b7"
+      },
+      {
+        "path": "whole44-selected/nested-cancel/retained-runtime.sqlite.gz.gz",
+        "gzipLayers": 2,
+        "sha256": "7ff3aca364e9eba5cf46af641eafa754afd61ab4f9f4877b89bfcacffac6a5b7"
+      },
+      {
+        "path": "whole44-selected/old-unrepresentable-timer/completed-runtime.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "c42e068813a39a6d05ff32fd6847877a97e9ecb8ba02ee915028b94869dd9160"
+      },
+      {
+        "path": "whole44-selected/old-unrepresentable-timer/fault-and-wait-runtime.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "7eb5e2fbd69777eedac206aa22fd6950abd25e76d7db5fcf4f288c3d544ffe30"
+      },
+      {
+        "path": "whole44-selected/old-unrepresentable-timer/retained-runtime.sqlite.gz",
+        "gzipLayers": 1,
+        "sha256": "c42e068813a39a6d05ff32fd6847877a97e9ecb8ba02ee915028b94869dd9160"
+      },
+      {
+        "path": "whole44-selected/template-design-upgrade/upgraded-design.sqlite.gz.gz",
+        "gzipLayers": 2,
+        "sha256": "51caed5472b28e95e1cc58221b0fe39d94fe0e0bb2274d8d6fff5d91f5af9659"
+      },
+      {
+        "path": "whole44-selected/template-design-upgrade/upgraded-runtime.sqlite.gz.gz",
+        "gzipLayers": 2,
+        "sha256": "4d819c9ff1c1ed63af0f4da94823ada506669ad95aac125f756c1dc84de73639"
+      }
+    ],
+    "errors": []
+  }
+]

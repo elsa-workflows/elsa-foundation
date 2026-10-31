@@ -1,0 +1,9 @@
+{
+  "originalDecodedSha256": "0a5ea64058dcdb950fdda9e5b792264ceec2f6ca19fa9398a7733f6c62ea097e",
+  "portableBackupDecodedSha256": "1d238bcb72f0c64fb1f0ce5db78488673dcb05c2dda5ac140e5a8ecc8d2c4ac5",
+  "sameFileBytes": false,
+  "identicalCompleteSchema": true,
+  "identicalRowsInEveryTable": true,
+  "tablesCompared": 38,
+  "initialAuditAssumption": "A byte comparison of a provider backup with its source failed; provider backup file bytes differ. No product behavior is inferred from that assertion. Complete schema/row comparison is the appropriate unchanged-input check."
+}

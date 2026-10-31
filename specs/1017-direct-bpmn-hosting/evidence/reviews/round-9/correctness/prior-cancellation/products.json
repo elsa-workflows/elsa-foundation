@@ -1,0 +1,22 @@
+[
+  {
+    "name": "Elsa.Activities.Bpmn",
+    "source": "1.0.0\u002B20bca048737cdbcceb95cc4541643077d3a307a5",
+    "sha256": "dcd427bbdd2bf59d45e2afd9e7a11caeb92ccf1f6667132d030a9bae1f14bef8"
+  },
+  {
+    "name": "Elsa.Workflows.Runtime.Core",
+    "source": "1.0.0\u002B20bca048737cdbcceb95cc4541643077d3a307a5",
+    "sha256": "edafd05c5bf6f4d39c621392850bada6bcd15d46652b17051c4913469c268964"
+  },
+  {
+    "name": "Elsa.Workflows.Runtime",
+    "source": "1.0.0\u002B20bca048737cdbcceb95cc4541643077d3a307a5",
+    "sha256": "f839c5d819cb525d572bb4bac11af16c5694ac4e8712251b4ed8ff3d614e4104"
+  },
+  {
+    "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+    "source": "1.0.0\u002B20bca048737cdbcceb95cc4541643077d3a307a5",
+    "sha256": "88ffac38b0bf6eb78893353eeae18524430eb932a5c6d5e46046a657024fd4a3"
+  }
+]

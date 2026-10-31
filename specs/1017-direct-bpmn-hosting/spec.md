@@ -4,9 +4,9 @@
 
 **Created**: 2026-10-28
 
-**Status**: Implemented
+**Status**: In progress
 
-**Delivery**: The [round8 correction qualification](evidence/reviews/round-8/corrections/README.md) evidences runtime acceptance and the preserved saved Studio scope at their recorded sources. Implemented takes effect at this implementation merge under the lifecycle policy. Clean exact-head review,required CI,protected merge and resulting-main remain open; broader program acceptance is separate.
+**Delivery**: [Complete-PR round9](evidence/reviews/round-9/README.md) at ca1b3ea8/base d63e is not clean: correctness C1 identifies one P2 omitted prior-checkpoint cancellation source. Native scope cancellation remains physically owed, but a later Cancelled worker result has an empty current-checkpoint inventory and settles its outer model prematurely. The author independently repeated the normal production-port failure; eight complete original stores include the authentic queued result before consumption. This is a derived SDK fixture, not a new actual-host/ETL acceptance run. Standards and acceptance have no additional findings. Nine full rounds completed,none clean;16total authorized,next10 after correction and affected recovery qualification. T041/T043/T044 reopen and spec is In progress. Existing source-bound Studio and backend positives retain their limits; T042 and earlier owner decisions remain settled. Broader acceptance and existing deferrals stay open.
 
 **Input**: Deliver existing [#2898](https://github.com/elsa-workflows/elsa-foundation/issues/2898) within [program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892), after verified #2735 adoption: direct and embedded BPMN hosting, restart and operational races, real recoverable pipeline invocation, and supported human-task/incident commands. Preserve authoring and saved executions. Broader operational and Studio acceptance remains [#2907](https://github.com/elsa-workflows/elsa-foundation/issues/2907).
 

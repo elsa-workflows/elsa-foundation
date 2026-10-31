@@ -1,0 +1,22 @@
+[
+  {
+    "path": "Essentials",
+    "unchangedFrom20bca": true,
+    "differences": ""
+  },
+  {
+    "path": "Extensions",
+    "unchangedFrom20bca": true,
+    "differences": ""
+  },
+  {
+    "path": "Studio",
+    "unchangedFrom20bca": true,
+    "differences": ""
+  },
+  {
+    "path": "tools/bpmn",
+    "unchangedFrom20bca": true,
+    "differences": ""
+  }
+]
