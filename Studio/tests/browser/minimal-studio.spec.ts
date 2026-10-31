@@ -4,12 +4,12 @@ import axe from "axe-core";
 const presets = [{ name: "Porcelain", id: "builtin:porcelain", mode: "light" }, { name: "Atelier", id: "builtin:atelier", mode: "light" }, { name: "Graphite", id: "builtin:graphite", mode: "dark" }];
 async function preset(page: Page, name = "Atelier", width = 1440) {
   await page.setViewportSize({ width, height: 960 });
-  await page.goto("/minimal-studio.html?view=appearance&visual-study=1");
+  await page.goto("/minimal-studio.html?screen=appearance&visual-study=1");
   await page.getByRole("radiogroup", { name: "Studio preset", exact: true }).getByRole("radio", { name, exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-workspace-style", "minimal");
 }
 async function view(page: Page, name: string, extra = "") {
-  await page.goto(`/minimal-studio.html?view=${name}&visual-study=1${extra}`);
+  await page.goto(`/minimal-studio.html?screen=${name}&visual-study=1${extra}`);
 }
 
 test("Atelier keeps the account readable in top navigation and renders its small selected-nav accent", async ({ page }) => {
@@ -137,6 +137,113 @@ test("a public UI consumer opts into Minimal without host CSS", async ({ page })
   await row.focus();
   await row.press("Enter");
   await expect(row).toHaveAttribute("aria-selected", "true");
+});
+
+for (const item of presets) test(`${item.name} keeps long folder trees beside the full library view`, async ({ page }, testInfo) => {
+  await preset(page, item.name);
+  const navigation = page.getByRole("complementary", { name: "Workflow folders", exact: true });
+  for (const treeHeight of ["short", "tall"]) {
+    await view(page, "library", `&folder-layout=1${treeHeight === "tall" ? "&tall-folders=1" : ""}`);
+    const folder = navigation.locator('[data-folder-id="finance"]');
+    await folder.focus();
+    await folder.press("ArrowRight");
+    const child = navigation.locator('[data-folder-id="layout-child"]');
+    await expect(child).toBeVisible();
+    await folder.press("ArrowRight");
+    await expect(child).toBeFocused();
+    const table = page.getByRole("region", { name: "Workflow definitions table", exact: true });
+    await expect(table).toBeVisible();
+    for (const width of [1440, 1280]) {
+      await page.setViewportSize({ width, height: 960 });
+      for (const filtersOpen of [false, true]) {
+        if (filtersOpen) await page.getByRole("button", { name: "Filters", exact: true }).click();
+        const bounds = await navigation.boundingBox();
+        const tableBounds = await table.boundingBox();
+        expect(tableBounds!.x).toBeGreaterThanOrEqual(bounds!.x + bounds!.width);
+        const controls = await page.getByRole("region", { name: "Workflow library organization", exact: true }).boundingBox();
+        expect(Math.abs(controls!.x - tableBounds!.x)).toBeLessThanOrEqual(1);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+        if (filtersOpen) await page.getByRole("button", { name: "Filters", exact: true }).click();
+      }
+      for (const row of [folder.locator(":scope > .wf-folder-tree-folder"), child.locator(":scope > .wf-folder-tree-folder")]) {
+        expect((await row.boundingBox())!.height).toBeLessThanOrEqual(34);
+      }
+      const folderBounds = await navigation.boundingBox();
+      for (const row of await navigation.locator(".wf-folder-tree-row").all()) {
+        const bounds = await row.boundingBox();
+        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(folderBounds!.x + folderBounds!.width);
+      }
+      const label = folder.locator(".wf-folder-tree-label").first();
+      await expect(label).toHaveAttribute("title", "Customer operations and international support");
+      await expect(label).toHaveText("Customer operations and international support");
+      await page.screenshot({ path: testInfo.outputPath(`${item.name}-${treeHeight}-folder-layout-${width}.png`), fullPage: true });
+    }
+  }
+  await page.setViewportSize({ width: 320, height: 960 });
+  await expect(navigation).toBeHidden();
+  await page.getByRole("button", { name: "Folders", exact: true }).click();
+  const drawer = page.getByRole("dialog", { name: "Workflow folders", exact: true });
+  await expect(drawer).toBeVisible();
+  await expect(drawer.locator('[data-folder-id="layout-child"]')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+});
+
+test("the supported sixteen folder levels retain bounded labels and tree semantics", async ({ page }, testInfo) => {
+  await preset(page);
+  await view(page, "library", "&folder-layout=1&deep-folders=1");
+  const navigation = page.getByRole("complementary", { name: "Workflow folders", exact: true });
+  const id = (depth: number) => depth === 0 ? "finance" : depth === 1 ? "layout-child" : `layout-depth-${depth}`;
+  for (let depth = 0; depth < 15; depth++) {
+    const parent = navigation.locator(`[data-folder-id="${id(depth)}"]`);
+    await parent.focus();
+    await parent.press("ArrowRight");
+    await expect(navigation.locator(`[data-folder-id="${id(depth + 1)}"]`)).toBeVisible();
+  }
+  await expect(navigation.getByRole("treeitem")).toHaveCount(18);
+  const checkBounds = async (container: import("@playwright/test").Locator) => {
+    const boundary = await container.boundingBox();
+    for (const row of await container.locator(".wf-folder-tree-row").all()) {
+      const bounds = await row.boundingBox();
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(boundary!.x + boundary!.width);
+      expect(bounds!.height).toBeLessThanOrEqual(34);
+    }
+    for (const label of await container.locator(".wf-folder-tree-label").all()) {
+      await expect(label).toBeVisible();
+      expect((await label.boundingBox())!.width).toBeGreaterThanOrEqual(40);
+    }
+  };
+  await checkBounds(navigation);
+  await page.screenshot({ path: testInfo.outputPath("atelier-deep-folders-1440.png"), fullPage: true });
+  await page.setViewportSize({ width: 320, height: 960 });
+  await page.getByRole("button", { name: "Folders", exact: true }).click();
+  const drawer = page.getByRole("dialog", { name: "Workflow folders", exact: true });
+  await expect(drawer.getByRole("treeitem")).toHaveCount(18);
+  await checkBounds(drawer);
+});
+
+test("Linen keeps the library beside folders with contained table scrolling", async ({ page }) => {
+  await preset(page);
+  await page.getByRole("radiogroup", { name: "Workspace style", exact: true }).getByRole("radio", { name: "Linen", exact: true }).click();
+  await view(page, "library", "&folder-layout=1");
+  const navigation = page.getByRole("complementary", { name: "Workflow folders", exact: true });
+  const table = page.getByRole("region", { name: "Workflow definitions table", exact: true });
+  await expect(table).toBeVisible();
+  expect((await table.boundingBox())!.x).toBeGreaterThanOrEqual((await navigation.boundingBox())!.x + (await navigation.boundingBox())!.width);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+});
+
+test("a host without folders keeps its full-width browse content", async ({ page }) => {
+  await preset(page);
+  await view(page, "library", "&folders=unavailable");
+  const table = page.getByRole("region", { name: "Workflow definitions table", exact: true });
+  await expect(table).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Workflow folders", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("searchbox", { name: "Search all workflows", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Workflow library organization", exact: true })).toBeVisible();
+  const list = await page.locator(".wf-definitions-list").boundingBox();
+  const bounds = await table.boundingBox();
+  expect(Math.abs(bounds!.x - list!.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(bounds!.width - list!.width)).toBeLessThanOrEqual(1);
 });
 
 for (const item of presets) for (const width of [320, 1440]) test(`${item.name} integrates folders, tags, favorites and saved views at ${width}px`, async ({ page }, testInfo) => {
