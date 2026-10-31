@@ -1,0 +1,36 @@
+{
+  "lastWholeSuiteSource": "04c2b53adf7b8eeda6cdf2c879f697b867fc5ad2",
+  "currentSource": "4dc934c444705ddf40707b8eeb1991e1949fefa9",
+  "unchangedQualifiedSurfaces": [
+    {
+      "path": "Essentials/src/Workflows/Runtime",
+      "changedCodeFiles": [],
+      "otherChanges": []
+    },
+    {
+      "path": "Essentials/src/Workflows/Design",
+      "changedCodeFiles": [],
+      "otherChanges": []
+    },
+    {
+      "path": "Essentials/src/Activities/DispatchWorkflow",
+      "changedCodeFiles": [],
+      "otherChanges": []
+    },
+    {
+      "path": "Extensions/Etl",
+      "changedCodeFiles": [],
+      "otherChanges": []
+    },
+    {
+      "path": "Essentials/tests/Workflows/Runtime",
+      "changedCodeFiles": [],
+      "otherChanges": []
+    },
+    {
+      "path": "Essentials/tests/Workflows/Design",
+      "changedCodeFiles": [],
+      "otherChanges": []
+    }
+  ]
+}

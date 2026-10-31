@@ -1,0 +1,29 @@
+{
+  "observedAtUtc": "2026-10-31T02:22:07.011288+00:00",
+  "sourceRevision": "4dc934c444705ddf40707b8eeb1991e1949fefa9",
+  "processes": [
+    {
+      "role": "workbench",
+      "processId": 80006,
+      "controllerProcessId": 79997,
+      "started": "Sat Oct 31 03:20:45 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Workbench.dll",
+      "assemblySha256": "fff066abdbbf64451ada6c76961aeec0f75a94628b53fcb526fd9777a4b3d06d"
+    },
+    {
+      "role": "studio",
+      "processId": 80020,
+      "controllerProcessId": 79997,
+      "started": "Sat Oct 31 03:20:48 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Studio.Web.dll",
+      "assemblySha256": "b8b11fd0a33368669cfb218eb65d8c70cf8cc2a6621d285844cb6641b394ab7d"
+    }
+  ],
+  "executionIds": [
+    "14nDLeNijsP",
+    "14nDMSWR1sn"
+  ],
+  "commandWrittenAfterObservation": true
+}

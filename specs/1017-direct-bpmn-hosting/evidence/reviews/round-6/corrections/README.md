@@ -1,5 +1,7 @@
 # Round 6 corrections
 
+Latest: [main dec598d99 adoption qualification](main-adoption-dec598d99/README.md) is complete at4dc934c44, including both full saved Studio families and actual old-input recovery. Earlier source2191 evidence below retains its source. T041/T043 verified; owner review route and other delivery holds remain open.
+
 [Committed-source qualification](qualification-2191/README.md) now passes499 BPMN tests atdaac,42 actual host tests at2191,zero skips, and12 public binary API comparisons. The original accepted timer and a normal direct restart journey are proved through real SIGKILLs and closed stores. New main dec598d99 Identity/Studio adoption and its affected qualification remain due; no extra full review is authorized yet.
 
 ## Initial development checkpoint

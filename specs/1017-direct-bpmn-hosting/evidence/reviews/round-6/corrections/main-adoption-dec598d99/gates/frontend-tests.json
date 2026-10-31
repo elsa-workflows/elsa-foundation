@@ -1,0 +1,90 @@
+{
+  "source": "4dc934c444705ddf40707b8eeb1991e1949fefa9",
+  "exitCode": 0,
+  "passed": 4012,
+  "files": 307,
+  "packagesWithTestFiles": 19,
+  "noTestFileScripts": [
+    ".../Elsa.Studio.Hosting/StudioSdk test: No test files found, exiting with code 0",
+    ".../Elsa.Studio.Hosting/StudioUi test: No test files found, exiting with code 0",
+    "examples/vanilla-host test: No test files found, exiting with code 0"
+  ],
+  "summaryRows": [
+    {
+      "line": ".../Elsa.Studio.CodeEditor/Client test:       Tests  45 passed (45)",
+      "passed": 45
+    },
+    {
+      "line": ".../Elsa.Studio.ConsoleStream/Client test:       Tests  15 passed (15)",
+      "passed": 15
+    },
+    {
+      "line": ".../studio/Elsa.Studio.Attention/Client test:       Tests  9 passed (9)",
+      "passed": 9
+    },
+    {
+      "line": ".../Client test:       Tests  33 passed (33)",
+      "passed": 33
+    },
+    {
+      "line": ".../Elsa.Studio.Connections/Client test:       Tests  58 passed (58)",
+      "passed": 58
+    },
+    {
+      "line": ".../Client test:       Tests  20 passed (20)",
+      "passed": 20
+    },
+    {
+      "line": ".../Client test:       Tests  8 passed (8)",
+      "passed": 8
+    },
+    {
+      "line": ".../Etl/studio/Elsa.Studio.Etl/Client test:       Tests  69 passed (69)",
+      "passed": 69
+    },
+    {
+      "line": ".../Client test:       Tests  7 passed (7)",
+      "passed": 7
+    },
+    {
+      "line": ".../Client test:       Tests  1 passed (1)",
+      "passed": 1
+    },
+    {
+      "line": ".../Elsa.Studio.FeatureManagement/Client test:       Tests  72 passed (72)",
+      "passed": 72
+    },
+    {
+      "line": ".../studio/Elsa.Studio.Secrets/Client test:       Tests  71 passed (71)",
+      "passed": 71
+    },
+    {
+      "line": ".../Client test:       Tests  16 passed (16)",
+      "passed": 16
+    },
+    {
+      "line": ".../Elsa.Studio.Dashboard/Client test:       Tests  76 passed (76)",
+      "passed": 76
+    },
+    {
+      "line": ".../Elsa.Studio.ExtensionBuilder/Client test:       Tests  52 passed (52)",
+      "passed": 52
+    },
+    {
+      "line": ".../Elsa.Studio.Hosting/Client test:       Tests  675 passed (675)",
+      "passed": 675
+    },
+    {
+      "line": ".../Elsa.Studio.Workflows/Client test:       Tests  2775 passed (2775)",
+      "passed": 2775
+    },
+    {
+      "line": "examples/react-host test:       Tests  3 passed (3)",
+      "passed": 3
+    },
+    {
+      "line": ".../Elsa.Studio.Weaver.Workflows/Client test:       Tests  7 passed (7)",
+      "passed": 7
+    }
+  ]
+}

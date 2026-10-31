@@ -1,0 +1,8 @@
+{
+  "combinedCommandExit": 1,
+  "controlTests": 13,
+  "controlFailures": 0,
+  "followingCommand": "python3 <DeliveryRecoveryRead.dll>",
+  "followingCommandOutcome": "Python rejected the .NET DLL encoding; product execution never began",
+  "correction": "Run the metadata reader through dotnet; succeeds and product hashes match. Standalone control invocation repeated below."
+}

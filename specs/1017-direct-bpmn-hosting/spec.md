@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-28
 
-**Status**: In progress — both round6 corrections pass source-bound BPMN/actual-host/API qualification. Adopted-main Identity/Studio compatibility, owner review-route decision and delivery gates remain open; six full reviews completed, none clean.
+**Status**: In progress — both round6 repairs and affected current-main host/Studio qualification are verified. The owner review-route decision and delivery gates remain open; six full reviews completed, none clean.
 
 **Input**: Deliver existing [#2898](https://github.com/elsa-workflows/elsa-foundation/issues/2898) within [program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892), after verified #2735 adoption: direct and embedded BPMN hosting, restart and operational races, real recoverable pipeline invocation, and supported human-task/incident commands. Preserve authoring and saved executions. Broader operational and Studio acceptance remains [#2907](https://github.com/elsa-workflows/elsa-foundation/issues/2907).
 
