@@ -111,5 +111,7 @@ jobs:
         with:
           name: weaver-package-evidence-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/weaver-evidence/
+          # The exporter already selects safe references, including hidden package metadata.
+          include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14
