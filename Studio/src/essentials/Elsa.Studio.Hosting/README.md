@@ -153,7 +153,7 @@ backend's session cookie: use the same site, or configure the identity host for 
 Studio does not override browser cookie policy or transfer cookies/tokens between backends.
 Anonymous sessions also omit cookies on Agent and Structured Logs SSE. Structured Logs uses the SDK response
 transport for anonymous streaming; a custom transport without `requestResponse` retains recent reads and reports
-live streaming unavailable. Anonymous Console connections use cookie-free long polling because browser-native
+live streaming unavailable. Anonymous backend and Studio-host Console connections use cookie-free long polling because browser-native
 WebSockets and EventSource cannot suppress same-origin cookies. Authenticated stream transports retain their existing contracts.
 
 Studio:BackendBaseUrl remains supported as the browser-facing **stable Studio-host identity authority**. When absent,

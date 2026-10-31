@@ -133,7 +133,12 @@ builder.Services.AddAuthentication();
 builder.Services.AddAuthorization();
 var tokenConnection = builder.Configuration.GetConnectionString("Tokens");
 if (string.IsNullOrWhiteSpace(tokenConnection)) throw new InvalidOperationException("Set the separate owned Tokens connection string.");
-builder.Services.AddDbContext<TokenDb>(options => { options.UseSqlite(tokenConnection); options.UseOpenIddict(); });
+builder.Services.AddDbContext<TokenDb>(options =>
+{
+    // Include the same SQLite serial-open guard as the ordinary persistence bindings (#2220).
+    Elsa.Persistence.EntityFramework.EfRelationalProviderBinding.UseSqlite(options, tokenConnection, "__EFMigrationsHistory");
+    options.UseOpenIddict();
+});
 builder.Services.AddOpenIddict().AddCore(options => options.UseEntityFrameworkCore().UseDbContext<TokenDb>());
 
 await using var app = builder.Build();

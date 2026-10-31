@@ -541,8 +541,8 @@ export function createConsoleConnectionOptions(context: StudioEndpointContext): 
   const headers = createSignalRHeaders(context.headers);
   const baseOptions: signalR.IHttpConnectionOptions = headers ? { headers } : {};
   // The shell decides the hub credential and hands it over as context.accessTokenFactory (a user JWT, the
-  // host management key, or none). The module is a dumb consumer: pass it straight through so WebSocket/SSE
-  // transports carry it as the access_token query parameter instead of degrading to long polling.
+  // host management key, or none). Authenticated contexts retain native transports with that token factory.
+  // Anonymous contexts, including the Studio host console, use cookie-free SDK polling.
   return context.accessTokenFactory
     ? { ...baseOptions, accessTokenFactory: context.accessTokenFactory }
     // Browser WebSocket/EventSource transports cannot omit same-origin cookies.

@@ -866,6 +866,13 @@ async function consumedIntentRemount() {
   };
   await page.goto(studio + witness.route);
   await expect(page.getByTestId("acme-home-revision")).toBeVisible();
+  const backendReference = new URL(page.url()).searchParams.get("backend");
+  need(backendReference, "The prepared backend must be explicit in native Studio resource URLs.");
+  const studioRoute = route => {
+    const url = new URL(route, studio);
+    url.searchParams.set("backend", backendReference);
+    return url.toString();
+  };
   const before = await owner("owner-before", witness.ownerEndpoint);
   result.ownerBefore = before.receipt;
   const selected = command(witness.readTool, {});
@@ -883,7 +890,7 @@ async function consumedIntentRemount() {
   // Use native SPA navigation so the App retaining the consumed shell intent survives.
   await page.getByLabel("Search modules", { exact: true }).fill("Features");
   await page.getByRole("link", { name: "Features", exact: true }).click();
-  await expect(page).toHaveURL(studio + "/features");
+  await expect(page).toHaveURL(studioRoute("/features"));
   await page.getByLabel("Search modules", { exact: true }).fill("");
   await page.getByRole("tab", { name: "Studio", exact: true }).click();
   const tokenResponse = await page.request.get(backend + "/_elsa/identity/token");
@@ -933,7 +940,7 @@ async function consumedIntentRemount() {
     providerId: bootstrapValue.data.provider.providerId, isAvailable: bootstrapValue.data.provider.isAvailable }));
   // Features contributes no Weaver capability. Verify that policy before moving
   // this same remounted dock to a route where an old retained intent could run.
-  await expect(page).toHaveURL(studio + "/features");
+  await expect(page).toHaveURL(studioRoute("/features"));
   await expect(dock().getByTestId("weaver-provider-status")).toContainText("No Weaver capabilities are enabled for this screen.");
   await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeDisabled();
   await expect(dock()).toHaveAttribute("aria-busy", "false");
@@ -941,7 +948,7 @@ async function consumedIntentRemount() {
     composerDisabled: await dock().getByLabel("Ask Weaver", { exact: true }).isDisabled(), busy: await dock().getAttribute("aria-busy") };
   result.evidence.push(retain("remount-features-state", featuresState));
   await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Workflows", exact: true }).click();
-  await expect(page).toHaveURL(studio + "/workflows/definitions");
+  await expect(page).toHaveURL(studioRoute("/workflows/definitions"));
   await expect(dock().getByLabel("Ask Weaver", { exact: true })).toBeEnabled();
   await expect(dock()).toHaveAttribute("aria-busy", "false");
   const workflowsState = { url: diagnosticUrl(page.url()), providerStatus: await dock().getByTestId("weaver-provider-status").innerText(),
