@@ -358,7 +358,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
         var file = Path.Combine(_contentRoot, "existing-theme.json");
         await File.WriteAllTextAsync(file, JsonSerializer.Serialize(new { themes = new[] { theme } }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
         _themeConfig.ThemesDirectory = file;
-        _themeConfig.ThemesMode = "DirectoryOnly";
+        _themeConfig.ThemesMode = StudioThemeSourceMode.DirectoryOnly;
         await RestartHostAsync();
         var store = await GetStoreAsync();
         Assert.Equal(id, store.DefaultThemeId);
