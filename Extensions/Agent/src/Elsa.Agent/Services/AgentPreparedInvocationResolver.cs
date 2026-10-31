@@ -34,7 +34,15 @@ internal sealed class AgentPreparedInvocationResolver(
             return (null, new("agent.disabled", "Current host policy disables this operation.", 403));
         if (session.Policy.RequiresApprovalForMutations && (proposal.ApprovedAt is null || proposal.ApprovedBy != session.ActorId))
             return (null, new("agent.proposal.approval_required", "Current session policy requires approval of the exact operation.", 409));
-        var tool = await registry.FindAsync(prepared.ToolName, cancellationToken);
+        IAgentTool? tool;
+        try { tool = await registry.FindAsync(prepared.ToolName, cancellationToken); }
+        catch (AgentContributionException)
+        {
+            // Catalog validation precedes module dispatch. Losing a declared disclosure owner
+            // is a concrete refusal, not an uncertain effect reported by the executor catch.
+            return (null, new("agent.proposal.executor_unavailable",
+                $"The prepared tool '{prepared.ToolName}' or disclosure source '{prepared.DisclosureSourceId}' is unavailable with its reviewed contract.", 409));
+        }
         if (tool is null || tool.Descriptor.ModuleId != prepared.ModuleId || tool.Descriptor.ContractVersion != prepared.ToolContractVersion
             || tool.Descriptor.DisclosureSourceId != prepared.DisclosureSourceId
             || tool.Descriptor.ExecutionLocation != prepared.ExecutionLocation || tool.Descriptor.Mutability != AgentToolMutability.Mutating)

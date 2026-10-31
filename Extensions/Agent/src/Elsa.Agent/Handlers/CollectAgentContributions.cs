@@ -201,12 +201,24 @@ internal sealed class CollectAgentCapabilities(IEnumerable<IAgentCapabilityProvi
 }
 
 /// <summary>The single Sequential tool aggregator over the existing installed tool contract.</summary>
-internal sealed class CollectAgentTools(IEnumerable<IAgentTool> tools) : IEventHandler<AgentToolsCollecting>
+internal sealed class CollectAgentTools(IEnumerable<IAgentTool> tools, IEnumerable<IAgentContextProvider> sources) : IEventHandler<AgentToolsCollecting>
 {
     public Task Handle(AgentToolsCollecting domainEvent, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        foreach (var tool in tools)
+        var installed = tools.ToArray();
+        // Registration integrity uses only public metadata. Context/disclosure behavior remains
+        // exclusively on AgentContextCollecting and is rechecked under current authority there.
+        var descriptors = sources.Select(source => source.Descriptor).ToArray();
+        foreach (var tool in installed)
+        {
+            var descriptor = tool.Descriptor;
+            var owners = descriptors.Where(source => source.Id == descriptor.DisclosureSourceId).ToArray();
+            if (string.IsNullOrWhiteSpace(descriptor.DisclosureSourceId) || owners.Length != 1
+                || owners[0].ModuleId != descriptor.ModuleId)
+                throw new AgentContributionException($"Agent tool '{descriptor.Name}' requires one installed disclosure source '{descriptor.DisclosureSourceId ?? "(missing)"}' owned by module '{descriptor.ModuleId}'.");
+        }
+        foreach (var tool in installed)
             domainEvent.Tools.Add(tool);
         return Task.CompletedTask;
     }

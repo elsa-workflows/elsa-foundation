@@ -23,6 +23,7 @@ public sealed class AgentCurrentToolAdmissionTests
     private const string ForbiddenOutcome = "MUTATION_OUTCOME_MUST_NOT_EXIST_AFTER_ADMISSION_CHANGES";
     private static readonly AgentResourceTarget Original = new(Module, "owned-resource", "original-resource", "revision-1");
     private static readonly AgentResourceTarget Other = new(Module, "owned-resource", "other-resource", "revision-2");
+    private static readonly AgentResourceTarget Section = new(Module, "owned-section", "authorized-section", "section-revision");
 
     [Theory]
     [InlineData("copilot")]
@@ -88,6 +89,28 @@ public sealed class AgentCurrentToolAdmissionTests
         fixture.AssertSecondCallAttempted();
     }
 
+    [Theory]
+    [InlineData("copilot")]
+    [InlineData("host-steps")]
+    [InlineData("host-batch")]
+    public async Task Adding_an_authorized_section_does_not_retarget_an_explicit_write_to_the_original_resource(string path)
+    {
+        using var fixture = new Fixture(path, retainEdit: true, changeTarget: false, addAuthorizedSection: true);
+
+        var events = await fixture.Run();
+
+        Assert.Equal(1, fixture.Read.Executions);
+        Assert.True(fixture.Source.ExpandedProjections > 0);
+        Assert.Equal(1, fixture.Write.Preparations);
+        Assert.Equal(1, fixture.Write.Executions);
+        Assert.Equal(Original, Assert.Single(fixture.Write.PreparedTargets));
+        Assert.Equal("changed-value", fixture.Resource.Values[Original.ResourceId!]);
+        Assert.Equal("other-original-value", fixture.Resource.Values[Other.ResourceId!]);
+        Assert.Contains(events, item => item.Payload is AgentToolResult { ToolName: WriteName, Succeeded: true, Receipt: not null });
+        Assert.DoesNotContain(events, item => item.Error is not null);
+        fixture.AssertSecondCallAttempted();
+    }
+
     private static void AssertNoMutationResult(IEnumerable<AgentStreamEvent> events)
     {
         Assert.DoesNotContain(events, item => item.Payload is AgentToolResult { ToolName: WriteName, Succeeded: true });
@@ -108,13 +131,14 @@ public sealed class AgentCurrentToolAdmissionTests
         internal SequenceProvider Provider { get; }
         internal SdkSession Sdk { get; } = new();
 
-        internal Fixture(string path, bool retainEdit, bool changeTarget)
+        internal Fixture(string path, bool retainEdit, bool changeTarget, bool addAuthorizedSection = false)
         {
             copilot = path == "copilot";
             Read = new(Resource);
             Write = new(Resource);
-            Source = new(Resource, retainEdit, changeTarget);
-            Provider = new(path == "host-batch");
+            Source = new(Resource, retainEdit, changeTarget, addAuthorizedSection);
+            Provider = new(path == "host-batch", addAuthorizedSection);
+            Sdk.ExplicitTarget = addAuthorizedSection;
             root = AgentTestServices.Create(services =>
             {
                 services.AddSingleton<IAgentTool>(Read);
@@ -202,10 +226,11 @@ public sealed class AgentCurrentToolAdmissionTests
         { [Original.ResourceId!] = "original-value", [Other.ResourceId!] = "other-original-value" };
     }
 
-    private sealed class ProjectionSource(Resource resource, bool retainEdit, bool changeTarget) : IAgentContextProvider
+    private sealed class ProjectionSource(Resource resource, bool retainEdit, bool changeTarget, bool addAuthorizedSection) : IAgentContextProvider
     {
         internal int PostReadProjections;
-        public AgentContextProviderDescriptor Descriptor { get; } = new(SourceId, Module, "*", ["scope.resource"], ["1"], ["owned-resource"]);
+        internal int ExpandedProjections;
+        public AgentContextProviderDescriptor Descriptor { get; } = new(SourceId, Module, "*", ["scope.resource"], ["1"], ["owned-resource", "owned-section"]);
         public ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
             => ValueTask.FromResult(new AgentContextContribution([Attachment(Original, [ReadScope, EditScope])], []));
         public ValueTask<AgentContextContribution> AdmitDisclosureAsync(AgentContextDisclosureRequest request, CancellationToken cancellationToken = default)
@@ -215,6 +240,12 @@ public sealed class AgentCurrentToolAdmissionTests
             var afterRead = resource.Reads > 0;
             if (afterRead) PostReadProjections++;
             IReadOnlyCollection<string> scopes = afterRead && !retainEdit ? [ReadScope] : [ReadScope, EditScope];
+            if (afterRead && addAuthorizedSection)
+            {
+                ExpandedProjections++;
+                return ValueTask.FromResult(new AgentContextContribution(
+                    [Attachment(Original, scopes), Attachment(Section, scopes) with { Id = "authorized-section" }], []));
+            }
             return ValueTask.FromResult(new AgentContextContribution([Attachment(afterRead && changeTarget ? Other : Original, scopes)], []));
         }
         private static AgentContextAttachment Attachment(AgentResourceTarget target, IReadOnlyCollection<string> scopes)
@@ -251,7 +282,9 @@ public sealed class AgentCurrentToolAdmissionTests
         public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
         {
             Preparations++;
-            var target = Assert.Single(invocation.Context, item => item.ModuleId == Module && item.Target is not null).Target!;
+            invocation.Arguments.TryGetValue("resourceId", out var resourceId);
+            var target = Assert.Single(invocation.Context, item => item.ModuleId == Module && item.Target is not null
+                && (resourceId is null || item.Target.ResourceId == resourceId.ToString())).Target!;
             PreparedTargets.Add(target);
             return Task.FromResult(AgentResult<AgentToolPreparation>.Success(AgentTestToolHelpers.Preparation(invocation, Descriptor) with { Target = target }));
         }
@@ -271,7 +304,7 @@ public sealed class AgentCurrentToolAdmissionTests
             mutability == AgentToolMutability.ReadOnly ? AgentRisk.ReadOnly : AgentRisk.ReviewRequired, "{\"type\":\"object\"}", [], [scope])
         { ModuleId = Module, DisclosureSourceId = SourceId, ResultType = "scope.result", ResultSchemaVersion = "1" };
 
-    private sealed class SequenceProvider(bool batch) : IAgentProvider
+    private sealed class SequenceProvider(bool batch, bool explicitTarget) : IAgentProvider
     {
         private readonly DeterministicAgentProvider inner = new();
         internal List<string> Attempted { get; } = [];
@@ -293,9 +326,10 @@ public sealed class AgentCurrentToolAdmissionTests
             }
             yield return new(Guid.NewGuid().ToString("N"), AgentStreamEventKind.Completed, null, null, null, DateTimeOffset.UtcNow);
         }
-        private static AgentStreamEvent Call(string id, string name, AgentRisk risk)
+        private AgentStreamEvent Call(string id, string name, AgentRisk risk)
             => new(Guid.NewGuid().ToString("N"), AgentStreamEventKind.ToolCallRequested, null, id, null, DateTimeOffset.UtcNow,
-                Payload: new AgentToolCallRequest(id, name, "{}", risk, false));
+                Payload: new AgentToolCallRequest(id, name, explicitTarget && name == WriteName
+                    ? JsonSerializer.Serialize(new { resourceId = Original.ResourceId }) : "{}", risk, false));
     }
 
     private sealed class SdkFactory(SdkSession session) : IGitHubCopilotClientFactory
@@ -316,6 +350,7 @@ public sealed class AgentCurrentToolAdmissionTests
         internal List<string> Attempted { get; } = [];
         internal List<string> CapturedTools { get; } = [];
         internal object? WriteReturn;
+        internal bool ExplicitTarget;
         public string SessionId => "current-admission-sdk-session";
         public string? WorkspacePath => null;
         public async IAsyncEnumerable<GitHubCopilotStreamEvent> SendAsync(string prompt, [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -326,7 +361,9 @@ public sealed class AgentCurrentToolAdmissionTests
             Attempted.Add(ReadName);
             await Assert.Single(captured, tool => tool.Name == ReadName).InvokeAsync(new AIFunctionArguments(new Dictionary<string, object?>()), cancellationToken);
             Attempted.Add(WriteName);
-            WriteReturn = await Assert.Single(captured, tool => tool.Name == WriteName).InvokeAsync(new AIFunctionArguments(new Dictionary<string, object?>()), cancellationToken);
+            var writeArguments = new Dictionary<string, object?>();
+            if (ExplicitTarget) writeArguments["resourceId"] = Original.ResourceId;
+            WriteReturn = await Assert.Single(captured, tool => tool.Name == WriteName).InvokeAsync(new AIFunctionArguments(writeArguments), cancellationToken);
             yield return new(GitHubCopilotStreamEventKind.Completed);
         }
         public Task AbortAsync(CancellationToken cancellationToken) => Task.CompletedTask;

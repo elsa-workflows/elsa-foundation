@@ -170,8 +170,8 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     return new(null, new("agent.tool.not_admitted", "This tool is not admitted for the current turn.", 403));
                 // An allowed projection can refresh evidence without authorizing this accepted
                 // turn to move to another resource or revision. Fresh intent must establish that.
-                if (TargetsChanged(descriptor.ModuleId, source.Context, prepared.Context)
-                    || TargetsChanged(descriptor.ModuleId, invocation.Context, prepared.Context))
+                if (OriginalTargetsMissing(descriptor.ModuleId, source.Context, prepared.Context)
+                    || OriginalTargetsMissing(descriptor.ModuleId, invocation.Context, prepared.Context))
                     return new(null, new("agent.tool.context_changed", "The admitted resource context changed. Submit fresh context before another operation.", 409));
                 return new(invocation with { Context = prepared.Context }, null);
             }, async (invocation, result, dispatchToken) =>
@@ -397,13 +397,13 @@ internal sealed class DefaultAgentTurnOrchestrator(
             throw new AgentContributionException("The session store did not retain complete disclosure provenance for the observed outcome.");
     }
 
-    private static bool TargetsChanged(string moduleId, IReadOnlyCollection<AgentContextAttachment> original,
+    private static bool OriginalTargetsMissing(string moduleId, IReadOnlyCollection<AgentContextAttachment> original,
         IReadOnlyCollection<AgentContextAttachment> current)
     {
         var before = original.Where(x => x.ModuleId == moduleId && x.Target is not null).Select(x => x.Target).ToArray();
         var after = current.Where(x => x.ModuleId == moduleId && x.Target is not null).Select(x => x.Target).ToArray();
-        return before.Any(x => !after.Any(y => AgentInvocationIntegrity.SameTarget(x, y)))
-            || after.Any(x => !before.Any(y => AgentInvocationIntegrity.SameTarget(x, y)));
+        // Authorized detail may add targets without moving the operation's original binding.
+        return before.Any(x => !after.Any(y => AgentInvocationIntegrity.SameTarget(x, y)));
     }
 
     private sealed record ToolInvocationAdmission(AgentToolInvocation? Invocation, AgentError? Error, bool StopProvider = false);

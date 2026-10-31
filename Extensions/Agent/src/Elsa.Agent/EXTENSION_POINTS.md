@@ -53,7 +53,7 @@ Known provider implementations:
 
 - **Kind:** Source; the existing interface name is retained. [Signature](../Core/Contracts/AgentContracts.cs): `Descriptor: AgentContextProviderDescriptor`, derived `ScopeKind`, and `CollectAsync(AgentContextRequest): ValueTask<AgentContextContribution>`.
 - **Register:** `services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentContextProvider, MyContextSource>())`.
-- **Consumed by:** the single `CollectAgentContext` handler for `AgentContextCollecting`. Modules register sources rather than additional fan-in handlers.
+- **Consumed by:** the single `CollectAgentContext` handler for `AgentContextCollecting`. `CollectAgentTools` reads only public descriptor metadata to validate installed tool-to-source ownership. Modules register sources rather than additional fan-in handlers.
 - **Ownership:** descriptor declares module, supported context kinds/schema versions, resource types and scope. The module admits/minimizes caller material, authorizes its own reads, supplies installed guidance and returns typed diagnostics. Caller origin/scopes are reset before source admission; only the installed source can contribute admitted scopes. `Descriptor.ScopeKind = "*"` opts an installed source into ambient collection for every request; it does not admit arbitrary owners, kinds, versions or permissions.
 - **Known implementations:** `DefaultWorkflowAgentContextProvider` (`Elsa.Agent.Workflows`) *(cross-domain)*; external `WidgetContextSource` (`Acme.Home.Weaver`) *(cross-domain — qualified package fixture, not shipped)*; private journey `NoteContextSource` (`Weaver.Journey.Backend`) *(cross-domain — source-composed fixture, not shipped)*.
 
@@ -68,7 +68,7 @@ Known provider implementations:
 
 - **Kind:** Installed-tool contribution. [Signature](../Core/Contracts/AgentToolContracts.cs): `Descriptor: AgentToolDescriptor`, `PrepareAsync(AgentToolInvocation): Task<AgentResult<AgentToolPreparation>>`, and `ExecuteAsync(AgentPreparedToolInvocation): Task<AgentResult<AgentToolResult>>`.
 - **Register:** `services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, MyTool>())`.
-- **Consumed by:** the single `CollectAgentTools` handler for `AgentToolsCollecting`, then the existing async `IAgentToolRegistry`. Duplicate names, missing owner/version and malformed input schemas fail discovery; per-turn context/current authority determine availability.
+- **Consumed by:** the single `CollectAgentTools` handler for `AgentToolsCollecting`, then the existing async `IAgentToolRegistry`. Duplicate names, missing owner/version, missing/ambiguous/foreign disclosure-source links and malformed input schemas fail discovery; per-turn context/current authority determine availability.
 - **Ownership:** the module validates canonical arguments, exact target/revision, required context and risk during side-effect-free preparation. It supplies versioned preview/result schemas and renderer identity, applies through its owning service/native transaction, rechecks resource constraints and returns actual read-back evidence. `AgentToolPreparation`, `AgentPreparedToolInvocation`, `AgentPayload`, `AgentResourceTarget` and `AgentEffectReceipt` are defined in [Core contribution models](../Core/Models/AgentContributionModels.cs); the generic engine freezes and binds preparation rather than defining module payload meaning. Both provider paths use the existing thin `AgentToolAIFunctions` bridge.
 - **Known implementations:** `WorkflowReadGraphTool` and `WorkflowSetDesignerPositionTool` (`Elsa.Agent.Workflows`) *(cross-domain)*; external `ReadWidgetTool` / `SetWidgetVisibilityTool` (`Acme.Home.Weaver`) *(cross-domain — qualified package fixture, not shipped)*; private journey `SetNoteTool` (`Weaver.Journey.Backend`) *(cross-domain — source-composed fixture, not shipped)*.
 
@@ -130,7 +130,8 @@ unavailable disclosure gate permissive. Current host policy also governs origina
 including history retained by a provider SDK, as well as the returned projection.
 Before each SDK callback or host batch operation, current admission and tools are rechecked. A
 projection that removes a scope cannot leave an older callback authorized. A changed owner resource
-identity or revision requires fresh intent rather than silently moving the accepted turn.
+identity or revision requires fresh intent rather than silently moving the accepted turn. Adding
+authorized detail targets while retaining the original binding is permitted.
 
 `AgentContextOptions.SourceTimeout` defaults to10seconds and requires a positive finite supported
 timer interval. Backend descriptors default `Required=true`. Optional collection faults/deadlines
