@@ -82,6 +82,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
         ownerNodeId={id}
         ownerLabel={nodeData.label}
         slots={nodeData.childSlots}
+        collections={nodeData.collectionSlots}
         onEnterSlot={nodeData.onEnterSlot}
       />
       <WorkflowNodeRuntimeBadges data={nodeData} />
