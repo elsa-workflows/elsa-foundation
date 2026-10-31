@@ -1,0 +1,14 @@
+{
+  "Identity": {
+    "Login": {
+      "ProductName": "Northstar Studio",
+      "Tagline": "Make room for possibility.",
+      "Description": "Thoughtful automation for the work that matters.",
+      "Layout": "split",
+      "Palette": "linen",
+      "Artwork": "ember",
+      "FocalX": 50,
+      "FocalY": 45
+    }
+  }
+}

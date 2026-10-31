@@ -128,3 +128,13 @@ D4); the async contexts are the only request authorization contexts.
 ## Opt-in external bearer normalization
 
 `Elsa.Foundation.Identity.Oidc` consumes `IClaimMappingStore` and `IClaimsNormalizer` for its default-false fixed-host bearer bridge. The store is explicitly supplied through the existing replacement-contract registration; opt-in activation requires exactly one normalizer descriptor. It filters internal input claims before matching and validates the single output identity, without changing shared normalizer semantics. It does not invoke `IPrincipalFactory` or mutate user/link stores. See the [owning OIDC README](../Oidc/README.md) and [canonical bearer contract](../../../../../specs/190-worker-oidc-normalization/contracts/bearer-normalization.md) for supported callbacks, ordinary persistence-scope agreement and trust enrollment.
+
+## ASP.NET Core Identity login presentation
+
+The optional `LoginPageOptions.Renderer` callback is a single presentation replacement owned by
+`Elsa.Foundation.Identity.AspNetCoreIdentity` (Layer 3), not a provider-neutral authentication contract.
+Its default is `LoginPage.Render`, configured through `Identity:Login`. Register once with
+`PostConfigure<LoginPageOptions>`; it receives a `LoginPageContext` after return URL sanitization and
+antiforgery issuance. Keeping `FormHtml` retains the standard POST fields. The login endpoint consumes
+the callback; credential/CSRF/return-url validation remains endpoint-owned. No event or contributor is
+registered. See the [branding guide](../../../../../Studio/docs/branding.md#replace-login-presentation).

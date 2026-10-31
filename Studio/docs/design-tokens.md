@@ -314,3 +314,20 @@ values:
 
 (That palette is currently exempted centrally via `ignoreSelectors` in the stylelint config;
 prefer an inline disable pair for any new exception you introduce.)
+
+### Linen and navigation surfaces
+
+Linen is a workspace presentation, independently selectable from a palette. Its rounded Manrope
+geometry and restrained gradients apply through shared roles; modules keep ownership of their layout
+and runtime/selection states. Existing arrangements and full presets remain available.
+
+The additive navigation roles are `--studio-nav-bg`, `--studio-nav-text`, `--studio-nav-muted`,
+`--studio-nav-active` and `--studio-nav-active-text`. They form separate background/foreground pairs:
+never use work-area text on contrasting navigation. In light Linen the host derives these from the
+palette's dark navigation roles; in other modes it uses the selected mode. A light-only custom palette
+uses its own pair. High contrast retains the explicit high-contrast pair.
+
+`--studio-workspace-page-background` and `--studio-workspace-panel-background` are workspace background recipes,
+which may contain subtle gradients. Use them only as `background`, with a solid role fallback; never
+pass a recipe to `color-mix()`, a border color or text color. Linen removes decorative gradients in High
+contrast and preserves visible focus. See [branding](branding.md) for host and module customization.

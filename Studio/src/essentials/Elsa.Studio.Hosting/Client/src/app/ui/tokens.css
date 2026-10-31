@@ -23,6 +23,11 @@
      `--studio-title-weight` lets a single-weight display face (a serif) avoid faux bold. */
   --studio-font-display: var(--font-display, var(--studio-font-ui));
 
+  --studio-nav-bg: var(--sidebar);
+  --studio-nav-text: var(--sidebar-foreground);
+  --studio-nav-muted: var(--sidebar-foreground);
+  --studio-nav-active: var(--sidebar-active);
+  --studio-nav-active-text: var(--sidebar-active-foreground);
   --studio-bg: var(--background);
   --studio-surface: var(--card);
   --studio-surface-muted: var(--muted);
@@ -34,6 +39,9 @@
   --studio-edge-control: var(--studio-border);
   --studio-canvas: var(--studio-bg);
   --studio-panel: var(--studio-surface);
+  /* Background-only recipes: neutral for independently hosted modules. */
+  --studio-workspace-page-background: var(--studio-bg);
+  --studio-workspace-panel-background: var(--studio-panel);
   --studio-accent: var(--primary);
   --studio-accent-text: var(--primary-foreground);
   --studio-accent-soft: color-mix(in srgb, var(--primary) 10%, transparent);

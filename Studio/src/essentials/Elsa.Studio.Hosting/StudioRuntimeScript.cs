@@ -34,12 +34,18 @@ internal static class StudioRuntimeScript
             {
                 ["hostApiEnabled"] = configuration.GetValue("Studio:Attention:HostApiEnabled", defaultValue: false)
             },
-            ["dashboard"] = BuildDashboardRuntimeConfig(configuration)
+            ["dashboard"] = BuildDashboardRuntimeConfig(configuration),
+            ["branding"] = PublicPresentation(configuration, "Studio:Branding", ["ProductName", "Subtitle", "LogoUrl", "FaviconUrl", "HelpUrl", "PrivacyUrl"]),
+            ["appearance"] = PublicPresentation(configuration, "Studio:Appearance", ["WorkspaceStyle", "PaletteId", "Mode", "Navigation"])
         };
 
     /// <summary>Renders the full <c>/studio-runtime.js</c> body.</summary>
     public static string Render(IConfiguration configuration, bool authEnabled) =>
         $"{GlobalName} = {JsonSerializer.Serialize(BuildRuntimeConfig(configuration, authEnabled))};";
+
+    private static Dictionary<string, object?> PublicPresentation(IConfiguration configuration, string section, string[] keys) =>
+        keys.Where(key => configuration[$"{section}:{key}"] is not null)
+            .ToDictionary(key => char.ToLowerInvariant(key[0]) + key[1..], key => (object?)configuration[$"{section}:{key}"]);
 
     private static Dictionary<string, object?> BuildAuthRuntimeConfig(IConfiguration configuration, bool authEnabled)
     {

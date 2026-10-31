@@ -7,7 +7,7 @@ namespace Elsa.Foundation.Identity.Tests.Api;
 public sealed class IdentityOpenApiContractTests
 {
     [Fact]
-    public async Task Minimal_api_publishes_the_nine_identity_operations_with_stable_ids_and_tags()
+    public async Task Minimal_api_publishes_the_ten_identity_operations_with_stable_ids_and_tags()
     {
         await using var fixture = await TokenEndpointFixture.StartAsync();
         using var client = fixture.Client;
@@ -16,7 +16,7 @@ public sealed class IdentityOpenApiContractTests
             .Where(operation => operation.Endpoint.Route.Value.Contains("/_elsa/identity/", StringComparison.Ordinal))
             .ToArray();
 
-        Assert.Equal(9, identityOperations.Length);
+        Assert.Equal(10, identityOperations.Length);
         AssertIdentityOpenApiMetadata(document);
     }
 
@@ -33,6 +33,7 @@ public sealed class IdentityOpenApiContractTests
             [("/_elsa/identity/challenge/{provider}", "get")] = "FoundationIdentityChallenge",
             [("/_elsa/identity/logout/{provider}", "post")] = "FoundationIdentityLogout",
             [("/_elsa/identity/refresh", "post")] = "FoundationIdentityRefresh",
+            [("/_elsa/identity/login-assets/{name}", "get")] = "AspNetCoreIdentityLoginArtwork",
             [("/_elsa/identity/login", "get")] = "AspNetCoreIdentityLoginPage",
             [("/_elsa/identity/login", "post")] = "AspNetCoreIdentityLogin"
         };

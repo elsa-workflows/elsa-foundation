@@ -22,7 +22,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     private bool _started;
     private readonly StudioThemeStoreOptions _themeConfig = new();
     private string? _rawMode;
-    private static readonly HashSet<string> BuiltInIds = new(StringComparer.OrdinalIgnoreCase) { "classic", "meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk" };
+    private static readonly HashSet<string> BuiltInIds = new(StringComparer.OrdinalIgnoreCase) { "linen", "classic", "meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk" };
     private HttpClient _client = null!;
 
     [Theory]
@@ -216,6 +216,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     }
 
     [Theory]
+    [InlineData("linen")]
     [InlineData("classic")]
     [InlineData("meridian")]
     [InlineData("drift")]
@@ -259,6 +260,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     }
 
     [Theory]
+    [InlineData("linen")]
     [InlineData("classic")]
     [InlineData("meridian")]
     public async Task SavingACustomThemeWithABuiltInIdIsRejected(string themeId)
