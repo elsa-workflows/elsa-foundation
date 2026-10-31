@@ -28,8 +28,10 @@ public sealed class WorkflowsDashboardFeature : IWebShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddElsaEndpoints();
-        services.AddApiCapability(new ApiCapabilityDeclaration("elsa.api.workflow-dashboard",1,
-            [new("workflow-portfolio","_elsa/workflows/dashboard/definitions"),new("workflow-run-health","_elsa/workflows/dashboard/runs")],"WorkflowsDashboard"));
+        services.AddApiCapability(new ApiCapabilityDeclaration(
+            "elsa.api.workflow-dashboard", 1,
+            [new("workflow-portfolio", "_elsa/workflows/dashboard/definitions"), new("workflow-run-health", "_elsa/workflows/dashboard/runs")],
+            "WorkflowsDashboard"));
         services.TryAddScoped<IWorkflowRunHealthDataSource>(provider =>
         {
             var executions = provider.GetRequiredService<IWorkflowExecutionStateStore>();

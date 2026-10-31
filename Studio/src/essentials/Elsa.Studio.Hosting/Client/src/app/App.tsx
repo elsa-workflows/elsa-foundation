@@ -42,7 +42,8 @@ import type {
   StudioNavigationPlacement,
   StudioNavigationSection,
   StudioAgentPromptRequest,
-  StudioPanelContribution
+  StudioPanelContribution,
+  StudioContributionAvailability
 } from "../sdk";
 import { AuthProvider, AnonymousAuthProvider, evaluateBackendRequirements, isHomeRunDetailPath, recordHomeRunDetailOpened, qualifyStudioBackendPath, requestStudioNavigation, studioBackendCapabilitiesChangedEvent, useAuthContext } from "@elsa-workflows/studio-sdk";
 import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
@@ -385,7 +386,7 @@ function AppContent({ authManager,backendSession,connections }: { authManager: A
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authManager, backendBaseUrl, backendSession, connections, manifestQuery.data, manifestQuery.isError, manifestQuery.error, manifestQuery.isPending, moduleRegistryRevision, shellBaseUrl]);
 
-  const routes = useMemo(() => api?.routes.list({includeUnavailable:true}) ?? [], [api, state]);
+  const routes = useMemo(() => api?.routes.compose({includeUnavailable:true}).map(({contribution,availability}) => ({...contribution,availability})) ?? [], [api, state]);
   const enabledFeatures = useMemo(() => {
     const features = new Set<string>();
     for (const module of manifestQuery.data?.modules ?? []) {
@@ -437,7 +438,7 @@ function AppContent({ authManager,backendSession,connections }: { authManager: A
 
   const activeRoute = findRouteForPath(routes, path);
   const ActiveComponent = activeRoute?.component;
-  const routeAvailability = evaluateBackendRequirements(backendSession,activeRoute?.requiresBackend);
+  const routeAvailability = activeRoute?.availability;
   const owningFeatureArea = findFeatureAreaForPath(featureAreas, path);
   const settingsSection = settingsSurface ? resolveSettingsSection(path, settingsGroups) : undefined;
   const pageTitle = settingsSection?.label
@@ -481,7 +482,7 @@ function AppContent({ authManager,backendSession,connections }: { authManager: A
             <DevDisclosurePage />
           </Suspense>
         ) : null}
-        {!settingsSurface && ActiveComponent ? routeAvailability.state === "available" ? <ActiveComponent navigate={navigateTo} /> : <div className="empty-state" role="status">{routeAvailability.reason}<button type="button" onClick={() => navigateTo("/settings/backends")}>Choose backend</button></div> : null}
+        {!settingsSurface && ActiveComponent ? routeAvailability?.state === "available" ? <ActiveComponent navigate={navigateTo} /> : <div className="empty-state" role="status">{routeAvailability?.reason ?? "This route is unavailable."}<button type="button" onClick={() => navigateTo("/settings/backends")}>Choose backend</button></div> : null}
         {!settingsSurface && !ActiveComponent && path !== "/diagnostics" && path !== "/diagnostics/modules" && !(DevDisclosurePage && path === "/dev/disclosure") ? (
           <div className="empty-state">
             {owningFeatureArea
@@ -1481,10 +1482,14 @@ export function getStudioNavigation(moduleNavigation: StudioNavigationContributi
 function renderHostSettingsSection(
   section: StudioNavigationContribution,
   api: ElsaStudioModuleApi,
-  routes: Array<{ path: string; component: React.ComponentType<{ navigate: (path: string) => void }> }>,
+  routes: Array<{ path: string; component: React.ComponentType<{ navigate: (path: string) => void }>; availability: StudioContributionAvailability }>,
   navigate: (path: string) => void,
   themeBuilderEnabled: boolean
 ) {
+  const route = findRouteForPath(routes, section.path);
+  if (route && route.availability.state !== "available") {
+    return <div className="empty-state" role="status">{route.availability.reason ?? "This route is unavailable."}<button type="button" onClick={() => navigate("/settings/backends")}>Choose backend</button></div>;
+  }
   if (section.id === "modules" || section.path === "/modules") {
     return <ModuleManagementPage api={api} />;
   }
@@ -1494,7 +1499,6 @@ function renderHostSettingsSection(
   if (section.id === "package-feeds" || section.path === "/package-feeds") {
     return <PackageFeedsPage api={api} />;
   }
-  const route = findRouteForPath(routes, section.path);
   if (route?.component) {
     const Component = route.component;
     return <Component navigate={navigate} />;
