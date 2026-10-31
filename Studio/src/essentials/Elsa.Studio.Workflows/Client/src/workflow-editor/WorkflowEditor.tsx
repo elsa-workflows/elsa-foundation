@@ -248,7 +248,7 @@ export function WorkflowEditor({
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
   // in dedicated hooks; `markSaved`/`reload` let the loader seed the save baseline and reload after promote.
-  const { holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, setAutosavePaused, markSaved } = useWorkflowPersistence({ context, documentAdapter, draft: editableDraft, autosaveEnabledByDefault, editDraft: editableDoc.editDraft, setStatus, setError });
+  const { persistedDraft, holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, setAutosavePaused, markSaved } = useWorkflowPersistence({ context, documentAdapter, draft: editableDraft, autosaveEnabledByDefault, editDraft: editableDoc.editDraft, setStatus, setError });
   const {
     details,
     setDetails,
@@ -349,7 +349,7 @@ export function WorkflowEditor({
   // Draft validation surface (#453): fetch server-derived validations after the draft settles (when the
   // backend advertises the relation), and combine them with the draft's reconciled errors and
   // designer-side structural checks so the editor panel agrees with the promotion gate.
-  const draftValidations = useDraftValidations({ context, draft, enabled: !documentAdapter });
+  const draftValidations = useDraftValidations({ context, draft, persistedDraft, enabled: !documentAdapter });
 
   // Executable-artifact export (#493, foundation #1304): available only when the workflow has a
   // published version and the server advertises the export relation, so a runtime-less or older server
