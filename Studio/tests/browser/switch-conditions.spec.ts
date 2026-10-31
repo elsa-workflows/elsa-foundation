@@ -3,6 +3,12 @@ import { expect, test, type Page } from "@playwright/test";
 test.setTimeout(60_000);
 const owner = (page: Page) => page.locator('.wf-sequence-step[data-id="collection-owner"], .react-flow__node[data-id="collection-owner"], .react-flow__node[data-id="collection-element"]');
 const cases = (page: Page) => page.getByRole("region", { name: "Cases", exact: true });
+async function navigationAllowed(page: Page) {
+  return page.evaluate(() => ({
+    studio: window.dispatchEvent(new CustomEvent("elsa:studio-navigation-requested", { cancelable: true, detail: { fromPath: "/workflows/editor", toPath: "/settings/backends" } })),
+    unload: window.dispatchEvent(new Event("beforeunload", { cancelable: true }))
+  }));
+}
 async function saved(page: Page) {
   return page.evaluate(() => {
     const value = JSON.parse(sessionStorage.getItem(Object.keys(sessionStorage).find(key => key.startsWith("adaptive-ports:"))!)!);
@@ -34,7 +40,11 @@ for (const host of ["activity", "workflow"]) for (const composition of ["sequenc
     await expect(first).toHaveValue("Rejected");
     await expect(cases(page).getByRole("textbox", { name: "Case 2 label", exact: true })).toHaveValue("Approved");
     await expect(cases(page).locator(".wf-slot-collection-item").nth(1).getByRole("button", { name: "JavaScript expression. Activate to edit.", exact: true })).toContainText("1 + 1 === 2");
-    if (host === "workflow") await page.getByRole("button", { name: "Save", exact: true }).click();
+    if (host === "workflow") {
+      expect(await navigationAllowed(page)).toEqual({ studio: false, unload: false });
+      await page.getByRole("button", { name: "Save", exact: true }).click();
+      await expect.poll(() => navigationAllowed(page)).toEqual({ studio: true, unload: true });
+    }
     await expect.poll(async () => JSON.stringify(await saved(page))).toContain("1 + 1 === 2");
     const before = await saved(page);
     expect(before.structure.payload.cases.map((item: { match: string }) => item.match)).toEqual(["Rejected", "Approved"]);

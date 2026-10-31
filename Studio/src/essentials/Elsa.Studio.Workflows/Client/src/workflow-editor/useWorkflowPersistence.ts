@@ -1,6 +1,6 @@
 import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { studioNavigationRequestedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { WorkflowDraft } from "../workflowTypes";
 import { updateDraft } from "../api/workflowDesign";
 import { autosaveDelayMs } from "./constants";
@@ -35,9 +35,23 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
   const saveRequestIdRef = useRef(0);
   const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const inFlightSavesRef = useRef(0);
+  const queuedSavesRef = useRef(0);
   // Keep the latest draft addressable so flushPendingSave can persist unsaved edits without a stale closure.
   const latestDraftRef = useRef<WorkflowDraft | null>(draft);
   latestDraftRef.current = draft;
+
+  useEffect(() => {
+    const preventNavigation = (event: Event) => {
+      const current = latestDraftRef.current;
+      if (queuedSavesRef.current > 0 || current && getDraftSignature(current) !== lastSavedDraftSignatureRef.current) event.preventDefault();
+    };
+    window.addEventListener(studioNavigationRequestedEvent, preventNavigation);
+    window.addEventListener("beforeunload", preventNavigation);
+    return () => {
+      window.removeEventListener(studioNavigationRequestedEvent, preventNavigation);
+      window.removeEventListener("beforeunload", preventNavigation);
+    };
+  }, []);
 
   const markSaved = useCallback((savedDraft: WorkflowDraft | null) => {
     reviewHoldGenerationRef.current++;
@@ -87,7 +101,8 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
         if (inFlightSavesRef.current === 0) setSaving(false);
       }
     };
-    const queued = saveQueueRef.current.then(queuedSave, queuedSave);
+    queuedSavesRef.current += 1;
+    const queued = saveQueueRef.current.then(queuedSave, queuedSave).finally(() => { queuedSavesRef.current -= 1; });
     saveQueueRef.current = queued.catch(() => undefined);
     return queued;
   }, [context, documentAdapter, editDraft, setStatus, setError]);

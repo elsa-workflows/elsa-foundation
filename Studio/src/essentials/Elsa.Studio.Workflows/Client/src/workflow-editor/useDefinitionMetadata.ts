@@ -1,6 +1,6 @@
 import type { WorkflowEditorDocumentAdapter } from "./WorkflowEditorDocumentAdapter";
 import React, { useCallback, useEffect, useRef } from "react";
-import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { studioNavigationRequestedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { WorkflowDefinitionDetails } from "../workflowTypes";
 import { updateDefinitionMetadata } from "../api/workflowDesign";
 
@@ -26,6 +26,18 @@ export function useDefinitionMetadata({ context, documentAdapter, details, setDe
   // the pending patch over the current definition — so a name-only edit can't drop the description
   // regardless of whether the backend does a partial or full-replace update.
   const inFlightRef = useRef<Promise<boolean> | null>(null);
+  useEffect(() => {
+    const preventNavigation = (event: Event) => {
+      const pending = pendingMetaRef.current;
+      if (inFlightRef.current || pending.name !== undefined || pending.description !== undefined) event.preventDefault();
+    };
+    window.addEventListener(studioNavigationRequestedEvent, preventNavigation);
+    window.addEventListener("beforeunload", preventNavigation);
+    return () => {
+      window.removeEventListener(studioNavigationRequestedEvent, preventNavigation);
+      window.removeEventListener("beforeunload", preventNavigation);
+    };
+  }, []);
   const flushDefinitionMeta = useCallback(async (): Promise<boolean> => {
     if (metaSaveTimeoutRef.current !== null) {
       window.clearTimeout(metaSaveTimeoutRef.current);
