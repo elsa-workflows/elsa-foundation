@@ -21514,7 +21514,7 @@
         {
           "type": "external",
           "id": "Microsoft.Extensions.AI.Abstractions",
-          "version": "10.5.1"
+          "version": "10.10.1"
         },
         {
           "type": "external",
@@ -21623,7 +21623,7 @@
         {
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.AI.Abstractions",
-          "version": "10.5.1"
+          "version": "10.10.1"
         },
         {
           "type": "pinned-transitive",
@@ -21657,7 +21657,7 @@
         {
           "type": "external",
           "id": "Microsoft.Extensions.AI.Abstractions",
-          "version": "10.5.1"
+          "version": "10.10.1"
         },
         {
           "type": "external",
@@ -21726,7 +21726,7 @@
         {
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.AI.Abstractions",
-          "version": "10.5.1"
+          "version": "10.10.1"
         },
         {
           "type": "pinned-transitive",
@@ -21785,7 +21785,7 @@
         {
           "type": "external",
           "id": "Microsoft.Extensions.AI.Abstractions",
-          "version": "10.5.1"
+          "version": "10.10.1"
         },
         {
           "type": "external",
@@ -21869,7 +21869,7 @@
         {
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.AI.Abstractions",
-          "version": "10.5.1"
+          "version": "10.10.1"
         },
         {
           "type": "pinned-transitive",
