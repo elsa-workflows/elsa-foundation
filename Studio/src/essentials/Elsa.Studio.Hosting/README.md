@@ -151,6 +151,10 @@ backend's credentials. An anonymous probe omits cookies. Backends must allow the
 and their identity return-URL policy. For cookie-based identity, the browser must also be permitted to send that
 backend's session cookie: use the same site, or configure the identity host for cross-site cookies over HTTPS.
 Studio does not override browser cookie policy or transfer cookies/tokens between backends.
+Anonymous sessions also omit cookies on Agent and Structured Logs SSE. Structured Logs uses the SDK response
+transport for anonymous streaming; a custom transport without `requestResponse` retains recent reads and reports
+live streaming unavailable. Anonymous Console connections use cookie-free long polling because browser-native
+WebSockets and EventSource cannot suppress same-origin cookies. Authenticated stream transports retain their existing contracts.
 
 Studio:BackendBaseUrl remains supported as the browser-facing **stable Studio-host identity authority**. When absent,
 the configured default profile supplies that authority at startup. Studio:BackendServerBaseUrl may independently

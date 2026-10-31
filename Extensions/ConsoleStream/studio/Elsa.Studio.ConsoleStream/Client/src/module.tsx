@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import * as signalR from "@microsoft/signalr";
 import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { resolveBackendPath } from "@elsa-workflows/studio-sdk";
+import { AnonymousConsoleHttpClient } from "./anonymousConsoleClient";
 import "./styles.css";
 
 type ConsoleHostId = "server" | "studio";
@@ -544,7 +545,8 @@ export function createConsoleConnectionOptions(context: StudioEndpointContext): 
   // transports carry it as the access_token query parameter instead of degrading to long polling.
   return context.accessTokenFactory
     ? { ...baseOptions, accessTokenFactory: context.accessTokenFactory }
-    : baseOptions;
+    // Browser WebSocket/EventSource transports cannot omit same-origin cookies.
+    : { ...baseOptions, withCredentials: false, transport: signalR.HttpTransportType.LongPolling, httpClient:new AnonymousConsoleHttpClient(context) };
 }
 
 export function createConsoleExportContent(entries: ConsoleEntry[]) {

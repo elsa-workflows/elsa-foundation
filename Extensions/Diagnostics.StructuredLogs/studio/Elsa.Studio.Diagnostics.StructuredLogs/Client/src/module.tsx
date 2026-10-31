@@ -2,6 +2,7 @@ import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { resolveBackendPath } from "@elsa-workflows/studio-sdk";
+import { connectAnonymousLogStream } from "./anonymousLogStream";
 import "./styles.css";
 
 type StructuredLogLevel = "Trace" | "Debug" | "Information" | "Warning" | "Error" | "Critical";
@@ -242,7 +243,7 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
 
   useEffect(() => {
     let cancelled = false;
-    let eventSource: EventSource | null = null;
+    let closeStream: (() => void) | undefined;
 
     setRows([]);
     setSelectedEntryId(null);
@@ -269,34 +270,39 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
     }
 
     function connect() {
-      eventSource = new EventSource(createStreamUrl(moduleApi.backend, filters), { withCredentials: true });
-
-      eventSource.onopen = () => {
-        if (cancelled)
-          return;
+      const context = moduleApi.backend;
+      const opened = () => {
+        if (cancelled) return;
         setStatus(pausedRef.current ? "paused" : "live");
         setDetail("Live structured log stream connected.");
       };
-
-      eventSource.addEventListener("entry", event => {
-        if (cancelled)
-          return;
-        addEntries([normalizeStructuredLogEntry(parseSseJson<StructuredLogWireEntry>(event))]);
-      });
-
-      eventSource.addEventListener("dropped", event => {
-        if (cancelled)
-          return;
-        const dropped = parseSseJson<DroppedEntriesSignal>(event);
-        setUpstreamDroppedCount(current => current + (dropped.droppedCount ?? dropped.count ?? 0));
-      });
-
-      eventSource.onerror = () => {
-        if (cancelled)
-          return;
+      const received = (event: Event) => {
+        if (cancelled) return;
+        if (event.type === "entry") addEntries([normalizeStructuredLogEntry(parseSseJson<StructuredLogWireEntry>(event))]);
+        else if (event.type === "dropped") {
+          const dropped = parseSseJson<DroppedEntriesSignal>(event);
+          setUpstreamDroppedCount(current => current + (dropped.droppedCount ?? dropped.count ?? 0));
+        }
+      };
+      const failed = () => {
+        if (cancelled) return;
         setStatus("disconnected");
         setDetail("Live stream disconnected. The browser will retry automatically.");
       };
+      const url = createStreamUrl(context, filters);
+      if (context.accessTokenFactory) {
+        const eventSource = new EventSource(url, { withCredentials: true });
+        closeStream = () => eventSource.close();
+        eventSource.onopen = opened;
+        eventSource.addEventListener("entry", received);
+        eventSource.addEventListener("dropped", received);
+        eventSource.onerror = failed;
+      } else if (context.http.requestResponse) {
+        closeStream = connectAnonymousLogStream(init => context.http.requestResponse!(url, init), opened, received, failed);
+      } else {
+        setStatus("unavailable");
+        setDetail("Anonymous live streaming requires a streaming-capable backend transport. Recent logs remain available.");
+      }
     }
 
     void loadRecent().then(() => {
@@ -307,7 +313,7 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
 
     return () => {
       cancelled = true;
-      eventSource?.close();
+      closeStream?.();
     };
   }, [addEntries, filters]);
 

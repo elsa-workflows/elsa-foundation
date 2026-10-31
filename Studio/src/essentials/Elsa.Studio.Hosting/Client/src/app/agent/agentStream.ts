@@ -64,7 +64,7 @@ async function readStream(
 async function withStreamHeaders(context: StudioEndpointContext, init: RequestInit) {
   const withStaticHeaders = withDefaultHeaders(context.headers, init);
   const token = await context.accessTokenFactory?.();
-  if (!token) return withStaticHeaders;
+  if (!token) return { ...withStaticHeaders, credentials: "omit" as const };
 
   const headers = new Headers(withStaticHeaders.headers);
   headers.set("Authorization", `Bearer ${token}`);

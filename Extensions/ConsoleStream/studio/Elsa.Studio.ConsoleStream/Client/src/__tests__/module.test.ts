@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { AbortError, TimeoutError, HttpTransportType } from "@microsoft/signalr";
 import {
   appendConsoleEntries,
   createConsoleConnectionOptions,
@@ -168,6 +169,36 @@ describe("console stream module", () => {
   it("omits sourceId when all sources are selected", () => {
     expect(createConsoleFilter(null)).toEqual({ limit: 2000 });
     expect(createConsoleFilter("source-1")).toEqual({ limit: 2000, sourceId: "source-1" });
+  });
+
+  it("delegates anonymous hub HTTP to the SDK transport and preserves SignalR cancellation",async()=>{
+    let observed:RequestInit|undefined;
+    const requestResponse=vi.fn((_url:string,init?:RequestInit)=>new Promise<Response>((_resolve,reject)=>{
+      observed=init;init?.signal?.addEventListener("abort",()=>reject(new DOMException("Aborted","AbortError")),{once:true});
+    }));
+    const options=createConsoleConnectionOptions({baseUrl:"https://server.example/shell/",http:{getJson:async()=>({}),requestResponse}});
+    const signal:{aborted:boolean;onabort:(()=>void)|null}={aborted:false,onabort:null};
+    const pending=options.httpClient!.send({url:"https://server.example/shell/hub",method:"GET",abortSignal:signal});
+    expect(observed?.credentials).toBe("omit");
+    signal.aborted=true;signal.onabort?.();
+    await expect(pending).rejects.toBeInstanceOf(AbortError);
+    expect(signal.onabort).toBeNull();
+  });
+
+  it("maps anonymous long-poll timeout to SignalR TimeoutError",async()=>{
+    vi.useFakeTimers();
+    try {
+      const requestResponse=vi.fn((_url:string,init?:RequestInit)=>new Promise<Response>((_resolve,reject)=>init?.signal?.addEventListener("abort",()=>reject(new DOMException("Aborted","AbortError")),{once:true})));
+      const options=createConsoleConnectionOptions({baseUrl:"https://server.example/",http:{getJson:async()=>({}),requestResponse}});
+      const pending=expect(options.httpClient!.send({url:"https://server.example/hub",method:"GET",timeout:100})).rejects.toBeInstanceOf(TimeoutError);
+      await vi.advanceTimersByTimeAsync(100);await pending;
+    } finally {vi.useRealTimers();}
+  });
+
+  it("uses cookie-free polling for anonymous hubs instead of native credentialed transports",()=>{
+    const options=createConsoleConnectionOptions({baseUrl:"https://server.example/shell/",http:{getJson:async()=>({})}});
+    expect(options.withCredentials).toBe(false);
+    expect(options.transport).toBe(HttpTransportType.LongPolling);
   });
 
   it("passes endpoint headers to SignalR connection options", () => {

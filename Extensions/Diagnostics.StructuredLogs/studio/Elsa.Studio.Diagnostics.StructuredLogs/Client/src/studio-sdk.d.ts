@@ -2,11 +2,13 @@ declare module "@elsa-workflows/studio-sdk" {
   import type { ComponentType } from "react";
 
   export interface StudioHttpClient {
+    requestResponse?(url: string, init?: RequestInit): Promise<Response>;
     getJson<T>(url: string, init?: RequestInit): Promise<T>;
     postJson<T>(url: string, body: unknown, init?: RequestInit): Promise<T>;
   }
 
   export interface StudioEndpointContext {
+    accessTokenFactory?: () => Promise<string>;
     baseUrl: string;
     http: StudioHttpClient;
   }
