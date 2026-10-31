@@ -2,7 +2,7 @@ import React, { useEffect, useId, useRef, useState, useSyncExternalStore } from 
 import { ArrowLeft, ChevronDown, Plus, Server } from "lucide-react";
 import { studioNavigationRequestedEvent, type StudioApiCapabilityDocument, type StudioBackendProfile } from "../../sdk";
 import { AnchoredPopover, StudioAlert, StudioTabs, StudioTabPanel } from "../ui";
-import { BackendConnections, canonicalBackendUrl, connectionError } from "./connections";
+import { BackendConnections, backendConnectionNonce, canonicalBackendUrl, connectionError } from "./connections";
 import "./backends.css";
 
 export const backendNavigation = {id:"backends",label:"Backends",path:"/settings/backends",activePathPrefix:"/settings/backends",placement:"settings" as const,order:20};
@@ -124,7 +124,7 @@ function BackendForm({connections,profile,navigate}:{connections:BackendConnecti
       event.preventDefault();setError(null);setSaving(true);
       let url:string;
       try {url=canonicalBackendUrl(baseUrl);} catch(error) {setError(connectionError(error));setSaving(false);return;}
-      const entry:StudioBackendProfile={id:profile?.id ?? `personal-${crypto.randomUUID()}`,name,baseUrl:url,environment,source:"personal",...(authenticationProfile ? {authenticationProfile} : {})};
+      const entry:StudioBackendProfile={id:profile?.id ?? `personal-${backendConnectionNonce()}`,name,baseUrl:url,environment,source:"personal",...(authenticationProfile ? {authenticationProfile} : {})};
       void connections.save(entry).then(() => {saved.current=true;navigate(`/settings/backends/${encodeURIComponent(entry.id)}`);}).catch(error => setError(connectionError(error))).finally(() => setSaving(false));
     }}>
       <label>Name<input required maxLength={80} value={name} onChange={event => setName(event.target.value)} disabled={saving} /></label>

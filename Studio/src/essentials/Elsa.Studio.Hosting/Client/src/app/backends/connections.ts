@@ -14,6 +14,11 @@ const profileBytes = 32 * 1024;
 const selectionKey = "elsa.studio.backend.selection.v1";
 const pendingKey = "elsa.studio.backend.sign-in.v1";
 
+/** Opaque cryptographic generation IDs also work on HTTP development hosts. */
+export function backendConnectionNonce() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,"0")).join("");
+}
+
 export function canonicalBackendUrl(value: string, origin = window.location.origin) {
   const url = new URL(value || origin, origin);
   if (!/^https?:$/.test(url.protocol) || url.username || url.password || url.search || url.hash || value.includes("\\") || value.length > 2048)
@@ -60,7 +65,7 @@ export class PreparedBackend implements StudioBackendSession {
   constructor(readonly profile: StudioBackendProfile, readonly manager: AuthProviderManager | null, readonly identity: AuthSession) {
     profile = this.profile = Object.freeze({...profile});
     identity = this.identity = Object.freeze({...identity,roles:[...identity.roles],permissions:[...identity.permissions]});
-    this.key = JSON.stringify([profile.id,profile.baseUrl,identity.subject ?? "anonymous",identity.tenantId ?? "default",crypto.randomUUID()]);
+    this.key = JSON.stringify([profile.id,profile.baseUrl,identity.subject ?? "anonymous",identity.tenantId ?? "default",backendConnectionNonce()]);
     const boundAuth = manager ? {
       getAccessToken:async () => {this.assertActive();const token = await manager.getAccessToken();this.assertActive();return token;},
       refresh:async () => {this.assertActive();const session = await manager.refresh();this.assertActive();return session;}
@@ -305,7 +310,7 @@ export class BackendConnections {
       const stored = localStorage.getItem(this.localKey);
       const current = stored ? (JSON.parse(stored) as {revision:string}).revision : undefined;
       if (current !== this.revision) throw new Error("Backend profiles changed in another tab. Reload before saving.");
-      const revision = crypto.randomUUID();
+      const revision = backendConnectionNonce();
       localStorage.setItem(this.localKey,JSON.stringify({...value,revision}));
       this.revision = revision;
     } else {

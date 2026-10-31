@@ -14,6 +14,7 @@ test.describe("backend connections against composed hosts",()=>{
     await page.getByLabel("Username",{exact:true}).fill(studioUser);
     await page.getByLabel("Password",{exact:true}).fill(studioPassword);
     await page.getByRole("button",{name:"Sign in",exact:true}).click();
+    await page.waitForLoadState("networkidle");
     await expect(page.getByRole("heading",{name:"Home",exact:true,level:2})).toBeVisible();
   }
 
@@ -83,6 +84,7 @@ test.describe("backend connections against composed hosts",()=>{
     await page.getByLabel("Username",{exact:true}).fill(studioUser);
     await page.getByLabel("Password",{exact:true}).fill(studioPassword);
     await page.getByRole("button",{name:"Sign in",exact:true}).click();
+    await page.waitForLoadState("networkidle");
     await expect(page).toHaveURL(new RegExp(`^${process.env.ELSA_STUDIO_URL}/\\?backend=${secondary}$`));
     await expect(page.getByRole("heading",{name:"Home",exact:true,level:2})).toBeVisible();
     await expect(page.getByRole("link",{name:"Workflows",exact:true})).toHaveCount(0);
@@ -95,9 +97,9 @@ test.describe("backend connections against composed hosts",()=>{
     await page.goForward();
     await expect(page.getByRole("button",{name:/Select backend\. Current: Runtime/})).toBeVisible();
     await page.goto(`/workflows/definitions?definition=shared-resource-id&backend=${secondary}`);
-    await expect(page.getByText("This backend does not support elsa.api.workflow-design.",{exact:true})).toBeVisible();
+    await expect(page.getByRole("status").filter({hasText:"This backend does not support elsa.api.workflow-design."})).toBeVisible();
     await page.reload();
     await expect(page.getByRole("button",{name:/Select backend\. Current: Runtime/})).toBeVisible();
-    await expect(page.getByText("This backend does not support elsa.api.workflow-design.",{exact:true})).toBeVisible();
+    await expect(page.getByRole("status").filter({hasText:"This backend does not support elsa.api.workflow-design."})).toBeVisible();
   });
 });

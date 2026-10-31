@@ -218,6 +218,38 @@ public sealed class BackendProfilesTests : IAsyncLifetime
         finally {if (_app is not null) {await _app.DisposeAsync();_app=null;} Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();System.IO.File.Delete(database);}
     }
 
+    [Fact]
+    public async Task Chunked_oversized_bodies_are_bounded_before_parsing_or_persistence()
+    {
+        using var client = await StartAsync();
+        using var request = new HttpRequestMessage(HttpMethod.Put, Route)
+        {Content = new ChunkedJson(System.Text.Encoding.UTF8.GetBytes("{\"padding\":\"" + new string('x',40*1024) + "\"}"))};
+        request.Headers.Authorization = new("Bearer","alice-a");
+        request.Headers.TryAddWithoutValidation("If-None-Match","*");
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge,response.StatusCode);
+        using var read = await ReadAsync(client,"alice-a");
+        Assert.Equal(HttpStatusCode.NotFound,read.StatusCode);
+    }
+
+    [Fact]
+    public async Task Unknown_wrapper_metadata_is_rejected_instead_of_silently_accepted()
+    {
+        using var client = await StartAsync();
+        using var request = new HttpRequestMessage(HttpMethod.Put,Route)
+        {Content=JsonContent.Create(new {schemaVersion=1,value=Value(),token="not-profile-metadata"})};
+        request.Headers.Authorization=new("Bearer","alice-a");
+        request.Headers.TryAddWithoutValidation("If-None-Match","*");
+        using var response=await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.BadRequest,response.StatusCode);
+    }
+
+    private sealed class ChunkedJson(byte[] bytes) : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream,TransportContext? context) => stream.WriteAsync(bytes).AsTask();
+        protected override bool TryComputeLength(out long length) {length=0;return false;}
+    }
+
     public Task InitializeAsync() => Task.CompletedTask;
     public async Task DisposeAsync() { if (_app is not null) await _app.DisposeAsync(); }
 

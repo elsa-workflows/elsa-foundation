@@ -96,6 +96,12 @@ describe("immutable backend lifetimes",()=>{
 });
 
 describe("backend profile selection",()=>{
+  it("initializes on HTTP hosts without crypto.randomUUID",async()=>{
+    const random=vi.spyOn(crypto,"randomUUID").mockImplementation(()=>{throw new Error("Secure-context API is unavailable");});
+    vi.stubGlobal("fetch",vi.fn(async()=>response(document)));
+    try {const {connections}=controller();await connections.initialize();expect(connections.getSnapshot().active?.capabilities).toEqual(document);expect(random).not.toHaveBeenCalled();}
+    finally {random.mockRestore();}
+  });
   it("commits a successful preparation to a backend-qualified safe landing route",async()=>{
     const request=vi.fn(async(_input:RequestInfo|URL,_init?:RequestInit)=>response(document));vi.stubGlobal("fetch",request);
     const {connections,commit}=controller();await connections.initialize();await connections.connect(b.id);
@@ -191,4 +197,16 @@ describe("resource navigation lifetime admission",()=>{
       window.dispatchEvent(new PageTransitionEvent("pageshow",{persisted:true}));expect(reload).toHaveBeenCalledTimes(1);
     } finally {cleanup();}
   });
+});
+
+it("rejects a late old response when both backends use the same resource id",async()=>{
+  let finish!:(response:Response)=>void;
+  vi.stubGlobal("fetch",vi.fn((input:RequestInfo|URL)=>String(input).includes("other.example") ? Promise.resolve(response({id:"shared-id",name:"Backend B data"})) : new Promise<Response>(resolve=>{finish=resolve;})));
+  const first=new PreparedBackend(a,null,{status:"anonymous",roles:[],permissions:[]});
+  const second=new PreparedBackend(b,null,{status:"anonymous",roles:[],permissions:[]});
+  const old=first.context.http.getJson("/resources/shared-id");first.dispose();
+  const current=await second.context.http.getJson("/resources/shared-id");
+  finish(response({id:"shared-id",name:"Backend A data"}));
+  await expect(old).rejects.toMatchObject({name:"AbortError"});
+  expect(current).toEqual({id:"shared-id",name:"Backend B data"});second.dispose();
 });
