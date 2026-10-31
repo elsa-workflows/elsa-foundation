@@ -10,7 +10,7 @@ import {
   type AuthProviderManager,
   type StudioEndpointContext
 } from "@elsa-workflows/studio-sdk";
-import { isStudioAuthEnabled, type StudioRuntimeConfig } from "../runtime";
+import { getStudioBranding, isStudioAuthEnabled, type StudioRuntimeConfig } from "../runtime";
 import elsaLogo from "../../assets/images/icon.png";
 
 /**
@@ -91,6 +91,7 @@ export function createStudioEndpointContext(
 }
 
 function StudioSignInStatus({ failed = false, onRetry }: { failed?: boolean; onRetry?: () => void }) {
+  const branding = getStudioBranding();
   return (
     <main className="studio-shell studio-auth-signing-in">
       <div
@@ -100,9 +101,9 @@ function StudioSignInStatus({ failed = false, onRetry }: { failed?: boolean; onR
         aria-busy={failed ? undefined : "true"}
       >
         <span className="studio-auth-brand-mark" aria-hidden="true">
-          <img src={elsaLogo} alt="" />
+          <img src={branding.logoUrl ?? elsaLogo} alt="" onError={event => { event.currentTarget.onerror = null; event.currentTarget.src = elsaLogo; }} />
         </span>
-        <h1 className="studio-auth-title">{failed ? "Unable to sign in" : "Elsa Studio"}</h1>
+        <h1 className="studio-auth-title">{failed ? "Unable to sign in" : branding.productName}</h1>
         <p className="studio-auth-copy">
           {failed
             ? "The authentication service may be unavailable. Check the backend, then try again."

@@ -217,3 +217,6 @@ a compose snippet).
 
 Elsa-owned material in this repository is licensed under the MIT License; see [LICENSE](LICENSE).
 Third-party code, assets, and dependencies retain their respective license terms and notices.
+
+For white-label hosts, see [Brand Studio and sign-in](docs/branding.md) and the
+[branded host example](examples/branded-host/README.md).

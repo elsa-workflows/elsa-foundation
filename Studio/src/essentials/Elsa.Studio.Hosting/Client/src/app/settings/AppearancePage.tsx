@@ -65,7 +65,7 @@ export function AppearancePage({
           value={workspaceStyle ?? "theme"}
           options={[
             ...workspaceStyles.map(style => ({ value: style.id, label: style.name, description: style.description })),
-            { value: "theme", label: "Theme default", description: `Keep ${currentTheme.name}'s original arrangement.`, defaultValue: true }
+            { value: "theme", label: "Theme default", description: `Keep ${currentTheme.name}'s original arrangement.`, defaultValue: false }
           ]}
           onChange={value => setWorkspaceStyle(isWorkspaceStyle(value) ? value : null)}
         />

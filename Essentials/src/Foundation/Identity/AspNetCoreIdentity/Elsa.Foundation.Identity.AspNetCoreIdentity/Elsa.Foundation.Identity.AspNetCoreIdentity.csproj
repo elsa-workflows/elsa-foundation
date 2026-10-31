@@ -21,4 +21,7 @@
     <PackageReference Include="NativeEndpoints" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Assets/*.jpg" LogicalName="Elsa.LoginArtwork.%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

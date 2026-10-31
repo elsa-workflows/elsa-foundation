@@ -24,6 +24,7 @@ internal static class ThemeStoreApi
     private static readonly string[] ThemeLayoutNames = ["classic", "floating", "workbench", "editorial"];
     internal static readonly HashSet<string> BuiltInThemeIds = new(StringComparer.OrdinalIgnoreCase)
     {
+        "linen",
         "classic",
         "meridian",
         "drift",
