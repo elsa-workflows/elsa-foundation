@@ -97,10 +97,21 @@ html:where([data-workspace-style])[data-theme-appearance="high-contrast"] .wf-no
 
 html[data-workspace-style="linen"] :is(.wf-palette, .wf-inspector) { background: var(--studio-workspace-panel-background, var(--studio-panel)); }
 html[data-workspace-style="linen"] .wf-inspector { border-left: 1px solid var(--studio-edge-subtle); }
-html[data-workspace-style="linen"] .wf-palette { border-right: 1px solid var(--studio-edge-subtle); }
-html[data-workspace-style="linen"] .wf-canvas { background-color: var(--studio-canvas); }
 html[data-workspace-style="linen"] .wf-node { border-radius: var(--studio-radius-md); }
 html[data-workspace-style="linen"] .wf-node.selected:where(:not(.wf-node-runtime):not(.wf-node-unavailable):not(.wf-node-ghost)) {
   background: linear-gradient(125deg, color-mix(in srgb, var(--studio-accent) 6%, var(--studio-panel)), var(--studio-panel));
 }
 html[data-workspace-style="linen"][data-theme-appearance="high-contrast"] .wf-node.selected:where(:not(.wf-node-runtime):not(.wf-node-unavailable):not(.wf-node-ghost)) { background: var(--studio-panel); }
+
+/* Designer decoration loads with the workbench rather than the Definitions landing page. */
+html[data-workspace-style="linen"] .wf-editor { background: transparent; padding: 0 20px 16px; }
+html[data-workspace-style="linen"] .wf-editor-body {
+  border: 1px solid var(--studio-edge-subtle);
+  border-radius: var(--studio-radius-lg);
+  background: var(--studio-panel);
+  box-shadow: var(--studio-shadow-sm);
+  overflow: hidden;
+}
+@media (max-width: 600px) {
+  html[data-workspace-style="linen"] .wf-editor { padding: 0 6px 6px; }
+}

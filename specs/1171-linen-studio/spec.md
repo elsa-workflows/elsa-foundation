@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3496-linen-studio`
 **Created**: 2026-10-31
-**Status**: Draft
+**Status**: Implemented
 **Issue**: [#3496](https://github.com/elsa-workflows/elsa-foundation/issues/3496)
 **Program**: [Elsa 4 Simplification](../../docs/program-goals/elsa-4-simplification.md)
 **Input**: Deliver the owner-selected Linen design end to end, including existing themes, modular branding and image-led customizable login pages, after the owner approved the visual prototypes.

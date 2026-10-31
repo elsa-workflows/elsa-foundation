@@ -134,3 +134,8 @@ essential low-contrast text directly over an uncontrolled image.
 
 A complete configuration and launch example is in [branded-host](../examples/branded-host/README.md).
 Host composition and deployment remain documented in the [hosting guide](custom-hosting.md).
+
+For a wholly custom browser shell or additional font/CSS assets, select an application-owned
+`StudioHostingOptions.IndexFile` and use the public SDK/UI contracts described in
+[custom hosting](custom-hosting.md). The theme store supplies palette definitions; host-owned assets
+and presentation do not need a fork of the authentication provider or workflow modules.

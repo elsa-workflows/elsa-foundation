@@ -120,14 +120,3 @@ html[data-workspace-style="linen"] .wf-grid {
   border-radius: var(--studio-radius-lg);
   background: var(--studio-panel);
 }
-html[data-workspace-style="linen"] .wf-editor { background: transparent; padding: 0 20px 16px; }
-html[data-workspace-style="linen"] .wf-editor-body {
-  border: 1px solid var(--studio-edge-subtle);
-  border-radius: var(--studio-radius-lg);
-  background: var(--studio-panel);
-  box-shadow: var(--studio-shadow-sm);
-  overflow: hidden;
-}
-@media (max-width: 600px) {
-  html[data-workspace-style="linen"] .wf-editor { padding: 0 6px 6px; }
-}

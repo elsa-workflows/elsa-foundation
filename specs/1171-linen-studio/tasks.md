@@ -36,13 +36,15 @@ Independent check: host configuration reaches shell/status and actual login; rep
 Independent check: documented example uses public configuration/replacement seams and builds without product edits.
 
 - [x] T014 [US4] Write Studio/docs/branding.md and a complete runnable branded-host example, linking existing hosting/theme/token guides.
-- [ ] T015 [US4] Verify example consumer compilation and served asset integration using existing host/sample paths.
+- [x] T015 [US4] Verify example consumer compilation and served asset integration using existing host/sample paths.
 
 ## Qualification and delivery
 
 - [ ] T016 Run full affected suites, red/green bite proof and browser qualification; record evidence in specs/1171-linen-studio/quickstart.md.
 - [ ] T017 Run architecture/maps, public API checks and review constitutional constraints.
 - [ ] T018 Commit, open/attach draft PR and complete three independent review perspectives, fixing verified findings in new commits.
-- [ ] T019 Qualify exact head against current main, ready/review/merge through org protocol and verify resulting main; mark specs/1171-linen-studio/spec.md Implemented.
+- [ ] T019 Prepare reviewed exact-head delivery evidence and resulting-main verification steps on the PR; mark specs/1171-linen-studio/spec.md Implemented.
+
+Merge and resulting-main status are recorded on the PR/issue after the implementation checklist; this checklist does not claim a merge has already happened.
 
 Dependencies: T001 → T002–T008 (US1/US2); T009 → T010; T011 → T012–T013; US1–US3 → US4 → qualification. Distinct CSS, runtime and identity files permit parallel tooling but implementation remains sequential to preserve clear ownership. MVP is US1+US2; authorized delivery includes all stories.
