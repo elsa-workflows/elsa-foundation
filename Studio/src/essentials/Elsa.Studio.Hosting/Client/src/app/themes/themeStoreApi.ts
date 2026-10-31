@@ -329,6 +329,11 @@ function validateShape(shape: ThemeShape | undefined, issues: ThemeValidationIss
   }
 }
 
+/** Typed servers serialize absent optional members as null; omission keeps client defaults editable. */
+function normalizeOptionalMembers<T extends object>(value: T | null | undefined): T | undefined {
+  return value ? Object.fromEntries(Object.entries(value).filter(([, member]) => member !== null)) as T : undefined;
+}
+
 function normalizeThemeDefinition(theme: Partial<StudioThemeDefinition> | null | undefined): StudioThemeDefinition | null {
   if (!theme?.id || !theme.modes?.light || !theme.modes?.dark) {
     return null;
@@ -349,9 +354,9 @@ function normalizeThemeDefinition(theme: Partial<StudioThemeDefinition> | null |
       ...(theme.modes.dim ? { dim: theme.modes.dim } : {}),
       ...(theme.modes.highContrast ? { highContrast: theme.modes.highContrast } : {})
     },
-    // The host serializes absent optional sections as null; keep them undefined client-side.
-    typography: theme.typography ?? undefined,
-    shape: theme.shape ?? undefined,
+    // Normalize both absent sections and absent members from current and older typed hosts.
+    typography: normalizeOptionalMembers(theme.typography),
+    shape: normalizeOptionalMembers(theme.shape),
     layout: isStudioThemeLayout(theme.layout) ? theme.layout : undefined,
     workspaceStyle: isWorkspaceStyle(theme.workspaceStyle) ? theme.workspaceStyle : undefined,
     material: theme.material

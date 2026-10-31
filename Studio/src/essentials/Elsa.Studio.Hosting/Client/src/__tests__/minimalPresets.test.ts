@@ -34,6 +34,21 @@ describe("minimal Studio theme definitions", () => {
     expect(getTheme("builtin:atelier")!.typography?.display).toBeUndefined();
   });
 
+  it("keeps a server-duplicated theme editable when optional font and radius members are null", () => {
+    const custom = createCustomThemeFrom(getTheme("builtin:graphite")!, "branded-studio", "Branded Studio");
+    const wire = JSON.parse(JSON.stringify(custom));
+    wire.typography.display = null;
+    wire.shape.radiusSm = null;
+    const normalized = normalizeThemeStore({ themes: [wire] }).themes.find(theme => theme.id === custom.id)!;
+    expect(normalized.typography?.display).toBeUndefined();
+    expect(normalized.typography?.sans).toBe(custom.typography?.sans);
+    expect(normalized.shape?.radiusSm).toBeUndefined();
+    expect(normalized.shape?.radius).toBe("8px");
+    expect(validateThemeDefinition(normalized).valid).toBe(true);
+    const invalid = { ...normalized, typography: { ...normalized.typography, display: "bad; font" } };
+    expect(validateThemeDefinition(invalid).issues.some(issue => issue.path === "typography.display" && issue.severity === "error")).toBe(true);
+  });
+
   it("rejects invalid presentation metadata and safely normalizes an old or invalid wire value", () => {
     const copy = createCustomThemeFrom(getTheme("builtin:porcelain")!, "my-studio", "My Studio");
     const invalid = { ...copy, workspaceStyle: "untrusted-style" } as unknown as typeof copy;
