@@ -3,6 +3,8 @@ using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Persistence.Core.Exceptions;
 using Elsa.Workflows.Design.Validations.Core.Exceptions;
 using Elsa.Workflows.Design.Validations.Core.Models;
+using Elsa.Workflows.Design.Api.Services;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Microsoft.AspNetCore.Http;
 using NativeEndpoints;
 
@@ -31,10 +33,13 @@ internal sealed class WorkflowDesignExceptionTranslator : IEndpointExceptionTran
             WorkflowPromotionOperationConflictException or
             WorkflowDraftChangedException or
             WorkflowTemplateConflictException or
-            WorkflowDefinitionNotSoftDeletedException =>
+            WorkflowDefinitionNotSoftDeletedException or WorkflowLibraryConflictException =>
             EndpointProblem.General(StatusCodes.Status409Conflict, exception.Message),
         Templates.WorkflowTemplatesUnavailableException => EndpointProblem.General(StatusCodes.Status501NotImplemented, exception.Message),
         PermanentDeletionUnavailableException => EndpointProblem.General(StatusCodes.Status501NotImplemented, exception.Message),
+        WorkflowLibraryUnavailableException => EndpointProblem.General(StatusCodes.Status501NotImplemented, exception.Message),
+        WorkflowLibraryAuthorizationException => EndpointProblem.General(StatusCodes.Status403Forbidden, exception.Message),
+        UnauthorizedAccessException => EndpointProblem.General(StatusCodes.Status403Forbidden, "The requested workflow library operation is not permitted."),
         ArgumentException => EndpointProblem.General(StatusCodes.Status400BadRequest, exception.Message),
         _ => null
     };

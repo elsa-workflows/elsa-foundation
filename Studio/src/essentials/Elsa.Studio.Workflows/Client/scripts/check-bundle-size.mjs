@@ -78,10 +78,14 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // and limiting affordances to the proved explain/layout journeys reduced these to 387.22 / 378.34 kB.
 // Add 3 kB to the previous 384.50 / 376.00 kB limits for this measured ownership cost; entry, stylesheet,
 // individual-chunk and heavy-surface guards are unchanged. The parent tree was not rebuilt separately.
+// Workflow library organization (#3500): the same installed dependencies measure the exact parent
+// Definitions landing at 387,066 bytes and this candidate at 398,685 bytes. Canonical query/access
+// boundaries and list integration justify a 400,000-byte limit; filters/editors/catalog remain deferred.
+// Every other budget is unchanged, and those three new surfaces join the eager-regression guards.
 const budgets = {
   entryJavaScript: 127_500,
   stylesheet: 185_000,
-  definitionsLandingTotal: 387_500,
+  definitionsLandingTotal: 400_000,
   upgradeLandingTotal: 379_000,
   individualChunk: 500_000
 };
@@ -99,6 +103,9 @@ const deferredHeavySurfaces = [
   "WorkflowTestDrivePanel",
   "WorkflowTestRunControls",
   "CreateWorkflowDialog",
+  "WorkflowLibraryControls",
+  "WorkflowOrganizationDialog",
+  "WorkflowTagCatalogDialog",
   "workflowTestHttpAction"
 ];
 

@@ -12,6 +12,8 @@ using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Validations.Core;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using NativeEndpoints;
+using Elsa.Workflows.Design.Api.Services;
+using Elsa.Workflows.Design.Persistence.Core.Stores;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -23,7 +25,8 @@ public sealed class Endpoint(
     IWorkflowDefinitionFactory definitionFactory,
     IWorkflowDefinitionDraftFactory draftFactory,
     IAddWorkflowDefinitionCommand addCommand,
-    ICredentialLiteralValidator credentialLiterals) : ApiEndpoint<AddDefinition, WorkflowDefinitionDetailsView>
+    ICredentialLiteralValidator credentialLiterals,
+    IWorkflowLibraryStore? library = null) : ApiEndpoint<AddDefinition, WorkflowDefinitionDetailsView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -33,6 +36,12 @@ public sealed class Endpoint(
 
     public override async Task<WorkflowDefinitionDetailsView> HandleAsync(AddDefinition command, CancellationToken cancellationToken)
     {
+        if (command.FolderId is not null)
+        {
+            WorkflowLibraryAccess.Require(library);
+            await WorkflowLibraryAccess.RequireAsync(HttpContext, WorkflowDesignPermissions.Manage,
+                new WorkflowLibraryResource(FolderId: command.FolderId), cancellationToken);
+        }
         var state = (command.InitialState ?? new WorkflowDefinitionStateView()).ToState();
         await credentialLiterals.AdmitAsync(state, cancellationToken);
         var definition = definitionFactory.Create(command.Name, command.Description);
@@ -56,6 +65,8 @@ public sealed class Endpoint(
             draftEntity,
             layout,
             activityPresentation,
+            command.FolderId,
+            command.FolderId is null ? string.Empty : (await WorkflowLibraryAccess.SubjectAsync(HttpContext, true, cancellationToken))!,
             cancellationToken);
 
         var authoritativeDefinition = WorkflowDefinition.From(definition);
@@ -63,8 +74,11 @@ public sealed class Endpoint(
         var authoritativeDraft = WorkflowDefinitionDraft.From(draft);
         authoritativeDraft.Id = result.DraftId;
         authoritativeDraft.WorkflowDefinitionId = result.DefinitionId;
+        var definitionView = authoritativeDefinition.ToView();
+        if (library is not null && await library.GetOrganizationAsync(result.DefinitionId, cancellationToken) is { } organization)
+            definitionView = WorkflowLibraryProjection.WithOrganization(definitionView, organization);
         return new WorkflowDefinitionDetailsView(
-            authoritativeDefinition.ToView(),
+            definitionView,
             WorkflowDraftView.From(authoritativeDraft, layout, activityPresentation),
             Versions: []);
     }

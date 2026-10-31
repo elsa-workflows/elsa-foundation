@@ -85,7 +85,7 @@ public sealed class WorkflowsDesignApiContractTests
         """;
 
     [Fact]
-    public void Mapper_registers_exactly_the_32_owned_operations_with_stable_metadata()
+    public void Mapper_registers_exactly_the_53_owned_operations_with_stable_metadata()
     {
         using var services = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(services);
@@ -93,8 +93,8 @@ public sealed class WorkflowsDesignApiContractTests
         Elsa.Workflows.Design.Api.WorkflowsDesignApi.MapWorkflowsDesignApi(routes);
 
         var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
-        Assert.Equal(32, endpoints.Length);
-        Assert.Equal(32, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.OwnerId).Distinct().Count() == 1 ? endpoints.Length : 0);
+        Assert.Equal(53, endpoints.Length);
+        Assert.Equal(53, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<EndpointOwnershipMetadata>()?.OwnerId).Distinct().Count() == 1 ? endpoints.Length : 0);
 
         foreach (var endpoint in endpoints)
         {
@@ -146,10 +146,22 @@ public sealed class WorkflowsDesignApiContractTests
             "POST design/workflows/drafts/{draftId}/promotion-preflight",
             "PUT design/workflows/drafts/{draftId}",
             "DELETE design/workflows/drafts/{draftId}",
-            "POST design/workflows/versions/ingest"
+            "POST design/workflows/versions/ingest",
+            "POST design/workflows/folders",
+            "POST design/workflows/folders/{folderId}/rename",
+            "POST design/workflows/folders/{folderId}/move",
+            "DELETE design/workflows/folders/{folderId}",
+            "POST design/workflows/definitions/move"
+        };
+        var libraryPermissions = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["PUT design/workflows/definitions/{definitionId}/organization"] = WorkflowDesignPermissions.AssignTags,
+            ["POST design/workflows/tags/bulk"] = WorkflowDesignPermissions.AssignTags,
+            ["POST design/workflows/tags"] = WorkflowDesignPermissions.ManageTags,
+            ["PUT design/workflows/tags/{tagId}"] = WorkflowDesignPermissions.ManageTags
         };
         var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
-        Assert.Equal(32, endpoints.Length);
+        Assert.Equal(53, endpoints.Length);
         foreach (var endpoint in endpoints)
         {
             var method = endpoint.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.Single();
@@ -159,7 +171,9 @@ public sealed class WorkflowsDesignApiContractTests
             var permissions = policy.Descriptor!.Permissions;
             Assert.Single(permissions);
             Assert.DoesNotContain(PermissionKey.Normalize(PermissionKey.Wildcard), permissions);
-            Assert.Equal(PermissionKey.Normalize(manageRoutes.Contains(key) ? WorkflowDesignPermissions.Manage : WorkflowDesignPermissions.Read), permissions.Single());
+            var expected = libraryPermissions.GetValueOrDefault(key) ??
+                (manageRoutes.Contains(key) ? WorkflowDesignPermissions.Manage : WorkflowDesignPermissions.Read);
+            Assert.Equal(PermissionKey.Normalize(expected), permissions.Single());
         }
     }
 
@@ -656,6 +670,7 @@ public sealed class WorkflowsDesignApiContractTests
 
     internal sealed class AuthorizationHost(IHost host) : IAsyncDisposable
     {
+        public IServiceProvider Services => host.Services;
         public const string IdentityHeader = "X-Workflow-Design-Identity";
         public HttpClient Client { get; } = host.GetTestClient();
         public ContractActivityVersionStore ActivityStore { get; } = host.Services.GetRequiredService<ContractActivityVersionStore>();
@@ -663,7 +678,7 @@ public sealed class WorkflowsDesignApiContractTests
         public AuthorizationProbe AuthorizationProbe { get; } = host.Services.GetRequiredService<AuthorizationProbe>();
         public DefinitionDomainFakes Domain { get; } = host.Services.GetRequiredService<DefinitionDomainFakes>();
 
-        public static async Task<AuthorizationHost> StartAsync()
+        public static async Task<AuthorizationHost> StartAsync(Action<IServiceCollection>? configure = null)
         {
             var host = new HostBuilder()
                 .ConfigureWebHost(webHost =>
@@ -695,6 +710,7 @@ public sealed class WorkflowsDesignApiContractTests
                         new Elsa.Workflows.Design.Validations.WorkflowDesignValidationsFeature().ConfigureServices(services);
                         services.AddSingleton<IActivityDefinitionLookup>(CredentialLiteralTestSupport.Catalog());
                         services.AddFastEndpoints(options => options.Assemblies = [typeof(DesignRetainedFastEndpointsCanary).Assembly]);
+                        configure?.Invoke(services);
                     });
                     webHost.Configure(app =>
                     {
@@ -736,7 +752,19 @@ public sealed class WorkflowsDesignApiContractTests
                 return Task.FromResult(AuthenticateResult.NoResult());
 
             var claims = new List<Claim>();
-            if (identity == "external-read")
+            if (identity.StartsWith("library-", StringComparison.Ordinal))
+            {
+                claims.Add(new Claim(IdentityClaimTypes.Normalized, "v1"));
+                claims.Add(new Claim(IdentityClaimTypes.TenantId, "tenant-design"));
+                claims.Add(new Claim(IdentityClaimTypes.Permission, WorkflowDesignPermissions.Read));
+                if (identity != "library-no-subject")
+                    claims.Add(new Claim(ClaimTypes.NameIdentifier, identity == "library-read-other" ? "user-b" : "user-a"));
+                if (identity == "library-all") claims.Add(new Claim(IdentityClaimTypes.Permission, PermissionKey.Wildcard));
+                if (identity == "library-assign") claims.Add(new Claim(IdentityClaimTypes.Permission, WorkflowDesignPermissions.AssignTags));
+                if (identity == "library-catalog") claims.Add(new Claim(IdentityClaimTypes.Permission, WorkflowDesignPermissions.ManageTags));
+                if (identity == "library-share") claims.Add(new Claim(IdentityClaimTypes.Permission, WorkflowDesignPermissions.ShareViews));
+            }
+            else if (identity == "external-read")
             {
                 claims.Add(new Claim(IdentityClaimTypes.Normalized, "v1"));
                 claims.Add(new Claim(IdentityClaimTypes.Provider, "external"));

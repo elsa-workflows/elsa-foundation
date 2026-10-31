@@ -5,6 +5,7 @@ import {
   parseWorkflowDefinitionBrowseLocation,
   updateWorkflowDefinitionBrowseUrl,
   workflowFolderSelectionKey,
+  workflowLibraryFilterKey,
   type WorkflowDefinitionBrowseLocation
 } from "./workflowDefinitionBrowseLocation";
 
@@ -223,6 +224,9 @@ export function useWorkflowDefinitionBrowseSession(context: StudioEndpointContex
     const syncFromLocation = () => {
       const next = parseWorkflowDefinitionBrowseLocation(window.location.search);
       const changed = next.search !== browseLocation.search
+        || workflowLibraryFilterKey(next) !== workflowLibraryFilterKey(browseLocation)
+        || next.viewId !== browseLocation.viewId
+        || JSON.stringify(next.columns) !== JSON.stringify(browseLocation.columns)
         || next.listState !== browseLocation.listState
         || workflowFolderSelectionKey(next.folderSelection) !== workflowFolderSelectionKey(browseLocation.folderSelection);
       if (!changed) return;

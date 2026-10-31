@@ -72,6 +72,7 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
         services.AddApiCapability(WorkflowDesignApiCapabilities.StaticDeclaration);
         services.AddApiCapabilitySource<WorkflowDesignOperationalCapabilitySource>();
         services.AddApiCapabilitySource<WorkflowTemplateCapabilitySource>();
+        services.AddApiCapabilitySource<WorkflowLibraryCapabilitySource>();
         services.AddPermissionContributor<WorkflowDesignPermissionContributor>();
         services.ConfigureHttpJsonOptions(options =>
         {

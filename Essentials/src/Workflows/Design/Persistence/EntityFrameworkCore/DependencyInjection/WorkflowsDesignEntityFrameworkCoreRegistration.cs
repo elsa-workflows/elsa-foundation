@@ -50,6 +50,9 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         addContext(services, options);
         services.TryAddScoped<IDesignAtomicWriter, EfDesignAtomicWriter>();
         services.AddScoped<IWorkflowTemplateStore, EfWorkflowTemplateStore>();
+        services.AddScoped<EfWorkflowLibraryStore>();
+        services.AddScoped<IWorkflowLibraryStore>(provider => provider.GetRequiredService<EfWorkflowLibraryStore>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<Elsa.Workflows.Runtime.Core.Contracts.IWorkflowTriggerIndexObserver, WorkflowLibraryPublicationObserver>());
         services.TryAddScoped<IWorkflowDefinitionFactory, WorkflowDefinitionFactory>();
         services.TryAddScoped<IWorkflowDefinitionDraftFactory, WorkflowDefinitionDraftFactory>();
         services.TryAddScoped<IWorkflowDefinitionVersionFactory, WorkflowDefinitionVersionFactory>();
@@ -113,6 +116,8 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         typeof(WorkflowsDesignPostgreSqlDbContext),
         typeof(WorkflowsDesignMySqlDbContext),
         typeof(IWorkflowTemplateStore),
+        typeof(IWorkflowLibraryStore),
+        typeof(EfWorkflowLibraryStore),
         typeof(IDesignAtomicWriter),
         typeof(IWorkflowDefinitionLookup),
         typeof(EfWorkflowDefinitionStore),

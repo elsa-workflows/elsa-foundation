@@ -6774,6 +6774,8 @@ Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerIndexSnapshot.ArtifactId.init 
 Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerIndexSnapshot.Bindings.get -> System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerBinding!>!
 Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerIndexSnapshot.Bindings.init -> void
 Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerIndexSnapshot.Deconstruct(out string! ArtifactId, out System.Collections.Generic.IReadOnlyCollection<Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerBinding!>! Bindings) -> void
+Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerIndexSnapshot.DefinitionId.get -> string?
+Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerIndexSnapshot.DefinitionId.init -> void
 Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerIndexSnapshot.Equals(Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerIndexSnapshot? other) -> bool
 Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerIndexSnapshot.RequiresProjectionRefresh.get -> bool
 Elsa.Workflows.Runtime.Core.Models.WorkflowTriggerIndexSnapshot.RequiresProjectionRefresh.init -> void
