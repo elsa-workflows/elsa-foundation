@@ -30,6 +30,12 @@ public sealed class DomainApiCapabilityRegistrationTests
 {
     public static TheoryData<Type, ApiCapabilityDeclaration> DomainFeatures => new()
     {
+        { typeof(Elsa.Workflows.Dashboard.WorkflowsDashboardFeature), new("elsa.api.workflow-dashboard",1,[new("workflow-portfolio","_elsa/workflows/dashboard/definitions"),new("workflow-run-health","_elsa/workflows/dashboard/runs")],"WorkflowsDashboard") },
+        { typeof(Elsa.Connections.Api.Features.ConnectionsApiFeature), new("elsa.api.connections",1,[new("connections","connections"),new("connection-picker","connections/picker")],"ConnectionsApi") },
+        { typeof(Elsa.Secrets.Api.Features.SecretsApiFeature), new("elsa.api.secrets",1,[new("secrets","secrets"),new("secret-picker","secrets/picker")],"SecretsApi") },
+        { typeof(Elsa.Attention.Api.AttentionApiFeature), new("elsa.api.attention",1,[new("attention-items","_elsa/attention/items")],"AttentionApi") },
+        { typeof(Elsa.Agent.Api.FoundationAgentApiFeature), new("elsa.api.agent",1,[new("agent-bootstrap","_elsa/agent/bootstrap"),new("agent-sessions","_elsa/agent/sessions")],"FoundationAgentApi") },
+        { typeof(Elsa.Diagnostics.OpenTelemetry.OpenTelemetryFeature), new("elsa.api.open-telemetry",1,[new("telemetry-resources","diagnostics/opentelemetry/resources/search")],"DiagnosticsOpenTelemetry") },
         { typeof(WorkflowsDesignApiFeature), WorkflowDesignApiCapabilities.StaticDeclaration },
         { typeof(ActivitiesDesignApiFeature), ActivityDesignApiCapabilities.StaticDeclaration },
         // The expressions declaration is internal to its API, so its wire values are stated here.
@@ -67,6 +73,20 @@ public sealed class DomainApiCapabilityRegistrationTests
             Assert.False(link.Href.StartsWith('/'));
             Assert.False(Uri.TryCreate(link.Href, UriKind.Absolute, out _));
         });
+    }
+
+    [Fact]
+    public async Task Structured_log_capabilities_use_the_host_configured_routes()
+    {
+        var services = new ServiceCollection();
+        new Elsa.Diagnostics.StructuredLogs.StructuredLogsFeature().ConfigureServices(services);
+        services.Configure<Elsa.Diagnostics.StructuredLogs.Core.Options.StructuredLogsOptions>(options =>
+        {options.RecentPath="/custom/logs";options.SourcesPath="/custom/sources";options.StreamPath="/custom/stream";});
+        using var provider = services.BuildServiceProvider();
+        var source = Assert.Single(provider.GetServices<IApiCapabilitySource>());
+        var declaration = Assert.Single(await source.GetCapabilitiesAsync());
+        Assert.Equal("elsa.api.structured-logs",declaration.CapabilityId);
+        Assert.Equal(["custom/logs","custom/sources","custom/stream"],declaration.Links.Select(link => link.Href).Order(StringComparer.Ordinal));
     }
 
     [Fact]

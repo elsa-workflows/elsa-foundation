@@ -75,7 +75,7 @@ public static class AspNetCoreIdentityApi
         var tokens = context.RequestServices.GetRequiredService<IAntiforgery>().GetAndStoreTokens(context);
 
         context.Response.ContentType = "text/html; charset=utf-8";
-        await context.Response.WriteAsync(LoginPage.Render(returnUrl, error is not null, tokens.RequestToken, context.RequestServices.GetRequiredService<IOptions<LoginPageOptions>>().Value), context.RequestAborted);
+        await context.Response.WriteAsync(LoginPage.RenderInShell(returnUrl, error is not null, tokens.RequestToken, context.RequestServices.GetRequiredService<IOptions<LoginPageOptions>>().Value, LoginPathBase(context)), context.RequestAborted);
     }
 
     private static async Task HandleLoginAsync(HttpContext context)
@@ -192,10 +192,19 @@ public static class AspNetCoreIdentityApi
         }
     }
 
+    private static string LoginPathBase(HttpContext context)
+    {
+        var suffix = "/" + AspNetCoreIdentityDefaults.LoginRoute;
+        var path = context.Request.Path.Value ?? "";
+        // CShells prefixes endpoint routes without rewriting Request.PathBase. Also retain a reverse proxy PathBase.
+        var shellPrefix = path.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) ? path[..^suffix.Length] : "";
+        return context.Request.PathBase.Add(new PathString(shellPrefix)).Value ?? "";
+    }
+
     private static async Task RedirectToLoginWithErrorAsync(HttpContext context, string? returnUrl)
     {
         var options = context.RequestServices.GetRequiredService<IOptions<AspNetCoreIdentityOptions>>().Value;
-        var back = $"/{AspNetCoreIdentityDefaults.LoginRoute}?error=1&returnUrl={Uri.EscapeDataString(LocalUrl.Sanitize(returnUrl, options.AllowedReturnUrlOrigins))}";
+        var back = $"{LoginPathBase(context)}/{AspNetCoreIdentityDefaults.LoginRoute}?error=1&returnUrl={Uri.EscapeDataString(LocalUrl.Sanitize(returnUrl, options.AllowedReturnUrlOrigins))}";
         await Results.Redirect(back, permanent: false).ExecuteAsync(context);
     }
 

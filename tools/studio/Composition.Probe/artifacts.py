@@ -118,6 +118,7 @@ class Artifacts:
             for name in ["Core", "Nuplane"]:
                 project = f"Essentials/src/Modularity/{name}/Elsa.Modularity.{name}.csproj"
                 self.run("producer-modularity-" + name.lower(), [self.dotnet, "pack", project, "-c", "Release", *properties, "-o", str(self.feed)], producer)
+            self.run("producer-preferences", [self.dotnet,"pack","Essentials/src/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj","-c","Release",*properties,"-o",str(self.feed)],producer)
             self.run("reference-web-publish", [self.dotnet, "publish", "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj", "-c", "Release", "--no-build", *properties, "-o", str(self.root / "reference-web-published")], producer)
             self.report.update(producer="owned committed source snapshot and actual production projects", producerSource=self.source,
                                generatedInputHashes=generated, referenceWebPublished=True)
@@ -129,7 +130,7 @@ class Artifacts:
                 dependencies = [node.attrib for node in spec.iter() if node.tag.rsplit("}", 1)[-1] == "dependency"]
             self.packages[name] = {"path": str(path), "version": version, "archiveSha256": digest(path.read_bytes()), "dependencies": dependencies}
         required = {"Elsa.Studio.Core", "Elsa.Studio.Api", "Elsa.Studio.Hosting", "Elsa.Studio.Hosting.Themes",
-                    "Elsa.Studio.Hosting.Nuplane", "Elsa.Studio.ConsoleStream", "Elsa.Modularity.Core", "Elsa.Modularity.Nuplane"}
+                    "Elsa.Studio.Hosting.Nuplane", "Elsa.Studio.ConsoleStream", "Elsa.Studio.Preferences.Core", "Elsa.Modularity.Core", "Elsa.Modularity.Nuplane"}
         check(required.issubset(self.packages), "Missing actual composition candidate packages")
         versions = {self.packages[name]["version"] for name in required}
         check(len(versions) == 1, "Composition product candidates must share one injected version")

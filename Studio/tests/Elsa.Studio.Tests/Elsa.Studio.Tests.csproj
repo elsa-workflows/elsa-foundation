@@ -10,6 +10,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
@@ -22,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\essentials\Elsa.Studio.Api\Elsa.Studio.Api.csproj" />
     <ProjectReference Include="../../src/essentials/Elsa.Studio.Hosting/Elsa.Studio.Hosting.csproj" />
+    <ProjectReference Include="../../../Essentials/src/Studio/Preferences/Persistence/EntityFrameworkCore/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../src/essentials/Elsa.Studio.Hosting.Themes/Elsa.Studio.Hosting.Themes.csproj" />
     <ProjectReference Include="..\..\..\Extensions\ConsoleStream\studio\Elsa.Studio.ConsoleStream\Elsa.Studio.ConsoleStream.csproj" />
     <ProjectReference Include="..\..\src\essentials\Elsa.Studio.Core\Elsa.Studio.Core.csproj" />

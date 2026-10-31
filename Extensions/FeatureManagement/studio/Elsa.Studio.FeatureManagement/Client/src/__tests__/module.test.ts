@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { AnonymousAuthProvider, AuthProvider, type AuthProviderManager } from "@elsa-workflows/studio-sdk";
+import { AnonymousAuthProvider, AuthProvider, studioBackendCapabilitiesChangedEvent, studioNavigationRequestedEvent, type AuthProviderManager } from "@elsa-workflows/studio-sdk";
 import {
   applyFeatureToggle,
   buildDependentsIndex,
@@ -2200,3 +2200,40 @@ async function flushPromises() {
   await new Promise(resolve => setTimeout(resolve, 0));
   await Promise.resolve();
 }
+
+describe("backend feature administration isolation",() => {
+  it("refuses reviewed Apply after connection lifetime changes",async()=>{
+    let posts=0;
+    const api=stubApi({getJson:async()=>({revision:"rev-a",features:[feature("FeatureA",true,{})]}),postJson:async()=>{posts++;return {};}});
+    api.backendSession={key:"backend-a:alice:tenant-a:generation-one",identity:{status:"anonymous",roles:[],permissions:[]},profile:{name:"Backend A"}};
+    register(api);const page=await renderFeatureManagementPage();
+    try {
+      expect(page.container.textContent).toContain("Server · Backend A");
+      await click(page.container.querySelector("[aria-label='Disable FeatureA']"));const review=await openImpactReview(page.container);
+      api.backendSession={...api.backendSession,key:"backend-b:bob:tenant-b:generation-two",profile:{name:"Backend B"}};
+      await click(buttonByText(review,"Apply"));expect(posts).toBe(0);
+    } finally {await page.unmount();}
+  });
+  it("pins settings and revision, guards drafts, and refreshes only the applied connection",async()=>{
+    let payload:any;const events:string[]=[];
+    const source=feature("Configured",true,{Limit:1},[],{settings:[setting({name:"Limit",displayName:"Limit",jsonType:"integer"})]});
+    const api=stubApi({getJson:async()=>({revision:"rev-a",features:[source]}),postJson:async(_url,body)=>{payload=body;return {catalog:{revision:"rev-b",features:[source]},featureDescriptorCount:1,reloadedShellCount:1};}});
+    api.backendSession={key:"exact-backend-session",identity:{status:"anonymous",roles:[],permissions:[]},profile:{name:"Backend A"}};
+    const listener=(event:Event)=>events.push((event as CustomEvent).detail.key);window.addEventListener(studioBackendCapabilitiesChangedEvent,listener);
+    register(api);const page=await renderFeatureManagementPage();
+    try {
+      await editSettingValue(page.container,"Configured","Limit","7");
+      const leave=new Event(studioNavigationRequestedEvent,{cancelable:true});window.dispatchEvent(leave);expect(leave.defaultPrevented).toBe(true);
+      const review=await openImpactReview(page.container);await click(buttonByText(review,"Apply"));
+      expect(payload.revision).toBe("rev-a");expect(payload.features[0].configuration.Limit).toBe(7);expect(events).toEqual(["exact-backend-session"]);
+    } finally {window.removeEventListener(studioBackendCapabilitiesChangedEvent,listener);await page.unmount();}
+  });
+  it("preserves missing descriptor information and explains dormant features",async()=>{
+    const api=stubApi({getJson:async()=>({revision:"rev",features:[feature("Older",true,{}),{...feature("Dormant",true,{}),runtimeAvailable:true,availability:{status:"dormant",reasons:[{family:"schema",version:"1",kind:"missing",reason:"Schema finalization is pending."}]}}]})});
+    register(api);const page=await renderFeatureManagementPage();
+    try {
+      await click(buttonContainingText(page.container,"Older"));expect(page.container.textContent).toContain("Not reported");
+      await click(buttonContainingText(page.container,"Dormant"));expect(page.container.textContent).toContain("Schema finalization is pending.");
+    } finally {await page.unmount();}
+  });
+});

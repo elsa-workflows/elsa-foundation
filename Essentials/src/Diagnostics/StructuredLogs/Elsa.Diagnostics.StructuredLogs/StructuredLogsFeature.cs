@@ -1,3 +1,7 @@
+using Elsa.Api.Capabilities.Extensions;
+using Elsa.Api.Capabilities.Models;
+using Elsa.Api.Capabilities.Contracts;
+using Microsoft.Extensions.Options;
 using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Api.AspNetCore;
@@ -31,7 +35,8 @@ namespace Elsa.Diagnostics.StructuredLogs;
 [ShellFeature(
     name: "DiagnosticsStructuredLogs",
     DisplayName = "Diagnostics: Structured Logs",
-    Description = "Captures structured log entries and exposes them for live tailing and recent-history queries."
+    Description = "Captures structured log entries and exposes them for live tailing and recent-history queries.",
+    DependsOn = new object[] { "ApiCapabilities" }
 )]
 public class StructuredLogsFeature : IWebShellFeature
 {
@@ -50,6 +55,7 @@ public class StructuredLogsFeature : IWebShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddElsaEndpoints();
+        services.AddApiCapabilitySource<StructuredLogsApiCapabilitySource>();
         var minimumLevel = Enum.TryParse<LogLevel>(MinimumLevel, ignoreCase: true, out var parsed)
             ? parsed
             : LogLevel.Information;
@@ -87,4 +93,15 @@ public class StructuredLogsFeature : IWebShellFeature
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>
         StructuredLogsApi.MapStructuredLogsApi(endpoints);
+}
+
+internal sealed class StructuredLogsApiCapabilitySource(IOptions<StructuredLogsOptions> options) : IApiCapabilitySource
+{
+    public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult<IReadOnlyCollection<ApiCapabilityDeclaration>>([new(
+            "elsa.api.structured-logs", 1,
+            [new("structured-logs", options.Value.RecentPath.TrimStart('/')),
+             new("structured-log-sources", options.Value.SourcesPath.TrimStart('/')),
+             new("structured-log-stream", options.Value.StreamPath.TrimStart('/'))],
+            "DiagnosticsStructuredLogs")]);
 }

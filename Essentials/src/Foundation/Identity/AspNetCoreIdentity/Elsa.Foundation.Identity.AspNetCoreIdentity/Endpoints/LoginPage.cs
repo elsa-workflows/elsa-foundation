@@ -11,8 +11,11 @@ public static class LoginPage
 
     /// <summary>Renders configured presentation or invokes its single host replacement. The return URL must already be sanitized.</summary>
     public static string Render(string returnUrl, bool showError, string? antiforgeryToken, LoginPageOptions options)
+        => RenderInShell(returnUrl,showError,antiforgeryToken,options,"");
+
+    internal static string RenderInShell(string returnUrl, bool showError, string? antiforgeryToken, LoginPageOptions options, string pathBase)
     {
-        var form = RenderForm(returnUrl, showError, antiforgeryToken);
+        var form = RenderForm(returnUrl, showError, antiforgeryToken, pathBase);
         if (options.Renderer is { } renderer)
             return renderer(new(options.ProductName, returnUrl, showError, antiforgeryToken, form));
 
@@ -20,7 +23,7 @@ public static class LoginPage
         var layout = options.Layout is "split" or "reverse" or "immersive" or "editorial" ? options.Layout : "split";
         var palette = options.Palette is "linen" or "tidal" or "daybreak" or "canopy" ? options.Palette : "linen";
         var artwork = options.Artwork is "ember" or "tidal" or "daybreak" or "canopy" ? options.Artwork : "ember";
-        var image = SafeUrl(options.ImageUrl) ?? $"/_elsa/identity/login-assets/{artwork}.jpg";
+        var image = SafeUrl(options.ImageUrl) ?? $"{pathBase}/_elsa/identity/login-assets/{artwork}.jpg";
         var logo = SafeUrl(options.LogoUrl) is { } logoUrl ? $"<img class=\"logo\" src=\"{Encode(logoUrl)}\" alt=\"\" />" : "<span class=\"monogram\" aria-hidden=\"true\">✦</span>";
         var links = string.Join("", new[] { (options.HelpUrl, "Help"), (options.PrivacyUrl, "Privacy") }
             .Where(link => SafeUrl(link.Item1) is not null)
@@ -120,12 +123,12 @@ public static class LoginPage
         """;
     }
 
-    private static string RenderForm(string returnUrl, bool showError, string? token)
+    private static string RenderForm(string returnUrl, bool showError, string? token, string pathBase)
     {
         var antiforgery = string.IsNullOrEmpty(token) ? "" : $"<input type=\"hidden\" name=\"{AspNetCoreIdentityDefaults.AntiforgeryFieldName}\" value=\"{WebUtility.HtmlEncode(token)}\" />";
         var error = showError ? "<p class=\"error\" role=\"alert\">Invalid username or password.</p>" : "";
         return $$"""
-        <form method="post" action="/{{AspNetCoreIdentityDefaults.LoginRoute}}">
+        <form method="post" action="{{WebUtility.HtmlEncode(pathBase)}}/{{AspNetCoreIdentityDefaults.LoginRoute}}">
           {{error}}{{antiforgery}}
           <input type="hidden" name="returnUrl" value="{{WebUtility.HtmlEncode(returnUrl)}}" />
           <label for="username">Username</label>
