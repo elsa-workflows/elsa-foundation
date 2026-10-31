@@ -6,9 +6,8 @@ namespace Elsa.Activities.Switch.Internal;
 
 /// <summary>
 /// Shared <c>Switch</c> case rules so the design-time validator, the compile-time structure handler, and
-/// the runtime navigator all agree on what makes two cases collide. A <c>Switch</c> selects the first case
-/// whose match value equals the evaluated value using ordinal comparison; duplicate match values are
-/// therefore detected with that same ordinal comparison at every layer.
+/// the runtime navigator agree on ordinal label uniqueness. Schema-specific checks also preserve
+/// predicate identity and refuse activation-only bindings before compilation.
 /// </summary>
 internal static class SwitchCaseRules
 {

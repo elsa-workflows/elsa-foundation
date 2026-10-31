@@ -4,9 +4,9 @@ using Elsa.Workflows.Design.Core.Models;
 namespace Elsa.Activities.Switch.Models;
 
 /// <summary>
-/// Authored design-time structure for a <c>Switch</c> node: the ordered set of cases (each a match value
-/// plus an optional single branch activity) and an optional default branch activity. Every branch is a
-/// single child placed in its own named slot.
+/// Authored design-time structure for a <c>Switch</c> node: ordered case labels, optional Boolean
+/// condition arguments and branch activities, plus an optional default branch. Each branch occupies
+/// one named child slot. Cases without a condition retain legacy Value matching.
 /// </summary>
 public sealed class SwitchAuthoredStructure
 {
@@ -27,8 +27,7 @@ public sealed class SwitchAuthoredStructure
 }
 
 /// <summary>
-/// A single authored case: the value the switch expression is matched against and the optional branch
-/// activity to run when it matches.
+/// One authored case: its human label (also the legacy comparison value), optional predicate and branch.
 /// </summary>
 public sealed class SwitchAuthoredCase
 {

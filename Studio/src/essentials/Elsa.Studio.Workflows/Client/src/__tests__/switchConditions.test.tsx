@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { CaseConditionEditor } from "../workflow-editor/CaseConditionEditor";
 import { builtInPropertyEditors } from "../../../../../essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { addCollectionItem, canUpgradeSwitch, caseConditionInputKey, collectionSlotItems, getCollectionSlots, isPredicateOnlySwitch, moveCollectionItem, setCollectionCondition, upgradeSwitch } from "../collectionSlots";
 import { createActivityNode, getChildSlots, resolveScope, resolveScopeFrames, replaceSlotActivities, planSlotNavigation } from "../workflowAdapter";
 import { canonicalizeStateForWire, expandStateFromWire } from "../activityInputWire";
@@ -28,6 +28,19 @@ describe("Switch case conditions", () => {
     expect(cases[0].caseId).not.toBe(cases[1].caseId);
     for (const item of cases) expect(item.condition).toEqual({ referenceKey: caseConditionInputKey(item.caseId as string), value: { expressionType: "Literal", value: false } });
     expect(cases.map(item => item.match)).toEqual(["Case 1", "Case 2"]);
+  });
+
+  it("creates case identities through the existing fallback when randomUUID is unavailable", () => {
+    vi.stubGlobal("crypto", {});
+    try {
+      const node = addCollectionItem(empty(), collection);
+      const id = collectionSlotItems(node, collection)![0].caseId;
+      expect(typeof id).toBe("string");
+      expect(id).not.toBe("");
+      const legacy = createActivityNode(collectionActivity("switch"), "old");
+      legacy.structure!.payload.cases = [{ match: "Approved", activity: null }];
+      expect((upgradeSwitch(legacy, catalog).structure!.payload.cases as Record<string, unknown>[])[0].caseId).toEqual(expect.any(String));
+    } finally { vi.unstubAllGlobals(); }
   });
 
   it("retains an unbound predicate when cleared, preserving branch and unknown fields", () => {

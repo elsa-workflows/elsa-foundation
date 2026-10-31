@@ -1,3 +1,4 @@
+import { generateId } from "./workflowProperties";
 import type { ActivityCatalogItem, ActivityNode } from "./workflowTypes";
 import { readStructureDesignFacet, type StructureDesignFacet } from "./workflowAdapter";
 
@@ -50,7 +51,7 @@ export function addCollectionItem(activity: ActivityNode, collection: Collection
   let ordinal = 1;
   while (items.some(item => item[collection.labelProperty] === `${noun} ${ordinal}`)) ordinal++;
   const item: Record<string, unknown> = { [collection.labelProperty]: `${noun} ${ordinal}`, [collection.childProperty]: null };
-  if (collection.itemIdProperty) item[collection.itemIdProperty] = crypto.randomUUID();
+  if (collection.itemIdProperty) item[collection.itemIdProperty] = generateId();
   if (collection.conditionProperty && collection.itemIdProperty) item[collection.conditionProperty] = {
     referenceKey: caseConditionInputKey(item[collection.itemIdProperty] as string), value: { expressionType: "Literal", value: false }
   };
@@ -116,7 +117,7 @@ export function upgradeSwitch(activity: ActivityNode, target: ActivityCatalogIte
   if (!canUpgradeSwitch(activity) || facet?.kind !== "elsa.switch.structure" || facet.schemaVersion !== "2.0.0") return activity;
   const cases = activity.structure!.payload.cases as Record<string, unknown>[];
   return { ...activity, activityVersionId: target.activityVersionId, structure: { ...activity.structure!, schemaVersion: facet.schemaVersion,
-    payload: { ...activity.structure!.payload, cases: cases.map(item => ({ ...item, caseId: crypto.randomUUID() })) } } };
+    payload: { ...activity.structure!.payload, cases: cases.map(item => ({ ...item, caseId: generateId() })) } } };
 }
 
 function replaceItems(activity: ActivityNode, collection: CollectionSlot, items: Record<string, unknown>[]): ActivityNode {
