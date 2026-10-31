@@ -473,8 +473,7 @@ for (const theme of ["light", "dark"]) {
           range.selectNodeContents(modified);
           return {
             timestampLines: range.getClientRects().length,
-            // The compact content budget excludes the collection's one-pixel row separator.
-            rowHeight: element.clientHeight,
+            rowHeight: element.getBoundingClientRect().height,
             timestampWidth: range.getBoundingClientRect().width,
             columnWidth: modified.getBoundingClientRect().width
           };
