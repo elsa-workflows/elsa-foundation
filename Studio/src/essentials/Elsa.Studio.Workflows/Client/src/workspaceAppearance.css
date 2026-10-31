@@ -115,3 +115,4 @@ html[data-workspace-style="minimal"] .wf-grid.wf-instance-grid > .wf-grid-row { 
 html[data-workspace-style="minimal"] .wf-grid.wf-instance-grid > .wf-grid-row:hover { background: var(--studio-row-hover); }
 html[data-workspace-style="minimal"] .wf-grid.wf-instance-grid > .wf-grid-row[aria-selected="true"] { background: var(--studio-row-selected); box-shadow: inset 3px 0 0 var(--studio-selection-mark); }
 html[data-workspace-style="minimal"] .wf-artifact-card[data-active="true"] { border-color: var(--studio-selection-mark); background: var(--studio-surface); }
+html[data-workspace-style="minimal"] .wf-page--run-workbench > .studio-page-header { padding: 20px 24px 0; }

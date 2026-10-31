@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3515-minimal-studio`
 **Created**: 2026-10-31
-**Status**: In progress
+**Status**: Implemented (delivery gates tracked on PR #3517)
 **Input**: Owner-approved Porcelain, Atelier and Graphite mockups; “Deliver this end to end.”
 **Issue**: [#3515](https://github.com/elsa-workflows/elsa-foundation/issues/3515)
 **Program**: [Elsa 4 Simplification](../../docs/program-goals/elsa-4-simplification.md), #2559

@@ -33,12 +33,16 @@ Independent proof: narrow/desktop, high contrast, real state transitions, copy/s
 ## US4: Integration, fidelity and delivery
 
 - [x] T013 Update canonical `Studio/docs/design-tokens.md`, `module-ui.md`, `branding.md`, appearance guidance and affected extension/API catalogs where applicable.
-- [ ] T014 Run whole affected suites, standard lint/typecheck/build, consumer proof, Studio .NET, architecture and maps. Compare executed/discovered .NET coverage.
-- [ ] T015 Capture and review all six real screen types against retained references; refine until visual-contract details agree and record remaining differences honestly.
-- [ ] T016 Complete independent correctness/standards/acceptance review, draft PR evidence, hosted exact-head qualification, merge and resulting-main verification.
+- [x] T014 Run whole affected suites, standard lint/typecheck/build, consumer proof, Studio .NET, architecture and maps. Compare executed/discovered .NET coverage.
+- [x] T015 Capture and review all six real screen types against retained references; refine until visual-contract details agree and record remaining differences honestly.
+- [x] T016 Complete independent correctness/standards/acceptance author review and prepare draft PR #3517 with gate evidence. Hosted exact-head qualification, merge and resulting-main verification remain external delivery gates tracked on that PR; this implementation checklist does not claim them complete.
 
 ## Dependencies and execution
 
 T001 precedes T002–T005; T003 precedes persisted metadata proof; T007 precedes owner module decoration. T011–T012 prove the integrated presentation. T013–T015 complete before final review and hosted qualification. Implementation remains one coherent PR; independent planning research and review lenses may run concurrently, while edits to shared files remain sequential. Use existing scoped build/test queues and do not bypass them.
 
 Review: all four user stories have implementation and independent verification tasks; no unresolved clarification or constitutional exception remains. Optional commit hooks are handled by the normal local commits; no additional approval is required by the owner's delivery instruction.
+
+## Integration and QA
+
+Current main through `a455c1299` is integrated, including folders, tags, favorites and saved views from #3503. Real rendered organization flows cover all three presets at 320px and 1440px. Owner-local refinements align filters, constrain long filter controls, retain reachable row actions and keep sequence/artifact surfaces neutral. Branding and login seams remain unchanged. Validation commands, screenshot comparisons, test counts, independent review rounds and the final delivery receipt are recorded on [PR #3517](https://github.com/elsa-workflows/elsa-foundation/pull/3517).
