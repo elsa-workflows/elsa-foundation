@@ -1,0 +1,23 @@
+{
+  "scenarioExecuted": "The fixture reached a native Running worker and completed WriteLine, then stopped before Fault start; no compensation retry or cancellation was exercised.",
+  "faultMessage": "VF-ACT-003: Executable node 'fault' cannot materialize a complete input snapshot. Missing keys: [category, code, faultType, message]; unknown keys: [].",
+  "sourceHead": "830772c7f",
+  "productionFixForC1": false,
+  "attempts": [
+    {
+      "name": "c1-red",
+      "kind": "compile/setup",
+      "result": "No runtime scenario: constructor and request arguments missing."
+    },
+    {
+      "name": "c1-red-executed",
+      "kind": "fixture/setup",
+      "result": "Null source assertion before compensation retry; no retained store from this attempt."
+    },
+    {
+      "name": "c1-red-driven",
+      "kind": "fixture/setup",
+      "result": "Whole retained SQLite proves missing optional Fault input bindings; no future retry exists."
+    }
+  ]
+}
