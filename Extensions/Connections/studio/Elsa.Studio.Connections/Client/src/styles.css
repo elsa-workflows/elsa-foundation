@@ -54,6 +54,7 @@
 .connections-modal button:hover:not(:disabled) { background: var(--studio-material-hover-bg); }
 .connections-modal button[type="submit"] { border-color: var(--connections-accent); background: var(--connections-accent); color: var(--connections-accent-text); }
 .connections-modal button[type="submit"]:hover:not(:disabled) { filter: brightness(1.08); background: var(--connections-accent); }
+html[data-workspace-style="minimal"] .connections-modal button[type="submit"] { border-color: var(--studio-action-primary-bg); background: var(--studio-action-primary-bg); color: var(--studio-action-primary-fg); }
 .connections-shell button:not(.studio-button):disabled,
 .connections-modal button:disabled { cursor: not-allowed; opacity: 0.6; }
 .connections-shell :focus-visible,

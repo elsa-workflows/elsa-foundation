@@ -70,6 +70,7 @@ import { AdvancedSection, CopyableIdentifier, OverflowMenu, StudioPageHeader, St
 import { RunWorkflowPicker } from "./RunWorkflowPicker";
 import { WorkflowListIdentifiers } from "./WorkflowListIdentifiers";
 import "./cleanListTables.css";
+import "./minimalRunInspection.css";
 
 type WorkflowRunFlowInstance = ReactFlowInstance<Node<WorkflowNodeData>, Edge<WorkflowEdgeData>>;
 

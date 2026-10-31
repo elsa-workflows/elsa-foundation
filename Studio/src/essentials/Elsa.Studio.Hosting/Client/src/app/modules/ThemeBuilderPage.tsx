@@ -2,6 +2,7 @@ import { StudioPageHeader, StudioButton } from "../ui";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, Download, FileUp, ImagePlus, Paintbrush, RefreshCcw, Save, Trash2 } from "lucide-react";
 import { isStudioThemeLayout, studioThemeLayouts, type ElsaStudioModuleApi } from "../../sdk";
+import { isWorkspaceStyle, workspaceStyles } from "../themes/workspaceStyles";
 import { SkeletonRows, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
   allThemeModes,
@@ -339,6 +340,14 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           {tab === "tokens" ? (
             <div className="theme-token-editor">
               <div className="theme-token-grid">
+                <label className="theme-token-field">
+                  <span>Default workspace treatment</span>
+                  <select value={draft.workspaceStyle ?? ""} disabled={isReadOnly} onChange={event => patchDraft({ workspaceStyle: isWorkspaceStyle(event.target.value) ? event.target.value : undefined })}>
+                    <option value="">Original theme treatment</option>
+                    {workspaceStyles.map(style => <option key={style.id} value={style.id}>{style.name}</option>)}
+                  </select>
+                  <small>Shared surfaces and controls. Your theme's layout, fonts and radii below remain its defaults; a user's workspace choice can override them.</small>
+                </label>
                 <label className="theme-token-field">
                   <span>Layout</span>
                   <select

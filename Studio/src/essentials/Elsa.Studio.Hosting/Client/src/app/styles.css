@@ -2,6 +2,7 @@
 @import "./ui/components.css";
 @import "./ui/layout/page.css";
 @import "./ui/disclosure/disclosure.css";
+@import "./ui/minimal.css";
 @import "./themes/fonts.css";
 @import "./themes/layouts.css";
 @import "./themes/elsaCloud.css";

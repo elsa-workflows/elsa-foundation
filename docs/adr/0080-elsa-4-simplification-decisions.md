@@ -188,6 +188,21 @@ organization scope adopted from historical #790 and parked #792; other parked ob
 Timing benchmarks remain retired; deterministic bounded query work is the scale gate under D2. Releases and
 production deployment are not included. The remaining decisions in this ADR apply.
 
+**Owner amendment, 31 October 2026:** [Elsa Agents #3519](../program-goals/elsa-agents.md)
+is authorized for program establishment and end-to-end delivery. The owner selected reusable specialists
+with explicit inputs/outputs and optional conversation continuity, Microsoft Agent Framework reuse and
+Foundry-inspired authoring, then instructed: "make a complete end to end plan, including research spikes,
+designs, architecture and implementation, then turn that into a Program, then deliver that end to end".
+Sequencing: M0 executable research, M1 reviewed product/architecture design, M2 catalog/publication,
+M3 specialist execution, M4 native/BPMN integration, M5 Studio/evaluations, M6 tools/knowledge/bounded teams,
+then M7 integrated qualification. Run beside the active programs, displace none, preserve consolidation's
+first priority and reactivate no parked backlog. Existing #2892/#2912 retains production collaboration
+and recovery ownership; consume or deliver shared work through that owning hierarchy and its claims.
+Weaver #3428 retains Studio-assistant ownership and its provider defaults. One active implementation leaf
+for this Program; routine decisions, milestone transitions, tests, documentation, scoped PRs, authorized
+review/merge and resulting-main qualification proceed under this instruction. Releases, deployments,
+provider purchases and publisher activation are not included. The remaining decisions apply.
+
 ### D1 — Risk-based testing
 
 - Test observable behaviour at the cheapest level that proves it; unit-test logic that carries real risk.

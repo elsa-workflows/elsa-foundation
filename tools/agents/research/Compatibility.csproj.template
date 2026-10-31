@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.27.0" />
+    <PackageReference Include="CShells" Version="0.0.31" />
+    <ProjectReference Include="__FOUNDATION_ROOT__/Extensions/Agent/src/Elsa.Agent/Elsa.Agent.csproj" />
+    <ProjectReference Include="__FOUNDATION_ROOT__/Extensions/Agent/src/Anthropic/Elsa.Agent.Anthropic.csproj" />
+    <ProjectReference Include="__FOUNDATION_ROOT__/Extensions/Agent/src/GitHubCopilot/Elsa.Agent.GitHubCopilot.csproj" />
+    <ProjectReference Include="__FOUNDATION_ROOT__/Essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
+  </ItemGroup>
+</Project>
