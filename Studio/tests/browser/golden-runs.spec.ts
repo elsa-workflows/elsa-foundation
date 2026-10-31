@@ -354,13 +354,13 @@ async function expectIdentifierValues(row: Locator, identifiers: readonly (reado
 
 async function expectPrimaryFiltersAligned(page: Page) {
   // Measure one rendered frame: row-name hydration can move the scroll anchor between separate boundingBox calls.
-  await expect.poll(() => page.locator(".wf-run-filters > .wf-toolbar").evaluate(toolbar => {
+  await expect.poll(() => page.locator(".wf-run-filters > .studio-collection-toolbar").evaluate(toolbar => {
     const input = toolbar.querySelector<HTMLInputElement>('input[role="combobox"]');
     if (!input) return Number.POSITIVE_INFINITY;
     const inputBounds = input.getBoundingClientRect();
     const inputCenter = inputBounds.y + inputBounds.height / 2;
     const buttons = [...toolbar.querySelectorAll("button")];
-    return Math.max(...["Refresh", "Needs attention", "Running", "Clear filters"].map(name => {
+    return Math.max(...["Needs attention", "Running", "Clear filters"].map(name => {
       const button = buttons.find(candidate => candidate.textContent?.trim() === name);
       if (!button) return Number.POSITIVE_INFINITY;
       const bounds = button.getBoundingClientRect();

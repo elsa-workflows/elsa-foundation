@@ -1,3 +1,4 @@
+import { StudioPageHeader, StudioButton, StudioSearchInput } from "@elsa-workflows/studio-ui";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ChevronDown, ChevronRight, Play, RotateCcw, ScanSearch, Search, Sparkles, X } from "lucide-react";
 import type { StudioAgentRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
@@ -149,8 +150,15 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
           onCancel={executableRun.cancel}
         />
       ) : null}
-      <div className="wf-toolbar wf-executable-toolbar">
-        <button type="button" onClick={() => void load()}>Refresh</button>
+      <StudioPageHeader title="Executables" headingLevel={2} description="Inspect and run immutable workflow executables." actions={<StudioButton onClick={() => void load()}>Refresh</StudioButton>} />
+      <div className="studio-collection-toolbar">
+        <StudioSearchInput
+          aria-label="Filter executables by workflow definition"
+          list="wf-executable-definition-options"
+          placeholder="Workflow name or ID"
+          value={definitionFilter ?? ""}
+          onChange={event => onDefinitionFilterChange(event.currentTarget.value || null)}
+        />
         <label className="wf-toolbar-field">
           <span>Scope</span>
           <select aria-label="Executable reference scope" value={scope} onChange={event => setScope(event.target.value as WorkflowExecutableListScope)}>
@@ -168,32 +176,22 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
           />
           <span>Include retired</span>
         </label>
-        <label className="wf-search wf-executable-definition-filter">
-          <Search size={14} />
-          <input
-            aria-label="Filter executables by workflow definition"
-            list="wf-executable-definition-options"
-            placeholder="Workflow name or ID"
-            value={definitionFilter ?? ""}
-            onChange={event => onDefinitionFilterChange(event.currentTarget.value || null)}
-          />
-        </label>
         <datalist id="wf-executable-definition-options">
           {definitionOptions.map(option => <option key={option.id} value={option.id} label={option.name === option.id ? option.id : `${option.name} · ${option.id}`} />)}
         </datalist>
         {definitionFilter ? (
-          <button type="button" onClick={() => onDefinitionFilterChange(null)}><X size={13} /> Clear</button>
+          <StudioButton onClick={() => onDefinitionFilterChange(null)}><X size={13} /> Clear</StudioButton>
         ) : null}
       </div>
-      {state === "failed" ? <WfErrorCard message={error} /> : null}
-      {state === "ready" && error ? <WfErrorCard message={error} /> : null}
+      {state === "failed" ? <WfErrorCard headingLevel={3} message={error} /> : null}
+      {state === "ready" && error ? <WfErrorCard headingLevel={3} message={error} /> : null}
       {status ? <ExecutableRunStatusLine status={status} run={lastRun} /> : null}
       {state === "loading" ? <WfListSkeleton /> : null}
       {state === "ready" && visibleExecutables.length === 0 ? (
         definitionNamesLoading ? (
-          <WfEmptyState icon={<Search size={22} />} title="Loading workflow names" description="Checking definition names for matching executables." />
+          <WfEmptyState headingLevel={3} icon={<Search size={22} />} title="Loading workflow names" description="Checking definition names for matching executables." />
         ) : (
-          <WfEmptyState
+          <WfEmptyState headingLevel={3}
             icon={<Play size={22} />}
             title="No workflow executables"
             description={definitionFilter ? "No executables match this definition filter." : "Publish a workflow definition to make it executable."}
@@ -201,8 +199,8 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
         )
       ) : null}
       {state === "ready" && visibleExecutables.length > 0 ? (
-        <div className="wf-executable-table-wrap">
-          <table className="wf-executable-table" aria-label="Workflow executables">
+        <div className="studio-table-container">
+          <table className="studio-table wf-executable-table" aria-label="Workflow executables">
             <colgroup>
               <col className="wf-executable-workflow-column" /><col className="wf-executable-artifact-column" />
               <col className="wf-executable-version-column" /><col className="wf-executable-root-column" />

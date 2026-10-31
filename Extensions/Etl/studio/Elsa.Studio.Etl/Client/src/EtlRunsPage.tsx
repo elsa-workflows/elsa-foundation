@@ -1,3 +1,4 @@
+import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import { appendUnique } from "./paging";
 import React, { useEffect, useRef, useState } from "react";
 import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -347,17 +348,10 @@ export function EtlRunsPage({ context, dialogs }: { context: StudioEndpointConte
     return currentContext.current === requestContext && selectedRunRef.current === runId && cancelOperation.current === operation;
   }
 
-  return <section className="etl-shell etl-runs-page" aria-label="ETL runs">
-    <header className="etl-runs-header">
-      <div>
-        <p className="etl-editor-eyebrow">Runtime</p>
-        <h1>ETL runs</h1>
-        <p>Inspect durable run progress, partitions, and cancellation outcomes.</p>
-      </div>
-      <button type="button" className="etl-refresh-button" onClick={refresh} disabled={!contextIsLoaded || runsLoading}>
+  return <section className="studio-page etl-shell etl-runs-page" aria-label="ETL runs">
+    <StudioPageHeader headingLevel={1} title={<>ETL runs</>} description={<>Runtime</>} actions={<><StudioButton type="button" className="etl-refresh-button" onClick={refresh} disabled={!contextIsLoaded || runsLoading}>
         {runsLoading && visibleRuns.length > 0 ? "Refreshing…" : "Refresh"}
-      </button>
-    </header>
+      </StudioButton></>} />
 
     <div className="etl-runs-layout">
       <section className="etl-runs-list" aria-labelledby="etl-runs-list-heading">

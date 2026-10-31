@@ -331,3 +331,16 @@ uses its own pair. High contrast retains the explicit high-contrast pair.
 which may contain subtle gradients. Use them only as `background`, with a solid role fallback; never
 pass a recipe to `color-mix()`, a border color or text color. Linen removes decorative gradients in High
 contrast and preserves visible focus. See [branding](branding.md) for host and module customization.
+
+## Page and collection spacing
+
+The public page recipes use `--studio-space-1` (4px), `--studio-space-2` (8px),
+`--studio-space-3` (12px), `--studio-space-4` (16px), and `--studio-space-6` (24px).
+`--studio-control-height` is 32px and `--studio-row-height` is a 48px minimum;
+wrapped content can grow rows. Consume these semantic tokens when extending a
+shared pattern rather than repeating local spacing values.
+
+`@elsa-workflows/studio-ui/styles.css` includes the token contract and all public
+primitive/disclosure styles. `tokens.css` remains available for token-only hosts.
+Both published files include the light-theme primitive defaults; load custom theme
+overrides afterward. See the [module UI guide](module-ui.md) for integration.

@@ -1,3 +1,4 @@
+import { StudioPageHeader } from "./ui";
 import { getStudioBranding } from "./runtime";
 import React, { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
@@ -1093,12 +1094,10 @@ export function Diagnostics({
   const destinations = getDiagnosticDestinations(navigation);
 
   return (
-    <section className="diagnostics-view">
+    <section className="studio-page diagnostics-view">
       <section className="diagnostics-index" aria-labelledby="diagnostics-index-heading">
-        <header className="diagnostics-section-heading">
-          <h2 id="diagnostics-index-heading">Diagnostic tasks</h2>
-          <p>Choose a tool for the task you need to complete.</p>
-        </header>
+        <StudioPageHeader headingLevel={2} title="Diagnostic tasks" titleId="diagnostics-index-heading"
+          description="Choose a tool for the task you need to complete." />
         {destinations.length === 0 ? (
           <p className="diagnostics-index-empty" role="status">No diagnostic tool links are available to you in this app.</p>
         ) : (

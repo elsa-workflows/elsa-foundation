@@ -1,3 +1,4 @@
+import { StudioPageHeader, StudioButton, StudioSearchInput } from "@elsa-workflows/studio-ui";
 import { builtInWorkflowTemplates } from "../builtInWorkflowTemplates";
 import "./WorkflowTemplatesPage.css";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
@@ -74,12 +75,12 @@ export function WorkflowTemplatesPage(props: Props) {
     finally { setBusy(false); }
   };
   if (templateId) return <section className="wf-page"><Suspense fallback={<p role="status">Loading template designer…</p>}><TemplateDesigner key={`${context.baseUrl}:${templateId}`} {...props} id={templateId} onBack={() => open(null)} /></Suspense></section>;
-  return <section className="wf-page wf-templates-page">
-    <header className="wf-page-header"><div><h1>Workflow templates</h1><p>Create reusable starting points. Workflows created from a template are independent copies.</p></div><div className="wf-actions">
-      <button type="button" className="wf-primary-button" disabled={loading || !supported} onClick={() => begin("template")}><Plus size={15} /> New template</button>
-      <button type="button" disabled={loading || busy} onClick={() => void reload()}><RefreshCw size={15} /> Refresh</button>
-    </div></header>
-    <label className="wf-form-field wf-template-search">Search templates<input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Name or description" /></label>
+  return <section className="studio-page wf-page wf-templates-page">
+    <StudioPageHeader title="Workflow templates" description="Create reusable starting points. Workflows created from a template are independent copies." actions={<>
+      <StudioButton variant="primary" disabled={loading || !supported} onClick={() => begin("template")}><Plus size={15} /> New template</StudioButton>
+      <StudioButton disabled={loading || busy} onClick={() => void reload()}><RefreshCw size={15} /> Refresh</StudioButton>
+    </>} />
+    <div className="studio-collection-toolbar"><StudioSearchInput aria-label="Search templates" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search templates" /></div>
     {loading ? <p role="status">Loading templates…</p> : null}
     {!loading && !supported ? <p role="status">Saved template management is unavailable on this server. Built-in starters are still available when creating workflows.</p> : null}
     {error && !dialog ? <p className="wf-alert" role="alert">{error}</p> : null}
