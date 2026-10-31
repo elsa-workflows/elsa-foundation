@@ -1,0 +1,59 @@
+{
+  "scope": "Second actual invocation of committed portable controller from /tmp, all9 raw whole stores hashed. Primary actual run above includes the full portable9 store payloads and focused audit; the repeat store payloads are not duplicated. Reproduce from committed source9508 waiting input with fresh owned output.",
+  "assets": [
+    {
+      "path": "before-elsa.sqlite.gz",
+      "gzipSha256": "d117c739aeac95bb921620f1cdb04081924cc1d28848eeab029fa2b8874cb25e",
+      "decodedSha256": "1682a93594e5f9577d64c53f1709952a88aa0a161e1d19d4b06e5c68a22de5cb",
+      "portablePayload": false
+    },
+    {
+      "path": "before-etl-design.sqlite.gz",
+      "gzipSha256": "eb9419ed5ffedba9b6eb9e313618acb800abc0f073705ba496c277d29e376df7",
+      "decodedSha256": "18771bf22cbd150d543a08699b7dfa218bb418e688b43d46f11100535516b466",
+      "portablePayload": false
+    },
+    {
+      "path": "before-etl-runtime.sqlite.gz",
+      "gzipSha256": "623b944a6c195a9757661ddd74f4aad2fc9fdd3d1d66d583eab92d2744664759",
+      "decodedSha256": "cc0ca8a47fa2f64e8930cb73cae6809b2754af5593368955e6646304d161a2aa",
+      "portablePayload": false
+    },
+    {
+      "path": "completed-elsa.sqlite.gz",
+      "gzipSha256": "0ee96fc3a5ecbe2d97c14300facdf86047e07ff369906a2217f803e79894d310",
+      "decodedSha256": "cbf1179da2f4dc61c075c56f3d0a78e84552c05afa8fb413c5a78834fa756447",
+      "portablePayload": false
+    },
+    {
+      "path": "completed-etl-design.sqlite.gz",
+      "gzipSha256": "b6339a81e2aa69efe6a6fa220b26595fa5c161ca5b4f4db64b938d8acfa3072a",
+      "decodedSha256": "090d1f657a7d9e8744c7b88b246588e0acd60d1fe90d55cb78dd0f7f237444e6",
+      "portablePayload": false
+    },
+    {
+      "path": "completed-etl-runtime.sqlite.gz",
+      "gzipSha256": "6c95d80a6dff8c9769ade85fd7adc3b0df3f21b15cf06c2fc1bb2cb7ddb85d7c",
+      "decodedSha256": "c0d6551a5b23f4f384f6bf97d5bfb9bbe73e0a27864105c287416443e507044e",
+      "portablePayload": false
+    },
+    {
+      "path": "retained-elsa.sqlite.gz",
+      "gzipSha256": "cb69bd5d4c2e44fe05fed9cb60c97c9ac0608431782df444e1a6be0f8015bf10",
+      "decodedSha256": "590b3a1243450b56c66316440fc3e44df4019b2c380093f36dff8a01f5816f17",
+      "portablePayload": false
+    },
+    {
+      "path": "retained-etl-design.sqlite.gz",
+      "gzipSha256": "b6339a81e2aa69efe6a6fa220b26595fa5c161ca5b4f4db64b938d8acfa3072a",
+      "decodedSha256": "090d1f657a7d9e8744c7b88b246588e0acd60d1fe90d55cb78dd0f7f237444e6",
+      "portablePayload": false
+    },
+    {
+      "path": "retained-etl-runtime.sqlite.gz",
+      "gzipSha256": "6c95d80a6dff8c9769ade85fd7adc3b0df3f21b15cf06c2fc1bb2cb7ddb85d7c",
+      "decodedSha256": "c0d6551a5b23f4f384f6bf97d5bfb9bbe73e0a27864105c287416443e507044e",
+      "portablePayload": false
+    }
+  ]
+}

@@ -101,6 +101,10 @@ project.fragment.lock.json
 artifacts/
 .artifacts/
 
+# Historical BPMN proof is restored from the pinned release assets when needed.
+# Concise receipts already tracked here remain versioned; add new receipts explicitly.
+/specs/1017-direct-bpmn-hosting/evidence/**
+
 # ASP.NET Scaffolding
 ScaffoldingReadMe.txt
 
