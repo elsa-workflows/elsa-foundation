@@ -1123,3 +1123,16 @@ a durable retry delay that exists only in memory.
 `AddWorkflowStimulusRouter` registers the host-neutral router, default trigger-binding store and bookmark lookup without requiring the Runtime API feature. `IStimulusRouter.RouteSourceAsync` accepts the existing committed outbox source context, rereads physical source/claim state, captures every exact wait before any start, installs the whole ordered cohort and uses only its persisted winner. Both selected dispatchers must qualify the actual source/material/execution tuple; unsupported compositions refuse before selection or effects. The original `RouteAsync` remains the ordinary external routing entrypoint.
 
 `IStimulusDeliveryIntentAdapter` has one owning registration per exact intent kind and projects the immutable persisted intent without effects. Missing or duplicate owners refuse. `IStimulusDeliveryStore.ReadSourceAsync` validates the physical scope, current claim and publisher with provider time; absent cohort permits selection, while a present empty cohort is authoritative. Data-only or replaced winners refuse. See the [broadcast contract](../../../../../specs/1006-bpmn-library-adoption/contracts/broadcast-recipient-snapshot.md) and [component evidence](../../../../../specs/1006-bpmn-library-adoption/evidence/broadcast-source-owned-routing.md). Publisher activation and upgraded-host recovery are separate gates.
+
+### `IRuntimeStructureInputMaterializationPolicy` *(Core — `Elsa.Workflows.Runtime.Core`)*
+
+- **Kind:** Explicit ownership keyed by `Kind` and `SchemaVersion`. Exactly one policy owns each used pair; missing ownership refuses materialization and duplicate ownership refuses composition.
+- **Signature:** `ValueTask MaterializeAsync(IRuntimeStructureInputMaterializationContext context, CancellationToken cancellationToken)`. The constrained context exposes the pinned `ExecutableNode` and `MaterializeAsync(inputKey, cancellationToken)`.
+- **Obligations:** select ordered structure-owned inputs by awaiting context reads sequentially. Never evaluate expressions through a separate service, resolve undeclared/ordinary keys, or perform side effects. Context reads use the normal typed binding resolver/evaluator/conversion/presence/storage pipeline once per consumed key. The existing durable `ActivityInputSnapshot.Values` captures consumed inputs before the Running checkpoint; unconsumed keys remain absent. Withheld values refuse; external values retain their durable envelope while selection gets a transient readable view.
+- **Known implementation:** Switch 2.0.0 short-circuits at the first true predicate or matching legacy case.
+
+### `IRuntimeStructureInputConsumer` *(Core — `Elsa.Workflows.Runtime.Core`)*
+
+- **Kind:** Activity opt-in, not a service registration.
+- **Signature:** `void BindStructureInputs(IReadOnlyDictionary<string, ValueEnvelope> inputs)`.
+- **Obligations:** consume only the committed, activation-resolved input values. `ActivityInputContract.IsStructureInput` marks these fields; the hydrator skips CLR property assignment and requires an explicit consumer. Ordinary inputs retain their existing hydration. The optional flag is omitted from serialization/fingerprinting when false, retaining old artifact identities. Switch accepts this binding once per fresh activation and never reevaluates predicates on child completion.

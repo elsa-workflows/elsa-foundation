@@ -199,13 +199,20 @@ public sealed class RetryFaultedActivityAlterationHandlerTests
         Assert.Equal("ActivityStateRevisionConflict", result.Failure!.Code);
     }
 
-    [Fact]
-    public async Task PreflightAsync_ResolvesTheIncidentAndStagesASuccessorKeepingTheSourcesIdentity()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PreflightAsync_ResolvesTheIncidentAndStagesASuccessorKeepingTheSourcesIdentity(bool structureSnapshot)
     {
         var fixture = await Fixture.CreateAsync();
+        var source = structureSnapshot ? fixture.Source with
+        {
+            InputSnapshot = new ActivityInputSnapshot("source", "contract", "binding", new Dictionary<string, ValueEnvelope>
+            { ["Case:first:Condition"] = ValueEnvelope.Inline(new ValueTypeDescriptor("Boolean"), JsonSerializer.SerializeToElement(true), ValueProtectionPolicy.InstanceInline) }, DateTimeOffset.UnixEpoch)
+        } : fixture.Source;
         var staging = new Staging();
 
-        var result = await fixture.Handler.PreflightAsync(Context(Payload("source", "  Delivery service restored  "), staging, fixture.Source));
+        var result = await fixture.Handler.PreflightAsync(Context(Payload("source", "  Delivery service restored  "), staging, source));
 
         Assert.True(result.IsAccepted, result.Failure?.Message);
         var builder = Apply(Assert.Single(staging.StagedChanges));
@@ -215,7 +222,12 @@ public sealed class RetryFaultedActivityAlterationHandlerTests
         Assert.Equal(successor.Execution.ActivityExecutionId, superseded.SupersededByActivityExecutionId);
 
         Assert.Equal(ActivityExecutionStatus.Running, successor.Status);
-        Assert.Same(fixture.Source.InputSnapshot, successor.InputSnapshot);
+        Assert.Same(source.InputSnapshot, successor.InputSnapshot);
+        if (structureSnapshot)
+        {
+            Assert.True(successor.InputSnapshot!.Values["Case:first:Condition"].InlineValue!.Value.GetBoolean());
+            Assert.False(successor.InputSnapshot.Values.ContainsKey("Case:later:Condition"));
+        }
         Assert.Equal("parent", successor.ParentActivityExecutionId);
         Assert.Equal("parent", successor.SchedulingActivityExecutionId);
         Assert.Equal("compensation", successor.Provenance.SchedulingCause);

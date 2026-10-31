@@ -137,8 +137,9 @@ public sealed class ExecutableNodeCompiler(
         var activityType = clrActivityType is null
             ? catalogActivityType
             : ActivityTypeMetadata.GetDeclaredActivityType(clrActivityType) ?? catalogActivityType;
-        inputBindingCompiler.EnsureSecretBindingsAdmissible(activity.NodeId, descriptor, activity.Inputs);
-        var inputBindings = inputBindingCompiler.CompileAll(activity.NodeId, inputDefinitions, activity.Inputs);
+        var projectedInputs = ProjectInputs(activity, inputDefinitions, activityStructureService.ProjectInputs(activity));
+        inputBindingCompiler.EnsureSecretBindingsAdmissible(activity.NodeId, descriptor, projectedInputs.States);
+        var inputBindings = inputBindingCompiler.CompileAll(activity.NodeId, projectedInputs.Definitions, projectedInputs.States);
         var childSlots = CompileChildSlots(activityType, activity.NodeId, projection.ChildProjections(activity), projection, activityRows, placedActivities, workflowVariables, workflowInputs);
         var executionType = clrActivityType is not null && ActivityTypeMetadata.IsTrigger(clrActivityType)
             ? TriggerNodeMetadata.TriggerExecutionType
@@ -147,7 +148,9 @@ public sealed class ExecutableNodeCompiler(
         var structure = CompileStructure(activity.NodeId, activityStructureService.CompileExecutableStructure(activity));
         var activityContract = clrActivityType is null
             ? null
-            : BuildActivityContract(activity, activityVersion, inputDefinitions, clrActivityType, activityType, structure, inputBindings: inputBindings, outcomeProjection: outcomeProjection);
+            : BuildActivityContract(activity with { Inputs = projectedInputs.States }, activityVersion, projectedInputs.Definitions,
+                clrActivityType, activityType, structure, inputBindings: inputBindings, outcomeProjection: outcomeProjection,
+                structureInputKeys: projectedInputs.StructureKeys);
 
         if (activity.ExecutionPlacement == ActivityExecutionPlacement.Background)
             ValidateBackgroundExecution(activity, clrActivityType, childSlots, structure, activityContract);
@@ -193,6 +196,32 @@ public sealed class ExecutableNodeCompiler(
         }
 
         return metadata;
+    }
+
+    private static (InputDefinition[] Definitions, ArgumentState[] States, HashSet<string> StructureKeys) ProjectInputs(
+        ActivityNode activity,
+        InputDefinition[] catalogInputs,
+        ActivityStructureInputProjection projection)
+    {
+        var catalogByKey = catalogInputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
+        var consumed = projection.ConsumedInputKeys.ToHashSet(StringComparer.Ordinal);
+        if (consumed.Any(key => !catalogByKey.ContainsKey(key)))
+            throw new ArgumentException($"Structure on node '{activity.NodeId}' consumes an undeclared activity input.");
+        var definitions = catalogInputs.Where(input => !consumed.Contains(input.ReferenceKey)).ToList();
+        var states = activity.Inputs.Where(input => !consumed.Contains(input.ReferenceKey)).ToList();
+        var structureKeys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var input in projection.Inputs)
+        {
+            if (!structureKeys.Add(input.ReferenceKey))
+                throw new ArgumentException($"Structure on node '{activity.NodeId}' declares duplicate input '{input.ReferenceKey}'.");
+            var definition = input.Definition ?? catalogByKey.GetValueOrDefault(input.ReferenceKey)
+                ?? throw new ArgumentException($"Structure input '{input.ReferenceKey}' on node '{activity.NodeId}' has no declaration.");
+            if (!StringComparer.Ordinal.Equals(definition.ReferenceKey, input.ReferenceKey))
+                throw new ArgumentException($"Structure input '{input.ReferenceKey}' on node '{activity.NodeId}' does not match its declaration.");
+            definitions.Add(definition);
+            if (input.State is { } state) states.Add(state with { ReferenceKey = input.ReferenceKey });
+        }
+        return (definitions.ToArray(), states.ToArray(), structureKeys);
     }
 
     private static string? StructuralFaultHandling(Type? clrActivityType)
@@ -478,7 +507,8 @@ public sealed class ExecutableNodeCompiler(
         ExecutableActivityStructure? structure,
         string? contractVersion = null,
         IReadOnlyDictionary<string, RuntimeInputBinding>? inputBindings = null,
-        ActivityChildOutcomeProjection? outcomeProjection = null)
+        ActivityChildOutcomeProjection? outcomeProjection = null,
+        IReadOnlySet<string>? structureInputKeys = null)
     {
         var resultType = FindTypedActivityResult(activityType);
         if (resultType is null)
@@ -498,7 +528,8 @@ public sealed class ExecutableNodeCompiler(
                 input.DefaultValue,
                 RuntimeInputBindingCompiler.EffectivePolicy(activity.NodeId, input, state),
                 isCredential: input.IsCredential == true,
-                connectionType: input.ConnectionType);
+                connectionType: input.ConnectionType)
+            { IsStructureInput = structureInputKeys?.Contains(input.ReferenceKey) == true };
         });
         var outputDefinitions = activityVersion.Outputs.ToDictionary(output => output.ReferenceKey, StringComparer.Ordinal);
         var outputStates = activity.Outputs.ToDictionary(output => output.ReferenceKey, StringComparer.Ordinal);
@@ -581,6 +612,14 @@ public sealed class ExecutableNodeCompiler(
         return ValuePolicyCombiner.Combine(owner, authoredMinimum, valueRole);
     }
 
+    internal static IEnumerable<string> StructureOutcomes(ExecutableActivityStructure? structure)
+    {
+        if (StringComparer.Ordinal.Equals(structure?.Kind, "elsa.switch.structure") && structure.Payload.TryGetProperty("cases", out var cases))
+            foreach (var item in cases.EnumerateArray())
+                if (item.TryGetProperty("match", out var match) && match.GetString() is { Length: > 0 } value)
+                    yield return value;
+    }
+
     private static IReadOnlyCollection<string> ResolveOutcomes(
         Type activityType,
         ExecutableActivityStructure? structure,
@@ -590,15 +629,7 @@ public sealed class ExecutableNodeCompiler(
             .Select(attribute => attribute.Key)
             .ToHashSet(StringComparer.Ordinal);
 
-        // Switch case labels are authored control ports. They belong to the pinned invocation contract even
-        // though no finite set can be declared on the CLR type itself.
-        if (StringComparer.Ordinal.Equals(structure?.Kind, "elsa.switch.structure") &&
-            structure.Payload.TryGetProperty("cases", out var cases))
-        {
-            foreach (var @case in cases.EnumerateArray())
-                if (@case.TryGetProperty("match", out var match) && match.GetString() is { Length: > 0 } value)
-                    outcomes.Add(value);
-        }
+        outcomes.UnionWith(StructureOutcomes(structure));
 
         // A BPMN transaction subprocess declares the additional "Cancelled" outcome (structure-dependent,
         // the same FlowSwitch/VF-ACT-006 pattern as Switch case labels): a cancel end event inside the transaction

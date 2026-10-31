@@ -1,4 +1,13 @@
 #nullable enable
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputConsumer
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputConsumer.BindStructureInputs(System.Collections.Generic.IReadOnlyDictionary<string!, Elsa.Workflows.Runtime.Core.Models.ValueEnvelope!>! inputs) -> void
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputMaterializationContext
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputMaterializationContext.MaterializeAsync(string! inputKey, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.ValueEnvelope!>
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputMaterializationContext.Node.get -> Elsa.Workflows.Runtime.Core.Models.ExecutableNode!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputMaterializationPolicy
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputMaterializationPolicy.Kind.get -> string!
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputMaterializationPolicy.MaterializeAsync(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputMaterializationContext! context, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputMaterializationPolicy.SchemaVersion.get -> string!
 Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext!
 Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext? other) -> bool
 override Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.Equals(object? obj) -> bool
@@ -9241,3 +9250,5 @@ Elsa.Workflows.Runtime.Core.Contracts.IRuntimeCheckpointCommitEnricher.ValidateF
 Elsa.Workflows.Runtime.Core.Events.DurableTimerScheduled
 Elsa.Workflows.Runtime.Core.Events.DurableTimerScheduled.DurableTimerScheduled(System.DateTimeOffset dueTime) -> void
 Elsa.Workflows.Runtime.Core.Events.DurableTimerScheduled.DueTime.get -> System.DateTimeOffset
+Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay.InputContracts.get -> System.Collections.Generic.IReadOnlyList<Elsa.Activities.Runtime.Core.Models.ActivityInputContract!>?
+Elsa.Workflows.Runtime.Core.Models.ExecutableActivityTemplateOccurrenceOverlay.InputContracts.init -> void

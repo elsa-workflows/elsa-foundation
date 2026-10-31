@@ -236,3 +236,7 @@ The Activity Graph implementation and its feature registration are documented in
 - Transport surface, transport authorization, and activity-draft seams: [Publishing API catalog](../Api/EXTENSION_POINTS.md).
 - Publication authority decision: [ADR 0043](../../../../../docs/adr/0043-publication-slots-define-start-authority.md).
 - Repo-wide index: [root extension-point index](../../../../../EXTENSION_POINTS.md).
+
+### Structure-owned occurrence inputs
+
+`ActivityTemplateOccurrenceCompilation.StructureInputs` optionally carries the owning Design handler's input projection from a graph provider to the publishing coordinator. Providers emit effective ordinary/projected argument states and validate their references against that same view. `ActivityTemplateCompiler` lowers declarations/policies against the exact source template into optional `ExecutableActivityTemplateOccurrenceOverlay.InputContracts`; no Design types enter Runtime artifacts. Placement compiles and stamps these same contracts, then applies the existing closed-scope variable/result remapping. Null is omitted for ordinary occurrences, preserving their serialized shape and template hashes. Switch condition overlays also retain their authored case outcomes on the placed contract.

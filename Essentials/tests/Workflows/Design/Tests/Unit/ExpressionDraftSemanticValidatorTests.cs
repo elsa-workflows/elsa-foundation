@@ -1,4 +1,6 @@
+using Elsa.Activities.Design.Core.Models;
 using System.Text.Json;
+using Elsa.Primitives.Models;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.Testing;
@@ -177,6 +179,29 @@ public sealed class ExpressionDraftSemanticValidatorTests
         Assert.Equal("JavaScript/Syntax", Assert.Single(result.Diagnostics).Code);
     }
 
+    [Fact]
+    public async Task Structure_predicates_are_validated_as_boolean_and_consumed_unused_inputs_are_excluded()
+    {
+        var provider = new ErrorProvider();
+        var validator = new ExpressionDraftSemanticValidator(new Resolver(provider), new DescriptorRegistry(DefaultDescriptors), new ProjectedStructure());
+        var result = await validator.ValidateAsync(StateOf(Argument("Value", "stale invalid source", "JavaScript")), "draft", CancellationToken.None);
+        Assert.Equal("predicate source", provider.Source);
+        Assert.Equal("Boolean", provider.ExpectedType);
+        Assert.Equal("node/structure/Case:a:Condition", Assert.Single(result.Diagnostics).AuthoredPath);
+    }
+
+    private sealed class ProjectedStructure : IActivityStructureService
+    {
+        public ActivityStructureInputProjection ProjectInputs(ActivityNode activity) => new([
+            new("Case:a:Condition", new InputDefinition("Case:a:Condition", "Condition", new("Boolean"), null, "Condition", null, false),
+                Argument("arbitrary-state-key", "predicate source", "JavaScript"))], ["Value"]);
+        public IReadOnlyCollection<ActivityChildProjection> ProjectChildren(ActivityNode activity) => [];
+        public IReadOnlyCollection<VariableDefinition> ProjectScopedVariables(ActivityNode activity) => [];
+        public bool SupportsScopedVariables(ActivityNode activity) => false;
+        public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections) => activity;
+        public ActivityNodeStructure? CompileExecutableStructure(ActivityNode activity) => null;
+    }
+
     private static ExpressionDraftSemanticValidator Validator(IExpressionToolingProvider? provider) =>
         Validator(provider, DefaultDescriptors);
 
@@ -222,6 +247,7 @@ public sealed class ExpressionDraftSemanticValidatorTests
     private sealed class ErrorProvider : IExpressionToolingProvider
     {
         public string? Source { get; private set; }
+        public string? ExpectedType { get; private set; }
         public string ExpressionType => "JavaScript";
         public ExpressionToolingContractVersion SupportedVersion => ExpressionToolingContractVersion.V1;
         public ValueTask<ExpressionToolingOutcome<ExpressionToolingCapabilities>> GetCapabilitiesAsync(ExpressionToolingRequestScope scope, CancellationToken cancellationToken) => throw new NotSupportedException();
@@ -230,6 +256,7 @@ public sealed class ExpressionDraftSemanticValidatorTests
         public ValueTask<ExpressionToolingOutcome<ExpressionDiagnosticSet>> ValidateAsync(ExpressionValidationRequest request, CancellationToken cancellationToken)
         {
             Source = request.Source;
+            ExpectedType = request.Scope.Document.ExpectedResultType;
             var diagnostic = new ExpressionDiagnostic("JavaScript/Semantic", ExpressionDiagnosticSeverity.Error, "Invalid expression.", request.Scope.Document.DocumentRevision);
             return ValueTask.FromResult(ExpressionToolingOutcome<ExpressionDiagnosticSet>.Success(new([diagnostic]), ExpressionToolingContractVersion.V1, request.Scope.Document.DocumentRevision, request.Scope.Context.ContextRevision));
         }

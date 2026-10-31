@@ -6,7 +6,9 @@ using Elsa.Activities.Switch.Internal;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using SwitchActivity = Elsa.Activities.Switch.Activities.Switch;
 
 namespace Elsa.Activities.ControlFlow;
 
@@ -29,7 +31,9 @@ public class ActivitiesControlFlowFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<IActivityStructureHandler, IfStructureHandler>();
-        services.AddSingleton<IActivityStructureHandler, SwitchStructureHandler>();
+        services.AddSingleton<IActivityStructureHandler>(new SwitchStructureHandler());
+        services.AddSingleton<IActivityStructureHandler>(new SwitchStructureHandler(SwitchActivity.LegacyStructureSchemaVersion));
+        services.AddSingleton<IRuntimeStructureInputMaterializationPolicy, SwitchStructureInputPolicy>();
         services.AddSingleton<IActivityStructureHandler>(new LoopStructureHandler(LoopKind.ForEach));
         services.AddSingleton<IActivityStructureHandler>(new LoopStructureHandler(LoopKind.For));
         services.AddSingleton<IActivityStructureHandler>(new LoopStructureHandler(LoopKind.While));
