@@ -1,6 +1,6 @@
 # Native runtime performance assessment — 31 October 2026
 
-Status: measured assessment of commit `ab46bc22a52aa6e456bca6ac0e803c80904de081`; experimental optimization evaluated separately. No runtime source change is retained. Program context: runtime efficiency; this is an owner-requested assessment, not a new wall-clock CI gate.
+Status: measured assessment of commit `ab46bc22a52aa6e456bca6ac0e803c80904de081`; experimental optimization evaluated separately. This assessment retained no runtime source change; the separately qualified implementation is described in the [follow-up report](native-runtime-performance-implementation-2026-10-31.md). Program context: runtime efficiency; this is an owner-requested assessment, not a new wall-clock CI gate.
 
 ## Assessment
 
