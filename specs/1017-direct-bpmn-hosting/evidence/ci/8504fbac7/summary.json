@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "checkHead": "8504fbac779941eeef51c1ccdc1a36a07fceee88",
+  "testedMergeCommit": "f422dc2990a418cbd7e8c3f27d6583a311fff382",
+  "identicalWholeTree": "e80b01a5dc02f4587af074892d6be0b73a286ef0",
+  "ciRun": 41160195245,
+  "fullTierRun": 41160195267,
+  "backendSourceRun": 41160195158,
+  "ciConclusion": "success",
+  "fullTierConclusion": "success",
+  "backendSourceConclusion": "success",
+  "fullTierShardCount": 7,
+  "fullTierPassedOnRetry": 0,
+  "fullTierFailedTwiceOutsideQuarantine": 0,
+  "quarantine": [
+    {
+      "issue": 3261,
+      "test": "Elsa.Workbench.Tests.WorkbenchCompensationSampleTests.The_sample_workflows_end_as_the_readme_says",
+      "attemptOutcomes": [
+        "Failed",
+        "Failed"
+      ],
+      "failure": "System.IO.FileNotFoundException: Build samples/Elsa.Samples.Compensation (Release) before running this test.",
+      "notClaimedPassed": true,
+      "distinctFromOriginalQuarantineTimeout": true
+    }
+  ],
+  "notExecuted": [
+    {
+      "test": "Elsa.Cluster.EntityFrameworkCore.Tests.SqliteEfClusterMembershipConformanceTests.FR039_a_duplicate_host_id_is_reported_when_displaced_while_still_heartbeating",
+      "reason": "Reference-store join is race-free; FR039 is covered by the terminal duplicate-host exception in FR004b."
+    }
+  ],
+  "bpmnHosting": {
+    "passed": 42,
+    "failed": 0,
+    "skipped": 0,
+    "attempt": 1,
+    "legacyTimerRegressionExecuted": true
+  },
+  "gitGuardian": {
+    "conclusion": "neutral",
+    "scanCompleted": false,
+    "reason": "PR too large to scan",
+    "existingIncident": 39189012,
+    "existingIncidentDisposition": "owner deferred"
+  },
+  "reviewRoundsCompleted": 6,
+  "cleanReviewRounds": 0,
+  "mergeAuthorizedByThisRecord": false,
+  "assets": [
+    {
+      "path": "test-outcomes-cluster-foundation-host.json",
+      "sha256": "3d499a6be05f3fcaa7c82a8f6575e1cce5b9e42fb52204527f2784a265143b5d",
+      "bytes": 217
+    },
+    {
+      "path": "test-outcomes-ef-1.json",
+      "sha256": "6f6a93e322c65637e30667b8ad6ded34836d874250b726f218eac594aff51480",
+      "bytes": 198
+    },
+    {
+      "path": "test-outcomes-ef-2.json",
+      "sha256": "5047a19ca9062a0b67dd8dec2999feb904bdd12c049e3ad3e96043d3da715718",
+      "bytes": 198
+    },
+    {
+      "path": "test-outcomes-ef-3.json",
+      "sha256": "50d3f518c169cd017f54f81009537d4fdd30115a7c1c530add311d225ee607a2",
+      "bytes": 198
+    },
+    {
+      "path": "test-outcomes-integration-other.json",
+      "sha256": "3f1c3cffb71d4b5a1210fbd35f756479799f21e57c35fe7a0f8930ba980f87c7",
+      "bytes": 211
+    },
+    {
+      "path": "test-outcomes-workbench-native-hosting.json",
+      "sha256": "a699ac7359432b0ce531851f1cfe0e07077e308294db8a56eae017585f2c601f",
+      "bytes": 218
+    },
+    {
+      "path": "test-outcomes-workbench-rest.json",
+      "sha256": "bc12031827fb7e701eaf8ea9e6559dbef8256630202ca903a6873bfe4dbb9253",
+      "bytes": 358
+    },
+    {
+      "path": "source-identity.json",
+      "sha256": "dfaad473664883fba929ffe8fcc03f048c325e26d6794ff2d1f07b2b93d21eec",
+      "bytes": 591
+    },
+    {
+      "path": "bpmn-hosting-confirmed.json",
+      "sha256": "94bf4a592f500603f02d4000e35b0942753b533ace98fc5124957dd9031c5396",
+      "bytes": 312
+    },
+    {
+      "path": "bpmn-hosting.trx.gz",
+      "sha256": "19ec6e7ab62462080b2ca1cdc93d9ab6d2c9136dc95f295ec193ad4fca0084f8",
+      "bytes": 9127,
+      "decodedSha256": "b2dba5ea7cb41c8e9f83c9a57abe2ab66acaa4621b4a360fcc4eb2eafcc2700e",
+      "decodedBytes": 72242
+    }
+  ]
+}

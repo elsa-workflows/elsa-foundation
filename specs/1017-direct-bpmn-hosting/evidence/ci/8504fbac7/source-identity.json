@@ -1,0 +1,12 @@
+{
+  "pullRequestHead": "8504fbac779941eeef51c1ccdc1a36a07fceee88",
+  "workflowMergeCommit": "f422dc2990a418cbd7e8c3f27d6583a311fff382",
+  "workflowMergeParents": [
+    "dec598d9997eaf0b3f8c778ca358f8393a673171",
+    "8504fbac779941eeef51c1ccdc1a36a07fceee88"
+  ],
+  "identicalWholeTree": "e80b01a5dc02f4587af074892d6be0b73a286ef0",
+  "treeIdentityVerified": true,
+  "artifactHeadSha": "f422dc2990a418cbd7e8c3f27d6583a311fff382",
+  "scope": "GitHub checks attach to PR head8504; workflow/outcome metadata names the identical-tree synthetic merge. They are retained as separate identities."
+}
