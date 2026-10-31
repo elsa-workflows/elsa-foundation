@@ -232,6 +232,34 @@ test("Linen keeps the library beside folders with contained table scrolling", as
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
 
+test("Classic dark keeps library fields and buttons aligned beside folders", async ({ page }, testInfo) => {
+  await preset(page);
+  const appearance = page.getByRole("region", { name: "Appearance", exact: true });
+  await appearance.getByText("Theme presets", { exact: true }).click();
+  await appearance.getByRole("radiogroup", { name: "Theme", exact: true }).getByRole("radio", { name: "Classic", exact: true }).click();
+  await appearance.getByRole("radiogroup", { name: "Colour mode", exact: true }).getByRole("radio", { name: "Dark", exact: true }).click();
+  await view(page, "library", "&folder-layout=1");
+  await expect(page.locator("html")).toHaveAttribute("data-color-scheme", "classic");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "classic");
+  await expect(page.locator("html")).not.toHaveAttribute("data-workspace-style", /.+/);
+  await expect(page.locator("html")).toHaveAttribute("data-theme-appearance", "dark");
+  const controls = page.getByRole("region", { name: "Workflow library organization", exact: true });
+  const table = page.getByRole("region", { name: "Workflow definitions table", exact: true });
+  await expect(table).toBeVisible();
+  for (const width of [1440, 1329]) {
+    await page.setViewportSize({ width, height: 960 });
+    const sort = await controls.getByLabel("Sort workflows", { exact: true }).boundingBox();
+    for (const button of ["Favorites", "Filters", "Save view", "Manage tags"].map(name => controls.getByRole("button", { name, exact: true }))) {
+      const bounds = await button.boundingBox();
+      expect(Math.abs(bounds!.y + bounds!.height - sort!.y - sort!.height)).toBeLessThanOrEqual(1);
+    }
+    const navigation = await page.getByRole("complementary", { name: "Workflow folders", exact: true }).boundingBox();
+    expect((await table.boundingBox())!.x).toBeGreaterThanOrEqual(navigation!.x + navigation!.width);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  }
+  await page.screenshot({ path: testInfo.outputPath("classic-dark-folders-1329.png"), fullPage: true });
+});
+
 test("a host without folders keeps its full-width browse content", async ({ page }) => {
   await preset(page);
   await view(page, "library", "&folders=unavailable");
