@@ -75,7 +75,11 @@ public sealed record AgentPreparedToolInvocation(
     AgentExecutionLocation ExecutionLocation,
     bool RequiresApproval,
     AgentClientBinding? Client,
-    DateTimeOffset ExpiresAt);
+    DateTimeOffset ExpiresAt)
+{
+    /// <summary>Original module-declared result disclosure owner, frozen into preparation and its review digest.</summary>
+    public string? DisclosureSourceId { get; init; }
+}
 
 /// <summary>An owning module's observed effect; local working state does not imply durable save/publish.</summary>
 public sealed record AgentEffectReceipt(
@@ -101,9 +105,13 @@ public sealed record AgentContextProviderDescriptor(
     string ScopeKind,
     IReadOnlyCollection<string> ContextKinds,
     IReadOnlyCollection<string> SchemaVersions,
-    IReadOnlyCollection<string> ResourceTypes);
+    IReadOnlyCollection<string> ResourceTypes)
+{
+    /// <summary>Whether a missing, failed or timed-out source blocks provider use. Existing sources remain required by default.</summary>
+    public bool Required { get; init; } = true;
+}
 
-/// <summary>Expected source limitations are data. Required outcomes block this collection; unexpected exceptions retain Sequential failure semantics.</summary>
+/// <summary>Source limitations are data. Required outcomes block collection; unexpected required-source faults retain Sequential failure semantics.</summary>
 public sealed record AgentContributionDiagnostic(string ContributorId, string Code, string Message, bool Required);
 
 public sealed record AgentContextContribution(

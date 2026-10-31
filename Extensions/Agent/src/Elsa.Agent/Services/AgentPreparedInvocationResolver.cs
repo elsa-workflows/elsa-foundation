@@ -36,6 +36,7 @@ internal sealed class AgentPreparedInvocationResolver(
             return (null, new("agent.proposal.approval_required", "Current session policy requires approval of the exact operation.", 409));
         var tool = await registry.FindAsync(prepared.ToolName, cancellationToken);
         if (tool is null || tool.Descriptor.ModuleId != prepared.ModuleId || tool.Descriptor.ContractVersion != prepared.ToolContractVersion
+            || tool.Descriptor.DisclosureSourceId != prepared.DisclosureSourceId
             || tool.Descriptor.ExecutionLocation != prepared.ExecutionLocation || tool.Descriptor.Mutability != AgentToolMutability.Mutating)
             return (null, new("agent.proposal.executor_unavailable", "The prepared tool is no longer installed with its reviewed contract.", 409));
         if (prepared.ExecutionLocation == AgentExecutionLocation.ClientWorkingState

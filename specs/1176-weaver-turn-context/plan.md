@@ -39,7 +39,7 @@ No known constitution exception is required. A failed gate stops the dependent d
 ## Project Structure
 
 ```text
-specs/1175-weaver-turn-context/
+specs/1176-weaver-turn-context/
   spec.md, plan.md, research.md, data-model.md, quickstart.md
   contracts/context-lifecycle.md
   tasks.md

@@ -49,6 +49,9 @@ public static class AgentServiceCollectionExtensions
         services.TryAddSingleton<IAgentTurnRegistry, AgentTurnRegistry>();
         services.TryAddSingleton<IAgentTurnStateStore, InMemoryAgentTurnStateStore>();
         services.AddOptions<AgentTurnOptions>();
+        services.AddOptions<AgentContextOptions>().Validate(options => options.SourceTimeout > TimeSpan.Zero
+            && options.SourceTimeout <= TimeSpan.FromMilliseconds(uint.MaxValue - 1),
+            "The context source timeout must be positive and within the supported finite timer range.");
         services.TryAddScoped<IAgentToolInvoker>(AgentRegistrationValidator.Create<DefaultAgentToolInvoker>);
         services.TryAddScoped<IAgentStreamingService>(AgentRegistrationValidator.Create<DefaultAgentTurnOrchestrator>);
         services.TryAddScoped<IAgentProviderRegistry, DefaultAgentProviderRegistry>();

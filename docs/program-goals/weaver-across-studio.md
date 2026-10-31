@@ -18,7 +18,7 @@ Use the existing [Slots and Contributions decision](../../Studio/docs/adr/0001-u
 and [resource-agnostic Weaver decision](../../Studio/docs/adr/0003-make-weaver-tools-and-proposals-resource-agnostic.md).
 The [Studio domain context](../../Studio/CONTEXT.md) and [Elsa glossary](../glossary/elsa.md) own meanings;
 the Program issue owns the acceptance matrix and current evidence. Candidate API signatures remain
-provisional until the independent M1 witness and normal architecture review justify them.
+subject to demonstrated journeys and normal architecture review. The independent M1 minimum is accepted and verified; later lifecycle changes require their own qualification.
 
 Weaver owns generic orchestration, discovery, transport, policy, review lifecycle, cancellation and
 audit. The Studio host owns generic surface/selection lifecycle and the common review shell.
@@ -41,6 +41,17 @@ merge gates. The issue records the fresh claim, diagnostic limits and observed r
 The [M0 baseline](../reports/weaver-baseline.md) records authenticated `missing-auth` diagnostics,
 the actual loaded-module inventory, source wiring findings and the initial finite coverage matrix.
 It does not establish a successful provider turn or applied effect.
+
+The [31 October context-verification exception](https://github.com/elsa-workflows/elsa-foundation/issues/3439#issuecomment-6542261312)
+authorizes bounded resumption of #3439 after its compilation stop. The original failed attempts remain
+recorded; no acceptance, review, package or resulting-main gate is waived.
+
+[M1 is verified Done](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6539679143),
+merged through #3497 and qualified on resulting main `ab46bc22a`. Its package-only workflow and
+separate-resource journeys establish the bounded minimum, with deterministic provider-protocol
+rather than live-provider evidence. M2–M5 remain open. [Context admission #3439](https://github.com/elsa-workflows/elsa-foundation/issues/3439)
+is the sole current implementation leaf; its [spec1176](../../specs/1176-weaver-turn-context/spec.md)
+retains all six acceptance areas and the module ownership boundary.
 
 ## Delivery plan
 

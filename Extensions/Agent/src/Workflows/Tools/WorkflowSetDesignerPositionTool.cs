@@ -18,7 +18,8 @@ internal sealed class WorkflowSetDesignerPositionTool(IAgentToolAuthorizer autho
         ["workflows/design:manage"], ["/workflows"])
     {
         ModuleId = WorkflowAgentSnapshot.ModuleId, ContractVersion = "1", ExecutionLocation = AgentExecutionLocation.ClientWorkingState,
-        ResultType = ResultType, ResultSchemaVersion = "1", ResultRendererId = "workflows.agent.layout-result"
+        ResultType = ResultType, ResultSchemaVersion = "1", ResultRendererId = "workflows.agent.layout-result",
+        DisclosureSourceId = "workflows.context"
     };
 
     public async Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)

@@ -4,6 +4,7 @@ using Elsa.Agent.Core.Models;
 using Elsa.Agent.Core.Services;
 using Elsa.Agent.Workflows.Contracts;
 using Elsa.Agent.Workflows.Models;
+using Elsa.Agent.Workflows.Tools;
 
 namespace Elsa.Agent.Workflows.Services;
 
@@ -26,22 +27,31 @@ public sealed class DefaultWorkflowActivityCatalogProvider : IWorkflowActivityCa
 
 public sealed class DefaultWorkflowAgentContextProvider(
     IWorkflowRevisionProvider revisionProvider,
-    IWorkflowActivityCatalogProvider activityCatalogProvider) : IWorkflowAgentContextProvider, IAgentContextProvider
+    IWorkflowActivityCatalogProvider activityCatalogProvider,
+    IAgentSessionService sessions,
+    IAgentToolAuthorizer authorizer) : IWorkflowAgentContextProvider, IAgentContextProvider
 {
+    private static readonly AgentToolDescriptor ReadDescriptor = new WorkflowReadGraphTool().Descriptor;
     public AgentContextProviderDescriptor Descriptor { get; } = new(
         "workflows.context", WorkflowAgentSnapshot.ModuleId, "workflow",
         ["workflow.definition", "workflow.request", "workflow.guidance"], ["1"], ["workflow-definition"]);
 
-    public ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
+    public async ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
     {
         var attachments = new List<AgentContextAttachment>();
         var diagnostics = new List<AgentContributionDiagnostic>();
+        var session = await FindSessionAsync(request.SessionId, cancellationToken);
+        if (session is null) return SessionDenied();
         foreach (var caller in request.CallerAttachments.Where(item =>
                      item.ModuleId == WorkflowAgentSnapshot.ModuleId || item.ContentType?.StartsWith("workflow.", StringComparison.Ordinal) == true))
         {
             if (caller.ContentType == "workflow.request" && caller.SchemaVersion == "1")
             {
-                if (TryAdmitRequest(caller, out var admitted)) attachments.Add(admitted!);
+                if (TryAdmitRequest(caller, out var admitted))
+                {
+                    if (await CanDiscloseAsync(session, null, cancellationToken)) attachments.Add(admitted!);
+                    else diagnostics.Add(PermissionDenied());
+                }
                 else diagnostics.Add(new(Descriptor.Id, "agent.workflow.request_invalid", "The workflow request must contain bounded request-kind and reference metadata.", true));
                 continue;
             }
@@ -60,6 +70,11 @@ public sealed class DefaultWorkflowAgentContextProvider(
                 diagnostics.Add(new(Descriptor.Id, "agent.workflow.context_target_mismatch", "The workflow snapshot does not match the requested target and revision.", true));
                 continue;
             }
+            if (!await CanDiscloseAsync(session, snapshot.Target, cancellationToken))
+            {
+                diagnostics.Add(PermissionDenied());
+                continue;
+            }
             attachments.Add(new($"workflow:{snapshot!.Target.ResourceId}:{snapshot.Target.Revision}", "workflow.definition",
                 snapshot.Target.ResourceId, "Open workflow working state", "workflow.definition", AdmittedSensitivity(caller.Sensitivity),
                 "selection", $"Workflow '{snapshot.Target.ResourceId}' at revision '{snapshot.Target.Revision}' contains {snapshot.Graph.Activities.Count} activity summaries.",
@@ -69,15 +84,84 @@ public sealed class DefaultWorkflowAgentContextProvider(
                 Origin = AgentContextOrigin.ClientSnapshot, Client = snapshot.Client, AgentScopes = ["/workflows"]
             });
         }
-        attachments.Add(new("workflows:installed-guidance", "workflows.module", null, "Workflow module guidance", "workflow.guidance",
+        if (request.CallerAttachments.Count == 0 && !await CanDiscloseAsync(session, null, cancellationToken))
+            diagnostics.Add(PermissionDenied());
+        attachments.Add(InstalledGuidance());
+        return new(attachments, diagnostics);
+    }
+
+    public async ValueTask<AgentContextContribution> AdmitDisclosureAsync(AgentContextDisclosureRequest request, CancellationToken cancellationToken = default)
+    {
+        var session = await FindSessionAsync(request.SessionId, cancellationToken);
+        if (session is null) return SessionDenied();
+        var retained = new List<AgentContextAttachment>();
+        var targets = new List<AgentResourceTarget?>();
+        foreach (var item in request.Context)
+        {
+            if (item.ModuleId != Descriptor.ModuleId || item.SchemaVersion != "1"
+                || !Descriptor.ContextKinds.Contains(item.ContentType, StringComparer.Ordinal)) return ContextDenied();
+            if (item.ContentType == "workflow.guidance" && item.Origin == AgentContextOrigin.InstalledGuidance) continue;
+            if (item.Sensitivity == AgentContextSensitivity.SecretRedacted)
+            {
+                targets.Add(null);
+                retained.Add(item);
+                continue;
+            }
+            if (item.ContentType == "workflow.definition" && WorkflowAgentSnapshot.TryRead(item, out var snapshot, out _))
+                targets.Add(snapshot.Target);
+            else if (item.ContentType == "workflow.request" && TryAdmitRequest(item, out _))
+                targets.Add(null);
+            else return ContextDenied();
+            retained.Add(item);
+        }
+        foreach (var result in request.Results)
+        {
+            if (result.Access is { } access && access.ModuleId != Descriptor.ModuleId) return ContextDenied();
+            var target = result.Access?.Target ?? result.Receipt?.After;
+            if (target is not { ModuleId: WorkflowAgentSnapshot.ModuleId, ResourceType: WorkflowAgentSnapshot.ResourceType }
+                || string.IsNullOrWhiteSpace(target.ResourceId)) return ContextDenied();
+            targets.Add(target);
+        }
+        if (targets.Count == 0) targets.Add(null);
+        foreach (var target in targets.Distinct())
+            if (!await CanDiscloseAsync(session, target, cancellationToken))
+                return new([], [PermissionDenied()]);
+
+        // An editor revision belongs to its unsaved working state. A persisted revision read
+        // cannot establish its freshness. Historical disclosure preserves the original binding;
+        // receipt continuation withholds the obsolete snapshot without changing the receipt.
+        if (request.IsReceiptContinuation)
+            return new([InstalledGuidance()], [new(Descriptor.Id, "agent.workflow.context.receipt_only",
+                "The prior working-state snapshot is withheld; the accepted outcome is historical evidence, not a fresh editor read.", false)]);
+        retained.Add(InstalledGuidance());
+        return new(retained, []);
+    }
+
+    private async Task<AgentSession?> FindSessionAsync(string sessionId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var session = await sessions.FindAsync(sessionId, cancellationToken);
+        return session is { Status: AgentSessionStatus.Active } && !string.IsNullOrWhiteSpace(session.ActorId)
+            && !string.IsNullOrWhiteSpace(session.TenantId) && (session.ExpiresAt is null || session.ExpiresAt > DateTimeOffset.UtcNow) ? session : null;
+    }
+
+    private async Task<bool> CanDiscloseAsync(AgentSession session, AgentResourceTarget? target, CancellationToken cancellationToken)
+        => (await authorizer.AuthorizeAsync(ReadDescriptor, session.ActorId, session.TenantId, target, cancellationToken)).Allowed;
+
+    private AgentContextContribution SessionDenied() => new([], [new(Descriptor.Id, "agent.workflow.session_denied",
+        "A current workflow session with an authenticated actor and tenant is required.", true)]);
+    private AgentContributionDiagnostic PermissionDenied() => new(Descriptor.Id, "agent.workflow.permission_denied",
+        "Current read permission for the workflow context is required.", true);
+    private AgentContextContribution ContextDenied() => new([], [new(Descriptor.Id, "agent.workflow.disclosure_invalid",
+        "The retained workflow evidence does not match this module's supported context and resource identities.", true)]);
+
+    private static AgentContextAttachment InstalledGuidance() => new("workflows:installed-guidance", "workflows.module", null, "Workflow module guidance", "workflow.guidance",
             AgentContextSensitivity.Public, "module", "The workflow module can read the admitted working-state graph and propose a reviewed layout change for an existing activity. Activity creation, property edits, broad graph batches, save and publish are unavailable in this contribution. Apply changes only through the declared tool and report local working-state receipts separately from saved resources.", null,
             new Dictionary<string, string>())
         {
             ModuleId = WorkflowAgentSnapshot.ModuleId, SchemaVersion = "1", Origin = AgentContextOrigin.InstalledGuidance,
             AgentScopes = []
-        });
-        return ValueTask.FromResult(new AgentContextContribution(attachments, diagnostics));
-    }
+        };
 
     // A caller classification can restrict module-owned data; it cannot certify prior redaction.
     private static AgentContextSensitivity AdmittedSensitivity(AgentContextSensitivity caller) =>

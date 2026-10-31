@@ -30,6 +30,8 @@ public sealed record AgentToolDescriptor(
 {
     public string ModuleId { get; init; } = string.Empty;
     public string ContractVersion { get; init; } = "1";
+    /// <summary>Installed context source owning disclosure of this tool's results. Missing support fails closed before provider use.</summary>
+    public string? DisclosureSourceId { get; init; }
     public AgentExecutionLocation ExecutionLocation { get; init; } = AgentExecutionLocation.Server;
     public string? ResultType { get; init; }
     public string? ResultSchemaVersion { get; init; }

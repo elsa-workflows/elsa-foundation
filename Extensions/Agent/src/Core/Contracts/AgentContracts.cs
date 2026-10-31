@@ -44,6 +44,13 @@ public interface IAgentContextProvider
     string ScopeKind => Descriptor.ScopeKind;
 
     ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Re-admits this source's retained evidence under current native authority; no effects may be executed.</summary>
+    /// <remarks>The default refuses disclosure. Success authorizes supplied historical evidence/results unchanged;
+    /// the returned attachments may omit obsolete current context. Implementations must not downgrade authority failures to optional limitations.</remarks>
+    ValueTask<AgentContextContribution> AdmitDisclosureAsync(AgentContextDisclosureRequest request, CancellationToken cancellationToken = default)
+        => ValueTask.FromResult(new AgentContextContribution([], [new(Descriptor.Id, "agent.context.disclosure_unavailable",
+            "The installed context source cannot establish current disclosure authority. Start a fresh request after updating the module.", true)]));
 }
 
 public interface IAgentContextCollector

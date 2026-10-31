@@ -6,40 +6,40 @@ Only #3439 is the active implementation leaf. Parallel work below is investigati
 
 ## Phase 1: Setup
 
-- [x] T001 Refresh main, Program hierarchy/dependencies/claims and Project65; reserve spec1175 and branch in `specs/1175-weaver-turn-context/spec.md` and owning issue records.
-- [x] T002 Review specification, both constitution gates and scoped design in `specs/1175-weaver-turn-context/plan.md`; verify existing ignore rules for private evidence/build outputs.
+- [x] T001 Refresh main, Program hierarchy/dependencies/claims and Project65; reserve spec1176 and branch in `specs/1176-weaver-turn-context/spec.md` and owning issue records.
+- [x] T002 Review specification, both constitution gates and scoped design in `specs/1176-weaver-turn-context/plan.md`; verify existing ignore rules for private evidence/build outputs.
 
 ## Phase 2: Reproduction and shared prerequisites
 
-- [ ] T003 [P] Capture fresh package-consumer acceptance-to-dispatch and accepted-effect-to-continuation native authority probes using `tools/studio/Weaver.Conformance.Probe/run.py` and existing native IAM fixture; record actual adapter input, current owner denial and receipt truth on #3439.
-- [ ] T004 [P] Reproduce admitted-display, per-request surface, granted permission filtering and same-tick request behavior in `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/__tests__/WeaverSurface.test.tsx` and `src/__tests__/app-weaver-intent.test.tsx`.
-- [ ] T005 [P] Reproduce required/optional failure, uncooperative contributor, Stop/late completion and budget behavior in `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/__tests__/agentContext.test.ts` and `Extensions/Agent/tests/Tests/AgentContextContributionTests.cs`.
-- [ ] T006 Update demonstrated findings and smallest actual contract decisions in `specs/1175-weaver-turn-context/research.md` and `contracts/context-lifecycle.md`; reevaluate constitution gates before contract edits.
+- [x] T003 [P] Capture fresh package-consumer acceptance-to-dispatch and accepted-effect-to-continuation native authority probes using `tools/studio/Weaver.Conformance.Probe/qualify.py` and existing native IAM fixture; record actual adapter input, current owner denial and receipt truth on #3439.
+- [x] T004 [P] Reproduce admitted-display, per-request surface, granted permission filtering and same-tick request behavior in `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/__tests__/WeaverSurface.test.tsx` and `src/__tests__/app-weaver-intent.test.tsx`.
+- [x] T005 [P] Reproduce required/optional failure, uncooperative contributor, Stop/late completion and budget behavior in `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/__tests__/agentContext.test.ts` and `Extensions/Agent/tests/Tests/AgentContextContributionTests.cs`.
+- [x] T006 Update demonstrated findings and smallest actual contract decisions in `specs/1176-weaver-turn-context/research.md` and `contracts/context-lifecycle.md`; reevaluate constitution gates before contract edits.
 
 ## Phase 3: US1 - Correct context for this request
 
 **Independent test**: Explicit correlated request on A followed by fresh intent on B displays the admitted owner/revision/limitations; an older operation stays on A or refuses.
 
-- [ ] T007 [US1] Preserve and refresh request surface/source/correlation and return actual admitted context in `Extensions/Agent/src/Api/AgentApi.cs`, `src/Api/Models/AgentApiModels.cs` and `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agentClient.ts` as demonstrated necessary.
-- [ ] T008 [US1] Display backend-admitted evidence and opaque metadata in `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/useWeaverSession.ts` and `src/app/agent/AgentContextChips.tsx`, removing domain payload interpretation.
+- [x] T007 [US1] Preserve and refresh request surface/source/correlation and return actual admitted context in `Extensions/Agent/src/Api/AgentApi.cs`, `src/Api/Models/AgentApiModels.cs` and `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agentClient.ts` as demonstrated necessary.
+- [x] T008 [US1] Display backend-admitted evidence and opaque metadata in `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/useWeaverSession.ts` and `src/app/agent/AgentContextChips.tsx`, removing domain payload interpretation.
 - [ ] T009 [US1] Prove provenance/revision, explicit attachments, redacted/partial/unavailable display and A-to-B selection/editor transitions in `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/__tests__/WeaverSurface.test.tsx` and owning workflow bridge tests.
 
 ## Phase 4: US2 - Current authority at every disclosure
 
 **Independent test**: Fresh normal identity after native grant withdrawal denies owner reads and prevents forbidden context/results/history reaching either actual adapter, while one accepted effect remains true and occurs once.
 
-- [ ] T010 [US2] Re-admit or explicitly withhold retained resource evidence before provider use in `Extensions/Agent/src/Elsa.Agent/Services/AgentTurnServices.cs`, reusing installed module admission/current host policy without retargeting or replay.
-- [ ] T011 [US2] Apply matching current tool admission/policy/scope semantics in `Extensions/Agent/src/Elsa.Agent/Services/AgentTurnServices.cs` and `src/Elsa.Agent/Services/AgentContributedToolServices.cs` as warranted by repro; preserve native owning authorization.
-- [ ] T012 [US2] Prove ordinary/continuation disclosure, truthful receipts, original target binding, authority and host-policy changes in `Extensions/Agent/tests/Tests/AgentTurnOrchestratorTests.cs` and related existing Agent tests.
+- [x] T010 [US2] Re-admit or explicitly withhold retained resource evidence before provider use in `Extensions/Agent/src/Elsa.Agent/Services/AgentTurnServices.cs`, reusing installed module admission/current host policy without retargeting or replay.
+- [x] T011 [US2] Apply matching current tool admission/policy/scope semantics in `Extensions/Agent/src/Elsa.Agent/Services/AgentTurnServices.cs` and `src/Elsa.Agent/Services/AgentToolInvoker.cs` as warranted by repro; preserve native owning authorization.
+- [x] T012 [US2] Prove ordinary/continuation disclosure, truthful receipts, original target binding, authority and host-policy changes in `Extensions/Agent/tests/Tests/AgentTurnOrchestratorTests.cs` and related existing Agent tests.
 - [ ] T013 [US2] Prove normal remount and retained custom editor identity/module lifetimes through `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useWorkflowContextBridge.ts` tests and the native independent fixture; change owning lifetime code only for demonstrated gaps.
 
 ## Phase 5: US3 - Bounded contributor and delivery outcomes
 
 **Independent test**: Required/optional faults, noncompletion, Stop, late completion, budgets and two same-tick requests each produce the specified explicit disposition without stale state or hidden missing required evidence.
 
-- [ ] T014 [US3] Implement bounded isolated contribution outcomes in `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agentContext.ts` and `Extensions/Agent/src/Elsa.Agent/Handlers/CollectAgentContributions.cs`, preserving named Sequential event semantics.
-- [ ] T015 [US3] Preserve cancellation/generation isolation and explicit simultaneous-request disposition in `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/useWeaverSession.ts` and `src/app/App.tsx` as demonstrated necessary.
-- [ ] T016 [US3] Prove complete/partial/required/fault/deadline/cancellation/late-mutation/volume outcomes in `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/__tests__/agentContext.test.ts`, `src/__tests__/app-weaver-intent.test.tsx` and `Extensions/Agent/tests/Tests/AgentContextContributionTests.cs`.
+- [x] T014 [US3] Implement bounded isolated contribution outcomes in `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/agentContext.ts` and `Extensions/Agent/src/Elsa.Agent/Handlers/CollectAgentContributions.cs`, preserving named Sequential event semantics.
+- [x] T015 [US3] Preserve cancellation/generation isolation and explicit simultaneous-request disposition in `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/weaver/useWeaverSession.ts` and `src/app/App.tsx` as demonstrated necessary.
+- [x] T016 [US3] Prove complete/partial/required/fault/deadline/cancellation/late-mutation/volume outcomes in `Studio/src/essentials/Elsa.Studio.Hosting/Client/src/app/agent/__tests__/agentContext.test.ts`, `src/__tests__/app-weaver-intent.test.tsx` and `Extensions/Agent/tests/Tests/AgentContextContributionTests.cs`.
 
 ## Phase 6: US4 - Provider parity and module extensibility
 
@@ -54,7 +54,7 @@ Only #3439 is the active implementation leaf. Parallel work below is investigati
 
 - [ ] T021 Update actual public API/SDK contract baselines and owning extension catalogs in `Extensions/Agent/` and `Studio/src/essentials/Elsa.Studio.Hosting/`; document module-author failure/deadline/admission rules and update `docs/program-goals/weaver-across-studio.md` with bounded M1/current M2 state.
 - [ ] T022 Run full affected Agent/Hosting/Workflows/Studio tests and architecture/maps gates; reconcile discovery/execution/skips and retain gate evidence on #3439 and its scoped PR.
-- [ ] T023 Review the integrated design against every #3439 criterion, update `specs/1175-weaver-turn-context/` to its accurate terminal implementation snapshot and remove its temporary checklist only when implementation is actually complete.
+- [ ] T023 Review the integrated design against every #3439 criterion, update `specs/1176-weaver-turn-context/` to its accurate terminal implementation snapshot and remove its temporary checklist only when implementation is actually complete.
 - [ ] T024 Open/attach a scoped draft PR for #3439, converge independent nonauthor review, publish required gate evidence and request normal Code Review through the authorized repository process; preserve claim/Project transitions.
 - [ ] T025 Verify required checks and reviewed head, obtain authorized merge and verify resulting descendant main through affected tests/native consumers; record evidence on the owning issue/PR, without substituting issue closure for validation.
 - [ ] T026 Reconcile verified acceptance/task checklists, dependency and claim release, Program/M2 and Project65 statuses; mark #3439 Done only after T025, then continue the next eligible leaf.

@@ -18,6 +18,7 @@ from authors import build_authors, build_incompatible_studio
 from case_records import CaseRecords, retained
 from consumers import (configure_runtime, freeze_consumer_baseline, capture_consumer_after,
                        select_native_archives, stage_native_archives, prepare_consumers)
+from disclosure_journeys import qualify_context_disclosure
 from evidence import CONTROL_IDS, REQUIRED_CASES, validate_report
 from journey_runtime import (BASE_GRANTS, HOME_PREFERENCES_PATH, NATIVE_HOME, HOST_HEADER, JourneyRuntime,
                              atomic_json, expect_error, same)
@@ -626,6 +627,7 @@ def qualify_distributions(run):
         _incompatible(runtime, records)
         _restore(runtime, records, deltas)
         _positives(runtime, records, restored=True)
+        qualify_context_disclosure(runtime)
         capture_consumer_after(run)
         check({case["id"] for case in run.report["cases"]} == set(REQUIRED_CASES) and len(run.report["cases"]) == len(REQUIRED_CASES),
               "Every one of the 38 actual required cases must be completed exactly once")

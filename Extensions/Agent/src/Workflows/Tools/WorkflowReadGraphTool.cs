@@ -13,7 +13,10 @@ public sealed class WorkflowReadGraphTool : IAgentTool
         "Returns admitted activity identities, connections, positions and working-state revision. Activity property values are excluded.",
         AgentToolMutability.ReadOnly, AgentRisk.ReadOnly, """{"type":"object","properties":{},"additionalProperties":false}""",
         ["workflows/design:read"], ["/workflows"])
-    { ModuleId = WorkflowAgentSnapshot.ModuleId, ResultType = "workflows.graph", ResultSchemaVersion = "1" };
+    {
+        ModuleId = WorkflowAgentSnapshot.ModuleId, ResultType = "workflows.graph", ResultSchemaVersion = "1",
+        DisclosureSourceId = "workflows.context"
+    };
 
     public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
     {

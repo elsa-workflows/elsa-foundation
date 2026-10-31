@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-31
 
-**Status**: Draft
+**Status**: In progress
 
 **Input**: Program [#3428](https://github.com/elsa-workflows/elsa-foundation/issues/3428), M2 [#3431](https://github.com/elsa-workflows/elsa-foundation/issues/3431), feature [#3439](https://github.com/elsa-workflows/elsa-foundation/issues/3439). Carry authorized module context and tools through every turn while preserving the module ownership and delivery boundaries in the [Program charter](../../docs/program-goals/weaver-across-studio.md).
 

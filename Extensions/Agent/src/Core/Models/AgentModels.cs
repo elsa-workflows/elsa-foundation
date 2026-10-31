@@ -120,7 +120,8 @@ public enum AgentStreamEventKind
     ToolCallCompleted,
     PlanUpdated,
     Progress,
-    TurnCancelled
+    TurnCancelled,
+    ContextAdmitted
 }
 
 public enum AgentResultKind
@@ -255,6 +256,10 @@ public sealed record AgentMessage(
     public AgentClientBinding? Client { get; init; }
     public string? PromptMode { get; init; }
     public string? DeliveryFingerprint { get; init; }
+    /// <summary>Observed tool outcomes whose current disclosure must be established before transcript reuse.</summary>
+    public IReadOnlyList<AgentToolResult> ToolResults { get; init; } = [];
+    /// <summary>The engine tracks this message and the resource/result disclosures of its turn.</summary>
+    public bool HasDisclosureProvenance { get; init; }
 }
 
 public sealed record AgentContextAttachment(
@@ -269,6 +274,8 @@ public sealed record AgentContextAttachment(
     object? Content,
     IReadOnlyDictionary<string, string> References)
 {
+    /// <summary>Original source identity stamped by installed admission, never accepted from caller transport.</summary>
+    public string? ContributorId { get; init; }
     public string ModuleId { get; init; } = string.Empty;
     public string SchemaVersion { get; init; } = "1";
     public AgentResourceTarget? Target { get; init; }
@@ -371,6 +378,8 @@ public sealed record AgentMessageCreateRequest(
     public AgentClientBinding? Client { get; init; }
     public string? PromptMode { get; init; }
     public string? DeliveryFingerprint { get; init; }
+    public IReadOnlyList<AgentToolResult> ToolResults { get; init; } = [];
+    public bool HasDisclosureProvenance { get; init; }
 }
 
 public sealed record AgentContextRequest(
@@ -381,6 +390,8 @@ public sealed record AgentContextRequest(
     public AgentResourceTarget? Target { get; init; }
     public IReadOnlyCollection<AgentContextAttachment> CallerAttachments { get; init; } = [];
     public AgentClientBinding? Client { get; init; }
+    /// <summary>Server-only retained evidence admission; caller attachments cannot select this phase.</summary>
+    public AgentContextDisclosureRequest? Disclosure { get; init; }
 }
 
 public sealed record AgentProviderSession(
@@ -410,6 +421,8 @@ public sealed record AgentTurnMessage(AgentRole Role, string Content, string? To
 public sealed record AgentToolResult(string ToolCallId, string ToolName, bool Succeeded, string Content, AgentPayload? Payload = null)
 {
     public AgentEffectReceipt? Receipt { get; init; }
+    /// <summary>Preparation identity stamped by the engine for current authority checks before later disclosure.</summary>
+    public AgentToolResultAccess? Access { get; init; }
 }
 
 /// <summary>Payload for <see cref="AgentStreamEventKind.ToolCallRequested"/>: the provider asks the orchestrator to run a tool.</summary>

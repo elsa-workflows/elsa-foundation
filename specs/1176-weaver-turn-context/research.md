@@ -41,3 +41,24 @@ Baseline: reviewed main `ab46bc22a52aa6e456bca6ac0e803c80904de081`.
 **Rationale**: This proves the actual transport/ownership path without credentials or live-provider charges. Completed proof roots remain immutable; native IAM changes require fresh normal authentication because an older token retains its permission claims.
 
 **Alternatives**: In-process-only assertions cannot prove composed behavior. Reusing mutable published directories contaminates accepted evidence. A provider-protocol pass is not a live-provider observation.
+
+## Observed baseline and selected implementation
+
+Fresh native package consumers on ab46bc22a reproduced both ordinary and receipt disclosure after fresh native owner403 through both actual adapters (protocol evidence, no live provider). Final four-case summary SHA256 `7a5d833c3f053d594426bc07b3037915df1c9fc0fe1a9760240a7e0ece8e5e51`; native-cases `55cdc8872d120ff86e5ccc932f64b48b572a1ef170ac543f16ec312d1101fa61`. Exact owner readback confirmed one effect and no replay. Earlier private-driver Failed attempts remain Failed. [Owning issue baseline](https://github.com/elsa-workflows/elsa-foundation/issues/3439#issuecomment-6539864507).
+
+Client baseline51unique cases yielded36passed/15failed, preserving all34 existing passes. Backend cancellation baseline7passed/2failed plus a separately failing inter-source snapshot race. Fixed focused collection26/26 and client90/90 are bounded evidence pending integrated qualification. Per-message backend surface independently failed on empty scope and passed after current-surface propagation.
+
+Selected disclosure shape: optional fail-closed `IAgentContextProvider.AdmitDisclosureAsync` uses the existing named context fan-in and source identity. The host stamps `ContributorId`; current module/descriptor/schema must match that original source. Successful admission authorizes supplied historical evidence/results unchanged, while returning the current permitted context projection. Receipt truth is never rewritten; unsupported/unknown ownership, current denial or failed disclosure blocks provider entry, including Copilot remote-session reuse. Optional collection failures cannot downgrade this security gate. Native tool identity/version/target for retained result authority is server-stamped from real preparation, not inferred from a reused tool name. Current historical resource provenance is retained with assistant messages.
+
+Collection options add a finite positive per-source deadline (default10seconds), with `Required=true` by default on backend source descriptors. Optional faults/deadlines are visible outcomes; required unexpected faults remain domain-wrapped failures. Named Sequential publisher semantics remain unchanged. Returned source data is snapshotted before another source can run.
+
+This decision remains under implementation and independent review. Full affected tests, native package extension proof and main verification are still required before #3439 completion.
+
+
+## Integrated behavior evidence before package qualification
+
+All316Agent cases passed with zero skips after the result boundary, exact-source routing, policy projection and provenance repairs. Thirteen boundary cases had a12failure/1control baseline and passed after repair; two legacy/custom-store cases failed before repair and passed after. Two extension-contract cases also failed before repair: the review digest omitted the disclosure source, and a generic same-resource restriction rejected a module-owned collection-to-new-item receipt. The digest now binds that source; generic identity validation preserves the existing receipt contract and lets the module own resource transitions. Original historical labels/routes are not identity.
+
+The integrated frontend at main a5d4 plus this feature passed710Hosting and2803Workflows cases with exact discovery reconciliation, supported Studio `pnpm typecheck`, frozen install and scoped lint (zero errors; six preexisting App warnings). Earlier raw standalone typecheck failures remain distinct invocations; the supported check is the current evidence.
+
+The package run must retain all38M1 cases and additionally pass four native authority-withdrawal cases through both actual adapters. No native fixed-source result is claimed by these component results. The branch is still under implementation/qualification; independent review and resulting-main gates remain mandatory.
