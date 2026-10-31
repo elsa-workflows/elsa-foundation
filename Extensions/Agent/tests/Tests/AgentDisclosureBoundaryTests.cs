@@ -193,7 +193,10 @@ public sealed class AgentDisclosureBoundaryTests
         }
         fixture.Authority.Throw = true;
         var error = await Record.ExceptionAsync(async () => await fixture.Stream(session.Id));
-        Assert.False(error is TimeoutException, "Admission must terminate without a stranded pending gate.");
+        var domain = Assert.IsType<AgentContributionException>(error);
+        Assert.IsType<InvalidOperationException>(domain.InnerException);
+        Assert.Contains(session.Id, domain.Message, StringComparison.Ordinal);
+        Assert.False(fixture.Turns.IsActive(session.Id));
 
         if (receiptPause)
         {
@@ -225,6 +228,7 @@ public sealed class AgentDisclosureBoundaryTests
         internal IAgentContextCollector Collector => scope.ServiceProvider.GetRequiredService<IAgentContextCollector>();
         internal IAgentProposalService Proposals => scope.ServiceProvider.GetRequiredService<IAgentProposalService>();
         internal IAgentTurnStateStore Pauses => scope.ServiceProvider.GetRequiredService<IAgentTurnStateStore>();
+        internal IAgentTurnRegistry Turns => scope.ServiceProvider.GetRequiredService<IAgentTurnRegistry>();
         internal Fixture(bool copilot = false, Source? extraSource = null, bool includeContext = true)
         {
             this.copilot = copilot;

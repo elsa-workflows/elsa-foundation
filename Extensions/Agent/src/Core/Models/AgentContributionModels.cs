@@ -124,5 +124,6 @@ public sealed record AgentContextContribution(
     IReadOnlyCollection<AgentContextAttachment> Attachments,
     IReadOnlyCollection<AgentContributionDiagnostic> Diagnostics);
 
-/// <summary>Invalid installed contribution composition or a contribution contract violation.</summary>
+/// <summary>Invalid installed contribution composition, a contribution contract violation, or failure to establish retained disclosure provenance.</summary>
+/// <remarks>Infrastructure failures preserve the original cause as <see cref="Exception.InnerException"/>; transport callers redact its details.</remarks>
 public sealed class AgentContributionException(string message, Exception? innerException = null) : Exception(message, innerException);

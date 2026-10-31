@@ -158,6 +158,33 @@ protected assistant/pause history refuses further provider use while accepted ef
 retained. Empty unprotected legacy messages remain supported. A turn with resource evidence but no
 visible answer still retains a metadata-only journal, omitted from chat and provider message text.
 
+Disclosure history is a verified write-ahead checkpoint: the engine retains a metadata-only row
+before a provider handoff or a callback consumes newly admitted evidence, and retains an observed
+tool outcome before returning it to a provider. A foreground fingerprint cache avoids appending
+another checkpoint when its complete dependencies are unchanged; it does not use caller request
+identities for deduplication. Current authority is still checked before every handoff. A failed
+terminal answer insert therefore cannot erase the dependencies already exposed to an SDK session.
+Pending projections remain separate from the last verified checkpoint, so a known failed insert
+before any disclosure does not later journal that unexposed projection in cleanup.
+
+Pre-disclosure writes honor foreground cancellation. Terminal and accepted-effect journals retain
+their non-cancellable truth policy. Cleanup always releases the foreground lease, and does not
+retry a known failed terminal insert or replace a primary domain failure with another journal
+attempt. State removal, source status and lease release are each attempted even when another
+cleanup operation fails. Cleanup failures cross the same Core boundary with the original primary
+and cleanup causes retained in the inner exception chain. A store that commits and then reports failure has an uncertain write outcome; retaining
+its evidence conservatively does not authorize provider use. Cooperative cancellation is supported;
+durable recovery and uncooperative-store timeout policy remain outside this process-local contract.
+
+Unexpected disclosure infrastructure failures cross `IAgentStreamingService` as the existing Core
+`AgentContributionException`, retaining the original `InnerException` and localizing session and
+operation. This is distinct from expected authority refusals and missing-provenance outcomes.
+The API SSE endpoint is the higher transport caller: it logs the domain cause on the server and
+sends a fixed redacted error. Custom in-process stream callers must choose their own logging,
+retry or abort policy. SDK callbacks receive only safe cancellation when a disclosure fails; the
+original domain cause remains observable to the stream caller. No new public exception type,
+error payload or storage port is introduced.
+
 The generic engine bounds retained disclosure history to 64 distinct complete snapshots and 8 MiB
 of serialized evidence. It deep-copies snapshots and deduplicates by their complete canonical value,
 never by attachment ID. A bound refuses another disclosure before handoff; it never evicts a prior

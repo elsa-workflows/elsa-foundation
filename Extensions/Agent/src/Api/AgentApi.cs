@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using System.Security.Cryptography;
 
@@ -335,8 +336,20 @@ public static class AgentApi
             await WriteEventAsync(context, new(AgentProviderPrimitives.NewId(), AgentStreamEventKind.Error, null, null, error, DateTimeOffset.UtcNow));
             return;
         }
-        await foreach (var item in context.RequestServices.GetRequiredService<IAgentStreamingService>().StreamAsync(sessionId, context.RequestAborted))
-            await WriteEventAsync(context, item);
+        try
+        {
+            await foreach (var item in context.RequestServices.GetRequiredService<IAgentStreamingService>().StreamAsync(sessionId, context.RequestAborted))
+                await WriteEventAsync(context, item);
+        }
+        catch (AgentContributionException failure)
+        {
+            // The feature exposes its domain cause to this transport caller. Keep the causal
+            // exception on the server; the browser receives only the fixed recovery disposition.
+            context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(OwnerId)
+                .LogError(failure, "Agent disclosure {Operation} failed for session {SessionId}.", "stream", sessionId);
+            await WriteEventAsync(context, new(AgentProviderPrimitives.NewId(), AgentStreamEventKind.Error, null, null,
+                new("agent.history.provenance_unavailable", "Complete disclosure history could not be retained or authorized. Recorded effects remain unchanged; retry when storage and authority are available.", 503), DateTimeOffset.UtcNow));
+        }
     }
 
     private static async Task HandleFeedbackAsync(HttpContext context)

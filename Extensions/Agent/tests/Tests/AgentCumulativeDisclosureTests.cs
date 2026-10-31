@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Agent.Tests;
 
@@ -252,9 +253,13 @@ public sealed class AgentCumulativeDisclosureTests
         await fixture.Post("Read the authorized detail without answering");
         Assert.DoesNotContain(await fixture.Stream(), item => item.Kind == AgentStreamEventKind.Error);
         var messages = await fixture.Services.GetRequiredService<IAgentSessionService>().ListMessagesAsync(fixture.Session!.Id);
-        var metadata = Assert.Single(messages, message => message.Role == AgentRole.Assistant);
-        Assert.Empty(metadata.Content);
-        Assert.Contains(metadata.DisclosureHistory!, snapshot => snapshot.Context.Any(item => item.Target?.ResourceId == "detail-resource"));
+        var metadata = messages.Where(message => message.Role == AgentRole.Assistant).ToArray();
+        Assert.NotEmpty(metadata);
+        Assert.All(metadata, message =>
+        {
+            Assert.Empty(message.Content);
+            Assert.Contains(message.DisclosureHistory!, snapshot => snapshot.Context.Any(item => item.Target?.ResourceId == "detail-resource"));
+        });
         var app = new TestEndpointRouteBuilder(fixture.Services);
         AgentApi.MapAgentApi(app);
         var endpoint = Assert.Single(app.DataSources.SelectMany(source => source.Endpoints), item =>
@@ -277,6 +282,402 @@ public sealed class AgentCumulativeDisclosureTests
         Assert.Single(visible);
         Assert.Equal("user", visible[0].GetProperty("role").GetString());
         Assert.False(string.IsNullOrEmpty(visible[0].GetProperty("content").GetString()));
+    }
+
+    [Theory]
+    [InlineData(false, "answer", true)]
+    [InlineData(true, "answer", true)]
+    [InlineData(false, "completed", true)]
+    [InlineData(true, "completed", true)]
+    [InlineData(false, "error", true)]
+    [InlineData(true, "error", true)]
+    [InlineData(false, "cancelled", true)]
+    [InlineData(true, "cancelled", true)]
+    [InlineData(false, "answer", false)]
+    [InlineData(true, "answer", false)]
+    [InlineData(false, "completed", false)]
+    [InlineData(true, "completed", false)]
+    [InlineData(false, "error", false)]
+    [InlineData(true, "error", false)]
+    [InlineData(false, "cancelled", false)]
+    [InlineData(true, "cancelled", false)]
+    public async Task An_insert_failure_after_provider_input_cannot_leave_an_unrecorded_resource_disclosure(bool delegated, string terminal, bool withdraw)
+    {
+        using var fixture = new Fixture(delegated, Script.Answer, services =>
+        {
+            services.AddSingleton<SessionBoundary>(sp => new(new InMemoryAgentSessionService(sp.GetRequiredService<IAgentAuditSink>())));
+            services.Replace(ServiceDescriptor.Singleton<IAgentSessionService>(sp => sp.GetRequiredService<SessionBoundary>()));
+        });
+        var store = fixture.Services.GetRequiredService<SessionBoundary>();
+        fixture.CaptureDomainFailures = true;
+        var failure = new IOException("Synthetic journal outage " + Guid.NewGuid().ToString("N"));
+        fixture.Probe.TextlessTerminal = terminal == "answer" ? null : terminal;
+        fixture.Probe.Cancel = () => fixture.Services.GetRequiredService<IAgentTurnRegistry>().Cancel(fixture.Session!.Id, fixture.Probe.TurnId!);
+        fixture.Probe.AfterInput = () => { if (fixture.Probe.Inputs.Count == 1) store.ThrowBeforeAssistantInsert = failure; };
+        await fixture.Post("Receive the detail before a storage failure");
+
+        var first = await fixture.Stream();
+
+        Assert.Single(fixture.Probe.Inputs);
+        Assert.Contains(fixture.Probe.Inputs[0].Context, attachment => attachment.Target?.ResourceId == "detail-resource");
+        Assert.Equal(1, store.FailedInserts);
+        Assert.DoesNotContain(first, item => item.Kind == AgentStreamEventKind.Completed);
+        fixture.Probe.TextlessTerminal = null;
+        fixture.Source.ShowDetail = false;
+        if (withdraw) fixture.Source.AllowedDetailRevisions.Remove("detail-v1");
+        await fixture.Post("Use only the original resource after storage recovers");
+
+        var second = await fixture.Stream();
+
+        if (withdraw)
+        {
+            Assert.Single(fixture.Probe.Inputs);
+            AssertDisclosureDenied(second);
+        }
+        else
+        {
+            Assert.Equal(2, fixture.Probe.Inputs.Count);
+            Assert.DoesNotContain(second, item => item.Kind == AgentStreamEventKind.Error);
+        }
+        Assert.Equal(0, fixture.Read.Executions);
+        Assert.Equal(0, fixture.Mutation.ExecuteCalls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_failed_first_disclosure_insert_never_enters_the_provider_and_allows_fresh_authorized_recovery(bool delegated)
+    {
+        using var fixture = new Fixture(delegated, Script.Answer, services =>
+        {
+            services.AddSingleton<SessionBoundary>(sp => new(new InMemoryAgentSessionService(sp.GetRequiredService<IAgentAuditSink>())));
+            services.Replace(ServiceDescriptor.Singleton<IAgentSessionService>(sp => sp.GetRequiredService<SessionBoundary>()));
+        });
+        var store = fixture.Services.GetRequiredService<SessionBoundary>();
+        fixture.CaptureDomainFailures = true;
+        store.ThrowBeforeAssistantInsert = new IOException("Synthetic pre-disclosure outage " + Guid.NewGuid().ToString("N"));
+        await fixture.Post("The detail must not reach an unjournaled provider");
+
+        var first = await fixture.Stream();
+
+        Assert.Equal(1, store.FailedInserts);
+        Assert.Empty(fixture.Probe.Inputs);
+        Assert.True(first.Any(item => item.Error?.Code == "agent.history.provenance_unavailable") || fixture.DomainFailures.Count > 0);
+        fixture.Source.ShowDetail = false;
+        fixture.Source.AllowedDetailRevisions.Remove("detail-v1");
+        await fixture.Post("Only the still-authorized original resource is needed");
+
+        var second = await fixture.Stream();
+
+        var recovered = Assert.Single(fixture.Probe.Inputs);
+        Assert.DoesNotContain(recovered.Context, attachment => attachment.Target?.ResourceId == "detail-resource");
+        Assert.DoesNotContain(second, item => item.Kind == AgentStreamEventKind.Error);
+        Assert.Equal(0, fixture.Read.Executions);
+        Assert.Equal(0, fixture.Mutation.ExecuteCalls);
+    }
+
+    [Theory]
+    [InlineData("assistant")]
+    [InlineData("pause")]
+    [InlineData("authorization")]
+    [InlineData("unchanged")]
+    public async Task Disclosure_infrastructure_failures_retain_their_server_cause_and_redact_the_transport(string boundary)
+    {
+        var failure = new IOException("Synthetic private infrastructure cause " + Guid.NewGuid().ToString("N"));
+        using var fixture = new Fixture(true, boundary == "pause" ? Script.PauseThenAnswer : Script.Answer, services =>
+        {
+            services.AddSingleton<SessionBoundary>(sp => new(new InMemoryAgentSessionService(sp.GetRequiredService<IAgentAuditSink>())));
+            services.Replace(ServiceDescriptor.Singleton<IAgentSessionService>(sp => sp.GetRequiredService<SessionBoundary>()));
+            if (boundary == "pause")
+            {
+                services.AddSingleton(new PauseBoundary { ThrowOnSave = failure });
+                services.Replace(ServiceDescriptor.Singleton<IAgentTurnStateStore>(sp => sp.GetRequiredService<PauseBoundary>()));
+            }
+            if (boundary == "authorization")
+            {
+                services.AddScoped<DefaultAgentContextCollector>();
+                services.Replace(ServiceDescriptor.Scoped<IAgentContextCollector>(sp => new ThrowingDisclosureCollector(
+                    sp.GetRequiredService<DefaultAgentContextCollector>(), failure)));
+            }
+        });
+        fixture.CaptureDomainFailures = true;
+        if (boundary == "assistant")
+            fixture.Probe.AfterInput = () => fixture.Services.GetRequiredService<SessionBoundary>().ThrowBeforeAssistantInsert = failure;
+        await fixture.Post("Use current authorized evidence");
+
+        var events = await fixture.Stream();
+
+        if (boundary == "unchanged")
+        {
+            Assert.Empty(fixture.DomainFailures);
+            Assert.Contains(events, item => item.Kind == AgentStreamEventKind.Completed);
+        }
+        else
+        {
+            Assert.DoesNotContain(events, item => item.Kind == AgentStreamEventKind.Completed);
+            var domain = Assert.Single(fixture.DomainFailures);
+            Assert.Same(failure, domain.InnerException);
+            Assert.Contains(fixture.Session!.Id, domain.Message, StringComparison.Ordinal);
+            Assert.Contains("disclosure", domain.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(failure.Message, domain.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain(failure.Message, JsonSerializer.Serialize(events), StringComparison.Ordinal);
+        }
+        Assert.Equal(0, fixture.Mutation.ExecuteCalls);
+    }
+
+    [Theory]
+    [InlineData("assistant")]
+    [InlineData("pause")]
+    [InlineData("authorization")]
+    [InlineData("unchanged")]
+    public async Task Native_SSE_caller_logs_the_domain_cause_and_sends_only_a_redacted_disclosure_failure(string boundary)
+    {
+        var failure = new IOException("Synthetic private API infrastructure cause " + Guid.NewGuid().ToString("N"));
+        var logger = new RecordingLogger();
+        using var fixture = new Fixture(true, boundary == "pause" ? Script.PauseThenAnswer : Script.Answer, services =>
+        {
+            services.AddRouting().AddElsaEndpoints();
+            services.AddLogging(builder => builder.AddProvider(new CaptureLoggerProvider(logger)));
+            services.AddSingleton<SessionBoundary>(sp => new(new InMemoryAgentSessionService(sp.GetRequiredService<IAgentAuditSink>())));
+            services.Replace(ServiceDescriptor.Singleton<IAgentSessionService>(sp => sp.GetRequiredService<SessionBoundary>()));
+            if (boundary == "pause")
+            {
+                services.AddSingleton(new PauseBoundary { ThrowOnSave = failure });
+                services.Replace(ServiceDescriptor.Singleton<IAgentTurnStateStore>(sp => sp.GetRequiredService<PauseBoundary>()));
+            }
+            if (boundary == "authorization")
+            {
+                services.AddScoped<DefaultAgentContextCollector>();
+                services.Replace(ServiceDescriptor.Scoped<IAgentContextCollector>(sp => new ThrowingDisclosureCollector(
+                    sp.GetRequiredService<DefaultAgentContextCollector>(), failure)));
+            }
+        });
+        if (boundary == "assistant")
+            fixture.Probe.AfterInput = () => fixture.Services.GetRequiredService<SessionBoundary>().ThrowBeforeAssistantInsert = failure;
+        await fixture.Post("Use the current authorized resources through the native stream");
+
+        var wire = await fixture.StreamViaApi();
+
+        var frames = wire.Split('\n').Where(line => line.StartsWith("data: ", StringComparison.Ordinal))
+            .Select(line => JsonSerializer.Deserialize<JsonElement>(line[6..])).ToArray();
+        if (boundary == "unchanged")
+        {
+            Assert.DoesNotContain(logger.Entries, entry => entry.Level == LogLevel.Error);
+            Assert.Contains(frames, frame => frame.GetProperty("kind").GetString() == "completed");
+        }
+        else
+        {
+            var entry = Assert.Single(logger.Entries, item => item.Level == LogLevel.Error);
+            var domain = Assert.IsType<AgentContributionException>(entry.Exception);
+            Assert.Same(failure, domain.InnerException);
+            Assert.Equal(fixture.Session!.Id, entry.Fields["SessionId"]);
+            Assert.Equal("stream", entry.Fields["Operation"]);
+            Assert.DoesNotContain(failure.Message, domain.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain(failure.Message, entry.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain(failure.Message, wire, StringComparison.Ordinal);
+            var error = Assert.Single(frames, frame => frame.GetProperty("kind").GetString() == "error").GetProperty("error");
+            Assert.Equal("agent.history.provenance_unavailable", error.GetProperty("code").GetString());
+            Assert.Equal(503, error.GetProperty("statusCode").GetInt32());
+            Assert.DoesNotContain(frames, frame => frame.GetProperty("kind").GetString() == "completed");
+        }
+        Assert.False(fixture.Services.GetRequiredService<IAgentTurnRegistry>().IsActive(fixture.Session!.Id));
+        Assert.Equal(0, fixture.Mutation.ExecuteCalls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_callback_journal_failure_preserves_its_cause_and_an_accepted_effect_without_replay(bool delegated)
+    {
+        using var fixture = new Fixture(delegated, Script.PauseThenAnswer, services =>
+        {
+            services.AddSingleton<SessionBoundary>(sp => new(new InMemoryAgentSessionService(sp.GetRequiredService<IAgentAuditSink>())));
+            services.Replace(ServiceDescriptor.Singleton<IAgentSessionService>(sp => sp.GetRequiredService<SessionBoundary>()));
+        });
+        fixture.CaptureDomainFailures = true;
+        fixture.Policy = AgentPolicy.Default with { AutonomyMode = AgentAutonomyMode.FullAuto };
+        fixture.Probe.SwallowCallbackCancellation = delegated;
+        var failure = new IOException("Synthetic observed-outcome journal outage " + Guid.NewGuid().ToString("N"));
+        fixture.Probe.BeforeOperation = () => fixture.Services.GetRequiredService<SessionBoundary>().ThrowBeforeToolInsert = failure;
+        await fixture.Post("Perform exactly one allowed owner change");
+
+        var first = await fixture.Stream();
+
+        Assert.Single(fixture.Probe.Inputs);
+        Assert.Equal(1, fixture.Mutation.ExecuteCalls);
+        Assert.Equal("changed", fixture.Mutation.Value);
+        var domain = Assert.Single(fixture.DomainFailures);
+        Assert.Same(failure, domain.InnerException);
+        Assert.DoesNotContain(first, item => item.Kind == AgentStreamEventKind.Completed);
+        Assert.False(fixture.Probe.AfterCallbackEntered);
+        if (delegated)
+        {
+            Assert.NotNull(fixture.Probe.CallbackCancellation);
+            Assert.DoesNotContain(failure.Message, fixture.Probe.CallbackCancellation!.Message, StringComparison.Ordinal);
+        }
+        Assert.False(fixture.Services.GetRequiredService<IAgentTurnRegistry>().IsActive(fixture.Session!.Id));
+        var proposal = Assert.Single(fixture.Services.GetRequiredService<InMemoryAgentProposalStore>().Proposals.Values);
+        var proposals = fixture.Services.GetRequiredService<IAgentProposalService>();
+        var receipt = Assert.IsType<AgentEffectReceipt>((await proposals.FindResultAsync(proposal.Id))?.Receipt);
+        Assert.Equal(proposal.PreparedInvocation!.Target, receipt.Before);
+        Assert.Equal(fixture.Mutation.Revision, receipt.After.Revision);
+        fixture.Source.ShowDetail = false;
+        fixture.Source.AllowedDetailRevisions.Remove("detail-v1");
+        await fixture.Post("Explain only the original resource without another effect");
+
+        AssertDisclosureDenied(await fixture.Stream());
+
+        Assert.Single(fixture.Probe.Inputs);
+        Assert.Equal(1, fixture.Mutation.ExecuteCalls);
+        Assert.Equal(receipt, (await proposals.FindResultAsync(proposal.Id))?.Receipt);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Stop_cancels_a_cooperative_pre_disclosure_write_without_exposing_the_pending_projection(bool delegated)
+    {
+        using var fixture = new Fixture(delegated, Script.Answer, services =>
+        {
+            services.AddSingleton<SessionBoundary>(sp => new(new InMemoryAgentSessionService(sp.GetRequiredService<IAgentAuditSink>())));
+            services.Replace(ServiceDescriptor.Singleton<IAgentSessionService>(sp => sp.GetRequiredService<SessionBoundary>()));
+        });
+        var store = fixture.Services.GetRequiredService<SessionBoundary>();
+        store.BlockAssistantInsert = true;
+        await fixture.Post("Do not disclose the detail before its checkpoint commits");
+        var running = fixture.Stream();
+        await store.AssistantInsertStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.Empty(fixture.Probe.Inputs);
+        Assert.True(fixture.Services.GetRequiredService<IAgentTurnRegistry>().Cancel(fixture.Session!.Id, fixture.Probe.TurnId!));
+
+        var cancelled = await running.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Contains(cancelled, item => item.Kind == AgentStreamEventKind.TurnCancelled);
+        Assert.DoesNotContain(cancelled, item => item.Kind == AgentStreamEventKind.Completed);
+        Assert.Empty(fixture.Probe.Inputs);
+        Assert.True(store.AssistantInsertCancelled);
+        Assert.False(fixture.Services.GetRequiredService<IAgentTurnRegistry>().IsActive(fixture.Session.Id));
+        store.BlockAssistantInsert = false;
+        fixture.Source.ShowDetail = false;
+        fixture.Source.AllowedDetailRevisions.Remove("detail-v1");
+        await fixture.Post("Use fresh original-resource context after Stop");
+        Assert.DoesNotContain(await fixture.Stream(), item => item.Kind == AgentStreamEventKind.Error);
+        Assert.DoesNotContain(Assert.Single(fixture.Probe.Inputs).Context, item => item.Target?.ResourceId == "detail-resource");
+        Assert.Equal(0, fixture.Mutation.ExecuteCalls);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_persistent_terminal_insert_failure_relies_on_the_verified_checkpoint_and_releases_the_lease(bool withdraw)
+    {
+        using var fixture = new Fixture(true, Script.Answer, services =>
+        {
+            services.AddSingleton<SessionBoundary>(sp => new(new InMemoryAgentSessionService(sp.GetRequiredService<IAgentAuditSink>())));
+            services.Replace(ServiceDescriptor.Singleton<IAgentSessionService>(sp => sp.GetRequiredService<SessionBoundary>()));
+        });
+        fixture.CaptureDomainFailures = true;
+        var store = fixture.Services.GetRequiredService<SessionBoundary>();
+        var failure = new IOException("Synthetic persistent final journal outage " + Guid.NewGuid().ToString("N"));
+        fixture.Probe.AfterInput = () => { if (fixture.Probe.Inputs.Count == 1) store.PersistentAssistantInsertFailure = failure; };
+        await fixture.Post("Receive detail before the persistent terminal outage");
+
+        var first = await fixture.Stream();
+
+        Assert.Same(failure, Assert.Single(fixture.DomainFailures).InnerException);
+        Assert.Equal(1, store.FailedInserts);
+        Assert.DoesNotContain(first, item => item.Kind == AgentStreamEventKind.Completed);
+        Assert.False(fixture.Services.GetRequiredService<IAgentTurnRegistry>().IsActive(fixture.Session!.Id));
+        store.PersistentAssistantInsertFailure = null;
+        fixture.Source.ShowDetail = false;
+        if (withdraw) fixture.Source.AllowedDetailRevisions.Remove("detail-v1");
+        await fixture.Post("The new prompt is accepted rather than held by a leaked lease");
+        var second = await fixture.Stream();
+
+        if (withdraw) { Assert.Single(fixture.Probe.Inputs); AssertDisclosureDenied(second); }
+        else { Assert.Equal(2, fixture.Probe.Inputs.Count); Assert.Contains(second, item => item.Kind == AgentStreamEventKind.Completed); }
+        Assert.Equal(0, fixture.Mutation.ExecuteCalls);
+    }
+
+    [Theory]
+    [InlineData("status", true, false)]
+    [InlineData("remove", true, false)]
+    [InlineData("both", true, false)]
+    [InlineData("status", false, false)]
+    [InlineData("remove", false, false)]
+    [InlineData("both", false, false)]
+    [InlineData("status", true, true)]
+    [InlineData("remove", true, true)]
+    [InlineData("both", true, true)]
+    [InlineData("status", false, true)]
+    [InlineData("remove", false, true)]
+    [InlineData("both", false, true)]
+    public async Task Cleanup_failures_preserve_all_causes_attempt_both_operations_and_release_the_turn(string boundary, bool primaryFails, bool api)
+    {
+        var primary = new IOException("Synthetic private primary insert cause " + Guid.NewGuid().ToString("N"));
+        var remove = new IOException("Synthetic private pause cleanup cause " + Guid.NewGuid().ToString("N"));
+        var status = new IOException("Synthetic private status cleanup cause " + Guid.NewGuid().ToString("N"));
+        var logger = new RecordingLogger();
+        using var fixture = new Fixture(true, Script.Answer, services =>
+        {
+            services.AddRouting().AddElsaEndpoints();
+            services.AddLogging(builder => builder.AddProvider(new CaptureLoggerProvider(logger)));
+            services.AddSingleton<SessionBoundary>(sp => new(new InMemoryAgentSessionService(sp.GetRequiredService<IAgentAuditSink>())));
+            services.Replace(ServiceDescriptor.Singleton<IAgentSessionService>(sp => sp.GetRequiredService<SessionBoundary>()));
+            services.AddSingleton<PauseBoundary>();
+            services.Replace(ServiceDescriptor.Singleton<IAgentTurnStateStore>(sp => sp.GetRequiredService<PauseBoundary>()));
+        });
+        fixture.CaptureDomainFailures = true;
+        var sessions = fixture.Services.GetRequiredService<SessionBoundary>();
+        var pauses = fixture.Services.GetRequiredService<PauseBoundary>();
+        fixture.Probe.AfterInput = () =>
+        {
+            if (primaryFails) sessions.ThrowBeforeAssistantInsert = primary;
+            if (boundary is "remove" or "both") pauses.ThrowOnRemove = remove;
+            if (boundary is "status" or "both") sessions.ThrowOnTerminalStatus = status;
+        };
+        await fixture.Post("Retain the primary failure even if its cleanup also fails");
+
+        string? wire = null;
+        var escaped = await Record.ExceptionAsync(async () =>
+        {
+            if (api) wire = await fixture.StreamViaApi();
+            else await fixture.Stream();
+        });
+
+        Assert.Equal(1, pauses.RemoveCalls);
+        Assert.Equal(1, sessions.TerminalStatusCalls);
+        Assert.False(fixture.Services.GetRequiredService<IAgentTurnRegistry>().IsActive(fixture.Session!.Id));
+        Assert.Null(escaped);
+        var domain = api
+            ? Assert.IsType<AgentContributionException>(Assert.Single(logger.Entries, entry => entry.Level == LogLevel.Error).Exception)
+            : Assert.Single(fixture.DomainFailures);
+        var causes = ExceptionChain(domain).ToArray();
+        if (primaryFails) Assert.Contains(causes, cause => ReferenceEquals(cause, primary));
+        if (boundary is "remove" or "both") Assert.Contains(causes, cause => ReferenceEquals(cause, remove));
+        if (boundary is "status" or "both") Assert.Contains(causes, cause => ReferenceEquals(cause, status));
+        Assert.Contains(fixture.Session.Id, domain.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Synthetic private", domain.Message, StringComparison.Ordinal);
+        if (api)
+        {
+            Assert.Contains("agent.history.provenance_unavailable", wire, StringComparison.Ordinal);
+            Assert.DoesNotContain("Synthetic private", wire, StringComparison.Ordinal);
+        }
+        Assert.Single(fixture.Probe.Inputs);
+        Assert.Equal(0, fixture.Mutation.ExecuteCalls);
+    }
+
+    private static IEnumerable<Exception> ExceptionChain(Exception exception)
+    {
+        yield return exception;
+        if (exception is AggregateException aggregate)
+        {
+            foreach (var cause in aggregate.InnerExceptions.SelectMany(ExceptionChain)) yield return cause;
+        }
+        else if (exception.InnerException is { } inner)
+        {
+            foreach (var cause in ExceptionChain(inner)) yield return cause;
+        }
     }
 
     [Theory]
@@ -418,6 +819,9 @@ public sealed class AgentCumulativeDisclosureTests
         internal ProposalMutationTool Mutation { get; } = new();
         internal ProbeState Probe { get; }
         internal AgentSession? Session { get; private set; }
+        internal AgentPolicy Policy { get; set; } = AgentPolicy.Default;
+        internal bool CaptureDomainFailures;
+        internal List<AgentContributionException> DomainFailures { get; } = [];
         internal IServiceProvider Services => scope.ServiceProvider;
 
         internal Fixture(bool delegated, Script script, Action<IServiceCollection>? configure = null)
@@ -439,7 +843,7 @@ public sealed class AgentCumulativeDisclosureTests
         {
             var sessions = Services.GetRequiredService<IAgentSessionService>();
             Session ??= await sessions.CreateAsync(new("tenant-1", "actor-1", "conversation-1", "cumulative-probe", "explain", null,
-                AgentPolicy.Default, new Dictionary<string, string>()));
+                Policy, new Dictionary<string, string>()));
             var collected = await Services.GetRequiredService<IAgentContextCollector>().CollectAsync(Session.Policy,
                 new(Session.Id, SourceId, new Dictionary<string, string>()));
             Assert.True(collected.Succeeded, collected.Error?.Message);
@@ -451,12 +855,36 @@ public sealed class AgentCumulativeDisclosureTests
         internal async Task<List<AgentStreamEvent>> Stream()
         {
             var events = new List<AgentStreamEvent>();
-            await foreach (var item in Services.GetRequiredService<IAgentStreamingService>().StreamAsync(Session!.Id))
+            try
             {
-                if (item.Payload is AgentTurnStarted started) Probe.TurnId = started.TurnId;
-                events.Add(item);
+                await foreach (var item in Services.GetRequiredService<IAgentStreamingService>().StreamAsync(Session!.Id))
+                {
+                    if (item.Payload is AgentTurnStarted started) Probe.TurnId = started.TurnId;
+                    events.Add(item);
+                }
             }
+            catch (AgentContributionException failure) when (CaptureDomainFailures) { DomainFailures.Add(failure); }
             return events;
+        }
+
+        internal async Task<string> StreamViaApi()
+        {
+            var app = new TestEndpointRouteBuilder(Services);
+            AgentApi.MapAgentApi(app);
+            var endpoint = Assert.Single(app.DataSources.SelectMany(source => source.Endpoints), item =>
+                item.Metadata.GetMetadata<EndpointNameMetadata>()?.EndpointName == "ElsaAgentApiEndpointsStreamSession");
+            var context = new DefaultHttpContext
+            {
+                RequestServices = Services,
+                User = new ClaimsPrincipal(new ClaimsIdentity([
+                    new Claim(ClaimTypes.NameIdentifier, "actor-1"), new Claim("elsa.identity.tenant_id", "tenant-1")], "test"))
+            };
+            context.Request.RouteValues["sessionId"] = Session!.Id;
+            context.Response.Body = new MemoryStream();
+            await endpoint.RequestDelegate!(context);
+            context.Response.Body.Position = 0;
+            using var reader = new StreamReader(context.Response.Body);
+            return await reader.ReadToEndAsync();
         }
 
         public void Dispose() { scope.Dispose(); root.Dispose(); }
@@ -497,9 +925,12 @@ public sealed class AgentCumulativeDisclosureTests
     {
         internal List<Input> Inputs { get; } = [];
         internal Action? BeforeOperation;
+        internal Action? AfterInput;
         internal bool Operated, AfterCallbackEntered;
         internal string? TextlessTerminal, TurnId;
         internal Action? Cancel;
+        internal bool SwallowCallbackCancellation;
+        internal OperationCanceledException? CallbackCancellation;
         internal bool NeedsOperation => !Operated && script != Script.Answer;
         internal string ToolName => script == Script.PauseThenAnswer ? "test_mutate" : "cumulative_neutral_read";
     }
@@ -539,6 +970,7 @@ public sealed class AgentCumulativeDisclosureTests
         {
             await Task.Yield();
             State.Inputs.Add(new(context.Context, context.History, context.PendingToolResults, context.AvailableTools.Select(item => item.Name).ToArray()));
+            State.AfterInput?.Invoke();
             if (State.TextlessTerminal is { } terminal)
             {
                 if (terminal == "cancelled") { State.Cancel!(); cancellationToken.ThrowIfCancellationRequested(); }
@@ -563,6 +995,7 @@ public sealed class AgentCumulativeDisclosureTests
         {
             await Task.Yield();
             State.Inputs.Add(new(request.Context, request.History, request.PendingToolResults, request.Tools.Select(item => item.Descriptor.Name).ToArray()));
+            State.AfterInput?.Invoke();
             if (State.TextlessTerminal is { } terminal)
             {
                 if (terminal == "cancelled") { State.Cancel!(); cancellationToken.ThrowIfCancellationRequested(); }
@@ -572,10 +1005,20 @@ public sealed class AgentCumulativeDisclosureTests
             yield return Text(DerivedText);
             if (!State.NeedsOperation) yield break;
             State.Operated = true; State.BeforeOperation?.Invoke();
-            var dispatch = await request.ToolInvoker!.DispatchAsync(new("cumulative-call", State.ToolName, request.SessionId, request.ActorId,
-                new Dictionary<string, object?> { ["value"] = "changed" }, request.Context)
-            { TenantId = request.TenantId, TurnId = request.TurnId }, request.Policy, cancellationToken);
-            if (dispatch.Proposal is { } proposal)
+            AgentToolDispatch? dispatch = null;
+            try
+            {
+                dispatch = await request.ToolInvoker!.DispatchAsync(new("cumulative-call", State.ToolName, request.SessionId, request.ActorId,
+                    new Dictionary<string, object?> { ["value"] = "changed" }, request.Context)
+                { TenantId = request.TenantId, TurnId = request.TurnId }, request.Policy, cancellationToken);
+            }
+            catch (OperationCanceledException stopped) { State.CallbackCancellation = stopped; }
+            if (State.CallbackCancellation is { } cancellation)
+            {
+                if (State.SwallowCallbackCancellation) yield break;
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(cancellation).Throw();
+            }
+            if (dispatch!.Proposal is { } proposal)
             {
                 yield return new(Guid.NewGuid().ToString("N"), AgentStreamEventKind.ProposalCreated, null, proposal.Id, null, DateTimeOffset.UtcNow, Payload: proposal);
                 yield break;
@@ -599,19 +1042,57 @@ public sealed class AgentCumulativeDisclosureTests
     {
         private AgentPausedTurn? state;
         internal string? Mutation;
-        public void Save(AgentPausedTurn value) => state = value;
+        internal Exception? ThrowOnSave;
+        internal Exception? ThrowOnRemove;
+        internal int RemoveCalls;
+        public void Save(AgentPausedTurn value)
+        {
+            if (ThrowOnSave is { } failure) throw failure;
+            state = value;
+        }
         public AgentPausedTurn? Find(string sessionId) => state is not null && state.SessionId == sessionId
             ? state with { DisclosureHistory = ChangeHistory(state.DisclosureHistory, Mutation) } : null;
-        public void Remove(string sessionId) { if (state?.SessionId == sessionId) state = null; }
+        public void Remove(string sessionId)
+        {
+            RemoveCalls++;
+            if (ThrowOnRemove is { } failure) throw failure;
+            if (state?.SessionId == sessionId) state = null;
+        }
     }
 
     private sealed class SessionBoundary(IAgentSessionService inner) : IAgentSessionService
     {
         internal string? Mutation;
+        internal Exception? ThrowBeforeAssistantInsert;
+        internal Exception? ThrowBeforeToolInsert;
+        internal Exception? PersistentAssistantInsertFailure;
+        internal Exception? ThrowOnTerminalStatus;
+        internal int TerminalStatusCalls;
+        internal bool BlockAssistantInsert, AssistantInsertCancelled;
+        internal TaskCompletionSource AssistantInsertStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal int FailedInserts;
         public Task<AgentSession> CreateAsync(AgentSessionCreateRequest request, CancellationToken cancellationToken = default) => inner.CreateAsync(request, cancellationToken);
         public Task<AgentSession?> FindAsync(string sessionId, CancellationToken cancellationToken = default) => inner.FindAsync(sessionId, cancellationToken);
         public async Task<AgentMessage> AddMessageAsync(string sessionId, AgentMessageCreateRequest request, CancellationToken cancellationToken = default)
-            => Project(await inner.AddMessageAsync(sessionId, request, cancellationToken));
+        {
+            if (request.Role == AgentRole.Assistant && BlockAssistantInsert)
+            {
+                AssistantInsertStarted.TrySetResult();
+                try { await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken); }
+                catch (OperationCanceledException) { AssistantInsertCancelled = true; throw; }
+            }
+            if (request.Role == AgentRole.Assistant && (ThrowBeforeAssistantInsert ?? PersistentAssistantInsertFailure) is { } failure)
+            {
+                ThrowBeforeAssistantInsert = null; FailedInserts++;
+                throw failure;
+            }
+            if (request.Role == AgentRole.Tool && ThrowBeforeToolInsert is { } toolFailure)
+            {
+                ThrowBeforeToolInsert = null; FailedInserts++;
+                throw toolFailure;
+            }
+            return Project(await inner.AddMessageAsync(sessionId, request, cancellationToken));
+        }
         public async Task<IReadOnlyCollection<AgentMessage>> ListMessagesAsync(string sessionId, CancellationToken cancellationToken = default)
             => (await inner.ListMessagesAsync(sessionId, cancellationToken)).Select(Project).ToArray();
         public async Task<AgentMessage?> FindMessageAsync(string sessionId, string messageId, CancellationToken cancellationToken = default)
@@ -619,12 +1100,31 @@ public sealed class AgentCumulativeDisclosureTests
         public async Task<AgentMessage?> FindLatestMessageAsync(string sessionId, AgentRole? role = null, CancellationToken cancellationToken = default)
         { var message = await inner.FindLatestMessageAsync(sessionId, role, cancellationToken); return message is null ? null : Project(message); }
         public Task SetMessageStatusAsync(string sessionId, string messageId, AgentMessageStatus status, CancellationToken cancellationToken = default)
-            => inner.SetMessageStatusAsync(sessionId, messageId, status, cancellationToken);
+        {
+            if (status is AgentMessageStatus.Completed or AgentMessageStatus.Cancelled or AgentMessageStatus.Failed)
+            {
+                TerminalStatusCalls++;
+                if (ThrowOnTerminalStatus is { } failure) throw failure;
+            }
+            return inner.SetMessageStatusAsync(sessionId, messageId, status, cancellationToken);
+        }
         public Task AddContextAsync(string sessionId, IReadOnlyCollection<AgentContextAttachment> attachments, CancellationToken cancellationToken = default)
             => inner.AddContextAsync(sessionId, attachments, cancellationToken);
         public Task<IReadOnlyCollection<AgentContextAttachment>> ListContextAsync(string sessionId, CancellationToken cancellationToken = default)
             => inner.ListContextAsync(sessionId, cancellationToken);
         private AgentMessage Project(AgentMessage message) => message.Role == AgentRole.Assistant
             ? message with { DisclosureHistory = ChangeHistory(message.DisclosureHistory, Mutation) } : message;
+    }
+
+    private sealed class ThrowingDisclosureCollector(IAgentContextCollector inner, Exception failure) : IAgentContextCollector
+    {
+        public Task<AgentResult<AgentContextContribution>> CollectAsync(AgentPolicy policy, AgentContextRequest request, CancellationToken cancellationToken = default)
+            => request.Disclosure?.IsHistorical == true ? throw failure : inner.CollectAsync(policy, request, cancellationToken);
+    }
+
+    private sealed class CaptureLoggerProvider(RecordingLogger logger) : ILoggerProvider
+    {
+        public ILogger CreateLogger(string categoryName) => logger;
+        public void Dispose() { }
     }
 }

@@ -96,6 +96,9 @@ public interface IAgentProposalService
 
 public interface IAgentStreamingService
 {
+    /// <summary>Streams a turn only after complete disclosure provenance has been retained and authorized.</summary>
+    /// <exception cref="AgentContributionException">An installed contribution or disclosure infrastructure boundary failed.
+    /// The exception localizes the session/operation and retains the original cause; transport callers choose logging and redacted presentation.</exception>
     IAsyncEnumerable<AgentStreamEvent> StreamAsync(string sessionId, CancellationToken cancellationToken = default);
 }
 

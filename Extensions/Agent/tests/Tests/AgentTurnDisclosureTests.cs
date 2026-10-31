@@ -84,7 +84,7 @@ public sealed class AgentTurnDisclosureTests
         var session = await Session(sessions);
         await Post(scope, session.Id, "explain");
         Assert.Equal(AgentStreamEventKind.Completed, (await Collect(scope, session.Id))[^1].Kind);
-        var assistant = Assert.Single(await sessions.ListMessagesAsync(session.Id), x => x.Role == AgentRole.Assistant);
+        var assistant = Assert.Single(await sessions.ListMessagesAsync(session.Id), x => x.Role == AgentRole.Assistant && x.Content.Length > 0);
         Assert.Equal(source.Descriptor.Id, Assert.Single(assistant.Context).ContributorId);
         Assert.Single(provider.Inputs);
         source.Allowed = false;
