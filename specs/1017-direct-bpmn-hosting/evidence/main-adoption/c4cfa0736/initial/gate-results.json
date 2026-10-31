@@ -1,0 +1,300 @@
+[
+  {
+    "name": "locked-restore",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "dotnet",
+      "restore",
+      "Elsa.Server.slnx",
+      "--locked-mode",
+      "--force"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 8.20517611503601
+  },
+  {
+    "name": "pnpm-install",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "pnpm",
+      "install",
+      "--frozen-lockfile"
+    ],
+    "workingDirectory": "Studio",
+    "exitCode": 0,
+    "elapsedSeconds": 0.5524461269378662
+  },
+  {
+    "name": "frontend-tests",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "python3.14",
+      "/tmp/elsa-2898-main-c4cfa-qualification/serial-frontend.py"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 129.312735080719
+  },
+  {
+    "name": "typecheck",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "pnpm",
+      "typecheck"
+    ],
+    "workingDirectory": "Studio",
+    "exitCode": 0,
+    "elapsedSeconds": 10.780354976654053
+  },
+  {
+    "name": "lint",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "pnpm",
+      "lint"
+    ],
+    "workingDirectory": "Studio",
+    "exitCode": 0,
+    "elapsedSeconds": 9.381370067596436
+  },
+  {
+    "name": "frontend-build",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "pnpm",
+      "build"
+    ],
+    "workingDirectory": "Studio",
+    "exitCode": 0,
+    "elapsedSeconds": 16.457037210464478
+  },
+  {
+    "name": "bpmn",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=bpmn.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-main-c4cfa-qualification"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 39.30145788192749
+  },
+  {
+    "name": "behavioral",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=behavioral.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-main-c4cfa-qualification"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 9.395865678787231
+  },
+  {
+    "name": "shared-ef",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=shared-ef.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-main-c4cfa-qualification"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 8.351989984512329
+  },
+  {
+    "name": "migrations",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=migrations.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-main-c4cfa-qualification"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 92.52249503135681
+  },
+  {
+    "name": "design",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Design/Tests/Elsa.Workflows.Design.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=design.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-main-c4cfa-qualification"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 41.880959033966064
+  },
+  {
+    "name": "design-ef",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=design-ef.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-main-c4cfa-qualification"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 10.5646071434021
+  },
+  {
+    "name": "design-api",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=design-api.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-main-c4cfa-qualification"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 4.282148838043213
+  },
+  {
+    "name": "runtime",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=runtime.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-main-c4cfa-qualification"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 4.896229982376099
+  },
+  {
+    "name": "publishing-api",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=publishing-api.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-main-c4cfa-qualification"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 11.72502875328064
+  },
+  {
+    "name": "studio",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Studio/tests/Elsa.Studio.Tests/Elsa.Studio.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=studio.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-main-c4cfa-qualification"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 118.07675385475159
+  },
+  {
+    "name": "architecture",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=architecture.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-main-c4cfa-qualification"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 0,
+    "elapsedSeconds": 45.13824415206909
+  },
+  {
+    "name": "hosting",
+    "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=hosting.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-main-c4cfa-qualification"
+    ],
+    "workingDirectory": ".",
+    "exitCode": 1,
+    "elapsedSeconds": 1254.4888501167297
+  }
+]

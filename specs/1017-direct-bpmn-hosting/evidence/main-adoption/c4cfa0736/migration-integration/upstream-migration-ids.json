@@ -1,0 +1,18 @@
+{
+  "Sqlite": {
+    "upstreamId": "20261031002424_Initial",
+    "file": "20261031002424_Initial.cs"
+  },
+  "SqlServer": {
+    "upstreamId": "20261031002423_Initial",
+    "file": "20261031002423_Initial.cs"
+  },
+  "PostgreSql": {
+    "upstreamId": "20261031002421_Initial",
+    "file": "20261031002421_Initial.cs"
+  },
+  "MySql": {
+    "upstreamId": "20261031002420_Initial",
+    "file": "20261031002420_Initial.cs"
+  }
+}

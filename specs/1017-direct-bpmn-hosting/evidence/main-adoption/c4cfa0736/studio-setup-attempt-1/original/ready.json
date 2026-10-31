@@ -1,0 +1,151 @@
+{
+  "family": "original",
+  "sourceRevision": "0f5f6c6efaada666f40766478ef63ad488b28e58",
+  "backendUrl": "http://127.0.0.1:63331",
+  "studioUrl": "http://127.0.0.1:63332",
+  "privateRoot": "/var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-studio-upgrade-9pb5ew1w",
+  "baselineAssets": {
+    "studio/runtime.sqlite.gz": "f5cc2045989ed1a7f9382586c1c661690d372e8520b69dd7c84c9a3be5de6ac2",
+    "studio/design.sqlite.gz": "ef63e7c4a921fa636c1dbb9f68264c4bc77c2b29a8fefc289c7de8e29548b113"
+  },
+  "hostProducts": {
+    "sourceCommit": "0f5f6c6efaada666f40766478ef63ad488b28e58",
+    "metadataOnly": true,
+    "actualProductVersions": [
+      {
+        "name": "Elsa.Workbench.dll",
+        "productVersion": "1.0.0+0f5f6c6efaada666f40766478ef63ad488b28e58",
+        "sha256": "26736c3390e79c39f84dd7aa44eee731d4d18f10fab84f051bbd20f38b0846c8"
+      },
+      {
+        "name": "Elsa.Activities.Bpmn.dll",
+        "productVersion": "1.0.0+0f5f6c6efaada666f40766478ef63ad488b28e58",
+        "sha256": "87cc722431a51f9138312aeea1bb11bddc978ae3ad0f0962fdafc8829f23e6d1"
+      },
+      {
+        "name": "Elsa.Activities.Bpmn.Interchange.dll",
+        "productVersion": "1.0.0+0f5f6c6efaada666f40766478ef63ad488b28e58",
+        "sha256": "7f8a7d5d535b8ece74abb8db0c488833063437faa4c1d2b71d91f639dfac3941"
+      },
+      {
+        "name": "Elsa.Workflows.Runtime.Core.dll",
+        "productVersion": "1.0.0+0f5f6c6efaada666f40766478ef63ad488b28e58",
+        "sha256": "7d6be912a798d8aa24921311dc593eb8849f529c936b0674b9240f893eb471c3"
+      },
+      {
+        "name": "Elsa.Workflows.Runtime.dll",
+        "productVersion": "1.0.0+0f5f6c6efaada666f40766478ef63ad488b28e58",
+        "sha256": "08a33d930d850971f70fce4fb685d090cd504d5eaa3c6ad6f0f084ada63d8e02"
+      },
+      {
+        "name": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.dll",
+        "productVersion": "1.0.0+0f5f6c6efaada666f40766478ef63ad488b28e58",
+        "sha256": "23838aa18a8e385e19ebf6563a8502ba5664ab44a57c8ed35de230ae7dbba49a"
+      },
+      {
+        "name": "Elsa.Activities.Runtime.dll",
+        "productVersion": "1.0.0+0f5f6c6efaada666f40766478ef63ad488b28e58",
+        "sha256": "7fddf0fb25deb6c6cef8fcd8bc1c3d6107ecad5685c9e6b998f0619a352573f8"
+      },
+      {
+        "name": "Elsa.Activities.DispatchWorkflow.Runtime.dll",
+        "productVersion": "1.0.0+0f5f6c6efaada666f40766478ef63ad488b28e58",
+        "sha256": "a510c89d525282b33c46e6d039d063f581928fb3dd82027d9f9ac3065b6878df"
+      },
+      {
+        "name": "Elsa.Serialization.SystemText.dll",
+        "productVersion": "1.0.0+0f5f6c6efaada666f40766478ef63ad488b28e58",
+        "sha256": "b3d7c5a805e8e92f2b1b739d33804b82ef79fe70b9b369e02ddadc9104b05969"
+      },
+      {
+        "name": "Elsa.Workflows.Design.Core.dll",
+        "productVersion": "1.0.0+0f5f6c6efaada666f40766478ef63ad488b28e58",
+        "sha256": "c06d2438bd02c5725fe5094324bfd327871bbe7e9790eb9ed6ceb3ea2130b9d5"
+      },
+      {
+        "name": "Elsa.Workflows.Design.Api.dll",
+        "productVersion": "1.0.0+0f5f6c6efaada666f40766478ef63ad488b28e58",
+        "sha256": "e7e93fd8c678121bb98953af0f32ef967b4f383fe366d2ef048c121c35b5fcb5"
+      },
+      {
+        "name": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll",
+        "productVersion": "1.0.0+0f5f6c6efaada666f40766478ef63ad488b28e58",
+        "sha256": "071dbec734cec0a22b826290dd99a4a7ff51f1f000f866a75641e3be43c37bc0"
+      },
+      {
+        "name": "Elsa.Persistence.EntityFramework.dll",
+        "productVersion": "1.0.0+0f5f6c6efaada666f40766478ef63ad488b28e58",
+        "sha256": "1a37205db2cf334944c3ff58a7ae2e353810c083bbf1faab0acd9fe51100310e"
+      }
+    ],
+    "releasedLibraryProducts": [
+      {
+        "name": "Bpmn.Model.dll",
+        "productVersion": "0.5.0+021d2c5bba494f17d346144d97763cd3b2a13a4b",
+        "sha256": "899645779a1d7057e8fdb34ebd623459590f6d074db7faa220825d68be69b776"
+      },
+      {
+        "name": "Bpmn.Semantics.dll",
+        "productVersion": "0.5.0+021d2c5bba494f17d346144d97763cd3b2a13a4b",
+        "sha256": "7bcb16caab992c7166ab9080de72cd2417c9a51f2dd183d23ce1c7d13127d923"
+      },
+      {
+        "name": "Bpmn.Interchange.dll",
+        "productVersion": "0.5.0+021d2c5bba494f17d346144d97763cd3b2a13a4b",
+        "sha256": "4199d813b9e6dad4f0ec4f189b05b9084de86fb9a7d46233a85183072d88c6d9"
+      }
+    ]
+  },
+  "studioProducts": {
+    "sourceCommit": "0f5f6c6efaada666f40766478ef63ad488b28e58",
+    "metadataOnly": true,
+    "actualProductVersions": [
+      {
+        "name": "Elsa.Studio.Web.dll",
+        "productVersion": "1.0.0+0f5f6c6efaada666f40766478ef63ad488b28e58",
+        "sha256": "b4f73b7c3bfe106ae6f4b779003c38aef243a88c33a87b3acb58722a019e7d64"
+      },
+      {
+        "name": "Elsa.Studio.Hosting.dll",
+        "productVersion": "1.0.0+0f5f6c6efaada666f40766478ef63ad488b28e58",
+        "sha256": "a9c1aa3df98fb8cea2ad078e0463609c94c5c8ec37a75cf82c0dfa7bf6db3bc6"
+      },
+      {
+        "name": "Elsa.Studio.Core.dll",
+        "productVersion": "1.0.0+0f5f6c6efaada666f40766478ef63ad488b28e58",
+        "sha256": "0bf41a510f1be54a40b5fc4c0587e90134aa56d6f016a22d2455b136bafeaf99"
+      },
+      {
+        "name": "Elsa.Studio.Workflows.dll",
+        "productVersion": "1.0.0+0f5f6c6efaada666f40766478ef63ad488b28e58",
+        "sha256": "94a3333f2345fb2c6f522e2abbf92d25c75ae9d113596612ed8262da45d60976"
+      }
+    ]
+  },
+  "clrSourceBinding": {
+    "readOnly": true,
+    "sourceIds": [
+      "/private/tmp/elsa-2735-review/t045-ack-standard-build/bin/Elsa.Workbench/release/"
+    ]
+  },
+  "processes": [
+    {
+      "role": "workbench",
+      "processId": 15679,
+      "controllerProcessId": 15656,
+      "started": "Sat Oct 31 13:57:37 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Workbench.dll",
+      "assemblySha256": "26736c3390e79c39f84dd7aa44eee731d4d18f10fab84f051bbd20f38b0846c8"
+    },
+    {
+      "role": "studio",
+      "processId": 15688,
+      "controllerProcessId": 15656,
+      "started": "Sat Oct 31 13:57:43 2026",
+      "executable": "dotnet",
+      "assemblyName": "Elsa.Studio.Web.dll",
+      "assemblySha256": "b4f73b7c3bfe106ae6f4b779003c38aef243a88c33a87b3acb58722a019e7d64"
+    }
+  ]
+}

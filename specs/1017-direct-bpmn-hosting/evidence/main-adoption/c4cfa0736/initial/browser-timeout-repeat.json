@@ -1,0 +1,126 @@
+{
+  "config": {
+    "argv": [
+      "/Users/sipke/Library/Application Support/fnm/node-versions/v22.23.4/installation/bin/node",
+      "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/node_modules/@playwright/test/cli.js",
+      "test",
+      "tests/browser/design-language.spec.ts",
+      "-g",
+      "collections share typography and containment at 1440px light linen",
+      "--workers=1",
+      "--reporter=json"
+    ],
+    "configFile": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/playwright.config.ts",
+    "rootDir": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/tests/browser",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/tests/browser",
+        "testIgnore": [
+          "expression-code-intelligence-performance.spec.ts",
+          "weaver-contributions.spec.ts"
+        ],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.61.1",
+    "workers": 1,
+    "webServer": {
+      "command": "pnpm exec vite --config tests/browser/vite.config.ts",
+      "url": "http://127.0.0.1:4179",
+      "reuseExistingServer": false,
+      "stdout": "pipe",
+      "stderr": "pipe"
+    }
+  },
+  "suites": [
+    {
+      "title": "design-language.spec.ts",
+      "file": "design-language.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "collections share typography and containment at 1440px light linen",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6744,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-31T12:41:25.246Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "edda2d846ab67f9df44c-4ec49fa53bc87d38ac81",
+          "file": "design-language.spec.ts",
+          "line": 5,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-31T12:41:24.168Z",
+    "duration": 7969.924999999999,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

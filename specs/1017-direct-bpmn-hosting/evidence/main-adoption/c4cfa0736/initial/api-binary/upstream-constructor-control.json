@@ -1,0 +1,20 @@
+{
+  "direction": "published4.0.24-preview to published4.0.25-preview",
+  "arguments": [
+    "/tmp/elsa-2898-api-binary/tools/apicompat",
+    "-l",
+    "/tmp/elsa-2898-round4-repairs/api-binary/bpmn-baselines/elsa.workflows.design.persistence.entityframeworkcore/lib/net10.0/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll",
+    "-r",
+    "/tmp/elsa-2898-main-c4cfa-qualification/api-latest/published/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.dll",
+    "--lref",
+    "/tmp/elsa-2898-round4-final-qualification/api-binary/baseline-references,/usr/local/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.13/ref/net10.0,/usr/local/share/dotnet/packs/Microsoft.AspNetCore.App.Ref/10.0.13/ref/net10.0",
+    "--rref",
+    "/tmp/elsa-2898-main-c4cfa-qualification/api-latest/references,/usr/local/share/dotnet/packs/Microsoft.NETCore.App.Ref/10.0.13/ref/net10.0,/usr/local/share/dotnet/packs/Microsoft.AspNetCore.App.Ref/10.0.13/ref/net10.0",
+    "--enable-rule-cannot-change-parameter-name",
+    "--verbosity",
+    "High"
+  ],
+  "exitCode": 1,
+  "expectedFailure": "CP0002 old five-parameter constructor absent; inherited in mainc4cfa and its published package",
+  "unresolvedReferences": false
+}

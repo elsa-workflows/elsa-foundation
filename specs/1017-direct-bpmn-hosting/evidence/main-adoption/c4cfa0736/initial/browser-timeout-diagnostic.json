@@ -1,0 +1,50 @@
+{
+  "loadAfterRun": "13:40  up 6 days, 23:06, 1 user, load averages: 44.60 51.97 36.11",
+  "failures": [
+    {
+      "file": "design-language.spec.ts",
+      "line": 5,
+      "title": "collections share typography and containment at 1440px light linen",
+      "result": {
+        "workerIndex": 0,
+        "parallelIndex": 0,
+        "status": "timedOut",
+        "duration": 33076,
+        "error": {
+          "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m",
+          "stack": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+        },
+        "errors": [
+          {
+            "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+          },
+          {
+            "location": {
+              "file": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/tests/browser/design-language.spec.ts",
+              "column": 63,
+              "line": 30
+            },
+            "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator:  getByRole('table').first().getByRole('columnheader').first()\nExpected: visible\nReceived: undefined\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('table').first().getByRole('columnheader').first()\u001b[22m\n\n\n  28 |         }, workspace);\n  29 |         const table = page.getByRole(\"table\").first();\n> 30 |         await expect(table.getByRole(\"columnheader\").first()).toBeVisible();\n     |                                                               ^\n  31 |         const typography = await header.getByRole(\"heading\").evaluate(element => ({\n  32 |           size: getComputedStyle(element).fontSize,\n  33 |           margin: getComputedStyle(element).marginTop\n    at /Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/tests/browser/design-language.spec.ts:30:63"
+          }
+        ],
+        "stdout": [],
+        "stderr": [],
+        "retry": 0,
+        "startTime": "2026-10-31T12:35:32.696Z",
+        "annotations": [],
+        "attachments": [
+          {
+            "name": "error-context",
+            "contentType": "text/markdown",
+            "path": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/test-results/design-language-collection-1cd92-nment-at-1440px-light-linen-chromium/error-context.md"
+          },
+          {
+            "name": "trace",
+            "contentType": "application/zip",
+            "path": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/test-results/design-language-collection-1cd92-nment-at-1440px-light-linen-chromium/trace.zip"
+          }
+        ]
+      }
+    }
+  ]
+}

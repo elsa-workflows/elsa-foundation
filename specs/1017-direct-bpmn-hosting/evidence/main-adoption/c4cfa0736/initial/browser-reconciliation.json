@@ -1,0 +1,72 @@
+{
+  "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+  "reports": [
+    {
+      "report": "browser-affected.json",
+      "stats": {
+        "startTime": "2026-10-31T12:32:47.684Z",
+        "duration": 384092.796,
+        "expected": 244,
+        "skipped": 0,
+        "unexpected": 1,
+        "flaky": 0
+      },
+      "outcomes": {
+        "passed": 244,
+        "timedOut": 1
+      },
+      "retryCount": 0
+    },
+    {
+      "report": "browser-timeout-repeat.json",
+      "stats": {
+        "startTime": "2026-10-31T12:41:24.168Z",
+        "duration": 7969.924999999999,
+        "expected": 1,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "outcomes": {
+        "passed": 1
+      },
+      "retryCount": 0
+    },
+    {
+      "report": "browser-library.json",
+      "stats": {
+        "startTime": "2026-10-31T12:41:50.718Z",
+        "duration": 79394.117,
+        "expected": 41,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "outcomes": {
+        "passed": 41
+      },
+      "retryCount": 0
+    },
+    {
+      "report": "browser-canvas.json",
+      "stats": {
+        "startTime": "2026-10-31T12:43:10.682Z",
+        "duration": 55279.503000000004,
+        "expected": 35,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "outcomes": {
+        "passed": 35
+      },
+      "retryCount": 0
+    }
+  ],
+  "uniqueCases": 321,
+  "firstPassCases": 320,
+  "isolatedRepeatPass": 1,
+  "originalTimeoutsRetained": 1,
+  "skipped": 0,
+  "newTestCoverageAdded": false
+}

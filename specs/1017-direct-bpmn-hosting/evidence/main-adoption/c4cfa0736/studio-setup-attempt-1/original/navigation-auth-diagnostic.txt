@@ -1,0 +1,63 @@
+- complementary:
+  - link "Elsa Studio Workflow studio":
+    - /url: /
+    - strong: Elsa Studio
+    - generic: Workflow studio
+  - button "Collapse navigation" [expanded]:
+  - searchbox "Search modules"
+  - navigation "Main":
+    - link "Home":
+      - /url: /dashboard
+      - generic: Home
+    - link "Workflows":
+      - /url: /workflows/definitions
+      - generic: Workflows
+    - link "Runs":
+      - /url: /workflows/instances
+      - generic: Runs
+  - navigation "More tools":
+    - button "More tools":
+      - generic: More tools
+  - navigation "Settings":
+    - link "Settings":
+      - /url: /settings
+      - generic: Settings
+  - group "Environment and account":
+    - 'group "Configured backend endpoint: 127.0.0.1:63331"':
+      - strong: Backend API
+      - generic: 127.0.0.1:63331
+    - 'button "Account: Administrator"':
+      - generic: A
+      - generic: Administrator
+- banner:
+  - generic: Studio / Workflows
+  - heading "Workflows" [level=1]
+  - button "Weaver":
+    - text: Weaver
+  - link "GitHub":
+    - /url: https://github.com/elsa-workflows/elsa-foundation
+  - link "Documentation":
+    - /url: https://docs.elsaworkflows.io
+  - radiogroup "Colour mode":
+    - radio "Light":
+    - radio "Dark" [checked]:
+    - radio "Dim":
+  - button "Select theme":
+- main:
+  - alert:
+    - paragraph: Authentication required.
+    - paragraph:
+      - text: "Selected workflow definition:"
+      - code: 14iBsLEuiJS
+    - button "Retry loading this workflow"
+    - button "Browse workflows"
+- region "Bottom panel":
+  - tablist "Bottom panels":
+    - tab "Console" [selected]
+    - tab "Structured Logs"
+    - tab "OpenTelemetry"
+  - generic "Bottom panel controls":
+    - button "Expand bottom panel":
+    - button "Maximize bottom panel":
+  - option "All sources" [selected]
+  - option "Elsa Studio · Sipkes-Mac-Mini:15688"

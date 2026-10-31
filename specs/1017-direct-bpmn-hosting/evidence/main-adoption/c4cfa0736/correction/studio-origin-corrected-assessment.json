@@ -1,0 +1,9 @@
+{
+  "sourceRevision": "39f9b48f277264dca8daf3f9c0a14457145eff4a",
+  "ownedReturnOriginsVerified": "studio-owned-return-origin-config.json",
+  "outcome": "Sign-in did not reach the original editor after submitting supported credentials; browser returned to the login route.",
+  "causeConfirmed": false,
+  "postRestartStudioAcceptanceProved": false,
+  "nextScopeDecision": "One bounded auth/session diagnostic and repair pass requested under the org repeated-check stop condition.",
+  "productRuntimeSourceUnchangedFrom": "0f5f6c6efaada666f40766478ef63ad488b28e58"
+}

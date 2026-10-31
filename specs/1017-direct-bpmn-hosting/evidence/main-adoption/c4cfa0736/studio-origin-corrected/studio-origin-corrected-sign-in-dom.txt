@@ -1,0 +1,16 @@
+- main:
+  - region "Welcome":
+    - text: Elsa Studio
+    - heading "Space for your next great idea." [level=2]
+    - paragraph: Bring your ideas to life, one thoughtful workflow at a time.
+  - region "Welcome back":
+    - generic: ✦
+    - generic: Elsa Studio
+    - heading "Welcome back" [level=1]
+    - paragraph: Sign in to your workspace.
+    - generic: Username
+    - textbox "Username" [active]
+    - generic: Password
+    - textbox "Password"
+    - button "Sign in"
+    - generic: Elsa Studio

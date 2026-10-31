@@ -1,0 +1,19 @@
+{
+  "source": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+  "arguments": [
+    "pnpm",
+    "exec",
+    "playwright",
+    "test",
+    "tests/browser/design-language.spec.ts",
+    "-g",
+    "collections share typography and containment at 1440px light linen",
+    "--workers=1",
+    "--reporter=json"
+  ],
+  "loadBeforeRepeat": "13:41  up 6 days, 23:07, 1 user, load averages: 20.88 43.83 34.23",
+  "elapsedSeconds": 8.49735975265503,
+  "exitCode": 0,
+  "firstRunPreserved": "browser-affected.json",
+  "normalTimeoutUnchanged": true
+}

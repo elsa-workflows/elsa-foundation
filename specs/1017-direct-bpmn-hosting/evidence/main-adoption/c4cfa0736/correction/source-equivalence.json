@@ -1,0 +1,53 @@
+{
+  "sourceRevision": "0f5f6c6efaada666f40766478ef63ad488b28e58",
+  "wholeProjectSource": "1cee5acd4e7d7adb01dd467342641a108e349d60",
+  "adoptedMain": "a455c1299b91ce4961804ff1d3904c8eb4cc631a",
+  "productionMain": "c4cfa0736a2216c924092d12a3ad432c6f05e8bb",
+  "allChangedPaths": [
+    "Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Commands/EfWorkflowDesignCommands.cs",
+    "Essentials/tests/Activities/Bpmn/Hosting/Tests/TemplateDesignUpgradeTests.cs",
+    "docs/program-goals/README.md",
+    "docs/program-goals/workflow-library-organization.md",
+    "specs/1173-workflow-library/tasks.md"
+  ],
+  "trees": {
+    "Essentials/src/Activities/Bpmn": {
+      "before": "72d9dcb6f5623c2219318cb6fb1e256beb1c94d0",
+      "after": "72d9dcb6f5623c2219318cb6fb1e256beb1c94d0",
+      "identical": true,
+      "changedPaths": []
+    },
+    "Essentials/src/Workflows/Runtime": {
+      "before": "67c6b9a320403a276512466ed3d9e5dcdaec501f",
+      "after": "67c6b9a320403a276512466ed3d9e5dcdaec501f",
+      "identical": true,
+      "changedPaths": []
+    },
+    "Extensions/Etl": {
+      "before": "149f37b9630c36dcc9ef8089511af2500d583cd3",
+      "after": "149f37b9630c36dcc9ef8089511af2500d583cd3",
+      "identical": true,
+      "changedPaths": []
+    },
+    "Studio": {
+      "before": "e3fb15b56570f3e3df0a121f661dadde627afd35",
+      "after": "e3fb15b56570f3e3df0a121f661dadde627afd35",
+      "identical": true,
+      "changedPaths": []
+    },
+    "Essentials/src/Persistence/EntityFramework": {
+      "before": "2d5f1446f2c212fd102a3ada0e29288caf6cb63c",
+      "after": "2d5f1446f2c212fd102a3ada0e29288caf6cb63c",
+      "identical": true,
+      "changedPaths": []
+    },
+    "Essentials/src/Workflows/Design": {
+      "before": "61804b9f3192fc4a457c5bcd52c8c2aee7f847fc",
+      "after": "0a9dc4d3f879c293ab4e1faa249026e19784c04a",
+      "identical": false,
+      "changedPaths": [
+        "Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Commands/EfWorkflowDesignCommands.cs"
+      ]
+    }
+  }
+}
