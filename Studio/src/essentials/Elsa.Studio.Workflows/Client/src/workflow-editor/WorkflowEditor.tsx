@@ -1387,7 +1387,7 @@ export function WorkflowEditor({
             if (saved) { await saveDraft(editableDraft, "Saved"); onBack(); }
           }).catch(() => undefined).finally(() => setTemplateNavigationPending(false));
         }}
-        onSave={() => { if (documentAdapter) void flushDefinitionMeta().then(saved => { if (saved) void save(); }); else void save(); }}
+        onSave={() => { void flushDefinitionMeta().then(saved => { if (saved) void save(); }); }}
         publicationUnavailableReason={operations?.publishing.state === "unavailable" ? operations.publishing.reason ?? "Publication is unavailable on this backend." : undefined}
         onPublish={mode => { if (operations?.publishing.state !== "unavailable") void preparePublication(mode); }}
         onRun={() => { if (operations?.testRuns.state !== "unavailable") void run(); }}
