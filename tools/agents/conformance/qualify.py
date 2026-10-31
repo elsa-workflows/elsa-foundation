@@ -19,7 +19,7 @@ PRODUCT_ROOTS = [
     "Elsa.Agent.Specialists.Design", "Elsa.Agent.Specialists", "Elsa.Activities.Runtime",
     "Elsa.Serialization.SystemText", "Elsa.Secrets", "Elsa.Workflows.Publishing.Api",
     "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
-    "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore", "Elsa.Locking.FileSystem",
+    "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore", "Elsa.Locking.FileSystem", "Elsa.Events", "Elsa.Expressions", "Elsa.Tasks", "Elsa.Workflows.Runtime.Resumption",
 ]
 
 
@@ -154,13 +154,15 @@ def main():
 
     central = ET.parse(producer / "Directory.Packages.props")
     sqlite_bundle_version = next(p.attrib["Version"] for p in central.iter("PackageVersion") if p.attrib.get("Include") == "SQLitePCLRaw.bundle_e_sqlite3")
+    cshells_version = next(p.attrib["Version"] for p in central.iter("PackageVersion") if p.attrib.get("Include") == "CShells")
+    report["fixtureDependencyPins"] = {"SQLitePCLRaw.bundle_e_sqlite3": sqlite_bundle_version, "CShells": cshells_version}
     for name in ["Model", "Author", "Consumer"]:
         directory = out / name
         directory.mkdir()
         for path in (fixtures / name).iterdir():
             if path.suffix != ".template":
                 continue
-            (directory / path.stem).write_text(path.read_text().replace("__VERSION__", args.version).replace("__SQLITE_BUNDLE_VERSION__", sqlite_bundle_version))
+            (directory / path.stem).write_text(path.read_text().replace("__VERSION__", args.version).replace("__SQLITE_BUNDLE_VERSION__", sqlite_bundle_version).replace("__CSHELLS_VERSION__", cshells_version))
         if name == "Author":
             test_source = producer / "Extensions/Agent/tests/Specialists/Tests/Publication/SpecialistPublicationTests.cs"
             shutil.copy2(test_source, directory / test_source.name)

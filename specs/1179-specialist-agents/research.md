@@ -318,3 +318,14 @@ These cases do not claim a new public specialist policy editor or the final supp
 architecture suite passed all 592 checks after the new metadata interface was tracked; normal maps,
 locked restore and all 163 catalog links also passed. The first architecture run's sole untracked-link
 failure is retained separately. Final package qualification and independent review remain pending.
+
+
+The corrected `4f7034828` immutable run passed product/model packaging, every normal and locked
+consumer restore, and all six independent public-API authoring checks. Runtime activation then failed
+because the manual fixture enumerated serialization startup tasks without the Events dependency. It
+remains a failed qualification receipt. The runtime consumer now composes the ordinary CShells
+lifecycle with Tasks, Events, Serialization, Expressions and background/resumption dependencies, plus
+explicit filesystem locking and the development journal. The fixture's shell contributes ordinary
+runtime services and its deterministic provider; normal startup must register the specialist alias.
+CShells and SQLite fixture versions derive from the archived producer's central pins. A new immutable
+run is required; this change is not yet a passed host-activation or package receipt.

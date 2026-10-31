@@ -14,5 +14,11 @@
     <PackageReference Include="Elsa.Activities.Runtime" Version="__VERSION__" />
     <PackageReference Include="Elsa.Serialization.SystemText" Version="__VERSION__" />
     <PackageReference Include="Elsa.Secrets" Version="__VERSION__" />
+    <PackageReference Include="Elsa.Events" Version="__VERSION__" />
+    <PackageReference Include="Elsa.Expressions" Version="__VERSION__" />
+    <PackageReference Include="Elsa.Tasks" Version="__VERSION__" />
+    <PackageReference Include="Elsa.Workflows.Runtime.Resumption" Version="__VERSION__" />
+    <PackageReference Include="Elsa.Locking.FileSystem" Version="__VERSION__" />
+    <PackageReference Include="CShells" Version="__CSHELLS_VERSION__" />
   </ItemGroup>
 </Project>

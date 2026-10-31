@@ -20,7 +20,10 @@ publication/placement, immutable prompt behavior, schema compatibility, stale re
 runtime/storage. Its SQLite databases are disposed and deleted before the separately started consumer.
 Only serialized placement material crosses that process boundary.
 
-The Runtime consumer composes the real facade/background worker and the separately packed model
+The Runtime consumer activates the real CShells lifecycle, including Tasks, Events, Serialization,
+Expressions and the background feature dependencies, then resolves its scoped runtime services. It
+checks that ordinary startup registered the specialist alias without manually calling product tasks.
+It composes the real facade/background worker and the separately packed model
 contribution. It checks the exact model/schema/instructions, native typed result, duplicate delivery,
 invalid-result refusal and disposal. Runtime package graphs and loaded assemblies must contain zero
 Design/Publishing dependencies. Restores use isolated caches and locked mode; retained candidate

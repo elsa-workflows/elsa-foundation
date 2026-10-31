@@ -1,10 +1,21 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using CShells;
+using CShells.Configuration;
+using CShells.DependencyInjection;
+using CShells.Features;
+using CShells.Lifecycle;
 using Acme.Specialist.ModelFixture;
 using Elsa.Activities.Runtime;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
 using Elsa.Agent.Specialists;
+using Elsa.Agent.Specialists.Core.Models;
+using Elsa.Events;
+using Elsa.Expressions;
+using Elsa.Locking.FileSystem;
+using Elsa.Tasks;
+using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Secrets.Features;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
@@ -13,6 +24,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 
 var mode = args.Length > 1 ? args[1] : "native";
 var checks = new List<string>();
@@ -31,24 +43,23 @@ Check(node.DescriptorPayload.GetProperty("definitionVersionId").GetString() == "
 Check(node.ChildSlots.Single().Activities.Single().ExecutableNodeId != "model-turn", "real placement remapped the worker node");
 var services = new ServiceCollection();
 services.AddLogging();
-services.AddWorkflowRuntime();
-new ActivitiesRuntimeFeature().ConfigureServices(services);
-new SerializationFeature().ConfigureServices(services);
-new BackgroundActivitiesFeature { RunWorkers = false }.ConfigureServices(services);
-new SecretsFeature { EncryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)) }.ConfigureServices(services);
-
-new SpecialistsRuntimeFeature().ConfigureServices(services);
-new SpecialistsInMemoryJournalFeature().ConfigureServices(services);
-services.AddFixtureModel();
-services.AddPersistenceModeOptions(new PersistenceModeOptions { Mode = PersistenceMode.Durable });
-services.AddPersistenceModes();
-await using var provider = services.BuildServiceProvider();
-var types = provider.GetRequiredService<IWellKnownTypeRegistry>();
-types.RegisterType(typeof(string), "String");
-types.RegisterType(typeof(JsonElement), "System.Text.Json.JsonElement");
-await using (var startupScope = provider.CreateAsyncScope())
-    foreach (var startup in startupScope.ServiceProvider.GetServices<IStartupTask>().Where(x => x.GetType().Assembly == typeof(SpecialistsRuntimeFeature).Assembly))
-        await startup.ExecuteAsync(CancellationToken.None);
+services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+var locks = Path.Combine(args[0], "runtime-locks-" + mode);
+Directory.CreateDirectory(locks);
+services.AddCShells(builder => builder.WithAssemblies(typeof(PackageHostFeature).Assembly,
+        typeof(SpecialistsRuntimeFeature).Assembly, typeof(ActivitiesRuntimeFeature).Assembly,
+        typeof(SerializationFeature).Assembly, typeof(SecretsFeature).Assembly, typeof(EventsFeature).Assembly,
+        typeof(TasksFeature).Assembly, typeof(WorkflowsRuntimeResumptionFeature).Assembly,
+        typeof(FileSystemLockingFeature).Assembly, typeof(ExpressionsFeature).Assembly)
+    .AddShell("specialist-package", shell => shell.WithFeature<PackageHostFeature>()
+        .WithFeature<BackgroundActivitiesFeature>(feature => feature.RunWorkers = false)
+        .WithFeature<SecretsFeature>(feature => feature.EncryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)))
+        .WithFeature<FileSystemLockingFeature>(feature => feature.LocksFolderPath = locks)));
+await using var host = services.BuildServiceProvider();
+var activated = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync("specialist-package");
+await using var executionScope = activated.BeginScope();
+var provider = executionScope.ServiceProvider;
+Check(provider.GetRequiredService<IWellKnownTypeRegistry>().TryGetType(SpecialistRuntimeIds.FacadeCapability, out _), "CShells startup registered the specialist runtime alias");
 var observations = provider.GetRequiredService<ModelObservations>();
 observations.InvalidResult = mode == "invalid-result";
 var identity = new WorkflowExecutableIdentity("packaged-editorial-" + mode, "workflow", "workflow-v1", "1.0.0", node.DescriptorPayload.GetProperty("templateHash").GetString()!);
@@ -91,3 +102,16 @@ else
 Check(!AppDomain.CurrentDomain.GetAssemblies().Any(x => x.GetName().Name is { } name && name.StartsWith("Elsa.", StringComparison.Ordinal) &&
     (name.Contains(".Design", StringComparison.Ordinal) || name.Contains(".Publishing", StringComparison.Ordinal))), "runtime loaded zero Design or Publishing assemblies");
 Console.WriteLine(JsonSerializer.Serialize(new { mode, checks, passed = checks.Count, liveModel = false, journalProfile = "process-local-development", workflowStatus = workflow?.Status.ToString() }));
+
+
+[ShellFeature("SpecialistPackageHost", DependsOn = new object[] { "SpecialistsInMemoryJournal", "Events", "Tasks", "FileSystemDistributedLocking", "Expressions" })]
+public sealed class PackageHostFeature : IShellFeature
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddWorkflowRuntime();
+        services.AddFixtureModel();
+        services.AddPersistenceModeOptions(new PersistenceModeOptions { Mode = PersistenceMode.Durable });
+        services.AddPersistenceModes();
+    }
+}
