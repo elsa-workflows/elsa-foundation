@@ -1,0 +1,87 @@
+{
+  "observedAt": "2026-10-31T13:58:27.449400+00:00",
+  "method": "Read 100-byte file headers after probe exit. Header versions 2/2 indicate WAL. No assertion about original connection-local synchronous setting; native library compile defaults separately captured.",
+  "reference": "https://sqlite.org/fileformat.html#file_format_version_numbers",
+  "databases": [
+    {
+      "label": "local-ProviderSqlite-ModeBalanced-Activities1-r1",
+      "database": "perf_8bde538cad2f4a0192cc357386843100",
+      "fileBytes": 44486656,
+      "writeVersionByte18": 2,
+      "readVersionByte19": 2,
+      "journalModeFromHeader": "WAL",
+      "pageSize": 4096,
+      "headerHex": "53514c69746520666f726d617420330010000202004020200000000200002a6d000000e300000001000000a700000004000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000002002e8a14"
+    },
+    {
+      "label": "local-ProviderSqlite-ModeBalanced-Activities10-r1",
+      "database": "perf_4c836083e69d4cf486077475194b3184",
+      "fileBytes": 89350144,
+      "writeVersionByte18": 2,
+      "readVersionByte19": 2,
+      "journalModeFromHeader": "WAL",
+      "pageSize": 4096,
+      "headerHex": "53514c69746520666f726d617420330010000202004020200000000200005536000000e800000001000000a700000004000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000002002e8a14"
+    },
+    {
+      "label": "local-ProviderSqlite-ModeBalanced-Activities100-r1",
+      "database": "perf_9a086e8d24f44e82975fbd0921bf2e7e",
+      "fileBytes": 107757568,
+      "writeVersionByte18": 2,
+      "readVersionByte19": 2,
+      "journalModeFromHeader": "WAL",
+      "pageSize": 4096,
+      "headerHex": "53514c69746520666f726d6174203300100002020040202000000005000066c4000065ed00000003000000a700000004000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000005002e8a14"
+    },
+    {
+      "label": "local-ProviderSqlite-ModeEphemeralNoRecord-Activities1-r1",
+      "database": "perf_77600770e3284c8aae2c60a7ebad4b5a",
+      "fileBytes": 18350080,
+      "writeVersionByte18": 2,
+      "readVersionByte19": 2,
+      "journalModeFromHeader": "WAL",
+      "pageSize": 4096,
+      "headerHex": "53514c69746520666f726d617420330010000202004020200000000200001180000000e300000001000000a700000004000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000002002e8a14"
+    },
+    {
+      "label": "local-ProviderSqlite-ModeEphemeralNoRecord-Activities10-r1",
+      "database": "perf_e7aceb39e8e24d558b61bfd0c5f4b624",
+      "fileBytes": 5308416,
+      "writeVersionByte18": 2,
+      "readVersionByte19": 2,
+      "journalModeFromHeader": "WAL",
+      "pageSize": 4096,
+      "headerHex": "53514c69746520666f726d617420330010000202004020200000000200000510000000e800000001000000a700000004000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000002002e8a14"
+    },
+    {
+      "label": "local-ProviderSqlite-ModeEphemeralNoRecord-Activities100-r1",
+      "database": "perf_7a30e63022e64439b8b94eeeb6c43795",
+      "fileBytes": 1953792,
+      "writeVersionByte18": 2,
+      "readVersionByte19": 2,
+      "journalModeFromHeader": "WAL",
+      "pageSize": 4096,
+      "headerHex": "53514c69746520666f726d6174203300100002020040202000000002000001dd0000011300000001000000a700000004000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000002002e8a14"
+    },
+    {
+      "label": "sqlite-scaling-ProviderSqlite-ModeBalanced-Activities10-Concurrency16-r1",
+      "database": "perf_e39e61eaec174bdaad7774118080b784",
+      "fileBytes": 251785216,
+      "writeVersionByte18": 2,
+      "readVersionByte19": 2,
+      "journalModeFromHeader": "WAL",
+      "pageSize": 4096,
+      "headerHex": "53514c69746520666f726d61742033001000020200402020000006cc0000f01f0000de7f00000005000000a7000000040000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000006cc002e8a14"
+    },
+    {
+      "label": "sqlite-scaling-ProviderSqlite-ModeBalanced-Activities10-Concurrency4-r1",
+      "database": "perf_e915ac4e360c45c498deb5d5a213c607",
+      "fileBytes": 201883648,
+      "writeVersionByte18": 2,
+      "readVersionByte19": 2,
+      "journalModeFromHeader": "WAL",
+      "pageSize": 4096,
+      "headerHex": "53514c69746520666f726d61742033001000020200402020000002610000c0880000bc7d00000001000000a700000004000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000261002e8a14"
+    }
+  ]
+}
