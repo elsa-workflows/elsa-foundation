@@ -107,14 +107,21 @@
       "bytes": 1201
     },
     {
+      "path": "pre-correction/natural-order/assessment.json",
+      "sha256": "44cd29ee322d7b5deef0b707838bcadb60084ab708447c2a65faebbbb9bc34db",
+      "bytes": 665
+    },
+    {
       "path": "pre-correction/natural-order/cancel-response.json",
       "sha256": "f8ab8dd796d18bd4016c1d4649cfa2675bdad4fcf90ff3cbddbb3b3512b04453",
       "bytes": 294
     },
     {
-      "path": "pre-correction/natural-order/cancellation-observations.json",
-      "sha256": "ff212fda8299f81f4fbca2f8266c83d461913802a756f74136586dfe0c7df5d0",
-      "bytes": 88045135
+      "path": "pre-correction/natural-order/cancellation-observations.json.gz",
+      "sha256": "ba76b8844598a9f9bf387dab1147ba0e70a25f0a53df201d4a6fbd883a349129",
+      "bytes": 714577,
+      "decodedSha256": "ff212fda8299f81f4fbca2f8266c83d461913802a756f74136586dfe0c7df5d0",
+      "decodedBytes": 88045135
     },
     {
       "path": "pre-correction/natural-order/capture.py",

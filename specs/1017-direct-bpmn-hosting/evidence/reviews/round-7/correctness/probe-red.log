@@ -1,0 +1,4 @@
+{"sourceHead":"9508e25e57672c569f462aff9a1e0282c5780eb9","Lifecycle":2,"unsettledCancellations":1,"result":"CancelEmbedded returned successfully while worker cancellation remains unsettled","normalResultDeliveryGuard":"RuntimeSchedulerWorkUnavailableException: The embedded native worker cancellation remains owed before parent settlement.","library":"Elsa.Activities.Bpmn, Version=4.0.0.0, Culture=neutral, PublicKeyToken=null","productVersion":"1.0.0\u002B9508e25e57672c569f462aff9a1e0282c5780eb9","productSha256":"70447dc4e6dee1a94597ed12f22d389f7abb246466f62e3d42447faef9f1e3a7"}
+Unhandled exception. System.InvalidOperationException: ASSERTION FAILED: cancel source must remain owed while the child has unsettled native cancellation responsibility.
+   at Program.<Main>$(String[] args) in /private/tmp/elsa-2898-review7-correctness/probe/Program.cs:line 48
+   at Program.<Main>(String[] args)

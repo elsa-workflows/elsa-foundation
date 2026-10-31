@@ -1,0 +1,6 @@
+Current compiled BpmnModelRuntime from9508; no copied implementation
+Dependency product: 1.0.0+9508e25e57672c569f462aff9a1e0282c5780eb9
+BPMN implementation product: 1.0.0+9508e25e57672c569f462aff9a1e0282c5780eb9
+StartAsync owned queued invalid command: Elsa.Activities.Bpmn.Core.BpmnModelValidationException; inner=System.Text.Json.JsonException; expectedDomain=True; message=BPMN execution 'bpmn:8eefef61a07837cd533e96d6fab17153f25da1dce48264f4f3c2b96ec1ef577a', request 'request' has invalid owned queued-command JSON in work 'item'.
+FindCommandAsync owned queued invalid command: Elsa.Activities.Bpmn.Core.BpmnModelValidationException; inner=System.Text.Json.JsonException; expectedDomain=True; message=BPMN execution 'execution', request 'request' has invalid owned queued-command JSON in work 'item'.
+Domain boundary controls: 2 executed, 0 failed

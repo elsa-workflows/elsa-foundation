@@ -1,0 +1,8 @@
+Current compiled BpmnModelRuntime from9508; no copied implementation
+Dependency product: 1.0.0+9508e25e57672c569f462aff9a1e0282c5780eb9
+BPMN implementation product: 1.0.0+9508e25e57672c569f462aff9a1e0282c5780eb9
+OwnedCommandInput={"executable":{"artifactId":"artifact","definitionId":"definition","definitionVersionId":"definition-version","artifactVersion":"1.0.0","artifactHash":"hash"},"materialIncarnationId":"incarnation","inputId":"request","inputKind":"","payload":{},"authority":{"systemIdentity":"bpmn-runtime","rootInitiator":"actor","metadata":{}},"tenantId":"tenant-a"}
+StartAsync owned queued invalid command: System.ArgumentException; inner=; expectedDomain=False; message=The value cannot be an empty string or composed entirely of whitespace. (Parameter 'value')
+OwnedCommandInput={"executable":{"artifactId":"artifact","definitionId":"definition","definitionVersionId":"definition-version","artifactVersion":"1.0.0","artifactHash":"hash"},"materialIncarnationId":"incarnation","inputId":"request","inputKind":"","payload":{},"authority":{"systemIdentity":"bpmn-runtime","rootInitiator":"actor","metadata":{}},"tenantId":"tenant-a"}
+FindCommandAsync owned queued invalid command: System.ArgumentException; inner=; expectedDomain=False; message=The value cannot be an empty string or composed entirely of whitespace. (Parameter 'value')
+Domain boundary controls: 2 executed, 2 failed
