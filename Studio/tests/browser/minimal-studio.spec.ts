@@ -59,6 +59,7 @@ for (const item of presets) test(`${item.name} keeps workflow headings inside th
   await view(page, "list");
   const table = page.getByRole("table", { name: "Workflow definitions", exact: true });
   await expect(table).toBeVisible();
+  await expect(table.locator(".wf-definition-description").first()).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   for (const width of [1280, 1440, 320]) {
     await page.setViewportSize({ width, height: 960 });

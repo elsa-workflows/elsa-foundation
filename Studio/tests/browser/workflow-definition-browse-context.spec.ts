@@ -467,6 +467,7 @@ for (const theme of ["light", "dark"]) {
         const row = page.getByRole("row", { name: "Open workflow definition First page renewal", exact: true });
         await expect(row).toBeVisible();
         if (workspaceStyle) await page.evaluate(() => document.documentElement.setAttribute("data-workspace-style", "browser-fixture"));
+        await expect(row.locator(".wf-definition-description")).toBeHidden();
         const geometry = await row.evaluate(element => {
           const cells = element.querySelectorAll("[role=cell]");
           const modified = cells[6];
