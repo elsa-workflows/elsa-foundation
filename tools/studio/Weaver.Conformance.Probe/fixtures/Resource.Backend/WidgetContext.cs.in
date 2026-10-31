@@ -1,0 +1,65 @@
+using System.Text.Json;
+using Elsa.Agent.Core.Contracts;
+using Elsa.Agent.Core.Models;
+
+namespace Acme.Home.Weaver;
+
+internal sealed class WidgetCapabilities : IAgentCapabilityProvider
+{
+    public ValueTask<IReadOnlyCollection<AgentCapability>> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult<IReadOnlyCollection<AgentCapability>>([
+            new("acme.home.read", WidgetContract.Module, "Explain Acme status card", "Read current personal visibility without exposing the full Home layout.",
+                AgentCapabilityKind.Answer, AgentRisk.ReadOnly, WidgetContract.Scopes, [WidgetContract.ReadPermission], [WidgetContract.ContextType]) { Modes = ["explain"] },
+            new("acme.home.visibility", WidgetContract.Module, "Review Acme status card visibility", "Review showing or hiding the existing card in the current personal Home layout.",
+                AgentCapabilityKind.Proposal, AgentRisk.ReviewRequired, WidgetContract.Scopes,
+                [WidgetContract.ReadPermission, WidgetContract.WritePermission], [WidgetContract.ContextType]) { Modes = ["build"] }
+        ]);
+    }
+}
+
+internal sealed class WidgetContextSource(WidgetResource resource, IAgentSessionService sessions) : IAgentContextProvider
+{
+    public AgentContextProviderDescriptor Descriptor { get; } = new("acme.home.widget-context", WidgetContract.Module, "acme-home",
+        [WidgetContract.ContextType, WidgetContract.GuidanceType], ["1"], [WidgetContract.ResourceType]);
+
+    public async ValueTask<AgentContextContribution> CollectAsync(AgentContextRequest request, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var session = await sessions.FindAsync(request.SessionId, cancellationToken);
+            if (session is null || string.IsNullOrWhiteSpace(session.ActorId) || string.IsNullOrWhiteSpace(session.TenantId))
+                WidgetContract.Refuse("session_denied", "A current personal Weaver session is required.", 403);
+            var state = await resource.ObserveAsync(session!.ActorId, session.TenantId, false, cancellationToken);
+            if (request.Target is not null && !WidgetContract.SameTarget(request.Target, state))
+                WidgetContract.Refuse("context_stale", "The requested Acme status card reference is foreign or stale.");
+            // Caller content, labels, references and origin never become installed instructions or owner data.
+            if (request.CallerAttachments.Count > 1 || request.CallerAttachments.Any(item => item.ModuleId != WidgetContract.Module ||
+                    item.ContentType != WidgetContract.ContextType || item.SchemaVersion != "1" || !WidgetContract.SameTarget(item.Target, state)))
+                WidgetContract.Refuse("context_invalid", "Only a current Acme status card reference is supported.");
+            var sensitivity = request.CallerAttachments.Select(item => item.Sensitivity == AgentContextSensitivity.SecretRedacted
+                ? AgentContextSensitivity.Secret : item.Sensitivity).Append(AgentContextSensitivity.Internal).Max();
+            var canonical = new AgentContextAttachment("acme.home:widget:" + state.Document.Revision, WidgetContract.ContextType, WidgetContract.WidgetId,
+                "Acme status card", WidgetContract.ContextType, sensitivity, WidgetContract.Route,
+                "Current personal Acme status card visibility, reread from the owning Home layout.",
+                JsonSerializer.SerializeToElement(new { widgetId = WidgetContract.WidgetId, visible = state.Visible, revision = state.Document.Revision }),
+                new Dictionary<string, string>())
+            {
+                ModuleId = WidgetContract.Module, SchemaVersion = "1", Target = WidgetContract.Target(state),
+                Origin = AgentContextOrigin.AuthoritativeRead, AgentScopes = WidgetContract.Scopes
+            };
+            var guidance = new AgentContextAttachment("acme.home:installed-guidance", "acme.home.module", null, "Acme Home guidance",
+                WidgetContract.GuidanceType, AgentContextSensitivity.Public, "module",
+                "The Acme module reads the existing personal status card and proposes one reviewed boolean visibility change. Use only its declared tools. " +
+                "A persisted receipt confirms the personal Home layout; reload native Home to observe it. Missing personal layouts/cards, stale revisions and no-op changes are refused. " +
+                "Other widgets, options and default layouts are outside this contribution. An uncertain result must be reread and never replayed automatically.",
+                null, new Dictionary<string, string>())
+            {
+                ModuleId = WidgetContract.Module, SchemaVersion = "1", Origin = AgentContextOrigin.InstalledGuidance, AgentScopes = []
+            };
+            return new([canonical, guidance], []);
+        }
+        catch (WidgetRefusal refusal) { return new([], [new(Descriptor.Id, refusal.Error.Code, refusal.Error.Message, true)]); }
+    }
+}

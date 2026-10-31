@@ -1,0 +1,22 @@
+{
+  "moduleId": "Acme.Home",
+  "backendPackage": "Acme.Home.Weaver",
+  "backendFeature": "AcmeHomeWidget",
+  "studioPackage": "Acme.Home.Studio",
+  "studioAssembly": "Acme.Home",
+  "studioFeature": "AcmeHomeStudio",
+  "widgetId": "acme.home:status",
+  "resourceType": "home-widget",
+  "route": "/qualification/acme-home",
+  "ownerEndpoint": "/_qualification/acme/home-widget",
+  "contextType": "acme.home.widget",
+  "readTool": "acme_home_read_widget",
+  "writeTool": "acme_home_set_visibility",
+  "readResultType": "acme.home.widget-state",
+  "changeResultType": "acme.home.widget-visibility",
+  "renderer": "acme.home.widget-result",
+  "schemaVersion": "1",
+  "contractVersion": "1",
+  "hostId": "weaver-conformance3438",
+  "protocolPackage": "Acme.Weaver.ProtocolFixtures"
+}

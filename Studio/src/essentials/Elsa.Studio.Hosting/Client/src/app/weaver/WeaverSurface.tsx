@@ -34,7 +34,8 @@ export function WeaverSurface({
   client,
   subscribeStream,
   onSessionIndicatorChange,
-  incomingPrompt
+  incomingPrompt,
+  onPromptConsumed
 }: {
   api: ElsaStudioModuleApi;
   surface: StudioAgentSurface;
@@ -44,6 +45,7 @@ export function WeaverSurface({
   subscribeStream?: typeof subscribeAgentSessionStream;
   onSessionIndicatorChange?(sessions: AgentSessionIndicatorSession[]): void;
   incomingPrompt?: (StudioAgentPromptRequest & { id: string }) | null;
+  onPromptConsumed?(id: string): void;
 }) {
   const session = useWeaverSession({ api, surface, client, subscribeStream });
   const resultRenderers = useMemo(() => api.agent.resultRenderers.list(), [api]);
@@ -68,9 +70,10 @@ export function WeaverSurface({
   useEffect(() => {
     if (incomingPrompt && incomingPrompt.id !== lastPromptIdRef.current && session.ready) {
       lastPromptIdRef.current = incomingPrompt.id;
+      onPromptConsumed?.(incomingPrompt.id);
       sendRef.current(incomingPrompt);
     }
-  }, [incomingPrompt, session.ready]);
+  }, [incomingPrompt, onPromptConsumed, session.ready]);
 
   const composerDisabled = !session.ready || session.chatState === "awaiting-review" || session.chatState === "awaiting-confirmation";
 
