@@ -4,6 +4,7 @@
 - **Area:** User-defined specialists, immutable publication, model execution, native/BPMN composition, Studio and bounded teams.
 - **Steward:** Sipke Schoorstra; one active implementation leaf with independent review support.
 - **Charter, complete plan and acceptance:** [Program #3519](https://github.com/elsa-workflows/elsa-foundation/issues/3519).
+- **Project:** [Elsa Agents #66 — Kanban](https://github.com/orgs/elsa-workflows/projects/66/views/1), [complete hierarchy](https://github.com/orgs/elsa-workflows/projects/66/views/3).
 - **Activation and sequencing:** [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus), 31 October Elsa Agents amendment.
 
 ## Purpose
@@ -69,6 +70,10 @@ configuration is the initial designer; a bespoke free-form graph needs evidence 
    Framework and prove dynamic structured output, tools, streaming, cancellation, explicit session
    persistence and integration seams. Reconcile #2913 before proposing collaboration mechanics.
 3. After those gates, elaborate M1's reviewed product/architecture packet and the next implementation leaf.
+
+The initial umbrella research is split into the SDK/source-compatibility spike #3529 and
+[publication/lifecycle witness #3533](https://github.com/elsa-workflows/elsa-foundation/issues/3533).
+The latter preserves the remaining M0 gates; SDK success alone cannot advance M1 or freeze contracts.
 
 ## Completion
 
