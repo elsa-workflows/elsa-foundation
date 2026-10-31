@@ -37,7 +37,7 @@
     <PackageVersion Include="GitHub.Copilot.SDK" Version="1.0.4" />
     <PackageVersion Include="Anthropic" Version="12.32.0" />
     <PackageVersion Include="JsonSchema.Net" Version="9.2.0" />
-    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.5.1" />
+    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.10.1" />
     <PackageVersion Include="Jint" Version="4.9.1" />
     <!--
       The Microsoft.AspNetCore.* pins below at 2.3.x are NOT stale, and must not be "bumped" to match

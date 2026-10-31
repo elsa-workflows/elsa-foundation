@@ -27,7 +27,7 @@ namespace Elsa.Workflows.Runtime.Tests;
 // End-to-end coverage for the checkpoint-folding machinery every persistence mode drains through. A workflow is driven
 // to completion through the in-process agent over an in-memory durable substrate, and the drain's session is observed to
 // run in the mode the run resolved to.
-public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
+public sealed partial class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 3, 12, 0, 0, TimeSpan.Zero);
 
