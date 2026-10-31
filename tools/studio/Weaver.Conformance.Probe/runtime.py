@@ -176,3 +176,9 @@ def server(run, name, origin):
                        for key, folder in caches.items()}
         started.update(stoppedAt=time.time(), exitCode=process.returncode, runtimeCacheFiles=cache_files)
         private_json(run.root / (name + "-process.json"), started)
+    # Only a successful body reaches these checks. Retain final shutdown evidence first,
+    # and let an original startup/qualification failure propagate without replacing it.
+    check(process.returncode == 0,
+          "Owned consumer exited unsuccessfully during shutdown: " + str(log))
+    check(not any(cache_files.values()),
+          "Native runtime populated an undeclared NuGet cache instead of using its retained feed closure")

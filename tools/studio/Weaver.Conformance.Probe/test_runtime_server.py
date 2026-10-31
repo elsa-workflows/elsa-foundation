@@ -90,11 +90,12 @@ while not (signal_count and (root/'release').exists()): time.sleep(.01)
             published = root / "published"
             published.mkdir()
             release = published / "release"
-            (published / "host.py").write_text('''import argparse, time, os
+            (published / "host.py").write_text('''import argparse, time, os, signal, sys
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 p=argparse.ArgumentParser();p.add_argument('--contentRoot');p.add_argument('--urls');a=p.parse_args()
+signal.signal(signal.SIGTERM,lambda signum,frame:sys.exit(0))
 if any(key in os.environ for key in ('ANTHROPIC_API_KEY','GITHUB_TOKEN','DOTNET_ADDITIONAL_DEPS')):
  raise RuntimeError('Ambient credential or dependency input reached the runtime fixture')
 class Handler(BaseHTTPRequestHandler):
@@ -156,6 +157,89 @@ server.serve_forever()
                 self.assertFalse(worker.is_alive())
                 self.assertEqual(failures, [])
                 self.assertIsNotNone(json.loads((root / "backend-process.json").read_text())["exitCode"])
+
+
+@unittest.skipUnless(os.name == "posix", "Requires a real POSIX SIGTERM handler")
+class RuntimeShutdownTests(unittest.TestCase):
+    def launch(self, root, *, exit_code=0, cache_key=None, bad_listener=False):
+        published = root / "published"
+        published.mkdir()
+        (published / "host.py").write_text('''import argparse, os, signal, sys
+from pathlib import Path
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlparse
+p=argparse.ArgumentParser();p.add_argument('--contentRoot');p.add_argument('--urls');a=p.parse_args()
+def terminate(signum, frame):
+ cache_key=CACHE_KEY
+ if cache_key: (Path(os.environ[cache_key])/'shutdown-cache-entry').write_text('undeclared runtime input')
+ sys.exit(EXIT_CODE)
+signal.signal(signal.SIGTERM,terminate)
+class Handler(BaseHTTPRequestHandler):
+ def do_GET(self): self.send_response(200);self.end_headers();self.wfile.write(b'live')
+ def log_message(self,*args): pass
+server=HTTPServer(('127.0.0.1',urlparse(a.urls).port),Handler)
+print('Now listening on: '+('http://127.0.0.1:1' if BAD_LISTENER else a.urls),flush=True)
+print('WEAVER_BACKEND_CONSUMER_READY',flush=True)
+server.serve_forever()
+'''.replace("CACHE_KEY", repr(cache_key)).replace("EXIT_CODE", repr(exit_code))
+            .replace("BAD_LISTENER", repr(bad_listener)))
+        run = SimpleNamespace(root=root, dotnet=sys.executable, profiles={"backend": {
+            "published": published, "assembly": "host.py", "env": dict(os.environ)}})
+        return runtime.server(run, "backend", runtime.owned_origin())
+
+    def assert_final_receipt(self, root, *, exit_code, cache_key=None):
+        receipt = json.loads((root / "backend-process.json").read_text())
+        self.assertEqual(receipt["exitCode"], exit_code)
+        self.assertGreaterEqual(receipt["stoppedAt"], receipt["startedAt"])
+        expected = {"NUGET_PACKAGES": [], "NUGET_HTTP_CACHE_PATH": []}
+        if cache_key:
+            expected[cache_key] = ["shutdown-cache-entry"]
+        self.assertEqual(receipt["runtimeCacheFiles"], expected)
+        with self.assertRaises(ProcessLookupError):
+            os.kill(receipt["pid"], 0)
+
+    def test_clean_shutdown_accepts_qualification(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            with self.launch(root) as started:
+                self.assertEqual(runtime.Http(started["origin"]).request("/health/live")[0], 200)
+            self.assert_final_receipt(root, exit_code=0)
+
+    def test_nonzero_shutdown_rejects_qualification_after_retaining_receipt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            with self.assertRaisesRegex(RuntimeError, "Owned consumer exited unsuccessfully during shutdown"):
+                with self.launch(root, exit_code=1) as started:
+                    self.assertEqual(runtime.Http(started["origin"]).request("/health/live")[0], 200)
+            self.assert_final_receipt(root, exit_code=1)
+
+    def test_shutdown_cache_write_rejects_qualification_after_retaining_receipt(self):
+        for cache_key in ("NUGET_PACKAGES", "NUGET_HTTP_CACHE_PATH"):
+            with self.subTest(cache_key=cache_key), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                with self.assertRaisesRegex(RuntimeError, "Native runtime populated an undeclared NuGet cache"):
+                    with self.launch(root, cache_key=cache_key) as started:
+                        self.assertEqual(runtime.Http(started["origin"]).request("/health/live")[0], 200)
+                self.assert_final_receipt(root, exit_code=0, cache_key=cache_key)
+
+    def test_original_body_failure_survives_nonzero_shutdown_and_cache_write(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            original = RuntimeError("Original qualification failure")
+            with self.assertRaises(RuntimeError) as observed:
+                with self.launch(root, exit_code=1, cache_key="NUGET_PACKAGES") as started:
+                    self.assertEqual(runtime.Http(started["origin"]).request("/health/live")[0], 200)
+                    raise original
+            self.assertIs(observed.exception, original)
+            self.assert_final_receipt(root, exit_code=1, cache_key="NUGET_PACKAGES")
+
+    def test_original_startup_failure_survives_nonzero_shutdown_and_cache_write(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            with self.assertRaisesRegex(RuntimeError, "Ready marker did not match actual Kestrel listener"):
+                with self.launch(root, exit_code=1, cache_key="NUGET_HTTP_CACHE_PATH", bad_listener=True):
+                    self.fail("An invalid ready marker must not enter the qualification body")
+            self.assert_final_receipt(root, exit_code=1, cache_key="NUGET_HTTP_CACHE_PATH")
 
 
 if __name__ == "__main__":
