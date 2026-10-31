@@ -146,7 +146,8 @@ for (const width of [320, 390]) {
     await page.goto(`${browseUrl}&long-identities=1&workbench-shell=1`);
     await page.getByRole("button", { name: "Next page" }).click();
     const row = page.getByRole("row", { name: /Second page renewal/ });
-    await expect(row.locator(".wf-definition-name")).toHaveText("Second page renewal");
+    await expect(row.getByRole("link", { name: "Second page renewal", exact: true })).toHaveText("Second page renewal");
+    await expect(row.locator(".wf-definition-description")).toHaveText("Browser workflow fixture");
     await expect(page.getByRole("columnheader", { name: "Definition ID", exact: true })).toBeAttached();
 
     const tracks = await row.evaluate(element => {

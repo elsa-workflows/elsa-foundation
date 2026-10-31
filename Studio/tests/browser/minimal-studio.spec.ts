@@ -54,6 +54,28 @@ for (const item of presets) test(`${item.name} is a complete, persistent preset 
   await page.screenshot({ path: testInfo.outputPath(`${item.id}-definitions.png`), fullPage: true });
 });
 
+for (const item of presets) test(`${item.name} keeps workflow headings inside their tracks at desktop and narrow widths`, async ({ page }) => {
+  await preset(page, item.name, 1280);
+  await view(page, "list");
+  const table = page.getByRole("table", { name: "Workflow definitions", exact: true });
+  await expect(table).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+  for (const width of [1280, 1440, 320]) {
+    await page.setViewportSize({ width, height: 960 });
+    const overflowing = await table.getByRole("columnheader").evaluateAll(headers => headers.flatMap(header => {
+      const label = header.textContent?.trim();
+      if (!label) return [];
+      const range = document.createRange();
+      range.selectNodeContents(header);
+      const text = range.getBoundingClientRect();
+      const cell = header.getBoundingClientRect();
+      return text.left < cell.left - 1 || text.right > cell.right + 1 ? [{ label, textLeft: text.left, textRight: text.right, cellLeft: cell.left, cellRight: cell.right }] : [];
+    }));
+    expect(overflowing, `${item.name} headings at ${width}px`).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  }
+});
+
 for (const width of [320, 1440]) test(`six real screen types retain containment and hierarchy at ${width}px`, async ({ page }, testInfo) => {
   await preset(page, "Atelier", width);
   for (const screen of ["appearance", "list", "runs", "templates", "logs", "inspection"]) {
