@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Design.Persistence.Core.Services;
 
-/// <summary>Fails startup unless every replacement contract has exactly one registered implementation.</summary>
+/// <summary>Validates one owner for mandatory replacement contracts and at most one for optional ports.</summary>
 public sealed class ValidateDesignPersistenceReplacementContractsStartupTask(IServiceCollection services) : IStartupTask
 {
     public Task ExecuteAsync(CancellationToken cancellationToken)
@@ -13,7 +13,9 @@ public sealed class ValidateDesignPersistenceReplacementContractsStartupTask(ISe
         cancellationToken.ThrowIfCancellationRequested();
         var invalidRegistrations = DesignPersistenceBackend.ReplacementContractTypes
             .Select(serviceType => (serviceType, Count: services.Count(descriptor => descriptor.ServiceType == serviceType)))
-            .Where(item => item.Count != 1)
+            // Library support is optional for existing design backends. Keeping its
+            // contract in the ownership set still rejects an implicit second owner.
+            .Where(item => item.serviceType == typeof(IWorkflowLibraryStore) ? item.Count > 1 : item.Count != 1)
             .Select(item => $"{item.serviceType.Name} ({item.Count} registrations)")
             .OrderBy(item => item, StringComparer.Ordinal)
             .ToArray();

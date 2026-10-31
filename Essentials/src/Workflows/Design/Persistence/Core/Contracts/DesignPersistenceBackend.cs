@@ -7,7 +7,8 @@ public sealed class DesignPersistenceBackend
 {
     public const string EntityFramework = "entity-framework";
 
-    /// <summary>Provider-neutral design persistence contracts that select exactly one implementation.</summary>
+    /// <summary>Provider-neutral design persistence replacement contracts. A selected contract has
+    /// exactly one owner; optional library support may be absent.</summary>
     public static IReadOnlySet<Type> ReplacementContractTypes { get; } = new HashSet<Type>
     {
         typeof(Elsa.Workflows.Design.Core.Contracts.IWorkflowDefinitionFactory),

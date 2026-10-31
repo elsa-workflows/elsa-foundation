@@ -387,6 +387,32 @@ public sealed class WorkflowLibraryApiContractTests
         Assert.DoesNotContain("folderBreadcrumb", body);
     }
 
+    [Theory]
+    [InlineData(true, HttpStatusCode.Forbidden)]
+    [InlineData(false, HttpStatusCode.OK)]
+    public async Task Creating_in_a_folder_checks_returned_ancestors_before_committing(bool denyAncestor, HttpStatusCode expected)
+    {
+        var probe = new LibraryProbe { IncludeHiddenFolder = true };
+        var add = new LibraryAddCommand();
+        await using var host = await StartAsync(probe, services =>
+        {
+            services.RemoveAll<IAddWorkflowDefinitionCommand>();
+            services.AddSingleton<IAddWorkflowDefinitionCommand>(add);
+            if (denyAncestor) services.AddSingleton<IPermissionResourceHandler, DeniedFolderPolicy>();
+        });
+        using var response = await SendAsync(host, "POST", "/design/workflows/definitions", "library-all",
+            "{\"name\":\"New invoice\",\"folderId\":\"invoices\"}");
+        Assert.Equal(expected, response.StatusCode);
+        Assert.Equal(!denyAncestor, add.Executed);
+        var body = await response.Content.ReadAsStringAsync();
+        if (denyAncestor)
+        {
+            Assert.DoesNotContain("Secret finance root", body);
+            Assert.DoesNotContain("folderBreadcrumb", body);
+        }
+        else Assert.Contains("Secret finance root", body);
+    }
+
     [Fact]
     public async Task Stale_organization_writes_are_structured_conflicts()
     {
@@ -501,6 +527,22 @@ public sealed class WorkflowLibraryApiContractTests
         public ValueTask<PermissionEvaluationResult?> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult<PermissionEvaluationResult?>(context.Resource is WorkflowLibraryResource { FolderId: "finance" }
                 ? PermissionEvaluationResult.Denied() : null);
+    }
+
+    private sealed class LibraryAddCommand : IAddWorkflowDefinitionCommand
+    {
+        public bool Executed;
+        public Task<WorkflowDefinitionCreated> Execute(DesignOperationKey operationKey, WorkflowDefinition definition,
+            WorkflowDefinitionDraft draft, CancellationToken cancellationToken = default)
+        {
+            Executed = true;
+            return Task.FromResult(new WorkflowDefinitionCreated(definition.Id, draft.Id));
+        }
+        public Task<WorkflowDefinitionCreated> Execute(DesignOperationKey operationKey, WorkflowDefinition definition,
+            WorkflowDefinitionDraft draft, IReadOnlyCollection<DesignMetadataRecord> layout,
+            IReadOnlyCollection<Elsa.Workflows.Design.Core.Models.ActivityPresentationRecord> activityPresentation,
+            string? folderId, string actorId, CancellationToken cancellationToken = default) =>
+            Execute(operationKey, definition, draft, cancellationToken);
     }
 
     private sealed class PublicationLookup(IReadOnlyDictionary<string, WorkflowDefinitionPublicationSummary> summaries) : IWorkflowDefinitionPublicationStateLookup

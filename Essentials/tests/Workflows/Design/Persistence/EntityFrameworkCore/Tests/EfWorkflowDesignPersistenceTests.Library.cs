@@ -319,6 +319,55 @@ public sealed partial class EfWorkflowDesignPersistenceTests
     }
 
     [Fact]
+    public async Task Legacy_custom_backend_without_optional_library_starts_and_reads_existing_definitions()
+    {
+        await using var database = new TemporarySqliteDatabase("workflow-library-legacy-backend");
+        var services = new ServiceCollection();
+        services.AddSingleton<IPayloadSerializer, TestSerializer>();
+        services.AddSingleton<IPersistenceAccessContextAccessor>(new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+        services.AddWorkflowsDesignEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = database.ConnectionString });
+        var original = DesignPersistenceBackend.Find(services)!;
+        // A legacy backend can delegate the original design ports to EF without
+        // implementing the optional organization port or its Runtime contribution.
+        var delegated = services.Where(original.Owns).Where(descriptor =>
+            descriptor.ServiceType != typeof(IWorkflowLibraryStore) &&
+            descriptor.ServiceType != typeof(Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores.EfWorkflowLibraryStore) &&
+            descriptor.ServiceType != typeof(IWorkflowTriggerIndexObserver)).ToArray();
+        original.RemoveOwnedDescriptors(services);
+        foreach (var descriptor in delegated) ((IServiceCollection)services).Add(descriptor);
+        var custom = new DesignPersistenceBackend("legacy-custom", delegated);
+        DesignPersistenceBackend.Register(services, custom);
+        custom.EnsureOwnsRegisteredContracts(services);
+
+        await using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var startup = Assert.Single(scope.ServiceProvider.GetServices<Elsa.Tasks.Core.IStartupTask>(), task =>
+            task is Elsa.Workflows.Design.Persistence.Core.Services.ValidateDesignPersistenceReplacementContractsStartupTask);
+        await startup.ExecuteAsync(CancellationToken.None);
+        Assert.Null(scope.ServiceProvider.GetService<IWorkflowLibraryStore>());
+        Assert.Empty(scope.ServiceProvider.GetServices<IWorkflowTriggerIndexObserver>());
+        var db = scope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>();
+        await db.Database.EnsureCreatedAsync();
+        db.Definitions.Add(new WorkflowDefinition { Id = "legacy-definition", TenantId = "tenant-a", Name = "Existing workflow" });
+        await db.SaveChangesAsync();
+        var definitions = await scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionStore>()
+            .ListAsync(new Elsa.Workflows.Design.Persistence.Core.Filters.WorkflowDefinitionFilter());
+        Assert.Equal("legacy-definition", Assert.Single(definitions).Id);
+    }
+
+    [Fact]
+    public async Task Optional_library_port_still_rejects_multiple_owners()
+    {
+        var services = new ServiceCollection();
+        services.AddWorkflowsDesignEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = "Data Source=:memory:" });
+        services.AddScoped<IWorkflowLibraryStore>(_ => throw new NotSupportedException());
+        var startup = new Elsa.Workflows.Design.Persistence.Core.Services.ValidateDesignPersistenceReplacementContractsStartupTask(services);
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => startup.ExecuteAsync(CancellationToken.None));
+        Assert.Contains($"{nameof(IWorkflowLibraryStore)} (2 registrations)", error.Message, StringComparison.Ordinal);
+        Assert.Throws<InvalidOperationException>(() => DesignPersistenceBackend.Find(services)!.EnsureOwnsRegisteredContracts(services));
+    }
+
+    [Fact]
     public async Task Library_concurrent_opposing_folder_moves_cannot_commit_a_cycle_even_when_the_lock_provider_does_not_serialize()
     {
         await using var database = new TemporarySqliteDatabase("workflow-library-concurrent-hierarchy");

@@ -21,9 +21,9 @@
 ## Integrated qualification and delivery
 
 - [x] T010 [US4] Regenerate provider Initial migrations with `tools/ef/generate-module-migrations.sh`; run provider/migration suites and deterministic large-library budgets in existing EF test projects.
-- [ ] T011 [US4] Add/run real-host and fixture journeys in `Studio/tests/`, including restart, lifecycle/source, tenant/user and narrow keyboard controls.
+- [x] T011 [US4] Add/run real-host and fixture journeys in `Studio/tests/`, including restart, lifecycle/source, tenant/user and narrow keyboard controls.
 - [x] T012 Document delivered user/integrator behavior, permissions and bounds in canonical docs/module catalogs.
-- [ ] T013 Run affected whole suites, architecture/maps, lint/typecheck/build and package-consumer qualification; retain exact receipts on #3500/the PR.
+- [x] T013 Run affected whole suites, architecture/maps, lint/typecheck/build and package-consumer qualification; retain exact receipts on #3500/the PR.
 - [ ] T014 Review independently to convergence under `docs/skills/catalog.md`; complete draft PR, required CI, merge/resulting-main qualification and program reconciliation.
 
 ## Dependencies and execution

@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3500-workflow-library`
 **Created**: 2026-10-31
-**Status**: In progress
+**Status**: Implemented
 **Input**: Approved folders, tags and saved-views proposal; owner instruction to create a program and deliver end to end in a separate worktree. Program #3499; delivery #3500.
 
 ## User Scenarios & Testing

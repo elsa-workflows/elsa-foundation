@@ -30,6 +30,8 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 ### `IWorkflowLibraryStore` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
 
 The scoped optional port owns catalog organization independently of authored workflow state.
+Startup permits an omitted library port for existing backends and rejects multiple registrations;
+backend ownership still rejects an implicit second owner of a selected port.
 Consumers are the capability-discovered folder, paged-definition, organization, tag, saved-view and
 favorite endpoints. `WorkflowLibraryCapabilitySource` advertises those relations only when the port
 is registered. Omission retains legacy flat browsing and yields a truthful unsupported response on
