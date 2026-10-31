@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 2,
+  "loading": {
+    "loadMode": "HostIntegrated",
+    "scope": "DependencyClosure",
+    "reason": "Independent resource contribution using explicitly shared host-provided Core contracts."
+  }
+}

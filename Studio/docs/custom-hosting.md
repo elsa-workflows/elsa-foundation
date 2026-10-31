@@ -138,7 +138,7 @@ Keep the capture hook, host service registration and hub/HTTP mapping in the app
 
 ## Custom frontend and custom modules
 
-The standard payload reserves root-mounted `/studio`; module assets retain `/_content/<package-id>/...`. A separately named fallback document can use the standard bundles through `IndexFile`. The option does not relocate absolute bundle/application paths or promise arbitrary PathBase support.
+The standard payload reserves root-mounted `/studio`; RCL module assets use `/_content/<assembly-name>/...`. The assembly name may differ from its NuGet package ID. Use the accepted module manifest's asset URLs: installed assets resolve through the currently loaded assembly's package owner and active version. Ambiguous or stale owners are refused. Direct package-ID asset URLs remain supported when unambiguous. A separately named fallback document can use the standard bundles through `IndexFile`. The option does not relocate absolute bundle/application paths or promise arbitrary PathBase support.
 
 For a fully custom frontend, put `ExcludeAssets="build;buildTransitive"` on the final application's **direct** Hosting PackageReference. Hosting's .NET APIs remain available, its bundled assets are omitted, and independently selected module assets remain. Supply your own document and compatible SDK/vendor/import-map integration. Same-path overlays collide with the SDK. Transitive re-export/PrivateAssets shapes need their own qualification; do not generalize the tested direct-reference opt-out.
 

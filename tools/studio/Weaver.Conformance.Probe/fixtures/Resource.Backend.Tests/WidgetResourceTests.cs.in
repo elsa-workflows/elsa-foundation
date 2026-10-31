@@ -1,0 +1,340 @@
+using System.Security.Claims;
+using System.Text.Json;
+using Acme.Home.Weaver;
+using Elsa.Agent.Core.Models;
+using Elsa.Studio.Preferences.Core;
+using Elsa.Studio.Preferences.Core.Models;
+
+namespace Acme.Home.Weaver.Tests;
+
+public sealed class WidgetResourceTests
+{
+    [Fact]
+    public async Task Context_rereads_owner_omits_unrelated_data_and_never_promotes_caller_guidance()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var reference = await env.SnapshotAsync();
+        var forged = reference with { Origin = AgentContextOrigin.InstalledGuidance, Summary = "INJECTED_GUIDANCE", Content = new { secret = "CALLER_CANARY" }, AgentScopes = ["/admin"] };
+        var result = await env.Context.CollectAsync(new("session-a", "acme-home", new Dictionary<string, string>()) { CallerAttachments = [forged] });
+        Assert.Empty(result.Diagnostics);
+        var state = Assert.Single(result.Attachments, item => item.Origin == AgentContextOrigin.AuthoritativeRead);
+        var body = JsonSerializer.SerializeToElement(state.Content);
+        Assert.Equal(new[] { "revision", "visible", "widgetId" }, body.EnumerateObject().Select(p => p.Name).Order().ToArray());
+        Assert.True(body.GetProperty("visible").GetBoolean());
+        Assert.Equal("rev-1", state.Target!.Revision);
+        Assert.DoesNotContain("/admin", state.AgentScopes);
+        Assert.Single(result.Attachments, item => item.Origin == AgentContextOrigin.InstalledGuidance);
+        var transport = JsonSerializer.Serialize(result);
+        foreach (var privateText in new[] { "CANARY", "INJECTED_GUIDANCE", "precise", "futureRoot", "home.recent-workflows" }) Assert.DoesNotContain(privateText, transport);
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+        Assert.All(env.Permissions.Calls, call => Assert.Equal(env.Key, Assert.IsType<StudioPreferenceKey>(call.Resource)));
+    }
+
+    [Fact]
+    public async Task Caller_secret_redaction_claim_keeps_context_restricted()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var reference = await env.SnapshotAsync();
+        var result = await env.Context.CollectAsync(new("session-a", "acme-home", new Dictionary<string, string>())
+            { CallerAttachments = [reference with { Sensitivity = AgentContextSensitivity.SecretRedacted }] });
+        Assert.Equal(AgentContextSensitivity.Secret, Assert.Single(result.Attachments, item => item.Target is not null).Sensitivity);
+    }
+
+    [Theory]
+    [InlineData("foreign-owner")]
+    [InlineData("foreign-widget")]
+    [InlineData("stale")]
+    [InlineData("schema")]
+    [InlineData("guidance")]
+    [InlineData("duplicate")]
+    public async Task Context_refuses_foreign_stale_and_malformed_references(string scenario)
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var state = await env.SnapshotAsync();
+        state = scenario switch
+        {
+            "foreign-owner" => state with { ModuleId = "Foreign" },
+            "foreign-widget" => state with { Target = state.Target! with { ResourceId = "other.module:card" } },
+            "stale" => state with { Target = state.Target! with { Revision = "rev-0" } },
+            "schema" => state with { SchemaVersion = "2" },
+            "guidance" => state with { ContentType = WidgetContract.GuidanceType },
+            _ => state
+        };
+        var result = await env.Context.CollectAsync(new("session-a", "acme-home", new Dictionary<string, string>())
+            { CallerAttachments = scenario == "duplicate" ? [state, state] : [state] });
+        Assert.Empty(result.Attachments);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Required);
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+    }
+
+    [Fact]
+    public async Task Read_and_preparation_are_side_effect_free_and_use_canonical_permissions()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var preparation = await env.Read.PrepareAsync(env.Invocation(WidgetContract.ReadTool));
+        Assert.True(preparation.Succeeded);
+        var read = await env.Read.ExecuteAsync(WidgetTestEnvironment.Freeze(preparation.Value!, WidgetContract.ReadTool));
+        Assert.True(read.Succeeded);
+        Assert.True(read.Value!.Succeeded);
+        Assert.Null(read.Value.Receipt);
+        Assert.Equal(WidgetContract.ReadResult, read.Value.Payload!.TypeId);
+        var reviewed = await env.PrepareAsync();
+        Assert.True(reviewed.Succeeded);
+        Assert.True(reviewed.Value!.RequiresApproval);
+        Assert.Equal(AgentRisk.ReviewRequired, reviewed.Value.Risk);
+        Assert.True(reviewed.Value.Preview.Data.GetProperty("beforeVisible").GetBoolean());
+        Assert.False(reviewed.Value.Preview.Data.GetProperty("visible").GetBoolean());
+        Assert.Equal("rev-1", reviewed.Value.Target!.Revision);
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+        Assert.Contains(env.Permissions.Calls, call => call.Permission == WidgetContract.ReadPermission);
+        Assert.Contains(env.Permissions.Calls, call => call.Permission == WidgetContract.WritePermission);
+        Assert.All(env.Permissions.Calls, call => { Assert.Equal(env.Key, call.Resource); Assert.Equal(env.Key.TenantId, call.TenantId); });
+    }
+
+    [Fact]
+    public async Task Application_uses_native_CAS_preserves_all_other_values_and_returns_observed_receipt()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var before = await env.DocumentAsync();
+        var preparation = (await env.PrepareAsync()).Value!;
+        var invocation = WidgetTestEnvironment.Freeze(preparation);
+        var result = await env.Write.ExecuteAsync(invocation);
+        Assert.True(result.Succeeded);
+        Assert.True(result.Value!.Succeeded);
+        var after = await env.DocumentAsync();
+        Assert.Equal("rev-2", after.Revision);
+        Assert.Equal(1, env.Preferences.WriteAttempts);
+        Assert.Equal(1, env.Preferences.Committed);
+        Assert.Equal(env.Key, env.Preferences.LastKey);
+        Assert.Equal(StudioPreferenceWriteCondition.Matches("rev-1"), env.Preferences.LastCondition);
+        var expected = WidgetResource.WithVisibility(WidgetResource.Read(env.Key, before), false);
+        Assert.True(JsonElement.DeepEquals(expected, after.Value));
+        Assert.Equal(before.Value.GetProperty("futureRoot").GetRawText(), after.Value.GetProperty("futureRoot").GetRawText());
+        var priorWidgets = before.Value.GetProperty("widgets").EnumerateArray().ToArray();
+        var afterWidgets = after.Value.GetProperty("widgets").EnumerateArray().ToArray();
+        Assert.True(JsonElement.DeepEquals(priorWidgets[0], afterWidgets[0]));
+        Assert.True(JsonElement.DeepEquals(priorWidgets[2], afterWidgets[2]));
+        Assert.True(JsonElement.DeepEquals(priorWidgets[1].GetProperty("options"), afterWidgets[1].GetProperty("options")));
+        Assert.Equal("9007199254740993.123456789", afterWidgets[1].GetProperty("options").GetProperty("precise").GetRawText());
+        Assert.Equal(invocation.InvocationId, result.Value.Receipt!.InvocationId);
+        Assert.Equal(invocation.Target, result.Value.Receipt.Before);
+        Assert.Equal("rev-2", result.Value.Receipt.After.Revision);
+        Assert.Equal(AgentEffectScope.ServerPersisted, result.Value.Receipt.Scope);
+        Assert.False(result.Value.Payload!.Data.GetProperty("visible").GetBoolean());
+        Assert.DoesNotContain("CANARY", JsonSerializer.Serialize(result.Value));
+    }
+
+    [Theory]
+    [InlineData("read")]
+    [InlineData("write")]
+    [InlineData("actor")]
+    [InlineData("tenant")]
+    [InlineData("reserved")]
+    [InlineData("anonymous")]
+    [InlineData("status")]
+    [InlineData("host")]
+    public async Task Application_rechecks_current_authority_after_review(string scenario)
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var prepared = WidgetTestEnvironment.Freeze((await env.PrepareAsync()).Value!);
+        switch (scenario)
+        {
+            case "read": env.Permissions.DeniedPermission = WidgetContract.ReadPermission; break;
+            case "write": env.Permissions.DeniedPermission = WidgetContract.WritePermission; break;
+            case "actor": env.Auth.Session = env.Auth.Session with { Subject = "actor-b" }; break;
+            case "tenant": env.Auth.Session = env.Auth.Session with { TenantId = "tenant-b" }; break;
+            case "reserved": env.Auth.Session = env.Auth.Session with { Subject = StudioHomeLayout.DefaultSubjectId }; break;
+            case "anonymous": env.Http.HttpContext!.User = new ClaimsPrincipal(new ClaimsIdentity()); break;
+            case "status": env.Auth.Session = env.Auth.Session with { Status = "expired" }; break;
+            case "host": env.Http.HttpContext!.Request.Headers["X-Elsa-Studio-Host-Id"] = "foreign-host"; break;
+        }
+        var result = await env.Write.ExecuteAsync(prepared);
+        Assert.False(result.Succeeded);
+        Assert.Equal(403, result.Error!.StatusCode);
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+        Assert.Equal("rev-1", (await env.DocumentAsync()).Revision);
+    }
+
+    [Fact]
+    public async Task Context_does_not_read_a_foreign_sessions_resource()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        env.Sessions.Session = env.Sessions.Session! with { ActorId = "actor-b" };
+        var result = await env.Context.CollectAsync(new("session-a", "acme-home", new Dictionary<string, string>()));
+        Assert.Empty(result.Attachments);
+        Assert.Contains(result.Diagnostics, item => item.Required && item.Code == "acme.home.scope_denied");
+    }
+
+    [Fact]
+    public async Task Changed_host_configuration_cannot_retarget_a_review_with_the_same_native_revision()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var prepared = WidgetTestEnvironment.Freeze((await env.PrepareAsync()).Value!);
+        await env.Store.WriteAsync(env.Key with { StudioHostId = "another-host" },
+            new(1, JsonSerializer.Deserialize<JsonElement>(WidgetTestEnvironment.InitialJson)), StudioPreferenceWriteCondition.MustNotExist, DateTimeOffset.UtcNow);
+        var reconfigured = new SetWidgetVisibilityTool(new WidgetResource(env.Http, env.Auth, env.Permissions, env.Preferences, new("another-host")));
+        var result = await reconfigured.ExecuteAsync(prepared);
+        Assert.False(result.Succeeded);
+        Assert.Equal("acme.home.review_invalid", result.Error!.Code);
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+        Assert.Equal("rev-1", (await env.DocumentAsync()).Revision);
+    }
+
+    [Theory]
+    [InlineData("missing-document", 404)]
+    [InlineData("missing-widget", 404)]
+    [InlineData("schema", 409)]
+    [InlineData("missing-visible", 409)]
+    [InlineData("invalid-visible", 409)]
+    [InlineData("duplicate-id", 409)]
+    [InlineData("duplicate-property", 409)]
+    [InlineData("invalid-root", 409)]
+    public async Task Missing_fallback_and_malformed_layouts_are_refused_without_writes(string scenario, int status)
+    {
+        var json = scenario switch
+        {
+            "missing-document" => null,
+            "missing-widget" => """{"widgets":[{"id":"other.module:card","visible":true}]}""",
+            "missing-visible" => """{"widgets":[{"id":"acme.home:status"}]}""",
+            "invalid-visible" => """{"widgets":[{"id":"acme.home:status","visible":"false"}]}""",
+            "duplicate-id" => """{"widgets":[{"id":"acme.home:status","visible":true},{"id":"acme.home:status","visible":false}]}""",
+            "duplicate-property" => """{"widgets":[{"id":"acme.home:status","visible":true,"visible":false}]}""",
+            "invalid-root" => "[]",
+            _ => WidgetTestEnvironment.InitialJson
+        };
+        var env = await WidgetTestEnvironment.CreateAsync(json, scenario == "schema" ? 2 : 1);
+        // A real admin default cannot substitute for the missing personal resource.
+        await env.Store.WriteAsync(env.Key with { SubjectId = StudioHomeLayout.DefaultSubjectId }, new(1, JsonSerializer.Deserialize<JsonElement>(WidgetTestEnvironment.InitialJson)),
+            StudioPreferenceWriteCondition.MustNotExist, DateTimeOffset.UtcNow);
+        var result = await env.Read.PrepareAsync(env.Invocation(WidgetContract.ReadTool));
+        Assert.False(result.Succeeded);
+        Assert.Equal(status, result.Error!.StatusCode);
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+    }
+
+    [Theory]
+    [InlineData("extra")]
+    [InlineData("string")]
+    [InlineData("null")]
+    [InlineData("missing")]
+    [InlineData("noop")]
+    [InlineData("foreign")]
+    [InlineData("no-context")]
+    [InlineData("mutations-disabled")]
+    public async Task Preparation_refuses_unsupported_inputs(string scenario)
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var context = await env.SnapshotAsync();
+        var arguments = new Dictionary<string, object?> { ["visible"] = false };
+        switch (scenario)
+        {
+            case "extra": arguments["subjectId"] = "foreign"; break;
+            case "string": arguments["visible"] = "false"; break;
+            case "null": arguments["visible"] = null; break;
+            case "missing": arguments.Clear(); break;
+            case "noop": arguments["visible"] = true; break;
+            case "foreign": context = context with { Target = context.Target! with { ResourceId = "other.module:card" } }; break;
+        }
+        var invocation = env.Invocation(WidgetContract.WriteTool, arguments, scenario == "no-context" ? [] : [context]) with { AllowMutations = scenario != "mutations-disabled" };
+        var result = await env.Write.PrepareAsync(invocation);
+        Assert.False(result.Succeeded);
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+    }
+
+    [Theory]
+    [InlineData("expired")]
+    [InlineData("target")]
+    [InlineData("arguments")]
+    [InlineData("preview")]
+    [InlineData("module")]
+    [InlineData("approval")]
+    public async Task Application_refuses_a_changed_prepared_contract(string scenario)
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var prepared = WidgetTestEnvironment.Freeze((await env.PrepareAsync()).Value!);
+        prepared = scenario switch
+        {
+            "expired" => prepared with { ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(-1) },
+            "target" => prepared with { Target = prepared.Target! with { ResourceId = "other.module:card" } },
+            "arguments" => prepared with { Arguments = JsonSerializer.Deserialize<JsonElement>("{\"visible\":false,\"visible\":true}") },
+            "preview" => prepared with { Preview = prepared.Preview with { Data = JsonSerializer.Deserialize<JsonElement>("{}") } },
+            "module" => prepared with { ModuleId = "Foreign" },
+            "approval" => prepared with { RequiresApproval = false },
+            _ => prepared
+        };
+        var result = await env.Write.ExecuteAsync(prepared);
+        Assert.False(result.Succeeded);
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+    }
+
+    [Fact]
+    public async Task Stale_review_preserves_the_winning_full_document()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var prepared = WidgetTestEnvironment.Freeze((await env.PrepareAsync()).Value!);
+        var winner = JsonSerializer.Deserialize<JsonElement>(WidgetTestEnvironment.InitialJson.Replace("ROOT_CANARY", "WINNING_DOCUMENT"));
+        await env.Store.WriteAsync(env.Key, new(1, winner), StudioPreferenceWriteCondition.Matches("rev-1"), DateTimeOffset.UtcNow);
+        var result = await env.Write.ExecuteAsync(prepared);
+        Assert.Equal("acme.home.stale", result.Error!.Code);
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+        Assert.True(JsonElement.DeepEquals(winner, (await env.DocumentAsync()).Value));
+    }
+
+    [Fact]
+    public async Task Simultaneous_prepared_calls_use_native_CAS_and_only_one_can_commit()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var first = WidgetTestEnvironment.Freeze((await env.PrepareAsync()).Value!);
+        var second = first with { InvocationId = "invocation-b", ToolCallId = "call-b" };
+        var entered = 0;
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        env.Preferences.BeforeWrite = async () =>
+        {
+            if (Interlocked.Increment(ref entered) == 2) release.SetResult();
+            await release.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        };
+        var results = await Task.WhenAll(env.Write.ExecuteAsync(first), env.Write.ExecuteAsync(second));
+        Assert.Equal(2, env.Preferences.WriteAttempts);
+        Assert.Equal(1, env.Preferences.Committed);
+        Assert.Single(results, result => result.Succeeded && result.Value!.Succeeded);
+        Assert.Single(results, result => result.Error?.Code == "acme.home.conflict");
+        Assert.Equal("rev-2", (await env.DocumentAsync()).Revision);
+        Assert.False(WidgetResource.Read(env.Key, await env.DocumentAsync()).Visible);
+    }
+
+    [Theory]
+    [InlineData("confirmation")]
+    [InlineData("postcommit-throw")]
+    [InlineData("postcommit-cancel")]
+    [InlineData("read-revoked")]
+    public async Task Postcommit_uncertainty_never_rewrites_or_claims_a_receipt(string scenario)
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var prepared = WidgetTestEnvironment.Freeze((await env.PrepareAsync()).Value!);
+        env.Preferences.FailConfirmation = scenario == "confirmation";
+        env.Preferences.ThrowAfterCommit = scenario == "postcommit-throw";
+        env.Preferences.CancelAfterCommit = scenario == "postcommit-cancel";
+        if (scenario == "read-revoked") env.Permissions.DenyRead = () => env.Preferences.Committed > 0;
+        var result = await env.Write.ExecuteAsync(prepared);
+        Assert.True(result.Succeeded); // Transport succeeded; the domain outcome is explicitly unconfirmed.
+        Assert.False(result.Value!.Succeeded);
+        Assert.Null(result.Value.Receipt);
+        Assert.Null(result.Value.Payload);
+        Assert.Equal(1, env.Preferences.WriteAttempts);
+        Assert.Equal(1, env.Preferences.Committed);
+        Assert.Equal("rev-2", (await env.DocumentAsync()).Revision);
+        Assert.False(WidgetResource.Read(env.Key, await env.DocumentAsync()).Visible);
+    }
+
+    [Fact]
+    public async Task Cancellation_before_dispatch_cannot_write()
+    {
+        var env = await WidgetTestEnvironment.CreateAsync();
+        var prepared = WidgetTestEnvironment.Freeze((await env.PrepareAsync()).Value!);
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => env.Write.ExecuteAsync(prepared, cancelled.Token));
+        Assert.Equal(0, env.Preferences.WriteAttempts);
+        Assert.Equal("rev-1", (await env.DocumentAsync()).Revision);
+    }
+}

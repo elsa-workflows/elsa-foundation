@@ -1,0 +1,191 @@
+using System.Security.Claims;
+using System.Text.Json;
+using Elsa.Agent.Core.Models;
+using Elsa.Foundation.Identity.Core.Authentication;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Studio.Preferences.Core;
+using Elsa.Studio.Preferences.Core.Contracts;
+using Elsa.Studio.Preferences.Core.Exceptions;
+using Elsa.Studio.Preferences.Core.Models;
+using Microsoft.AspNetCore.Http;
+
+namespace Acme.Home.Weaver;
+
+internal static class WidgetContract
+{
+    internal const string Module = "Acme.Home";
+    internal const string WidgetId = "acme.home:status";
+    internal const string ResourceType = "home-widget";
+    internal const string ContextType = "acme.home.widget";
+    internal const string GuidanceType = "acme.home.guidance";
+    internal const string ReadTool = "acme_home_read_widget";
+    internal const string WriteTool = "acme_home_set_visibility";
+    internal const string ReadResult = "acme.home.widget-state";
+    internal const string ChangeResult = "acme.home.widget-visibility";
+    internal const string Renderer = "acme.home.widget-result";
+    internal const string Route = "/qualification/acme-home";
+    internal const string Endpoint = "/_qualification/acme/home-widget";
+    internal const string ReadPermission = "studio/preferences:read";
+    internal const string WritePermission = "studio/preferences:write";
+    internal static readonly string[] Scopes = [Route, "/", "/dashboard", "/overview"];
+    internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
+    internal static AgentResourceTarget Target(WidgetObservation state) => new(Module, ResourceType, WidgetId, state.Document.Revision)
+        { DisplayName = "Acme status card", Route = Route };
+    internal static object State(WidgetObservation state) => new { widgetId = WidgetId, revision = state.Document.Revision, visible = state.Visible, hostId = state.Key.StudioHostId };
+    internal static AgentPayload ReadPayload(WidgetObservation state) => new(ReadResult, "1", JsonSerializer.SerializeToElement(State(state), Json));
+    internal static AgentPayload Preview(WidgetObservation state, bool visible) => new(ChangeResult, "1", JsonSerializer.SerializeToElement(new
+        { widgetId = WidgetId, beforeVisible = state.Visible, visible, revision = state.Document.Revision, hostId = state.Key.StudioHostId }, Json));
+    internal static AgentPayload Changed(WidgetObservation after, bool beforeVisible) => new(ChangeResult, "1", JsonSerializer.SerializeToElement(new
+        { widgetId = WidgetId, beforeVisible, visible = after.Visible, revision = after.Document.Revision, hostId = after.Key.StudioHostId }, Json));
+    internal static bool SameTarget(AgentResourceTarget? target, WidgetObservation state) => target is not null &&
+        target.ModuleId == Module && target.ResourceType == ResourceType && target.ResourceId == WidgetId && target.Revision == state.Document.Revision;
+    internal static bool IsOwn(AgentContextAttachment item) => item.ModuleId == Module || item.ContentType.StartsWith("acme.home.", StringComparison.Ordinal);
+    internal static void Refuse(string code, string message, int status = 409) => throw new WidgetRefusal(new("acme.home." + code, message, status));
+}
+
+internal sealed class WidgetRefusal(AgentError error) : Exception(error.Message)
+{
+    internal AgentError Error { get; } = error;
+}
+
+// This full-document observation never crosses the module boundary.
+internal sealed record WidgetObservation(StudioPreferenceKey Key, StudioPreferenceDocument Document, bool Visible);
+
+internal sealed class WidgetResource(
+    IHttpContextAccessor http,
+    IAuthSessionService auth,
+    IPermissionAuthorizationService permissions,
+    IStudioPreferenceService preferences,
+    WidgetHost host)
+{
+    internal async Task<WidgetObservation> ObserveAsync(string? actor, string? tenant, bool write, CancellationToken ct)
+    {
+        var key = await AuthorizeAsync(actor, tenant, write, ct);
+        StudioPreferenceDocument? document;
+        try { document = await preferences.FindAsync(key, ct); }
+        catch (StudioPreferenceException) { WidgetContract.Refuse("resource_unavailable", "The personal Home layout is unavailable.", 404); throw; }
+        if (document is null) WidgetContract.Refuse("personal_missing", "Create a personal Home layout before using this widget.", 404);
+        return Read(key, document!);
+    }
+
+    private async Task<StudioPreferenceKey> AuthorizeAsync(string? actor, string? tenant, bool write, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var context = http.HttpContext;
+        var principal = context?.User;
+        if (principal?.Identity?.IsAuthenticated != true) WidgetContract.Refuse("unauthenticated", "An authenticated personal session is required.", 403);
+        var session = await auth.GetAsync(principal!, ct);
+        if (session.Status != "authenticated" || string.IsNullOrWhiteSpace(session.Subject) || string.IsNullOrWhiteSpace(session.TenantId) ||
+            session.Subject == StudioHomeLayout.DefaultSubjectId || (actor is not null && actor != session.Subject) || (tenant is not null && tenant != session.TenantId))
+            WidgetContract.Refuse("scope_denied", "The current personal actor and tenant must match the request.", 403);
+        var suppliedHost = context!.Request.Headers["X-Elsa-Studio-Host-Id"];
+        if (suppliedHost.Count > 0 && (suppliedHost.Count != 1 || suppliedHost[0] != host.Id))
+            WidgetContract.Refuse("host_denied", "The request does not match the configured Studio host.", 403);
+        var key = new StudioPreferenceKey(session.Subject!, session.TenantId!, host.Id, StudioPreferenceNamespaces.HomeLayout);
+        // Read and write are independent canonical permission decisions against the actual native key.
+        foreach (var permission in write ? new[] { WidgetContract.ReadPermission, WidgetContract.WritePermission } : new[] { WidgetContract.ReadPermission })
+        {
+            var decision = await permissions.AuthorizeAsync(new(principal!, permission, key.TenantId, key) { CancellationToken = ct }, ct);
+            if (!decision.Succeeded) WidgetContract.Refuse("permission_denied", "Current permission for this personal Home layout is required.", 403);
+        }
+        return key;
+    }
+
+    internal static WidgetObservation Read(StudioPreferenceKey key, StudioPreferenceDocument document)
+    {
+        if (key.SubjectId == StudioHomeLayout.DefaultSubjectId || document.Namespace != StudioPreferenceNamespaces.HomeLayout ||
+            document.SchemaVersion != StudioHomeLayout.SchemaVersion || string.IsNullOrWhiteSpace(document.Revision) || document.Revision.Length > 256 ||
+            !StudioHomeLayout.IsValid(document.Value) || HasDuplicateProperties(document.Value))
+            WidgetContract.Refuse("layout_invalid", "The personal Home layout has an unsupported schema or invalid value.");
+        var matches = document.Value.GetProperty("widgets").EnumerateArray()
+            .Where(entry => entry.GetProperty("id").GetString() == WidgetContract.WidgetId).ToArray();
+        if (matches.Length == 0) WidgetContract.Refuse("widget_missing", "The Acme status card is absent from the personal Home layout.", 404);
+        if (matches.Length != 1 || !matches[0].TryGetProperty("visible", out var visibility) || visibility.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            WidgetContract.Refuse("visibility_invalid", "The Acme status card must have one explicit boolean visibility.");
+        return new(key, document, matches[0].GetProperty("visible").GetBoolean());
+    }
+
+    private static bool HasDuplicateProperties(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.Object => value.EnumerateObject().Select(p => p.Name).Distinct(StringComparer.Ordinal).Count() != value.EnumerateObject().Count() ||
+                                value.EnumerateObject().Any(p => HasDuplicateProperties(p.Value)),
+        JsonValueKind.Array => value.EnumerateArray().Any(HasDuplicateProperties),
+        _ => false
+    };
+
+    // Copy unknown root/entry/options values verbatim through JsonElement; no whole-layout DTO loses data.
+    internal static JsonElement WithVisibility(WidgetObservation before, bool visible)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            foreach (var property in before.Document.Value.EnumerateObject())
+            {
+                writer.WritePropertyName(property.Name);
+                if (property.Name != "widgets") { property.Value.WriteTo(writer); continue; }
+                writer.WriteStartArray();
+                foreach (var entry in property.Value.EnumerateArray())
+                {
+                    if (entry.GetProperty("id").GetString() != WidgetContract.WidgetId) { entry.WriteTo(writer); continue; }
+                    writer.WriteStartObject();
+                    foreach (var field in entry.EnumerateObject())
+                    {
+                        writer.WritePropertyName(field.Name);
+                        if (field.Name == "visible") writer.WriteBooleanValue(visible); else field.Value.WriteTo(writer);
+                    }
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
+            }
+            writer.WriteEndObject();
+        }
+        using var parsed = JsonDocument.Parse(stream.ToArray());
+        return parsed.RootElement.Clone();
+    }
+
+    internal async Task<AgentToolResult> ApplyAsync(AgentPreparedToolInvocation invocation, bool visible, CancellationToken ct)
+    {
+        var before = await ObserveAsync(invocation.ActorId, invocation.TenantId, true, ct);
+        if (!WidgetContract.SameTarget(invocation.Target, before)) WidgetContract.Refuse("stale", "The reviewed personal layout revision has changed.");
+        if (before.Visible == visible) WidgetContract.Refuse("noop", "The Acme status card already has the requested visibility.");
+        if (invocation.Preview.TypeId != WidgetContract.ChangeResult || invocation.Preview.SchemaVersion != "1" ||
+            !JsonElement.DeepEquals(invocation.Preview.Data, WidgetContract.Preview(before, visible).Data))
+            WidgetContract.Refuse("review_invalid", "The reviewed preview does not match this exact visibility change.");
+        var value = WithVisibility(before, visible);
+        ct.ThrowIfCancellationRequested();
+        StudioPreferenceDocument saved;
+        try
+        {
+            // The native service owns validation/quota and the store's atomic revision comparison.
+            saved = await preferences.WriteAsync(before.Key, new(before.Document.SchemaVersion, value),
+                StudioPreferenceWriteCondition.Matches(before.Document.Revision), ct);
+        }
+        catch (StudioPreferenceConflictException) { WidgetContract.Refuse("conflict", "The personal layout changed before the native CAS could commit."); throw; }
+        catch (Exception exception) when (exception is StudioPreferenceValidationException or StudioPreferenceQuotaExceededException or StudioPreferenceNamespaceNotFoundException)
+        { WidgetContract.Refuse("write_invalid", "The native preference service refused the visibility change."); throw; }
+        catch (Exception)
+        {
+            // A store/transport cancellation may occur after commit. The engine retains this uncertain outcome.
+            return Uncertain(invocation);
+        }
+        try
+        {
+            var after = await ObserveAsync(invocation.ActorId, invocation.TenantId, false, CancellationToken.None);
+            if (after.Document.Revision == before.Document.Revision || after.Document.Revision != saved.Revision || after.Visible != visible ||
+                !JsonElement.DeepEquals(after.Document.Value, value) || !JsonElement.DeepEquals(saved.Value, value))
+                return Uncertain(invocation);
+            var payload = WidgetContract.Changed(after, before.Visible);
+            return new(invocation.ToolCallId, invocation.ToolName, true, visible ? "Acme status card is visible in your saved Home layout." : "Acme status card is hidden in your saved Home layout.", payload)
+            {
+                Receipt = new(invocation.InvocationId, invocation.Target!, WidgetContract.Target(after), AgentEffectScope.ServerPersisted,
+                    new(WidgetContract.ChangeResult, "1", payload.Data.Clone()))
+            };
+        }
+        catch (Exception) { return Uncertain(invocation); }
+    }
+
+    private static AgentToolResult Uncertain(AgentPreparedToolInvocation invocation) => new(invocation.ToolCallId, invocation.ToolName, false,
+        "The personal layout may have changed, but owner confirmation is unavailable. Do not replay this change; reread Home.");
+}

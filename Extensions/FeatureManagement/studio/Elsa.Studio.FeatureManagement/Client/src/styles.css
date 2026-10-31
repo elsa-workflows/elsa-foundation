@@ -15,13 +15,8 @@
   --fm-overlay-strong: color-mix(in srgb, var(--studio-text, var(--foreground, #0f172a)) 38%, transparent);
   display: flex;
   flex-direction: column;
-  gap: 14px;
   container-type: inline-size;
   container-name: feature-management;
-}
-
-.feature-management-header {
-  align-items: center;
 }
 
 .feature-management-inspector-heading button,

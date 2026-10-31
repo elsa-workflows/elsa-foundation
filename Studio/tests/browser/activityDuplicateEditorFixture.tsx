@@ -32,7 +32,7 @@ import {
 } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/fixtures";
 import { JavaScriptExpandedEditor, JavaScriptInlineEditor } from "../../../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/module";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
-import { createActivityNode, getChildSlots } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
+import { collectActivityNodeIds, createActivityNode, getChildSlots } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
 import { builtInPropertyEditors } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/propertyEditors";
 import { activityGraphLayoutFromDesign } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityGraphDocumentAdapter";
 
@@ -40,7 +40,8 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false 
 const bpmnDecisionFixture = new URLSearchParams(window.location.search).get("bpmn-decision");
 const adaptivePorts = new URLSearchParams(window.location.search).get("adaptive-ports");
 const collectionSlotsFixture = new URLSearchParams(window.location.search).get("collection-slots");
-const persistFixture = Boolean(adaptivePorts || collectionSlotsFixture || bpmnDecisionFixture);
+const staleValidationsFixture = new URLSearchParams(window.location.search).get("stale-validations");
+const persistFixture = Boolean(adaptivePorts || collectionSlotsFixture || bpmnDecisionFixture || staleValidationsFixture);
 const adaptiveStorageKey = `adaptive-ports:${window.location.search}`;
 
 const writeLineCatalog: ActivityCatalogItem = {
@@ -66,6 +67,12 @@ const writeLineCatalog: ActivityCatalogItem = {
   ] : [{ name: "Done", displayName: "Done", isBrowsable: true }],
   available: true
 };
+const runEtlCatalog: ActivityCatalogItem = {
+  ...writeLineCatalog, activityVersionId: "run-etl-v1", activityTypeKey: "Elsa.RunEtl", displayName: "Run Etl",
+  inputs: [{ referenceKey: "Pipeline", name: "Pipeline", displayName: "Pipeline", typeName: "System.String", isRequired: true }]
+};
+const missingPipeline = { type: "InputOutput/MissingRequired", path: "write-one/inputs/Pipeline", message: 'Required input "Pipeline" on Run Etl is empty.' };
+
 const denseOutcomeCatalog: ActivityCatalogItem = {
   ...writeLineCatalog,
   activityVersionId: "dense-outcomes-v1",
@@ -84,7 +91,7 @@ const httpEndpointCatalog: ActivityCatalogItem = {
   ]
 };
 
-const notifyBuyer: ActivityNode = workflowStartFixture ? {
+const notifyBuyer: ActivityNode = staleValidationsFixture ? { ...leafNode("write-one"), activityVersionId: runEtlCatalog.activityVersionId, inputs: [] } : workflowStartFixture ? {
   nodeId: "write-one", activityVersionId: "http-endpoint-v1", outputs: [],
   inputs: [
     { referenceKey: "CanStartWorkflow", value: { expressionType: "Literal", value: "true" } },
@@ -163,8 +170,8 @@ function editorDraft(): WorkflowDraft {
       { nodeId: "write-one", x: 420, y: 180 },
       { nodeId: "write-two", x: 720, y: 180 }
     ],
-    activityPresentation: [{ nodeId: "write-one", displayName: workflowStartFixture ? "Http Endpoint" : "Notify buyer" }],
-    validationErrors: []
+    activityPresentation: [{ nodeId: "write-one", displayName: staleValidationsFixture ? "Run Etl" : workflowStartFixture ? "Http Endpoint" : "Notify buyer" }],
+    validationErrors: staleValidationsFixture ? [missingPipeline] : []
   };
 }
 
@@ -240,7 +247,7 @@ function ActivityDuplicateEditorFixtureContent() {
               expressionEditors={expressionEditors}
               runInputEditors={[]}
               workflowDesignerPanels={[]}
-              autosaveEnabledByDefault={false}
+              autosaveEnabledByDefault={Boolean(staleValidationsFixture)}
               onBack={() => undefined}
             />}
       </QueryClientProvider>
@@ -287,7 +294,10 @@ export function createEditorContext(live?: { status: string; disconnected: boole
     }], paletteHints: { containerModes: ["bpmn"], description: "BPMN Decision is intended for a gateway in a BPMN Process." } },
     { ...writeLineCatalog, activityVersionId: "complete-v1", activityTypeKey: "Elsa.Complete", displayName: "Complete", paletteHints: { resourceKinds: ["activity-definition-graph"] } }
   ] : [];
-  const catalog = [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity, ...(slotAssignment ? [whileActivity] : []), ...(rootSlots ? [ifActivity] : []), ...paletteFixtures, ...((adaptivePorts || collectionSlotsFixture) && !bpmnDecisionFixture ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : []), ...(collectionSlotsFixture ? [collectionActivity(collectionSlotsFixture === "parallel" ? "parallel" : "switch")] : [])];
+  const catalog = [writeLineCatalog, ...(staleValidationsFixture ? [runEtlCatalog] : []), flowchartActivity, sequenceActivity, forEachActivity, ...(slotAssignment ? [whileActivity] : []), ...(rootSlots ? [ifActivity] : []), ...paletteFixtures, ...((adaptivePorts || collectionSlotsFixture) && !bpmnDecisionFixture ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : []), ...(collectionSlotsFixture ? [collectionActivity(collectionSlotsFixture === "parallel" ? "parallel" : "switch")] : [])];
+  const validationReads: boolean[] = [];
+  (window as Window & { staleValidationReads?: boolean[] }).staleValidationReads = validationReads;
+  const hasEtl = () => !!draft.state.rootActivity && collectActivityNodeIds(draft.state.rootActivity, catalog).has("write-one");
   const compiled = (node: ActivityNode): object => ({
     executableNodeId: `exec-${node.nodeId}`, authoredActivityId: node.nodeId,
     activityType: catalog.find(item => item.activityVersionId === node.activityVersionId)?.activityTypeKey ?? "unknown",
@@ -346,7 +356,8 @@ export function createEditorContext(live?: { status: string; disconnected: boole
                 id: "elsa.api.workflow-design",
                 contractVersion: "1",
                 links: [{ rel: "workflow-definitions", href: "design/workflows/definitions" },
-                  ...(persistFixture ? [{ rel: "workflow-drafts", href: "design/workflows/drafts/{draftId}", templated: true }] : [])]
+                  ...(persistFixture ? [{ rel: "workflow-drafts", href: "design/workflows/drafts/{draftId}", templated: true }] : []),
+                  ...(staleValidationsFixture ? [{ rel: "workflow-draft-validations", href: "design/workflows/drafts/{draftId}/validations", templated: true }] : [])]
               },
               {
                 id: "elsa.api.activity-design",
@@ -360,6 +371,10 @@ export function createEditorContext(live?: { status: string; disconnected: boole
               }
             ]
           };
+        }
+        if (staleValidationsFixture && url === "/design/workflows/drafts/draft-1/validations") {
+          const present = hasEtl(); validationReads.push(present);
+          return { errors: present ? [{ code: missingPipeline.type, message: missingPipeline.message, nodeId: "write-one", member: "inputs/Pipeline" }] : [] };
         }
         if (url === "/design/workflows/definitions/definition-1") {
           return {
@@ -436,7 +451,9 @@ export function createEditorContext(live?: { status: string; disconnected: boole
       },
       putJson: async (_url: string, body: unknown) => {
         if (persistFixture) {
+          if (staleValidationsFixture === "slow-save") await new Promise(resolve => setTimeout(resolve, 2200));
           draft = { ...draft, ...body as object };
+          if (staleValidationsFixture) draft.validationErrors = hasEtl() ? [missingPipeline] : [];
           sessionStorage.setItem(adaptiveStorageKey, JSON.stringify(draft));
         }
         return draft;

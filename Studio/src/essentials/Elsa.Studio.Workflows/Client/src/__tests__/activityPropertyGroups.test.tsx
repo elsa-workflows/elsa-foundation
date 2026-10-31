@@ -146,6 +146,153 @@ function propertyLabels(container: HTMLElement) {
 }
 
 describe("activity property organization", () => {
+  it("binds a selected workflow input into JavaScript args and preserves the expression source", async () => {
+    const changes: ActivityNode[] = [];
+    const source = "`Started Order ID: ${args.OrderId}`";
+    const container = renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: {
+        typeName: "System.String",
+        expression: {
+          type: "JavaScript",
+          value: {
+            language: "JavaScript",
+            source,
+            resultType: { alias: "String", collectionKind: "Single" },
+            parameters: { Existing: { kind: "Literal", value: "preserve me" } },
+            options: {},
+            capabilityProfile: "binding-pure-v1"
+          }
+        }
+      } }),
+      workflowState: {
+        inputs: [{ referenceKey: "input-order", name: "OrderId", displayName: "Order ID" }]
+      },
+      onChange: next => changes.push(next)
+    });
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
+    const picker = container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")!;
+    expect(picker).not.toBeNull();
+    flushSync(() => {
+      picker.value = "OrderId";
+      picker.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const saved = (changes.at(-1)!.text as { expression: { value: Record<string, unknown> } }).expression.value;
+    expect(saved).toMatchObject({
+      language: "JavaScript",
+      source,
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: {
+        Existing: { kind: "Literal", value: "preserve me" },
+        OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" }
+      }
+    });
+    expect(container.textContent).toContain("args.OrderId");
+
+    const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId binding']")!;
+    flushSync(() => remove.click());
+    const removed = (changes.at(-1)!.text as { expression: { value: { source: string; parameters: Record<string, unknown> } } }).expression.value;
+    expect(removed).toMatchObject({
+      source,
+      parameters: { Existing: { kind: "Literal", value: "preserve me" } }
+    });
+    expect(Object.keys(removed.parameters)).toEqual(["Existing"]);
+  });
+
+  it("keeps a stale workflow input binding removable after the input is deleted", async () => {
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: {
+        typeName: "System.String",
+        expression: {
+          type: "JavaScript",
+          value: {
+            language: "JavaScript",
+            source: "args.OrderId",
+            resultType: { alias: "String", collectionKind: "Single" },
+            parameters: { OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" } },
+            options: {},
+            capabilityProfile: "binding-pure-v1"
+          }
+        }
+      } }),
+      workflowState: { inputs: [] },
+      onChange: next => changes.push(next)
+    });
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
+    const picker = container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")!;
+    expect(picker.disabled).toBe(true);
+    expect(container.textContent).toContain("OrderId (missing workflow input)");
+
+    const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId binding']")!;
+    flushSync(() => remove.click());
+    expect((changes.at(-1)!.text as { expression: { value: { parameters: unknown } } }).expression.value.parameters).toEqual({});
+    expect(container.querySelector(".wf-js-input-bindings select")).toBeNull();
+  });
+
+  it("lets authors remove a malformed workflow input binding with no member key", async () => {
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: {
+        typeName: "System.String",
+        expression: {
+          type: "JavaScript",
+          value: {
+            language: "JavaScript",
+            source: "args.OrderId",
+            resultType: { alias: "String", collectionKind: "Single" },
+            parameters: { OrderId: { kind: "WorkflowRequest" } },
+            options: {},
+            capabilityProfile: "binding-pure-v1"
+          }
+        }
+      } }),
+      workflowState: { inputs: [] },
+      onChange: next => changes.push(next)
+    });
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
+    expect(container.textContent).toContain("Unknown workflow input (invalid workflow input binding)");
+    const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Remove OrderId binding']")!;
+    flushSync(() => remove.click());
+    expect((changes.at(-1)!.text as { expression: { value: { parameters: unknown } } }).expression.value.parameters).toEqual({});
+  });
+
+  it("does not offer input bindings for malformed object-valued expressions", () => {
+    const container = renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: {
+        typeName: "System.String",
+        expression: { type: "JavaScript", value: { language: "JavaScript", source: "args.OrderId", parameters: {} } }
+      } }),
+      workflowState: { inputs: [{ referenceKey: "input-order", name: "OrderId", displayName: "Order ID" }] }
+    });
+
+    expect(container.querySelector(".wf-js-input-bindings")).toBeNull();
+  });
+
+  it("allows prototype-key workflow input names to be bound in the picker", async () => {
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([input("Text", { referenceKey: "text", isWrapped: true })], {
+      activity: activity({ text: { typeName: "System.String", expression: { type: "JavaScript", value: "args.constructor" } } }),
+      workflowState: { inputs: [{ referenceKey: "input-constructor", name: "constructor", displayName: "constructor" }] },
+      onChange: next => changes.push(next)
+    });
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-js-input-bindings select")).not.toBeNull());
+    const picker = container.querySelector<HTMLSelectElement>(".wf-js-input-bindings select")!;
+    expect(picker.querySelector<HTMLOptionElement>("option[value='constructor']")?.disabled).toBe(false);
+    flushSync(() => {
+      picker.value = "constructor";
+      picker.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const parameters = (changes.at(-1)!.text as { expression: { value: { parameters: Record<string, unknown> } } }).expression.value.parameters;
+    expect(Object.prototype.hasOwnProperty.call(parameters, "constructor")).toBe(true);
+    expect(parameters.constructor).toEqual({ kind: "WorkflowRequest", memberKey: "constructor" });
+  });
+
   it("locks an already expanded editor without disabling Close or accepting stale edits", () => {
     const changes: ActivityNode[] = [];
     let lateEdit: ((value: unknown) => void) | undefined;
@@ -1153,6 +1300,150 @@ describe("activity property organization", () => {
     const replacement = container.querySelector<HTMLInputElement>("input[aria-label='Template expression']");
     expect(replacement?.value).toBe("Hello");
     expect(document.activeElement).toBe(replacement);
+  });
+
+  it("keeps portable expression source and parameters when switching between text syntaxes", () => {
+    const changes: ActivityNode[] = [];
+    const source = "args.OrderId";
+    const definition = {
+      language: "JavaScript",
+      source,
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: { OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" } },
+      options: {},
+      capabilityProfile: "binding-pure-v1"
+    };
+    const container = renderPanel([
+      input("Text", { referenceKey: "text", typeName: "System.String", isWrapped: true })
+    ], {
+      activity: activity({ text: { typeName: "System.String", expression: { type: "JavaScript", value: definition } } }),
+      workflowState: { inputs: [{ referenceKey: "input-order", name: "OrderId", displayName: "Order ID" }] },
+      onChange: next => changes.push(next)
+    });
+
+    openAndSelect(container, "Liquid");
+
+    expect(container.querySelector("[role='alertdialog']")).toBeNull();
+    expect(container.querySelector<HTMLInputElement>("input[aria-label='Text expression']")?.value).toBe(source);
+    expect((changes.at(-1)!.text as { expression: { type: string; value: unknown } }).expression).toEqual({
+      type: "Liquid",
+      value: { ...definition, language: "Liquid" }
+    });
+  });
+
+  it("confirms removal of expression bindings when switching a portable expression to Literal", () => {
+    const changes: ActivityNode[] = [];
+    const source = "args.OrderId";
+    const definition = {
+      language: "JavaScript",
+      source,
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: { OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" } },
+      options: {},
+      capabilityProfile: "binding-pure-v1"
+    };
+    const container = renderPanel([
+      input("Text", { referenceKey: "text", typeName: "System.String", isWrapped: true })
+    ], {
+      activity: activity({ text: { typeName: "System.String", expression: { type: "JavaScript", value: definition } } }),
+      onChange: next => changes.push(next)
+    });
+
+    openAndSelect(container, "Literal");
+
+    const confirmation = container.querySelector<HTMLElement>("[role='alertdialog']");
+    expect(confirmation?.textContent).toContain("keep the source text as a Literal value");
+    expect(confirmation?.textContent).toContain("remove 1 expression binding");
+    expect(changes).toHaveLength(0);
+
+    const removeBindings = [...confirmation!.querySelectorAll<HTMLButtonElement>("button")]
+      .find(button => button.textContent === "Remove 1 binding")!;
+    flushSync(() => removeBindings.click());
+
+    expect((changes.at(-1)!.text as { expression: { type: string; value: unknown } }).expression).toEqual({
+      type: "Literal",
+      value: source
+    });
+  });
+
+  it("keeps an empty portable source when confirming a switch to Literal", () => {
+    const changes: ActivityNode[] = [];
+    const definition = {
+      language: "JavaScript",
+      source: "",
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: { OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" } },
+      options: {},
+      capabilityProfile: "binding-pure-v1"
+    };
+    const container = renderPanel([
+      input("Text", { referenceKey: "text", typeName: "System.String", defaultValue: "default text", isWrapped: true })
+    ], {
+      activity: activity({ text: { typeName: "System.String", expression: { type: "JavaScript", value: definition } } }),
+      onChange: next => changes.push(next)
+    });
+
+    openAndSelect(container, "Literal");
+
+    const confirmation = container.querySelector<HTMLElement>("[role='alertdialog']")!;
+    expect(confirmation.textContent).toContain("keep the source text as a Literal value");
+    const removeBindings = [...confirmation.querySelectorAll<HTMLButtonElement>("button")]
+      .find(button => button.textContent === "Remove 1 binding")!;
+    flushSync(() => removeBindings.click());
+
+    expect((changes.at(-1)!.text as { expression: { type: string; value: unknown } }).expression).toEqual({
+      type: "Literal",
+      value: ""
+    });
+  });
+
+  it("uses the literal default when switching a bound non-string expression to Literal", () => {
+    const changes: ActivityNode[] = [];
+    const definition = {
+      language: "JavaScript",
+      source: "args.Count",
+      resultType: { alias: "Int32", collectionKind: "Single" },
+      parameters: { Count: { kind: "WorkflowRequest", memberKey: "Count" } },
+      options: {},
+      capabilityProfile: "binding-pure-v1"
+    };
+    const container = renderPanel([
+      input("Count", { referenceKey: "count", typeName: "System.Int32", defaultValue: 42, isWrapped: true })
+    ], {
+      activity: activity({ count: { typeName: "System.Int32", expression: { type: "JavaScript", value: definition } } }),
+      onChange: next => changes.push(next)
+    });
+
+    openAndSelect(container, "Literal");
+
+    const confirmation = container.querySelector<HTMLElement>("[role='alertdialog']")!;
+    expect(confirmation.textContent).toContain("will replace the current value and remove 1 expression binding");
+    const replace = [...confirmation.querySelectorAll<HTMLButtonElement>("button")]
+      .find(button => button.textContent === "Replace value and remove 1 binding")!;
+    flushSync(() => replace.click());
+
+    expect((changes.at(-1)!.count as { expression: { type: string; value: unknown } }).expression).toEqual({
+      type: "Literal",
+      value: 42
+    });
+  });
+
+  it("preserves an ordinary string expression as a Literal without confirmation", () => {
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([
+      input("Text", { referenceKey: "text", typeName: "System.String", isWrapped: true })
+    ], {
+      activity: activity({ text: { typeName: "System.String", expression: { type: "JavaScript", value: "hello" } } }),
+      onChange: next => changes.push(next)
+    });
+
+    openAndSelect(container, "Literal");
+
+    expect(container.querySelector("[role='alertdialog']")).toBeNull();
+    expect((changes.at(-1)!.text as { expression: { type: string; value: unknown } }).expression).toEqual({
+      type: "Literal",
+      value: "hello"
+    });
   });
 
   it("preserves a primitive Literal as visible text when switching to a text expression", () => {

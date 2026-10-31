@@ -5,6 +5,7 @@ import { ThemeProvider } from "../../src/essentials/Elsa.Studio.Hosting/Client/s
 import { ThemeSwitcher } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/components/ThemeSwitcher";
 import { AppearancePage } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/AppearancePage";
 import { ActivityDuplicateEditorFixture } from "./activityDuplicateEditorFixture";
+import { ActivityAvailabilityFixture } from "./activityAvailabilityFixture";
 import { WorkflowDefinitionBrowseFixture } from "./workflowDefinitionBrowseFixture";
 import { WorkflowPublishChoiceFixture } from "./workflowPublishChoiceFixture";
 import { DialogHost } from "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/ui/dialog/DialogHost";
@@ -20,14 +21,18 @@ const navigation = getStudioNavigation([
   { id: "executables", label: "Executables", path: "/workflows/executables", placement: "more" }
 ], { includeThemeBuilder: false });
 
+const panels = new URLSearchParams(location.search).has("bottom-panel")
+  ? [{ id: "fixture-logs", title: "Structured Logs", component: () => <p>Structured log stream connected.</p> }]
+  : [];
+
 function Fixture() {
   const [view, setView] = useState(new URLSearchParams(location.search).get("view") ?? "editor");
-  const path = view === "appearance" ? "/settings/appearance" : "/workflows/definitions";
+  const path = view === "appearance" ? "/settings/appearance" : view === "availability" ? "/workflows/activity-availability" : "/workflows/definitions";
   return <ThemeProvider>
-    <ShellFrame navigation={navigation} panels={[]} path={path} title={view === "appearance" ? "Appearance" : "Workflows"}
+    <ShellFrame navigation={navigation} panels={panels} path={path} title={view === "appearance" ? "Appearance" : "Workflows"}
       backendBaseUrl="https://backend.example/" themeAction={<ThemeSwitcher />}
       onNavigate={next => setView(next.startsWith("/settings") ? "appearance" : "list")}>
-      {view === "appearance" ? <AppearancePage onNavigate={() => {}} /> : view === "list" ? <WorkflowDefinitionBrowseFixture /> : view === "publication" ? <WorkflowPublishChoiceFixture /> : view === "dialogs" ? <>
+      {view === "availability" ? <ActivityAvailabilityFixture /> : view === "appearance" ? <AppearancePage onNavigate={() => {}} /> : view === "list" ? <WorkflowDefinitionBrowseFixture /> : view === "publication" ? <WorkflowPublishChoiceFixture /> : view === "dialogs" ? <>
         <button onClick={() => void dialogs.confirm({ title: "Delete workflow", message: "Delete this workflow?", tone: "danger" })}>Delete workflow</button>
         <button onClick={() => void dialogs.confirm({ title: "Publish workflow", message: "Publish this workflow?" })}>Publish workflow</button>
         <DialogHost />

@@ -1,0 +1,117 @@
+name: Weaver package conformance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'Extensions/Agent/**'
+      - 'Extensions/FeatureManagement/**'
+      - 'Studio/**'
+      - 'Essentials/**'
+      - 'tools/studio/Weaver.Conformance.Probe/**'
+      - 'Directory.Build.*'
+      - 'Directory.Packages.props'
+      - 'PackageVersioning.props'
+      - 'PackageRanges.targets'
+      - 'VersionLines.props'
+      - 'NuGet.config'
+      - 'global.json'
+      - '.github/workflows/weaver-conformance.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'Extensions/Agent/**'
+      - 'Extensions/FeatureManagement/**'
+      - 'Studio/**'
+      - 'Essentials/**'
+      - 'tools/studio/Weaver.Conformance.Probe/**'
+      - 'Directory.Build.*'
+      - 'Directory.Packages.props'
+      - 'PackageVersioning.props'
+      - 'PackageRanges.targets'
+      - 'VersionLines.props'
+      - 'NuGet.config'
+      - 'global.json'
+      - '.github/workflows/weaver-conformance.yml'
+
+# This workflow builds local archives and private owned hosts. It never publishes.
+permissions:
+  contents: read
+
+concurrency:
+  group: weaver-conformance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package-witness:
+    name: Weaver independent package witness
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      WEAVER_VERSION: 4.0.0-weaver-ci.${{ github.run_id }}.${{ github.run_attempt }}
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: Studio/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: Studio/pnpm-lock.yaml
+
+      - name: Install driver browser tooling
+        working-directory: Studio
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+
+      - name: Verify driver refusal controls
+        run: python3 -m unittest discover -s tools/studio/Weaver.Conformance.Probe -p 'test_*.py'
+
+      - name: Qualify real distributions and all native journeys
+        run: >-
+          python3 tools/studio/Weaver.Conformance.Probe/qualify.py
+          --output "$RUNNER_TEMP/weaver-conformance"
+          --version "$WEAVER_VERSION"
+
+      - name: Select evidence without private authentication or runtime state
+        if: always()
+        run: |
+          if test -f "$RUNNER_TEMP/weaver-conformance/report.json"; then
+            python3 tools/studio/Weaver.Conformance.Probe/export_evidence.py \
+              --source "$RUNNER_TEMP/weaver-conformance" \
+              --destination "$RUNNER_TEMP/weaver-evidence"
+          fi
+
+      - name: Retain qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weaver-package-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/weaver-evidence/
+          # The exporter already selects safe references, including hidden package metadata.
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14

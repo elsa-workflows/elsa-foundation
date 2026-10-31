@@ -180,7 +180,7 @@ function isPrimitiveValue(value: unknown): boolean {
   return ["string", "number", "boolean", "bigint"].includes(typeof value);
 }
 
-function isStringType(typeName: string): boolean {
+export function isStringType(typeName: string): boolean {
   const normalized = typeName.split(",", 1)[0]?.trim().toLowerCase();
   return normalized === "system.string" || normalized === "string";
 }

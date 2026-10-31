@@ -1,3 +1,4 @@
+import { StudioPageHeader } from "./ui";
 import { getStudioBranding } from "./runtime";
 import React, { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
@@ -221,6 +222,12 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
       setIncomingPrompt({ ...prompt, id: `prompt-${Date.now()}-${Math.random()}` });
     });
   }, [api]);
+
+  const consumeIncomingPrompt = useCallback((id: string) => {
+    // The shell outlives dock and registry remounts. Retaining an attempted request here
+    // would submit it again as fresh intent when a new assistant lifetime becomes ready.
+    setIncomingPrompt(current => current?.id === id ? null : current);
+  }, []);
 
   // Probe the agent provider once so provider-gated affordances (e.g. the workflow "Risks" action) can be
   // disabled before the user opens the Weaver dock. "unavailable"/"disabled" mean the provider can deliver
@@ -450,7 +457,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         ) : null}
       </ShellFrame>
       {assistantOpen ? (
-        <WeaverSurface api={api!} surface={{ route: path }} variant="dock" onClose={() => setAssistantOpen(false)} onSessionIndicatorChange={setAgentSessions} incomingPrompt={incomingPrompt} />
+        <WeaverSurface api={api!} surface={{ route: path }} variant="dock" onClose={() => setAssistantOpen(false)} onSessionIndicatorChange={setAgentSessions} incomingPrompt={incomingPrompt} onPromptConsumed={consumeIncomingPrompt} />
       ) : null}
     </ThemeProvider>
   );
@@ -1072,12 +1079,10 @@ export function Diagnostics({
   const destinations = getDiagnosticDestinations(navigation);
 
   return (
-    <section className="diagnostics-view">
+    <section className="studio-page diagnostics-view">
       <section className="diagnostics-index" aria-labelledby="diagnostics-index-heading">
-        <header className="diagnostics-section-heading">
-          <h2 id="diagnostics-index-heading">Diagnostic tasks</h2>
-          <p>Choose a tool for the task you need to complete.</p>
-        </header>
+        <StudioPageHeader headingLevel={2} title="Diagnostic tasks" titleId="diagnostics-index-heading"
+          description="Choose a tool for the task you need to complete." />
         {destinations.length === 0 ? (
           <p className="diagnostics-index-empty" role="status">No diagnostic tool links are available to you in this app.</p>
         ) : (

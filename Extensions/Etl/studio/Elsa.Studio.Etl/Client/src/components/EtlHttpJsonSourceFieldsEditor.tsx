@@ -78,8 +78,8 @@ export function EtlHttpJsonSourceFieldsEditor({ source, maxFields, disabled, onC
           <button type="button" disabled={disabled || source.fields.length >= maxFields} onClick={() => onChange({ ...source, fields: [...source.fields, { name: "", pointer: "", type: "string", required: false }] })}>Add field</button>
         </div>
         {source.fields.length === 0 ? <p className="etl-editor-empty" role="status">No HTTP JSON fields are declared yet.</p> : null}
-        <div className="etl-editor-table-wrap" tabIndex={0} role="region" aria-label="HTTP JSON source fields table">
-          <table className="etl-editor-table">
+        <div className="studio-table-container etl-editor-table-wrap" tabIndex={0} role="region" aria-label="HTTP JSON source fields table">
+          <table className="studio-table etl-editor-table">
             <thead><tr><th scope="col">Field name</th><th scope="col">JSON Pointer</th><th scope="col">Type</th><th scope="col">Required</th><th scope="col"><span className="etl-editor-sr-only">Actions</span></th></tr></thead>
             <tbody>
               {source.fields.map((field, index) => (
