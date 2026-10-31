@@ -19,7 +19,10 @@ The project pins Microsoft.Agents.AI and Microsoft.Agents.AI.Workflows 1.27.0 an
 transitive lock. Source provenance is
 [`dotnet-1.27.0`, commit `4d1674b78951d6fd127ada532660514637f906e9`](https://github.com/microsoft/agent-framework/tree/4d1674b78951d6fd127ada532660514637f906e9).
 The package declares the MIT license. The dependency graph needs Microsoft.Extensions.AI.Abstractions
-10.10.1; Foundation currently pins 10.5.1. Production compatibility/upgrade remains a design gate.
+10.10.1; M0 observed Foundation at10.5.1; the normal central graph now pins10.10.1 through
+[dependency enabler#3544](https://github.com/elsa-workflows/elsa-foundation/issues/3544). Its
+compatibility lock template follows the real project dependencies. Full production specialist runtime/
+package qualification remains an implementation gate.
 
 The two JSON results name each actual SDK observation, including a second process restoring the
 session persisted by the first. They explicitly distinguish a deterministic model
