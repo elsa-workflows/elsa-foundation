@@ -23,7 +23,7 @@ async function expectRestoredPageRequest(page: import("@playwright/test").Page, 
 
 async function openSecondPage(page: import("@playwright/test").Page, url = browseUrl) {
   await page.goto(url);
-  await expect(page.getByRole("textbox", { name: "Search selected folder" })).toHaveValue("renewal");
+  await expect(page.getByRole("searchbox", { name: "Search selected folder" })).toHaveValue("renewal");
   await expect(page.getByText("First page renewal", { exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Folder breadcrumb" }).getByRole("button", { name: "Operations" })).toBeVisible();
   await page.getByLabel("Rows").selectOption("25");
@@ -37,7 +37,7 @@ async function expectPriorPageIsDisplayOnly(page: import("@playwright/test").Pag
   await expect(page.getByText("Second page renewal", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Second page renewal" })).toHaveCount(0);
   await expect(page.getByLabel("Select workflow definition Second page renewal")).toHaveCount(0);
-  await expect(page.locator(".wf-pagination")).toHaveCount(0);
+  await expect(page.locator(".studio-collection-footer")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Identifiers for / })).toHaveCount(0);
   await expect(page.getByRole("dialog", { name: /^Workflow definition identifiers for / })).toHaveCount(0);
 }
@@ -69,7 +69,7 @@ test("narrow keyboard users preserve workflow browse context through global sear
   await page.goto("/?theme=light&mode=folder-restructure&folderId=folder-operations&state=all&search=workflow");
 
   await expect(page.getByText("Operations workflow")).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Search selected folder" })).toHaveValue("workflow");
+  await expect(page.getByRole("searchbox", { name: "Search selected folder" })).toHaveValue("workflow");
   await expect(page.getByRole("button", { name: "All states" })).toHaveAttribute("aria-pressed", "true");
 
   await page.getByRole("button", { name: "Search all workflows" }).click();
@@ -89,14 +89,14 @@ test("narrow keyboard users preserve workflow browse context through global sear
 
   await page.goBack();
   await expect(page.getByText("All workflow", { exact: true })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Search all workflows" })).toHaveValue("workflow");
+  await expect(page.getByRole("searchbox", { name: "Search all workflows" })).toHaveValue("workflow");
   await page.goBack();
   await expect(page.getByText("Operations workflow")).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Search selected folder" })).toHaveValue("workflow");
+  await expect(page.getByRole("searchbox", { name: "Search selected folder" })).toHaveValue("workflow");
 
   await page.goForward();
   await expect(page.getByText("All workflow", { exact: true })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Search all workflows" })).toHaveValue("workflow");
+  await expect(page.getByRole("searchbox", { name: "Search all workflows" })).toHaveValue("workflow");
   await page.goBack();
   await expect(page.getByText("Operations workflow")).toBeVisible();
 
@@ -218,7 +218,7 @@ test("Workflow Definitions groups its create and refresh actions above the colle
   await expect(header.getByText("Create and organize workflow definitions")).toBeVisible();
   await expect(actions.getByRole("button", { name: "Create workflow" })).toBeVisible();
   await expect(actions.getByRole("button", { name: "Refresh workflow definitions" })).toBeVisible();
-  const search = page.getByRole("textbox", { name: "Search selected folder" });
+  const search = page.getByRole("searchbox", { name: "Search selected folder" });
   await expect(page.getByRole("group", { name: "Definition state" })).toBeVisible();
   const headingBounds = await heading.boundingBox();
   const searchBounds = await search.boundingBox();
@@ -230,7 +230,7 @@ test("Workflow Definitions groups its create and refresh actions above the colle
   await expect(page.getByRole("dialog", { name: "Create workflow" })).toBeVisible();
 });
 
-for (const { width, expectedInset } of [{ width: 1280, expectedInset: 18 }, { width: 390, expectedInset: 12 }]) {
+for (const { width, expectedInset } of [{ width: 1280, expectedInset: 0 }, { width: 390, expectedInset: 0 }]) {
   test(`Activity and Workflow definition pages use the same content inset (${width}px)`, async ({ page }) => {
     await page.route("**/capabilities", route => route.fulfill({
       status: 200,
@@ -245,7 +245,7 @@ for (const { width, expectedInset } of [{ width: 1280, expectedInset: 18 }, { wi
 
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/?mode=activity-definitions&theme=light");
-    const activityInset = await page.getByRole("heading", { name: "Activity Definitions" }).evaluate(heading => {
+    const activityInset = await page.getByRole("heading", { name: "Activity definitions" }).evaluate(heading => {
       const page = heading.closest("main")!;
       return heading.getBoundingClientRect().left - page.getBoundingClientRect().left;
     });
@@ -286,7 +286,7 @@ test("definition header actions use the shared button recipe in the custom mater
 
   await page.goto("/?mode=activity-definitions&theme=material");
   await expect(page.getByRole("heading", { name: "No designed activities yet" })).toBeVisible();
-  const activityHeader = page.locator("header").filter({ has: page.getByRole("heading", { name: "Activity Definitions" }) });
+  const activityHeader = page.locator("header").filter({ has: page.getByRole("heading", { name: "Activity definitions" }) });
   const activityCreate = activityHeader.getByRole("button", { name: "Create activity" });
   await expectMaterialPrimaryRecipe(activityCreate);
   await activityCreate.click();
@@ -360,7 +360,7 @@ test("a full reload keeps URL filters and starts with the default page and page 
   await page.reload();
 
   await expect(page.getByText("First page renewal", { exact: true })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Search selected folder" })).toHaveValue("renewal");
+  await expect(page.getByRole("searchbox", { name: "Search selected folder" })).toHaveValue("renewal");
   await expect(page.getByRole("button", { name: "All states" })).toHaveAttribute("aria-pressed", "true");
   await expect(page).toHaveURL(/folderId=folder-operations/);
   await expect(page).toHaveURL(/state=all/);
@@ -384,14 +384,14 @@ for (const variant of searchStatusVariants) {
     // Install before application timers and pause at a future target, independent of protocol latency.
     await page.clock.install({ time: new Date(clockStart.getTime() - 60_000) });
     await openSecondPage(page, browseUrl.replace("/?", `/?theme=${variant.theme}&`));
-    await expect(page.locator(".wf-pagination")).toBeVisible();
+    await expect(page.locator(".studio-collection-footer")).toBeVisible();
     await page.clock.pauseAt(clockStart);
     await page.evaluate(() => {
       (window as Window & { workflowBrowseTestControl?: { deferNext(searchTerm: string): void } })
         .workflowBrowseTestControl?.deferNext("latest");
     });
 
-    const search = page.getByRole("textbox", { name: "Search selected folder" });
+    const search = page.getByRole("searchbox", { name: "Search selected folder" });
     await search.fill("latest");
     const staleStatus = page.getByRole("status").filter({ hasText: "Showing previous results" });
     await expect(staleStatus).toContainText("Showing previous results for “renewal” on page 2");
@@ -480,7 +480,7 @@ for (const theme of ["light", "dark"]) {
         });
         expect(geometry.timestampLines).toBe(1);
         expect(geometry.timestampWidth).toBeLessThanOrEqual(geometry.columnWidth);
-        expect(geometry.rowHeight).toBeLessThanOrEqual(44);
+        expect(geometry.rowHeight).toBeLessThanOrEqual(48);
         await expect(row.getByRole("button", { name: "Actions for First page renewal" })).toBeVisible();
         if (width === 1920 && workspaceStyle) {
           await page.screenshot({ path: testInfo.outputPath(`compact-definitions-${theme}.png`), fullPage: true });

@@ -66,8 +66,15 @@ export function StudioDataGrid<T>({
             role="row"
             aria-selected={selectable ? selected : undefined}
             tabIndex={selectable ? (key === rovingKey ? 0 : -1) : undefined}
-            onClick={activate}
+            onClick={selectable ? event => {
+              if (event.defaultPrevented) return;
+              const control = event.target instanceof Element ? event.target.closest("button, a, input, select, textarea, label, summary, [contenteditable='true'], [role='button'], [role='link']") : null;
+              if (control && control !== event.currentTarget && event.currentTarget.contains(control)) return;
+              activate?.();
+            } : undefined}
             onKeyDown={selectable ? event => {
+              // Nested controls keep their native keyboard activation.
+              if (event.target !== event.currentTarget || event.defaultPrevented) return;
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
                 activate?.();

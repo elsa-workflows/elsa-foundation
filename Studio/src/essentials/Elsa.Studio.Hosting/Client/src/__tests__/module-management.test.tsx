@@ -29,7 +29,7 @@ describe("module management page", () => {
     expect(gridPanel?.textContent).toContain("Source kind");
     expect(gridPanel?.textContent).toContain("static-web-asset");
     expect(gridPanel?.textContent).not.toContain("Upload Packages");
-    expect(container.querySelector(".modules-header")?.textContent).not.toContain("Upload Packages");
+    expect(container.querySelector(".studio-page-header")?.textContent).not.toContain("Upload Packages");
     expect(container.textContent).not.toContain("Elsa.Studio.FeatureManagement.1.0.1.nupkg");
 
     await clickSourceButton(container, "Nuplane");

@@ -1,3 +1,4 @@
+import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import React, { useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, EyeOff, ListChecks, Save, Search, Shield, SlidersHorizontal, X } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -174,21 +175,14 @@ export function ActivityAvailabilityPage({ context }: { context: StudioEndpointC
   };
 
   return (
-    <section className="wf-page availability-page">
-      <div className="wf-page-header">
-        <div>
-          <div className="wf-kicker">Workflows</div>
-          <h2><ListChecks size={18} /> Activity availability</h2>
-          <p className="wf-muted">Control which activities can be added to new workflows. Host baseline rules always take precedence.</p>
-        </div>
-        <div className="wf-actions">
+    <section className="studio-page wf-page availability-page">
+      <StudioPageHeader headingLevel={2} title={<><ListChecks size={18} /> Activity availability</>} description={<>Control which activities can be added to new workflows. Host baseline rules always take precedence.</>} actions={<><div className="studio-page-actions">
           {dirty && !saving && <span className="wf-chip availability-dirty">Unsaved changes</span>}
-          <button type="button" className="availability-save" onClick={save} disabled={loading || saving || !dirty}>
+          <StudioButton type="button" variant="primary" onClick={save} disabled={loading || saving || !dirty}>
             <Save size={15} />
             {saving ? "Saving…" : "Save"}
-          </button>
-        </div>
-      </div>
+          </StudioButton>
+        </div></>} />
 
       <div className="availability-body">
         {errorMessage && (

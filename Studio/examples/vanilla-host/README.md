@@ -35,15 +35,15 @@ import { createRoot } from "react-dom/client";
 import { StudioCodeEditor, javaScriptLanguageAdapter } from "@elsa-workflows/studio-code-editor";
 import { StatusChip, StudioToolbar } from "@elsa-workflows/studio-ui";
 
-import "./theme.css";                          // your LAYER-1 primitive tokens
-import "@elsa-workflows/studio-ui/tokens.css"; // the --studio-* token layer
+import "@elsa-workflows/studio-ui/styles.css"; // token defaults and components
+import "@elsa-workflows/studio-code-editor/style.css";
+import "./theme.css"; // your overrides
 ```
 
-> **In-repo vs published:** inside this monorepo the `tokens.css` subpath does not resolve (the
-> package's on-disk `exports` map only `"."`), so `src/main.ts` imports the source file by
-> workspace-relative path with a comment showing the external form. It also supplies the
-> component visual rules in `src/studio-components.css`, which `@elsa-workflows/studio-ui`
-> does not ship (see the react-host README for the full explanation).
+The same CSS subpaths work in the workspace and from published packages. Import
+`@elsa-workflows/studio-ui/styles.css` once for token defaults and component styles,
+then your theme overrides. The editor stylesheet is exported as
+`@elsa-workflows/studio-code-editor/style.css`. No copied component CSS is needed.
 
 ## Peer dependencies
 

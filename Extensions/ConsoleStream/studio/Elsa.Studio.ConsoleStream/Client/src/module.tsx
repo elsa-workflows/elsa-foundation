@@ -1,3 +1,4 @@
+import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as signalR from "@microsoft/signalr";
 import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -413,23 +414,18 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
   }
 
   return (
-    <section className={page ? "console-stream-page" : "console-stream-panel"}>
-      <header className="console-stream-header">
-        <div>
-          <h2>{target.label} console</h2>
-          <p>{getConsolePanelDetail(selectedSource, sourcesState, queuedLineCount)}</p>
-        </div>
-        <div className="console-stream-tools">
+    <section className={page ? "studio-page console-stream-page" : "console-stream-panel"}>
+      <StudioPageHeader className={page ? undefined : "studio-page-header--compact"} headingLevel={2} title={<>{target.label} console</>} description={<>{getConsolePanelDetail(selectedSource, sourcesState, queuedLineCount)}</>} actions={<><div className="console-stream-tools">
           <div className="console-stream-hosts" role="group" aria-label="Console host">
             {Object.values(consoleTargetDefinitions).map(host => (
-              <button
+              <StudioButton
                 type="button"
                 className={host.id === hostId ? "active" : ""}
                 aria-pressed={host.id === hostId}
                 onClick={() => setHostId(host.id)}
                 key={host.id}>
                 {host.label}
-              </button>
+              </StudioButton>
             ))}
           </div>
           <select
@@ -445,16 +441,15 @@ function ConsoleStreamView({ page = false }: { page?: boolean }) {
           <span>{connected ? "live" : "waiting"}</span>
           <span>stdout</span>
           <span>stderr</span>
-          <button type="button" className={paused ? "active" : ""} onClick={togglePaused} aria-pressed={paused}>
+          <StudioButton type="button" className={paused ? "active" : ""} onClick={togglePaused} aria-pressed={paused}>
             {paused ? "Resume" : "Pause"}
-          </button>
-          <button type="button" className={autoScroll ? "active" : ""} onClick={() => setAutoScroll(current => !current)} aria-pressed={autoScroll}>
+          </StudioButton>
+          <StudioButton type="button" className={autoScroll ? "active" : ""} onClick={() => setAutoScroll(current => !current)} aria-pressed={autoScroll}>
             Autoscroll
-          </button>
-          <button type="button" onClick={download} disabled={visibleLines.length === 0}>Download</button>
-          <button type="button" onClick={clear}>Clear</button>
-        </div>
-      </header>
+          </StudioButton>
+          <StudioButton type="button" onClick={download} disabled={visibleLines.length === 0}>Download</StudioButton>
+          <StudioButton type="button" onClick={clear}>Clear</StudioButton>
+        </div></>} />
       <div className="console-stream-lines" ref={viewportRef}>
         {renderedLines.length === 0 ? (
           <div className="console-stream-line stdout">

@@ -15,37 +15,6 @@
   --connections-shadow: var(--studio-shadow-sm);
   --connections-body-size: var(--studio-body-size);
 }
-
-.connections-shell {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 100%;
-  overflow: hidden;
-  border: 1px solid var(--connections-border);
-  border-radius: var(--studio-radius-md);
-  background: var(--studio-material-panel-bg);
-  color: var(--connections-text);
-  font-size: var(--connections-body-size);
-}
-.connections-header,
-.connections-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1.25rem;
-  border-bottom: 1px solid var(--connections-border);
-}
-.connections-header-copy { min-width: 0; }
-.connections-header h2 {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0.25rem 0 0.35rem;
-  font-size: var(--studio-page-title-size, 1.25rem);
-}
-.connections-header p,
 .connections-count,
 .connections-date,
 .connections-modal-help,
@@ -53,11 +22,7 @@
 .connection-credential-help,
 .connection-secret-picker-status,
 .connection-secret-selection { color: var(--connections-text-muted); }
-.connections-header p { margin: 0; }
 .connections-count { white-space: nowrap; font-size: var(--studio-label-size); }
-.connections-header-actions { display: flex; align-items: center; gap: 12px; }
-.connections-page-actions { display: flex; align-items: center; gap: 8px; }
-.connections-kicker,
 .connections-create-eyebrow {
   color: var(--connections-text-muted);
   font-size: var(--studio-label-size);
@@ -65,14 +30,9 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-.connections-toolbar { flex-wrap: wrap; padding-block: 1rem; }
 .connections-search,
 .connections-danger-actions { display: flex; align-items: center; gap: 0.5rem; }
 .connections-search { flex: 1; max-width: 32rem; min-width: min(100%, 18rem); }
-.connections-search-control { flex: 1; min-width: 0; }
-.connections-search-control .studio-search-input { width: 100%; min-height: 2.25rem; padding: 0; }
-.connections-search-control:focus-within { outline: 2px solid var(--connections-focus); outline-offset: 2px; }
-.connections-search-control .studio-search-input:focus-visible { outline: none; }
 .connections-shell button:not(.studio-button),
 .connections-modal button,
 .connection-picker-editor button,
@@ -99,13 +59,10 @@
 .connections-shell :focus-visible,
 .connections-modal :focus-visible,
 .connection-picker-editor :focus-visible { outline: 2px solid var(--connections-focus); outline-offset: 2px; }
-.connections-table-wrap { position: relative; overflow-x: auto; }
-.connections-table { width: 100%; border-collapse: collapse; text-align: left; }
+.connections-table { width: 100%; text-align: left; }
 .connections-table th,
-.connections-table td { padding: 1rem 1.25rem; vertical-align: middle; }
-.connections-table th { background: var(--studio-material-panel-bg-soft); color: var(--connections-text-muted); font-size: var(--studio-label-size); font-weight: 600; white-space: nowrap; }
-.connections-table tbody tr + tr { border-top: 1px solid var(--connections-border); }
-.connections-table tbody tr:hover { background: var(--studio-material-hover-bg); }
+.connections-table td { vertical-align: middle; }
+.connections-table th { white-space: nowrap; }
 .connections-table th:last-child,
 .connections-table td:last-child { text-align: right; }
 .connections-name { display: flex; align-items: center; gap: 0.75rem; min-width: 12rem; }
@@ -146,9 +103,7 @@
 .connections-date { font-size: var(--studio-label-size); white-space: nowrap; }
 .connections-shell button.connections-details-action { white-space: nowrap; }
 .connections-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-.connections-table td.connections-empty-cell { padding: 3rem 1rem; text-align: center; }
-.connections-empty { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; }
-.connections-empty-icon { color: var(--connections-text-muted); }
+.connections-table td.connections-empty-cell { padding: 0; text-align: center; }
 .connections-empty p { margin: 0; color: var(--connections-text-muted); }
 .connections-limit,
 .connections-load-error { margin: 1rem 1.25rem; font-size: var(--studio-label-size); color: var(--connections-text-muted); overflow-wrap: anywhere; }
@@ -405,29 +360,15 @@
 .connections-create-section { display: grid; gap: 1rem; padding-top: 1.25rem; border-top: 1px solid var(--connections-border); }
 .connections-create-section-empty { color: var(--connections-text-muted); }
 @media (max-width: 48rem) {
-  .connections-shell { margin: 0.75rem; }
-  .connections-header { align-items: flex-start; }
-  .connections-header, .connections-toolbar { padding: 1rem; }
-  .connections-toolbar { align-items: stretch; }
   .connections-search { flex-basis: 100%; max-width: none; }
 }
 @media (max-width: 40rem) {
-  .connections-header { flex-direction: column; gap: 0.5rem; }
-  .connections-header-actions { width: 100%; display: grid; gap: 12px; }
-  .connections-page-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
   .connections-summary, .connections-create-fields { grid-template-columns: minmax(0, 1fr); }
   .connections-create-header, .connections-create-content, .connections-create-actions, .connections-dialog-body, .connections-dialog-header { padding: var(--spacing-lg); }
   .connections-dialog-footer { padding: 1rem; }
-  .connections-table th, .connections-table td { padding: 0.75rem; }
 }
 
 @media (max-width: 40rem) {
-  .connections-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .connections-table tbody { display: block; }
-  .connections-table tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; padding: 1rem; }
-  .connections-table td { min-width: 0; padding: 0; overflow-wrap: anywhere; }
-  .connections-table td:first-child, .connections-table td:last-child { grid-column: 1 / -1; text-align: left; }
-  .connections-table td[data-label]::before { display: block; content: attr(data-label); color: var(--connections-text-muted); font-size: var(--studio-label-size); margin-bottom: 0.35rem; }
   .connections-name { min-width: 0; }
   .connections-date, .connection-status { white-space: normal; }
 }
@@ -438,3 +379,5 @@
 .connections-create-dialog .studio-status-pill[data-tone="accent"] {
   color: var(--studio-text);
 }
+
+.connections-search-control { flex: 1; min-width: 0; }

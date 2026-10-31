@@ -1,3 +1,4 @@
+import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -280,16 +281,9 @@ export function ActivityUpgradeWorkbenchPage({
   ) ?? null;
   const complete = Boolean(plan && normalizePlanStatus(plan.status) === "Applied" && currentPlanResult?.receiptId);
 
-  return <main className="ad-page au-page" aria-labelledby="activity-upgrade-title">
+  return <main className="studio-page ad-page au-page" aria-labelledby="activity-upgrade-title">
     <StudioLink className="ad-back" href="/workflows/activity-definitions" navigateToStudioPath={navigateToStudioPath}><ArrowLeft size={16} aria-hidden /> Activity Definitions</StudioLink>
-    <header className="ad-page-header">
-      <div>
-        <span className="ad-kicker">Activity Definition maintenance</span>
-        <h1 id="activity-upgrade-title">Staged dependency upgrades</h1>
-        <p>Choose explicit exact roots, review the backend's authoritative dependency closure, and apply one bottom-up atomic stage at a time.</p>
-      </div>
-      {plan ? <button type="button" onClick={() => void reloadPlan()} disabled={Boolean(busy)}><RefreshCw size={16} aria-hidden /> Confirm plan</button> : null}
-    </header>
+    <StudioPageHeader headingLevel={1} title={<>Staged dependency upgrades</>} titleId="activity-upgrade-title" description={<>Choose explicit exact roots, review the backend's authoritative dependency closure, and apply one bottom-up atomic stage at a time.</>} actions={<>{plan ? <StudioButton type="button" onClick={() => void reloadPlan()} disabled={Boolean(busy)}><RefreshCw size={16} aria-hidden /> Confirm plan</StudioButton> : null}</>} />
 
     <div className="au-scope-note" role="note">
       <strong>Broad planning is deliberate</strong>

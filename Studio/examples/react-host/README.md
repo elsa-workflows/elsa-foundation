@@ -39,27 +39,20 @@ npm install @elsa-workflows/studio-ui @elsa-workflows/studio-code-editor \
 ### CSS imports
 
 ```ts
-// 1. Provide your own LAYER-1 primitive tokens first (--background, --primary, ...).
-//    tokens.css aliases the semantic --studio-* layer ONTO these. See src/theme.css.
+// Public defaults/components first; consumer theme overrides afterward.
+import "@elsa-workflows/studio-ui/styles.css";
+import "@elsa-workflows/studio-code-editor/style.css";
 import "./theme.css";
-
-// 2. The semantic --studio-* token layer.
-import "@elsa-workflows/studio-ui/tokens.css";
 
 // 3. The workflow module's styles (only if you use @elsa-workflows/studio-workflows).
 import "@xyflow/react/dist/style.css";
 import "@elsa-workflows/studio-workflows/style.css";
 ```
 
-> **In-repo vs published:** inside this monorepo the published CSS *subpaths* above do not
-> resolve (the packages' on-disk `exports` map only `"."`), so `src/main.tsx` imports the same
-> source files by workspace-relative path with comments showing the external form. In your own
-> app you use the subpath imports exactly as written above.
-
-> **Component visual rules:** `@elsa-workflows/studio-ui` ships `tokens.css` (the token layer)
-> but **not** the per-component visual rules — in Elsa.Studio.Web those live in the host's own
-> stylesheet. This example supplies them in `src/studio-components.css` (a faithful copy keyed
-> off the `--studio-*` tokens) so the primitives look styled. Adapt them to your own design.
+The same CSS subpaths work in the workspace and from published packages. Import
+`@elsa-workflows/studio-ui/styles.css` once for token defaults and component styles,
+then your theme overrides. The editor stylesheet is exported as
+`@elsa-workflows/studio-code-editor/style.css`. No copied component CSS is needed.
 
 ## The stub module API
 

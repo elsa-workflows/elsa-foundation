@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { AlertCircle, Check, Package, Plus, Search } from "lucide-react";
 import { StudioHttpError, type StudioAgentRegistry, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier, OverflowMenu, StudioButton, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, OverflowMenu, StudioButton, type OverflowMenuItem, StudioPageHeader, StudioCollectionToolbar, StudioSearchInput } from "@elsa-workflows/studio-ui";
 import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition, workflowDefinitionFolderMovePath } from "../api/workflowDesign";
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails, WorkflowDefinitionSummary } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
@@ -496,17 +496,10 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
 
   return (
     <>
-      <header className="wf-definition-page-header" aria-labelledby="workflow-definitions-title">
-        <div>
-          <span className="wf-kicker">Workflows</span>
-          <h1 id="workflow-definitions-title">Workflow definitions</h1>
-          <p>Create and organize workflow definitions, then open a definition to edit its behavior.</p>
-        </div>
-        <div className="wf-definition-page-actions" role="group" aria-label="Workflow definition page actions">
+      <StudioPageHeader title="Workflow definitions" titleId="workflow-definitions-title" description="Create and organize workflow definitions, then open a definition to edit its behavior." actions={        <div className="studio-page-actions" role="group" aria-label="Workflow definition page actions">
           <StudioButton variant="primary" size="md" title="Create workflow" aria-label="Create workflow" onClick={openCreateDialog}><Plus size={15} /> Create workflow</StudioButton>
           <StudioButton ref={refreshButtonRef} variant="default" size="md" title="Refresh workflow definitions" aria-label="Refresh workflow definitions" onClick={retry}>Refresh</StudioButton>
-        </div>
-      </header>
+        </div>} />
       <div className="wf-definitions-list">
         <WorkflowFolderNavigation
           context={context}
@@ -520,18 +513,16 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
             Workflow folders are unavailable. Showing all workflows while preserving the requested folder context.
           </div>
         ) : null}
-        <div className="wf-toolbar">
-          <div className="wf-segmented" role="group" aria-label="Definition state">
+        <StudioCollectionToolbar>
+          <StudioSearchInput aria-label={searchLabel} value={search} onChange={event => changeSearch(event.target.value)} placeholder="Search definitions" />
+          <div className="studio-filter-group" role="group" aria-label="Definition state">
             <button type="button" className={listState === "active" ? "active" : ""} aria-pressed={listState === "active"} onClick={() => changeListState("active")}>Active</button>
             <button type="button" className={listState === "deleted" ? "active" : ""} aria-pressed={listState === "deleted"} onClick={() => changeListState("deleted")}>Deleted</button>
             <button type="button" className={listState === "all" ? "active" : ""} aria-pressed={listState === "all"} onClick={() => changeListState("all")}>All states</button>
           </div>
-          <label className="wf-search">
-            <Search size={15} />
-            <input aria-label={searchLabel} value={search} onChange={event => changeSearch(event.target.value)} placeholder="Search definitions" />
-          </label>
-          {effectiveFolderSelection !== "all" ? <button type="button" onClick={() => changeFolder("all")}>Search all workflows</button> : null}
-        </div>
+
+          {effectiveFolderSelection !== "all" ? <StudioButton onClick={() => changeFolder("all")}>Search all workflows</StudioButton> : null}
+        </StudioCollectionToolbar>
 
         {staleStatus ? <div className="wf-status-line wf-definition-refresh-status" role="status">{staleStatus}</div> : null}
         {displayState === "failed" && currentError ? (
@@ -540,8 +531,8 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
             title={errorTitle}
             action={(
               <div className="wf-definition-search-actions">
-                <button type="button" className="wf-link-button" onClick={retry}>Retry current search</button>
-                {page > 1 ? <button type="button" className="wf-link-button" onClick={() => rebase()}>Restart from first page</button> : null}
+                <StudioButton onClick={retry}>Retry current search</StudioButton>
+                {page > 1 ? <StudioButton onClick={() => rebase()}>Restart from first page</StudioButton> : null}
               </div>
             )}
           />
@@ -563,12 +554,12 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
             icon={<Package size={22} />}
             title={emptyTitle}
             description={emptyDescription}
-            action={<button type="button" className="wf-link-button" onClick={openCreateDialog}><Plus size={15} /> Create workflow</button>}
+            action={<StudioButton variant="primary" onClick={openCreateDialog}><Plus size={15} /> Create workflow</StudioButton>}
           />
         ) : null}
         {renderResultRows && definitions.length > 0 ? (
           <>
-            <div className="wf-definition-table-scroll" role="region" aria-label="Workflow definitions table" tabIndex={0}><div className="wf-grid wf-definition-grid" role="table" aria-label="Workflow definitions">
+            <div className="studio-table-container wf-definition-table-scroll" role="region" aria-label="Workflow definitions table" tabIndex={0}><div className="studio-collection-table wf-grid wf-definition-grid" role="table" aria-label="Workflow definitions">
               <div className="wf-grid-head" role="row">
                 <div className="wf-row-select" role="columnheader">
                   {isCurrentData ? (
