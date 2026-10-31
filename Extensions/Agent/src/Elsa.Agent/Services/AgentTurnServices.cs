@@ -155,7 +155,26 @@ internal sealed class DefaultAgentTurnOrchestrator(
             yield return Lifecycle(AgentStreamEventKind.ContextAdmitted, new AgentContextContribution(prepared.Context, prepared.Diagnostics));
 
             var receiptOnly = prepared.IsContinuation;
-            var guardedInvoker = new ProviderToolInvoker(toolInvoker, () => receiptOnly, async (invocation, result, dispatchToken) =>
+            var guardedInvoker = new ProviderToolInvoker(toolInvoker, () => receiptOnly, async (invocation, dispatchToken) =>
+            {
+                // Delegated SDK functions capture their initial context, and a host provider can
+                // request several calls in one batch. Neither snapshot admits a later operation.
+                var historical = await AuthorizeHistoryAsync(session, await sessions.ListMessagesAsync(sessionId, dispatchToken), dispatchToken);
+                if (historical is not null) return new(null, historical, true);
+                var admission = await AdmitAsync(session, source.Context, observedResults, false, false, dispatchToken);
+                if (!admission.Succeeded || admission.Value is null) return new(null, admission.Error, true);
+                prepared = prepared with { Context = admission.Value.Attachments, Diagnostics = admission.Value.Diagnostics };
+                var admittedTools = await GetAdmittedToolsAsync(session, prepared, dispatchToken);
+                var descriptor = admittedTools.FirstOrDefault(x => string.Equals(x.Descriptor.Name, invocation.ToolName, StringComparison.OrdinalIgnoreCase))?.Descriptor;
+                if (descriptor is null)
+                    return new(null, new("agent.tool.not_admitted", "This tool is not admitted for the current turn.", 403));
+                // An allowed projection can refresh evidence without authorizing this accepted
+                // turn to move to another resource or revision. Fresh intent must establish that.
+                if (TargetsChanged(descriptor.ModuleId, source.Context, prepared.Context)
+                    || TargetsChanged(descriptor.ModuleId, invocation.Context, prepared.Context))
+                    return new(null, new("agent.tool.context_changed", "The admitted resource context changed. Submit fresh context before another operation.", 409));
+                return new(invocation with { Context = prepared.Context }, null);
+            }, async (invocation, result, dispatchToken) =>
             {
                 // Record the real observation before attempting another disclosure. Cancellation,
                 // provider errors and an empty assistant response cannot erase its provenance.
@@ -378,8 +397,20 @@ internal sealed class DefaultAgentTurnOrchestrator(
             throw new AgentContributionException("The session store did not retain complete disclosure provenance for the observed outcome.");
     }
 
+    private static bool TargetsChanged(string moduleId, IReadOnlyCollection<AgentContextAttachment> original,
+        IReadOnlyCollection<AgentContextAttachment> current)
+    {
+        var before = original.Where(x => x.ModuleId == moduleId && x.Target is not null).Select(x => x.Target).ToArray();
+        var after = current.Where(x => x.ModuleId == moduleId && x.Target is not null).Select(x => x.Target).ToArray();
+        return before.Any(x => !after.Any(y => AgentInvocationIntegrity.SameTarget(x, y)))
+            || after.Any(x => !before.Any(y => AgentInvocationIntegrity.SameTarget(x, y)));
+    }
+
+    private sealed record ToolInvocationAdmission(AgentToolInvocation? Invocation, AgentError? Error, bool StopProvider = false);
+
     /// <summary>One foreground dispatch boundary shared by host-driven and delegated provider loops.</summary>
     private sealed class ProviderToolInvoker(IAgentToolInvoker inner, Func<bool> receiptOnly,
+        Func<AgentToolInvocation, CancellationToken, Task<ToolInvocationAdmission>> beforeDispatch,
         Func<AgentToolInvocation, AgentToolResult, CancellationToken, Task<AgentError?>> admit, Action<AgentError> stop) : IAgentToolInvoker
     {
         // The SDK may request concurrent calls. Serialize their effect/admission transitions; this
@@ -392,6 +423,17 @@ internal sealed class DefaultAgentTurnOrchestrator(
             try
             {
                 if (receiptOnly()) return AgentToolDispatch.Denied(new("agent.turn.receipt_only", "The observed effect is recorded; this continuation cannot acquire another tool operation.", 403));
+                ToolInvocationAdmission current;
+                try { current = await beforeDispatch(invocation, cancellationToken); }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+                catch (Exception) { current = new(null, new("agent.tool.admission_unavailable", "Current tool admission could not be established.", 503), true); }
+                if (current.Error is { } refusal)
+                {
+                    if (!current.StopProvider) return AgentToolDispatch.Denied(refusal);
+                    stop(refusal);
+                    throw new OperationCanceledException("Provider disclosure stopped before tool dispatch.", cancellationToken);
+                }
+                invocation = current.Invocation!;
                 var dispatch = await inner.DispatchAsync(invocation, policy, cancellationToken);
                 if (dispatch.Outcome == AgentToolDispatchOutcome.Executed && dispatch.Result is { } result)
                 {

@@ -62,13 +62,72 @@ describe("WeaverSurface", () => {
     api.agent.onPromptResult(result => results.push(result));
     api.agent.contextProviders.add({ id: "available", displayName: "Available context", surfaces: ["*"], sensitivity: "internal", order: 1, collect: async () => [{ id: "available", source: "Sample", label: "Available evidence", contentType: "sample", sensitivity: "internal", scope: "screen" }] });
     api.agent.contextProviders.add({ id: "broken", displayName: "Unavailable context", surfaces: ["*"], sensitivity: "internal", order: 2, required, collect: async () => { throw new Error("Source could not collect"); } });
-    const subscribeStream = ((_context, _url, emit) => { emit({ type: "message-completed", messageId: "msg_1" }); return { close() {} }; }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+    const subscribeStream = ((_context, _url, emit) => { emit({ type: "context-admitted", attachments: [], diagnostics: [] }); emit({ type: "message-completed", messageId: "msg_1" }); return { close() {} }; }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
     const { container, unmount } = render(<WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: `failure-${required}`, requestId: `failure-${required}`, message: "Inspect" }} />);
     try {
       await flushPromises();
       expect(client.sendMessage).toHaveBeenCalledTimes(required ? 0 : 1);
       expect(results).toEqual([expect.objectContaining({ requestId: `failure-${required}`, status: required ? "failed" : "completed" })]);
-      if (!required) expect(container.querySelector('[aria-label="Context limitations"]')?.textContent).toContain("broken");
+      expect(container.querySelector('[aria-label="Context limitations"]')?.textContent ?? "").toContain("broken");
+    } finally { unmount(); }
+  });
+
+  it.each(["agent.context.contributor_failed", "agent.context.deadline", "agent.context.budget_exceeded"])("retains local %s and acceptance limitations while replacing consecutive server projections and resetting a new request", async code => {
+    const api = readyApi(); const client = readyClient(); let collections = 0; let deliveries = 0;
+    api.agent.contextProviders.add({ id: "client-source", displayName: "Client source", surfaces: ["*"], sensitivity: "internal", collect: async () => ({ attachments: [], diagnostics: ++collections === 1 ? [{ contributorId: "client-source", code, message: `Local ${code}`, required: false }] : [] }) });
+    client.sendMessage = vi.fn<AgentClient["sendMessage"]>(async () => ({ messageId: "msg_1", status: "pending", streamUrl: "/stream", warnings: ++deliveries === 1 ? [{ code: "acceptance.limited", message: "Acceptance limitation", target: "admission-source" }] : [] }));
+    const streams: ((event: AgentStreamEvent) => void)[] = [];
+    const subscribeStream = ((_context, _url, emit) => { streams.push(emit); return { close() {} }; }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+    const element = (id: string) => <WeaverSurface api={api} surface={{ route: "/sample" }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id, requestId: id, message: id }} />;
+    const { container, rerender, unmount } = render(element("first-limitations"));
+    try {
+      await flushPromises();
+      const emit = streams[0];
+      flushSync(() => emit({ type: "context-admitted", attachments: [], diagnostics: [{ contributorId: "server-one", code: "server.one", message: "Obsolete server limitation", required: false }] }));
+      expect(container.textContent).toContain(`Local ${code}`);
+      expect(container.textContent).toContain("Acceptance limitation");
+      expect(container.textContent).toContain("Obsolete server limitation");
+      flushSync(() => emit({ type: "context-admitted", attachments: [], diagnostics: [{ contributorId: "server-two", code: "server.two", message: "Current server limitation", required: false }] }));
+      expect(container.textContent).toContain(`Local ${code}`);
+      expect(container.textContent).toContain("Acceptance limitation");
+      expect(container.textContent).toContain("Current server limitation");
+      expect(container.textContent).not.toContain("Obsolete server limitation");
+      flushSync(() => emit({ type: "context-admitted", attachments: [], diagnostics: [] }));
+      expect(container.textContent).toContain(`Local ${code}`);
+      expect(container.textContent).toContain("Acceptance limitation");
+      expect(container.textContent).not.toContain("Current server limitation");
+      flushSync(() => emit({ type: "message-completed", messageId: "msg_1" }));
+      rerender(element("fresh-limitations")); await flushPromises();
+      expect(container.querySelector('[aria-label="Context limitations"]')).toBeNull();
+      flushSync(() => emit({ type: "context-admitted", attachments: [], diagnostics: [{ contributorId: "stale", code: "stale", message: "Stale prior turn limitation", required: false }] }));
+      expect(container.querySelector('[aria-label="Context limitations"]')).toBeNull();
+      flushSync(() => streams[1]({ type: "context-admitted", attachments: [], diagnostics: [{ contributorId: "fresh", code: "fresh", message: "Fresh server limitation", required: false }] }));
+      expect(container.textContent).toContain("Fresh server limitation");
+      expect(container.textContent).not.toContain(`Local ${code}`);
+      expect(container.textContent).not.toContain("Acceptance limitation");
+    } finally { unmount(); }
+  });
+
+  it.each(["navigation", "error", "transport", "cancelled", "stop"])("clears request and server limitations on %s without allowing a late projection to restore them", async boundary => {
+    const api = readyApi(); const client = readyClient();
+    api.agent.contextProviders.add({ id: "client-source", displayName: "Client source", surfaces: ["*"], sensitivity: "internal", collect: async () => ({ attachments: [], diagnostics: [{ contributorId: "client-source", code: "client.partial", message: "Local limitation to clear", required: false }] }) });
+    client.sendMessage = vi.fn<AgentClient["sendMessage"]>(async () => ({ messageId: "msg_1", status: "pending", streamUrl: "/stream", warnings: [{ code: "acceptance.partial", message: "Acceptance limitation to clear" }] }));
+    let emit!: (event: AgentStreamEvent) => void;
+    let fail!: (error: Error) => void;
+    const subscribeStream = ((_context, _url, receive, rejected) => { emit = receive; fail = rejected; return { close() {} }; }) as typeof import("../../agent/agentStream").subscribeAgentSessionStream;
+    const element = (route: string) => <WeaverSurface api={api} surface={{ route }} variant="dock" client={client} subscribeStream={subscribeStream} incomingPrompt={{ id: "boundary-limitations", requestId: "boundary-limitations", message: "Inspect" }} />;
+    const { container, rerender, unmount } = render(element("/sample"));
+    try {
+      await flushPromises();
+      flushSync(() => emit({ type: "context-admitted", attachments: [], diagnostics: [{ contributorId: "server", code: "server.partial", message: "Server limitation to clear", required: false }] }));
+      if (boundary === "navigation") { rerender(element("/sample/other")); await flushPromises(); }
+      else if (boundary === "error") flushSync(() => emit({ type: "error", message: "Stream admission was refused." }));
+      else if (boundary === "transport") flushSync(() => fail(new Error("Stream transport was interrupted.")));
+      else if (boundary === "cancelled") flushSync(() => emit({ type: "turn-cancelled", turnId: "turn" }));
+      else flushSync(() => buttonByText(container, "Stop")!.click());
+      expect(container.querySelector('[aria-label="Context limitations"]')).toBeNull();
+      flushSync(() => emit({ type: "context-admitted", attachments: [], diagnostics: [{ contributorId: "late", code: "late", message: "Late limitation to exclude", required: false }] }));
+      expect(container.querySelector('[aria-label="Context limitations"]')).toBeNull();
     } finally { unmount(); }
   });
 

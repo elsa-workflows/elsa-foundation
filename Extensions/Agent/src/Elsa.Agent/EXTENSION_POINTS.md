@@ -128,6 +128,9 @@ an obsolete snapshot during receipt continuation, without changing the receipt o
 fresh read. Required authority failures block provider use. Source optionality never makes an
 unavailable disclosure gate permissive. Current host policy also governs original retained evidence,
 including history retained by a provider SDK, as well as the returned projection.
+Before each SDK callback or host batch operation, current admission and tools are rechecked. A
+projection that removes a scope cannot leave an older callback authorized. A changed owner resource
+identity or revision requires fresh intent rather than silently moving the accepted turn.
 
 `AgentContextOptions.SourceTimeout` defaults to10seconds and requires a positive finite supported
 timer interval. Backend descriptors default `Required=true`. Optional collection faults/deadlines
@@ -138,7 +141,10 @@ rejoin admission. These source boundaries do not shield unrelated Sequential eve
 
 The [owning feature](https://github.com/elsa-workflows/elsa-foundation/issues/3439) records runtime
 qualification and the [scoped contract changes](../../../../specs/1176-weaver-turn-context/contracts/context-lifecycle.md).
-The API additions are additive in shape, but an older contribution without disclosure support now
-fails closed before another provider disclosure. This is a deliberate pre-GA behavior change;
-module authors must add the source hook and explicit result link. This is not an announcement of a
-release or a frozen full Program contract.
+The shared API additions also introduce a deliberate pre-GA behavior change: an older contribution
+without disclosure support fails closed before another provider disclosure. Module authors must add
+the source hook and explicit result link, and custom session stores must retain journal provenance.
+The public workflow context provider additionally has a source/binary constructor break: direct
+consumers must rebuild and supply `IAgentSessionService` and `IAgentToolAuthorizer`, or resolve the
+provider through the supported workflow feature registration. See the scoped contract for the exact
+old/new signatures. This is not an announcement of a release or a frozen full Program contract.

@@ -62,3 +62,11 @@ All316Agent cases passed with zero skips after the result boundary, exact-source
 The integrated frontend at main a5d4 plus this feature passed710Hosting and2803Workflows cases with exact discovery reconciliation, supported Studio `pnpm typecheck`, frozen install and scoped lint (zero errors; six preexisting App warnings). Earlier raw standalone typecheck failures remain distinct invocations; the supported check is the current evidence.
 
 The package run must retain all38M1 cases and additionally pass four native authority-withdrawal cases through both actual adapters. No native fixed-source result is claimed by these component results. The branch is still under implementation/qualification; independent review and resulting-main gates remain mandatory.
+
+## First integrated package run and independent review
+
+The immutable `dd5d6d1a4` package run failed in the initial Copilot resource journey after 120 stages; it never completed the original 38 or additional 4 cases. The real backend trace showed `AgentSseJsonContext` lacked `AgentContextContribution` metadata, resetting the SSE stream after Started. A focused test reproduced the same serialization failure; registering the payload then passed the full 317-test Agent suite. This is a component repair, not native completion. The failed report/root is retained unchanged, both owned hosts exited 0 and their private runtime caches were empty.
+
+Independent round 1 identified three concrete findings: delegated callbacks reused captured scopes after a successful narrower module projection; ContextAdmitted erased current-request client limitations; and the compatibility note omitted the public workflow provider constructor break. Repairs require causal checks, full affected suites and a fresh immutable native run. Review/qualification remain open; no terminal status is claimed.
+
+The current-tool regression reproduced five failures and four passing controls across nine cases: Copilot and a host batch reused a withdrawn scope; all three provider shapes followed a changed target/revision. Rechecking module admission, the current tool set and the accepted resource binding before dispatch passed all nine, including the three same-target/edit-retained positive controls. These are deterministic actual-adapter/host-loop tests; package runtime qualification remains open.
