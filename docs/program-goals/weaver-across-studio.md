@@ -51,7 +51,10 @@ merged through #3497 and qualified on resulting main `ab46bc22a`. Its package-on
 separate-resource journeys establish the bounded minimum, with deterministic provider-protocol
 rather than live-provider evidence. M2–M5 remain open. [Context admission #3439](https://github.com/elsa-workflows/elsa-foundation/issues/3439)
 is the sole current implementation leaf; its [spec1176](../../specs/1176-weaver-turn-context/spec.md)
-retains all six acceptance areas and the module ownership boundary.
+retains all six acceptance areas and the module ownership boundary. Its implementation and
+package qualification are in [PR #3514](https://github.com/elsa-workflows/elsa-foundation/pull/3514);
+review, required checks and resulting-main evidence remain live delivery gates. The current
+inventory also includes workflow library folders, tags and saved views added on main during M2.
 
 ## Delivery plan
 

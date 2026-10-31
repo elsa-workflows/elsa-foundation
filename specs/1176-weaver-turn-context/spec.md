@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-31
 
-**Status**: In progress
+**Status**: Implemented
 
 **Input**: Program [#3428](https://github.com/elsa-workflows/elsa-foundation/issues/3428), M2 [#3431](https://github.com/elsa-workflows/elsa-foundation/issues/3431), feature [#3439](https://github.com/elsa-workflows/elsa-foundation/issues/3439). Carry authorized module context and tools through every turn while preserving the module ownership and delivery boundaries in the [Program charter](../../docs/program-goals/weaver-across-studio.md).
 
@@ -128,3 +128,18 @@ A module author contributes guidance, evidence and tools once. Users receive the
 - Time bounds are correctness/cancellation limits, not performance targets. Risk-based behavior tests and actual composed/package-consumer evidence are required.
 - Deterministic tests, actual-adapter protocol qualification and live-provider evidence remain separate. This slice does not authorize live-provider purchases, credentials, releases, deployment or publisher activation.
 - Demonstrated journeys determine the smallest required generic contracts; no universal resource schema or second orchestration engine is introduced.
+
+## Implementation and delivery record
+
+This is the implementation snapshot for [PR #3514](https://github.com/elsa-workflows/elsa-foundation/pull/3514). Per the repository transition rule, the terminal status becomes true when that implementation PR merges. The live [owning issue #3439](https://github.com/elsa-workflows/elsa-foundation/issues/3439) and PR retain final exact-head qualification, review, required CI and resulting-main gates; this snapshot does not mark the issue, M2 or Program Done.
+
+| Acceptance area | Implemented behavior and evidence |
+| --- | --- |
+| Request context, correlation and provenance | Current request surface, explicit attachments/source/correlation, backend-admitted evidence and generic metadata chips; Hosting tests cover denied/replaced/partial context and successive projections. |
+| Navigation and origin lifetimes | Fresh per-request collection and generation fencing; workflow native document tests prove selection/revision, retained controller/client changes, remounts, auth invalidation and Activity reactivation cannot revive old preparations. Ordinary edits and whole-change Undo retain their active origin. |
+| Current authority and policy | Owning source re-admission of context/history/results; exact result source and retained provenance in the existing session store; generic tool authority companion plus native workflow definition/folder read/manage decisions, including post-approval dispatch. Native endpoint/permission composition and supported package consumers supply distinct evidence. |
+| Guidance, redaction and detail bounds | Installed guidance remains distinguished from untrusted resource data; module-owned minimization and generic policy/redaction preserve native redaction-opacity controls. Detail tools remain bounded and owner-authorized. |
+| Required/optional outcomes and delivery | Configurable per-source deadlines, isolated optional diagnostics, required failure, cancellation/late-result fencing, transport snapshots and existing volume bounds. Current-request limitations survive server projection replacement; correlated same-tick delivery has explicit dispositions. |
+| Provider parity and extensibility | Both actual adapters retain the independent package context-to-tool-to-review-to-applied-result journey. Every immutable complete witness retains the original 38 case records and four added native authority-withdrawal cases; recognized negative controls remain recorded as Failed with their expected causes. No live-provider claim is inferred. |
+
+Whole-project component evidence includes 377 Agent and 233 workflow API cases, zero skips; 722 Hosting and 2,822 Workflows cases with exact discovery reconciliation; supported Studio typecheck and scoped lint; architecture/maps/locked restore. The current-source package report and final reviewed head are recorded on the live issue/PR. Earlier passed and failed runs remain separate.

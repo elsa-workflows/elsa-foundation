@@ -38,6 +38,10 @@ permission checks, tenant-scoped `IWorkflowDefinitionStore.FindByIdAsync` existe
 Management includes read visibility plus the typed management permission. Unexpected reader/store
 failures propagate; they never become permission grants.
 
+The startup validator captures the configuring collection's metadata only. Copied child-shell
+registrations rebind it to the child's collection, and repeated configuration retains one validator;
+an inherited application-wide `IServiceCollection` registration cannot hide a child duplicate.
+
 The built-in reader's preflight reads organization metadata only. A replacement details reader's
 compatibility default may call its complete `ReadAsync`. The definition GET honors the selected
 authorizer before returning details and preserves the existing reader's not-found response. This

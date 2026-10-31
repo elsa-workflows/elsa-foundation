@@ -198,8 +198,10 @@ public sealed class WorkflowAgentNativeAuthorityTests
         using var fixture = await Fixture.CreateAsync(services => services.AddSingleton<IWorkflowDefinitionAuthorizer>(new AllowOwner()));
         var registrations = fixture.Services.GetRequiredService<IServiceCollection>();
         var registration = Assert.Single(registrations, item => item.ServiceType == typeof(IStartupTask)
-            && item.ImplementationType?.Name == "WorkflowDefinitionAuthorizationStartupTask");
-        var startup = Assert.IsAssignableFrom<IStartupTask>(ActivatorUtilities.CreateInstance(fixture.Services, registration.ImplementationType!));
+            && (item.ImplementationInstance?.GetType().Name == "WorkflowDefinitionAuthorizationStartupTask"
+                || item.ImplementationType?.Name == "WorkflowDefinitionAuthorizationStartupTask"));
+        var startup = registration.ImplementationInstance is IStartupTask instance ? instance
+            : Assert.IsAssignableFrom<IStartupTask>(ActivatorUtilities.CreateInstance(fixture.Services, registration.ImplementationType!));
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => startup.ExecuteAsync(CancellationToken.None));
 

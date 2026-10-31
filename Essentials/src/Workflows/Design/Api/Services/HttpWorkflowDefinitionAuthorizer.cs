@@ -54,6 +54,8 @@ internal sealed class HttpWorkflowDefinitionAuthorizer(
 /// <summary>Rejects ambiguous owner authority before the shell accepts requests.</summary>
 internal sealed class WorkflowDefinitionAuthorizationStartupTask(IServiceCollection registrations) : Elsa.Tasks.Core.IStartupTask
 {
+    internal bool Owns(IServiceCollection collection) => ReferenceEquals(registrations, collection);
+
     public Task ExecuteAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
