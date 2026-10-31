@@ -50,7 +50,7 @@ public sealed class LegacyTimerAdmissionWorkbenchTests
             Assert.Empty(physical["queuedModelInputs"]!.AsArray());
             Assert.Empty(physical["sources"]!.AsArray());
             Assert.Empty(physical["model"]!["payload"]!["work"]!.AsArray());
-            var lateCancel = await host.PostAsync(path + "/cancel", new { requestId = "cancel-after-host-fault", reason = "supported terminal command" });
+            var lateCancel = await host.PostAsync(path + "/cancel", new { requestId = "cancel-after-host-fault", reason = "supported terminal command" }, HttpStatusCode.Conflict);
             Assert.Equal("Rejected", lateCancel["result"]!["status"]!.GetValue<string>());
             Assert.True(JsonNode.DeepEquals(recovered, await host.GetAsync(path)));
 
