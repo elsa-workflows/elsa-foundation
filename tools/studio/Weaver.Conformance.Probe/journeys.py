@@ -491,10 +491,20 @@ def _incompatible(runtime, records):
     installed, installed_record = runtime.native.membership(runtime.studio, "incompatible-active-membership", studio=True)
     require_installed_package(installed, package)
     registry, record = runtime.native.json(runtime.studio, "incompatible-registry", "/_elsa/module-management/registry")
-    module = next((item for item in registry["modules"] if item["id"] == runtime.witness["moduleId"]), None)
-    check(module is not None and module["version"] == package["version"] and module["requiredSdkVersion"] == "999.0.0" and module["requiredHostVersion"] == "*"
-          and module["compatibility"] == "incompatible" and module["status"] != "available", "Real unsupported SDK declaration was not the cause of native module refusal")
-    native_evidence = [bread, reconciled["receipt"], installed_record["receipt"], record["receipt"], *applied["evidence"],
+    bootstrap, manifest_record = runtime.native.json(runtime.studio, "incompatible-bootstrap-manifest", "/_elsa/studio/modules")
+    modules = [item for item in registry["modules"] if item["id"] == runtime.witness["moduleId"]]
+    declarations = [item for item in bootstrap["modules"] if item["id"] == runtime.witness["moduleId"]]
+    check(len(modules) == len(declarations) == 1, "Incompatible archive has no unique active native manifest/registry identity")
+    module, declaration = modules[0], declarations[0]
+    check(module.get("version") == declaration.get("version") == package["version"] and module.get("compatibility") == "incompatible"
+          and declaration.get("requiredSdkVersion") == "999.0.0" and declaration.get("requiredHostVersion") == "*"
+          and isinstance(bootstrap.get("sdkVersion"), str) and bootstrap["sdkVersion"] not in ("", "999.0.0"),
+          "Real unsupported SDK declaration was not the cause of module incompatibility")
+    check(same(module.get("manifest"), {key: declaration.get(key) for key in ("entry", "styles", "capabilities")}),
+          "Slim registry and full bootstrap manifest describe different module contributions")
+    # Management 'available' means manifest discovery; the browser loader owns
+    # SDK compatibility exclusion and the absence of loaded contributions below.
+    native_evidence = [bread, reconciled["receipt"], installed_record["receipt"], record["receipt"], manifest_record["receipt"], *applied["evidence"],
         runtime.save(runtime.output("incompatible-input"), "artifact", package)]
     class BrowserAndNativeRecords:
         def add(self, name, observation):
@@ -506,12 +516,13 @@ def _incompatible(runtime, records):
             require_installed_package(current, package)
             observation.update(ownerBefore=bref, ownerAfter=aref, nativeIncompatibleModule={
                 "packageId": package["id"], "version": package["version"], "sha256": package["sha256"],
-                "requiredSdkVersion": module["requiredSdkVersion"], "compatibility": module["compatibility"]})
+                "requiredSdkVersion": declaration["requiredSdkVersion"], "requiredHostVersion": declaration["requiredHostVersion"],
+                "actualSdkVersion": bootstrap["sdkVersion"], "discoveryStatus": module.get("status"), "compatibility": module["compatibility"]})
             observation["evidence"].extend([*native_evidence, aread, current_record["receipt"]])
             return records.add(name, observation)
     runtime.browser(BrowserAndNativeRecords(), "sdk-incompatible", "sdk-incompatible", extra={
         "ownerPath": HOME_PREFERENCES_PATH, "incompatibleModule": {"moduleId": runtime.witness["moduleId"],
-        "packageId": package["id"], "version": package["version"], "requiredSdkVersion": author["requiredSdkVersion"]}})
+        "packageId": package["id"], "version": package["version"], "requiredSdkVersion": declaration["requiredSdkVersion"]}})
     author["runtimeRejectionObserved"] = True
     runtime.run.save()
     runtime.native.feature(runtime.studio, "incompatible-feature-disable", runtime.witness["studioFeature"], enabled=False)

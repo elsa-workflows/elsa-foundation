@@ -1,17 +1,80 @@
 """Fail-closed coordinator boundaries; these tests are not runtime witness evidence."""
 from pathlib import Path
+import copy
 import json
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from agent_transport import Response, AgentTransportError
 from journey_runtime import expect_error, same, BASE_GRANTS, browser_inputs, JourneyRuntime
-from journeys import _unchanged, _seed_principals, qualify_distributions, _semantic_refusal, _remove
+from journeys import _unchanged, _seed_principals, qualify_distributions, _semantic_refusal, _remove, _incompatible
 
 
 class JourneyBoundariesTests(unittest.TestCase):
+    class BrowserObserved(Exception):
+        pass
+
+    def incompatible_runtime(self):
+        package = {"id": "Resource.Studio", "version": "1.0.1-incompatible", "sha256": "a" * 64}
+        manifest = {"id": "Resource", "version": package["version"], "requiredSdkVersion": "999.0.0", "requiredHostVersion": "*",
+                    "entry": "/module.js", "styles": ["/module.css"], "capabilities": ["test-resource"]}
+        # This is the actual slim management DTO shape: availability is server
+        # discovery and requirements belong only to the full bootstrap manifest.
+        module = {"id": manifest["id"], "version": package["version"], "status": "available", "compatibility": "incompatible",
+                  "manifest": {key: manifest[key] for key in ("entry", "styles", "capabilities")}}
+        registry, bootstrap = {"modules": [module]}, {"sdkVersion": "1.0.0", "hostVersion": "1.0.0", "modules": [manifest]}
+        native = SimpleNamespace(reconcile=Mock(return_value=({}, {"receipt": {"synthetic": "reconcile"}})),
+            feature=Mock(return_value={"evidence": []}), membership=Mock(return_value=(
+                {package["id"].lower(): {"id": package["id"], "version": package["version"], "installPath": "/synthetic/native"}}, {"receipt": {"synthetic": "membership"}})))
+        def read(_client, _name, path):
+            return copy.deepcopy(registry if path == "/_elsa/module-management/registry" else bootstrap), {"receipt": {"syntheticPath": path}}
+        native.json = Mock(side_effect=read)
+        runtime = SimpleNamespace(native=native, studio=object(), witness={"moduleId": "Resource", "studioFeature": "ResourceFeature"},
+            snapshot=Mock(return_value=({"revision": "r1", "value": {"unchanged": True}}, {}, {})),
+            run=SimpleNamespace(report={"authors": {"incompatibleStudio": {"requiredSdkVersion": "999.0.0", "packed": {"package": package}},
+                "studio": {"packed": {"package": {"version": "1.0.0"}}}}}, save=Mock()), output=Mock(return_value=Path("/synthetic")), save=Mock(return_value={}))
+        records = SimpleNamespace(add=Mock())
+        def browser(sink, name, journey, *, extra):
+            sink.add(name, {"status": "failed", "expectedFailureObserved": True, "actual": {"stage": "module-admission", "diagnostic": "incompatible"},
+                "observations": {"browserContributionsAbsent": True, "commonStudioUsable": True}, "evidence": []})
+            raise self.BrowserObserved()  # Stop before cleanup; no unit fixture represents a native archive.
+        runtime.browser = Mock(side_effect=browser)
+        return runtime, records, registry, bootstrap
+
+    def test_incompatible_uses_full_manifest_and_keeps_slim_discovery_status_distinct(self):
+        runtime, records, registry, bootstrap = self.incompatible_runtime()
+        with patch("journeys.select_native_archives", return_value=[]), patch("journeys.stage_native_archives"):
+            with self.assertRaises(self.BrowserObserved): _incompatible(runtime, records)
+        self.assertEqual(["/_elsa/module-management/registry", "/_elsa/studio/modules"], [call.args[2] for call in runtime.native.json.call_args_list])
+        observed = records.add.call_args.args[1]
+        self.assertEqual("999.0.0", observed["nativeIncompatibleModule"]["requiredSdkVersion"])
+        self.assertEqual("*", observed["nativeIncompatibleModule"]["requiredHostVersion"])
+        self.assertEqual("available", observed["nativeIncompatibleModule"]["discoveryStatus"])
+        self.assertEqual("incompatible", observed["nativeIncompatibleModule"]["compatibility"])
+        self.assertIn({"syntheticPath": "/_elsa/studio/modules"}, observed["evidence"])
+        self.assertEqual(1, runtime.native.feature.call_count)  # Browser must run before feature disable/removal.
+
+    def test_incompatible_refuses_wrong_declaration_identity_or_compatibility_before_browser(self):
+        for kind in ("missing-manifest", "duplicate-manifest", "version", "sdk", "actual-sdk-supported", "missing-sdk-declaration",
+                     "host", "compatible", "missing-registry", "entry"):
+            with self.subTest(kind=kind):
+                runtime, records, registry, bootstrap = self.incompatible_runtime()
+                if kind == "missing-manifest": bootstrap["modules"] = []
+                elif kind == "duplicate-manifest": bootstrap["modules"].append(copy.deepcopy(bootstrap["modules"][0]))
+                elif kind == "version": bootstrap["modules"][0]["version"] = "other-version"
+                elif kind == "sdk": bootstrap["modules"][0]["requiredSdkVersion"] = bootstrap["sdkVersion"]
+                elif kind == "actual-sdk-supported": bootstrap["sdkVersion"] = "999.0.0"
+                elif kind == "missing-sdk-declaration": del bootstrap["modules"][0]["requiredSdkVersion"]
+                elif kind == "host": bootstrap["modules"][0]["requiredHostVersion"] = "999.0.0"
+                elif kind == "compatible": registry["modules"][0]["compatibility"] = "compatible"
+                elif kind == "missing-registry": registry["modules"] = []
+                else: bootstrap["modules"][0]["entry"] = "/different-module.js"
+                with patch("journeys.select_native_archives", return_value=[]), patch("journeys.stage_native_archives"):
+                    with self.assertRaises(RuntimeError): _incompatible(runtime, records)
+                runtime.browser.assert_not_called(); records.add.assert_not_called()
+
     def test_changed_disable_and_reconcile_generations_cannot_mask_package_still_installed(self):
         package = {"id": "Resource.Package", "version": "1.2.3", "sha256": "a" * 64}
         inventory = {"resource.package": {"id": package["id"], "version": package["version"], "installPath": "/owned/native/resource"}}
