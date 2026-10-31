@@ -1,0 +1,13 @@
+{
+  "source": "e83fc58f6fa84a7cbeb72678729aa1b78c6b1ca9",
+  "arguments": [
+    "dotnet",
+    "/Users/sipke/.codex/worktrees/f236/elsa-foundation/tools/bpmn/NativeWorkDispatch/bin/Release/net10.0/NativeWorkDispatch.dll",
+    "--deliver-legacy-embedded-cancel",
+    "/tmp/elsa-2898-review8-closeout/actual-legacy-cancel-fixed/owned-root",
+    "bpmn-embedded:e705a3456fd038bcff55bf21094de655bd89bf8b395c96a9fe14deca2d2cb44d",
+    "bfb9b6eb-9413-407c-9a0e-99a072c70b65"
+  ],
+  "exitCode": 0,
+  "elapsedSeconds": 0.8235211372375488
+}
