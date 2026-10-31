@@ -76,7 +76,8 @@ public sealed class TemplateDesignUpgradeTests
             SameView(recoveredTemplate, await host.GetAsync(templateRoute));
             SameView(created, await host.GetAsync(createdRoute));
             await host.StopAsync();
-            Assert.Equal(originalHistory, await DesignHistoryAsync(host.DesignDatabase));
+            // The original cumulative template row stays untouched; the library delta appends its own row.
+            Assert.Equal(originalHistory.Append("20261031002424_Initial|10.0.10"), await DesignHistoryAsync(host.DesignDatabase));
             var snapshot = await host.SnapshotAsync("upgraded-runtime.sqlite.gz", "template-design-upgrade");
             var designSnapshot = await host.SnapshotAsync("upgraded-design.sqlite.gz", "template-design-upgrade", design: true);
             if (Environment.GetEnvironmentVariable("ELSA_BPMN_HOST_EVIDENCE_DIRECTORY") is { } evidence)
