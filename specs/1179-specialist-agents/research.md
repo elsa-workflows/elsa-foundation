@@ -329,3 +329,14 @@ explicit filesystem locking and the development journal. The fixture's shell con
 runtime services and its deterministic provider; normal startup must register the specialist alias.
 CShells and SQLite fixture versions derive from the archived producer's central pins. A new immutable
 run is required; this change is not yet a passed host-activation or package receipt.
+
+
+The `7239d56e6` package run activated CShells normally and passed both runtime journeys (including
+12 native checks). Its final assets inspection refused two transitive Design Core packages introduced
+by the fixture's optional Expressions implementation. No loaded Design assembly was observed, but
+that does not satisfy the stricter package-closure contract. Expressions is unnecessary for this
+literal-input profile: ordinary activity startup discovers String/JsonElement from the real facade
+and worker. The fixture removes that implementation, retains the closure guard, and adds explicit
+startup-type and single chat-assembly checks plus central-pin validation in assets inspection.
+The prior script exited with a closure failure while its report still said InProgress; the qualifier
+now finalizes all caught qualification exceptions as Failed. Earlier receipts remain untouched.

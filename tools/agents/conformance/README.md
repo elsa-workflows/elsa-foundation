@@ -21,8 +21,11 @@ runtime/storage. Its SQLite databases are disposed and deleted before the separa
 Only serialized placement material crosses that process boundary.
 
 The Runtime consumer activates the real CShells lifecycle, including Tasks, Events, Serialization,
-Expressions and the background feature dependencies, then resolves its scoped runtime services. It
+and the background feature dependencies, then resolves its scoped runtime services. It
 checks that ordinary startup registered the specialist alias without manually calling product tasks.
+Native activity startup also registers its declared business types, and the shared chat assembly and
+resolved shared dependency pins are checked. The optional Expressions implementation is unnecessary
+for this literal-input profile and would import Design packages, which the closure guard refuses.
 It composes the real facade/background worker and the separately packed model
 contribution. It checks the exact model/schema/instructions, native typed result, duplicate delivery,
 invalid-result refusal and disposal. Runtime package graphs and loaded assemblies must contain zero

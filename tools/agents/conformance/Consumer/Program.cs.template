@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 using CShells;
 using CShells.Configuration;
 using CShells.DependencyInjection;
@@ -12,14 +14,12 @@ using Elsa.Activities.Runtime.Services;
 using Elsa.Agent.Specialists;
 using Elsa.Agent.Specialists.Core.Models;
 using Elsa.Events;
-using Elsa.Expressions;
 using Elsa.Locking.FileSystem;
 using Elsa.Tasks;
 using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Secrets.Features;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
-using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
@@ -50,7 +50,7 @@ services.AddCShells(builder => builder.WithAssemblies(typeof(PackageHostFeature)
         typeof(SpecialistsRuntimeFeature).Assembly, typeof(ActivitiesRuntimeFeature).Assembly,
         typeof(SerializationFeature).Assembly, typeof(SecretsFeature).Assembly, typeof(EventsFeature).Assembly,
         typeof(TasksFeature).Assembly, typeof(WorkflowsRuntimeResumptionFeature).Assembly,
-        typeof(FileSystemLockingFeature).Assembly, typeof(ExpressionsFeature).Assembly)
+        typeof(FileSystemLockingFeature).Assembly)
     .AddShell("specialist-package", shell => shell.WithFeature<PackageHostFeature>()
         .WithFeature<BackgroundActivitiesFeature>(feature => feature.RunWorkers = false)
         .WithFeature<SecretsFeature>(feature => feature.EncryptionKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)))
@@ -59,7 +59,12 @@ await using var host = services.BuildServiceProvider();
 var activated = await host.GetRequiredService<IShellRegistry>().GetOrActivateAsync("specialist-package");
 await using var executionScope = activated.BeginScope();
 var provider = executionScope.ServiceProvider;
-Check(provider.GetRequiredService<IWellKnownTypeRegistry>().TryGetType(SpecialistRuntimeIds.FacadeCapability, out _), "CShells startup registered the specialist runtime alias");
+var types = provider.GetRequiredService<IWellKnownTypeRegistry>();
+Check(types.TryGetType(SpecialistRuntimeIds.FacadeCapability, out _), "CShells startup registered the specialist runtime alias");
+Check(types.TryGetType("String", out var stringType) && stringType == typeof(string) &&
+    types.TryGetType("System.Text.Json.JsonElement", out var jsonType) && jsonType == typeof(JsonElement), "ordinary activity startup registered the native business types");
+Check(AppDomain.CurrentDomain.GetAssemblies().Count(x => x.GetName().Name == "Microsoft.Extensions.AI.Abstractions") == 1,
+    "model and runtime share one chat abstraction assembly");
 var observations = provider.GetRequiredService<ModelObservations>();
 observations.InvalidResult = mode == "invalid-result";
 var identity = new WorkflowExecutableIdentity("packaged-editorial-" + mode, "workflow", "workflow-v1", "1.0.0", node.DescriptorPayload.GetProperty("templateHash").GetString()!);
@@ -101,10 +106,11 @@ else
 }
 Check(!AppDomain.CurrentDomain.GetAssemblies().Any(x => x.GetName().Name is { } name && name.StartsWith("Elsa.", StringComparison.Ordinal) &&
     (name.Contains(".Design", StringComparison.Ordinal) || name.Contains(".Publishing", StringComparison.Ordinal))), "runtime loaded zero Design or Publishing assemblies");
-Console.WriteLine(JsonSerializer.Serialize(new { mode, checks, passed = checks.Count, liveModel = false, journalProfile = "process-local-development", workflowStatus = workflow?.Status.ToString() }));
+Console.WriteLine(JsonSerializer.Serialize(new { mode, checks, passed = checks.Count, liveModel = false, journalProfile = "process-local-development", workflowStatus = workflow?.Status.ToString(),
+    mafAssembly = typeof(ChatClientAgent).Assembly.FullName, chatAbstractionsAssembly = typeof(IChatClient).Assembly.FullName }));
 
 
-[ShellFeature("SpecialistPackageHost", DependsOn = new object[] { "SpecialistsInMemoryJournal", "Events", "Tasks", "FileSystemDistributedLocking", "Expressions" })]
+[ShellFeature("SpecialistPackageHost", DependsOn = new object[] { "SpecialistsInMemoryJournal", "Events", "Tasks", "FileSystemDistributedLocking" })]
 public sealed class PackageHostFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
