@@ -44,6 +44,9 @@ public sealed class RuntimeCoalescingSession
     private readonly HashSet<string> _activityTombstones = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DurableValueState> _durableValueUpserts = new(StringComparer.Ordinal);
     private readonly HashSet<string> _durableValueTombstones = new(StringComparer.Ordinal);
+    private RuntimeCoalescingOrderedView<ActivityExecutionState>? _orderedActivities;
+    private Dictionary<string, RuntimeCoalescingOrderedView<ActivityExecutionState>>? _activitiesByParent;
+    private RuntimeCoalescingOrderedView<DurableValueState>? _orderedDurableValues;
     private readonly Dictionary<string, ActivityExecutionInspectionProjection> _inspectionUpserts = new(StringComparer.Ordinal);
     private readonly Dictionary<string, WorkflowDispatchRecord> _workflowDispatchUpserts = new(StringComparer.Ordinal);
 
@@ -425,6 +428,16 @@ public sealed class RuntimeCoalescingSession
 
     private void ApplyToOverlay(RuntimeCheckpointStateChangeSet changes, bool includeOutbox)
     {
+        // Only the session-owned delta is indexed. Durable pages still pass through their existing
+        // read/authorization path, and every overlay mutation (including cap flushes) drops the view.
+        if (changes.ActivityExecutions.Count > 0)
+        {
+            _orderedActivities = null;
+            _activitiesByParent = null;
+        }
+        if (changes.DurableValues.Count > 0)
+            _orderedDurableValues = null;
+
         if (changes.WorkflowExecution is { } workflowExecutionChange)
             _workflowExecution = workflowExecutionChange.State;
 
@@ -562,6 +575,23 @@ public sealed class RuntimeCoalescingSession
 
     /// <summary>Returns a stable snapshot of activity upserts currently visible through this session.</summary>
     public IReadOnlyCollection<ActivityExecutionState> GetActivityUpserts() => _activityUpserts.Values.ToArray();
+
+    internal ActivityExecutionState? NextActivityUpsert(string? after) =>
+        (_orderedActivities ??= new(_activityUpserts.Values, static state => state.Execution.ActivityExecutionId)).Next(after);
+
+    internal ActivityExecutionState? NextActivityUpsertByParent(string parentId, string? after)
+    {
+        _activitiesByParent ??= _activityUpserts.Values
+            .Where(state => state.ParentActivityExecutionId is not null)
+            .GroupBy(state => state.ParentActivityExecutionId!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key,
+                group => new RuntimeCoalescingOrderedView<ActivityExecutionState>(group, static state => state.Execution.ActivityExecutionId),
+                StringComparer.Ordinal);
+        return _activitiesByParent.GetValueOrDefault(parentId)?.Next(after);
+    }
+
+    internal DurableValueState? NextDurableValueUpsert(string? after) =>
+        (_orderedDurableValues ??= new(_durableValueUpserts.Values, static state => state.DurableValueId)).Next(after);
 
     /// <summary>Returns a stable snapshot of activity identities deleted by this session.</summary>
     public IReadOnlyCollection<string> GetActivityTombstones() => _activityTombstones.ToArray();

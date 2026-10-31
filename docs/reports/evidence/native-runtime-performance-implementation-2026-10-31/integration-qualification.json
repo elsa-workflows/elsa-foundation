@@ -1,0 +1,844 @@
+{
+  "codeHead": "74d22c11432b1d5495803031b36a7d7406524ff5",
+  "integratedMain": "0870a6740dac5e4e78d7b72a15e1dcb0177a4e5a",
+  "testAccounting": [
+    {
+      "name": "runtime",
+      "project": "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+      "listed": 3062,
+      "counts": {
+        "total": "3073",
+        "executed": "3073",
+        "passed": "3073",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "directory": ".",
+      "expandedTheories": {
+        "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_refused_commit_faults_the_execution_with_only_its_state_and_an_incident": 2,
+        "Elsa.Workflows.Runtime.Tests.CheckpointRuleViolationWorkflowFaulterTests.A_failure_that_is_not_a_rule_refusal_leaves_the_execution_running": 4,
+        "Elsa.Workflows.Runtime.Tests.ValueEnvelopeEncryptionPredicateTests.Only_a_present_value_under_a_policy_that_requires_encryption_matches": 8
+      },
+      "missing": [],
+      "unexpected": []
+    },
+    {
+      "name": "provider-drift",
+      "project": "Essentials/tests/Persistence/EntityFramework/BindingDriftTests/Elsa.Persistence.EntityFramework.BindingDriftTests.csproj",
+      "listed": 23,
+      "counts": {
+        "total": "23",
+        "executed": "23",
+        "passed": "23",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "directory": ".",
+      "expandedTheories": {},
+      "missing": [],
+      "unexpected": []
+    },
+    {
+      "name": "activities-runtime",
+      "project": "Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj",
+      "listed": 720,
+      "counts": {
+        "total": "722",
+        "executed": "722",
+        "passed": "722",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "directory": ".",
+      "expandedTheories": {
+        "Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_context_without_one_partition_refuses_before_the_resolver_is_called": 2,
+        "Elsa.Activities.Runtime.Tests.ClrActivityActivatorTests.A_resolver_that_throws_while_the_activation_is_live_reports_ResolverFailed_without_what_it_threw": 2
+      },
+      "missing": [],
+      "unexpected": []
+    },
+    {
+      "name": "sequence",
+      "project": "Essentials/tests/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj",
+      "listed": 22,
+      "counts": {
+        "total": "22",
+        "executed": "22",
+        "passed": "22",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "directory": ".",
+      "expandedTheories": {},
+      "missing": [],
+      "unexpected": []
+    },
+    {
+      "name": "control-flow",
+      "project": "Essentials/tests/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj",
+      "listed": 254,
+      "counts": {
+        "total": "254",
+        "executed": "254",
+        "passed": "254",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "directory": ".",
+      "expandedTheories": {},
+      "missing": [],
+      "unexpected": []
+    },
+    {
+      "name": "flowchart",
+      "project": "Essentials/tests/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj",
+      "listed": 109,
+      "counts": {
+        "total": "121",
+        "executed": "121",
+        "passed": "121",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "directory": ".",
+      "expandedTheories": {
+        "Elsa.Activities.Flowchart.Tests.FlowchartRoutingTableDifferentialTests.IndexOutboundRouting_MatchesLinearScan_ForEverySourceAndOutcomeSet": 7,
+        "Elsa.Activities.Flowchart.Tests.FlowchartRoutingTableDifferentialTests.IndexInboundRouting_MatchesLinearScan_ForEveryTarget": 7
+      },
+      "missing": [],
+      "unexpected": []
+    },
+    {
+      "name": "persistence-ef",
+      "project": "Essentials/tests/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj",
+      "listed": 691,
+      "counts": {
+        "total": "711",
+        "executed": "710",
+        "passed": "710",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "directory": ".",
+      "expandedTheories": {
+        "Elsa.Persistence.EntityFramework.Tests.EfHostConfigurationReaderTests.A_value_that_does_not_parse_is_refused_naming_its_key": 3,
+        "Elsa.Persistence.EntityFramework.Tests.EfHostConfigurationReaderTests.Refusals_are_raised_with_the_exception_the_reader_was_built_with": 4,
+        "Elsa.Persistence.EntityFramework.Tests.EfSchemaChainTests.A_read_that_is_not_its_tables_declared_content_columns_is_refused_at_every_version": 3,
+        "Elsa.Persistence.EntityFramework.Tests.EfSchemaChainTests.A_step_that_does_not_return_the_rows_declared_columns_reports_corruption": 5,
+        "Elsa.Persistence.EntityFramework.Tests.EfSchemaChainTests.A_malformed_chain_is_refused_at_registration": 10
+      },
+      "missing": [],
+      "unexpected": []
+    },
+    {
+      "name": "runtime-ef",
+      "project": "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+      "listed": 1729,
+      "counts": {
+        "total": "1729",
+        "executed": "1729",
+        "passed": "1729",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "directory": ".",
+      "expandedTheories": {},
+      "missing": [],
+      "unexpected": []
+    },
+    {
+      "name": "publishing",
+      "project": "Essentials/tests/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj",
+      "listed": 61,
+      "counts": {
+        "total": "61",
+        "executed": "61",
+        "passed": "61",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "directory": ".",
+      "expandedTheories": {},
+      "missing": [],
+      "unexpected": []
+    },
+    {
+      "name": "publishing-api",
+      "project": "Essentials/tests/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj",
+      "listed": 889,
+      "counts": {
+        "total": "909",
+        "executed": "909",
+        "passed": "909",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "directory": ".",
+      "expandedTheories": {
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_ValidPublicationIndexesEveryCompleteBinding": 4,
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.FirstPartyTriggerMatrix_InvalidPublicationPreservesSeededRegistration": 4,
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.LegacyActionCatalogRow_RepublishProjectsTriggerAndPreservesPriorRegistrationOnFailure": 4,
+        "Elsa.Workflows.Publishing.Api.Tests.PublishWorkflowTriggerIndexingTests.A_publish_time_literal_reader_refuses_a_secret_read_with_the_fixed_code": 10,
+        "Elsa.Workflows.Publishing.Api.Tests.WorkflowExecutableCompilerTests.A_literal_or_expression_on_a_credential_input_is_refused_by_the_credential_literal_rule_ahead_of_VF_ACT_011": 3
+      },
+      "missing": [],
+      "unexpected": []
+    },
+    {
+      "name": "architecture",
+      "project": "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+      "listed": 583,
+      "counts": {
+        "total": "592",
+        "executed": "592",
+        "passed": "592",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      },
+      "directory": ".",
+      "expandedTheories": {
+        "Elsa.Architecture.Tests.DomainApiCapabilityRegistrationTests.Canonical_domain_api_depends_on_capability_aggregation_and_registers_one_stable_declaration": 5,
+        "Elsa.Architecture.Tests.OpenApiLifetimeBoundaryTests.Every_collectible_api_explorer_artifact_is_rejected": 6
+      },
+      "missing": [],
+      "unexpected": []
+    }
+  ],
+  "validation": [
+    {
+      "name": "runtime",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj",
+        "--logger",
+        "trx;LogFileName=runtime.trx",
+        "--results-directory",
+        "/private/tmp/elsa-perf-delivery-3545"
+      ],
+      "exit": 0,
+      "seconds": 15.167542934417725,
+      "counts": {
+        "total": "3073",
+        "executed": "3073",
+        "passed": "3073",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "name": "provider-drift",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Persistence/EntityFramework/BindingDriftTests/Elsa.Persistence.EntityFramework.BindingDriftTests.csproj",
+        "--logger",
+        "trx;LogFileName=provider-drift.trx",
+        "--results-directory",
+        "/private/tmp/elsa-perf-delivery-3545"
+      ],
+      "exit": 0,
+      "seconds": 3.1392629146575928,
+      "counts": {
+        "total": "23",
+        "executed": "23",
+        "passed": "23",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "name": "activities-runtime",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Activities/Runtime/Tests/Elsa.Activities.Runtime.Tests.csproj",
+        "--logger",
+        "trx;LogFileName=activities-runtime.trx",
+        "--results-directory",
+        "/private/tmp/elsa-perf-delivery-3545"
+      ],
+      "exit": 0,
+      "seconds": 11.587002038955688,
+      "counts": {
+        "total": "722",
+        "executed": "722",
+        "passed": "722",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "name": "sequence",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Activities/Sequence/Tests/Elsa.Activities.Sequence.Tests.csproj",
+        "--logger",
+        "trx;LogFileName=sequence.trx",
+        "--results-directory",
+        "/private/tmp/elsa-perf-delivery-3545"
+      ],
+      "exit": 0,
+      "seconds": 11.623558282852173,
+      "counts": {
+        "total": "22",
+        "executed": "22",
+        "passed": "22",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "name": "control-flow",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj",
+        "--logger",
+        "trx;LogFileName=control-flow.trx",
+        "--results-directory",
+        "/private/tmp/elsa-perf-delivery-3545"
+      ],
+      "exit": 0,
+      "seconds": 9.143558979034424,
+      "counts": {
+        "total": "254",
+        "executed": "254",
+        "passed": "254",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "name": "flowchart",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj",
+        "--logger",
+        "trx;LogFileName=flowchart.trx",
+        "--results-directory",
+        "/private/tmp/elsa-perf-delivery-3545"
+      ],
+      "exit": 0,
+      "seconds": 7.193154811859131,
+      "counts": {
+        "total": "121",
+        "executed": "121",
+        "passed": "121",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "name": "persistence-ef",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Persistence/EntityFramework/Tests/Elsa.Persistence.EntityFramework.Tests.csproj",
+        "--logger",
+        "trx;LogFileName=persistence-ef.trx",
+        "--results-directory",
+        "/private/tmp/elsa-perf-delivery-3545"
+      ],
+      "exit": 0,
+      "seconds": 10.294343948364258,
+      "counts": {
+        "total": "711",
+        "executed": "710",
+        "passed": "710",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "name": "runtime-ef",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj",
+        "--logger",
+        "trx;LogFileName=runtime-ef.trx",
+        "--results-directory",
+        "/private/tmp/elsa-perf-delivery-3545"
+      ],
+      "exit": 0,
+      "seconds": 127.22490310668945,
+      "counts": {
+        "total": "1729",
+        "executed": "1729",
+        "passed": "1729",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "name": "publishing",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Publishing/Tests/Elsa.Workflows.Publishing.Tests.csproj",
+        "--logger",
+        "trx;LogFileName=publishing.trx",
+        "--results-directory",
+        "/private/tmp/elsa-perf-delivery-3545"
+      ],
+      "exit": 0,
+      "seconds": 9.162651777267456,
+      "counts": {
+        "total": "61",
+        "executed": "61",
+        "passed": "61",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "name": "publishing-api",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj",
+        "--logger",
+        "trx;LogFileName=publishing-api.trx",
+        "--results-directory",
+        "/private/tmp/elsa-perf-delivery-3545"
+      ],
+      "exit": 0,
+      "seconds": 13.011635065078735,
+      "counts": {
+        "total": "909",
+        "executed": "909",
+        "passed": "909",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    },
+    {
+      "name": "workbench-build",
+      "command": [
+        "dotnet",
+        "build",
+        "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj"
+      ],
+      "exit": 0,
+      "seconds": 6.693965911865234
+    },
+    {
+      "name": "probe-build",
+      "command": [
+        "dotnet",
+        "build",
+        "/private/tmp/elsa-native-perf-20261031/Perf.csproj",
+        "-c",
+        "Release",
+        "-o",
+        "/private/tmp/elsa-perf-delivery-3545/probe-bin"
+      ],
+      "exit": 0,
+      "seconds": 4.813950061798096
+    },
+    {
+      "name": "maps",
+      "command": [
+        "dotnet",
+        "run",
+        "--project",
+        "tools/maps/Elsa.Maps.Generator",
+        "--",
+        "check"
+      ],
+      "exit": 0,
+      "seconds": 1.7450718879699707
+    },
+    {
+      "name": "architecture-restore",
+      "command": [
+        "bash",
+        "tools/architecture/restore-ci-project-graph.sh"
+      ],
+      "exit": 0,
+      "seconds": 15.556719064712524
+    },
+    {
+      "name": "architecture",
+      "command": [
+        "dotnet",
+        "test",
+        "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+        "--logger",
+        "trx;LogFileName=architecture.trx",
+        "--results-directory",
+        "/private/tmp/elsa-perf-delivery-3545"
+      ],
+      "exit": 0,
+      "seconds": 57.913625955581665,
+      "counts": {
+        "total": "592",
+        "executed": "592",
+        "passed": "592",
+        "failed": "0",
+        "error": "0",
+        "timeout": "0",
+        "aborted": "0",
+        "inconclusive": "0",
+        "passedButRunAborted": "0",
+        "notRunnable": "0",
+        "notExecuted": "0",
+        "disconnected": "0",
+        "warning": "0",
+        "completed": "0",
+        "inProgress": "0",
+        "pending": "0"
+      }
+    }
+  ],
+  "postgresSmoke": {
+    "codeHead": "74d22c11432b1d5495803031b36a7d7406524ff5",
+    "purpose": "Correctness and accounting only; timings are not a controlled comparison",
+    "results": [
+      {
+        "mode": "balanced",
+        "leaves": 1,
+        "correct": true,
+        "measuredCompletions": 23,
+        "totalCompletions": 45,
+        "commands": 45,
+        "checkpoints": 1,
+        "transactions": 2
+      },
+      {
+        "mode": "balanced",
+        "leaves": 10,
+        "correct": true,
+        "measuredCompletions": 16,
+        "totalCompletions": 30,
+        "commands": 65,
+        "checkpoints": 1,
+        "transactions": 2
+      },
+      {
+        "mode": "balanced",
+        "leaves": 100,
+        "correct": true,
+        "measuredCompletions": 5,
+        "totalCompletions": 10,
+        "commands": 290,
+        "checkpoints": 3,
+        "transactions": 7
+      },
+      {
+        "mode": "durable",
+        "leaves": 10,
+        "correct": true,
+        "measuredCompletions": 5,
+        "totalCompletions": 10,
+        "commands": 275,
+        "checkpoints": 12,
+        "transactions": 25
+      }
+    ]
+  },
+  "cleanup": {
+    "container": "elsa-perf-delivery-3545-pg",
+    "removed": true,
+    "anonymousVolumesRemoved": true
+  },
+  "e2e": {
+    "json-bindings": {
+      "name": "json-bindings",
+      "exit": 0,
+      "seconds": 11.683396100997925,
+      "log": "  [server] started owned process 46441 for http://127.0.0.1:53911 (content root /var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-json-activity-bindings-b51341ee7e7d49009d0c5be9e5299f0a)\n  [server] owned process 46441 ready on 53911\n[login] health : Healthy\n[login] auth   : authenticated as Administrator\nPASS object: HTTP 200, exact body preserved\nPASS array: HTTP 200, exact body preserved\nPASS boolean: HTTP 200, exact body preserved\nPASS text: HTTP 200, exact body preserved\nPASS null: HTTP 200, exact body preserved\nPASS default: HTTP 200, exact body preserved\nPASS json-array-default: HTTP 200, exact body preserved\nPASS typed-object: HTTP 200, exact body preserved\nPASS typed-string: HTTP 200, exact body preserved\nPASS typed-array: HTTP 200, exact body preserved\nSUCCESS - all JSON capture/default/typed-variable bindings passed\n  [server] stopping owned process 46441\n"
+    },
+    "variable-loop": {
+      "name": "variable-loop",
+      "exit": 0,
+      "seconds": 11.462759017944336,
+      "log": "  [server] started owned process 46585 for http://127.0.0.1:53958 (content root /var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-set-variable-3316-069ca9f60d96442fbddd222b3256cb35)\n  [server] owned process 46585 ready on 53958\n[login] health : Healthy\n[login] auth   : authenticated as Administrator\n  instance   : status=Completed  activities=34  incidents=0\n    - root           [Completed] Sequence -> Done\n    - initialize     [Completed] set -> Done\n    - copy           [Completed] set -> Done\n    - loop           [Completed] While -> Done\n    - body           [Completed] Sequence -> Done\n    - increment      [Completed] set -> Done\n    - print          [Completed] WriteLine -> Done\n    - body           [Completed] Sequence -> Done\n    - increment      [Completed] set -> Done\n    - print          [Completed] WriteLine -> Done\n    - body           [Completed] Sequence -> Done\n    - increment      [Completed] set -> Done\n    - print          [Completed] WriteLine -> Done\n    - body           [Completed] Sequence -> Done\n    - increment      [Completed] set -> Done\n    - print          [Completed] WriteLine -> Done\n    - body           [Completed] Sequence -> Done\n    - increment      [Completed] set -> Done\n    - print          [Completed] WriteLine -> Done\n    - body           [Completed] Sequence -> Done\n    - increment      [Completed] set -> Done\n    - print          [Completed] WriteLine -> Done\n    - body           [Completed] Sequence -> Done\n    - increment      [Completed] set -> Done\n    - print          [Completed] WriteLine -> Done\n    - body           [Completed] Sequence -> Done\n    - increment      [Completed] set -> Done\n    - print          [Completed] WriteLine -> Done\n    - body           [Completed] Sequence -> Done\n    - increment      [Completed] set -> Done\n    - print          [Completed] WriteLine -> Done\n    - body           [Completed] Sequence -> Done\n    - increment      [Completed] set -> Done\n    - print          [Completed] WriteLine -> Done\nSUCCESS - Elsa.Any Set inputs updated the Int32 variable; printed 1..10 in order; zero incidents.\n  [server] stopping owned process 46585\nCleanup verified: owned server stopped and disposable data removed.\n"
+    },
+    "restart": {
+      "name": "restart",
+      "exit": 0,
+      "seconds": 16.485957145690918,
+      "log": "  [server] copied configuration has no persistence resource selection\n== Suspension durability ==  -> http://127.0.0.1:53985  (restart=True, external=False)\n  [server] started owned process 46680 for http://127.0.0.1:53985 (content root /var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-durability-1f4fc7eb43684403a179f0e8de6ddc7d)\n  [server] owned process 46680 ready on 53985\n[login] health : Healthy\n[login] auth   : authenticated as Administrator\n  instance   : status=Running  activities=3  incidents=0\n    - root           [Running] Sequence\n    - set            [Completed] set -> Done\n    - wait           [Suspended] Event\nsuspended at the Event with the variable set (set ran 1 x).\n  [server] legacy SQLite database is isolated at /var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-durability-1f4fc7eb43684403a179f0e8de6ddc7d/elsa.db\n\n--- restarting the server process ---\n  [server] stopping owned process 46680\n  [server] started owned process 46722 for http://127.0.0.1:53985 (content root /var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-durability-1f4fc7eb43684403a179f0e8de6ddc7d)\n  [server] owned process 46722 ready on 53985\n[login] health : Healthy\n[login] auth   : authenticated as Administrator\n--- server back; re-authenticated ---\n\n  instance   : status=Running  activities=3  incidents=0\n    - root           [Running] Sequence\n    - set            [Completed] set -> Done\n    - wait           [Suspended] Event\npost-check: still suspended, Set ran exactly once (no duplicate replay), SetOutput not run.\nstimulus: resumedCount=1\n  instance   : status=Completed  activities=4  incidents=0\n    - root           [Completed] Sequence -> Done\n    - set            [Completed] set -> Done\n    - wait           [Completed] Event -> Done\n    - echo           [Completed] setoutput -> Done\n\nSUCCESS - suspended instance survived the restart and resumed to completion; variable intact ('persisted-890284'), no duplicate effects.\n  [server] legacy SQLite database is isolated at /var/folders/7q/m1ycqfk94mq21vm_lzl0ch0c0000gn/T/elsa-durability-1f4fc7eb43684403a179f0e8de6ddc7d/elsa.db\n  [server] stopping owned process 46722\n"
+    }
+  },
+  "causalControl": {
+    "test": "Prepared_structure_inputs_use_each_materializers_policy_and_current_values",
+    "naiveMerge": "Failed: workflow request member recipient unavailable; the unselected structure input was eagerly evaluated",
+    "corrected": "Passed as part of the complete Runtime suite",
+    "negativeLogSha256": "a6e660d71f868173239efaf571bdc95a943664f0287daabaf3db29c1715e6e3b"
+  },
+  "logHashes": {
+    "integrated-durable-10.log": "c1484a2efd6cc230ddfb054eb8385b10487022b57f40c0380a0afc3ce3f0ff49",
+    "integrated-balanced-1.log": "7589e66f72b638203701ae62fd62584b6f95b5252bd5f7ad8170dd726bb1435c",
+    "e2e-json-bindings.log": "339e871907afcef7b4a5039c6f3dd45f07b40e0ab27dc273584010d7a3b04c94",
+    "control-flow.log": "ae0c438d821a714a2df166754723b0d0a045342b98b0d43cef564cb16feb8bba",
+    "maps.log": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04",
+    "architecture.log": "ae73eee170ce6ee8cfc4186e376d068146c8ce2ba5ff3926c19e92bb89c5c150",
+    "runtime-ef.log": "b482601e72821329536a8fe1ec1e1a85e6df9fe0d5536a095a53b841640baf25",
+    "test-accounting.log": "cd245d14882f40f4bc4202fad8f28dc2b82b5dff8ba8f2fd559dd2fd6e847e4c",
+    "flowchart.log": "ba70fddf89591683ac83f15910bbce477e6380255d5a54741506705a7fddbe59",
+    "persistence-ef-list.log": "d955dd6ee58d0551ca6aa1fae5fc4a960765cd842c2aceaec6c02a4328498264",
+    "publishing-api.log": "8cc817adde7e2a0cbe6d145ba7aec30701011d3a78bc5bb995a339d3acc291c6",
+    "provider-drift.log": "3d33c18c7d58dbce1cc93180f9a5c94ff2d91d27dfc4d98fe35a6b53c1b4f2d5",
+    "smoke.log": "627e2af404d202e2d3cebc40ec8a5384c3d126ec010a1baf6c732921a0b796d6",
+    "structure-negative.log": "a6e660d71f868173239efaf571bdc95a943664f0287daabaf3db29c1715e6e3b",
+    "integrated-balanced-10.log": "c52e52b936e84e4d172589eb1d411baceb6ff295df9787ae18a109d263a9704a",
+    "workbench-build.log": "e48866efd87d05fce2fa6e014be16fb80e5e15830b8f02f84d2cd931d3cde499",
+    "flowchart-list.log": "6477ed347c6888c3edf0619dd1a78dfa78d30931d3bc7ffd4c5913b8e142f64b",
+    "persistence-ef.log": "e977f885e61760421841d625d7030229ecce839f3dc96404f8ff3f64cd10299f",
+    "e2e-restart.log": "1626440c1465f38bf004e6902bf9ec02d1cfa4f453ade3699b74fc997a9e5c59",
+    "probe-build.log": "6a114ac1f51b950f6f59bb35ce4c974dc0e68693abb48443d960a14b0cd0f24b",
+    "publishing.log": "a7c4972ee4a0677551a8a3f15ddb1e4901c1c4f9d7aa6d9e47661a151eca4bc2",
+    "sequence.log": "6cd49f045e97c65bf15832301e4d83dc459126a2e475a198510639057525a63b",
+    "activities-runtime.log": "50703a286147df330cc47e5bc2f9eb19b839f8b747aa3233fc8eb8f47d80af48",
+    "publishing-api-list.log": "87d38fb71863af619c4b883c49459263b065bfc55ff1bea06bac3e65ac05d8d4",
+    "architecture-list.log": "5e88692f3aa3ae1ac3cb589e64732d854908e6aeec7ee7f47d765b526a41ba6e",
+    "runtime-list.log": "0b6eb8bdd7768de18861ebd8f91a1862b4ed6b6b0303515de821646d13f667b7",
+    "runtime-ef-list.log": "f6aa822d1942f82b08c254581137538236a4f5024b1038be4e26b0835afa2229",
+    "activities-runtime-list.log": "2b85c71ea08b9eeb619f3b2432fb9dbcee585657a841fd1ca49e1c74fe819218",
+    "sequence-list.log": "bdb8ba4610ce5b8428213e795d07daf36f12f8bb27c21596f069004cc7548350",
+    "provider-drift-list.log": "7e8cd928f8f62800e56732176889bb4cb186512c78cc5c7fc5c89e6bb6536db8",
+    "runtime.log": "a7abc6a18fbfc4e61b419df5bf71b3863cb97db4e003eb5c0be857d9e67ea53a",
+    "integrated-balanced-100.log": "9fb533d8328e5747a35e5e681eac3af3a56262ca70f14848dd2e4cfeeb475c7e",
+    "control-flow-list.log": "28931c9f36e43ef26a1a905e81838e91c792e57a6d2b88d6c1bc13e03ed5a949",
+    "publishing-list.log": "0b5c4eacbf7da002437684541de1c00d0bc314d565df6ea96be9c59a153a85b3",
+    "structure-control-compile.log": "4636640ed2f44c632cfd6273c058a3b3dd19c1af2738ef16c79ea18fd01b1785",
+    "e2e-variable-loop.log": "44c4495186a833441d8f54932fe1122434dfa03daac962105ebae1b47463bf12",
+    "architecture-restore.log": "b9112f78e6f1e19c66f875c6ec9fea5fa852c2bce43c03c03903d4968dfbf33e"
+  }
+}
