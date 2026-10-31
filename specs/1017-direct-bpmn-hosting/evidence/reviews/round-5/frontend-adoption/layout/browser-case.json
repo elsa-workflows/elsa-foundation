@@ -1,0 +1,12 @@
+{
+  "source": "9c7681c56c529c8a1a4ab4d9fc91934ec07d0448",
+  "family": "layout",
+  "testRunId": "14n6eR3NshH",
+  "executionId": "14n6eTFVcMO",
+  "executionStatus": "Completed",
+  "selectedActivity": "Delay",
+  "incidents": 0,
+  "evaluatedDuration": "00:00:01",
+  "outcome": "Done",
+  "initialHeadingWait": "selector did not match; actual completed execution inspected without another start"
+}

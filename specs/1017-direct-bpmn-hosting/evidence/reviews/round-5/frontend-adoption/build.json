@@ -1,0 +1,71 @@
+{
+  "source": "9c7681c56c529c8a1a4ab4d9fc91934ec07d0448",
+  "results": [
+    {
+      "name": "frontend-tests",
+      "command": [
+        "pnpm",
+        "exec",
+        "vitest",
+        "run",
+        "src/__tests__/bpmnAdapter.test.ts",
+        "src/__tests__/bpmnElementInspector.test.tsx",
+        "src/__tests__/sequenceDesigner.test.tsx",
+        "src/__tests__/collectionSlots.test.tsx",
+        "src/__tests__/workflowAdapter.test.ts",
+        "--reporter=json",
+        "--outputFile=/tmp/elsa-2898-round5-frontend-adoption/frontend-tests.json"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "frontend-build",
+      "command": [
+        "pnpm",
+        "-r",
+        "build"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "workbench-build",
+      "command": [
+        "dotnet",
+        "build",
+        "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+        "-c",
+        "Release",
+        "-p:RestoreLockedMode=true",
+        "-p:ElsaBpmnRecoveryProbe=false"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "observer-build",
+      "command": [
+        "dotnet",
+        "build",
+        "tools/bpmn/DeliveryRecoveryRead/DeliveryRecoveryRead.csproj",
+        "-c",
+        "Release",
+        "-p:RestoreLockedMode=true"
+      ],
+      "exitCode": 0
+    },
+    {
+      "name": "studio-build",
+      "command": [
+        "dotnet",
+        "build",
+        "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj",
+        "-c",
+        "Release",
+        "-p:RestoreLockedMode=true",
+        "-p:UseAppHost=false",
+        "-o",
+        "/tmp/elsa-2898-round5-frontend-adoption/studio-bin"
+      ],
+      "exitCode": 0
+    }
+  ]
+}

@@ -58,3 +58,6 @@ All four round5 findings have [worktree correction controls](evidence/reviews/ro
 
 
 Round5 fixes are qualified at04c2b53ad in [the source-bound receipt](evidence/reviews/round-5/qualification/README.md):6928 whole-suite passes,4 actual old-fault cuts/8 stores, both full actual Studio families/13 controls and12 public binary API comparisons. All104 original assets unchanged. Main d481d6a5 frontend adoption/affected smoke is next, then full-PR round6. Five completed rounds, none clean; the final round has not started. Owner/scan/exact-CI/protected/post-main holds unchanged.
+
+
+The [source9c Switch frontend adoption](evidence/reviews/round-5/frontend-adoption/README.md) closes affected integration:116 tests/zero skips, full builds, both saved editor/export/Test Run/attached-Inspector checks and8 closed stores. T041/T043 evidenced; T044 prepares Implemented for this same implementation merge. Five full rounds completed, none clean; final round6 has not started. Existing owner/scan/CI/protected/post-main holds unchanged.
