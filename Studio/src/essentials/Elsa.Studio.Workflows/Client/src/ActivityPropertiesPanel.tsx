@@ -726,6 +726,8 @@ function PropertyRow({
   const [pendingTransition, setPendingTransition] = useState<{
     descriptor: StudioExpressionDescriptor;
     nextValue: unknown;
+    replacesValue: boolean;
+    discardedBindingCount: number;
   } | null>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   const cancelTransitionRef = useRef<HTMLButtonElement>(null);
@@ -860,19 +862,32 @@ function PropertyRow({
     if (!wrapped || nextSyntax === syntax) return;
     const nextDescriptor = expressionDescriptors.find(descriptor => descriptor.type === nextSyntax);
     if (!nextDescriptor || getUnavailableReason(nextDescriptor)) return;
+    const transitionValue = portableDefinition?.source ?? value;
     const transition = planInputSyntaxTransition(
       input,
       editingMode ?? "structured",
       nextDescriptor.editingMode,
-      value,
+      transitionValue,
       getTargetDefaultValue(nextDescriptor)
     );
-    if (transition.requiresConfirmation) {
+    const discardedBindingCount = portableDefinition && nextDescriptor.editingMode !== "text"
+      ? Object.keys(portableDefinition.parameters).length
+      : 0;
+    const requiresConfirmation = transition.requiresConfirmation || discardedBindingCount > 0;
+    const nextValue = portableDefinition && nextDescriptor.editingMode === "text"
+      ? { ...portableDefinition, language: nextSyntax }
+      : transition.nextValue;
+    if (requiresConfirmation) {
       setExpandRequested(false);
-      setPendingTransition({ descriptor: nextDescriptor, nextValue: transition.nextValue });
+      setPendingTransition({
+        descriptor: nextDescriptor,
+        nextValue,
+        replacesValue: transition.requiresConfirmation,
+        discardedBindingCount
+      });
       return;
     }
-    applyTransition(nextDescriptor, transition.nextValue);
+    applyTransition(nextDescriptor, nextValue);
   };
   // The whole collection concept resolves to a single node: a collection-scoped editor when one claims
   // the value (e.g. a multi-select for option sets), otherwise a repeater of per-element editors.
@@ -1103,14 +1118,22 @@ function PropertyRow({
           }}
         >
           <p id={transitionDescriptionId}>
-            Switching to {pendingTransition.descriptor.displayName || pendingTransition.descriptor.type} will replace the current value.
+            {pendingTransition.discardedBindingCount > 0
+              ? pendingTransition.replacesValue
+                ? `Switching to ${pendingTransition.descriptor.displayName || pendingTransition.descriptor.type} will replace the current value and remove ${pendingTransition.discardedBindingCount} expression binding${pendingTransition.discardedBindingCount === 1 ? "" : "s"}.`
+                : `Switching to ${pendingTransition.descriptor.displayName || pendingTransition.descriptor.type} will keep the source text as a Literal value and remove ${pendingTransition.discardedBindingCount} expression binding${pendingTransition.discardedBindingCount === 1 ? "" : "s"}.`
+              : `Switching to ${pendingTransition.descriptor.displayName || pendingTransition.descriptor.type} will replace the current value.`}
           </p>
           <div>
             <button
               type="button"
               onClick={() => applyTransition(pendingTransition.descriptor, pendingTransition.nextValue)}
             >
-              Replace value
+              {pendingTransition.discardedBindingCount > 0
+                ? pendingTransition.replacesValue
+                  ? `Replace value and remove ${pendingTransition.discardedBindingCount} binding${pendingTransition.discardedBindingCount === 1 ? "" : "s"}`
+                  : `Remove ${pendingTransition.discardedBindingCount} binding${pendingTransition.discardedBindingCount === 1 ? "" : "s"}`
+                : "Replace value"}
             </button>
             <button
               ref={cancelTransitionRef}

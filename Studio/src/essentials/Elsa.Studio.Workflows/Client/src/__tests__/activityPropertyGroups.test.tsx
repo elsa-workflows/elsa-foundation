@@ -1302,6 +1302,88 @@ describe("activity property organization", () => {
     expect(document.activeElement).toBe(replacement);
   });
 
+  it("keeps portable expression source and parameters when switching between text syntaxes", () => {
+    const changes: ActivityNode[] = [];
+    const source = "args.OrderId";
+    const definition = {
+      language: "JavaScript",
+      source,
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: { OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" } },
+      options: {},
+      capabilityProfile: "binding-pure-v1"
+    };
+    const container = renderPanel([
+      input("Text", { referenceKey: "text", typeName: "System.String", isWrapped: true })
+    ], {
+      activity: activity({ text: { typeName: "System.String", expression: { type: "JavaScript", value: definition } } }),
+      workflowState: { inputs: [{ referenceKey: "input-order", name: "OrderId", displayName: "Order ID" }] },
+      onChange: next => changes.push(next)
+    });
+
+    openAndSelect(container, "Liquid");
+
+    expect(container.querySelector("[role='alertdialog']")).toBeNull();
+    expect(container.querySelector<HTMLInputElement>("input[aria-label='Text expression']")?.value).toBe(source);
+    expect((changes.at(-1)!.text as { expression: { type: string; value: unknown } }).expression).toEqual({
+      type: "Liquid",
+      value: { ...definition, language: "Liquid" }
+    });
+  });
+
+  it("confirms removal of expression bindings when switching a portable expression to Literal", () => {
+    const changes: ActivityNode[] = [];
+    const source = "args.OrderId";
+    const definition = {
+      language: "JavaScript",
+      source,
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: { OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" } },
+      options: {},
+      capabilityProfile: "binding-pure-v1"
+    };
+    const container = renderPanel([
+      input("Text", { referenceKey: "text", typeName: "System.String", isWrapped: true })
+    ], {
+      activity: activity({ text: { typeName: "System.String", expression: { type: "JavaScript", value: definition } } }),
+      onChange: next => changes.push(next)
+    });
+
+    openAndSelect(container, "Literal");
+
+    const confirmation = container.querySelector<HTMLElement>("[role='alertdialog']");
+    expect(confirmation?.textContent).toContain("keep the source text as a Literal value");
+    expect(confirmation?.textContent).toContain("remove 1 expression binding");
+    expect(changes).toHaveLength(0);
+
+    const removeBindings = [...confirmation!.querySelectorAll<HTMLButtonElement>("button")]
+      .find(button => button.textContent === "Remove 1 binding")!;
+    flushSync(() => removeBindings.click());
+
+    expect((changes.at(-1)!.text as { expression: { type: string; value: unknown } }).expression).toEqual({
+      type: "Literal",
+      value: source
+    });
+  });
+
+  it("preserves an ordinary string expression as a Literal without confirmation", () => {
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([
+      input("Text", { referenceKey: "text", typeName: "System.String", isWrapped: true })
+    ], {
+      activity: activity({ text: { typeName: "System.String", expression: { type: "JavaScript", value: "hello" } } }),
+      onChange: next => changes.push(next)
+    });
+
+    openAndSelect(container, "Literal");
+
+    expect(container.querySelector("[role='alertdialog']")).toBeNull();
+    expect((changes.at(-1)!.text as { expression: { type: string; value: unknown } }).expression).toEqual({
+      type: "Literal",
+      value: "hello"
+    });
+  });
+
   it("preserves a primitive Literal as visible text when switching to a text expression", () => {
     const changes: ActivityNode[] = [];
     const container = renderPanel([
