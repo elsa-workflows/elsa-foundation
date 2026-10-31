@@ -2,7 +2,7 @@
 
 Owner project: `Elsa.Agent`. Contract project: `Elsa.Agent.Core`. Domain: `Elsa.Agent`.
 
-This is the domain catalog for framework §2.22.1. The [root index](../../../../EXTENSION_POINTS.md) links here. Signatures and models live in [Core contracts](../Core/Contracts/) and [Core models](../Core/Models/); the [candidate contribution contract](../../../../specs/1018-weaver-module-contributions/contracts/contributions.md) records the current #3437 limits. The independently packaged extension proof in #3438 still gates contract freeze.
+This is the domain catalog for framework §2.22.1. The [root index](../../../../EXTENSION_POINTS.md) links here. Signatures and models live in [Core contracts](../Core/Contracts/) and [Core models](../Core/Models/); the [M1 contribution contract](../../../../specs/1018-weaver-module-contributions/contracts/contributions.md) records the accepted minimum supported by the [76ec independent package witness](../../../../specs/1174-weaver-package-witness/evidence/qualification-76ec58d00.json). Final PR integration remains pending.
 
 ## Composition and lifetimes
 
@@ -55,14 +55,14 @@ Known provider implementations:
 - **Register:** `services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentContextProvider, MyContextSource>())`.
 - **Consumed by:** the single `CollectAgentContext` handler for `AgentContextCollecting`. Modules register sources rather than additional fan-in handlers.
 - **Ownership:** descriptor declares module, supported context kinds/schema versions, resource types and scope. The module admits/minimizes caller material, authorizes its own reads, supplies installed guidance and returns typed diagnostics. Caller origin/scopes are reset before source admission; only the installed source can contribute admitted scopes. `Descriptor.ScopeKind = "*"` opts an installed source into ambient collection for every request; it does not admit arbitrary owners, kinds, versions or permissions.
-- **Known implementations:** `DefaultWorkflowAgentContextProvider` (`Elsa.Agent.Workflows`) *(cross-domain)*; private journey `NoteContextSource` (`Weaver.Journey.Backend`) *(cross-domain — qualification fixture, not shipped)*.
+- **Known implementations:** `DefaultWorkflowAgentContextProvider` (`Elsa.Agent.Workflows`) *(cross-domain)*; external `WidgetContextSource` (`Acme.Home.Weaver`) *(cross-domain — qualified package fixture, not shipped)*; private journey `NoteContextSource` (`Weaver.Journey.Backend`) *(cross-domain — source-composed fixture, not shipped)*.
 
 ### `IAgentCapabilityProvider` *(Core — `Elsa.Agent.Core`)*
 
 - **Kind:** Source. [Signature](../Core/Contracts/AgentContracts.cs): `GetCapabilitiesAsync(): ValueTask<IReadOnlyCollection<AgentCapability>>`.
 - **Register:** `services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentCapabilityProvider, MyCapabilitySource>())`.
 - **Consumed by:** the single `CollectAgentCapabilities` handler for `AgentCapabilitiesCollecting`. Advertise demonstrated supported journeys and limitations; discovery is not a permission grant.
-- **Known implementations:** `WorkflowAgentCapabilityProvider` (`Elsa.Agent.Workflows`) *(cross-domain)*; private journey `NoteCapabilities` (`Weaver.Journey.Backend`) *(cross-domain — qualification fixture, not shipped)*.
+- **Known implementations:** `WorkflowAgentCapabilityProvider` (`Elsa.Agent.Workflows`) *(cross-domain)*; external `WidgetCapabilities` (`Acme.Home.Weaver`) *(cross-domain — qualified package fixture, not shipped)*; private journey `NoteCapabilities` (`Weaver.Journey.Backend`) *(cross-domain — source-composed fixture, not shipped)*.
 
 ### `IAgentTool` *(Core — `Elsa.Agent.Core`)*
 
@@ -70,7 +70,7 @@ Known provider implementations:
 - **Register:** `services.TryAddEnumerable(ServiceDescriptor.Scoped<IAgentTool, MyTool>())`.
 - **Consumed by:** the single `CollectAgentTools` handler for `AgentToolsCollecting`, then the existing async `IAgentToolRegistry`. Duplicate names, missing owner/version and malformed input schemas fail discovery; per-turn context/current authority determine availability.
 - **Ownership:** the module validates canonical arguments, exact target/revision, required context and risk during side-effect-free preparation. It supplies versioned preview/result schemas and renderer identity, applies through its owning service/native transaction, rechecks resource constraints and returns actual read-back evidence. `AgentToolPreparation`, `AgentPreparedToolInvocation`, `AgentPayload`, `AgentResourceTarget` and `AgentEffectReceipt` are defined in [Core contribution models](../Core/Models/AgentContributionModels.cs); the generic engine freezes and binds preparation rather than defining module payload meaning. Both provider paths use the existing thin `AgentToolAIFunctions` bridge.
-- **Known implementations:** `WorkflowReadGraphTool` and `WorkflowSetDesignerPositionTool` (`Elsa.Agent.Workflows`) *(cross-domain)*; private journey `SetNoteTool` (`Weaver.Journey.Backend`) *(cross-domain — qualification fixture, not shipped)*. The fixture is not the independent #3438 package-consumer proof.
+- **Known implementations:** `WorkflowReadGraphTool` and `WorkflowSetDesignerPositionTool` (`Elsa.Agent.Workflows`) *(cross-domain)*; external `ReadWidgetTool` / `SetWidgetVisibilityTool` (`Acme.Home.Weaver`) *(cross-domain — qualified package fixture, not shipped)*; private journey `SetNoteTool` (`Weaver.Journey.Backend`) *(cross-domain — source-composed fixture, not shipped)*.
 
 ### `IAgentClientTool` *(Core — `Elsa.Agent.Core`)*
 
@@ -79,9 +79,9 @@ Known provider implementations:
 - **Ownership:** validate/redact the browser's observation against the exact preparation and return a typed local working-state receipt. Completion admits evidence; it never executes the operation again. The module's private browser binding owns current selection/revision/generation, native application, validation, rendering and undo semantics.
 - **Known implementation:** `WorkflowSetDesignerPositionTool` (`Elsa.Agent.Workflows`) *(cross-domain)*. See the [Workflow Agent catalog](../Workflows/EXTENSION_POINTS.md) for its supported subset.
 
-The unrelated-resource examples above are the private [owned journey backend fixture](../../../../tools/studio/Composition.Probe/fixtures/WeaverJourney.Backend.cs.in), not a shipped resource module or completed independent-consumer qualification.
+The `Note*` examples refer to the private [source-composed journey fixture](../../../../tools/studio/Composition.Probe/fixtures/WeaverJourney.Backend.cs.in). The independent package example below has separate author/consumer evidence.
 
-The separately authored [Acme Home fixture](../../../../tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Backend/) adds `WidgetContextSource` (`IAgentContextProvider`), `WidgetCapabilities` (`IAgentCapabilityProvider`), and `ReadWidgetTool` / `SetWidgetVisibilityTool` (`IAgentTool`) through `AcmeHomeWidgetFeature` *(cross-domain — qualification package)*. Its [Studio companion](../../../../tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Studio/) contributes public SDK context, prompt actions and result rendering. These are implementation examples; #3438's actual consumer journeys, removal controls and resulting-main verification still gate independent-package acceptance. The [preview migration](../../../../specs/1018-weaver-module-contributions/contracts/contributions.md#preview-migration) identifies removed exports and package/namespace changes.
+The separately authored [Acme Home fixture](../../../../tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Backend/) adds `WidgetContextSource` (`IAgentContextProvider`), `WidgetCapabilities` (`IAgentCapabilityProvider`), and `ReadWidgetTool` / `SetWidgetVisibilityTool` (`IAgentTool`) through `AcmeHomeWidgetFeature` *(cross-domain — qualification package)*. Its [Studio companion](../../../../tools/studio/Weaver.Conformance.Probe/fixtures/Resource.Studio/) contributes public SDK context, prompt actions and result rendering. The [76ec independent witness](../../../../specs/1174-weaver-package-witness/evidence/qualification-76ec58d00.json) qualifies the actual external consumer journeys, native add/remove/incompatible/restore controls and both provider adapters at that code baseline. Final-head review/CI, merge and resulting-main verification remain open in [#3497](https://github.com/elsa-workflows/elsa-foundation/pull/3497); durable shared lifecycle/recovery and broader Program M2–M5 coverage remain open. The [preview migration](../../../../specs/1018-weaver-module-contributions/contracts/contributions.md#preview-migration) identifies removed exports and package/namespace changes.
 
 ## Events
 
@@ -95,10 +95,12 @@ All three [Core events](../Core/AgentContributionsCollecting.cs) implement `IEve
 
 `AddFoundationAgentAbstractions()` registers those aggregators with `TryAddEventHandler<TEvent, THandler>()`. Modules add typed contributors, preserving one aggregator per contribution event. Duplicate context source/attachment and capability identities are diagnosed, as are duplicate tool identities by the registry. No background event or catch-and-ignore collection fallback is introduced.
 
-## Current candidate limits
+<a id="current-candidate-limits"></a>
 
-The #3437 implementation admits at most one distinct mutating tool call per session/turn; identical delivery coalesces and conflicting delivery is rejected. One module-owned call can contain its native atomic batch. Server reads execute inline; reads that request review or client execution are explicitly unsupported. Server mutations, including FullAuto, share the same prepared proposal/effect pipeline. Every client working-state mutation requires explicit review, including FullAuto.
+## Accepted M1 bounds
+
+The M1 implementation admits at most one distinct mutating tool call per session/turn; identical delivery coalesces and conflicting delivery is rejected. One module-owned call can contain its native atomic batch. Server reads execute inline; reads that request review or client execution are explicitly unsupported. Server mutations, including FullAuto, share the same prepared proposal/effect pipeline. Every client working-state mutation requires explicit review, including FullAuto.
 
 Client execution returns HTTP 202 with `awaiting-client`, `executed: false` and the exact prepared request. Only a matching authenticated observation accepted by the same installed tool can mark it Executed. Receipt continuation receives the retained result with no available tools and cannot start another mutation or replay the original prompt. Before dispatch a refusal has no effect; after dispatch cancellation, missing/invalid receipt or lost delivery can mean uncertainty. Retained duplicates cannot rerun effects or replace accepted evidence.
 
-All lifecycle retention and deduplication here are in memory. Restart, cross-process coordination, durable history/approvals and broader recovery remain M2 work. This catalog describes the candidate surface; completed composed-host, package-consumer and live-provider evidence must be recorded on their owning issues and is not inferred from these registrations.
+All lifecycle retention and deduplication here are in memory. Restart/shell replacement, cross-process coordination, durable history/approvals and broader recovery remain M2 work. The [owning receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6538498830) records completed package-consumer and deterministic provider-protocol evidence for 76ec; final-head integration and resulting-main gates remain open. Registrations alone establish no runtime evidence, and no live-provider success is claimed.

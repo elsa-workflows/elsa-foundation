@@ -4,9 +4,13 @@
 
 **Created**: 2026-10-30
 
-**Status**: Draft
+**Status**: Implemented — prepared in implementation [PR #3497](https://github.com/elsa-workflows/elsa-foundation/pull/3497); effective when that PR merges.
 
 **Input**: Program [#3428](https://github.com/elsa-workflows/elsa-foundation/issues/3428), leaf [#3438](https://github.com/elsa-workflows/elsa-foundation/issues/3438): prove that an independently packaged non-workflow module completes the same context, tool, review and observed-application journey as Workflows without changes to Weaver, its host or provider adapters. Use that proof to accept the smallest contribution contract.
+
+The qualified code baseline `76ec58d0061135cfa028e1bc47ec7639fd139e7f` completed all 38 cases and 135 stages, including the original and restored resource/workflow journeys through both actual provider adapters. The [curated receipt](evidence/qualification-76ec58d00.json), [owning issue evidence](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6538498830) and [validation guide](quickstart.md) record the exact artifacts and bounds. The [M1 contribution contract](../1018-weaver-module-contributions/contracts/contributions.md) records the demonstrated minimum.
+
+The terminal status is set in this implementation PR as the [spec lifecycle](../../docs/reference/spec-lifecycle.md#transition-rule) requires; it is not a claim that the open PR has merged. Final-source qualification, exact-head CI, independent review, merge and resulting-main verification remain unchecked in [T026–T028](tasks.md). Durable recovery, broader current-module/workflow participation and live providers remain outside this witness.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -124,7 +128,7 @@ A module author can run a reusable conformance fixture, identify compatible dist
 ## Assumptions
 
 - Program #3428 already authorizes scoped implementation, testing, documentation, review, authorized merges and routine issue refinement. This work adds no release, deployment or credential authority.
-- At this leaf's claim, merged candidate #3437 remained open/In review in the integration lane while #3438 occupied the sole implementation lane. Its accepted descendant-main integration is now verified and #3437 is Done ([receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3437#issuecomment-6516702315)). The native dependency retains that completed prerequisite; independent package acceptance and contract freeze remain this leaf's responsibility.
+- #3437's accepted descendant-main integration is verified and the prerequisite is Done ([receipt](https://github.com/elsa-workflows/elsa-foundation/issues/3437#issuecomment-6516702315)). #3438 remains the single implementation leaf through its own final review/integration gates; the 76ec package witness supports the bounded M1 contract decision.
 - The participating domain will reuse an existing non-workflow resource where its public owning contracts are practical; otherwise an isolated, separately authored fixture resource will make the ownership and persistence boundary explicit.
 - The witness uses ordinary host authentication and isolated owned data/processes. Existing developer hosts and user credential state are preserved.
 - The candidate's declared retention/recovery limits remain explicit. Durable recovery and full current-module/workflow coverage belong to M2–M5.

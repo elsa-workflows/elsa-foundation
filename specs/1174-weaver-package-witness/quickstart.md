@@ -1,11 +1,11 @@
 # Witness validation guide
 
-Planned entry point (implemented by this work unit):
+Run the implemented qualifier from committed source, using a new output directory and a unique local version:
 
 ```sh
 python3 tools/studio/Weaver.Conformance.Probe/qualify.py \
   --output /absolute/new-owned-weaver-proof \
-  --version 4.0.0-weaver3438
+  --version 4.0.0-weaver3438.local1
 ```
 
 Run from committed source with the supported .NET 10/native profile, Python 3, producer Node/pnpm and Chromium automation installed. The output directory must be new. The driver owns isolated product/module producers, consumers, resources and processes; existing developer hosts/credentials are untouched. Nothing publishes remotely.
@@ -21,3 +21,23 @@ Run from committed source with the supported .NET 10/native profile, Python 3, p
 9. Require aggregate success only when every required observation and exact identity comparison passes. After generic changes, rerun from a fresh final baseline. Follow review/CI/merge/main gates separately.
 
 See [witness boundaries](contracts/witness.md) for control semantics and [data model](data-model.md) for owner/receipt invariants. Public evidence should link exact source, artifact hashes and case receipts, with credentials/session state kept private. A successful driver is evidence for this witness, not M2–M5 completion.
+
+## Qualified code baseline
+
+The [curated 76ec receipt](evidence/qualification-76ec58d00.json) and [owning issue record](https://github.com/elsa-workflows/elsa-foundation/issues/3438#issuecomment-6538498830) retain the complete witness:
+
+| Observation | Recorded result |
+|---|---|
+| Qualified source / main base | `76ec58d0061135cfa028e1bc47ec7639fd139e7f` / `a01980064aed293502b9ada57a682286d950c7fd` |
+| Local product version | `4.0.0-weaver3438.20261031.8`; 80 product packages plus retained SDK tgz |
+| Stages / cases | 135 stages exit 0; all 38 cases: 16 positive, 22 expected failed controls with their precise causes |
+| Original and restored positives | Independent resource and native workflow through both actual Copilot and Anthropic adapters |
+| Immutable common files | 155 backend and 10,108 Studio baseline files unchanged through the extension sequence |
+| Consumer closure | Zero product source references and zero frontend build invocations for both consumers |
+| Cleanup / safe export | Both hosts exit 0; runtime caches empty; 11,823 exported evidence references exclude private runtime/auth state |
+| Qualification report SHA-256 | `7dd769bf6cfeb109f0019c4e080c7cd126e5767c5474c57fd3106c1afb233760` |
+| Safe-export index SHA-256 | `17a352e1cdcf91d038d37aac23b7ff0234f6b40719eb93c61645a0bb3cd20d79` |
+
+Expected controls remain Failed children; their intended causes are separately recognized. The packed author tests comprise 78 resource cases and 21 protocol cases. Provider evidence uses separate factory implementations with the actual unchanged adapters; live-provider access is unclaimed.
+
+The [M1 minimum contract](../1018-weaver-module-contributions/contracts/contributions.md) is recorded in implementation [PR #3497](https://github.com/elsa-workflows/elsa-foundation/pull/3497#issuecomment-6538499164). This is the qualified code baseline, not final-head or merged-main evidence. Documentation/source integration requires fresh qualification and required CI, independent review, authorized merge and resulting-main verification ([T026–T028](tasks.md)). M2–M5, durable recovery and broader workflow/current-module coverage remain open.
