@@ -1,0 +1,20 @@
+[
+  {
+    "name": "constructor-red",
+    "exitCode": 1,
+    "source": "9508e25e57672c569f462aff9a1e0282c5780eb9",
+    "copiedPrivateClass": false
+  },
+  {
+    "name": "shape-control",
+    "exitCode": 0,
+    "source": "9508e25e57672c569f462aff9a1e0282c5780eb9",
+    "copiedPrivateClass": false
+  },
+  {
+    "name": "constructor-green",
+    "exitCode": 0,
+    "source": "9508e25e57672c569f462aff9a1e0282c5780eb9",
+    "copiedPrivateClass": true
+  }
+]

@@ -1,0 +1,17 @@
+{
+  "command": [
+    "dotnet",
+    "run",
+    "--project",
+    "probe/Probe.csproj",
+    "--",
+    "--require-settlement"
+  ],
+  "exitCode": 134,
+  "expectation": "Cancellation delivery must not acknowledge a valid child with unsettled native cancellation obligations",
+  "sourceHead": "9508e25e57672c569f462aff9a1e0282c5780eb9",
+  "limits": [
+    "Synthetic valid-frame unit reproduction over exact current binaries; not an actual-host nested journey",
+    "No source, state, queue, receipt or writer changes in shared repository"
+  ]
+}

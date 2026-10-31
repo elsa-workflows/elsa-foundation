@@ -1,0 +1,19 @@
+{
+  "executable": {
+    "artifactId": "artifact",
+    "definitionId": "definition",
+    "definitionVersionId": "definition-version",
+    "artifactVersion": "1.0.0",
+    "artifactHash": "hash"
+  },
+  "materialIncarnationId": "incarnation",
+  "inputId": "request",
+  "inputKind": "",
+  "payload": {},
+  "authority": {
+    "systemIdentity": "bpmn-runtime",
+    "rootInitiator": "actor",
+    "metadata": {}
+  },
+  "tenantId": "tenant-a"
+}

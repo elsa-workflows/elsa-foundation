@@ -1,0 +1,15 @@
+# Complete-PR review round 7 and preserved inputs
+
+[Authoritative round receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3410#issuecomment-6541296466). Exact reviewed source9508e25e, baseab46bc22a. Seven full rounds completed, none clean;16 total owner-authorized. Correctness C1 and standards S1 are adopted; acceptance adds no finding. The three reports and negative controls retain their source and limits. Temporary paths in raw reports/command provenance describe the original execution; they are not reproduction inputs.
+
+## Preserved actual host inputs before correction
+
+Both cases execute clean source9508e25e with standard Workbench products. Normal published APIs create a finite model → native RunBpmn → embedded model → native RunEtl chain. One real HTTP partition completes; its sibling waits on429. The original coupled Runtime/Design, ETL Runtime and ETL Design stores are retained before affected production changes. The second case additionally reopens the same stores and cancels the outer model normally; this ordinary order did **not** observe premature ancestor settlement. It is a control, not a refutation of C1 or proof of the alternative order. The boundary counterexample remains distinct from actual-host evidence. No stored state, receipt, claim, queue, authority or clock was rewritten.
+
+The waiting capture has3 whole stores; the natural-order case retains3 waiting and3 cancellation stores. Each process record binds exact products, identities and controller hash. The first temporary request used an incorrect DTO property and failed500; that setup diagnostic is not a successful publication or additional adopted finding. It was corrected to the existing humanBindings field without changing product code. All owned processes finished; the Workbench losses are recorded in the case receipts.
+
+## Reproduce
+
+From a clean checkout of9508e25e, build the standard hosting project with `dotnet build Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj -c Release -p:ElsaBpmnRecoveryProbe=false`. From that repository root run the selected `pre-correction/<case>/capture.py` with Python3.14, `--parent BpmnModel --model-cancel --workbench-assembly <fresh-Workbench.dll> --reader-assembly <fresh-DeliveryRecoveryRead.dll> --output <new-directory>`. The portable controllers differ from the archived exact executed bytes only in repository-location resolution; all operations/assertions are unchanged. Both create private resources and verify actual product commit metadata. Existing store inputs for correction recovery are these original whole-store captures, not newly generated substitutes.
+
+[Manifest](manifest.json) hashes every retained raw asset, including decompressed data where declared. Focused correction regressions, actual correction recovery, affected qualification, new full review, exact required checks and protected/resulting-main gates remain due. Broader Studio/ETL/provider and program acceptance is unchanged.

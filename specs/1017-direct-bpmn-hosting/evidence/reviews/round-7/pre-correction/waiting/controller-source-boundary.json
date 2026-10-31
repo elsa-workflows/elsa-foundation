@@ -1,0 +1,6 @@
+{
+  "executingSource": "9508e25e57672c569f462aff9a1e0282c5780eb9",
+  "executedControllerSha256": "f01614c213ba6a8c3770ef24ca418d6ae675637d28ede9bf07d4adae5d95617e",
+  "portableControllerSha256": "4fda520a625b88016f57465887a23c8f90224353d6067cfa9346e1018f8a851f",
+  "onlyChange": "Resolve repository from ELSA_NESTED_REPO or current working directory instead of the historical machine path; test operations and assertions unchanged."
+}
