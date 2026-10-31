@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "a2cf47488fc7db8ba60c93c8b03fe4d78f6530d9",
+  "last_publish_commit": "ab46bc22a52aa6e456bca6ac0e803c80904de081",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -139,8 +139,8 @@
     },
     {
       "package_id": "Elsa.Agent.GitHubCopilot",
-      "version": "4.0.10-preview",
-      "commit": "e81401851b077a37f8e5c6f20e38fc1864a26705"
+      "version": "4.0.11-preview",
+      "commit": "ab46bc22a52aa6e456bca6ac0e803c80904de081"
     },
     {
       "package_id": "Elsa.Agent.Workflows",
@@ -194,8 +194,8 @@
     },
     {
       "package_id": "Elsa.Cluster.Readability",
-      "version": "4.0.20-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.21-preview",
+      "commit": "ab46bc22a52aa6e456bca6ac0e803c80904de081"
     },
     {
       "package_id": "Elsa.Connections",
@@ -494,8 +494,8 @@
     },
     {
       "package_id": "Elsa.Modularity.Api",
-      "version": "4.0.16-preview",
-      "commit": "6e677745bb828dcb1117379859068f8e735dac47"
+      "version": "4.0.17-preview",
+      "commit": "ab46bc22a52aa6e456bca6ac0e803c80904de081"
     },
     {
       "package_id": "Elsa.Modularity.Core",
