@@ -1,0 +1,174 @@
+#nullable enable
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelClientFactory
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelClientFactory.GetCapabilitiesAsync(Elsa.Agent.Specialists.Core.Models.SpecialistModelReference! model, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities!>
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelClientFactory.OpenAsync(Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Agent.Specialists.Core.Contracts.SpecialistModelClientLease!>
+Elsa.Agent.Specialists.Core.Contracts.ISpecialistModelClientFactory.ProviderKey.get -> string!
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelClientLease
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelClientLease.CapabilitiesFingerprint.get -> string!
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelClientLease.Client.get -> Microsoft.Extensions.AI.IChatClient!
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelClientLease.ConnectionVersion.get -> int
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelClientLease.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelClientLease.Options.get -> Microsoft.Extensions.AI.ChatOptions!
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelClientLease.SpecialistModelClientLease(Microsoft.Extensions.AI.IChatClient! client, Microsoft.Extensions.AI.ChatOptions! options, string! capabilitiesFingerprint, int connectionVersion, System.IAsyncDisposable? ownedScope = null) -> void
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest.<Clone>$() -> Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest!
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest.Deconstruct(out Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor! Descriptor, out Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! Invocation) -> void
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest.Descriptor.get -> Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor!
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest.Descriptor.init -> void
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest.Equals(Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest? other) -> bool
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest.Invocation.get -> Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity!
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest.Invocation.init -> void
+Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest.SpecialistModelOpenRequest(Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor! Descriptor, Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity! Invocation) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity!
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.ActivityExecutionId.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.ActivityExecutionId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.ArtifactHash.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.ArtifactHash.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.ArtifactId.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.ArtifactId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.Deconstruct(out string? TenantId, out string! PersistencePartition, out string! WorkflowExecutionId, out string! ActivityExecutionId, out string! OperationKey, out string! ArtifactId, out string! ArtifactHash, out string! DefinitionVersionId, out string! TemplateHash) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.DefinitionVersionId.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.DefinitionVersionId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.Equals(Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity? other) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.OperationKey.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.OperationKey.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.PersistencePartition.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.PersistencePartition.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.SpecialistInvocationIdentity(string? TenantId, string! PersistencePartition, string! WorkflowExecutionId, string! ActivityExecutionId, string! OperationKey, string! ArtifactId, string! ArtifactHash, string! DefinitionVersionId, string! TemplateHash) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.TemplateHash.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.TemplateHash.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.TenantId.get -> string?
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.TenantId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.WorkflowExecutionId.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.WorkflowExecutionId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistManifest
+Elsa.Agent.Specialists.Core.Models.SpecialistManifest.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.SpecialistManifest!
+Elsa.Agent.Specialists.Core.Models.SpecialistManifest.AllowContinuity.get -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistManifest.AllowContinuity.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistManifest.Deconstruct(out string! Instructions, out Elsa.Agent.Specialists.Core.Models.SpecialistModelReference! Model, out System.Text.Json.JsonElement Settings, out System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>! InputConstraints, out System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>! ResultConstraints, out Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits! Limits, out bool AllowContinuity) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistManifest.Equals(Elsa.Agent.Specialists.Core.Models.SpecialistManifest? other) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistManifest.InputConstraints.get -> System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>!
+Elsa.Agent.Specialists.Core.Models.SpecialistManifest.InputConstraints.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistManifest.Instructions.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistManifest.Instructions.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistManifest.Limits.get -> Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits!
+Elsa.Agent.Specialists.Core.Models.SpecialistManifest.Limits.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistManifest.Model.get -> Elsa.Agent.Specialists.Core.Models.SpecialistModelReference!
+Elsa.Agent.Specialists.Core.Models.SpecialistManifest.Model.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistManifest.ResultConstraints.get -> System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>!
+Elsa.Agent.Specialists.Core.Models.SpecialistManifest.ResultConstraints.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistManifest.Settings.get -> System.Text.Json.JsonElement
+Elsa.Agent.Specialists.Core.Models.SpecialistManifest.Settings.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistManifest.SpecialistManifest(string! Instructions, Elsa.Agent.Specialists.Core.Models.SpecialistModelReference! Model, System.Text.Json.JsonElement Settings, System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>! InputConstraints, System.Collections.Generic.IReadOnlyDictionary<string!, System.Text.Json.JsonElement>! ResultConstraints, Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits! Limits, bool AllowContinuity = false) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities
+Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities!
+Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities.Deconstruct(out string! Fingerprint, out System.Text.Json.JsonElement SettingsSchema, out bool SupportsJsonSchema, out int MaximumOutputTokens) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities.Equals(Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities? other) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities.Fingerprint.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities.Fingerprint.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities.MaximumOutputTokens.get -> int
+Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities.MaximumOutputTokens.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities.SettingsSchema.get -> System.Text.Json.JsonElement
+Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities.SettingsSchema.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities.SpecialistModelCapabilities(string! Fingerprint, System.Text.Json.JsonElement SettingsSchema, bool SupportsJsonSchema, int MaximumOutputTokens) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities.SupportsJsonSchema.get -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities.SupportsJsonSchema.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelReference
+Elsa.Agent.Specialists.Core.Models.SpecialistModelReference.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.SpecialistModelReference!
+Elsa.Agent.Specialists.Core.Models.SpecialistModelReference.ConnectionName.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistModelReference.ConnectionName.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelReference.Deconstruct(out string! ProviderKey, out string! ConnectionName, out string! ModelId) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelReference.Equals(Elsa.Agent.Specialists.Core.Models.SpecialistModelReference? other) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistModelReference.ModelId.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistModelReference.ModelId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelReference.ProviderKey.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistModelReference.ProviderKey.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistModelReference.SpecialistModelReference(string! ProviderKey, string! ConnectionName, string! ModelId) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor!
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.AllowContinuity.get -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.AllowContinuity.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.CapabilitiesFingerprint.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.CapabilitiesFingerprint.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.Deconstruct(out string! Instructions, out Elsa.Agent.Specialists.Core.Models.SpecialistModelReference! Model, out System.Text.Json.JsonElement Settings, out System.Text.Json.JsonElement InputSchema, out System.Text.Json.JsonElement ResultSchema, out string! CapabilitiesFingerprint, out string! SchemaProfile, out Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits! Limits, out bool AllowContinuity, out string? DefinitionId, out string? DefinitionVersionId, out string? Version, out string? TemplateHash, out string? SourceReferenceId) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.DefinitionId.get -> string?
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.DefinitionId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.DefinitionVersionId.get -> string?
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.DefinitionVersionId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.Equals(Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor? other) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.InputSchema.get -> System.Text.Json.JsonElement
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.InputSchema.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.Instructions.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.Instructions.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.Limits.get -> Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits!
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.Limits.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.Model.get -> Elsa.Agent.Specialists.Core.Models.SpecialistModelReference!
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.Model.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.ResultSchema.get -> System.Text.Json.JsonElement
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.ResultSchema.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.SchemaProfile.get -> string!
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.SchemaProfile.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.Settings.get -> System.Text.Json.JsonElement
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.Settings.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.SourceReferenceId.get -> string?
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.SourceReferenceId.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.SpecialistRuntimeDescriptor(string! Instructions, Elsa.Agent.Specialists.Core.Models.SpecialistModelReference! Model, System.Text.Json.JsonElement Settings, System.Text.Json.JsonElement InputSchema, System.Text.Json.JsonElement ResultSchema, string! CapabilitiesFingerprint, string! SchemaProfile, Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits! Limits, bool AllowContinuity, string? DefinitionId = null, string? DefinitionVersionId = null, string? Version = null, string? TemplateHash = null, string? SourceReferenceId = null) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.TemplateHash.get -> string?
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.TemplateHash.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.Version.get -> string?
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.Version.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeIds
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits.<Clone>$() -> Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits!
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits.Deconstruct(out int MaximumModelCalls, out int TimeoutMilliseconds, out int? MaximumOutputTokens) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits.Equals(Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits? other) -> bool
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits.MaximumModelCalls.get -> int
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits.MaximumModelCalls.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits.MaximumOutputTokens.get -> int?
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits.MaximumOutputTokens.init -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits.SpecialistTurnLimits(int MaximumModelCalls = 8, int TimeoutMilliseconds = 300000, int? MaximumOutputTokens = null) -> void
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits.TimeoutMilliseconds.get -> int
+Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits.TimeoutMilliseconds.init -> void
+const Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeIds.ConsumerKey = "elsa.specialist" -> string!
+const Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeIds.DescriptorSchema = "1" -> string!
+const Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeIds.FacadeCapability = "Elsa.Agent.Specialists.Activities.SpecialistActivity" -> string!
+const Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeIds.ManifestSchema = "1" -> string!
+const Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeIds.ProviderKey = "elsa.specialist" -> string!
+const Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeIds.SchemaProfile = "elsa.specialist.json/1" -> string!
+const Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeIds.TurnCapability = "Elsa.Agent.Specialists.Activities.SpecialistModelTurn" -> string!
+override Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest.ToString() -> string!
+override Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.ToString() -> string!
+override Elsa.Agent.Specialists.Core.Models.SpecialistManifest.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistManifest.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.SpecialistManifest.ToString() -> string!
+override Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities.ToString() -> string!
+override Elsa.Agent.Specialists.Core.Models.SpecialistModelReference.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistModelReference.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.SpecialistModelReference.ToString() -> string!
+override Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.ToString() -> string!
+override Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits.Equals(object? obj) -> bool
+override Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits.GetHashCode() -> int
+override Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits.ToString() -> string!
+static Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest.operator !=(Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest? left, Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest? right) -> bool
+static Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest.operator ==(Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest? left, Elsa.Agent.Specialists.Core.Contracts.SpecialistModelOpenRequest? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity? left, Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity? left, Elsa.Agent.Specialists.Core.Models.SpecialistInvocationIdentity? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistManifest.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistManifest? left, Elsa.Agent.Specialists.Core.Models.SpecialistManifest? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistManifest.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistManifest? left, Elsa.Agent.Specialists.Core.Models.SpecialistManifest? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities? left, Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities? left, Elsa.Agent.Specialists.Core.Models.SpecialistModelCapabilities? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistModelReference.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistModelReference? left, Elsa.Agent.Specialists.Core.Models.SpecialistModelReference? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistModelReference.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistModelReference? left, Elsa.Agent.Specialists.Core.Models.SpecialistModelReference? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor? left, Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor? left, Elsa.Agent.Specialists.Core.Models.SpecialistRuntimeDescriptor? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits.operator !=(Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits? left, Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits? right) -> bool
+static Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits.operator ==(Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits? left, Elsa.Agent.Specialists.Core.Models.SpecialistTurnLimits? right) -> bool

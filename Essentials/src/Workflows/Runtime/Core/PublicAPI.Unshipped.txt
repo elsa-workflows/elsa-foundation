@@ -8,6 +8,8 @@ Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputMaterializationPolic
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputMaterializationPolicy.Kind.get -> string!
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputMaterializationPolicy.MaterializeAsync(Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputMaterializationContext! context, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
 Elsa.Workflows.Runtime.Core.Contracts.IRuntimeStructureInputMaterializationPolicy.SchemaVersion.get -> string!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.OperationKey.get -> string!
+Elsa.Workflows.Runtime.Core.Models.ActivityExecutionState.TargetOperationKey.get -> string?
 Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.<Clone>$() -> Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext!
 Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.Equals(Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext? other) -> bool
 override Elsa.Workflows.Runtime.Core.Models.RuntimeChildControlContext.Equals(object? obj) -> bool

@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Agent.Specialists.JsonSchema.SpecialistJsonSchemaFeature
+Elsa.Agent.Specialists.JsonSchema.SpecialistJsonSchemaFeature.SpecialistJsonSchemaFeature() -> void
+virtual Elsa.Agent.Specialists.JsonSchema.SpecialistJsonSchemaFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

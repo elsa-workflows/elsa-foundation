@@ -199,3 +199,76 @@ Studio/support source. The packet resolves the identified design questions with 
 must prove the choices. The [support contract](contracts/support.md) names the actual matrix and
 remaining evidence. No untested provider/store/host or generic background protection capability is
 silently declared supported.
+
+## Implementation reconciliation — #3548
+
+The first real consumer uses JsonSchema.Net **9.2.0**, verified against its installed XML/API and
+actual evaluation tests. [Upstream basics](https://docs.json-everything.net/schema/basics/) describe
+isolated build registries and explicit dialect selection; current upstream documentation also covers
+newer APIs, so the pinned package remains the compile/test authority.
+
+The initial `elsa.specialist.json/1` profile explicitly selects draft 2020-12. It accepts a finite
+primitive/object/array vocabulary and bounded acyclic local pointers, expands references before
+engine construction, and refuses remote/custom dialects, unknown keywords, regex/combinator/dynamic
+reference features and validation siblings on references. It applies byte/node/depth bounds, unique
+object members and bounded finite numeric lexemes/exponents. Unsupported constructs are diagnostics,
+never ignored constraints. Defaults still come from the generic input boundary; schema annotations
+do not apply defaults. A broader vocabulary requires an explicit compatible profile and qualification.
+
+Native checkpoint entry already materializes external input envelopes through
+`MaterializeCheckpointInputsAsync` before invoking a checkpoint participant. The same activation then
+executes its structural callback and commits the staged continuation. The facade can therefore stage
+the request from those portable inputs and checkpoint an opaque handle with child scheduling; no
+CLR hydration or new generic input/checkpoint API is needed. A missing journal behind an already
+checkpointed handle must refuse recovery rather than silently start another provider call.
+
+Normal `ActivityTemplatePlacer` stamps boundary descriptors with exact definition/version/template
+identity and rewrites child slots. Runtime identity must use/verify that pinned material, not a
+caller-authored agent version ID. Compiler output already carries `ProviderCompatibilityChanges`,
+so schema refinements can strengthen the existing generic compatibility floor without a new diff API.
+
+Member reference keys remain binding/constraint identities; the generic public member `Name` supplies
+its JSON field name. Name changes already require a major generic version bump. Display name and
+description metadata do not become model instructions. Six causal result-read cases reproduced four
+failures before correction: direct and portable-expression reads selected nested content instead of
+an exact dotted member, and mishandled the whole-result `$` path. Both readers now preserve completion
+projection semantics for those cases while retaining ordinary nested traversal. The whole workflow
+runtime suite passed 3,062 tests on the earlier kernel baseline and 3,069 after integrating current
+main; the current whole specialist suite passes 89 cases. Actual specialist execution also covers a dotted public output followed by a causal read.
+
+The real MAF package graph additionally requires DI/logging/caching abstractions 10.0.12 and the
+latter's Primitives 10.0.12 dependency. Normal restore reproduced NU1109 against Foundation's 10.0.10
+central pins. This slice raises those four patch pins, introduces MAF 1.27.0 normally, and regenerates
+owned locks. The external Weaver protocol fixture must also derive its direct DI-abstraction pin
+from the selected producer graph; a hardcoded lower pin would reproduce the prior NU1605 regression.
+
+Provider/compiler/discovery registries are scoped to keep model metadata and existing publication
+baseline reads inside the selected operation. The real two-partition registry fixture passes; restoring
+all three previous singleton registrations fails for the intended captive scoped dependency. Existing
+stateless singleton contributors remain valid. No authoring persistence dependency enters Runtime.
+
+The existing operation-key resolver now delegates to computed, nonserialized properties on native
+activity state, so the specialist uses the same assigned/first-attempt/invocation fallback without a
+Runtime implementation dependency or a second resolver. The existing typed completion checkpoint
+participant is the facade's result boundary; structural completion alone is insufficient.
+
+Reviewed publication and real placement are exercised through three actual SQLite-owned contexts,
+existing EF CQS commands, the real filesystem lock and generic publisher/compiler/placer. Their
+stored template stays immutable, prompt changes alter behavior without a schema major, constraints
+strengthen the version floor, stale review and missing runtime/storage refuse without partial rows.
+The authoring fixture is disposed and its databases deleted before native actor/background execution;
+all identity stamps and child-node remapping in that execution come from the real placer. This is
+source/EF/deterministic evidence, not independent package or live-provider qualification.
+
+CLR reconciliation scans internal activity classes too. `Activity(IsDiscoverable=false)` excludes
+implementation-only facade/worker types from standalone catalog discovery while runtime alias
+registration remains available. The reflection-only scanner tests cover declared/inherited opt-out
+and an ordinary discoverable activity. User specialists remain generic provider-owned definitions.
+
+The initial in-memory journal is an explicit development/test feature. It protects scoped request and
+result envelopes, fixes the operation deadline at first staging, admits one worker and fences dispatch
+and acceptance. Missing restart state, foreign scope/provenance, altered arguments and stale/late writes
+are refusals. Fresh MAF sessions are always new; a published continuity capability never implicitly
+restores history. Durable providers, explicit continuation, physical SDK/HTTP retry accounting and
+accepted-versus-applied settlement remain M3 work. Independent package proof, final review/CI and
+resulting-main qualification remain pending for this implementation slice.

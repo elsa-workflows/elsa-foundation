@@ -1,0 +1,91 @@
+using CShells.Features;
+using Elsa.Activities.Runtime.Contracts;
+using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Agent.Specialists.Activities;
+using Elsa.Agent.Specialists.Core.Models;
+using Elsa.Agent.Specialists.Journal;
+using Elsa.Agent.Specialists.Services;
+using Elsa.Serialization.Core;
+using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Tasks.Core;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
+namespace Elsa.Agent.Specialists;
+
+/// <summary>Activates pinned native specialist boundaries and their background model-turn workers.</summary>
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Agent")]
+[ManifestFeatureCategory("Runtime")]
+[ShellFeature(name: "SpecialistsRuntime", DisplayName = "Specialists (Runtime)",
+    Description = "Executes published specialists through Microsoft Agent Framework. Requires an explicitly configured turn journal and model provider.",
+    DependsOn = new object[] { "BackgroundActivities", "SpecialistJsonSchema", "Secrets", "Serialization" })]
+public class SpecialistsRuntimeFeature : IShellFeature
+{
+    /// <inheritdoc />
+    public virtual void ConfigureServices(IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddScoped<SpecialistNativeBinding>();
+        services.TryAddScoped<SpecialistTurnJournal>();
+        services.TryAddScoped<SpecialistModelRunner>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivityActivationStrategy, SpecialistActivationStrategy>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, SpecialistConsumerCapability>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, SpecialistTypesStartupTask>());
+    }
+}
+
+/// <summary>Explicit development/test storage. It cannot continue turns after a host restart.</summary>
+[ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
+[ManifestFeatureCategory("Agent")]
+[ManifestFeatureCategory("Persistence")]
+[ShellFeature(name: "SpecialistsInMemoryJournal", DisplayName = "Specialists: In-memory Journal",
+    Description = "Development and test only. Retains at most 10,000 turns for this host lifetime; missing turns are refused after restart.",
+    DependsOn = new object[] { "SpecialistsRuntime" })]
+public class SpecialistsInMemoryJournalFeature : IShellFeature
+{
+    /// <inheritdoc />
+    public virtual void ConfigureServices(IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.AddSingleton<ISpecialistTurnStore, InMemorySpecialistTurnStore>();
+    }
+}
+
+internal sealed class SpecialistActivationStrategy(SpecialistNativeBinding binding, SpecialistTurnJournal journal, SpecialistModelRunner runner, TimeProvider time) : IActivityActivationStrategy
+{
+    public string ConsumerKey => SpecialistRuntimeIds.ConsumerKey;
+    public IReadOnlyCollection<string> SupportedSchemaVersions { get; } = [SpecialistRuntimeIds.DescriptorSchema];
+    public bool RequiresInputHydration => false;
+    public ValueTask<ActivityActivationLease> ActivateAsync(ActivityActivationStrategyRequest request, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (request.Descriptor.ConsumerKey != ConsumerKey || !SupportedSchemaVersions.Contains(request.Descriptor.SchemaVersion) || request.Contract.DescriptorKind != ConsumerKey)
+            throw new InvalidOperationException("The specialist descriptor consumer or schema is unsupported.");
+        IActivity activity = request.Contract.Activation.Capability switch
+        {
+            SpecialistRuntimeIds.FacadeCapability => new SpecialistActivity(binding, journal, runner),
+            SpecialistRuntimeIds.TurnCapability when request.Contract.SupportsBackgroundExecution && request.Contract.Inputs.Count == 0 => new SpecialistModelTurn(binding, journal, runner, time),
+            _ => throw new InvalidOperationException("The specialist activation capability is unsupported.")
+        };
+        return ValueTask.FromResult(new ActivityActivationLease(activity));
+    }
+}
+
+internal sealed class SpecialistConsumerCapability : IRuntimeActivityConsumerCapability
+{
+    public string ConsumerKey => SpecialistRuntimeIds.ConsumerKey;
+    public IReadOnlyCollection<string> SupportedSchemaVersions { get; } = [SpecialistRuntimeIds.DescriptorSchema];
+}
+
+internal sealed class SpecialistTypesStartupTask(IWellKnownTypeRegistry types) : IStartupTask
+{
+    public Task ExecuteAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        types.RegisterType(typeof(SpecialistActivity), SpecialistRuntimeIds.FacadeCapability);
+        types.RegisterType(typeof(SpecialistModelTurn), SpecialistRuntimeIds.TurnCapability);
+        return Task.CompletedTask;
+    }
+}

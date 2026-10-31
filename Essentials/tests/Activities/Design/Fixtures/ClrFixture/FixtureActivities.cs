@@ -18,6 +18,7 @@ public abstract class FixtureActivity : Activity<ActivityUnit>
 /// assembly's version (pinned to <c>2.1.0</c> in the fixture csproj). Carries a required input to
 /// exercise the scanner's <c>[Required]</c> → <c>IsRequired</c> mapping.
 /// </summary>
+[Activity(IsDiscoverable = true)]
 public sealed class UnannotatedFixtureActivity : Activity<UnannotatedFixtureResult>
 {
     [ActivityInput]
@@ -379,3 +380,10 @@ public abstract class GenericFixtureActivityBase<T> : FixtureActivity;
 
 /// <summary>A closed subclass of a generic base. It can be instantiated, so the scanner catalogs it.</summary>
 public sealed class ClosedGenericFixtureActivity : GenericFixtureActivityBase<string>;
+
+/// <summary>An implementation detail that retains its runtime activity contract.</summary>
+[Activity(IsDiscoverable = false)]
+public class ImplementationOnlyFixtureActivity : FixtureActivity;
+
+/// <summary>Inherits the ordinary ActivityAttribute discovery policy.</summary>
+public sealed class ImplementationOnlyDerivedFixtureActivity : ImplementationOnlyFixtureActivity;

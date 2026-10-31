@@ -16,7 +16,7 @@ proof covers plain registration; add a feature-specific test only where wiring h
 - [ ] T001 Establish actual specialist Core/Design/runtime project envelopes and stable provider/descriptor/feature identities in `Extensions/Agent/src/Specialists/`, with `.slnx`, central package/API/lock/catalog registration as each real feature appears.
 - [ ] T002 Define justified immutable manifest/runtime/request/receipt/capability/authority shapes in `Extensions/Agent/src/Specialists/Core/Models/` and genuine store/execution extension ports in `Extensions/Agent/src/Specialists/Core/Contracts/`; verify independent package-author needs before making types public.
 - [ ] T003 Implement shared bounded JsonSchema.Net validation without a Design dependency in `Extensions/Agent/src/Specialists/JsonSchema/`, plus typed contract-to-schema compilation in `Extensions/Agent/src/Specialists/Design/Services/SpecialistSchemaCompiler.cs`; test malformed/remote references, required/null/unknown members and compatible field constraints.
-- [ ] T004 Qualify the normal central MEAI 10.10.1/MAF1.27.0 graph in `Directory.Packages.props` and owned `packages.lock.json` files, including existing `Extensions/Agent/tests/` suites, actual CShells/shared-assembly/package closure and reviewed public/nuspec changes.
+- [ ] T004 Qualify the normal central MEAI 10.10.1/MAF 1.27.0 graph in `Directory.Packages.props` and owned `packages.lock.json` files, including existing `Extensions/Agent/tests/` suites, actual CShells/shared-assembly/package closure and reviewed public/nuspec changes.
 
 The central dependency enabler [#3544](https://github.com/elsa-workflows/elsa-foundation/issues/3544)
 promotes the normal MEAI pin/locks and current Agent compatibility. T004 stays open until the later

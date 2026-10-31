@@ -210,6 +210,7 @@ class ConformanceRun:
         values = {"__PRODUCT_VERSION__": self.version, "__FIXTURE_VERSION__": "1.0.0-witness",
                   "__CSHELLS_VERSION__": self.pin("CShells.Abstractions"),
                   "__AI_ABSTRACTIONS_VERSION__": self.pin("Microsoft.Extensions.AI.Abstractions"),
+                  "__DI_ABSTRACTIONS_VERSION__": self.pin("Microsoft.Extensions.DependencyInjection.Abstractions"),
                   "__SDK_TGZ__": str(self.sdk), "__REQUIRED_SDK_VERSION__": "*"}
         values.update(replacements or {})
         template = FIXTURES / relative

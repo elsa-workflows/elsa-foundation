@@ -594,6 +594,11 @@
       "medianMinutes": 0.25
     },
     {
+      "project": "Extensions/Agent/tests/Specialists/Tests/Elsa.Agent.Specialists.Tests.csproj",
+      "tier": "pr",
+      "medianMinutes": 0.02
+    },
+    {
       "project": "Extensions/Agent/tests/Tests/Elsa.Agent.Tests.csproj",
       "tier": "pr",
       "medianMinutes": 0.02

@@ -213,6 +213,11 @@
         "resolved": "12.1.1",
         "contentHash": "EPpkIe1yh1a0OXyC100oOA8WMbZvqUu5plwhvYcb7oSELfyUZzfxV48BLhvs3kKo4NwG7MGLNgy1RJiYtT8Dpw=="
       },
+      "Google.Protobuf": {
+        "type": "Transitive",
+        "resolved": "3.30.2",
+        "contentHash": "Y2aOVLIt75yeeEWigg9V9YnjsEm53sADtLGq0gLhwaXpk3iu8tYSoauolyhenagA2sWno2TQ2WujI0HQd6s1Vw=="
+      },
       "Humanizer.Core": {
         "type": "Transitive",
         "resolved": "3.0.10",
@@ -235,6 +240,14 @@
         "dependencies": {
           "Humanizer.Core": "3.0.10",
           "Json.More.Net": "3.0.1"
+        }
+      },
+      "Microsoft.Agents.AI.Abstractions": {
+        "type": "Transitive",
+        "resolved": "1.27.0",
+        "contentHash": "FTGX3V3DqrkEahoU7BtlMs/c8hE7W5QxzFaf+AcB6j50fYjsBMEkIE0kDMyrK+wH+xUVqAE41Zd01J+GwlrhDg==",
+        "dependencies": {
+          "Microsoft.Extensions.AI.Abstractions": "10.10.1"
         }
       },
       "Microsoft.Bcl.Cryptography": {
@@ -307,6 +320,23 @@
           "SQLitePCLRaw.core": "2.1.11"
         }
       },
+      "Microsoft.Extensions.AI": {
+        "type": "Transitive",
+        "resolved": "10.10.0",
+        "contentHash": "XKvtDUD3KySkvA5UpS+UF67M5rcqiXjAQchTZZ26WnavVKXxwlUTVdK/Ju0tc/25+16AVUdNl8cnVVGX/tx03A==",
+        "dependencies": {
+          "Microsoft.Extensions.AI.Abstractions": "10.10.0",
+          "System.Numerics.Tensors": "10.0.12"
+        }
+      },
+      "Microsoft.Extensions.AI.Evaluation": {
+        "type": "Transitive",
+        "resolved": "10.10.0",
+        "contentHash": "YXdqOSHl8X1/Vkmuu6QoV330FQ7aiYtNDqIUIiICSDd0HMx0No9D/ZWo0ocOPXd9bk00YQQfyK5HKcgRnRmQbQ==",
+        "dependencies": {
+          "Microsoft.Extensions.AI.Abstractions": "10.10.0"
+        }
+      },
       "Microsoft.Extensions.AmbientMetadata.Application": {
         "type": "Transitive",
         "resolved": "10.3.0",
@@ -314,8 +344,8 @@
       },
       "Microsoft.Extensions.Compliance.Abstractions": {
         "type": "Transitive",
-        "resolved": "10.3.0",
-        "contentHash": "b3gmxtyX0n8bQFuZ679f8QiOWqjeZKFc6XXPUsYNFzMcWi0Q44Ej3pB41N/QQ0maX380kmOMF36bLSBHNThXAg=="
+        "resolved": "10.10.0",
+        "contentHash": "Sh3ujDRJpCMNY4x+43ljCROt4qBOoWfsL8l816RPYZS1S+Tw277r5002rbB15Sh6hFcCT8mGYBO7NtpfSYrQ0Q=="
       },
       "Microsoft.Extensions.DependencyInjection.AutoActivation": {
         "type": "Transitive",
@@ -387,6 +417,14 @@
           "Microsoft.Extensions.Compliance.Abstractions": "10.3.0"
         }
       },
+      "Microsoft.Extensions.VectorData.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.10.0",
+        "contentHash": "bZdR7QbdLLqmc9xPJIiD5U6H678xyv8eMATjQ0SmH7OZyi+/12G/nFAGCE6DNG22q76YNwkXo+V7GMyUckjjgw==",
+        "dependencies": {
+          "Microsoft.Extensions.AI.Abstractions": "10.10.0"
+        }
+      },
       "Microsoft.IdentityModel.Abstractions": {
         "type": "Transitive",
         "resolved": "8.19.2",
@@ -432,6 +470,14 @@
         "dependencies": {
           "Microsoft.Bcl.Cryptography": "10.0.2",
           "Microsoft.IdentityModel.Logging": "8.19.2"
+        }
+      },
+      "Microsoft.ML.Tokenizers": {
+        "type": "Transitive",
+        "resolved": "2.0.0",
+        "contentHash": "+b8lT4cLLO/sBR2hjvE/qG6qrZG15h7/PBvnIrzTh4xDaAxdHUY6449rC+1pHzQUsBiCHZVbj+VMn+xS0sL7TA==",
+        "dependencies": {
+          "Google.Protobuf": "3.30.2"
         }
       },
       "Microsoft.SqlServer.Server": {
@@ -751,6 +797,11 @@
           "Microsoft.IdentityModel.JsonWebTokens": "8.19.2",
           "Microsoft.IdentityModel.Tokens": "8.19.2"
         }
+      },
+      "System.Numerics.Tensors": {
+        "type": "Transitive",
+        "resolved": "10.0.12",
+        "contentHash": "17brFrnQHV/XMMazXNqFq4GkvzWy8yzDPo5Gb8TT8zJtMFbUqDycOCyPCp9F+eMc4L75kcCKRZqaeBHMwLCL9Q=="
       },
       "System.Security.Cryptography.Pkcs": {
         "type": "Transitive",
@@ -1103,6 +1154,46 @@
           "Elsa.Agent.Core": "[4.0.0-dev, )",
           "GitHub.Copilot.SDK": "[1.0.4, )",
           "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )"
+        }
+      },
+      "elsa.agent.specialists": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Agent.Specialists.Core": "[4.0.0-dev, )",
+          "Elsa.Agent.Specialists.JsonSchema": "[4.0.0-dev, )",
+          "Elsa.Secrets.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "Microsoft.Agents.AI": "[1.27.0, )"
+        }
+      },
+      "elsa.agent.specialists.core": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.AI.Abstractions": "[10.10.1, )"
+        }
+      },
+      "elsa.agent.specialists.design": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Activities.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Elsa.Agent.Specialists.Core": "[4.0.0-dev, )",
+          "Elsa.Agent.Specialists.JsonSchema": "[4.0.0-dev, )",
+          "Elsa.Workflows.Publishing.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.agent.specialists.jsonschema": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Agent.Specialists.Core": "[4.0.0-dev, )",
+          "Elsa.Primitives": "[4.0.0-dev, )",
+          "JsonSchema.Net": "[9.2.0, )"
         }
       },
       "elsa.agent.workflows": {
@@ -2591,6 +2682,21 @@
         "contentHash": "pc1hr16zNQSxVsOSIYWliE3rtl5E4MwRXReflPf60l5tSvzMfl65eJV6M+iPXhZ2Ui5o078LJ2pS9O1o5ZT1zQ==",
         "dependencies": {
           "JsonPointer.Net": "7.0.1"
+        }
+      },
+      "Microsoft.Agents.AI": {
+        "type": "CentralTransitive",
+        "requested": "[1.27.0, )",
+        "resolved": "1.27.0",
+        "contentHash": "JMCxvNed3W1D0SDqsDlOl98BerkLaH/F2k8+iLMVMtKPKzy9aaU/5nvJzkbm/JNprULAxA5mjy8YAzxY3/+aOQ==",
+        "dependencies": {
+          "Microsoft.Agents.AI.Abstractions": "1.27.0",
+          "Microsoft.Extensions.AI": "10.10.0",
+          "Microsoft.Extensions.AI.Abstractions": "10.10.1",
+          "Microsoft.Extensions.AI.Evaluation": "10.10.0",
+          "Microsoft.Extensions.Compliance.Abstractions": "10.10.0",
+          "Microsoft.Extensions.VectorData.Abstractions": "10.10.0",
+          "Microsoft.ML.Tokenizers": "2.0.0"
         }
       },
       "Microsoft.AspNetCore.Authentication.JwtBearer": {

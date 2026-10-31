@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="JsonSchema.Net" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <InternalsVisibleTo Include="Elsa.Agent.Specialists.Design" />
+    <InternalsVisibleTo Include="Elsa.Agent.Specialists" />
+    <InternalsVisibleTo Include="Elsa.Agent.Specialists.Tests" />
+    <ProjectReference Include="../Core/Elsa.Agent.Specialists.Core.csproj" />
+    <ProjectReference Include="../../../../../Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj" />
+  </ItemGroup>
+</Project>
