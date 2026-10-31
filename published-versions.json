@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "0870a6740dac5e4e78d7b72a15e1dcb0177a4e5a",
+  "last_publish_commit": "ebc3fafdce0ee827755b4aa7b4f5ddb78d07ed8b",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -99,8 +99,8 @@
     },
     {
       "package_id": "Elsa.Activities.Runtime.Core",
-      "version": "4.0.25-preview",
-      "commit": "3bd200c098ec8bd7d4816f17757cde9389ed854a"
+      "version": "4.0.26-preview",
+      "commit": "ebc3fafdce0ee827755b4aa7b4f5ddb78d07ed8b"
     },
     {
       "package_id": "Elsa.Activities.Scheduling",
@@ -519,8 +519,8 @@
     },
     {
       "package_id": "Elsa.Persistence.EntityFramework",
-      "version": "4.0.32-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.33-preview",
+      "commit": "ebc3fafdce0ee827755b4aa7b4f5ddb78d07ed8b"
     },
     {
       "package_id": "Elsa.Persistence.Schema",
@@ -739,8 +739,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime",
-      "version": "4.0.72-preview",
-      "commit": "3bd200c098ec8bd7d4816f17757cde9389ed854a"
+      "version": "4.0.73-preview",
+      "commit": "ebc3fafdce0ee827755b4aa7b4f5ddb78d07ed8b"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Api",
