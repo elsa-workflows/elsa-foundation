@@ -14,6 +14,33 @@ afterEach(() => {
 });
 
 describe("studio auth mounting", () => {
+  it.each([false, true])("waits for initial backend discovery before exposing an editable profile (failure: %s)", async failure => {
+    const initialPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    localStorage.clear(); sessionStorage.clear(); window.history.replaceState({}, "", "/settings/backends/new?backend=legacy");
+    const fetchMock = stubShellFetch(), original = fetchMock.getMockImplementation()!;
+    let release!: (response: Response) => void;
+    const pending = new Promise<Response>(resolve => { release = resolve; });
+    fetchMock.mockImplementation(async input => String(input).endsWith("/capabilities") ? pending : original(input));
+    const view = await renderApp();
+    try {
+      await vi.waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/capabilities"))).toBe(true));
+      expect(view.container.querySelector(".backend-form")).toBeNull();
+      expect(view.container.querySelector('[aria-label="Loading backend connections"]')).not.toBeNull();
+      release(new Response(JSON.stringify(failure ? { message: "Unavailable" } : { capabilities: [] }), { status: failure ? 503 : 200, headers: { "content-type": "application/json" } }));
+      await vi.waitFor(() => expect(view.container.querySelector(".backend-form")).not.toBeNull());
+      const name = view.container.querySelector<HTMLInputElement>(".backend-form input")!;
+      flushSync(() => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(name, "Retained profile draft");
+        name.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await flushPromises(); await flushPromises();
+      expect(view.container.querySelector<HTMLInputElement>(".backend-form input")?.value).toBe("Retained profile draft");
+    } finally {
+      release(new Response(JSON.stringify({ capabilities: [] }), { status: 200 }));
+      await flushPromises(); await view.unmount(); window.history.replaceState({}, "", initialPath);
+    }
+  });
+
   it.each([
     ["unavailable", "/module-policy"], ["unavailable", "/settings/module-policy"],
     ["hidden", "/module-policy"], ["hidden", "/settings/module-policy"]
