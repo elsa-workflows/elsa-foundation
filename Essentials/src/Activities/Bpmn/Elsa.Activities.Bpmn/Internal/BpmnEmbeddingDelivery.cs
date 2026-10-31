@@ -62,6 +62,10 @@ internal sealed class BpmnEmbeddingDelivery(BpmnEmbeddingBoundary boundary, Bpmn
                 if (source.Intent.Kind == BpmnEmbeddingBoundary.StartKind) return;
                 if (retained.TerminalResult is not null)
                 {
+                    // The old fault's parent ACK is itself a cleanup trigger. Keep this cancel source owed
+                    // while that existing path retires legacy Work; do not block the shared ACK path on Work.
+                    if (BpmnDirectExecutionDriver.Read(retained).Work.Any(work => work.NativeWork is not null))
+                        throw BpmnNativeWorkBoundary.Unavailable("Legacy embedded native work remains owed before cancellation acknowledgment.");
                     BpmnEmbeddingBoundary.RequireWorkerCancellationSettled(retained);
                     return;
                 }
