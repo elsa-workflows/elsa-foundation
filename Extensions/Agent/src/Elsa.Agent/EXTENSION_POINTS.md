@@ -167,6 +167,13 @@ terminal answer insert therefore cannot erase the dependencies already exposed t
 Pending projections remain separate from the last verified checkpoint, so a known failed insert
 before any disclosure does not later journal that unexposed projection in cleanup.
 
+A successful checkpoint is followed by current owner/host admission of the exact retained
+dependencies before provider entry, callback dispatch or result delivery, including the UI result
+events. Persistence grants no authority. Tool admission is refreshed after the write. Dispatch
+retains the checkpointed context and refuses changes to its generic ownership, schema, target,
+client, sensitivity or scope bindings; an authorized refresh of opaque content, summaries or
+references does not replace that frozen payload or require byte-for-byte equality.
+
 Pre-disclosure writes honor foreground cancellation. Terminal and accepted-effect journals retain
 their non-cancellable truth policy. Cleanup always releases the foreground lease, and does not
 retry a known failed terminal insert or replace a primary domain failure with another journal
@@ -184,6 +191,13 @@ sends a fixed redacted error. Custom in-process stream callers must choose their
 retry or abort policy. SDK callbacks receive only safe cancellation when a disclosure fails; the
 original domain cause remains observable to the stream caller. No new public exception type,
 error payload or storage port is introduced.
+
+The foreground boundary invokes replaceable stores, catalogs, registration, provider enumeration
+and tool dispatch through delegates, covering synchronous throws as well as failed tasks. Distinct
+primary causes remain retained if provider disposal or terminal cleanup also fails. A receipt
+journal's known missing-metadata refusal remains bounded; an unexpected store failure crosses the
+Core exception boundary with its original cause, retaining the accepted receipt and pause for a
+supported retry. A failed read before source ownership is known does not guess a source to mutate.
 
 The generic engine bounds retained disclosure history to 64 distinct complete snapshots and 8 MiB
 of serialized evidence. It deep-copies snapshots and deduplicates by their complete canonical value,

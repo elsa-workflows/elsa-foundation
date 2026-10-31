@@ -34,7 +34,8 @@ internal sealed class AgentDisclosureHistory
             _bytes += size;
             return null;
         }
-        catch (Exception error) when (error is JsonException or NotSupportedException or AgentContributionException or ArgumentException)
+        catch (Exception error) when (error is JsonException or NotSupportedException or ArgumentException
+            or AgentContributionException { InnerException: null })
         {
             return new("agent.history.provenance_unavailable", "Complete immutable disclosure history could not be retained.", 409);
         }

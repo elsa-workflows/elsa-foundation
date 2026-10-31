@@ -15,7 +15,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Agent.Tests;
 
-public sealed class AgentCumulativeDisclosureTests
+public sealed partial class AgentCumulativeDisclosureTests
 {
     private const string Module = "cumulative.module";
     private const string SourceId = "cumulative.context";
@@ -893,6 +893,9 @@ public sealed class AgentCumulativeDisclosureTests
     private sealed class ProjectionSource : IAgentContextProvider
     {
         internal bool ShowDetail = true;
+        internal bool AddSection, RefreshPayload;
+        private int payloadRevision;
+        internal string? BindingDrift;
         internal string DetailRevision = "detail-v1";
         internal HashSet<string> AllowedDetailRevisions { get; } = ["detail-v1", "detail-v2"];
         public AgentContextProviderDescriptor Descriptor { get; } = new(SourceId, Module, "*", ["cumulative.resource"], ["1"], ["resource"]);
@@ -903,9 +906,19 @@ public sealed class AgentCumulativeDisclosureTests
             if (request.Context.Any(item => item.Target?.ResourceId == "detail-resource" && !AllowedDetailRevisions.Contains(item.Target.Revision!)))
                 return ValueTask.FromResult(new AgentContextContribution([], [new(SourceId, "cumulative.read_denied", "Current owner authority withholds this retained detail resource.", true)]));
             if (request.IsHistorical) return ValueTask.FromResult(new AgentContextContribution(request.Context, []));
-            return ValueTask.FromResult(new AgentContextContribution(ShowDetail
-                ? [Attachment("original", "original-resource", "original-v1"), Attachment("detail", "detail-resource", DetailRevision)]
-                : [Attachment("original", "original-resource", "original-v1")], []));
+            var current = new List<AgentContextAttachment> { Attachment("original", "original-resource", "original-v1") };
+            if (ShowDetail) current.Add(Attachment("detail", "detail-resource", DetailRevision));
+            if (AddSection) current.Add(Attachment("section", "section-resource", "section-v1"));
+            if (BindingDrift == "scopes") current = current.Select(item => item with { AgentScopes = ["new-scope"] }).ToList();
+            if (BindingDrift == "revision") current = current.Select(item => item.Target?.ResourceId == "detail-resource"
+                ? item with { Target = item.Target with { Revision = "detail-v2" } } : item).ToList();
+            if (BindingDrift == "target") current.Add(Attachment("another", "another-resource", "another-v1"));
+            if (RefreshPayload)
+            {
+                var value = ++payloadRevision;
+                current = current.Select(item => item with { Summary = "Authorized summary " + value, Content = new { timestamp = value } }).ToList();
+            }
+            return ValueTask.FromResult(new AgentContextContribution(current, []));
         }
         internal void SetAuthority(string authority)
         {
@@ -1044,14 +1057,19 @@ public sealed class AgentCumulativeDisclosureTests
         internal string? Mutation;
         internal Exception? ThrowOnSave;
         internal Exception? ThrowOnRemove;
+        internal Exception? ThrowOnFind;
         internal int RemoveCalls;
         public void Save(AgentPausedTurn value)
         {
             if (ThrowOnSave is { } failure) throw failure;
             state = value;
         }
-        public AgentPausedTurn? Find(string sessionId) => state is not null && state.SessionId == sessionId
-            ? state with { DisclosureHistory = ChangeHistory(state.DisclosureHistory, Mutation) } : null;
+        public AgentPausedTurn? Find(string sessionId)
+        {
+            if (ThrowOnFind is { } failure) throw failure;
+            return state is not null && state.SessionId == sessionId
+                ? state with { DisclosureHistory = ChangeHistory(state.DisclosureHistory, Mutation) } : null;
+        }
         public void Remove(string sessionId)
         {
             RemoveCalls++;
@@ -1067,14 +1085,39 @@ public sealed class AgentCumulativeDisclosureTests
         internal Exception? ThrowBeforeToolInsert;
         internal Exception? PersistentAssistantInsertFailure;
         internal Exception? ThrowOnTerminalStatus;
+        internal Exception? ThrowOnStreamingStatus, ThrowOnFind, ThrowOnList;
+        internal bool AsyncFailures;
+        internal int AssistantInsertCalls, HoldAssistantAt;
+        internal TaskCompletionSource SuccessfulWriteStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource ReleaseSuccessfulWrite { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal int TerminalStatusCalls;
         internal bool BlockAssistantInsert, AssistantInsertCancelled;
         internal TaskCompletionSource AssistantInsertStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal int FailedInserts;
         public Task<AgentSession> CreateAsync(AgentSessionCreateRequest request, CancellationToken cancellationToken = default) => inner.CreateAsync(request, cancellationToken);
-        public Task<AgentSession?> FindAsync(string sessionId, CancellationToken cancellationToken = default) => inner.FindAsync(sessionId, cancellationToken);
-        public async Task<AgentMessage> AddMessageAsync(string sessionId, AgentMessageCreateRequest request, CancellationToken cancellationToken = default)
+        public Task<AgentSession?> FindAsync(string sessionId, CancellationToken cancellationToken = default)
+            => ThrowOnFind is { } failure ? Failure<AgentSession?>(failure) : inner.FindAsync(sessionId, cancellationToken);
+        private Task<T> Failure<T>(Exception cause)
         {
+            if (AsyncFailures) return Task.FromException<T>(cause);
+            throw cause;
+        }
+        public Task<AgentMessage> AddMessageAsync(string sessionId, AgentMessageCreateRequest request, CancellationToken cancellationToken = default)
+        {
+            if (request.Role == AgentRole.Tool && ThrowBeforeToolInsert is { } failure)
+            {
+                ThrowBeforeToolInsert = null; FailedInserts++;
+                return Failure<AgentMessage>(failure);
+            }
+            return AddCoreAsync(sessionId, request, cancellationToken);
+        }
+        private async Task<AgentMessage> AddCoreAsync(string sessionId, AgentMessageCreateRequest request, CancellationToken cancellationToken)
+        {
+            if (request.Role == AgentRole.Assistant && ++AssistantInsertCalls == HoldAssistantAt)
+            {
+                SuccessfulWriteStarted.TrySetResult();
+                await ReleaseSuccessfulWrite.Task.WaitAsync(cancellationToken);
+            }
             if (request.Role == AgentRole.Assistant && BlockAssistantInsert)
             {
                 AssistantInsertStarted.TrySetResult();
@@ -1086,14 +1129,11 @@ public sealed class AgentCumulativeDisclosureTests
                 ThrowBeforeAssistantInsert = null; FailedInserts++;
                 throw failure;
             }
-            if (request.Role == AgentRole.Tool && ThrowBeforeToolInsert is { } toolFailure)
-            {
-                ThrowBeforeToolInsert = null; FailedInserts++;
-                throw toolFailure;
-            }
             return Project(await inner.AddMessageAsync(sessionId, request, cancellationToken));
         }
-        public async Task<IReadOnlyCollection<AgentMessage>> ListMessagesAsync(string sessionId, CancellationToken cancellationToken = default)
+        public Task<IReadOnlyCollection<AgentMessage>> ListMessagesAsync(string sessionId, CancellationToken cancellationToken = default)
+            => ThrowOnList is { } failure ? Failure<IReadOnlyCollection<AgentMessage>>(failure) : ListCoreAsync(sessionId, cancellationToken);
+        private async Task<IReadOnlyCollection<AgentMessage>> ListCoreAsync(string sessionId, CancellationToken cancellationToken)
             => (await inner.ListMessagesAsync(sessionId, cancellationToken)).Select(Project).ToArray();
         public async Task<AgentMessage?> FindMessageAsync(string sessionId, string messageId, CancellationToken cancellationToken = default)
         { var message = await inner.FindMessageAsync(sessionId, messageId, cancellationToken); return message is null ? null : Project(message); }
@@ -1101,6 +1141,8 @@ public sealed class AgentCumulativeDisclosureTests
         { var message = await inner.FindLatestMessageAsync(sessionId, role, cancellationToken); return message is null ? null : Project(message); }
         public Task SetMessageStatusAsync(string sessionId, string messageId, AgentMessageStatus status, CancellationToken cancellationToken = default)
         {
+            if (status == AgentMessageStatus.Streaming && ThrowOnStreamingStatus is { } streamingFailure)
+                return Failure<object?>(streamingFailure);
             if (status is AgentMessageStatus.Completed or AgentMessageStatus.Cancelled or AgentMessageStatus.Failed)
             {
                 TerminalStatusCalls++;

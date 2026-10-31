@@ -85,7 +85,8 @@ internal sealed class DefaultAgentTurnOrchestrator(
 
     public async IAsyncEnumerable<AgentStreamEvent> StreamAsync(string sessionId, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var session = await sessions.FindAsync(sessionId, cancellationToken);
+        var boundary = new TurnBoundary(sessionId);
+        var session = await boundary.CallAsync("find-session", () => sessions.FindAsync(sessionId, cancellationToken), cancellationToken);
         if (session is null || session.ExpiresAt <= DateTimeOffset.UtcNow)
         {
             yield return Error("agent.session.unavailable", "The session is missing or expired.", 404);
@@ -94,18 +95,22 @@ internal sealed class DefaultAgentTurnOrchestrator(
         // A custom store may canonicalize its lookup input. Keep lifecycle state on the returned
         // identity; the default store requires an exact opaque session ID.
         sessionId = session.Id;
-        var provider = providers.Active;
+        boundary.SessionId = sessionId;
+        var provider = boundary.Call("select-provider", () => providers.Active, cancellationToken);
         if (provider is null)
         {
             yield return Error("agent.provider.not_found", "No agent harness is enabled.", 404);
             yield break;
         }
 
-        var turnId = stateStore.Find(sessionId)?.TurnId ?? NewId();
+        var turnId = boundary.Call("find-paused-turn", () => stateStore.Find(sessionId), cancellationToken)?.TurnId ?? NewId();
         CancellationToken turnToken = default;
         AgentStreamEvent? leaseError = null;
         try { turnToken = turnRegistry.Register(sessionId, turnId); }
-        catch (AgentContributionException) { leaseError = Error("agent.turn.busy", "This session already has an active foreground turn.", 409); }
+        catch (AgentContributionException expected) when (expected.InnerException is null)
+        { leaseError = Error("agent.turn.busy", "This session already has an active foreground turn.", 409); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception cause) { throw boundary.Capture("register-turn", cause); }
         if (leaseError is not null)
         {
             yield return leaseError;
@@ -125,31 +130,16 @@ internal sealed class DefaultAgentTurnOrchestrator(
         var providerEntered = false;
         var assistantJournaled = false;
         AgentError? disclosureStop = null;
-        AgentContributionException? disclosureFailure = null;
-        async Task<T> TrackAsync<T>(Task<T> pending)
-        {
-            try { return await pending; }
-            catch (AgentContributionException failure)
-            {
-                Interlocked.CompareExchange(ref disclosureFailure, failure, null);
-                throw;
-            }
-        }
+        Task<T> TrackAsync<T>(Func<Task<T>> pending)
+            => boundary.CallAsync("admit-disclosure", pending, token);
         AgentError? TrackPause(Func<AgentError?> action)
-        {
-            try { return action(); }
-            catch (AgentContributionException failure)
-            {
-                Interlocked.CompareExchange(ref disclosureFailure, failure, null);
-                throw;
-            }
-        }
+            => boundary.Call("save-paused-turn", action, token);
         try
         {
             var preparationCancelled = false;
             try
             {
-                prepared = await TrackAsync(PrepareAsync(session, token, (source, continuation) =>
+                prepared = await TrackAsync(async () => await PrepareAsync(session, token, (source, continuation) =>
                 {
                     // Remember lifecycle ownership before a replaceable authority can throw.
                     // A retained receipt pause stays intact; a new prompt must leave Pending.
@@ -162,15 +152,15 @@ internal sealed class DefaultAgentTurnOrchestrator(
             {
                 // An already accepted receipt remains resumable. A cancelled new prompt must not
                 // strand the session's pending-message gate while an abandoned source finishes.
-                paused = stateStore.Find(sessionId) is not null;
+                paused = boundary.Call("find-cancelled-pause", () => stateStore.Find(sessionId)) is not null;
                 if (!paused)
                 {
-                    var cancelledPrompt = (await sessions.ListMessagesAsync(sessionId, CancellationToken.None))
+                    var cancelledPrompt = (await boundary.CallAsync("list-cancelled-prompts", () => sessions.ListMessagesAsync(sessionId, CancellationToken.None)))
                         .LastOrDefault(x => x.Role == AgentRole.User && x.Status == AgentMessageStatus.Pending);
                     if (cancelledPrompt is not null)
-                        await sessions.SetMessageStatusAsync(sessionId, cancelledPrompt.Id, AgentMessageStatus.Cancelled, CancellationToken.None);
+                        await boundary.CallAsync("cancel-prompt", () => sessions.SetMessageStatusAsync(sessionId, cancelledPrompt.Id, AgentMessageStatus.Cancelled, CancellationToken.None));
                 }
-                yield return Lifecycle(AgentStreamEventKind.TurnCancelled, new AgentTurnStarted(turnId, Math.Max(1, options.Value.MaxSteps)));
+                yield return Lifecycle(AgentStreamEventKind.TurnCancelled, new AgentTurnStarted(turnId, boundary.Call("read-turn-options", () => Math.Max(1, options.Value.MaxSteps), token)));
                 yield break;
             }
             if (prepared is null) yield break;
@@ -182,15 +172,15 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 yield break;
             }
             observedResults.AddRange(prepared.DisclosureResults);
-            if (disclosures.Add(prepared.DisclosureHistory) is { } retainedError)
+            if (boundary.Call("retain-disclosure-history", () => disclosures.Add(prepared.DisclosureHistory), token) is { } retainedError)
             {
                 yield return Error(retainedError.Code, retainedError.Message, retainedError.StatusCode);
                 yield break;
             }
             checkpoint.History = disclosures.Snapshots;
             var source = prepared.Source!;
-            await sessions.SetMessageStatusAsync(sessionId, source.Id, AgentMessageStatus.Streaming, token);
-            var maxSteps = Math.Max(1, options.Value.MaxSteps);
+            await boundary.CallAsync("start-prompt", () => sessions.SetMessageStatusAsync(sessionId, source.Id, AgentMessageStatus.Streaming, token), token);
+            var maxSteps = boundary.Call("read-turn-options", () => Math.Max(1, options.Value.MaxSteps), token);
             yield return Lifecycle(AgentStreamEventKind.Started, new AgentTurnStarted(turnId, maxSteps));
             yield return Lifecycle(AgentStreamEventKind.ContextAdmitted, new AgentContextContribution(prepared.Context, prepared.Diagnostics));
 
@@ -199,14 +189,14 @@ internal sealed class DefaultAgentTurnOrchestrator(
             {
                 // Delegated SDK functions capture their initial context, and a host provider can
                 // request several calls in one batch. Neither snapshot admits a later operation.
-                var historical = await TrackAsync(AuthorizeHistoryAsync(session, await sessions.ListMessagesAsync(sessionId, dispatchToken), dispatchToken));
+                var historical = await TrackAsync(async () => await AuthorizeHistoryAsync(session, await sessions.ListMessagesAsync(sessionId, dispatchToken), dispatchToken));
                 if (historical is not null) return new(null, historical, true);
-                historical = await TrackAsync(AuthorizeDisclosuresAsync(session, disclosures.Snapshots, dispatchToken));
+                historical = await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, disclosures.Snapshots, dispatchToken));
                 if (historical is not null) return new(null, historical, true);
-                var admission = await TrackAsync(AdmitAsync(session, source.Context, observedResults, false, false, dispatchToken));
+                var admission = await TrackAsync(async () => await AdmitAsync(session, source.Context, observedResults, false, false, dispatchToken));
                 if (!admission.Succeeded || admission.Value is null) return new(null, admission.Error, true);
                 prepared = prepared with { Context = admission.Value.Attachments, Diagnostics = admission.Value.Diagnostics };
-                var admittedTools = await GetAdmittedToolsAsync(session, prepared, dispatchToken);
+                var admittedTools = await boundary.CallAsync("discover-current-tools", () => GetAdmittedToolsAsync(session, prepared, dispatchToken), dispatchToken);
                 var descriptor = admittedTools.FirstOrDefault(x => string.Equals(x.Descriptor.Name, invocation.ToolName, StringComparison.OrdinalIgnoreCase))?.Descriptor;
                 if (descriptor is null)
                     return new(null, new("agent.tool.not_admitted", "This tool is not admitted for the current turn.", 403));
@@ -215,30 +205,43 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 if (OriginalTargetsMissing(descriptor.ModuleId, source.Context, prepared.Context)
                     || OriginalTargetsMissing(descriptor.ModuleId, invocation.Context, prepared.Context))
                     return new(null, new("agent.tool.context_changed", "The admitted resource context changed. Submit fresh context before another operation.", 409));
-                if (disclosures.Add(prepared.Context, []) is { } boundError) return new(null, boundError, true);
-                if (await TrackAsync(CheckpointAsync(sessionId, source, observedResults, disclosures.Snapshots, checkpoint, dispatchToken)) is { } checkpointError)
+                if (boundary.Call("retain-disclosure-snapshot", () => disclosures.Add(prepared.Context, []), dispatchToken) is { } boundError) return new(null, boundError, true);
+                if (await TrackAsync(async () => await CheckpointAsync(sessionId, source, observedResults, disclosures.Snapshots, checkpoint, dispatchToken)) is { } checkpointError)
                     return new(null, checkpointError, true);
+                // Persistence can await arbitrary store I/O. It grants no authority to use the
+                // earlier projection after that await, and cannot silently refresh this intent.
+                var current = await TrackAsync(async () => await AdmitAsync(session, source.Context, observedResults, false, false, dispatchToken));
+                if (!current.Succeeded || current.Value is null) return new(null, current.Error, true);
+                if (!SameContextBindings(current.Value.Attachments, prepared.Context))
+                    return new(null, new("agent.tool.context_changed", "The admitted resource context changed. Submit fresh context before another operation.", 409), true);
+                admittedTools = await boundary.CallAsync("discover-current-tools", () => GetAdmittedToolsAsync(session, prepared, dispatchToken), dispatchToken);
+                if (!admittedTools.Any(tool => string.Equals(tool.Descriptor.Name, invocation.ToolName, StringComparison.OrdinalIgnoreCase)))
+                    return new(null, new("agent.tool.not_admitted", "This tool is not admitted for the current turn.", 403));
+                if (await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, checkpoint.History, dispatchToken)) is { } postWriteDenial)
+                    return new(null, postWriteDenial, true);
                 return new(invocation with { Context = prepared.Context }, null);
             }, async (invocation, result, dispatchToken) =>
             {
                 // Record the real observation before attempting another disclosure. Cancellation,
                 // provider errors and an empty assistant response cannot erase its provenance.
-                await RecordToolResultAsync(sessionId, invocation.Context, result);
+                await boundary.CallAsync("record-tool-result", () => RecordToolResultAsync(sessionId, invocation.Context, result));
                 observedResults.Add(result);
-                var historical = await TrackAsync(AuthorizeHistoryAsync(session, await sessions.ListMessagesAsync(sessionId, dispatchToken), dispatchToken));
+                var historical = await TrackAsync(async () => await AuthorizeHistoryAsync(session, await sessions.ListMessagesAsync(sessionId, dispatchToken), dispatchToken));
                 if (historical is not null) return historical;
-                historical = await TrackAsync(AuthorizeDisclosuresAsync(session, disclosures.Snapshots, dispatchToken));
+                historical = await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, disclosures.Snapshots, dispatchToken));
                 if (historical is not null) return historical;
-                var admission = await TrackAsync(AdmitAsync(session, source.Context, observedResults,
+                var admission = await TrackAsync(async () => await AdmitAsync(session, source.Context, observedResults,
                     receiptOnly || result.Receipt is not null, false, dispatchToken));
                 if (!admission.Succeeded || admission.Value is null) return admission.Error;
-                if (disclosures.Add(invocation.Context, [result]) is { } boundError) return boundError;
-                if (await TrackAsync(CheckpointAsync(sessionId, source, observedResults, disclosures.Snapshots, checkpoint, dispatchToken)) is { } checkpointError)
+                if (boundary.Call("retain-result-snapshot", () => disclosures.Add(invocation.Context, [result]), dispatchToken) is { } boundError) return boundError;
+                if (await TrackAsync(async () => await CheckpointAsync(sessionId, source, observedResults, disclosures.Snapshots, checkpoint, dispatchToken)) is { } checkpointError)
                     return checkpointError;
+                if (await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, checkpoint.History, dispatchToken)) is { } postWriteDenial)
+                    return postWriteDenial;
                 receiptOnly |= result.Receipt is not null;
                 prepared = prepared with { Context = admission.Value.Attachments, Diagnostics = admission.Value.Diagnostics, IsContinuation = receiptOnly };
                 return null;
-            }, failure => Interlocked.CompareExchange(ref disclosureFailure, failure, null), error =>
+            }, failure => boundary.FailCallback(failure), error =>
             {
                 Interlocked.CompareExchange(ref disclosureStop, error, null);
                 // SDKs may convert function exceptions into model-visible tool text. Cancel their
@@ -251,7 +254,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
             // request, use the old client snapshot as a fresh read, or acquire another mutation.
             IReadOnlyCollection<IAgentTool> tools = [];
             var admissionCancelled = false;
-            try { tools = await GetAdmittedToolsAsync(session, prepared, token); }
+            try { tools = await boundary.CallAsync("discover-current-tools", () => GetAdmittedToolsAsync(session, prepared, token), token); }
             catch (OperationCanceledException) when (token.IsCancellationRequested) { admissionCancelled = true; }
             if (admissionCancelled)
             {
@@ -261,8 +264,8 @@ internal sealed class DefaultAgentTurnOrchestrator(
 
             if (provider is IAgentHarness harness)
             {
-                var dependencyError = await TrackAsync(AuthorizeDisclosuresAsync(session, disclosures.Snapshots, token))
-                    ?? disclosures.Add(prepared.Context, prepared.PendingResults);
+                var dependencyError = await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, disclosures.Snapshots, token))
+                    ?? boundary.Call("retain-provider-snapshot", () => disclosures.Add(prepared.Context, prepared.PendingResults), token);
                 if (dependencyError is not null)
                 {
                     yield return Error(dependencyError.Code, dependencyError.Message, dependencyError.StatusCode);
@@ -271,7 +274,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 var checkpointCancelled = false;
                 AgentError? checkpointError = null;
                 paused = prepared.IsContinuation;
-                try { checkpointError = await TrackAsync(CheckpointAsync(sessionId, source, observedResults, disclosures.Snapshots, checkpoint, token)); }
+                try { checkpointError = await TrackAsync(async () => await CheckpointAsync(sessionId, source, observedResults, disclosures.Snapshots, checkpoint, token)); }
                 catch (OperationCanceledException) when (token.IsCancellationRequested) { checkpointCancelled = true; }
                 if (checkpointCancelled)
                 {
@@ -284,6 +287,12 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     yield return Error(checkpointError.Code, checkpointError.Message, checkpointError.StatusCode);
                     yield break;
                 }
+                tools = await boundary.CallAsync("discover-current-tools", () => GetAdmittedToolsAsync(session, prepared, token), token);
+                if (await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, checkpoint.History, token)) is { } postWriteDenial)
+                {
+                    yield return Error(postWriteDenial.Code, postWriteDenial.Message, postWriteDenial.StatusCode);
+                    yield break;
+                }
                 paused = false;
                 var request = new AgentHarnessTurnRequest(sessionId, session.ActorId, prepared.History, prepared.Context, tools, session.Policy)
                 {
@@ -291,11 +300,11 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     PendingToolResults = prepared.PendingResults, IsReceiptContinuation = prepared.IsContinuation, ToolInvoker = guardedInvoker
                 };
                 providerEntered = true;
-                await using var enumerator = harness.RunTurnAsync(request, token).GetAsyncEnumerator(token);
+                await using var enumerator = boundary.Call("open-provider", () => new TrackedProviderEnumerator(harness.RunTurnAsync(request, token).GetAsyncEnumerator(token), boundary, token), token);
                 while (true)
                 {
                     var next = await NextAsync(enumerator, token);
-                    if (disclosureFailure is { } callbackFailure) ExceptionDispatchInfo.Capture(callbackFailure).Throw();
+                    if (boundary.CallbackFailure is { } callbackFailure) ExceptionDispatchInfo.Capture(callbackFailure).Throw();
                     if (next.Cancelled)
                     {
                         yield return disclosureStop is { } denial ? Error(denial.Code, denial.Message, denial.StatusCode)
@@ -329,7 +338,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     if (item.Kind == AgentStreamEventKind.Error) yield break;
                 }
                 assistantJournaled = true;
-                var journalError = await TrackAsync(RecordAssistantAsync(sessionId, source, assistant.ToString(), AgentMessageStatus.Completed, observedResults, checkpoint.History));
+                var journalError = await TrackAsync(async () => await RecordAssistantAsync(sessionId, source, assistant.ToString(), AgentMessageStatus.Completed, observedResults, checkpoint.History));
                 if (journalError is not null)
                 {
                     disclosureStop = journalError;
@@ -351,10 +360,10 @@ internal sealed class DefaultAgentTurnOrchestrator(
                         : Lifecycle(AgentStreamEventKind.TurnCancelled, new AgentTurnStarted(turnId, maxSteps));
                     yield break;
                 }
-                var historical = await TrackAsync(AuthorizeHistoryAsync(session, await sessions.ListMessagesAsync(sessionId, token), token));
-                historical ??= await TrackAsync(AuthorizeDisclosuresAsync(session, disclosures.Snapshots, token));
+                var historical = await TrackAsync(async () => await AuthorizeHistoryAsync(session, await sessions.ListMessagesAsync(sessionId, token), token));
+                historical ??= await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, disclosures.Snapshots, token));
                 var refreshed = historical is null
-                    ? await TrackAsync(AdmitAsync(session, source.Context, observedResults, prepared.IsContinuation, false, token))
+                    ? await TrackAsync(async () => await AdmitAsync(session, source.Context, observedResults, prepared.IsContinuation, false, token))
                     : new AgentResult<AgentContextContribution>(null, historical);
                 if (!refreshed.Succeeded || refreshed.Value is null)
                 {
@@ -364,7 +373,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     yield break;
                 }
                 prepared = prepared with { Context = refreshed.Value.Attachments, Diagnostics = refreshed.Value.Diagnostics };
-                tools = await GetAdmittedToolsAsync(session, prepared, token);
+                tools = await boundary.CallAsync("discover-current-tools", () => GetAdmittedToolsAsync(session, prepared, token), token);
                 if (disclosures.Add(prepared.Context, pending) is { } boundError)
                 {
                     yield return Error(boundError.Code, boundError.Message, boundError.StatusCode);
@@ -373,7 +382,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 var checkpointCancelled = false;
                 AgentError? checkpointError = null;
                 paused = prepared.IsContinuation;
-                try { checkpointError = await TrackAsync(CheckpointAsync(sessionId, source, observedResults, disclosures.Snapshots, checkpoint, token)); }
+                try { checkpointError = await TrackAsync(async () => await CheckpointAsync(sessionId, source, observedResults, disclosures.Snapshots, checkpoint, token)); }
                 catch (OperationCanceledException) when (token.IsCancellationRequested) { checkpointCancelled = true; }
                 if (checkpointCancelled)
                 {
@@ -386,6 +395,12 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     yield return Error(checkpointError.Code, checkpointError.Message, checkpointError.StatusCode);
                     yield break;
                 }
+                tools = await boundary.CallAsync("discover-current-tools", () => GetAdmittedToolsAsync(session, prepared, token), token);
+                if (await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, checkpoint.History, token)) is { } postWriteDenial)
+                {
+                    yield return Error(postWriteDenial.Code, postWriteDenial.Message, postWriteDenial.StatusCode);
+                    yield break;
+                }
                 paused = false;
                 yield return Lifecycle(AgentStreamEventKind.ContextAdmitted, new AgentContextContribution(prepared.Context, prepared.Diagnostics));
                 yield return Lifecycle(AgentStreamEventKind.StepStarted, new AgentStepDescriptor(step, maxSteps));
@@ -393,7 +408,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 var calls = new List<AgentToolCallRequest>();
                 var stepText = new StringBuilder();
                 providerEntered = true;
-                await using (var enumerator = provider.ContinueTurnAsync(context, token).GetAsyncEnumerator(token))
+                await using (var enumerator = boundary.Call("open-provider", () => new TrackedProviderEnumerator(provider.ContinueTurnAsync(context, token).GetAsyncEnumerator(token), boundary, token), token))
                     while (true)
                     {
                         var next = await NextAsync(enumerator, token);
@@ -412,7 +427,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                         if (item.Kind == AgentStreamEventKind.ClarificationRequested)
                         {
                             assistantJournaled = true;
-                            var clarificationJournalError = await TrackAsync(RecordAssistantAsync(sessionId, source, assistant.ToString(), AgentMessageStatus.Completed, observedResults, checkpoint.History));
+                            var clarificationJournalError = await TrackAsync(async () => await RecordAssistantAsync(sessionId, source, assistant.ToString(), AgentMessageStatus.Completed, observedResults, checkpoint.History));
                             if (clarificationJournalError is not null)
                             {
                                 disclosureStop = clarificationJournalError;
@@ -429,7 +444,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 if (calls.Count == 0)
                 {
                     assistantJournaled = true;
-                    var finalJournalError = await TrackAsync(RecordAssistantAsync(sessionId, source, assistant.ToString(), AgentMessageStatus.Completed, observedResults, checkpoint.History));
+                    var finalJournalError = await TrackAsync(async () => await RecordAssistantAsync(sessionId, source, assistant.ToString(), AgentMessageStatus.Completed, observedResults, checkpoint.History));
                     if (finalJournalError is not null)
                     {
                         disclosureStop = finalJournalError;
@@ -457,7 +472,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                             TurnId = turnId, TenantId = session.TenantId, Client = source.Client, AllowMutations = !prepared.IsContinuation
                         }, session.Policy, token); }
                         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
-                        if (disclosureFailure is { } callbackFailure) ExceptionDispatchInfo.Capture(callbackFailure).Throw();
+                        if (boundary.CallbackFailure is { } callbackFailure) ExceptionDispatchInfo.Capture(callbackFailure).Throw();
                         if (observedDispatch is null)
                         {
                             yield return disclosureStop is { } denial ? Error(denial.Code, denial.Message, denial.StatusCode)
@@ -491,7 +506,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 pending = results;
             }
             assistantJournaled = true;
-            var limitJournalError = await TrackAsync(RecordAssistantAsync(sessionId, source, assistant.ToString(), AgentMessageStatus.Completed, observedResults, checkpoint.History));
+            var limitJournalError = await TrackAsync(async () => await RecordAssistantAsync(sessionId, source, assistant.ToString(), AgentMessageStatus.Completed, observedResults, checkpoint.History));
             if (limitJournalError is not null)
             {
                 disclosureStop = limitJournalError;
@@ -516,9 +531,9 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     {
                         // A failed pre-disclosure checkpoint must not journal its unexposed projection
                         // later. Only the last verified checkpoint can describe prior provider input.
-                        if (!assistantJournaled && providerEntered && disclosureFailure is null && (assistant.Length > 0 || checkpoint.History.Count > 0))
+                        if (!assistantJournaled && providerEntered && boundary.Failure is null && (assistant.Length > 0 || checkpoint.History.Count > 0))
                         {
-                            var interruptedJournalError = await TrackAsync(RecordAssistantAsync(sessionId, source, assistant.ToString(),
+                            var interruptedJournalError = await TrackAsync(async () => await RecordAssistantAsync(sessionId, source, assistant.ToString(),
                                 AgentMessageStatus.Failed, observedResults, checkpoint.History));
                             disclosureStop ??= interruptedJournalError;
                         }
@@ -546,10 +561,82 @@ internal sealed class DefaultAgentTurnOrchestrator(
                 {
                     // Cleanup failures must neither replace the original causal failure nor
                     // prevent the other cleanup operations. The transport caller owns logging.
-                    if (disclosureFailure is not null) cleanupFailures.Insert(0, disclosureFailure);
+                    if (boundary.Failure is { } primaryFailure) cleanupFailures.Insert(0, primaryFailure);
                     throw new AgentContributionException($"Agent disclosure 'cleanup-turn' for session '{sessionId}' could not complete.",
                         new AggregateException("Agent disclosure cleanup encountered retained failures.", cleanupFailures));
                 }
+            }
+        }
+    }
+
+    /// <summary>One foreground feature boundary; delegates include synchronous custom failures.</summary>
+    private sealed class TurnBoundary(string sessionId)
+    {
+        private readonly object gate = new();
+        internal string SessionId = sessionId;
+        internal AgentContributionException? Failure { get; private set; }
+        internal AgentContributionException? CallbackFailure { get; private set; }
+
+        internal AgentContributionException Capture(string operation, Exception cause)
+        {
+            var domain = cause as AgentContributionException ?? new AgentContributionException(
+                $"Agent disclosure '{operation}' for session '{SessionId}' could not complete.", cause);
+            lock (gate)
+            {
+                if (Failure is null) Failure = domain;
+                else if (!Contains(Failure, domain))
+                    Failure = Contains(domain, Failure) ? domain : new AgentContributionException(
+                        $"Agent disclosure '{operation}' for session '{SessionId}' encountered multiple failures.",
+                        new AggregateException("Agent disclosure retained multiple causal failures.", Failure, domain));
+                return Failure;
+            }
+        }
+
+        internal void FailCallback(AgentContributionException failure)
+        {
+            lock (gate) CallbackFailure = Capture("provider-callback", failure);
+        }
+
+        private static bool Contains(Exception parent, Exception value)
+            => ReferenceEquals(parent, value) || (parent is AggregateException aggregate
+                ? aggregate.InnerExceptions.Any(inner => Contains(inner, value))
+                : parent.InnerException is { } inner && Contains(inner, value));
+
+        internal async Task<T> CallAsync<T>(string operation, Func<Task<T>> action, CancellationToken token = default)
+        {
+            try { return await action(); }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+            catch (Exception cause) { throw Capture(operation, cause); }
+        }
+
+        internal async Task CallAsync(string operation, Func<Task> action, CancellationToken token = default)
+        {
+            try { await action(); }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+            catch (Exception cause) { throw Capture(operation, cause); }
+        }
+
+        internal T Call<T>(string operation, Func<T> action, CancellationToken token = default)
+        {
+            try { return action(); }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
+            catch (Exception cause) { throw Capture(operation, cause); }
+        }
+    }
+
+    private sealed class TrackedProviderEnumerator(IAsyncEnumerator<AgentStreamEvent> inner, TurnBoundary boundary,
+        CancellationToken token) : IAsyncEnumerator<AgentStreamEvent>
+    {
+        public AgentStreamEvent Current => boundary.Call("read-provider-event", () => inner.Current, token);
+        public ValueTask<bool> MoveNextAsync() => new(boundary.CallAsync("advance-provider", async () => await inner.MoveNextAsync(), token));
+        public async ValueTask DisposeAsync()
+        {
+            try { await boundary.CallAsync("dispose-provider", async () => await inner.DisposeAsync(), token); }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                // Cancellation during teardown is expected, but must not replace a retained
+                // infrastructure cause from the provider/callback that initiated teardown.
+                if (boundary.Failure is { } failure) ExceptionDispatchInfo.Capture(failure).Throw();
             }
         }
     }
@@ -639,6 +726,22 @@ internal sealed class DefaultAgentTurnOrchestrator(
         return before.Any(x => !after.Any(y => AgentInvocationIntegrity.SameTarget(x, y)));
     }
 
+    private static bool SameContextBindings(IReadOnlyCollection<AgentContextAttachment> left,
+        IReadOnlyCollection<AgentContextAttachment> right)
+    {
+        static object[] Envelopes(IReadOnlyCollection<AgentContextAttachment> attachments) => attachments
+            .Select(item => new
+            {
+                item.Id, item.Source, item.SourceId, item.ContributorId, item.ModuleId, item.ContentType,
+                item.SchemaVersion, item.Target, item.Origin, item.Client, item.Sensitivity,
+                AgentScopes = item.AgentScopes.Distinct(StringComparer.Ordinal).OrderBy(scope => scope, StringComparer.Ordinal).ToArray()
+            }).OrderBy(item => item.ContributorId, StringComparer.Ordinal).ThenBy(item => item.Id, StringComparer.Ordinal)
+            .Cast<object>().ToArray();
+        // Summary, content and references are opaque module evidence. An authorized refresh of
+        // those fields cannot retarget an already checkpointed invocation or change its scopes.
+        return AgentInvocationIntegrity.Digest(Envelopes(left)) == AgentInvocationIntegrity.Digest(Envelopes(right));
+    }
+
     private sealed record ToolInvocationAdmission(AgentToolInvocation? Invocation, AgentError? Error, bool StopProvider = false);
 
     /// <summary>One foreground dispatch boundary shared by host-driven and delegated provider loops.</summary>
@@ -677,7 +780,16 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     throw new OperationCanceledException("Provider disclosure stopped before tool dispatch.", cancellationToken);
                 }
                 invocation = current.Invocation!;
-                var dispatch = await inner.DispatchAsync(invocation, policy, cancellationToken);
+                AgentToolDispatch dispatch;
+                try { dispatch = await inner.DispatchAsync(invocation, policy, cancellationToken); }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+                catch (Exception cause)
+                {
+                    fail(cause as AgentContributionException ?? new AgentContributionException(
+                        $"Agent disclosure 'dispatch-tool' for session '{invocation.SessionId}' could not complete.", cause));
+                    stop(new("agent.tool.admission_unavailable", "The current tool operation could not complete safely.", 503));
+                    throw new OperationCanceledException("Provider disclosure stopped during tool dispatch.", cancellationToken);
+                }
                 if (dispatch.Outcome == AgentToolDispatchOutcome.Executed && dispatch.Result is { } result)
                 {
                     AgentError? denied;
@@ -733,7 +845,7 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     return Rejected(source, "agent.result.provenance_unavailable", "The retained result's original preparation cannot be established.", 409);
                 result = AgentResultProvenance.Stamp(storedResult, original);
                 try { await RecordToolResultAsync(session.Id, paused.Context, result); }
-                catch (Exception)
+                catch (AgentContributionException expected) when (expected.InnerException is null)
                 {
                     return Rejected(source, "agent.result.provenance_unavailable", "The observed receipt is retained, but its session provenance could not be recorded. Retry after storage is available.", 503) with { KeepPause = true };
                 }
@@ -842,13 +954,13 @@ internal sealed class DefaultAgentTurnOrchestrator(
             return message.DisclosureHistory is not null && message.HasDisclosureProvenance
                 && message.DeliveryFingerprint == AgentDisclosureHistory.MessageFingerprint(message.Content, message.Context, message.ToolResults, message.DisclosureHistory);
         }
-        catch (Exception) { return false; }
+        catch (Exception error) when (error is JsonException or ArgumentException or InvalidOperationException or NotSupportedException) { return false; }
     }
 
     private static bool PauseHistoryMatches(AgentPausedTurn state)
     {
         try { return state.DisclosureHistory is not null && state.DisclosureHistoryFingerprint == AgentDisclosureHistory.PauseFingerprint(state); }
-        catch (Exception) { return false; }
+        catch (Exception error) when (error is JsonException or ArgumentException or InvalidOperationException or NotSupportedException) { return false; }
     }
 
     private async Task<AgentResult<AgentContextContribution>> AdmitAsync(AgentSession session,
