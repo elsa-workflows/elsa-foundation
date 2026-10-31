@@ -1,4 +1,3 @@
-using Elsa.Locking.Core;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
@@ -113,23 +112,10 @@ internal static class WorkflowLibraryNativeWitness
     {
         var services = new ServiceCollection();
         services.AddSingleton<IPayloadSerializer, NativeProviderSerializer>();
-        services.AddSingleton<IDistributedLockProvider, WitnessLock>();
         services.AddSingleton<IPersistenceAccessContextAccessor>(new WitnessAccess(PersistenceAccessContext.Scoped(new PersistenceScope(tenant))));
         services.AddWorkflowsDesignEntityFrameworkCore(new() { Provider = provider, ConnectionString = connection });
         return services.BuildServiceProvider();
     }
 
     private sealed class WitnessAccess(PersistenceAccessContext current) : IPersistenceAccessContextAccessor { public PersistenceAccessContext Current => current; }
-    private sealed class WitnessLock : IDistributedLockProvider
-    {
-        public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => new Handle();
-        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle?>(new Handle());
-        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) => ValueTask.FromResult<IDistributedSynchronizationHandle>(new Handle());
-        private sealed class Handle : IDistributedSynchronizationHandle
-        {
-            public CancellationToken HandleLostToken => CancellationToken.None;
-            public void Dispose() { }
-            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-        }
-    }
 }

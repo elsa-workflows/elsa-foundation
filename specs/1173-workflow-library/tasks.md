@@ -3,7 +3,7 @@
 ## Setup and foundation
 
 - [x] T001 Create/claim #3499/#3500, isolated worktree and issue branch; record `docs/program-goals/workflow-library-organization.md` and ADR 0080 authorization.
-- [x] T002 Research seams and prepare `specs/1172-workflow-library/{spec,plan,research,data-model,quickstart}.md` plus `contracts/api.md`.
+- [x] T002 Research seams and prepare `specs/1173-workflow-library/{spec,plan,research,data-model,quickstart}.md` plus `contracts/api.md`.
 - [x] T003 Fix shared library models/store port in `Essentials/src/Workflows/Design/Persistence/Core/` before dependent implementation.
 
 ## US1 / US4: Durable folders and bounded library

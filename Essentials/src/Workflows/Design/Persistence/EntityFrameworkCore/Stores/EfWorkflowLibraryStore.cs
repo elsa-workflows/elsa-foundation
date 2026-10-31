@@ -74,10 +74,17 @@ internal sealed partial class EfWorkflowLibraryStore(WorkflowsDesignDbContext db
             throw new ArgumentException("The supplied organization identity is invalid.");
     }
 
-    internal static ValueTask<IDistributedSynchronizationHandle> AcquireHierarchyAsync(IPersistenceAccessContextAccessor context,
-        IDistributedLockProvider? provider, CancellationToken token) =>
-        (provider ?? throw new InvalidOperationException("Workflow organization requires a distributed lock provider."))
-        .AcquireLockAsync("workflow-library:" + EfDesignSupport.ScopeKey(context.Current.RequireScope().Value), null, token);
+    internal static async ValueTask<IDistributedSynchronizationHandle?> AcquireHierarchyAsync(IPersistenceAccessContextAccessor context,
+        IDistributedLockProvider? provider, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        var scope = context.Current.RequireScope();
+        // The transaction's revision fence below rejects competing hierarchy observations.
+        // A host-provided lease additionally coordinates contention; it is not required to
+        // publish or organize workflows in an otherwise valid minimal EF composition.
+        return provider is null ? null : await provider.AcquireLockAsync(
+            "workflow-library:" + EfDesignSupport.ScopeKey(scope.Value), null, token);
+    }
 
     internal static async Task TouchFenceAsync(WorkflowsDesignDbContext context, IPersistenceAccessContextAccessor accessContext, CancellationToken token)
     {
@@ -99,7 +106,7 @@ internal sealed partial class EfWorkflowLibraryStore(WorkflowsDesignDbContext db
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         if (key.Length > 256) throw new ArgumentException("Operation keys cannot exceed 256 characters.");
         await using var hierarchy = await AcquireHierarchyAsync(access, locks, token);
-        using var lease = CancellationTokenSource.CreateLinkedTokenSource(token, hierarchy.HandleLostToken);
+        using var lease = hierarchy is null ? null : CancellationTokenSource.CreateLinkedTokenSource(token, hierarchy.HandleLostToken);
         try
         {
             var result = await atomic.ExecuteAsync(new DesignOperationKey(key), operation, material, ["workflow-library"], async (_, ct) =>
@@ -113,7 +120,7 @@ internal sealed partial class EfWorkflowLibraryStore(WorkflowsDesignDbContext db
                     entry.State = EntityState.Detached;
                 await TouchFenceAsync(db, access, ct);
                 return DesignAtomicWriteStage<T>.Accepted(await stage(ct));
-            }, cancellationToken: lease.Token);
+            }, cancellationToken: lease?.Token ?? token);
             if (result.Status is DesignAtomicWriteStatus.Conflict or DesignAtomicWriteStatus.Rejected)
                 throw new WorkflowLibraryConflictException("This operation key was already used for a different organization change.");
             return result.Value!;

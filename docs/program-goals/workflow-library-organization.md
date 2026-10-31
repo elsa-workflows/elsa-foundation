@@ -3,7 +3,7 @@
 - **Status:** Active; owner authorization, 31 October 2026.
 - **Steward:** Sipke Schoorstra; current implementation Codex.
 - **Program:** [#3499](https://github.com/elsa-workflows/elsa-foundation/issues/3499).
-- **Delivery:** [#3500](https://github.com/elsa-workflows/elsa-foundation/issues/3500), [specification](../../specs/1172-workflow-library/spec.md).
+- **Delivery:** [#3500](https://github.com/elsa-workflows/elsa-foundation/issues/3500), [specification](../../specs/1173-workflow-library/spec.md).
 
 ## Purpose
 

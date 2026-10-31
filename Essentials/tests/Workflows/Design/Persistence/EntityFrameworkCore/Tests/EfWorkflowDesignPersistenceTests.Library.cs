@@ -22,12 +22,13 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests;
 public sealed partial class EfWorkflowDesignPersistenceTests
 {
     private static ServiceProvider LibraryHost(string connection, string tenant = "tenant-a", LibraryCommands? commands = null,
-        IWorkflowActivationAuthority? authority = null, IDistributedLockProvider? locking = null, DbCommandInterceptor? failure = null)
+        IWorkflowActivationAuthority? authority = null, IDistributedLockProvider? locking = null, DbCommandInterceptor? failure = null,
+        bool includeLockProvider = true)
     {
         var services = new ServiceCollection();
         services.AddSingleton<IPayloadSerializer, TestSerializer>();
         services.AddSingleton<IIdentityGenerator, TestIdentity>();
-        services.AddSingleton<IDistributedLockProvider>(locking ?? new TestLockProvider());
+        if (includeLockProvider) services.AddSingleton<IDistributedLockProvider>(locking ?? new TestLockProvider());
         services.AddSingleton<IPersistenceAccessContextAccessor>(new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope(tenant))));
         if (authority is not null) services.AddSingleton(authority);
         services.AddWorkflowsDesignEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = connection });
@@ -367,8 +368,10 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         Assert.Throws<InvalidOperationException>(() => DesignPersistenceBackend.Find(services)!.EnsureOwnsRegisteredContracts(services));
     }
 
-    [Fact]
-    public async Task Library_concurrent_opposing_folder_moves_cannot_commit_a_cycle_even_when_the_lock_provider_does_not_serialize()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Library_concurrent_opposing_folder_moves_cannot_commit_a_cycle_even_without_a_serializing_lock(bool includeLockProvider)
     {
         await using var database = new TemporarySqliteDatabase("workflow-library-concurrent-hierarchy");
         string firstId; string secondId;
@@ -384,9 +387,9 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         await using var firstDb = new WorkflowsDesignSqliteDbContext(new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>().UseSqlite(database.ConnectionString).Options);
         await using var secondDb = new WorkflowsDesignSqliteDbContext(new DbContextOptionsBuilder<WorkflowsDesignSqliteDbContext>().UseSqlite(database.ConnectionString).Options);
         var first = new Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores.EfWorkflowLibraryStore(firstDb, access,
-            new PreTransactionBarrierAtomicWriter(new Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores.EfDesignAtomicWriter(firstDb, access), barrier), new TestLockProvider());
+            new PreTransactionBarrierAtomicWriter(new Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores.EfDesignAtomicWriter(firstDb, access), barrier), includeLockProvider ? new TestLockProvider() : null);
         var second = new Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores.EfWorkflowLibraryStore(secondDb, access,
-            new PreTransactionBarrierAtomicWriter(new Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores.EfDesignAtomicWriter(secondDb, access), barrier), new TestLockProvider());
+            new PreTransactionBarrierAtomicWriter(new Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores.EfDesignAtomicWriter(secondDb, access), barrier), includeLockProvider ? new TestLockProvider() : null);
         var outcomes = await Task.WhenAll(Task.Run(() => Record.ExceptionAsync(() => first.MoveFolderAsync(firstId, secondId, null, "alice"))),
             Task.Run(() => Record.ExceptionAsync(() => second.MoveFolderAsync(secondId, firstId, null, "bob"))));
         Assert.Single(outcomes, exception => exception is null);
@@ -522,6 +525,38 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         Assert.Equal(initial.Revision, published.Revision); Assert.Null(published.FolderId); Assert.Empty(published.Tags);
         var manual = await library.ReplaceTagsAsync("unorganized", initial.Revision, [], "alice", "initial-manual-edit");
         Assert.NotEqual("0", manual.Revision);
+    }
+
+    [Fact]
+    public async Task Library_publication_and_create_in_folder_work_without_a_distributed_lock_provider()
+    {
+        await using var database = new TemporarySqliteDatabase("workflow-library-minimal-publication");
+        var authority = new LibraryAuthority(() => true) { Published = true };
+        await using var host = LibraryHost(database.ConnectionString, authority: authority, includeLockProvider: false);
+        using var scope = host.CreateScope();
+        Assert.Null(scope.ServiceProvider.GetService<IDistributedLockProvider>());
+        var db = scope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>();
+        await db.Database.EnsureCreatedAsync();
+        db.Definitions.Add(new WorkflowDefinition { Id = "minimal", Name = "Minimal host", TenantId = "tenant-a" });
+        await db.SaveChangesAsync();
+        var library = scope.ServiceProvider.GetRequiredService<IWorkflowLibraryStore>();
+        var observer = Assert.Single(scope.ServiceProvider.GetServices<IWorkflowTriggerIndexObserver>());
+        await observer.OnTriggersIndexedAsync(new("triggerless", []) { DefinitionId = "minimal", RequiresProjectionRefresh = true });
+        Assert.Equal("minimal", Assert.Single((await library.ListDefinitionsAsync(new(PublicationState: "published"), null)).Items).Definition.Id);
+        var organization = (await library.GetOrganizationAsync("minimal"))!;
+        Assert.Equal("0", organization.Revision);
+
+        var folder = await library.CreateFolderAsync("Finance", null, "alice");
+        var definition = new WorkflowDefinition { Id = "created-in-folder", Name = "Created in folder" };
+        var draft = new WorkflowDefinitionDraft { Id = "created-draft", WorkflowDefinitionId = definition.Id };
+        await scope.ServiceProvider.GetRequiredService<IAddWorkflowDefinitionCommand>().Execute(new("minimal-create"),
+            definition, draft, [], [], folder.Id, "alice");
+        Assert.Equal(folder.Id, (await library.GetOrganizationAsync(definition.Id))!.FolderId);
+
+        authority.Published = false;
+        await observer.OnTriggersIndexedAsync(new("triggerless", []) { DefinitionId = "minimal", RequiresProjectionRefresh = true });
+        Assert.Empty((await library.ListDefinitionsAsync(new(PublicationState: "published"), null)).Items);
+        Assert.Equal(organization.Revision, (await library.GetOrganizationAsync("minimal"))!.Revision);
     }
 
     private sealed class LibraryAuthority(Func<bool> holdingFence) : IWorkflowActivationAuthority
