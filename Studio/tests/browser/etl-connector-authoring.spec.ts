@@ -80,7 +80,14 @@ for (const width of [320, 768, 1024, 1440]) {
     await page.getByRole("button", { name: "Save draft", exact: true }).click();
     await expect(page.getByText("Saved orders at revision 2.", { exact: false })).toBeVisible();
     await page.getByRole("button", { name: "Validate saved revision", exact: true }).click();
-    await page.getByRole("button", { name: "Publish immutable version", exact: true }).click();
+    const publishButton = page.getByRole("button", { name: "Publish immutable version", exact: true });
+    const primaryColors = await page.getByRole("button", { name: "New definition", exact: true }).evaluate(element => {
+      const style = getComputedStyle(element);
+      return { background: style.backgroundColor, text: style.color };
+    });
+    await expect(publishButton).toHaveCSS("background-color", primaryColors.background);
+    await expect(publishButton).toHaveCSS("color", primaryColors.text);
+    await publishButton.click();
     const dialog = page.getByRole("dialog", { name: "Publish immutable ETL version?" });
     await expect(dialog).toBeVisible();
     await dialog.getByRole("button", { name: "Publish version", exact: true }).press("Enter");

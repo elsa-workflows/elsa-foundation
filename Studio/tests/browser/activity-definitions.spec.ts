@@ -924,6 +924,7 @@ for (const theme of ["light", "dark"]) {
       const state = await mockActivityDefinitionAuthoring(page);
       await page.setViewportSize({ width, height: 900 });
       await createBrowserActivity(page, theme);
+      await expect(page.locator(".ad-draft-heading h1")).toHaveCSS("font-size", "16px");
       await page.locator("details.ad-authoring-advanced > summary").click();
       const toolbar = page.locator(".ad-authoring-toolbar-actions");
       const actions = [toolbar.locator(".ad-publication-toolbar-trigger"), toolbar.getByRole("button", { name: "Test Run", exact: true }), toolbar.getByRole("button", { name: "Save now", exact: true })];
