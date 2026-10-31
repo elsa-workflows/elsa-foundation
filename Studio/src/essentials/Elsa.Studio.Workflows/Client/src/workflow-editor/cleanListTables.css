@@ -40,8 +40,6 @@
 .wf-grid.wf-instance-grid .wf-run-health-indicator[data-health="none"] { color: var(--studio-text-muted); }
 .wf-grid.wf-instance-grid .wf-run-health-indicator[data-health="blocking"] { color: var(--studio-danger-fg); }
 .wf-grid.wf-instance-grid .wf-run-health-indicator[data-health="active"] { color: var(--studio-warning-fg); }
-
-.ad-designed-collection > .ad-page-header { border-bottom: 0; }
 .ad-designed-collection .ad-collection-head,
 .ad-designed-collection .ad-collection-row { display: grid; grid-template-columns: minmax(240px, 2fr) minmax(190px, 1.3fr) 70px minmax(160px, 1fr) 120px; min-width: 870px; align-items: center; gap: 16px; }
 .ad-designed-collection .ad-collection-row > span { min-width: 0; }

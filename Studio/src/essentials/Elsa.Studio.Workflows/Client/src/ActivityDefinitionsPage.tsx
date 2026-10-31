@@ -357,7 +357,7 @@ function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, aut
 
       <section className="studio-collection-toolbar ad-collection-filters" aria-label="Activity Definition filters">
         <StudioSearchInput aria-label="Search" value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Name, type key, or category" />
-        <div className="ad-collection-view" role="group" aria-label="Activity definition collection">
+        <div className="studio-filter-group" role="group" aria-label="Activity definition collection">
           <button type="button" aria-pressed={authority === "Design"} onClick={() => setAuthority("Design")}>Designed</button>
           <button type="button" aria-pressed={authority === "ProviderSource"} onClick={() => setAuthority("ProviderSource")}>Built-in</button>
           <button type="button" aria-pressed={authority === ""} onClick={() => setAuthority("")}>All</button>

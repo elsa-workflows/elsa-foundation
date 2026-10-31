@@ -43,24 +43,6 @@
   background: color-mix(in srgb, var(--studio-accent) 88%, var(--studio-text));
 }
 
-.wf-definitions-list .wf-segmented {
-  border-color: var(--studio-border);
-  border-radius: var(--studio-radius-sm);
-  background: transparent;
-}
-
-.wf-definitions-list .wf-segmented button {
-  min-height: 30px;
-  border-right-color: var(--studio-border);
-  background: transparent;
-  font-size: 12px;
-}
-
-.wf-definitions-list .wf-segmented button.active {
-  background: var(--studio-accent-soft);
-  color: var(--studio-text);
-}
-
 .wf-definitions-list .wf-search {
   flex: 1 1 220px;
   width: min(360px, 100%);

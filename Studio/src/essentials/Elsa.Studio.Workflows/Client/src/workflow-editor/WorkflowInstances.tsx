@@ -386,23 +386,23 @@ export function WorkflowInstances({ context, navigate }: {
         applyFilters();
       }}>
         <div className="studio-collection-toolbar">
+          <RunWorkflowPicker context={context} definitionId={location.filters.definitionId} onChange={definitionId => updateAppliedFilter("definitionId", definitionId)} />
           <div className="wf-run-primary-controls" aria-label="Primary workflow run filters">
-            <button
+            <StudioButton
               type="button"
               aria-pressed={location.filters.incidentHealth === "active"}
               aria-describedby={healthFilterSupported === false ? healthFilterHelpId : undefined}
               disabled={healthFilterSupported === false && location.filters.incidentHealth !== "active"}
               onClick={() => updateAppliedFilter("incidentHealth", location.filters.incidentHealth === "active" ? "" : "active")}
-            >Needs attention</button>
-            <button
+            >Needs attention</StudioButton>
+            <StudioButton
               type="button"
               aria-pressed={location.filters.status === "Running"}
               onClick={() => updateAppliedFilter("status", location.filters.status === "Running" ? "" : "Running")}
-            >Running</button>
+            >Running</StudioButton>
             {healthFilterSupported === false ? <small id={healthFilterHelpId}>Current incident health filtering is not available from this host.</small> : null}
           </div>
-          <RunWorkflowPicker context={context} definitionId={location.filters.definitionId} onChange={definitionId => updateAppliedFilter("definitionId", definitionId)} />
-          <button type="button" onClick={clearFilters} disabled={activeFilterCount === 0 && !hasDraftFilters}>Clear filters</button>
+          <StudioButton type="button" onClick={clearFilters} disabled={activeFilterCount === 0 && !hasDraftFilters}>Clear filters</StudioButton>
         </div>
         {appliedFilterChips.length > 0 ? (
           <div className="wf-run-applied-filters" aria-label="Applied workflow run filters">

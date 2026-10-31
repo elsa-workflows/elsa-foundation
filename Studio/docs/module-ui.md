@@ -95,7 +95,9 @@ the embedding surface already supplies an h1. Icons and eyebrows are optional;
 they should add information rather than repeat navigation.
 
 `StudioCollectionToolbar` wraps controls and retains native Tab order. Put search
-first, followed by domain filters. Label every control. A native table plus
+first, followed by domain filters. Label every control. For an exclusive filter, use
+`studio-filter-group` on a named `role="group"` container with native buttons and
+`aria-pressed` for the current choice. A native table plus
 `StudioTableContainer` and `studio-table` is the smallest collection recipe. Give
 scrolling regions an accessible name and keyboard focus. `StudioDataGrid` provides
 selectable rows; existing ARIA tables can use `studio-collection-table` for the same

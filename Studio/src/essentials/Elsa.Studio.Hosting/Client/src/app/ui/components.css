@@ -224,8 +224,8 @@
   font-weight: 600;
 }
 
-.studio-data-grid-header span,
-.studio-data-grid-row span {
+.studio-data-grid-header > span,
+.studio-data-grid-row > span {
   min-width: 0;
   padding: var(--studio-space-2) var(--studio-space-3);
   text-align: left;
@@ -470,10 +470,11 @@ html[data-theme-material] .studio-button[data-variant="primary"] {
 }
 
 .studio-search {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 7px;
-  min-height: 32px;
+  min-height: var(--studio-control-height);
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius);
   background: var(--studio-surface);
@@ -745,4 +746,50 @@ html[data-theme-material] .studio-stat-tile {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
   }
+}
+
+.studio-copyable-identifier__label {
+  color: var(--studio-text-muted);
+  font-weight: 600;
+}
+
+.studio-copyable-identifier__value {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--studio-text-muted);
+  font-family: var(--studio-font-mono);
+}
+
+.studio-copyable-identifier__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--studio-radius-sm);
+  color: var(--studio-text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.studio-copyable-identifier__button:hover,
+.studio-copyable-identifier__button:focus-visible {
+  color: var(--studio-text);
+  border-color: var(--studio-border);
+  background: var(--studio-material-hover-bg);
+}
+
+.studio-copyable-identifier__announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

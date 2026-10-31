@@ -1,4 +1,4 @@
-import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
+import { StudioPageHeader, StudioButton, StudioSearchInput } from "@elsa-workflows/studio-ui";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ChevronDown, ChevronRight, Play, RotateCcw, ScanSearch, Search, Sparkles, X } from "lucide-react";
 import type { StudioAgentRegistry, StudioEndpointContext, StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
@@ -151,7 +151,14 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
         />
       ) : null}
       <StudioPageHeader title="Executables" headingLevel={2} description="Inspect and run immutable workflow executables." actions={<StudioButton onClick={() => void load()}>Refresh</StudioButton>} />
-      <div className="studio-collection-toolbar wf-executable-toolbar">
+      <div className="studio-collection-toolbar">
+        <StudioSearchInput
+          aria-label="Filter executables by workflow definition"
+          list="wf-executable-definition-options"
+          placeholder="Workflow name or ID"
+          value={definitionFilter ?? ""}
+          onChange={event => onDefinitionFilterChange(event.currentTarget.value || null)}
+        />
         <label className="wf-toolbar-field">
           <span>Scope</span>
           <select aria-label="Executable reference scope" value={scope} onChange={event => setScope(event.target.value as WorkflowExecutableListScope)}>
@@ -169,21 +176,11 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
           />
           <span>Include retired</span>
         </label>
-        <label className="wf-search wf-executable-definition-filter">
-          <Search size={14} />
-          <input
-            aria-label="Filter executables by workflow definition"
-            list="wf-executable-definition-options"
-            placeholder="Workflow name or ID"
-            value={definitionFilter ?? ""}
-            onChange={event => onDefinitionFilterChange(event.currentTarget.value || null)}
-          />
-        </label>
         <datalist id="wf-executable-definition-options">
           {definitionOptions.map(option => <option key={option.id} value={option.id} label={option.name === option.id ? option.id : `${option.name} · ${option.id}`} />)}
         </datalist>
         {definitionFilter ? (
-          <button type="button" onClick={() => onDefinitionFilterChange(null)}><X size={13} /> Clear</button>
+          <StudioButton onClick={() => onDefinitionFilterChange(null)}><X size={13} /> Clear</StudioButton>
         ) : null}
       </div>
       {state === "failed" ? <WfErrorCard message={error} /> : null}

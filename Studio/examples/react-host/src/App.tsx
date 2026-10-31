@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StudioCodeEditor, javaScriptLanguageAdapter, type StudioCodeDocument } from "@elsa-workflows/studio-code-editor";
 import {
   StudioDataGrid,
+  CopyableIdentifier,
   StatusChip,
   StudioPage,
   StudioPageHeader,
@@ -99,6 +100,7 @@ function PrimitivesSection() {
   const columns: StudioDataGridColumn<WorkflowRow>[] = useMemo(
     () => [
       { id: "name", header: "Workflow", render: row => row.name },
+      { id: "id", header: "Identifier", render: row => <CopyableIdentifier label="Workflow ID" value={row.id} /> },
       { id: "status", header: "Status", render: row => <StatusChip tone={row.tone}>{row.status}</StatusChip> }
     ],
     []
@@ -131,7 +133,7 @@ function PrimitivesSection() {
           columns={columns}
           items={visibleRows}
           getKey={row => row.id}
-          gridColumns="minmax(160px, 2fr) minmax(120px, 1fr)"
+          gridColumns="minmax(160px, 2fr) minmax(180px, 1fr) minmax(120px, 1fr)"
           selectedKey={selected}
           onSelect={row => setSelected(row.id)}
           emptyState={<StudioResultState title="No matching workflows" description="Change the search or status filter." />}

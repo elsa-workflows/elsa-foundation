@@ -321,7 +321,7 @@ describe("Activity Definitions experience", () => {
     expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("second origin");
     expect(controlByLabel<HTMLInputElement>(rendered.container, "Provider key").value).toBe("provider-two");
     expect(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page").value).toBe("50");
-    expect(rendered.container.querySelector(".ad-collection-view button[aria-pressed='true']")?.textContent).toBe("Built-in");
+    expect(rendered.container.querySelector(".studio-filter-group button[aria-pressed='true']")?.textContent).toBe("Built-in");
 
     window.history.replaceState(firstOrigin, "", "/workflows/activity-definitions");
     window.dispatchEvent(new PopStateEvent("popstate"));
@@ -330,7 +330,7 @@ describe("Activity Definitions experience", () => {
     expect(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")?.value).toBe("first origin");
     expect(controlByLabel<HTMLInputElement>(rendered.container, "Provider key").value).toBe("");
     expect(controlByLabel<HTMLSelectElement>(rendered.container, "Rows per page").value).toBe("25");
-    expect(rendered.container.querySelector(".ad-collection-view button[aria-pressed='true']")?.textContent).toBe("Designed");
+    expect(rendered.container.querySelector(".studio-filter-group button[aria-pressed='true']")?.textContent).toBe("Designed");
     await rendered.unmount();
   }, 15000);
 

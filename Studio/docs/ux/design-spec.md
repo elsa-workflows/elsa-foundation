@@ -63,7 +63,7 @@ code.
 | Bottom dock default | `exists` | Collapsed by default when no stored value, including on desktop. Reset restores the default and keeps the cleared chrome keys absent. |
 | Bottom dock errors | `target, phase 2` | A status dot on the collapsed dock signals new errors. |
 | Page | `exists` | Content sits on the page surface. No wrapping card around a whole page. |
-| Page header | `target, #3511` | Shared `StudioPageHeader`: compact title, optional description/context, wrapping actions. One `primary` button (see Principles). |
+| Page header | `exists` | Shared `StudioPageHeader`: compact title, optional description/context, wrapping actions. One `primary` button (see Principles). |
 | Lists | `target, phase 2` | Keep the page heading/actions, primary search or filters, results, and pager in a stable order. Use an accessible table or grid with a clear empty/error state. Lists may retain domain-specific filter layouts; advanced Runs criteria remain drafts until explicit Apply and applied criteria stay visible as removable chips outside the disclosure. See [Definition list consistency](#definition-list-consistency-3070). |
 | Runs | `exists` for the reference implementation | Workflow names lead, with exact execution, artifact, definition and version IDs available as copyable identifiers. Bulk actions appear only after row selection and preserve the host's permission gates. Detail navigation returns to the validated local list query, including page size and cursor. Loading, empty, unsupported and request-error states stay distinct; failed requests offer Retry. |
 | Designer | `exists` | Palette / canvas / inspector. |
@@ -73,7 +73,7 @@ code.
 
 ## Shared module composition (#3511)
 
-**Status: `target, #3511`** pending exact-head acceptance. The
+**Status: `exists`**; exact-revision qualification is recorded on [PR #3512](https://github.com/elsa-workflows/elsa-foundation/pull/3512). The
 [coverage inventory](../../../docs/reports/studio-design-language-audit.md) records
 all discovered module surfaces, including modules absent from the default host.
 The [module UI guide](../module-ui.md) owns public imports and composition examples.

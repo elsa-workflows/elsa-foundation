@@ -1,6 +1,6 @@
 # Studio design language
 
-**Status**: In progress
+**Status**: Implemented
 
 Owner request: audit Studio, plan the correction, and deliver consistent UI across installed,
 disabled and future third-party modules. Tracking: [#3511](https://github.com/elsa-workflows/elsa-foundation/issues/3511),

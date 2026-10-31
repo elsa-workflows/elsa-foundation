@@ -728,10 +728,6 @@
   outline: none;
 }
 
-.wf-executable-definition-filter {
-  width: min(360px, 100%);
-}
-
 .wf-alert,
 .wf-empty {
   display: flex;
@@ -950,19 +946,6 @@
 
 .wf-grid-row {
   cursor: pointer;
-}
-
-.wf-executable-toolbar {
-  flex-wrap: wrap;
-}
-
-.wf-executable-toolbar .wf-search {
-  min-width: 0;
-  box-sizing: border-box;
-}
-
-.wf-executable-toolbar .wf-search input {
-  min-width: 0;
 }
 
 /* One table controls column geometry for both headers and artifact rows. */
