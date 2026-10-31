@@ -181,6 +181,33 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
         return FindAsync(outboxItemId, cancellationToken);
     }
 
+    public async ValueTask<RuntimePostCommitOutboxItem?> FindUndeliveredDurableAsync(string workflowExecutionId,
+        string excludedIntentKind, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(excludedIntentKind);
+        cancellationToken.ThrowIfCancellationRequested();
+        EnsureCommittedSourceBoundary();
+        var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
+        try
+        {
+            var row = await Rows(scope, workflowExecutionId, null)
+                .Where(item => item.Status != (int)RuntimePostCommitOutboxStatus.Delivered && item.IntentKind != excludedIntentKind)
+                .OrderBy(item => item.Id).FirstOrDefaultAsync(cancellationToken);
+            var source = row is null ? null : ReadChecked(row, scope);
+            if (source is not null && (source.Intent.WorkflowExecutionId != workflowExecutionId || source.Intent.Kind == excludedIntentKind ||
+                source.Status == RuntimePostCommitOutboxStatus.Delivered))
+                throw new InvalidDataException("The undelivered source differs from its exact execution query.");
+            return source;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        {
+            throw new RuntimeSchedulerWorkUnavailableException("runtime.outbox-state-unavailable",
+                $"Prior outbox responsibility could not be read in persistence scope '{scope}' for execution '{workflowExecutionId}'.", exception);
+        }
+    }
+
     private void EnsureCommittedSourceBoundary()
     {
         if (System.Transactions.Transaction.Current is not null || context.Database.CurrentTransaction is not null ||

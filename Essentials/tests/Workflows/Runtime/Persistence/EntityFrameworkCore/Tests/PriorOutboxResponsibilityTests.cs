@@ -1,0 +1,85 @@
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Xunit;
+
+namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
+
+public sealed partial class StimulusDeliveryStoreTests
+{
+    [Theory]
+    [InlineData(false, RuntimePostCommitOutboxStatus.Pending)]
+    [InlineData(true, RuntimePostCommitOutboxStatus.Pending)]
+    [InlineData(false, RuntimePostCommitOutboxStatus.Delivering)]
+    [InlineData(true, RuntimePostCommitOutboxStatus.Delivering)]
+    [InlineData(false, RuntimePostCommitOutboxStatus.FailedRetryable)]
+    [InlineData(true, RuntimePostCommitOutboxStatus.FailedRetryable)]
+    [InlineData(false, RuntimePostCommitOutboxStatus.FailedFinal)]
+    [InlineData(true, RuntimePostCommitOutboxStatus.FailedFinal)]
+    [InlineData(false, RuntimePostCommitOutboxStatus.Delivered)]
+    [InlineData(true, RuntimePostCommitOutboxStatus.Delivered)]
+    public async Task Durable_responsibility_lookup_includes_every_undelivered_state_regardless_of_due_time(bool ef,
+        RuntimePostCommitOutboxStatus status)
+    {
+        await using var harness = await Harness.Create(ef);
+        await harness.SeedPending(kind: "child.cancel");
+        if (status != RuntimePostCommitOutboxStatus.Pending)
+        {
+            var claim = Assert.Single(await harness.Claims.ClaimAsync(new("owner", Now, TimeSpan.FromMinutes(5), 1)));
+            if (status != RuntimePostCommitOutboxStatus.Delivering)
+                await harness.Claims.RecordDeliveryResultAsync(claim, new(claim.OutboxItemId, status, Now,
+                    status == RuntimePostCommitOutboxStatus.Delivered ? null : "A retained cancellation delivery failure."));
+        }
+        var lookup = (IPostCommitOutboxLookupStore)harness.Reopen();
+        var source = await lookup.FindUndeliveredDurableAsync("publisher", "worker.result");
+        if (status == RuntimePostCommitOutboxStatus.Delivered) Assert.Null(source);
+        else
+        {
+            Assert.Equal("commit:send", source!.OutboxItemId);
+            Assert.Equal(status, source.Status);
+            if (status == RuntimePostCommitOutboxStatus.Delivering) Assert.True(source.DeliveryVisibleAfter > Now);
+            if (status == RuntimePostCommitOutboxStatus.FailedRetryable) Assert.True(source.AvailableAt > Now);
+        }
+        Assert.Null(await lookup.FindUndeliveredDurableAsync("publisher", "child.cancel"));
+        Assert.Null(await lookup.FindUndeliveredDurableAsync("other-worker", "worker.result"));
+        var foreign = (IPostCommitOutboxLookupStore)harness.Reopen(new("other-scope"));
+        Assert.Null(await foreign.FindUndeliveredDurableAsync("publisher", "worker.result"));
+    }
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task Durable_responsibility_lookup_includes_sources_not_available_until_the_future(bool ef)
+    {
+        await using var harness = await Harness.Create(ef);
+        var original = Pending("earlier-checkpoint", true, kind: "child.cancel");
+        var delayed = new RuntimePostCommitOutboxItem(original.OutboxItemId, original.Intent, original.Status, original.RecordedAt,
+            Now.AddYears(1), original.RetryPolicy, 0, null, null, null, null, null, 0, null, 1, Scope, null);
+        await harness.SavePending(delayed);
+        Assert.Empty(await harness.Outbox.GetDeliverableAsync(new(Now, 1, "publisher")));
+        Assert.Equal(delayed.OutboxItemId, (await harness.Lookup.FindUndeliveredDurableAsync("publisher", "worker.result"))!.OutboxItemId);
+    }
+
+    [Fact]
+    public async Task Durable_responsibility_lookup_refuses_a_caller_owned_EF_transaction()
+    {
+        await using var harness = await Harness.Create(true);
+        await harness.SeedPending(kind: "child.cancel");
+        await using var transaction = await harness.Context!.Database.BeginTransactionAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Lookup.FindUndeliveredDurableAsync("publisher", "worker.result").AsTask());
+        await transaction.RollbackAsync();
+        Assert.NotNull(await harness.Lookup.FindUndeliveredDurableAsync("publisher", "worker.result"));
+    }
+
+    [Fact]
+    public async Task Durable_responsibility_lookup_refuses_a_legacy_provider_instead_of_assuming_settlement()
+    {
+        IPostCommitOutboxLookupStore lookup = new LegacyResponsibilityLookup();
+        await Assert.ThrowsAsync<NotSupportedException>(() => lookup.FindUndeliveredDurableAsync("publisher", "worker.result").AsTask());
+    }
+
+    private sealed class LegacyResponsibilityLookup : IPostCommitOutboxLookupStore
+    {
+        public ValueTask<RuntimePostCommitOutboxItem?> FindAsync(string outboxItemId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<RuntimePostCommitOutboxItem?>(null);
+    }
+}

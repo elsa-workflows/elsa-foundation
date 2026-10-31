@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -40,15 +41,21 @@ public sealed partial class BpmnDirectExecutionTests
         Assert.Equal(RuntimeModelLifecycle.TerminalPendingSettlement, (await reader.FindAsync(inner))!.Lifecycle);
 
         var processor = scope.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>();
-        for (var attempt = 0; attempt < 12; attempt++)
+        // Refusal retains the original positive queue claim for its real one-minute visibility period.
+        // Let it expire naturally; do not replace the result, edit its claim or advance an artificial clock.
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(90);
+        while (DateTimeOffset.UtcNow < deadline)
         {
             foreach (var execution in new[] { inner, middle, outer })
             {
                 await processor.ProcessAsync(new(limit: 100, workflowExecutionId: execution));
                 await DrainPriorCancellationAsync(execution);
             }
-            if ((await reader.FindAsync(outer))!.Lifecycle == RuntimeModelLifecycle.TerminalSettled &&
-                (await lookup.FindDurableAsync(source))!.Status == RuntimePostCommitOutboxStatus.Delivered) break;
+            if ((await reader.FindAsync(outer))!.Lifecycle == RuntimeModelLifecycle.TerminalSettled)
+            {
+                Assert.Equal(RuntimePostCommitOutboxStatus.Delivered, (await lookup.FindDurableAsync(source))!.Status);
+                break;
+            }
             await Task.Delay(1300);
         }
         var final = (await reader.FindAsync(outer))!;
@@ -68,8 +75,12 @@ public sealed partial class BpmnDirectExecutionTests
             var actor = await host.Services.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(new(execution,
                 WorkflowExecutionActorActivationReason.ControlPlaneCommand, now, "prior-cancel-test", WorkflowExecutionActorCapabilities.InProcessMailbox,
                 partition: new(PersistenceScope.DefaultValue)));
-            await actor.EnqueueAsync(new(id, execution, new(id, execution, WorkflowExecutionCommandKind.RunSchedulerWork, now, null,
-                new Dictionary<string, string>()), id, WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now, partition: new(PersistenceScope.DefaultValue)));
+            try
+            {
+                await actor.EnqueueAsync(new(id, execution, new(id, execution, WorkflowExecutionCommandKind.RunSchedulerWork, now, null,
+                    new Dictionary<string, string>()), id, WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now, partition: new(PersistenceScope.DefaultValue)));
+            }
+            catch (RuntimeSchedulerWorkUnavailableException) { /* The original claimed input stays owed for normal retry. */ }
         }
     }
 }

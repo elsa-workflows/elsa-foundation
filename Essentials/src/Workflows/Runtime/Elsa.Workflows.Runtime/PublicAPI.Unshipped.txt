@@ -1882,3 +1882,7 @@ static Elsa.Workflows.Runtime.Services.Executables.WorkflowExecutableDependencyG
 Elsa.Workflows.Runtime.Services.Coalescing.CoalescingWorkflowSchedulerWorkQueue.SupportsClaimValidation.get -> bool
 Elsa.Workflows.Runtime.Extensions.ModelHostingServiceCollectionExtensions
 static Elsa.Workflows.Runtime.Extensions.ModelHostingServiceCollectionExtensions.AddRuntimeModelHosting(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+
+Elsa.Workflows.Runtime.Services.Checkpoints.InMemoryRuntimeCheckpointCommitStore.FindUndeliveredDurableAsync(string! workflowExecutionId, string! excludedIntentKind, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem?>
+
+Elsa.Workflows.Runtime.Services.Coalescing.CoalescingRuntimePostCommitOutboxStore.FindUndeliveredDurableAsync(string! workflowExecutionId, string! excludedIntentKind, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem?>

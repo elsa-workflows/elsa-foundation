@@ -20,4 +20,14 @@ public interface IPostCommitOutboxLookupStore
     /// <exception cref="OperationCanceledException">Requested cancellation propagates unchanged.</exception>
     ValueTask<RuntimePostCommitOutboxItem?> FindDurableAsync(string outboxItemId, CancellationToken cancellationToken = default) =>
         ValueTask.FromException<RuntimePostCommitOutboxItem?>(new NotSupportedException("The selected provider cannot verify a durable outbox source."));
+
+    /// <summary>
+    /// Finds an undelivered physically committed source owned by this execution, excluding the supplied result kind.
+    /// Includes delayed, claimed, retryable and final failures from every checkpoint. Ignores working-set overlays.
+    /// Null proves that all other retained sources are Delivered; it is not a due-now or claimable-source query.
+    /// Requires explicit scope and refuses caller-owned transactions. Legacy providers refuse this capability.
+    /// </summary>
+    ValueTask<RuntimePostCommitOutboxItem?> FindUndeliveredDurableAsync(string workflowExecutionId, string excludedIntentKind,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromException<RuntimePostCommitOutboxItem?>(new NotSupportedException("The selected provider cannot verify prior durable outbox responsibility."));
 }

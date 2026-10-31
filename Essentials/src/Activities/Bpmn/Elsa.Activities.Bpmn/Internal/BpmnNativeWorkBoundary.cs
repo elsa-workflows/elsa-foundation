@@ -131,6 +131,10 @@ internal sealed class BpmnNativeWorkBoundary(IWorkflowExecutableStore materials,
     private async ValueTask RequireCancellationSettlementAsync(BpmnNativeWorkResult result, CancellationToken cancellationToken)
     {
         if (result.Status != WorkflowExecutionStatus.Cancelled) return; // Preserve an already completed/faulted worker's actual result.
+        // A scope cancellation may have committed its child intent before the terminal checkpoint. Read the
+        // physical execution's responsibility as well, including results already queued by the older writer.
+        if (await PhysicalLookup.FindUndeliveredDurableAsync(result.Origin.WorkerExecutionId, ResultKind, cancellationToken) is { } prior)
+            throw Unavailable($"Native downstream source '{prior.OutboxItemId}' remains owed.");
         if (result.CancellationSources is not { } sources)
             throw Unavailable("The native cancellation has no retained downstream settlement inventory.");
         // Intent ids can contain colons. Remove the exact deterministic result intent, rather than splitting an address.

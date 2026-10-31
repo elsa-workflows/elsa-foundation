@@ -9421,3 +9421,5 @@ Elsa.Workflows.Runtime.Core.Events.RuntimeExecutionProtocolsInitializing.Registr
 Elsa.Workflows.Runtime.Core.Events.DurableTimerScheduled
 Elsa.Workflows.Runtime.Core.Events.DurableTimerScheduled.DurableTimerScheduled(System.DateTimeOffset dueTime) -> void
 Elsa.Workflows.Runtime.Core.Events.DurableTimerScheduled.DueTime.get -> System.DateTimeOffset
+
+Elsa.Workflows.Runtime.Core.Contracts.IPostCommitOutboxLookupStore.FindUndeliveredDurableAsync(string! workflowExecutionId, string! excludedIntentKind, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Workflows.Runtime.Core.Models.RuntimePostCommitOutboxItem?>
