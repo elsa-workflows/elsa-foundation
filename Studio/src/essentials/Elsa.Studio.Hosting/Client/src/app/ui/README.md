@@ -27,9 +27,9 @@ Visual rules:
 - Resource lists are row-first. Avoid stacked large cards for scan-heavy data.
 - Resource workbenches use the available content width; avoid fixed desktop
   max-width caps that leave unused space beside lists or inspectors.
-- Use true white or cool neutral surfaces, hairline borders, minimal shadow, and
-  5-8px radii for admin chrome.
-- Selection uses the shared blue/cyan accent; statuses use the shared semantic
+- Use the active theme’s surfaces, hairline borders, minimal shadow, and shared
+  radius tokens for admin chrome.
+- Selection uses the active theme’s accent; statuses use the shared semantic
   green, amber, and red tokens.
 - Summary metrics are compact strips, not oversized dashboard cards.
 
@@ -77,114 +77,21 @@ For a configured optional section, start it open, show the set count, and allow 
 
 For a module-owned row instead of `StudioDataGrid`, guard the row handler against events whose target is inside an interactive descendant, and activate from the keyboard only when the row itself is the target. Workflow Definitions currently applies the descendant click guard in its custom rows and provides keyboard entry through the workflow-name link; its rows do not implement row-level keyboard activation. Do not assume the shared primitive supplies caller guards. See the [normative UX rules](../../../../../../../docs/ux/design-spec.md#components) for the supported Button variants and disclosure behavior.
 
-### Compose a page, list, and confirmation dialog
+### Compose a module page
 
-This example filters an already loaded collection. For a paged inventory, use the module's server search and distinguish shown, loaded, and total counts. The data hook and mutation remain module-owned; the example does not define a service endpoint.
+Use `StudioPage`, `StudioPageHeader`, `StudioCollectionToolbar`, `StudioSearchInput`,
+`StudioTableContainer` (native tables), `StudioDataGrid` (selectable rows),
+`StudioResultState`, and `StudioCollectionFooter` for page structure. The host owns
+outer gutters and the main landmark; modules own data, authorization, counts and
+cursor semantics. These primitives have no SDK, routing, query, or dialog provider dependency.
 
-```tsx
-import { useState } from "react";
-import {
-  EmptyState,
-  SkeletonRows,
-  StudioAlert,
-  StudioButton,
-  StudioDataGrid,
-  StudioSearchInput,
-  StudioToolbar,
-  type StudioDataGridColumn
-} from "@elsa-workflows/studio-ui";
-import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+The [module UI guide](../../../../../../../docs/module-ui.md) contains the public
+imports, a complete collection example, state/accessibility requirements, and the
+standalone stylesheet setup. The [React host example](../../../../../../../examples/react-host/README.md)
+exercises the same published styles without copying internal CSS.
 
-type Service = { id: string; name: string; endpoint: string };
-type Props = {
-  api: ElsaStudioModuleApi;
-  services: Service[];
-  loading: boolean;
-  loadError?: string;
-  onCreate(): void;
-  onRetry(): void;
-  onDelete(id: string): Promise<void>;
-};
-
-const columns: StudioDataGridColumn<Service>[] = [
-  { id: "name", header: "Name", render: service => service.name },
-  { id: "endpoint", header: "Endpoint", render: service => service.endpoint }
-];
-
-export function ServicesPage({ api, services, loading, loadError, onCreate, onRetry, onDelete }: Props) {
-  const [query, setQuery] = useState("");
-  const [selectedKey, setSelectedKey] = useState<string>();
-  const [mutationError, setMutationError] = useState<string>();
-  const [busy, setBusy] = useState(false);
-  const needle = query.trim().toLowerCase();
-  const visible = services.filter(service => service.name.toLowerCase().includes(needle));
-  const selected = visible.find(service => service.id === selectedKey);
-
-  async function deleteSelected() {
-    if (!selected || busy || loading || loadError) return;
-    setBusy(true);
-    setMutationError(undefined);
-    try {
-      const confirmed = await api.dialogs.confirm({
-        title: "Delete service",
-        message: `Remove ${selected.name}?`,
-        confirmLabel: "Delete service",
-        tone: "danger"
-      });
-      if (!confirmed) return;
-      await onDelete(selected.id);
-      setSelectedKey(undefined);
-      setMutationError(undefined);
-    } catch {
-      setMutationError("Could not delete the service. Try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section>
-      <header>
-        <div>
-          <h2>Services</h2>
-          <p>Manage configured service connections.</p>
-        </div>
-        <StudioButton variant="primary" onClick={onCreate}>Create service</StudioButton>
-      </header>
-      <StudioToolbar>
-        <StudioSearchInput
-          aria-label="Search loaded services"
-          placeholder="Search loaded services"
-          value={query}
-          onChange={event => setQuery(event.currentTarget.value)}
-        />
-        <StudioButton disabled={!selected || busy || loading || Boolean(loadError)} onClick={() => void deleteSelected()}>
-          Delete selected
-        </StudioButton>
-      </StudioToolbar>
-
-      {mutationError ? <StudioAlert tone="danger">{mutationError}</StudioAlert> : null}
-      {loading ? (
-        <SkeletonRows label="Loading services" />
-      ) : loadError ? (
-        <>
-          <StudioAlert tone="danger">{loadError}</StudioAlert>
-          <StudioButton onClick={onRetry}>Retry</StudioButton>
-        </>
-      ) : visible.length === 0 ? (
-        <EmptyState>{needle ? "No services match this search." : "No services yet."}</EmptyState>
-      ) : (
-        <StudioDataGrid
-          columns={columns}
-          items={visible}
-          getKey={service => service.id}
-          selectedKey={selected?.id}
-          onSelect={service => setSelectedKey(service.id)}
-        />
-      )}
-    </section>
-  );
-}
-```
-
-The injected `api.dialogs.confirm` resolves `true` for confirmation and `false` for cancel or dismissal. Only confirmation calls the mutation, and the button stays disabled while the dialog or mutation is pending. Modules must not import or mount `DialogHost`: the normal host mounts it once and owns the modal focus lifecycle. Use the existing host's dialog service instead of implementing another global dialog controller.
+Use the injected `api.dialogs.confirm` for confirmation; it resolves `true` for
+confirmation and `false` for cancel or dismissal. Only confirmation calls the
+mutation. Keep the action disabled while the dialog or mutation is pending.
+Modules must not import or mount `DialogHost`: the normal host mounts it once and
+owns the modal focus lifecycle.

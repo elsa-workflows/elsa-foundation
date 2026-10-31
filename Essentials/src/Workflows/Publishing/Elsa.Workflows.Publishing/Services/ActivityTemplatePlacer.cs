@@ -213,7 +213,8 @@ public sealed class ActivityTemplatePlacer(
                     current.Node.ActivityContract,
                     descriptor,
                     frame.ActivityTypeKey,
-                    frame.Publication.Version)
+                    frame.Publication.Version,
+                    frame.OccurrenceOverlay?.InputContracts, frame.OccurrenceOverlay?.Structure)
                 : current.Node.ActivityContract;
             placedNodes[current.Node.ExecutableNodeId] = new(
                 nodeIds[current.Node.ExecutableNodeId],
@@ -440,7 +441,9 @@ public sealed class ActivityTemplatePlacer(
         Elsa.Activities.Runtime.Core.Models.ActivityContract? contract,
         RuntimeActivityDescriptor descriptor,
         string activityTypeKey,
-        string activityVersion)
+        string activityVersion,
+        IReadOnlyList<ActivityInputContract>? inputContracts = null,
+        ExecutableActivityStructure? structure = null)
     {
         if (contract is null)
             return null;
@@ -450,9 +453,9 @@ public sealed class ActivityTemplatePlacer(
             activityVersion,
             contract.DescriptorKind,
             descriptor.Payload,
-            contract.Inputs.Values,
+            inputContracts ?? contract.Inputs.Values.ToArray(),
             contract.Result,
-            contract.Outcomes,
+            inputContracts is null ? contract.Outcomes : contract.Outcomes.Union(ExecutableNodeCompiler.StructureOutcomes(structure), StringComparer.Ordinal).ToArray(),
             contract.Activation,
             contract.SideEffectProfile);
     }
@@ -497,7 +500,7 @@ public sealed class ActivityTemplatePlacer(
         // An occurrence inside a reusable activity is authored like any node, so the same secret refusals apply
         // to it against its template root's activity kind and type.
         inputBindingCompiler.EnsureSecretBindingsAdmissible(frame.OccurrenceId!, templateRoot.Descriptor, inputStates);
-        return inputBindingCompiler.CompileAll(frame.OccurrenceId!, contract.Inputs.Values, inputStates);
+        return inputBindingCompiler.CompileAll(frame.OccurrenceId!, overlay.InputContracts ?? contract.Inputs.Values.ToArray(), inputStates);
     }
 
     // Studio picks a graph input as Input {referenceKey}. Inside a closed-scope body the request is the

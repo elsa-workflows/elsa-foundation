@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { AlertCircle, Check, Package, Plus, Search } from "lucide-react";
 import { StudioHttpError, type StudioAgentRegistry, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { CopyableIdentifier, OverflowMenu, StudioButton, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
+import { CopyableIdentifier, OverflowMenu, StudioButton, type OverflowMenuItem, StudioPageHeader, StudioCollectionToolbar, StudioSearchInput } from "@elsa-workflows/studio-ui";
 import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition, workflowDefinitionFolderMovePath } from "../api/workflowDesign";
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails, WorkflowDefinitionSummary } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
@@ -11,7 +11,9 @@ import { dispatchAiAction, findAiAction, getTotalPages } from "./editorListHelpe
 import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { DefinitionPager } from "./DefinitionPager";
 import { WorkflowFolderNavigation, type WorkflowFolderSelection, selectedFolderId } from "./WorkflowFolderNavigation";
-import { updateWorkflowDefinitionBrowseUrl, workflowFolderSelectionKey } from "./workflowDefinitionBrowseLocation";
+import { updateWorkflowDefinitionBrowseUrl, workflowFolderSelectionKey, workflowLibraryFilterKey, type WorkflowDefinitionBrowseLocation } from "./workflowDefinitionBrowseLocation";
+import type { WorkflowOrganizationPermissions, WorkflowTag } from "../api/workflowOrganization";
+import { workflowOrganizationSupport } from "../api/workflowOrganizationCapabilities";
 import "./workflowFolders.css";
 import "./workflowDefinitionTable.css";
 import { LatestDefinitionVersion, PublishedDefinitionVersion } from "./DefinitionVersionCells";
@@ -24,6 +26,9 @@ const CreateWorkflowDialog = lazy(() =>
 const MoveWorkflowDefinitionsDialog = lazy(() =>
   import("./MoveWorkflowDefinitionsDialog").then(module => ({ default: module.MoveWorkflowDefinitionsDialog }))
 );
+const WorkflowLibraryControls = lazy(() => import("./WorkflowLibraryControls").then(module => ({ default: module.WorkflowLibraryControls })));
+const WorkflowOrganizationDialog = lazy(() => import("./WorkflowOrganizationDialog").then(module => ({ default: module.WorkflowOrganizationDialog })));
+const WorkflowBulkTagsDialog = lazy(() => import("./WorkflowOrganizationDialog").then(module => ({ default: module.WorkflowBulkTagsDialog })));
 
 interface BrowseIdentity {
   baseUrl: string;
@@ -32,6 +37,7 @@ interface BrowseIdentity {
   effectiveFolderKey: string;
   listState: DefinitionListState;
   search: string;
+  libraryFilterKey: string;
   page: number;
   pageSize: number;
 }
@@ -41,6 +47,7 @@ interface BrowseSnapshot {
   definitions: WorkflowDefinitionDetails["definition"][];
   totalCount: number;
   usesCursorPaging: boolean;
+  hasKnownTotal: boolean;
 }
 
 const noDefinitions: BrowseSnapshot["definitions"] = [];
@@ -52,6 +59,7 @@ function sameBrowseIdentity(left: BrowseIdentity, right: BrowseIdentity) {
     && left.effectiveFolderKey === right.effectiveFolderKey
     && left.listState === right.listState
     && left.search === right.search
+    && left.libraryFilterKey === right.libraryFilterKey
     && left.page === right.page
     && left.pageSize === right.pageSize;
 }
@@ -62,6 +70,7 @@ function canRetainBrowseSnapshot(previous: BrowseIdentity, next: BrowseIdentity)
     && previous.requestedFolderKey === next.requestedFolderKey
     && previous.effectiveFolderKey === next.effectiveFolderKey
     && previous.listState === next.listState
+    && previous.libraryFilterKey === next.libraryFilterKey
     && previous.pageSize === next.pageSize
     && (previous.search === next.search ? previous.page === next.page : true);
 }
@@ -121,6 +130,11 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   const [moveCapabilityAvailable, setMoveCapabilityAvailable] = useState(false);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [focusRefreshAfterMove, setFocusRefreshAfterMove] = useState(false);
+  const [librarySupport, setLibrarySupport] = useState<Awaited<ReturnType<typeof workflowOrganizationSupport>> | null>(null);
+  const [libraryPermissions, setLibraryPermissions] = useState<WorkflowOrganizationPermissions>({});
+  const [tagCatalog, setTagCatalog] = useState<WorkflowTag[]>([]);
+  const [organizationTarget, setOrganizationTarget] = useState<{ id: string; name: string } | null>(null);
+  const [bulkTagTargets, setBulkTagTargets] = useState<string[] | null>(null);
   const selectVisibleRef = useRef<HTMLInputElement | null>(null);
   const refreshButtonRef = useRef<HTMLButtonElement | null>(null);
   const selectionMatchesScope = selectionScopeRevision === scopeRevision;
@@ -130,6 +144,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
       ? workflowFolderSelectionKey(folderSelection)
       : "all";
   const effectiveFolderResolved = folderCapability !== "unknown" && savedEffectiveFolderKey === effectiveFolderKey;
+  const libraryFilterKey = workflowLibraryFilterKey(browseLocation);
   const targetIdentity = useMemo<BrowseIdentity>(() => ({
     baseUrl: context.baseUrl,
     authorityRevision,
@@ -137,9 +152,10 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     effectiveFolderKey,
     listState,
     search: search.trim(),
+    libraryFilterKey,
     page,
     pageSize
-  }), [authorityRevision, context.baseUrl, effectiveFolderKey, folderSelection, listState, page, pageSize, search]);
+  }), [authorityRevision, context.baseUrl, effectiveFolderKey, folderSelection, libraryFilterKey, listState, page, pageSize, search]);
   const endpointIdentityCurrent = context.baseUrl === authorityBaseUrl;
   const snapshotVisible = lastSuccess && (sameBrowseIdentity(lastSuccess.identity, targetIdentity)
     || canRetainBrowseSnapshot(lastSuccess.identity, targetIdentity)) ? lastSuccess : null;
@@ -152,6 +168,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   const definitions = snapshotVisible?.definitions ?? noDefinitions;
   const totalCount = snapshotVisible?.totalCount ?? 0;
   const usesCursorPaging = snapshotVisible?.usesCursorPaging ?? false;
+  const hasKnownTotal = snapshotVisible?.hasKnownTotal ?? false;
   const visibleDefinitionIds = useMemo(() => definitions.map(definition => definition.id), [definitions]);
   const continuationToken = continuationTokens[page];
   const effectiveFolderSelection: WorkflowFolderSelection =
@@ -207,6 +224,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
 
   const load = useCallback(async () => {
     if (folderCapability === "unknown" || !effectiveFolderResolved || !endpointIdentityCurrent || requestsPaused || searchPending || settledSearch !== search) return;
+    if (browseLocation.invalidTagFilters) { setRequestState("failed"); setLastSuccess(null); setRequestError({ identity: targetIdentity, message: "The tag filters in this link are invalid. Clear or repair them before browsing." }); return; }
     const requestedPage = page;
     const requestedContinuationToken = continuationToken;
     const requestedFolderSelection = folderSelection;
@@ -223,20 +241,25 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
         pageSize,
         continuationToken: requestedContinuationToken,
         folderId: folderCapability === "available" ? selectedFolderId(requestedFolderSelection) : null,
-        unfiled: folderCapability === "available" && requestedFolderSelection === "unfiled"
+        unfiled: folderCapability === "available" && requestedFolderSelection === "unfiled",
+        tagFilters: browseLocation.tagFilters,
+        includeDescendants: browseLocation.includeDescendants,
+        favoritesOnly: browseLocation.favoritesOnly,
+        sort: browseLocation.sort,
+        publicationState: browseLocation.publicationState
       }, controller.signal);
       if (!isRequestCurrent(generation)) return;
       if (response.isPaged) {
-        setLastSuccess({ identity, definitions: response.definitions, totalCount: 0, usesCursorPaging: true });
-        recordNextCursor(requestedPage, response.nextContinuationToken);
+        setLastSuccess({ identity, definitions: response.definitions, totalCount: response.totalCount ?? 0, usesCursorPaging: true, hasKnownTotal: response.totalCount !== undefined });
+        recordNextCursor(requestedPage, response.nextContinuationToken ?? null);
       } else {
-        const effectiveTotalCount = response.totalCount;
+        const effectiveTotalCount = response.totalCount ?? response.definitions.length;
         const effectiveTotalPages = getTotalPages(effectiveTotalCount, pageSize);
         if (effectiveTotalCount > 0 && requestedPage > effectiveTotalPages) {
           changePage(effectiveTotalPages);
           return;
         }
-        setLastSuccess({ identity, definitions: response.definitions, totalCount: effectiveTotalCount, usesCursorPaging: false });
+        setLastSuccess({ identity, definitions: response.definitions, totalCount: effectiveTotalCount, usesCursorPaging: false, hasKnownTotal: true });
       }
       setRequestState("ready");
     } catch (e) {
@@ -271,7 +294,8 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     recordNextCursor,
     reportAccessDenied,
     settledSearch,
-    targetIdentity
+    targetIdentity,
+    browseLocation
   ]);
 
   useEffect(() => {
@@ -420,7 +444,14 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   };
 
   const changeFolder = (nextFolder: WorkflowFolderSelection) => {
-    navigateBrowseLocation({ ...browseLocation, folderSelection: nextFolder }, "push", true);
+    navigateBrowseLocation({ ...browseLocation, folderSelection: nextFolder, includeDescendants: typeof nextFolder === "object" ? browseLocation.includeDescendants : false }, "push", true);
+  };
+  const changeLibraryLocation = useCallback((next: WorkflowDefinitionBrowseLocation) => navigateBrowseLocation(next, "push", true), [navigateBrowseLocation]);
+  const organizationSaved = () => { rebase(true); setStatus("Workflow organization updated"); };
+  const closeOrganization = () => { setOrganizationTarget(null); setBulkTagTargets(null); requestAnimationFrame(() => refreshButtonRef.current?.focus()); };
+  const changeFavorite = async (definition: WorkflowDefinitionSummary) => {
+    try { const { setWorkflowFavorite } = await import("../api/workflowOrganization"); await setWorkflowFavorite(context, definition.id, !definition.favorite); setStatus(definition.favorite ? "Removed from favorites" : "Added to favorites"); rebase(true); }
+    catch (caught) { setStatus(caught instanceof Error ? caught.message : "Couldn't change this favorite."); }
   };
 
   const softDelete = async (definition: WorkflowDefinitionDetails["definition"]) => {
@@ -494,19 +525,24 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
     return () => { cancelled = true; };
   }, [context]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setLibrarySupport(null); setLibraryPermissions({}); setTagCatalog([]);
+    setOrganizationTarget(null); setBulkTagTargets(null);
+    void workflowOrganizationSupport(context).then(support => { if (!cancelled) setLibrarySupport(support); }).catch(() => { if (!cancelled) setLibrarySupport(null); });
+    return () => { cancelled = true; };
+  }, [authorityRevision, context]);
+
+  const showTagColumn = browseLocation.columns?.includes("tags") ?? false;
+  const showLocationColumn = browseLocation.columns?.includes("location") ?? false;
+  const hasLibrarySupport = librarySupport && Object.values(librarySupport).some(Boolean);
+
   return (
     <>
-      <header className="wf-definition-page-header" aria-labelledby="workflow-definitions-title">
-        <div>
-          <span className="wf-kicker">Workflows</span>
-          <h1 id="workflow-definitions-title">Workflow definitions</h1>
-          <p>Create and organize workflow definitions, then open a definition to edit its behavior.</p>
-        </div>
-        <div className="wf-definition-page-actions" role="group" aria-label="Workflow definition page actions">
+      <StudioPageHeader title="Workflow definitions" titleId="workflow-definitions-title" description="Create and organize workflow definitions, then open a definition to edit its behavior." actions={        <div className="studio-page-actions" role="group" aria-label="Workflow definition page actions">
           <StudioButton variant="primary" size="md" title="Create workflow" aria-label="Create workflow" onClick={openCreateDialog}><Plus size={15} /> Create workflow</StudioButton>
           <StudioButton ref={refreshButtonRef} variant="default" size="md" title="Refresh workflow definitions" aria-label="Refresh workflow definitions" onClick={retry}>Refresh</StudioButton>
-        </div>
-      </header>
+        </div>} />
       <div className="wf-definitions-list">
         <WorkflowFolderNavigation
           context={context}
@@ -514,24 +550,29 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
           onSelect={changeFolder}
           onAvailable={handleFolderAvailability}
           onFoldersMutated={foldersMutated}
+          canManage={librarySupport === null ? false : librarySupport.organization ? libraryPermissions.canManageFolders === true : true}
         />
         {folderCapability === "unavailable" && folderSelection !== "all" ? (
           <div className="wf-alert" role="status">
             Workflow folders are unavailable. Showing all workflows while preserving the requested folder context.
           </div>
         ) : null}
-        <div className="wf-toolbar">
-          <div className="wf-segmented" role="group" aria-label="Definition state">
+        <StudioCollectionToolbar>
+          <StudioSearchInput aria-label={searchLabel} value={search} onChange={event => changeSearch(event.target.value)} placeholder="Search definitions" />
+          <div className="studio-filter-group" role="group" aria-label="Definition state">
             <button type="button" className={listState === "active" ? "active" : ""} aria-pressed={listState === "active"} onClick={() => changeListState("active")}>Active</button>
             <button type="button" className={listState === "deleted" ? "active" : ""} aria-pressed={listState === "deleted"} onClick={() => changeListState("deleted")}>Deleted</button>
             <button type="button" className={listState === "all" ? "active" : ""} aria-pressed={listState === "all"} onClick={() => changeListState("all")}>All states</button>
           </div>
-          <label className="wf-search">
-            <Search size={15} />
-            <input aria-label={searchLabel} value={search} onChange={event => changeSearch(event.target.value)} placeholder="Search definitions" />
-          </label>
-          {effectiveFolderSelection !== "all" ? <button type="button" onClick={() => changeFolder("all")}>Search all workflows</button> : null}
-        </div>
+
+          {effectiveFolderSelection !== "all" ? <StudioButton onClick={() => changeFolder("all")}>Search all workflows</StudioButton> : null}
+        </StudioCollectionToolbar>
+
+        {hasLibrarySupport ? <Suspense fallback={<p role="status">Loading library organization…</p>}><WorkflowLibraryControls
+          key={`${context.baseUrl}:${authorityRevision}`} context={context} support={librarySupport}
+          location={browseLocation} onChange={changeLibraryLocation} onCatalog={setTagCatalog} onPermissions={setLibraryPermissions}
+        /></Suspense> : null}
+        {browseLocation.invalidTagFilters || (librarySupport !== null && !hasLibrarySupport && (browseLocation.tagFilters?.length || browseLocation.favoritesOnly || browseLocation.includeDescendants || browseLocation.publicationState || (browseLocation.sort && browseLocation.sort !== "name"))) ? <div className="wf-alert" role="alert">The requested organization filters are invalid or unavailable on this host. They have not been discarded. <button type="button" onClick={() => changeLibraryLocation({ ...browseLocation, tagFilters: [], invalidTagFilters: undefined, favoritesOnly: false, includeDescendants: false, publicationState: undefined, sort: "name", viewId: undefined })}>Clear organization filters</button></div> : null}
 
         {staleStatus ? <div className="wf-status-line wf-definition-refresh-status" role="status">{staleStatus}</div> : null}
         {displayState === "failed" && currentError ? (
@@ -540,8 +581,8 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
             title={errorTitle}
             action={(
               <div className="wf-definition-search-actions">
-                <button type="button" className="wf-link-button" onClick={retry}>Retry current search</button>
-                {page > 1 ? <button type="button" className="wf-link-button" onClick={() => rebase()}>Restart from first page</button> : null}
+                <StudioButton onClick={retry}>Retry current search</StudioButton>
+                {page > 1 ? <StudioButton onClick={() => rebase()}>Restart from first page</StudioButton> : null}
               </div>
             )}
           />
@@ -552,7 +593,8 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
           <div className="wf-selection-bar" aria-live="polite">
             <span>{selectedCount} selected</span>
             <div className="wf-selection-actions">
-              {moveCapabilityAvailable ? <button type="button" onClick={openMoveDialog}>Move to folder</button> : null}
+              {moveCapabilityAvailable && librarySupport !== null && (!librarySupport.organization || libraryPermissions.canManageFolders === true) ? <button type="button" onClick={openMoveDialog}>Move to folder</button> : null}
+              {librarySupport?.bulk && libraryPermissions.canAssignTags === true && listState !== "deleted" ? <button type="button" disabled={selectedCount > 100} onClick={() => setBulkTagTargets([...selectedIds])}>Edit tags</button> : null}
               <button type="button" onClick={clearSelection}>Clear selection</button>
             </div>
           </div>
@@ -563,12 +605,12 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
             icon={<Package size={22} />}
             title={emptyTitle}
             description={emptyDescription}
-            action={<button type="button" className="wf-link-button" onClick={openCreateDialog}><Plus size={15} /> Create workflow</button>}
+            action={<StudioButton variant="primary" onClick={openCreateDialog}><Plus size={15} /> Create workflow</StudioButton>}
           />
         ) : null}
         {renderResultRows && definitions.length > 0 ? (
           <>
-            <div className="wf-definition-table-scroll" role="region" aria-label="Workflow definitions table" tabIndex={0}><div className="wf-grid wf-definition-grid" role="table" aria-label="Workflow definitions">
+            <div className="studio-table-container wf-definition-table-scroll" role="region" aria-label="Workflow definitions table" tabIndex={0}><div className="studio-collection-table wf-grid wf-definition-grid" data-library-columns={showTagColumn && showLocationColumn ? "both" : showTagColumn ? "tags" : showLocationColumn ? "location" : undefined} role="table" aria-label="Workflow definitions">
               <div className="wf-grid-head" role="row">
                 <div className="wf-row-select" role="columnheader">
                   {isCurrentData ? (
@@ -587,6 +629,8 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
                 <span role="columnheader">Latest version</span>
                 <span role="columnheader">Published version</span>
                 <span role="columnheader">Modified</span>
+                {showTagColumn ? <span role="columnheader">Tags</span> : null}
+                {showLocationColumn ? <span role="columnheader">Location</span> : null}
                 <span className="wf-definition-actions-header" role="columnheader">{isCurrentData ? "Actions" : ""}</span>
               </div>
               {definitions.map(definition => {
@@ -606,6 +650,8 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
                   ]
                   : [
                     { id: "artifacts", label: "Artifacts", onSelect: () => openDefinitionArtifacts(definition.id) },
+                    ...(librarySupport?.organization ? [{ id: "organization", label: "Organization", onSelect: () => setOrganizationTarget({ id: definition.id, name: definition.name }) }] : []),
+                    ...(librarySupport?.favorites ? [{ id: "favorite", label: definition.favorite ? "Remove from favorites" : "Add to favorites", onSelect: () => void changeFavorite(definition) }] : []),
                     ...(explainDefinitionAction ? [{ id: "explain", label: "Explain", onSelect: () => dispatchAiAction(ai, explainDefinitionAction, definition) }] : []),
                     { id: "delete", label: "Delete", destructive: true, onSelect: () => void softDelete(definition) }
                   ];
@@ -650,6 +696,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
                           </a>
                         ) : definition.name}
                       </strong>
+                      {definition.description ? <small className="wf-definition-description">{definition.description}</small> : null}
                     </span>
                     <span className="wf-definition-id wf-definition-primary-identifier" role="cell" onClick={event => event.stopPropagation()}>
                       {isCurrentData ? <CopyableIdentifier label="Definition ID" value={definition.id} /> : <span title={definition.id}>{definition.id}</span>}
@@ -658,11 +705,14 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
                       {isCurrentData ? <WorkflowListIdentifiers name={definition.name} identifiers={secondaryIdentifiers} description={definition.description}>
                         {effectiveFolderSelection === "all" ? <ResultFolderBreadcrumb definition={definition} onSelect={changeFolder} /> : null}
                         {isDeleted ? <p>Deleted {formatDate(definition.deletedAt)}</p> : null}
+                        {definition.tags?.length ? <p>Tags: {formatWorkflowTags(definition, tagCatalog)}</p> : null}
                       </WorkflowListIdentifiers> : null}
                     </span>
                     <span className="wf-definition-version" role="cell"><LatestDefinitionVersion definition={definition} />{isDeleted ? <span className="wf-status-badge" data-status="cancelled">Deleted</span> : null}</span>
                     <span className="wf-definition-version" role="cell"><PublishedDefinitionVersion definition={definition} /></span>
                     <span className="wf-definition-modified" role="cell">{formatDate(definition.lastModifiedAt)}</span>
+                    {showTagColumn ? <span className="wf-library-tag-summary" role="cell" title={formatWorkflowTags(definition, tagCatalog)}>{formatWorkflowTags(definition, tagCatalog) || "—"}</span> : null}
+                    {showLocationColumn ? <span className="wf-library-location" role="cell" title={definition.folderBreadcrumb?.map(folder => folder.name).join(" / ") || "Unfiled"}>{definition.folderBreadcrumb?.map(folder => folder.name).join(" / ") || "Unfiled"}</span> : null}
                     <span className="wf-row-actions" role="cell" onClick={isCurrentData ? event => event.stopPropagation() : undefined}>
                       {isCurrentData ? <OverflowMenu items={menuItems} ariaLabel={`Actions for ${definition.name}`} /> : null}
                     </span>
@@ -675,13 +725,16 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
         {isCurrentData ? <DefinitionPager
           page={page}
           pageSize={pageSize}
-          totalCount={usesCursorPaging ? undefined : totalCount}
+          totalCount={hasKnownTotal || !usesCursorPaging ? totalCount : undefined}
           itemCount={definitions.length}
           hasNextPage={Boolean(continuationTokens[page + 1])}
+          usesCursorPaging={usesCursorPaging}
           onPageChange={changePage}
           onPageSizeChange={changePageSize}
         /> : null}
       </div>
+      {organizationTarget ? <Suspense fallback={<p role="status">Loading workflow organization…</p>}><WorkflowOrganizationDialog context={context} definitionId={organizationTarget.id} name={organizationTarget.name} onClose={closeOrganization} onSaved={organizationSaved} /></Suspense> : null}
+      {bulkTagTargets ? <Suspense fallback={<p role="status">Loading bulk tag editor…</p>}><WorkflowBulkTagsDialog context={context} definitionIds={bulkTagTargets} onClose={closeOrganization} onSaved={organizationSaved} /></Suspense> : null}
       {createDraft ? (
         <Suspense fallback={<div className="wf-dialog-backdrop" role="status">Loading create dialog…</div>}>
           <CreateWorkflowDialog
@@ -713,6 +766,14 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
       ) : null}
     </>
   );
+}
+
+function formatWorkflowTags(definition: WorkflowDefinitionSummary, catalog: WorkflowTag[]) {
+  return (definition.tags ?? []).map(assignment => {
+    const tag = catalog.find(item => item.id === assignment.tagId);
+    const value = tag?.values.find(item => item.id === assignment.valueId);
+    return `${tag?.name ?? assignment.tagId}${assignment.valueId ? `: ${value?.name ?? assignment.valueId}` : ""}`;
+  }).join(", ");
 }
 
 function ResultFolderBreadcrumb({

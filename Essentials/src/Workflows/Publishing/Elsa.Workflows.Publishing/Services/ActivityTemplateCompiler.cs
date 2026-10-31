@@ -1,4 +1,7 @@
 using System.Text.Json;
+using Elsa.Primitives.Models;
+using RuntimeActivityInputContract = Elsa.Activities.Runtime.Core.Models.ActivityInputContract;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
@@ -380,7 +383,10 @@ public sealed class ActivityTemplateCompiler(
                         ExecutableActivityTemplateOccurrenceOverlay.SupportedSchemaVersion,
                         occurrence.InputBindings,
                         structure,
-                        occurrence.OutputBindings);
+                        occurrence.OutputBindings)
+                    {
+                        InputContracts = CompileOccurrenceInputContracts(occurrence, loadedTemplates[x.TemplateId].Root)
+                    };
                 }
 
                 return new ExecutableActivityTemplateDependency(
@@ -610,6 +616,40 @@ public sealed class ActivityTemplateCompiler(
         }
 
         return closure;
+    }
+
+    private static IReadOnlyList<RuntimeActivityInputContract>? CompileOccurrenceInputContracts(ActivityTemplateOccurrenceCompilation occurrence, ExecutableNode source)
+    {
+        if (occurrence.StructureInputs is not { } projection || projection.Inputs.Count == 0 && projection.ConsumedInputKeys.Count == 0)
+            return null;
+        var sourceInputs = source.ActivityContract?.Inputs
+            ?? throw new InvalidOperationException("An occurrence with structure inputs requires an exact pinned source contract.");
+        if (projection.ConsumedInputKeys.Any(key => !sourceInputs.ContainsKey(key)))
+            throw new InvalidOperationException("An occurrence structure consumes an undeclared source input.");
+        var result = sourceInputs.Values.Where(input => !projection.ConsumedInputKeys.Contains(input.Key, StringComparer.Ordinal)).ToDictionary(input => input.Key, StringComparer.Ordinal);
+        foreach (var input in projection.Inputs)
+        {
+            RuntimeActivityInputContract contract;
+            if (input.Definition is { } definition)
+            {
+                if (definition.ReferenceKey != input.ReferenceKey) throw new InvalidOperationException("An occurrence structure input does not match its definition.");
+                contract = new(input.ReferenceKey, definition.Name, new ValueTypeDescriptor(definition.Type.Alias, definition.Type.CollectionKind),
+                    definition.IsRequired, definition.IsNullable, definition.DefaultValue.HasValue, definition.DefaultValue,
+                    RuntimeInputBindingCompiler.EffectivePolicy(occurrence.OccurrenceId, definition, input.State),
+                    isCredential: definition.IsCredential == true, connectionType: definition.ConnectionType) { IsStructureInput = true };
+            }
+            else
+            {
+                var original = sourceInputs.GetValueOrDefault(input.ReferenceKey)
+                    ?? throw new InvalidOperationException("An occurrence structure input has no source declaration.");
+                var policy = input.State is null ? original.Policy : ValuePolicyCombiner.CombineAuthoredInput(original.Policy,
+                    input.State.StorageDriverType, input.State.IsSensitive, $"Occurrence '{occurrence.OccurrenceId}' input '{input.ReferenceKey}'");
+                contract = new(original.Key, original.Name, original.Type, original.IsRequired, original.IsNullable, original.HasDefault,
+                    original.DefaultValue, policy, original.EditorMetadata, original.IsCredential, original.ConnectionType) { IsStructureInput = true };
+            }
+            if (!result.TryAdd(input.ReferenceKey, contract)) throw new InvalidOperationException("An occurrence structure declares a duplicate input key.");
+        }
+        return result.Values.OrderBy(input => input.Key, StringComparer.Ordinal).ToArray();
     }
 
     private static IEnumerable<ActivityDiagnostic> ValidateOccurrenceRequests(

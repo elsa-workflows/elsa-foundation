@@ -12,3 +12,9 @@ declare namespace NodeJS {
 }
 
 declare const process: NodeJS.Process;
+
+// Durable source-reconciliation receipts are shared across separate host runs.
+declare module "node:fs" {
+  export function readFileSync(path: string, encoding: "utf8"): string;
+  export function writeFileSync(path: string, data: string): void;
+}

@@ -1,6 +1,8 @@
+import { StudioPageHeader, StudioButton } from "../ui";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, Download, FileUp, ImagePlus, Paintbrush, RefreshCcw, Save, Trash2 } from "lucide-react";
 import { isStudioThemeLayout, studioThemeLayouts, type ElsaStudioModuleApi } from "../../sdk";
+import { isWorkspaceStyle, workspaceStyles } from "../themes/workspaceStyles";
 import { SkeletonRows, StudioAlert, StudioTabs, StudioToolbar, StudioToolbarGroup } from "../ui";
 import {
   allThemeModes,
@@ -262,36 +264,25 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
 
   if (!store || !draft) {
     return (
-      <section className="theme-builder-page">
-        <div className="section-header">
-          <div>
-            <h2>Theme Builder</h2>
-            <p>Loading Theme Store definitions.</p>
-          </div>
-        </div>
+      <section className="studio-page theme-builder-page">
+        <StudioPageHeader headingLevel={2} title={<>Theme Builder</>} description={<>Loading Theme Store definitions.</>} />
         <SkeletonRows rows={6} label="Loading themes" />
       </section>
     );
   }
 
   return (
-    <section className="theme-builder-page">
-      <div className="section-header">
-        <div>
-          <h2>Theme Builder</h2>
-          <p>{store.themes.length} definitions, {store.assets.length} material texture assets, default {store.defaultThemeId || "not set"}</p>
-        </div>
-        <StudioToolbar>
+    <section className="studio-page theme-builder-page">
+      <StudioPageHeader headingLevel={2} title={<>Theme Builder</>} description={<>{store.themes.length} definitions, {store.assets.length} material texture assets, default {store.defaultThemeId || "not set"}</>} actions={<><StudioToolbar>
           <StudioToolbarGroup>
-            <button type="button" className="studio-button" onClick={() => void loadStore()}>
+            <StudioButton type="button" className="studio-button" onClick={() => void loadStore()}>
               <RefreshCcw size={15} /> Refresh
-            </button>
-            <button type="button" className="studio-button" onClick={() => importInputRef.current?.click()}>
+            </StudioButton>
+            <StudioButton type="button" className="studio-button" onClick={() => importInputRef.current?.click()}>
               <FileUp size={15} /> Import
-            </button>
+            </StudioButton>
           </StudioToolbarGroup>
-        </StudioToolbar>
-      </div>
+        </StudioToolbar></>} />
 
       {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
       {status ? <StudioAlert tone="success">{status}</StudioAlert> : null}
@@ -349,6 +340,14 @@ export function ThemeBuilderPage({ api }: { api: ElsaStudioModuleApi }) {
           {tab === "tokens" ? (
             <div className="theme-token-editor">
               <div className="theme-token-grid">
+                <label className="theme-token-field">
+                  <span>Default workspace treatment</span>
+                  <select value={draft.workspaceStyle ?? ""} disabled={isReadOnly} onChange={event => patchDraft({ workspaceStyle: isWorkspaceStyle(event.target.value) ? event.target.value : undefined })}>
+                    <option value="">Original theme treatment</option>
+                    {workspaceStyles.map(style => <option key={style.id} value={style.id}>{style.name}</option>)}
+                  </select>
+                  <small>Shared surfaces and controls. Your theme's layout, fonts and radii below remain its defaults; a user's workspace choice can override them.</small>
+                </label>
                 <label className="theme-token-field">
                   <span>Layout</span>
                   <select

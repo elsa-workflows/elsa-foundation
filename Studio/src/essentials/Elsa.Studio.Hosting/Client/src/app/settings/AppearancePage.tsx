@@ -1,3 +1,4 @@
+import { StudioPageHeader } from "../ui";
 import React from "react";
 import { StudioButton } from "../ui/forms/Button";
 import { useTheme } from "../components/ThemeProvider";
@@ -10,6 +11,7 @@ import {
 import { getSupportedThemeModes, getThemeModeDefinition, isThemeMode } from "../themes/presets";
 import { isNavModePreference, navModePreferenceLabels, navModePreferences } from "../themes/navMode";
 import { isWorkspaceStyle, workspaceStyles } from "../themes/workspaceStyles";
+import { minimalStudioPresets, type MinimalStudioPresetId } from "../themes/minimalPresets";
 
 /** The radio-group arrow keys wrap around; Home/End jump to the ends. Undefined for any other key. */
 function keyTarget(key: string, index: number, count: number): number | undefined {
@@ -42,6 +44,8 @@ export function AppearancePage({
     modePreference,
     setModePreference,
     setTheme,
+    applyPreset,
+    mode,
     resetAppearance,
     supportedModes,
     navModePreference,
@@ -51,12 +55,21 @@ export function AppearancePage({
   const modeOptions = appearanceModePreferences.filter(option => option === "system" || supportedModes.includes(option));
 
   return (
-    <section className="settings-page" aria-labelledby="settings-appearance-title">
-      <header className="settings-page-header">
-        <h2 id="settings-appearance-title">Appearance</h2>
-        <p>Choose your workspace, colors and mode independently.</p>
-        <span className="settings-scope">This browser</span>
-      </header>
+    <section className="studio-page settings-page" aria-labelledby="settings-appearance-title">
+      <StudioPageHeader headingLevel={2} title={<>Appearance</>} titleId="settings-appearance-title" description={<>Choose your workspace, colors and mode independently.</>} actions={<><span className="settings-scope">This browser</span></>} />
+
+      <AppearanceCard title="Studio presets" description="Start with a complete look, then adjust each choice below.">
+        <RadioCardGroup
+          ariaLabel="Studio preset"
+          value={workspaceStyle === "minimal" && currentColorScheme.id === currentTheme.id && minimalStudioPresets.some(preset => preset.id === currentTheme.id && preset.mode === mode) ? currentTheme.id : ""}
+          options={minimalStudioPresets.flatMap(preset => {
+            const theme = availableThemes.find(candidate => candidate.id === preset.id);
+            const colors = theme && getThemeModeDefinition(theme, preset.mode);
+            return colors ? [{ value: preset.id, label: preset.name, description: preset.description, preview: colors }] : [];
+          })}
+          onChange={value => applyPreset(value as MinimalStudioPresetId)}
+        />
+      </AppearanceCard>
 
       <AppearanceCard title="Workspace style" description="Arrange your tools without changing your color scheme.">
         <RadioCardGroup
@@ -187,7 +200,7 @@ function RadioCardGroup({
   ariaLabel: string;
   workspacePreviews?: boolean;
   value: string;
-  options: Array<{ value: string; label: string; description?: string; defaultValue?: boolean; swatches?: string[]; disabled?: boolean }>;
+  options: Array<{ value: string; label: string; description?: string; defaultValue?: boolean; swatches?: string[]; disabled?: boolean; preview?: ReturnType<typeof getThemeModeDefinition> }>;
   onChange: (value: string) => void;
 }) {
   const optionRefs = React.useRef<Record<string, HTMLButtonElement | null>>({});
@@ -218,6 +231,11 @@ function RadioCardGroup({
           disabled={option.disabled}
           onClick={() => onChange(option.value)}
         >
+          {option.preview ? <span className="settings-preset-preview" aria-hidden="true" style={{
+            "--preview-background": option.preview.background, "--preview-sidebar": option.preview.sidebar,
+            "--preview-card": option.preview.card, "--preview-muted": option.preview.muted,
+            "--preview-ink": option.preview.mutedForeground, "--preview-accent": option.preview.ring
+          } as React.CSSProperties}><i className="settings-preset-nav"><b /><b /><b /></i><i className="settings-preset-content"><b /><b /><b /><b /></i></span> : null}
           {workspacePreviews && option.value !== "theme" ? (
             <span className="workspace-style-preview" data-style={option.value} aria-hidden="true"><i /><i /><i /></span>
           ) : null}

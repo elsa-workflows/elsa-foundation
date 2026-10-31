@@ -414,7 +414,11 @@ public sealed class ClrAssemblyScanner(
             ReadNamedStringArgument(attribute, nameof(ActivityChildSlotAttribute.CollectionProperty)),
             ReadNamedStringArgument(attribute, nameof(ActivityChildSlotAttribute.ChildProperty)),
             ReadNamedStringArgument(attribute, nameof(ActivityChildSlotAttribute.LabelProperty)),
-            ReadNamedStringArgument(attribute, nameof(ActivityChildSlotAttribute.SlotNameTemplate)));
+            ReadNamedStringArgument(attribute, nameof(ActivityChildSlotAttribute.SlotNameTemplate)))
+        {
+            ItemIdProperty = ReadNamedStringArgument(attribute, nameof(ActivityChildSlotAttribute.ItemIdProperty)),
+            ConditionProperty = ReadNamedStringArgument(attribute, nameof(ActivityChildSlotAttribute.ConditionProperty))
+        };
 
     private static IReadOnlyDictionary<string, object?> BuildInitialPayload(
         string mode,

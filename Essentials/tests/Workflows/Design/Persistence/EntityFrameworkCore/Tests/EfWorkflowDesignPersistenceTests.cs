@@ -139,6 +139,17 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         var template = (Elsa.Primitives.Entities.TenantEntity)Activator.CreateInstance(templateType)!;
         template.Id = "template-" + Guid.NewGuid().ToString("N"); template.TenantId = "tenant-a";
         db.Add(template); await db.SaveChangesAsync();
+        // Exercise the real organization writes so every new metadata table participates in
+        // the same schema-stamp contract, including audit and the hierarchy revision fence.
+        var libraryAccess = new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a")));
+        var library = new EfWorkflowLibraryStore(db, libraryAccess, new EfDesignAtomicWriter(db, libraryAccess), new TestLockProvider());
+        var folder = await library.CreateFolderAsync("Finance", null, "alice");
+        await library.MoveDefinitionsAsync(["alpha"], folder.Id, "alice", "schema-folder-placement");
+        var tag = await library.CreateTagAsync(new WorkflowTagInput("Critical"), "alice");
+        var organization = (await library.GetOrganizationAsync("alpha"))!;
+        await library.ReplaceTagsAsync("alpha", organization.Revision, [new(tag.Id)], "alice", "schema-tags");
+        await library.SaveViewAsync(null, new("Finance", new(FolderId: folder.Id)), "alice", false);
+        await library.SetFavoriteAsync("alpha", true, "alice");
         // The finalization tables belong to their own family, and their store stamps them.
         foreach (var entityType in db.Model.GetEntityTypes().ExcludingSchemaFinalization())
         {

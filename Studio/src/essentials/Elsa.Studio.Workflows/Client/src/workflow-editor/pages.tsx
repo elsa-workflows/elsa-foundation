@@ -1,3 +1,4 @@
+import { StudioPageHeader } from "@elsa-workflows/studio-ui";
 import React, { lazy, useCallback, useEffect, useRef, useState } from "react";
 import type { StudioActivityPropertyEditorContribution, StudioAgentRegistry, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { WorkflowAgentController } from "../workflowAgent";
@@ -112,7 +113,7 @@ export function WorkflowExecutablesPage({ context, ai, runInputEditors }: { cont
   }, []);
 
   return (
-    <WorkflowsPageFrame title="Executables">
+    <WorkflowsPageFrame>
       <WorkflowLazyBoundary label="workflow executables">
         <WorkflowExecutables context={context} ai={ai} runInputEditors={runInputEditors} definitionFilter={definitionFilter} onDefinitionFilterChange={updateDefinitionFilter} />
       </WorkflowLazyBoundary>
@@ -162,7 +163,7 @@ export function WorkflowExecutableInspectorPage({ context, ai, runInputEditors }
 
 export function WorkflowInstancesPage({ context, navigate }: { context: StudioEndpointContext; navigate(path: string): void }) {
   return (
-    <WorkflowsPageFrame title="Runs">
+    <WorkflowsPageFrame>
       <WorkflowLazyBoundary label="workflow runs">
         <WorkflowInstances context={context} navigate={navigate} />
       </WorkflowLazyBoundary>
@@ -228,14 +229,8 @@ function WorkflowsPageFrame({ title, context, workbench = false, definitions = f
   children: React.ReactNode;
 }) {
   return (
-    <section className={`wf-page${workbench ? " wf-page--run-workbench" : ""}${definitions ? " wf-page--definitions" : ""}`}>
-      {title ? <div className="wf-page-header">
-        <div>
-          {!definitions ? <span className="wf-kicker">Workflow management</span> : null}
-          <h2>{title}</h2>
-        </div>
-        {context}
-      </div> : null}
+    <section className={`studio-page wf-page${workbench ? " wf-page--run-workbench" : ""}${definitions ? " wf-page--definitions" : ""}`}>
+      {title ? <StudioPageHeader title={title} headingLevel={2} actions={context} /> : null}
       {children}
     </section>
   );

@@ -21,38 +21,23 @@ html[data-workspace-style] :is(.wf-page-header, .wf-toolbar, .wf-editor-top, .wf
 
 html[data-workspace-style] .wf-kicker { display: none; }
 
-html[data-workspace-style] :is(.wf-grid, .wf-pagination) {
+html[data-workspace-style] :is(.wf-grid:not(.studio-collection-table), .wf-pagination) {
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
 
-html[data-workspace-style] .wf-grid-head {
+html[data-workspace-style] .wf-grid:not(.studio-collection-table) > .wf-grid-head {
   border-color: var(--studio-edge-subtle);
   background: transparent;
   font-weight: 500;
 }
 
-html[data-workspace-style] .wf-grid-row {
+html[data-workspace-style] .wf-grid:not(.studio-collection-table) > .wf-grid-row {
   min-height: 64px;
   border-bottom-color: transparent;
   padding-block: 14px;
-}
-
-html[data-workspace-style] .wf-definitions-list .wf-definition-grid > .wf-grid-row {
-  min-height: 44px;
-  padding-block: 6px;
-}
-
-html[data-workspace-style] .wf-definitions-list > .wf-toolbar {
-  border: 0;
-  padding-block: 18px;
-}
-
-html[data-workspace-style] .wf-definitions-list .wf-search {
-  flex: 0 1 360px;
-  margin-left: auto;
 }
 
 html[data-workspace-style] :is(.wf-segmented, .wf-search) {
@@ -114,13 +99,20 @@ html[data-workspace-style][data-theme-appearance="high-contrast"] :is(.wf-grid-r
   border-color: var(--studio-edge-control);
 }
 
-@media (max-width: 600px) {
-  html[data-workspace-style] .wf-definitions-list .wf-search { flex: 1 1 180px; margin-left: 0; }
-}
-
-html[data-workspace-style="linen"] .wf-grid {
+html[data-workspace-style="linen"] .wf-grid:not(.studio-collection-table) {
   overflow: hidden;
   border: 1px solid var(--studio-edge-subtle);
   border-radius: var(--studio-radius-lg);
   background: var(--studio-panel);
 }
+
+html[data-workspace-style="minimal"] :is(.wf-definitions-list .wf-toolbar button, .wf-run-filters button, .wf-run-filters select) { min-height: var(--studio-control-height); font-size: var(--studio-body-size); border-radius: var(--studio-radius); }
+html[data-workspace-style="minimal"] .wf-panel-tab-list button.active { box-shadow: inset 0 -2px var(--studio-selection-mark); }
+html[data-workspace-style="minimal"] .wf-status-badge { gap: 6px; border-color: transparent; background: transparent; padding-inline: 0; font-weight: 500; }
+html[data-workspace-style="minimal"] .wf-status-badge:is([data-status="running"], [data-status="completed"]) { color: var(--studio-text-muted); }
+html[data-workspace-style="minimal"] .wf-status-badge::before { content: ""; width: 5px; height: 5px; flex: none; border-radius: 50%; background: currentColor; }
+html[data-workspace-style="minimal"] .wf-grid.wf-instance-grid > .wf-grid-row { border-bottom-style: var(--studio-row-boundary-style); }
+html[data-workspace-style="minimal"] .wf-grid.wf-instance-grid > .wf-grid-row:hover { background: var(--studio-row-hover); }
+html[data-workspace-style="minimal"] .wf-grid.wf-instance-grid > .wf-grid-row[aria-selected="true"] { background: var(--studio-row-selected); box-shadow: inset 3px 0 0 var(--studio-selection-mark); }
+html[data-workspace-style="minimal"] .wf-artifact-card[data-active="true"] { border-color: var(--studio-selection-mark); background: var(--studio-surface); }
+html[data-workspace-style="minimal"] .wf-page--run-workbench > .studio-page-header { padding: 20px 24px 0; }

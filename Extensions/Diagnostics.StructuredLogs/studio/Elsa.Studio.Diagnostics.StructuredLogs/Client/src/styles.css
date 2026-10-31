@@ -27,45 +27,8 @@
   color: var(--sl-text);
 }
 
-.structured-logs-page {
-  gap: 12px;
-}
-
 .structured-logs-panel {
   background: var(--sl-surface);
-}
-
-.structured-logs-header {
-  min-height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  border: 1px solid var(--sl-border);
-  border-radius: var(--radius, 6px);
-  background: var(--sl-surface);
-  padding: 8px 12px;
-}
-
-.structured-logs-panel .structured-logs-header {
-  border-width: 0 0 1px;
-  border-radius: 0;
-  padding-inline: 16px;
-}
-
-.structured-logs-header h2 {
-  margin: 0;
-  color: var(--sl-text);
-  font-size: 15px;
-  font-weight: 720;
-  line-height: 1.2;
-}
-
-.structured-logs-header p {
-  margin: 2px 0 0;
-  color: var(--sl-text-muted);
-  font-size: 11px;
-  line-height: 1.25;
 }
 
 .structured-logs-tools {
@@ -481,12 +444,33 @@
 }
 
 @media (max-width: 720px) {
-  .structured-logs-header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
 
   .structured-logs-tools {
     justify-content: flex-start;
   }
 }
+
+/* The stream keeps its task-specific grid; shared roles provide the minimal treatment. */
+html[data-workspace-style="minimal"] :is(.structured-logs-page, .structured-logs-panel) { gap: 24px; font-size: var(--studio-body-size); }
+html[data-workspace-style="minimal"] .structured-logs-tools { gap: 8px; font-size: var(--studio-label-size); font-weight: 500; }
+html[data-workspace-style="minimal"] .structured-logs-tools :is(button, input, select) { height: var(--studio-control-height); border-radius: var(--studio-radius); font-size: var(--studio-label-size); font-weight: 500; }
+html[data-workspace-style="minimal"] .structured-logs-tools > span:not(.structured-logs-status) { border: 0; background: transparent; }
+html[data-workspace-style="minimal"] .structured-logs-status { box-shadow: none; }
+html[data-workspace-style="minimal"] .structured-logs-rows { border-radius: var(--studio-radius-md); font-size: var(--studio-body-size); }
+html[data-workspace-style="minimal"] .structured-logs-grid-header { min-height: var(--studio-table-header-height); background: var(--sl-surface); font-size: var(--studio-label-size); font-weight: 600; text-transform: none; }
+html[data-workspace-style="minimal"] .structured-log-row { min-height: var(--studio-row-height); border-bottom: 1px var(--studio-row-boundary-style) var(--sl-border); font-size: var(--studio-body-size); }
+html[data-workspace-style="minimal"] :is(.structured-logs-grid-header, .structured-log-row) { grid-template-columns: 86px 92px 70px minmax(120px, 1fr) minmax(190px, 1.6fr) 28px; min-width: 700px; }
+html[data-workspace-style="minimal"] .structured-logs-rows.compact .structured-log-row { min-height: 36px; }
+html[data-workspace-style="minimal"] .structured-log-row:hover { background: var(--studio-row-hover); }
+html[data-workspace-style="minimal"] .structured-log-row.selected { background: var(--studio-row-selected); box-shadow: inset 2px 0 0 var(--studio-selection-mark); }
+html[data-workspace-style="minimal"] .structured-log-row:focus-visible { outline-color: var(--studio-focus); }
+html[data-workspace-style="minimal"] .structured-log-level { gap: 6px; justify-content: start; border: 0; background: transparent; font-size: var(--studio-label-size); font-weight: 500; }
+html[data-workspace-style="minimal"] .structured-log-level::before { content: ""; width: 5px; height: 5px; flex: none; border-radius: 50%; background: currentColor; }
+html[data-workspace-style="minimal"] .structured-log-level[data-level="information"] { color: var(--sl-text-muted); }
+html[data-workspace-style="minimal"] .structured-log-level[data-level="warning"] { color: var(--studio-warning-fg); }
+html[data-workspace-style="minimal"] .structured-log-level:is([data-level="error"], [data-level="critical"]) { color: var(--studio-danger-fg); }
+html[data-workspace-style="minimal"] .structured-log-inspector { border-radius: var(--studio-radius-md); }
+html[data-workspace-style="minimal"] .structured-log-inspector :is(header, section) { padding: 20px; border-bottom-style: var(--studio-section-boundary-style); }
+html[data-workspace-style="minimal"] .structured-log-inspector :is(p, dl) { font-size: var(--studio-body-size); }
+html[data-workspace-style="minimal"] .structured-log-inspector h3 { font-size: 20px; font-weight: 600; }
+html[data-workspace-style="minimal"] .structured-log-inspector dt { font-weight: 500; }

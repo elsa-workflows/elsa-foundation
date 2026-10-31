@@ -22,9 +22,13 @@ internal static class ThemeStoreApi
     private static readonly string[] ThemeModeNames = ["light", "dark", "dim", "high-contrast"];
     // Mirrors studioThemeLayouts in the SDK's themeLayout.ts.
     private static readonly string[] ThemeLayoutNames = ["classic", "floating", "workbench", "editorial"];
+    private static readonly string[] WorkspaceStyleNames = ["linen", "minimal", "quiet", "focus", "open"];
     internal static readonly HashSet<string> BuiltInThemeIds = new(StringComparer.OrdinalIgnoreCase)
     {
         "linen",
+        "builtin:porcelain",
+        "builtin:atelier",
+        "builtin:graphite",
         "classic",
         "meridian",
         "drift",
@@ -249,7 +253,7 @@ internal static class ThemeStoreApi
         await using var mutation = await mutationGate.AcquireAsync(cancellationToken);
         if (request is null || string.IsNullOrWhiteSpace(request.ThemeId))
             return Results.BadRequest(new ThemeStoreErrorResponse("Theme ID is required."));
-        if (!ThemeIdPattern.IsMatch(request.ThemeId))
+        if (!BuiltInThemeIds.Contains(request.ThemeId) && !ThemeIdPattern.IsMatch(request.ThemeId))
             return Results.BadRequest(new ThemeStoreErrorResponse("Theme ID must be kebab-case and between 3 and 64 characters."));
 
         var snapshot = await ReadStoreAsync(environment, themeService, httpRequest, cancellationToken);
@@ -559,6 +563,8 @@ internal static class ThemeStoreApi
 
         if (theme.Layout is not null && !ThemeLayoutNames.Contains(theme.Layout))
             return "Theme layout must be classic, floating, workbench or editorial.";
+        if (theme.WorkspaceStyle is not null && !WorkspaceStyleNames.Contains(theme.WorkspaceStyle))
+            return "Theme workspace style must be linen, minimal, quiet, focus or open.";
 
         foreach (var (name, value) in theme.Shape?.Values() ?? [])
         {
@@ -647,7 +653,11 @@ internal sealed record StudioThemeDefinition(
     string[]? SupportedModes = null,
     StudioThemeTypography? Typography = null,
     StudioThemeShape? Shape = null,
-    string? Layout = null);
+    string? Layout = null)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? WorkspaceStyle { get; init; }
+}
 
 /// <summary>A theme's palettes. Light and dark are required; dim and high contrast are optional.</summary>
 internal sealed record StudioThemeModes(

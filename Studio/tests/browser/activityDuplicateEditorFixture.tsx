@@ -13,6 +13,7 @@ import { activityGraphDiagnosticFocusEvent } from "../../src/essentials/Elsa.Stu
 import { ActivityGraphImplementationEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor";
 import { WorkflowEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor";
 import { WorkflowInstanceDetailsWorkbench } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowInstances";
+import { WorkflowExecutableInspectorWorkbench } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowExecutableInspector";
 import {
   bpmnActivity,
   collectionActivity,
@@ -39,6 +40,16 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false 
 const bpmnDecisionFixture = new URLSearchParams(window.location.search).get("bpmn-decision");
 const adaptivePorts = new URLSearchParams(window.location.search).get("adaptive-ports");
 const collectionSlotsFixture = new URLSearchParams(window.location.search).get("collection-slots");
+function collectionFixtureCatalog(conditions = collectionSlotsFixture === "switch-conditions") {
+  const catalog = collectionActivity(collectionSlotsFixture === "parallel" ? "parallel" : "switch");
+  if (conditions) {
+    catalog.activityVersionId = "activity-switch-4.1";
+    const facet = catalog.designFacets![0] as { schemaVersion: string; payload: { slots: Record<string, unknown>[] } };
+    facet.schemaVersion = "2.0.0";
+    Object.assign(facet.payload.slots[0], { itemIdProperty: "caseId", conditionProperty: "condition" });
+  }
+  return catalog;
+}
 const staleValidationsFixture = new URLSearchParams(window.location.search).get("stale-validations");
 const persistFixture = Boolean(adaptivePorts || collectionSlotsFixture || bpmnDecisionFixture || staleValidationsFixture);
 const adaptiveStorageKey = `adaptive-ports:${window.location.search}`;
@@ -133,8 +144,14 @@ function editorDraft(): WorkflowDraft {
     }
   }
   if (collectionSlotsFixture) {
-    const activity = collectionActivity(collectionSlotsFixture === "parallel" ? "parallel" : "switch");
-    root.structure!.payload.activities = [createActivityNode(activity, "collection-owner")];
+    const activity = collectionFixtureCatalog();
+    const collectionOwner = createActivityNode(activity, "collection-owner");
+    if (collectionSlotsFixture === "switch-upgrade") collectionOwner.structure!.payload.cases = [{ match: "Approved", activity: null }];
+    if (collectionSlotsFixture === "switch-upgrade" && new URLSearchParams(window.location.search).has("secret-value"))
+      collectionOwner.inputs = [{ referenceKey: "Value", value: { expressionType: "Secret", value: { name: "preserved-secret" } } }];
+    if (collectionSlotsFixture === "switch-conditions" && new URLSearchParams(window.location.search).has("read-only"))
+      collectionOwner.structure!.payload.cases = [{ caseId: "readonly", match: "Approved", condition: { referenceKey: "Case:readonly:Condition", value: { expressionType: "JavaScript", value: "true" } }, activity: null }];
+    root.structure!.payload.activities = [collectionOwner];
     if (!sequence) root.structure!.payload.connections = [];
     if (composition === "bpmn") {
       root.structure!.payload.elements = [{ elementId: "collection-element", elementType: "task", childNodeId: "collection-owner" }];
@@ -220,6 +237,7 @@ export function ActivityDuplicateEditorFixture() {
 
 function ActivityDuplicateEditorFixtureContent() {
   const instanceHost = new URLSearchParams(window.location.search).get("host") === "instance";
+  const executableHost = new URLSearchParams(window.location.search).get("host") === "executable";
   const motionFixture = new URLSearchParams(window.location.search).has("execution-motion");
   const live = useRef({ status: "Running", disconnected: false });
   const context = useMemo(() => createEditorContext(instanceHost || motionFixture ? live.current : undefined), [instanceHost, motionFixture]);
@@ -231,11 +249,11 @@ function ActivityDuplicateEditorFixtureContent() {
   } as unknown as StudioAiContributionApi), []);
 
   return (
-    <div className={`activity-duplicate-editor${instanceHost ? " wf-page wf-page--run-workbench" : ""}`} data-testid="activity-duplicate-editor">
+    <div className={`activity-duplicate-editor${instanceHost || executableHost ? " wf-page wf-page--run-workbench" : ""}`} data-testid="activity-duplicate-editor">
       {instanceHost || motionFixture ? <div aria-label="Fixture runtime controls"><button onClick={() => { live.current.status = "Completed"; }}>Complete fixture execution</button>
         <button onClick={() => { live.current.disconnected = true; }}>Disconnect fixture reads</button><button onClick={() => { live.current.disconnected = false; }}>Reconnect fixture reads</button></div> : null}
       <QueryClientProvider client={queryClient}>
-        {instanceHost ? <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId="editor-execution" expressionEditors={expressionEditors} navigate={() => undefined} /> : activityHost
+        {executableHost ? <WorkflowExecutableInspectorWorkbench context={context} ai={ai} artifactId="editor-artifact" sourceReferenceId={null} onSelectReference={() => undefined} runInputEditors={[]} /> : instanceHost ? <WorkflowInstanceDetailsWorkbench context={context} ai={ai} workflowExecutionId="editor-execution" expressionEditors={expressionEditors} navigate={() => undefined} /> : activityHost
           ? <ControlledActivityGraphFixture context={context} />
           : <WorkflowEditor
               context={context}
@@ -292,7 +310,7 @@ export function createEditorContext(live?: { status: string; disconnected: boole
     }], paletteHints: { containerModes: ["bpmn"], description: "BPMN Decision is intended for a gateway in a BPMN Process." } },
     { ...writeLineCatalog, activityVersionId: "complete-v1", activityTypeKey: "Elsa.Complete", displayName: "Complete", paletteHints: { resourceKinds: ["activity-definition-graph"] } }
   ] : [];
-  const catalog = [writeLineCatalog, ...(staleValidationsFixture ? [runEtlCatalog] : []), flowchartActivity, sequenceActivity, forEachActivity, ...(slotAssignment ? [whileActivity] : []), ...(rootSlots ? [ifActivity] : []), ...paletteFixtures, ...((adaptivePorts || collectionSlotsFixture) && !bpmnDecisionFixture ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : []), ...(collectionSlotsFixture ? [collectionActivity(collectionSlotsFixture === "parallel" ? "parallel" : "switch")] : [])];
+  const catalog = [writeLineCatalog, ...(staleValidationsFixture ? [runEtlCatalog] : []), flowchartActivity, sequenceActivity, forEachActivity, ...(slotAssignment ? [whileActivity] : []), ...(rootSlots ? [ifActivity] : []), ...paletteFixtures, ...((adaptivePorts || collectionSlotsFixture) && !bpmnDecisionFixture ? [bpmnActivity] : []), ...(adaptivePorts === "dense" ? [denseOutcomeCatalog] : []), ...(workflowStartFixture ? [httpEndpointCatalog] : []), ...(collectionSlotsFixture ? [collectionFixtureCatalog(), ...(collectionSlotsFixture === "switch-upgrade" ? [collectionFixtureCatalog(true)] : [])] : [])];
   const validationReads: boolean[] = [];
   (window as Window & { staleValidationReads?: boolean[] }).staleValidationReads = validationReads;
   const hasEtl = () => !!draft.state.rootActivity && collectActivityNodeIds(draft.state.rootActivity, catalog).has("write-one");
@@ -409,8 +427,10 @@ export function createEditorContext(live?: { status: string; disconnected: boole
           activities: [], incidents: runCanvas === "incident" ? [incident] : [], persistenceMode: "Balanced", inspectionGranularity: "boundary-level"
         };
         if (runCanvas && url === "/runtime/workflows/executables/editor-artifact") return {
-          artifactId: "editor-artifact", rootActivity: compiled(draft.state.rootActivity!),
-          ...(live ? { chosenReference: { sourceReferenceId: "fixture-reference", ...(adaptivePorts ? { layout: draft.layout } : {}), activityPresentation: draft.activityPresentation?.map(item => ({ ...item, executableNodeId: `exec-${item.nodeId}` })) } } : {})
+          artifactId: "editor-artifact", artifactHash: "fixture-artifact-hash", createdAt: "2026-10-27T10:00:00Z",
+          rootActivityType: draft.state.rootActivity!.activityVersionId, rootActivityVersion: "1.0.0",
+          nodeCount: runtimeNodes.length, resumeTargetCount: 0, references: [], rootActivity: compiled(draft.state.rootActivity!),
+          ...(live ? { chosenReference: { sourceReferenceId: "fixture-reference", selection: "requested", ...(adaptivePorts ? { layout: draft.layout } : {}), activityPresentation: draft.activityPresentation?.map(item => ({ ...item, executableNodeId: `exec-${item.nodeId}` })) } } : {})
         };
         if (runCanvas && url.startsWith("/runtime/workflows/instances/editor-execution/activity-executions?")) {
           if (new URLSearchParams(window.location.search).has("evidence-latency")) await new Promise(resolve => setTimeout(resolve, 400));

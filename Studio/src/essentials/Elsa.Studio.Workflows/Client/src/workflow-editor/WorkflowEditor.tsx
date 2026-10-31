@@ -36,6 +36,7 @@ import { loadActivityIconRegistry } from "../activityIconView";
 import { weaverUnavailableTitle } from "./constants";
 
 const AttachedRunActivityInspector = React.lazy(async () => ({ default: (await import("./AttachedRunActivityInspector")).AttachedRunActivityInspector }));
+const WorkflowOrganizationButton = React.lazy(async () => ({ default: (await import("./WorkflowOrganizationButton")).WorkflowOrganizationButton }));
 
 void loadActivityIconRegistry().catch(() => undefined);
 import type { CanvasView, WorkflowDesignerPanelContext, WorkflowEditorError, WorkflowEditorOperation, WorkflowEditorPanelTab, WorkflowErrorInput, WorkflowTestDriveSetupState } from "./editorTypes";
@@ -244,7 +245,7 @@ export function WorkflowEditor({
     editableDoc.editDraft(() => snapshot);
     editableDoc.navigateToScope(path);
   }, [editableDoc]);
-  const { resetHistory, undo, redo, canUndoNow, canRedoNow } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft });
+  const { resetHistory, undo, redo, canUndoNow, canRedoNow, flushPendingHistory } = useDraftHistory({ draft: editableDraft, restoreDraft: restoreHistoryDraft });
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
   // in dedicated hooks; `markSaved`/`reload` let the loader seed the save baseline and reload after promote.
@@ -795,8 +796,14 @@ export function WorkflowEditor({
     });
   }, [catalogByVersion, editDraft]);
 
+  const updateSelectedStructure = useCallback((activity: ActivityNode) => {
+    flushPendingHistory();
+    updateSelectedActivity(activity);
+  }, [flushPendingHistory, updateSelectedActivity]);
+
   const addCollectionSlotItem = useCallback((ownerNodeId: string, collection: CollectionSlot) => {
     if (!canAddActivitiesToCanvas) return;
+    flushPendingHistory();
     editDraft(({ draft: current }) => current?.state.rootActivity ? {
       ...current,
       state: { ...current.state, rootActivity: updateActivity(current.state.rootActivity, ownerNodeId, owner => {
@@ -809,7 +816,7 @@ export function WorkflowEditor({
     setInspectorView("configuration");
     setActiveInspectorTabId("slots");
     setInspectorCollapsed(false);
-  }, [canAddActivitiesToCanvas, catalogByVersion, editDraft, nodes, select, setInspectorCollapsed]);
+  }, [flushPendingHistory, canAddActivitiesToCanvas, catalogByVersion, editDraft, nodes, select, setInspectorCollapsed]);
 
   const updateSelectedPresentation = useCallback((
     presentation: { displayName?: string | null; description?: string | null }
@@ -1286,6 +1293,7 @@ export function WorkflowEditor({
           activeTabId={activeInspectorTabId}
           onActiveTabChange={setActiveInspectorTabId}
           onSelectedActivityChange={updateSelectedActivity}
+          onSelectedStructureChange={updateSelectedStructure}
           onSelectedPresentationChange={updateSelectedPresentation}
           onChangeReusableVersion={openVersionChange}
           onEnterSlot={enterSlotScope}
@@ -1561,7 +1569,7 @@ export function WorkflowEditor({
           {canvasView === "code" ? (
             <WorkflowCodeView draft={editableDraft ?? draft} inspectionSnapshot={editorDoc.pinned ? draft : undefined} onApply={applyEditedJson} />
           ) : canvasView === "properties" ? (
-            <fieldset className="wf-snapshot-properties" disabled={editorDoc.pinned}><WorkflowPropertiesView details={details} draft={draft} context={context} onStateChange={updateDraftState} onDefinitionMetaChange={updateDefinitionMeta} /></fieldset>
+            <>{!documentAdapter ? <React.Suspense fallback={null}><WorkflowOrganizationButton context={context} definitionId={details.definition.id} name={details.definition.name} onSaved={() => setStatus("Workflow organization updated")} /></React.Suspense> : null}<fieldset className="wf-snapshot-properties" disabled={editorDoc.pinned}><WorkflowPropertiesView details={details} draft={draft} context={context} onStateChange={updateDraftState} onDefinitionMetaChange={updateDefinitionMeta} /></fieldset></>
           ) : (
           <>
           <ScopeBreadcrumb frames={visibleFrames} onNavigate={next => navigateToScope(next, null)} />

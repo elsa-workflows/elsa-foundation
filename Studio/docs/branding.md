@@ -35,12 +35,38 @@ logo falls back to the bundled Elsa mark. Empty Subtitle hides the secondary bra
 also sets the browser title. Help and Privacy replace the two header resource links; set either URL to an empty string to hide that link. Names are plain
 text; HTML is never interpreted. Only named public fields are serialized: keep credentials elsewhere.
 
-WorkspaceStyle accepts `linen`, `quiet`, `focus`, `open`, or `preset` for a theme's original presentation.
+WorkspaceStyle accepts `linen`, `minimal`, `quiet`, `focus`, `open`, or `preset` for a theme's original presentation.
 PaletteId is an eligible theme ID from the existing [theme store](../src/essentials/Elsa.Studio.Hosting.Themes/README.md).
 Mode accepts `system`, `light`, `dark`, `dim`, `high-contrast`; Navigation accepts `theme`, `left`, `top`.
 Unsupported modes fall back through the existing palette policy. A host default only fills a missing
 user choice. Explicit browser choices win and Reset restores host defaults. Existing profiles that
 saved a full theme retain its original presentation; users can select Linen independently.
+
+### Minimal Studio presets
+
+Appearance offers three complete combinations: **Porcelain** (`builtin:porcelain`, Light), **Atelier**
+(`builtin:atelier`, Light), and **Graphite** (`builtin:graphite`, Dark). Each selects the Minimal workspace
+and its coordinated palette/mode. Navigation remains the user's independent choice. Subsequent
+workspace, color and mode changes remain independent; selecting a color swatch alone does not
+apply a complete preset. Linen remains the fresh-profile default.
+
+For a branded Atelier default, set `WorkspaceStyle` to `minimal`, `PaletteId` to
+`builtin:atelier`, and `Mode` to `light` in the configuration above. Use `builtin:porcelain`/`light` or
+`builtin:graphite`/`dark` for the other combinations. Existing browser choices still win. New built-in IDs use a `builtin:` namespace outside the custom kebab-case ID grammar, so existing
+custom themes such as `porcelain` or `graphite` remain intact. The earlier
+editorial theme keeps its stable ID `atelier` and appears as **Atelier Original**; saved profiles
+and integrations using that ID keep its original colors and geometry.
+
+Custom theme JSON can declare `"workspaceStyle": "minimal"` as its default surface treatment.
+The Theme Builder exposes this as **Default workspace treatment**. Leaving it absent keeps the
+theme's original treatment. Its font, radii and layout remain editable defaults; an explicit
+user workspace choice can replace those defaults. Clone, save, directory source, import and
+export preserve this metadata. See the [theme store](../src/essentials/Elsa.Studio.Hosting.Themes/README.md).
+
+Minimal uses neutral primary actions, tiny accent/selection marks, dotted secondary dividers and
+solid focus indicators. Supply a complete, readable palette for every supported mode rather than
+replacing only an accent value. Keep warning, danger and runtime state meanings intact. Logos,
+login visuals and replaceable login templates use the independent branding options below.
 
 ## Configure the actual credential page
 

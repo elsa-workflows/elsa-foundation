@@ -125,13 +125,19 @@
 
   --xy-background-pattern-color: var(--wf-border-strong);
   --xy-attribution-background-color: color-mix(in srgb, var(--wf-panel-tone) 70%, transparent);
+}
+.wf-editor,
+.wf-tokens {
 
   color: var(--wf-text);
 }
 
 /* Page/editor shells own their own flow layout and body fill; an embedded workspace inherits
    those from whatever host shell it is mounted in. */
-.wf-page,
+.wf-page {
+  display: flex;
+  flex-direction: column;
+}
 .wf-editor {
   display: flex;
   min-height: 100%;
@@ -143,11 +149,6 @@
    padded content area (same treatment as .console-stream-page). The editor (.wf-editor)
    stays full-bleed. Overlays are safe: menus/backdrops in list pages are position:fixed,
    and the sticky availability headers live in their own inner scroll container. */
-.wf-page {
-  border: 1px solid var(--wf-border);
-  border-radius: var(--wf-radius);
-  overflow: hidden;
-}
 
 .wf-page--run-workbench {
   display: grid;
@@ -461,12 +462,12 @@
   border-bottom: 0;
 }
 
-.wf-run-filters > .wf-toolbar {
+.wf-run-filters > .studio-collection-toolbar {
   align-items: flex-start;
   flex-wrap: wrap;
 }
 
-.wf-run-filters > .wf-toolbar > button {
+.wf-run-filters > .studio-collection-toolbar > button {
   flex-shrink: 0;
   white-space: nowrap;
 }
@@ -727,10 +728,6 @@
   outline: none;
 }
 
-.wf-executable-definition-filter {
-  width: min(360px, 100%);
-}
-
 .wf-alert,
 .wf-empty {
   display: flex;
@@ -935,9 +932,6 @@
 
 .wf-grid {
   display: grid;
-  margin: 14px 18px;
-  border: 1px solid var(--wf-border);
-  border-radius: var(--wf-radius-md);
   overflow: hidden;
 }
 
@@ -947,40 +941,11 @@
   grid-template-columns: 32px minmax(0, 1fr) 120px 150px 190px minmax(0, auto);
   align-items: start;
   gap: 12px;
-  border-bottom: 1px solid var(--wf-border);
-  padding: 10px 12px;
   text-align: left;
 }
 
-.wf-grid-head {
-  background: var(--wf-panel-muted);
-  color: var(--wf-muted-text);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: var(--wf-label-transform, uppercase);
-  letter-spacing: var(--wf-label-tracking, 0);
-}
-
 .wf-grid-row {
-  background: var(--wf-row);
-  background-size: var(--wf-row-bg-size);
-  color: var(--wf-text);
   cursor: pointer;
-  font: inherit;
-  font-size: 13px;
-}
-
-.wf-executable-toolbar {
-  flex-wrap: wrap;
-}
-
-.wf-executable-toolbar .wf-search {
-  min-width: 0;
-  box-sizing: border-box;
-}
-
-.wf-executable-toolbar .wf-search input {
-  min-width: 0;
 }
 
 /* One table controls column geometry for both headers and artifact rows. */
@@ -995,40 +960,24 @@
 .wf-executable-table {
   width: 100%;
   min-width: 1120px;
-  border-collapse: collapse;
   table-layout: fixed;
-  color: var(--studio-text);
-  font-size: 13px;
 }
 
 .wf-executable-workflow-column { width: 24%; }
 .wf-executable-artifact-column { width: 22%; }
-.wf-executable-version-column { width: 9%; }
+.wf-executable-version-column,
 .wf-executable-root-column { width: 9%; }
 .wf-executable-date-column { width: 14%; }
 .wf-executable-actions-column { width: 22%; }
 
 .wf-executable-table th,
 .wf-executable-table td {
-  padding: 12px;
-  border-bottom: 1px solid var(--studio-border);
   text-align: left;
   vertical-align: top;
   overflow-wrap: anywhere;
 }
 
-.wf-executable-table th {
-  background: var(--studio-surface-muted);
-  color: var(--studio-text-muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.025em;
-  text-transform: uppercase;
-}
-
 .wf-executable-table th:last-child { text-align: right; }
-.wf-executable-table tr:last-child td { border-bottom: 0; }
-.wf-executable-table tbody tr:hover { background: var(--studio-surface-muted); }
 .wf-executable-table .wf-row-actions { justify-content: flex-end; flex-wrap: wrap; }
 .wf-executable-table .wf-cell-line > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -1075,10 +1024,6 @@
   gap: 14px;
   align-items: start;
   margin: 14px 18px;
-}
-
-.wf-instance-workbench .wf-grid {
-  margin: 0;
 }
 
 
@@ -2318,10 +2263,7 @@
   color: var(--studio-text);
 }
 
-.wf-instance-incident-summary {
-  grid-column: 1 / -1;
-}
-
+.wf-instance-incident-summary,
 .wf-instance-incident-actions,
 .wf-incident-technical-details,
 .wf-incident-stacktrace {
@@ -2433,10 +2375,7 @@
 }
 
 .wf-run-association-status .wf-instance-note,
-.wf-run-association-status p {
-  margin: 0;
-}
-
+.wf-run-association-status p,
 .wf-run-association-status .wf-run-incident-action {
   margin: 0;
 }
@@ -3026,21 +2965,13 @@
   color: var(--wf-warning-text);
 }
 
-.wf-grid-row:hover {
-  background: var(--wf-accent-soft);
-}
-
 .wf-grid-row:focus-visible {
   outline: 2px solid var(--wf-accent);
   outline-offset: -2px;
 }
 
 .wf-grid-row[aria-selected="true"] {
-  background:
-    linear-gradient(color-mix(in srgb, var(--wf-accent) 14%, transparent) 0 0),
-    var(--wf-panel);
   /* The row's --wf-row-bg-size list is laid out for the row recipe, not this panel stack. */
-  background-size: auto;
 }
 
 .wf-row-select {
@@ -3714,7 +3645,7 @@
 }
 
 .wf-palette-activity,
-.wf-slot-list button {
+.wf-slot-list :where(.wf-slot-row, .wf-slot-collection-heading, .wf-slot-collection-label-row, .wf-slot-collection-priority) > button {
   width: 100%;
   border: 1px solid transparent;
   border-radius: var(--wf-radius);
@@ -3733,7 +3664,7 @@
   padding: 6px 7px;
 }
 
-.wf-slot-list button {
+.wf-slot-list :where(.wf-slot-row, .wf-slot-collection-heading, .wf-slot-collection-label-row, .wf-slot-collection-priority) > button {
   display: block;
   border-color: var(--wf-border);
   background: var(--wf-row);
@@ -3743,7 +3674,7 @@
 
 .wf-palette-activity:hover,
 .wf-palette-activity:focus-visible,
-.wf-slot-list button:hover {
+.wf-slot-list :where(.wf-slot-row, .wf-slot-collection-heading, .wf-slot-collection-label-row, .wf-slot-collection-priority) > button:hover {
   background: var(--wf-accent-soft);
   border-color: color-mix(in srgb, var(--wf-accent) 45%, var(--wf-border));
 }
@@ -4136,192 +4067,6 @@
   color: var(--wf-muted-text);
 }
 
-.wf-node {
-  position: relative;
-  width: 246px;
-  min-height: 64px;
-  border: 1px solid color-mix(in srgb, var(--wf-border-strong) 82%, transparent);
-  border-radius: var(--wf-radius-xl);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--wf-panel-tone) 96%, white) 0%, var(--wf-panel-tone) 100%);
-  box-shadow:
-    var(--wf-shadow-node),
-    inset 0 1px 0 color-mix(in srgb, white 42%, transparent);
-  color: var(--wf-text);
-  padding: 10px 11px;
-  transition: border-color var(--transition-fast, 0.15s ease),
-    box-shadow var(--transition-fast, 0.15s ease);
-}
-
-.wf-node:hover:not(.selected) {
-  border-color: color-mix(in srgb, var(--wf-accent) 38%, var(--wf-border-strong));
-  box-shadow:
-    var(--wf-shadow-menu),
-    inset 0 1px 0 color-mix(in srgb, white 42%, transparent);
-}
-
-/* Keep the trigger halo on its own layer so selection, focus and incident rings remain intact. */
-.wf-node[data-trigger-enabled="true"]::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  box-shadow:
-    0 0 20px 4px color-mix(in srgb, var(--studio-accent) 28%, transparent),
-    0 0 48px 12px color-mix(in srgb, var(--studio-accent) 14%, transparent);
-  pointer-events: none;
-}
-
-html[data-theme-appearance="high-contrast"] .wf-node[data-trigger-enabled="true"]::before {
-  box-shadow: none;
-  outline: 2px solid var(--studio-accent);
-  outline-offset: 5px;
-}
-
-.wf-node.selected {
-  border-color: var(--wf-accent);
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--wf-accent) 22%, transparent),
-    0 14px 30px var(--wf-drop-tint-strong),
-    inset 0 1px 0 color-mix(in srgb, white 44%, transparent);
-}
-
-.react-flow__node:focus-visible .wf-node {
-  border-color: var(--studio-focus);
-  box-shadow:
-    0 0 0 3px var(--studio-focus),
-    var(--wf-shadow-menu);
-}
-
-.wf-node-content {
-  display: grid;
-  min-width: 0;
-  align-items: center;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 10px;
-}
-
-.wf-node-icon {
-  display: inline-flex;
-  width: 34px;
-  height: 34px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--wf-accent) 24%, var(--wf-border));
-  border-radius: var(--wf-radius-md);
-  background:
-    linear-gradient(color-mix(in srgb, var(--wf-accent) 11%, transparent) 0 0),
-    var(--wf-panel);
-  color: var(--wf-accent);
-}
-
-.wf-node-icon img,
-.wf-activity-icon img,
-.wf-activity-icon-asset {
-  width: 15px;
-  height: 15px;
-  display: block;
-  object-fit: contain;
-}
-
-.wf-node[data-icon="terminal"] .wf-node-icon,
-.wf-node[data-tone="terminal"] .wf-node-icon,
-.wf-node-icon[data-tone="terminal"] {
-  border-color: color-mix(in srgb, var(--wf-activity-terminal) 34%, var(--wf-border));
-  background:
-    linear-gradient(color-mix(in srgb, var(--wf-activity-terminal) 12%, transparent) 0 0),
-    var(--wf-panel);
-  color: var(--wf-activity-terminal);
-}
-
-.wf-node[data-icon="flowchart"] .wf-node-icon,
-.wf-node[data-icon="sequence"] .wf-node-icon,
-.wf-node[data-icon="reusable"] .wf-node-icon,
-.wf-node[data-tone="composite"] .wf-node-icon,
-.wf-node-icon[data-tone="composite"] {
-  border-color: color-mix(in srgb, var(--wf-activity-composite) 34%, var(--wf-border));
-  background:
-    linear-gradient(color-mix(in srgb, var(--wf-activity-composite) 12%, transparent) 0 0),
-    var(--wf-panel);
-  color: var(--wf-activity-composite);
-}
-
-.wf-node[data-icon="runtime"] .wf-node-icon,
-.wf-node[data-tone="runtime"] .wf-node-icon,
-.wf-node-icon[data-tone="runtime"] {
-  border-color: color-mix(in srgb, var(--wf-activity-runtime) 35%, var(--wf-border));
-  background:
-    linear-gradient(color-mix(in srgb, var(--wf-activity-runtime) 12%, transparent) 0 0),
-    var(--wf-panel);
-  color: var(--wf-activity-runtime);
-}
-
-.wf-node[data-tone="trigger"] .wf-node-icon,
-.wf-node-icon[data-tone="trigger"] {
-  border-color: color-mix(in srgb, var(--wf-activity-trigger) 35%, var(--wf-border));
-  background:
-    linear-gradient(color-mix(in srgb, var(--wf-activity-trigger) 12%, transparent) 0 0),
-    var(--wf-panel);
-  color: var(--wf-activity-trigger);
-}
-
-.wf-node[data-tone="success"] .wf-node-icon,
-.wf-node-icon[data-tone="success"] {
-  border-color: color-mix(in srgb, var(--wf-icon-tone-success) 34%, var(--wf-border));
-  background:
-    linear-gradient(color-mix(in srgb, var(--wf-icon-tone-success) 12%, transparent) 0 0),
-    var(--wf-panel);
-  color: var(--wf-icon-tone-success);
-}
-
-.wf-node[data-tone="danger"] .wf-node-icon,
-.wf-node-icon[data-tone="danger"] {
-  border-color: color-mix(in srgb, var(--wf-icon-tone-danger) 34%, var(--wf-border));
-  background:
-    linear-gradient(color-mix(in srgb, var(--wf-icon-tone-danger) 12%, transparent) 0 0),
-    var(--wf-panel);
-  color: var(--wf-icon-tone-danger);
-}
-
-.wf-node-copy {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
-.wf-node-http-response-badge {
-  display: inline-flex;
-  width: fit-content;
-  align-items: center;
-  border: 1px solid var(--studio-border);
-  border-radius: 999px;
-  background: var(--studio-surface-muted);
-  color: var(--studio-text-muted);
-  font-size: 10px;
-  font-weight: 650;
-  line-height: 1.2;
-  padding: 2px 6px;
-}
-
-.wf-node strong {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 14px;
-  line-height: 1.2;
-}
-
-.wf-node small {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--wf-muted-text);
-  font-size: 11px;
-  font-weight: 650;
-}
-
 .wf-palette-version {
   color: var(--wf-accent);
   font-family: var(--studio-font-mono);
@@ -4441,51 +4186,6 @@ html[data-theme-appearance="high-contrast"] .wf-node[data-trigger-enabled="true"
   margin-bottom: 8px;
 }
 
-.wf-node-slot-badge {
-  display: inline-flex;
-  max-width: 88px;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  border: 1px solid var(--wf-border);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--wf-panel-muted-tone) 82%, transparent);
-  color: var(--wf-muted-text);
-  font-size: 10px;
-  font-weight: var(--wf-label-weight, 600);
-  line-height: 1;
-  margin: 8px 0 0 44px;
-  padding: 3px 7px;
-}
-
-.wf-node-slot-list {
-  display: flex;
-  max-width: 100%;
-  align-items: center;
-  gap: 5px;
-  margin: 8px 0 0 44px;
-}
-
-.wf-node-slot-list .wf-node-slot-badge {
-  margin: 0;
-}
-
-button.wf-node-slot-badge {
-  cursor: pointer;
-  font: inherit;
-  font-size: 10px;
-}
-
-button.wf-node-slot-badge:hover,
-button.wf-node-slot-badge:focus-visible {
-  border-color: color-mix(in srgb, var(--wf-accent) 50%, var(--wf-border));
-  background: var(--wf-accent-soft);
-  color: var(--wf-accent);
-  outline: none;
-}
-
 .wf-activity-icon {
   display: inline-flex;
   width: 26px;
@@ -4539,138 +4239,6 @@ button.wf-node-slot-badge:focus-visible {
   border-color: color-mix(in srgb, var(--wf-icon-tone-danger) 34%, var(--wf-border));
   background: color-mix(in srgb, var(--wf-icon-tone-danger) 12%, transparent);
   color: var(--wf-icon-tone-danger);
-}
-
-.wf-node .react-flow__handle {
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--wf-panel-tone);
-  background: var(--wf-accent);
-  opacity: 0.82;
-}
-
-.wf-node:hover .react-flow__handle,
-.wf-node.selected .react-flow__handle {
-  opacity: 1;
-}
-
-.wf-node-port-label {
-  position: absolute;
-  max-width: 128px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  border: 1px solid var(--wf-border);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--wf-panel-tone) 96%, transparent);
-  color: var(--wf-muted-text);
-  font-size: 10px;
-  font-weight: var(--wf-label-weight, 600);
-  line-height: 1;
-  padding: 3px 6px;
-  pointer-events: auto;
-}
-
-.wf-node-port-label[data-side="right"] {
-  left: calc(100% + 10px);
-  transform: translateY(-50%);
-}
-
-.wf-node-port-label[data-side="left"] {
-  right: calc(100% + 10px);
-  transform: translateY(-50%);
-}
-
-.wf-node-port-label[data-side="top"] {
-  bottom: calc(100% + 10px);
-  transform: translateX(-50%);
-}
-
-.wf-node-port-label[data-side="bottom"] {
-  top: calc(100% + 10px);
-  transform: translateX(-50%);
-}
-
-.wf-edge-actions {
-  position: absolute;
-  z-index: 10;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid var(--wf-border);
-  border-radius: var(--wf-radius-sm);
-  background: var(--wf-panel);
-  box-shadow: var(--shadow-sm, 0 1px 3px rgba(15, 23, 42, 0.08));
-  opacity: 0;
-  padding: 2px;
-  pointer-events: auto;
-  transition: opacity 0.12s ease, border-color 0.12s ease;
-}
-
-.wf-edge-actions.visible,
-.wf-edge-actions:hover,
-.wf-edge-actions.highlighted,
-.wf-edge-actions:focus-within {
-  opacity: 1;
-}
-
-.wf-edge-actions.highlighted {
-  border-color: color-mix(in srgb, var(--wf-accent) 55%, var(--wf-border));
-}
-
-.wf-edge-actions button,
-.wf-empty-canvas-add {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid transparent;
-  border-radius: var(--wf-radius-sm);
-  background: transparent;
-  color: var(--wf-muted-text);
-  cursor: pointer;
-}
-
-.wf-edge-actions button {
-  width: 22px;
-  height: 22px;
-}
-
-.wf-edge-actions button:hover,
-.wf-edge-actions button:focus-visible {
-  background: var(--wf-accent-soft);
-  color: var(--wf-accent);
-}
-
-.wf-edge-actions button:focus-visible {
-  outline: 2px solid var(--studio-focus);
-  outline-offset: 1px;
-}
-
-.react-flow__edge:focus-visible .react-flow__edge-path {
-  stroke: var(--studio-focus);
-  stroke-width: 2.5;
-}
-
-.wf-empty-canvas-add {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  gap: 6px;
-  transform: translate(-50%, -50%);
-  border-color: var(--wf-border);
-  background: var(--wf-panel);
-  color: var(--wf-text);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 8px 10px;
-  z-index: 5;
-}
-
-.wf-empty-canvas-add:hover {
-  border-color: color-mix(in srgb, var(--wf-accent) 45%, var(--wf-border));
-  background: var(--wf-accent-soft);
-  color: var(--wf-accent);
 }
 
 .wf-slot-empty {
@@ -5587,15 +5155,6 @@ button.wf-reference-select {
 
 .wf-executable-bindings > div {
   min-width: 0;
-}
-
-.wf-node-ghost {
-  border-style: dashed;
-  opacity: 0.75;
-}
-
-.wf-node-ghost-note {
-  color: var(--wf-warning-text);
 }
 
 .wf-properties {
@@ -7121,7 +6680,6 @@ button.wf-reference-select {
 }
 
 /* Layered depth on list/summary containers (closer to Elsa 3's ring + shadow). */
-.wf-grid,
 .wf-pagination {
   box-shadow: var(--wf-shadow-sm);
 }
@@ -7144,54 +6702,6 @@ button.wf-reference-select {
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
-}
-
-/* Non-blocking availability warnings: activities hidden/removed by the availability policy
-   remain fully editable, but are flagged so authors know they can't be re-added. */
-.wf-node-availability {
-  position: absolute;
-  top: -7px;
-  right: -7px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  background: var(--wf-warning);
-  color: var(--warning-foreground, #ffffff);
-  box-shadow: var(--wf-shadow-sm, 0 2px 6px rgba(15, 23, 42, 0.25));
-  z-index: 2;
-}
-
-.wf-node-unavailable {
-  border-color: var(--wf-warning);
-}
-
-/* The Flowchart start node: a ring plus a badge, so "which node runs first" is never inferred from
-   position on the canvas. */
-.wf-node-start {
-  border-color: var(--wf-accent);
-  box-shadow: 0 0 0 1px var(--wf-accent) inset;
-}
-
-.wf-node-start-badge {
-  position: absolute;
-  top: -10px;
-  left: 10px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--wf-accent);
-  color: var(--primary-foreground, #ffffff);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  box-shadow: var(--wf-shadow-sm, 0 2px 6px rgba(15, 23, 42, 0.25));
-  z-index: 2;
 }
 
 .wf-availability-notice {
@@ -7528,8 +7038,7 @@ html[data-theme-material] .react-flow__edge:focus .react-flow__edge-path {
 
 html[data-theme-material] .react-flow__controls,
 html[data-theme-material] .react-flow__minimap,
-html[data-theme-material] .wf-canvas-tools,
-html[data-theme-material] .wf-grid {
+html[data-theme-material] .wf-canvas-tools {
   border-color: var(--studio-material-edge);
   background: var(--studio-material-panel-bg);
   background-size: var(--studio-material-panel-bg-size);
@@ -7538,12 +7047,6 @@ html[data-theme-material] .wf-grid {
 
 /* Grid header is the one banded row atop the container slab; the data rows below stay flat
    (--wf-row) with hairline separators so the list reads as one slab, not corduroy ridges. */
-html[data-theme-material] .wf-grid-head {
-  border-color: var(--studio-material-edge);
-  background: var(--studio-material-panel-bg-soft);
-  background-size: var(--studio-material-panel-bg-size);
-  box-shadow: var(--studio-material-inset-low);
-}
 
 /* Checkboxes inside dense rows sit on grain — give them a solid surface + edge so they
    stay legible instead of drowning in the texture. */
@@ -7984,4 +7487,13 @@ html[data-theme-material] .availability-search .wf-search {
   margin: 0;
   color: var(--studio-danger);
   font-size: var(--studio-label-size, .8125rem);
+}
+
+/* Activity icons are also used by non-canvas lists and palettes. */
+.wf-activity-icon img,
+.wf-activity-icon-asset {
+  width: 15px;
+  height: 15px;
+  display: block;
+  object-fit: contain;
 }

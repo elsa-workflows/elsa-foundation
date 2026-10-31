@@ -172,24 +172,27 @@ npm install @elsa-workflows/studio-ui @elsa-workflows/studio-code-editor \
 | Package | What it gives you |
 | --- | --- |
 | `@elsa-workflows/studio-sdk` | Contribution/registry types and runtime helpers for building an `ElsaStudioModuleApi`. |
-| `@elsa-workflows/studio-ui` | Host-agnostic UI primitives (`DataGrid`, `StatusChip`, `Toolbar`, `Tabs`, `Field`, `Inspector`, feedback states) + `tokens.css`. |
+| `@elsa-workflows/studio-ui` | Host-agnostic UI primitives (`DataGrid`, `StatusChip`, `Toolbar`, `Tabs`, `Field`, `Inspector`, page/collection patterns, feedback states) + `styles.css` and `tokens.css`. |
 | `@elsa-workflows/studio-code-editor` | `StudioCodeEditor` component + `javaScriptLanguageAdapter`. |
 | `@elsa-workflows/studio-workflows` | The workflows module: `register(api)` + helpers, plus `style.css`. |
 
 **Peer dependencies:** `react` & `react-dom` (`^18`/`^19`) for all; `@tanstack/react-query` (`^5`)
 and `@xyflow/react` (`^12`) additionally for `@elsa-workflows/studio-workflows`.
 
-**Styles** (order matters — `tokens.css` aliases the `--studio-*` layer onto your own primitives):
+**Styles:** the same public CSS imports work in the workspace and in a consuming application.
 
 ```ts
-import "./theme.css";                              // your layer-1 primitives (--background, --primary, …)
-import "@elsa-workflows/studio-ui/tokens.css";     // the --studio-* token layer
+import "@elsa-workflows/studio-ui/styles.css";     // tokens, defaults and shared component rules
+import "@elsa-workflows/studio-code-editor/style.css"; // only if using the editor
+import "./theme.css";                            // optional theme overrides
 import "@xyflow/react/dist/style.css";             // only if using studio-workflows
 import "@elsa-workflows/studio-workflows/style.css";
 ```
 
-> `@elsa-workflows/studio-ui` ships the design-token layer (`tokens.css`), not per-component
-> visual rules. The examples include a `studio-components.css` you can copy as a starting point.
+The Studio host loads shared UI styles once. A module installed in Studio imports components from
+the public package and inherits the active theme. A standalone host imports `styles.css` once;
+`tokens.css` remains available for consumers that need only the token layer. No copied component
+CSS is required. See [building module UIs](docs/module-ui.md) for composition and examples.
 
 Preview builds (`4.0.0-preview.<n>`) publish to the elsa-4 feedz.io npm feed on every push to
 `main`; published GitHub Releases ship the tagged version to npmjs.org (see

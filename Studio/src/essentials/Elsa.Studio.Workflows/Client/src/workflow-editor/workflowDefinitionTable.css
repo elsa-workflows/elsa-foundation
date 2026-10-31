@@ -1,43 +1,20 @@
 /* The definitions page reads as a working list inside the app surface, not as a card inside a card. */
-.wf-page.wf-page--definitions {
-  border: 0;
-  border-radius: 0;
-  padding: 0 18px;
-}
-
-.wf-page--definitions > .wf-definition-page-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  border-bottom: 0;
-  background: transparent;
-  padding: 16px 0 8px;
-}
-
-.wf-definition-page-header h1 {
-  margin: .2rem 0 .35rem;
-  font-family: var(--studio-font-display);
-  font-size: var(--studio-page-title-size);
-  font-weight: var(--studio-title-weight, 700);
-  color: var(--studio-text);
-}
-
-.wf-definition-page-header p {
-  margin: 0;
-  color: var(--studio-text-muted);
-  line-height: 1.55;
-}
-
-.wf-definition-page-actions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: .5rem;
-}
 
 .wf-definitions-list {
   min-width: 0;
 }
+
+.wf-definitions-list .wf-definition-description { display: none; }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-description { display: block; color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid > .wf-grid-row { border-bottom-style: var(--studio-row-boundary-style); }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid > .wf-grid-row:hover { background: var(--studio-row-hover); }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid > .wf-grid-row[aria-selected="true"] { background: var(--studio-row-selected); box-shadow: inset 3px 0 0 var(--studio-selection-mark); }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-version .wf-status-badge { background: transparent; border-color: transparent; padding-inline: 0; }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-grid:not([data-library-columns]) { grid-template-columns: var(--wf-definition-selection-track) minmax(160px, 1fr) 112px 72px 108px 112px 132px 60px; min-width: 936px; }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-definition-modified { white-space: normal; }
+html[data-workspace-style="minimal"] .wf-definitions-list :is(.wf-definition-actions-header, .wf-row-actions) { position: sticky; right: 0; background: var(--studio-surface); }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-grid-row:hover .wf-row-actions { background: var(--studio-row-hover); }
+html[data-workspace-style="minimal"] .wf-definitions-list .wf-grid-row[aria-selected="true"] .wf-row-actions { background: var(--studio-row-selected); }
 
 .wf-definitions-list > .wf-toolbar {
   flex-wrap: wrap;
@@ -76,24 +53,6 @@
 .wf-definitions-list .wf-actions button:hover {
   border-color: color-mix(in srgb, var(--studio-accent) 88%, var(--studio-text));
   background: color-mix(in srgb, var(--studio-accent) 88%, var(--studio-text));
-}
-
-.wf-definitions-list .wf-segmented {
-  border-color: var(--studio-border);
-  border-radius: var(--studio-radius-sm);
-  background: transparent;
-}
-
-.wf-definitions-list .wf-segmented button {
-  min-height: 30px;
-  border-right-color: var(--studio-border);
-  background: transparent;
-  font-size: 12px;
-}
-
-.wf-definitions-list .wf-segmented button.active {
-  background: var(--studio-accent-soft);
-  color: var(--studio-text);
 }
 
 .wf-definitions-list .wf-search {
@@ -139,11 +98,7 @@
   grid-template-columns: var(--wf-definition-selection-track) minmax(220px, 1fr) 180px 76px 126px 132px max-content 60px;
   column-gap: var(--wf-definition-column-gap);
   min-width: 1120px;
-  margin: 0;
-  border: 0;
-  border-radius: 0;
   overflow: visible;
-  color: var(--studio-text);
 }
 
 .wf-definitions-list .wf-definition-grid > .wf-grid-head,
@@ -152,42 +107,26 @@
   grid-template-columns: subgrid;
   align-items: center;
   column-gap: 10px;
-  padding: 9px 10px;
 }
 
-.wf-definitions-list .wf-definition-grid > .wf-grid-head {
-  border-bottom-color: var(--studio-border);
-  background: transparent;
-  color: var(--studio-text-muted);
-  font-size: var(--studio-label-size, 11px);
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
+.wf-definitions-list .wf-definition-grid[data-library-columns="tags"],
+.wf-definitions-list .wf-definition-grid[data-library-columns="location"] {
+  grid-template-columns: var(--wf-definition-selection-track) minmax(220px, 1fr) 180px 76px 126px 132px max-content 180px 60px;
+  min-width: 1310px;
 }
 
-.wf-definitions-list .wf-definition-grid > .wf-grid-row {
-  min-height: 44px;
-  padding-block: 6px;
-  border-bottom-color: var(--studio-border);
-  background: transparent;
-  color: var(--studio-text);
+.wf-definitions-list .wf-definition-grid[data-library-columns="both"] {
+  grid-template-columns: var(--wf-definition-selection-track) minmax(220px, 1fr) 180px 76px 126px 132px max-content 180px 180px 60px;
+  min-width: 1500px;
 }
 
 .wf-definitions-list .wf-definition-grid > .wf-grid-row:last-child {
   border-bottom: 0;
 }
 
-.wf-definitions-list .wf-definition-grid > .wf-grid-row:hover {
-  background: var(--studio-accent-soft);
-}
-
 .wf-definitions-list .wf-definition-grid > .wf-grid-row:focus-visible {
   outline: 2px solid var(--studio-accent);
   outline-offset: -2px;
-}
-
-.wf-definitions-list .wf-definition-grid > .wf-grid-row[aria-selected="true"] {
-  background: var(--studio-accent-soft);
 }
 
 .wf-definitions-list .wf-definition-grid > .wf-grid-head > span {
@@ -431,15 +370,6 @@
 }
 
 @media (max-width: 760px) {
-  .wf-page--definitions > .wf-definition-page-header {
-    display: grid;
-    padding: 14px 0 8px;
-  }
-
-  .wf-definition-page-actions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 
   .wf-definitions-list > .wf-toolbar {
     margin-right: 0;
@@ -460,12 +390,6 @@
   .wf-definitions-list .wf-toolbar > .wf-search {
     flex-basis: 100%;
     width: 100%;
-  }
-}
-
-@media (max-width: 600px) {
-  .wf-page.wf-page--definitions {
-    padding: 0 12px;
   }
 }
 

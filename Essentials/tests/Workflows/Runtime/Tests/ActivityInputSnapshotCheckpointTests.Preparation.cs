@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Resolvers;
 using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -10,6 +11,45 @@ namespace Elsa.Workflows.Runtime.Tests;
 
 public sealed partial class ActivityInputSnapshotCheckpointTests
 {
+    [Fact]
+    public async Task Prepared_structure_inputs_use_each_materializers_policy_and_current_values()
+    {
+        RuntimeInputBinding Request(string key) => new(key, StringType, ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.WorkflowRequest, workflowRequest: new RuntimeWorkflowRequestReference(key));
+        var node = NewExecutable(true, ("message", Request("message")), ("recipient", Request("recipient"))).RootActivity;
+        string? fingerprint = null;
+        foreach (var key in new[] { "message", "recipient", "message" })
+        {
+            var invocation = Guid.NewGuid().ToString();
+            var policy = new SelectedStructureInputPolicy(key);
+            var materializer = new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), [policy]);
+            var context = new RuntimeInputBindingResolutionContext("wf", invocation,
+                workflowInputEnvelopes: new Dictionary<string, ValueEnvelope>
+                {
+                    [key] = DurableLiteral(key, invocation).Literal!
+                });
+            var snapshot = await materializer.MaterializeSnapshotAsync(node, invocation, context, Now);
+
+            Assert.Equal(key, Assert.Single(snapshot.Values).Key);
+            Assert.Equal(invocation, snapshot.Values[key].InlineValue!.Value.GetString());
+            Assert.Equal(1, policy.Calls);
+            if (fingerprint is not null) Assert.Same(fingerprint, snapshot.BindingFingerprint);
+            fingerprint = snapshot.BindingFingerprint;
+        }
+    }
+
+    private sealed class SelectedStructureInputPolicy(string key) : IRuntimeStructureInputMaterializationPolicy
+    {
+        public string Kind => "test.ordered";
+        public string SchemaVersion => "1";
+        public int Calls { get; private set; }
+        public async ValueTask MaterializeAsync(IRuntimeStructureInputMaterializationContext context, CancellationToken cancellationToken)
+        {
+            Calls++;
+            await context.MaterializeAsync(key, cancellationToken);
+        }
+    }
+
     [Fact]
     public async Task Pinned_input_contract_cannot_be_mutated_after_preparation()
     {
