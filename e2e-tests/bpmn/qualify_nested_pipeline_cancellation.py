@@ -2,7 +2,7 @@
 """Restore the real source9508 waiting chain; cancel through current standard Workbench with compute bindings offline."""
 from pathlib import Path
 import argparse
-import json,gzip,hashlib,subprocess,os,time,tempfile,shutil,signal,urllib.request,urllib.error,urllib.parse,importlib.util,sqlite3
+import json,gzip,hashlib,subprocess,os,time,tempfile,shutil,signal,urllib.request,urllib.error,urllib.parse,importlib.util,sqlite3,contextlib
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--workbench-assembly',type=Path,required=True)
 parser.add_argument('--reader-assembly',type=Path,required=True)
@@ -73,10 +73,13 @@ def snapshot(label):
    b=target.read_bytes();archive=out/(target.name+'.gz');archive.write_bytes(gzip.compress(b,mtime=0));stores[name]={'file':archive.name,'databaseSha256':sha(target),'gzipSha256':sha(archive),'observer':receipt}
   for part,model,worker in [('outer',capture['outerModelExecutionId'],capture['middleNativeExecutionId']),('inner',capture['innerModelExecutionId'],capture['etlWorkerExecutionId'])]:
    v=json.loads(subprocess.check_output(['dotnet',str(reader),'--read-bpmn-native',str(out/f'{label}-elsa.sqlite'),model,worker],text=True));assert v['readOnly'];write(out/f'{label}-{part}-physical.json',v)
-  db=sqlite3.connect((out/f'{label}-etl-runtime.sqlite').as_uri()+'?mode=ro',uri=True);db.row_factory=sqlite3.Row
   tables=['elsa_etl_runtime_runs','elsa_etl_runtime_outbox','elsa_etl_runtime_terminals','elsa_etl_connector_runs','elsa_etl_connector_partitions'];v={}
-  for t in tables:v[t]=[dict(r) for r in db.execute('SELECT * FROM '+t)]
-  db.close();write(out/f'{label}-etl-physical.json',v)
+  # This is the closed, hash-verified BackupDatabase output above, never the live store.
+  # Immutable reads do not need WAL sidecars from the .NET SQLite provider's VFS.
+  with contextlib.closing(sqlite3.connect((out/f'{label}-etl-runtime.sqlite').as_uri()+'?mode=ro&immutable=1',uri=True)) as db:
+   db.row_factory=sqlite3.Row
+   for t in tables:v[t]=[dict(r) for r in db.execute('SELECT * FROM '+t)]
+  write(out/f'{label}-etl-physical.json',v)
   return stores
  finally:
   if active:os.kill(host.pid,signal.SIGCONT)
@@ -99,7 +102,11 @@ try:
  write(out/'case.json',{'sourceRevision':source,'reviewedHead':head,'originalWriter':capture['sourceRevision'],'originalInput':str(fixture.relative_to(repo)),'inputs':inputs,'beforeStores':before_stores,'completedStores':completed_stores,'retainedStores':retained_stores,'products':products,'etlProducts':etl_products,'processes':records,'controllerSha256':sha(Path(__file__)),'scope':'Actual standard Workbench restores original waiting coupled stores with original compute connector bindings unavailable, normal outer HTTP cancellation reaches original ETL, then cold coupled retention. No current connector execution/retry or wider acceptance is claimed.'})
  print('Actual coupled cold retention passed; all owned hosts stopped.',flush=True)
 except Exception as e:
- stop();stores=snapshot('failed') if all((root/(n+'.db')).exists() for n in ['elsa','etl-runtime','etl-design']) else {};write(out/'failure.json',{'sourceRevision':source,'reviewedHead':head,'failureType':type(e).__name__,'failure':str(e),'stores':stores,'processes':records});raise
+ stop();stores={};observation_error=None
+ try:
+  if all((root/(n+'.db')).exists() for n in ['elsa','etl-runtime','etl-design']):stores=snapshot('failed')
+ except Exception as observer:observation_error={'type':type(observer).__name__,'error':str(observer)}
+ write(out/'failure.json',{'sourceRevision':source,'reviewedHead':head,'failureType':type(e).__name__,'failure':str(e),'stores':stores,'observationError':observation_error,'processes':records});raise
 finally:
  stop()
  for f in logs:f.close()
