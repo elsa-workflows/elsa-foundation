@@ -167,7 +167,12 @@ function WorkflowTagAssignmentsEditor({ context, assignments, disabled, allowRet
     finally { if (generation === generationRef.current) setLoading(false); }
   };
   return <fieldset className="wf-tag-assignments" disabled={disabled}><legend><Tags size={16} aria-hidden="true" />Tags</legend>
-    <div className="wf-tag-search"><label>Find tag<input type="search" placeholder="Search tags…" aria-label="Find workflow tags" value={search} onChange={event => setSearch(event.target.value)} /></label><StudioButton disabled={loading} onClick={() => setTerm(search)}><Search size={16} aria-hidden="true" />Find</StudioButton></div>
+    <div className="wf-tag-search"><label>Find tag<input type="search" placeholder="Search tags…" aria-label="Find workflow tags" value={search} onChange={event => setSearch(event.target.value)} enterKeyHint="search" onKeyDown={event => {
+      if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+        event.preventDefault();
+        if (!loading) setTerm(search);
+      }
+    }} /></label><StudioButton disabled={loading} onClick={() => setTerm(search)}><Search size={16} aria-hidden="true" />Find</StudioButton></div>
     {catalog.map(tag => tag.mode === "marker" ? <label className="wf-library-check" key={tag.id}><input type="checkbox" checked={selected.has(workflowTagAssignmentKey({ tagId: tag.id }))} disabled={!allowRetired && tag.deprecated && !selected.has(workflowTagAssignmentKey({ tagId: tag.id }))} onChange={event => toggle({ tagId: tag.id }, event.target.checked, true)} />{tag.name}{tag.deprecated ? " (retired)" : ""}</label> :
       <fieldset className="wf-library-values" key={tag.id}><legend>{tag.name}{tag.deprecated ? " (retired)" : ""}{tag.cardinality === "single" && !allowRetired ? " · choose one" : ""}</legend>{tag.values.map(value => {
         const assignment = { tagId: tag.id, valueId: value.id };
@@ -177,7 +182,7 @@ function WorkflowTagAssignmentsEditor({ context, assignments, disabled, allowRet
     {assignments.filter(assignment => !catalog.some(tag => tag.id === assignment.tagId && (!assignment.valueId || tag.values.some(value => value.id === assignment.valueId)))).map(assignment => <label key={workflowTagAssignmentKey(assignment)} className="wf-library-check"><input type="checkbox" checked onChange={() => toggle(assignment, false, false)} />Unavailable tag/value: {assignment.tagId}{assignment.valueId ? ` / ${assignment.valueId}` : ""}</label>)}
     {loading ? <p role="status">Loading tags…</p> : null}
     {!loading && !catalog.length ? <div className="wf-tag-empty"><Tags size={24} aria-hidden="true" /><p>{term ? "No matching tags" : "No tags available"}</p><span>{term ? "Try another search to find a tag." : "A tag manager can create tags from the workflow library."}</span></div> : null}
-    {cursor ? <button type="button" disabled={loading} onClick={() => void loadMore()}>Load more tags</button> : null}
+    {cursor ? <StudioButton disabled={loading} onClick={() => void loadMore()}>Load more tags</StudioButton> : null}
     {error ? <p role="alert">Couldn't read tags. {error}</p> : null}
   </fieldset>;
 }
