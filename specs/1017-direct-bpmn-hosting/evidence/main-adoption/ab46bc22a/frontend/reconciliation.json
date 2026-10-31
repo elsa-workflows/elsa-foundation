@@ -1,0 +1,35 @@
+{
+  "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+  "workspaceTestScripts": 22,
+  "vitestTestFileResults": 309,
+  "actualAssertionOutcomes": {
+    "passed": 4043
+  },
+  "noTestFilesSteps": [
+    {
+      "package": "@elsa-workflows/example-vanilla-host",
+      "script": "vitest run --passWithNoTests",
+      "exitCode": 0,
+      "noTestFiles": true
+    },
+    {
+      "package": "@elsa-workflows/studio-sdk",
+      "script": "vitest run --passWithNoTests",
+      "exitCode": 0,
+      "noTestFiles": true
+    },
+    {
+      "package": "@elsa-workflows/studio-ui",
+      "script": "vitest run --passWithNoTests",
+      "exitCode": 0,
+      "noTestFiles": true
+    }
+  ],
+  "resourceBound": {
+    "workspacesAtOnce": 1,
+    "maxVitestWorkers": 2,
+    "minVitestWorkers": 1
+  },
+  "sourceOrAssertionsChangedForRepeat": false,
+  "failedParallelAttemptsRetained": true
+}

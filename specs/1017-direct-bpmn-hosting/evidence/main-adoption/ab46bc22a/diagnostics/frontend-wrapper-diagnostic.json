@@ -1,0 +1,9 @@
+{
+  "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+  "kind": "Launcher error and distinct real frontend test failure",
+  "failure": "zsh read-only variable status after pnpm test returned; child output retained separately",
+  "action": "Repeat once through subprocess runner retaining actual child exitCode; no source or verifier edit.",
+  "initialTestFailure": "top navigation More tools overlay: expected data-nav-mode top, observed null",
+  "secondTestFailure": "artifact clipboard: writeText called, confirmation text not present at immediate assertion",
+  "classification": "Both original suite attempts failed. Initial pnpm child exit was obscured by the zsh wrapper; no pass is inferred."
+}

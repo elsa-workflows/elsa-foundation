@@ -1,0 +1,259 @@
+[
+  {
+    "name": "frontend-tests",
+    "arguments": [
+      "python3.14",
+      "/tmp/elsa-2898-serial-frontend.py"
+    ],
+    "workingDirectory": ".",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "exitCode": 0,
+    "elapsedSeconds": 116.29948401451111,
+    "log": "frontend-tests.log",
+    "logSha256": "b2688a5850e545be4bedbf18b80c4bb99c0b9e3555f9dbde3718f8663228af55"
+  },
+  {
+    "name": "typecheck",
+    "arguments": [
+      "pnpm",
+      "typecheck"
+    ],
+    "workingDirectory": "Studio",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "exitCode": 0,
+    "elapsedSeconds": 9.486119031906128,
+    "log": "typecheck.log",
+    "logSha256": "3d057c28accdc103fdb1279764c6379e7afa42515d667ee6d048fc0d20a13ee0"
+  },
+  {
+    "name": "lint",
+    "arguments": [
+      "pnpm",
+      "lint"
+    ],
+    "workingDirectory": "Studio",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "exitCode": 0,
+    "elapsedSeconds": 8.47111177444458,
+    "log": "lint.log",
+    "logSha256": "d3efc4e660e36d4678effa6ff4551d82d5d9a89fa9c3f1bb2c0ef40beeaf966d"
+  },
+  {
+    "name": "frontend-build",
+    "arguments": [
+      "pnpm",
+      "build"
+    ],
+    "workingDirectory": "Studio",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "exitCode": 0,
+    "elapsedSeconds": 13.673352003097534,
+    "log": "frontend-build.log",
+    "logSha256": "6ee355b64d6bb950a3f9551536f262326e75fdf819dc2c7009f9361fb73ad969"
+  },
+  {
+    "name": "readability",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj",
+      "-c",
+      "Release",
+      "--logger",
+      "trx;LogFileName=readability.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-post-owner-main-ab46-qualification"
+    ],
+    "workingDirectory": ".",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "exitCode": 0,
+    "elapsedSeconds": 13.480677843093872,
+    "log": "readability.log",
+    "logSha256": "b16fbfa5ab1e63a5b946ea3e9176ee7e9504aba4861f8b1208258cc88f3a4d82"
+  },
+  {
+    "name": "modularity",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj",
+      "-c",
+      "Release",
+      "--logger",
+      "trx;LogFileName=modularity.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-post-owner-main-ab46-qualification"
+    ],
+    "workingDirectory": ".",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "exitCode": 0,
+    "elapsedSeconds": 16.95376205444336,
+    "log": "modularity.log",
+    "logSha256": "5e66d5dd481ac649d8485e59e901a328eb891195b2b870153db6faf433cb3013"
+  },
+  {
+    "name": "publishing-api",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Workflows/Publishing/Api/Tests/Elsa.Workflows.Publishing.Api.Tests.csproj",
+      "-c",
+      "Release",
+      "--logger",
+      "trx;LogFileName=publishing-api.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-post-owner-main-ab46-qualification"
+    ],
+    "workingDirectory": ".",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "exitCode": 0,
+    "elapsedSeconds": 11.696472883224487,
+    "log": "publishing-api.log",
+    "logSha256": "7df84ec75849254ac7263ea064cc7d3cbee506f2884ca41e658bdd53b74e1609"
+  },
+  {
+    "name": "studio",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Studio/tests/Elsa.Studio.Tests/Elsa.Studio.Tests.csproj",
+      "-c",
+      "Release",
+      "--logger",
+      "trx;LogFileName=studio.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-post-owner-main-ab46-qualification"
+    ],
+    "workingDirectory": ".",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "exitCode": 0,
+    "elapsedSeconds": 116.87753176689148,
+    "log": "studio.log",
+    "logSha256": "698bbea119b8eb67991bbaa03656e171a50dd57931bc3730679de2fc7c2c9e65"
+  },
+  {
+    "name": "architecture",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj",
+      "-c",
+      "Release",
+      "--logger",
+      "trx;LogFileName=architecture.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-post-owner-main-ab46-qualification"
+    ],
+    "workingDirectory": ".",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "exitCode": 0,
+    "elapsedSeconds": 44.26325798034668,
+    "log": "architecture.log",
+    "logSha256": "8843f1ffd5729021ffe17345f414961bfa0e4432165764cfd01b21ddf34c2ad0"
+  },
+  {
+    "name": "host-new-main",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+      "-c",
+      "Release",
+      "--filter",
+      "FullyQualifiedName~LegacyTimerAdmissionWorkbenchTests",
+      "--logger",
+      "trx;LogFileName=host-new-main.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-post-owner-main-ab46-qualification"
+    ],
+    "workingDirectory": ".",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "exitCode": 0,
+    "elapsedSeconds": 14.722482919692993,
+    "log": "host-new-main.log",
+    "logSha256": "efa4943feb50a8c20369bf9e160b841c19ec4ce397b15040911b6004c8864858"
+  },
+  {
+    "name": "studio-host-build",
+    "arguments": [
+      "dotnet",
+      "build",
+      "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj",
+      "-c",
+      "Release"
+    ],
+    "workingDirectory": ".",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "exitCode": 0,
+    "elapsedSeconds": 6.242067337036133,
+    "log": "studio-host-build.log",
+    "logSha256": "5dba323b7ffe248bfd158dd78e2fe94a70737a529d95086ce7d75a9fe85c7220"
+  },
+  {
+    "name": "maps",
+    "arguments": [
+      "dotnet",
+      "run",
+      "--project",
+      "tools/maps/Elsa.Maps.Generator",
+      "-c",
+      "Release",
+      "--",
+      "check"
+    ],
+    "workingDirectory": ".",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "exitCode": 0,
+    "elapsedSeconds": 0.9990677833557129,
+    "log": "maps.log",
+    "logSha256": "086dadebd679cb9119d00d85007e41289b11075ffd6e9370507513b906924e04"
+  },
+  {
+    "name": "tiers",
+    "arguments": [
+      "dotnet",
+      "run",
+      "--project",
+      "tools/maps/Elsa.Maps.Generator",
+      "-c",
+      "Release",
+      "--no-build",
+      "--",
+      "test-tiers-check"
+    ],
+    "workingDirectory": ".",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "exitCode": 0,
+    "elapsedSeconds": 0.6937718391418457,
+    "log": "tiers.log",
+    "logSha256": "91cc02f2f85c466bbc3d5d675d3bf055059b2c0e5e185229a4c4d99b174f25c4"
+  },
+  {
+    "name": "tier-docs",
+    "arguments": [
+      "python3",
+      "tools/ci/test_tiers.py",
+      "check-docs"
+    ],
+    "workingDirectory": ".",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "exitCode": 0,
+    "elapsedSeconds": 0.04824399948120117,
+    "log": "tier-docs.log",
+    "logSha256": "a7efe6941fc840c43cc76878f7914a8d5b30eb856bb9c11b195806960bcaa00e"
+  },
+  {
+    "name": "tier-workflows",
+    "arguments": [
+      "python3",
+      "tools/ci/test_tiers.py",
+      "check-workflows"
+    ],
+    "workingDirectory": ".",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "exitCode": 0,
+    "elapsedSeconds": 0.02942204475402832,
+    "log": "tier-workflows.log",
+    "logSha256": "2c4c5e13c6ba764536c084642d95af6b180f81c9fed1f50da897ea7638b7bea2"
+  }
+]

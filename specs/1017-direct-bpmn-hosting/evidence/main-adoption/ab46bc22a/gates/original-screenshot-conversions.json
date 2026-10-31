@@ -1,0 +1,65 @@
+[
+  {
+    "source": "attached-test-run.png",
+    "sourceSha256": "fd533b75752bb0165222398ae3f2f81a571ef99ab8001c5c4281ea7446d0d686",
+    "output": "attached-test-run.jpg",
+    "outputSha256": "620dca0c9610c6703d59adfeac355704c571cc8c5dcdf0455609d379166e45bd",
+    "width": 1280,
+    "height": 720,
+    "operation": "PNG to JPEG format conversion only; no crop or resize"
+  },
+  {
+    "source": "legacy-run.png",
+    "sourceSha256": "c7ff3946891199bce239e681ef8cd5667ec4d1883eb42ed01598fb1869d7bd76",
+    "output": "legacy-run.jpg",
+    "outputSha256": "4d66fe171eb1dc5a9f89b09adc62dd3c1f790645771331e8b6db5b2a44b3efc6",
+    "width": 1280,
+    "height": 720,
+    "operation": "PNG to JPEG format conversion only; no crop or resize"
+  },
+  {
+    "source": "open.png",
+    "sourceSha256": "65b6151a07b0ef42d8c610230921424e98428a250ac60e9fd369eaae08903fb3",
+    "output": "open.jpg",
+    "outputSha256": "85aded8d57dac4a015a43459839e6b9c662f20975b99e95949a40154da6c09a0",
+    "width": 1280,
+    "height": 720,
+    "operation": "PNG to JPEG format conversion only; no crop or resize"
+  },
+  {
+    "source": "published-run.png",
+    "sourceSha256": "9b78be48603c2209b098dbdf9778df7b063e83ce272bde93455c692902a9aea7",
+    "output": "published-run.jpg",
+    "outputSha256": "a425510add4fc0b1954c5ceb1188cdbcceeda4822d67efe5b73e9643ce39f66c",
+    "width": 1280,
+    "height": 720,
+    "operation": "PNG to JPEG format conversion only; no crop or resize"
+  },
+  {
+    "source": "published.png",
+    "sourceSha256": "541a5c9dd3cb308f24f550b661277a8885fc9d9c61d118590c253aaa96f44422",
+    "output": "published.jpg",
+    "outputSha256": "895cf30f54bdd3496cbbe23ea97e9e4d128654f6d2f8199921ce0122e56526b0",
+    "width": 1280,
+    "height": 720,
+    "operation": "PNG to JPEG format conversion only; no crop or resize"
+  },
+  {
+    "source": "restarted-test-run.png",
+    "sourceSha256": "af763fa4c81071a0062e47b03c28c2d7fcfae787058e28b895432a59212912d5",
+    "output": "restarted-test-run.jpg",
+    "outputSha256": "0c79bf55c273a38b16f444050555b26192fd82652dc06095182e7689818e0b05",
+    "width": 1280,
+    "height": 720,
+    "operation": "PNG to JPEG format conversion only; no crop or resize"
+  },
+  {
+    "source": "test-run.png",
+    "sourceSha256": "feeb0f2f2cf159c44449d27d337bb49ba6acd09e8d7047fe7c75d86abe9d0791",
+    "output": "test-run.jpg",
+    "outputSha256": "747dbe6d976f4580d3a472138c1abeb6d71eb0fee3f5e5182c56deec41e05ce9",
+    "width": 1280,
+    "height": 720,
+    "operation": "PNG to JPEG format conversion only; no crop or resize"
+  }
+]

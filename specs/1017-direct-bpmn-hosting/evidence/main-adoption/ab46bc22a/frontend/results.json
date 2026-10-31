@@ -1,0 +1,585 @@
+[
+  {
+    "package": "@elsa-workflows/studio-attention",
+    "path": "Extensions/Attention/studio/Elsa.Studio.Attention/Client",
+    "script": "vitest run --passWithNoTests",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-attention.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.6302132606506348,
+    "log": "_elsa-workflows_studio-attention.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-attention.json",
+    "counts": {
+      "numTotalTests": 9,
+      "numPassedTests": 9,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 4,
+      "numPassedTestSuites": 4,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/studio-connections",
+    "path": "Extensions/Connections/studio/Elsa.Studio.Connections/Client",
+    "script": "vitest run",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-connections.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 1.5648481845855713,
+    "log": "_elsa-workflows_studio-connections.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-connections.json",
+    "counts": {
+      "numTotalTests": 58,
+      "numPassedTests": 58,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 10,
+      "numPassedTestSuites": 10,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/studio-console-stream",
+    "path": "Extensions/ConsoleStream/studio/Elsa.Studio.ConsoleStream/Client",
+    "script": "vitest run",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-console-stream.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.5310509204864502,
+    "log": "_elsa-workflows_studio-console-stream.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-console-stream.json",
+    "counts": {
+      "numTotalTests": 15,
+      "numPassedTests": 15,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 2,
+      "numPassedTestSuites": 2,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/studio-diagnostics-open-telemetry",
+    "path": "Extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Client",
+    "script": "vitest run",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-diagnostics-open-telemetry.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.9168710708618164,
+    "log": "_elsa-workflows_studio-diagnostics-open-telemetry.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-diagnostics-open-telemetry.json",
+    "counts": {
+      "numTotalTests": 33,
+      "numPassedTests": 33,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 5,
+      "numPassedTestSuites": 5,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/studio-diagnostics-structured-logs",
+    "path": "Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client",
+    "script": "vitest run",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-diagnostics-structured-logs.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.6322340965270996,
+    "log": "_elsa-workflows_studio-diagnostics-structured-logs.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-diagnostics-structured-logs.json",
+    "counts": {
+      "numTotalTests": 20,
+      "numPassedTests": 20,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 2,
+      "numPassedTestSuites": 2,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/studio-etl",
+    "path": "Extensions/Etl/studio/Elsa.Studio.Etl/Client",
+    "script": "vitest run",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-etl.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 1.9179630279541016,
+    "log": "_elsa-workflows_studio-etl.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-etl.json",
+    "counts": {
+      "numTotalTests": 69,
+      "numPassedTests": 69,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 16,
+      "numPassedTestSuites": 16,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/studio-expression-editors-javascript",
+    "path": "Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client",
+    "script": "vitest run",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-expression-editors-javascript.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.545417070388794,
+    "log": "_elsa-workflows_studio-expression-editors-javascript.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-expression-editors-javascript.json",
+    "counts": {
+      "numTotalTests": 8,
+      "numPassedTests": 8,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 2,
+      "numPassedTestSuites": 2,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/studio-expression-editors-liquid",
+    "path": "Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Client",
+    "script": "vitest run",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-expression-editors-liquid.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.548192024230957,
+    "log": "_elsa-workflows_studio-expression-editors-liquid.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-expression-editors-liquid.json",
+    "counts": {
+      "numTotalTests": 7,
+      "numPassedTests": 7,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 2,
+      "numPassedTestSuites": 2,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/studio-extension-builder",
+    "path": "Extensions/ExtensionBuilder/studio/Elsa.Studio.ExtensionBuilder/Client",
+    "script": "vitest run",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-extension-builder.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 6.6524059772491455,
+    "log": "_elsa-workflows_studio-extension-builder.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-extension-builder.json",
+    "counts": {
+      "numTotalTests": 52,
+      "numPassedTests": 52,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 4,
+      "numPassedTestSuites": 4,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/studio-feature-management",
+    "path": "Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Client",
+    "script": "vitest run",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-feature-management.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 1.290834903717041,
+    "log": "_elsa-workflows_studio-feature-management.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-feature-management.json",
+    "counts": {
+      "numTotalTests": 72,
+      "numPassedTests": 72,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 3,
+      "numPassedTestSuites": 3,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/studio-sample-weather",
+    "path": "Extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/Client",
+    "script": "vitest run",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-sample-weather.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.5781328678131104,
+    "log": "_elsa-workflows_studio-sample-weather.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-sample-weather.json",
+    "counts": {
+      "numTotalTests": 1,
+      "numPassedTests": 1,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 2,
+      "numPassedTestSuites": 2,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/studio-secrets",
+    "path": "Extensions/Secrets/studio/Elsa.Studio.Secrets/Client",
+    "script": "vitest run",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-secrets.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 1.935640811920166,
+    "log": "_elsa-workflows_studio-secrets.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-secrets.json",
+    "counts": {
+      "numTotalTests": 71,
+      "numPassedTests": 71,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 16,
+      "numPassedTestSuites": 16,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/studio-weaver-workflows",
+    "path": "Extensions/Weaver/studio/Elsa.Studio.Weaver.Workflows/Client",
+    "script": "vitest run",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-weaver-workflows.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.6880128383636475,
+    "log": "_elsa-workflows_studio-weaver-workflows.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-weaver-workflows.json",
+    "counts": {
+      "numTotalTests": 7,
+      "numPassedTests": 7,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 3,
+      "numPassedTestSuites": 3,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/studio-workflows-dashboard",
+    "path": "Extensions/Workflows.Dashboard/studio/Elsa.Studio.Workflows.Dashboard/Client",
+    "script": "vitest run --passWithNoTests",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-workflows-dashboard.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.8862738609313965,
+    "log": "_elsa-workflows_studio-workflows-dashboard.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-workflows-dashboard.json",
+    "counts": {
+      "numTotalTests": 16,
+      "numPassedTests": 16,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 6,
+      "numPassedTestSuites": 6,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/example-react-host",
+    "path": "Studio/examples/react-host",
+    "script": "vitest run --passWithNoTests",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_example-react-host.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.7008392810821533,
+    "log": "_elsa-workflows_example-react-host.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_example-react-host.json",
+    "counts": {
+      "numTotalTests": 3,
+      "numPassedTests": 3,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 2,
+      "numPassedTestSuites": 2,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/example-vanilla-host",
+    "path": "Studio/examples/vanilla-host",
+    "script": "vitest run --passWithNoTests",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_example-vanilla-host.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.4336559772491455,
+    "log": "_elsa-workflows_example-vanilla-host.log",
+    "kind": "vitest"
+  },
+  {
+    "package": "@elsa-workflows/studio-code-editor",
+    "path": "Studio/src/essentials/Elsa.Studio.CodeEditor/Client",
+    "script": "vitest run",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-code-editor.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 6.795223712921143,
+    "log": "_elsa-workflows_studio-code-editor.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-code-editor.json",
+    "counts": {
+      "numTotalTests": 45,
+      "numPassedTests": 45,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 8,
+      "numPassedTestSuites": 8,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/studio-dashboard",
+    "path": "Studio/src/essentials/Elsa.Studio.Dashboard/Client",
+    "script": "vitest run",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-dashboard.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 1.926682710647583,
+    "log": "_elsa-workflows_studio-dashboard.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-dashboard.json",
+    "counts": {
+      "numTotalTests": 76,
+      "numPassedTests": 76,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 12,
+      "numPassedTestSuites": 12,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/studio-web",
+    "path": "Studio/src/essentials/Elsa.Studio.Hosting/Client",
+    "script": "vitest run",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-web.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 12.12406587600708,
+    "log": "_elsa-workflows_studio-web.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-web.json",
+    "counts": {
+      "numTotalTests": 678,
+      "numPassedTests": 678,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 156,
+      "numPassedTestSuites": 156,
+      "numFailedTestSuites": 0
+    }
+  },
+  {
+    "package": "@elsa-workflows/studio-sdk",
+    "path": "Studio/src/essentials/Elsa.Studio.Hosting/StudioSdk",
+    "script": "vitest run --passWithNoTests",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-sdk.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.38976478576660156,
+    "log": "_elsa-workflows_studio-sdk.log",
+    "kind": "vitest"
+  },
+  {
+    "package": "@elsa-workflows/studio-ui",
+    "path": "Studio/src/essentials/Elsa.Studio.Hosting/StudioUi",
+    "script": "vitest run --passWithNoTests",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-ui.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 0.39299988746643066,
+    "log": "_elsa-workflows_studio-ui.log",
+    "kind": "vitest"
+  },
+  {
+    "package": "@elsa-workflows/studio-workflows",
+    "path": "Studio/src/essentials/Elsa.Studio.Workflows/Client",
+    "script": "vitest run",
+    "arguments": [
+      "pnpm",
+      "test",
+      "--maxWorkers=2",
+      "--minWorkers=1",
+      "--reporter=json",
+      "--outputFile=/tmp/elsa-2898-post-owner-main-ab46-qualification/frontend-serial/_elsa-workflows_studio-workflows.json"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 73.91127610206604,
+    "log": "_elsa-workflows_studio-workflows.log",
+    "kind": "vitest",
+    "report": "_elsa-workflows_studio-workflows.json",
+    "counts": {
+      "numTotalTests": 2803,
+      "numPassedTests": 2803,
+      "numFailedTests": 0,
+      "numPendingTests": 0,
+      "numTodoTests": 0,
+      "numTotalTestSuites": 536,
+      "numPassedTestSuites": 536,
+      "numFailedTestSuites": 0
+    }
+  }
+]

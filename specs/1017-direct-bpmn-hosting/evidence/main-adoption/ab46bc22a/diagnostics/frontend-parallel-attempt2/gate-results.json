@@ -1,0 +1,15 @@
+[
+  {
+    "name": "frontend-tests",
+    "arguments": [
+      "pnpm",
+      "test"
+    ],
+    "workingDirectory": "Studio",
+    "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+    "exitCode": 1,
+    "elapsedSeconds": 54.41031789779663,
+    "log": "frontend-tests.log",
+    "logSha256": "a76895558053bc43a85b470e2ac6a4673445cb044c611e2742bfa6d13f04b4ee"
+  }
+]

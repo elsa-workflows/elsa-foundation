@@ -1,5 +1,7 @@
 # Public API, version and compatibility reconciliation
 
+**Current decision and audit:** [Source25148 qualification](../main-adoption/ab46bc22a/README.md) refreshes exact publish-statea82590ea. Runtime Core180/0 and Runtime4/0 tracked changes, twelve current-product binary comparisons and the read-only computation pass. [The owner approved a scoped computed4.0-preview exception for this PR](https://github.com/elsa-workflows/elsa-foundation/pull/3410#issuecomment-6540308020). T042 is complete under that exception; the older audit below records the policy question as it stood then and does not override the current decision. No release/publish or general-policy amendment is implied.
+
 This T042 audit compares implementation source `fae8dce0d5177e987ca50affde428eec03303219` with the actual last-published preview records at publish-state `f49ff392871e217896efdbfe8c208f10cece7365`. The adopted main is `31b75cb60df779c94c7c28867dc6023f749a40f9` (PR3463, variable/argument add-button polish). That change does not touch the qualified BPMN gateway edit, export, publication, run or persistence paths. [T041's actual witnesses](../final-compatibility/README.md) retain their original executing sources; they are not relabelled as this head.
 
 ## API comparison and version proposal

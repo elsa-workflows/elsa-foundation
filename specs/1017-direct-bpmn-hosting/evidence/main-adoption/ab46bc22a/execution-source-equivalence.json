@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "qualifiedSource": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+  "previousEvidenceSources": {
+    "bpmnWholeProject": "daac77da4f2f7b6974dc9fb5c2f521446e14f1fa",
+    "bpmnWholeHosting": "2191e3710d87a63ed2f3a3770c5df84084a369ad",
+    "frozenV1EtlUpgrade": "8504fbac779941eeef51c1ccdc1a36a07fceee88"
+  },
+  "unchangedPrRuntimeTrees": {
+    "Essentials/src/Activities/Bpmn": {
+      "before": "632d134f25e2894355c68103e84dd564384c8f26",
+      "current": "632d134f25e2894355c68103e84dd564384c8f26",
+      "identical": true,
+      "changedDependencyLockFiles": [],
+      "productionAndTestSourceUnchanged": true,
+      "priorCountsKeepExecutingSources": true
+    },
+    "Essentials/src/Workflows/Runtime": {
+      "before": "e47a89cdbb6f73d3a3b1ddec1731cdd2c5c66bea",
+      "current": "e47a89cdbb6f73d3a3b1ddec1731cdd2c5c66bea",
+      "identical": true,
+      "changedDependencyLockFiles": [],
+      "productionAndTestSourceUnchanged": true,
+      "priorCountsKeepExecutingSources": true
+    },
+    "Essentials/tests/Activities/Bpmn": {
+      "before": "e347ae6e752ab9afb9b243699efdb10073263b5b",
+      "current": "e347ae6e752ab9afb9b243699efdb10073263b5b",
+      "identical": true,
+      "changedDependencyLockFiles": [],
+      "productionAndTestSourceUnchanged": true,
+      "priorCountsKeepExecutingSources": true
+    },
+    "Essentials/tests/Workflows/Runtime": {
+      "before": "9dd2615ae1775fe9182add5b07bfdb6383ebddde",
+      "current": "0da93b420498ccae13114374f4a166faf64fe17f",
+      "identical": false,
+      "changedDependencyLockFiles": [
+        "Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/ProviderTests/packages.lock.json"
+      ],
+      "productionAndTestSourceUnchanged": true,
+      "priorCountsKeepExecutingSources": true
+    },
+    "Extensions/Etl": {
+      "before": "0c75b0add099cd884a371021807d98b70fc57b20",
+      "current": "0c75b0add099cd884a371021807d98b70fc57b20",
+      "identical": true,
+      "changedDependencyLockFiles": [],
+      "productionAndTestSourceUnchanged": true,
+      "priorCountsKeepExecutingSources": true
+    }
+  }
+}

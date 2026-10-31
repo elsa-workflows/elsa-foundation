@@ -1,0 +1,10 @@
+{
+  "source": "25148ea9c3565afdb27774f4af9a5155a95d6c5c",
+  "testsRun": 10,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "successful": true,
+  "unchangedControlSource": true,
+  "currentEvidenceInput": "studio/manifest.json"
+}
