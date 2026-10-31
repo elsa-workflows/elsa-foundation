@@ -1366,6 +1366,37 @@ describe("activity property organization", () => {
     });
   });
 
+  it("keeps an empty portable source when confirming a switch to Literal", () => {
+    const changes: ActivityNode[] = [];
+    const definition = {
+      language: "JavaScript",
+      source: "",
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: { OrderId: { kind: "WorkflowRequest", memberKey: "OrderId" } },
+      options: {},
+      capabilityProfile: "binding-pure-v1"
+    };
+    const container = renderPanel([
+      input("Text", { referenceKey: "text", typeName: "System.String", defaultValue: "default text", isWrapped: true })
+    ], {
+      activity: activity({ text: { typeName: "System.String", expression: { type: "JavaScript", value: definition } } }),
+      onChange: next => changes.push(next)
+    });
+
+    openAndSelect(container, "Literal");
+
+    const confirmation = container.querySelector<HTMLElement>("[role='alertdialog']")!;
+    expect(confirmation.textContent).toContain("keep the source text as a Literal value");
+    const removeBindings = [...confirmation.querySelectorAll<HTMLButtonElement>("button")]
+      .find(button => button.textContent === "Remove 1 binding")!;
+    flushSync(() => removeBindings.click());
+
+    expect((changes.at(-1)!.text as { expression: { type: string; value: unknown } }).expression).toEqual({
+      type: "Literal",
+      value: ""
+    });
+  });
+
   it("preserves an ordinary string expression as a Literal without confirmation", () => {
     const changes: ActivityNode[] = [];
     const container = renderPanel([

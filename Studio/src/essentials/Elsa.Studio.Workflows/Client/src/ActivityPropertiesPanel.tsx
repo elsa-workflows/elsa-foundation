@@ -874,8 +874,12 @@ function PropertyRow({
       ? Object.keys(portableDefinition.parameters).length
       : 0;
     const requiresConfirmation = transition.requiresConfirmation || discardedBindingCount > 0;
-    const nextValue = portableDefinition && nextDescriptor.editingMode === "text"
-      ? { ...portableDefinition, language: nextSyntax }
+    const nextValue = portableDefinition
+      ? nextDescriptor.editingMode === "text"
+        ? { ...portableDefinition, language: nextSyntax }
+        : nextDescriptor.editingMode === "literal"
+          ? portableDefinition.source
+          : transition.nextValue
       : transition.nextValue;
     if (requiresConfirmation) {
       setExpandRequested(false);
