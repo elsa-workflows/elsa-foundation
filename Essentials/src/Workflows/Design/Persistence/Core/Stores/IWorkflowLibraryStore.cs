@@ -14,6 +14,8 @@ public interface IWorkflowLibraryStore
     Task MoveDefinitionsAsync(IReadOnlyList<string> definitionIds, string? folderId, string actorId, string operationKey, CancellationToken cancellationToken = default);
 
     Task<WorkflowLibraryPage> ListDefinitionsAsync(WorkflowLibraryQuery query, string? subjectId, CancellationToken cancellationToken = default);
+    Task<WorkflowLibraryPage> ListDefinitionsAsync(WorkflowLibraryQuery query, string? subjectId,
+        WorkflowLibraryReadScope readScope, CancellationToken cancellationToken = default);
     Task<IReadOnlyDictionary<string, string>> GetVersionLabelsAsync(IReadOnlyList<string> versionIds, CancellationToken cancellationToken = default);
     Task<WorkflowOrganization?> GetOrganizationAsync(string definitionId, CancellationToken cancellationToken = default);
     Task<WorkflowOrganization> ReplaceTagsAsync(string definitionId, string revision, IReadOnlyList<WorkflowTagAssignment> tags,

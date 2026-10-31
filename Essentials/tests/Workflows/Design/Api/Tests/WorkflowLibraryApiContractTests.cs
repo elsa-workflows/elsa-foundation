@@ -13,6 +13,7 @@ using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 using Host = Elsa.Workflows.Design.Api.Tests.WorkflowsDesignApiContractTests.AuthorizationHost;
 
@@ -260,6 +261,72 @@ public sealed class WorkflowLibraryApiContractTests
     }
 
     [Fact]
+    public async Task Resource_handlers_without_query_visibility_fail_before_any_inventory_query_or_count()
+    {
+        var probe = new LibraryProbe { CandidateIds = ["visibleAlpha", "deniedBeta"] };
+        await using var host = await StartAsync(probe, services =>
+        {
+            services.RemoveAll<IWorkflowLibraryVisibilityPolicy>();
+            services.AddSingleton<IPermissionResourceHandler, DeniedDefinitionPolicy>();
+        });
+        using var response = await SendAsync(host, "GET", "/design/workflows/definitions/page?pageSize=1", "library-read");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Null(probe.Query);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("totalCount", body);
+        Assert.DoesNotContain("nextContinuationToken", body);
+        Assert.DoesNotContain("deniedBeta", body);
+    }
+
+    [Fact]
+    public async Task Trusted_query_visibility_reaches_the_store_before_paging_and_exposes_only_the_authorized_total()
+    {
+        var probe = new LibraryProbe { CandidateIds = ["visibleAlpha", "deniedBeta"] };
+        var scope = new WorkflowLibraryReadScope("policy-r2", DeniedDefinitionIds: ["deniedBeta"]);
+        await using var host = await StartAsync(probe, services =>
+        {
+            services.AddSingleton<IWorkflowLibraryVisibilityPolicy>(new FixedVisibility(scope));
+            services.AddSingleton<IPermissionResourceHandler, DeniedDefinitionPolicy>();
+        });
+        using var response = await SendAsync(host, "GET", "/design/workflows/definitions/page?pageSize=1&allowedDefinitionIds=deniedBeta", "library-read");
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("policy-r2", probe.ReadScope!.Revision);
+        Assert.Equal(["deniedBeta"], probe.ReadScope.DeniedDefinitionIds);
+        Assert.Equal(0, probe.LegacyQueryCalls);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(1, document.RootElement.GetProperty("totalCount").GetInt32());
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("nextContinuationToken").ValueKind);
+        Assert.Equal("visibleAlpha", Assert.Single(document.RootElement.GetProperty("items").EnumerateArray()).GetProperty("id").GetString());
+        Assert.DoesNotContain("deniedBeta", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Tenant_action_only_hosts_can_browse_without_a_query_policy()
+    {
+        var probe = new LibraryProbe();
+        await using var host = await StartAsync(probe, services =>
+        {
+            services.RemoveAll<IWorkflowLibraryVisibilityPolicy>();
+            services.RemoveAll<IPermissionResourceHandler>();
+        });
+        using var response = await SendAsync(host, "GET", "/design/workflows/definitions/page", "library-read");
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("tenant-action-v1", probe.ReadScope!.Revision);
+        Assert.Null(probe.ReadScope.AllowedDefinitionIds);
+        Assert.Null(probe.ReadScope.DeniedDefinitionIds);
+    }
+
+    [Fact]
+    public async Task A_malformed_host_visibility_scope_fails_before_the_store()
+    {
+        var probe = new LibraryProbe();
+        await using var host = await StartAsync(probe, services => services.AddSingleton<IWorkflowLibraryVisibilityPolicy>(new FixedVisibility(new(" "))));
+        using var response = await SendAsync(host, "GET", "/design/workflows/definitions/page", "library-read");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Null(probe.Query);
+    }
+
+    [Fact]
     public async Task Stale_organization_writes_are_structured_conflicts()
     {
         var probe = new LibraryProbe { ConflictOnReplace = true };
@@ -328,6 +395,7 @@ public sealed class WorkflowLibraryApiContractTests
     {
         services.AddSingleton<IWorkflowLibraryStore>(store);
         services.AddSingleton<IAuthSessionService, PrincipalSession>();
+        services.AddSingleton<IWorkflowLibraryVisibilityPolicy>(new FixedVisibility(new("test-tenant-action-v1")));
         configure?.Invoke(services);
     });
 
@@ -358,8 +426,13 @@ public sealed class WorkflowLibraryApiContractTests
     private sealed class DeniedDefinitionPolicy : IPermissionResourceHandler
     {
         public ValueTask<PermissionEvaluationResult?> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<PermissionEvaluationResult?>(context.Resource is WorkflowLibraryResource { DefinitionId: "hidden" }
+            ValueTask.FromResult<PermissionEvaluationResult?>(context.Resource is WorkflowLibraryResource { DefinitionId: "hidden" or "deniedBeta" }
                 ? PermissionEvaluationResult.Denied() : null);
+    }
+
+    private sealed class FixedVisibility(WorkflowLibraryReadScope scope) : IWorkflowLibraryVisibilityPolicy
+    {
+        public ValueTask<WorkflowLibraryReadScope> GetScopeAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default) => ValueTask.FromResult(scope);
     }
 
     private sealed class PublicationLookup(IReadOnlyDictionary<string, WorkflowDefinitionPublicationSummary> summaries) : IWorkflowDefinitionPublicationStateLookup
@@ -381,6 +454,9 @@ public sealed class WorkflowLibraryApiContractTests
         public string? Subject, Actor, DefinitionId, FolderId, Revision, OperationKey, TagId, ViewId;
         public WorkflowTagInput? TagInput;
         public WorkflowLibraryQuery? Query;
+        public WorkflowLibraryReadScope? ReadScope;
+        public IReadOnlyList<string>? CandidateIds;
+        public int LegacyQueryCalls;
         public WorkflowTagBulkEdit? Bulk;
         public IReadOnlyList<string>? MovedIds;
         public IReadOnlyList<string>? RequestedVersionIds;
@@ -398,10 +474,23 @@ public sealed class WorkflowLibraryApiContractTests
         public Task MoveDefinitionsAsync(IReadOnlyList<string> definitionIds, string? folderId, string actorId, string operationKey, CancellationToken cancellationToken = default) { MovedIds = definitionIds; FolderId = folderId; Actor = actorId; return Task.CompletedTask; }
         public Task<WorkflowLibraryPage> ListDefinitionsAsync(WorkflowLibraryQuery query, string? subjectId, CancellationToken cancellationToken = default)
         {
+            LegacyQueryCalls++;
             Query = query; Subject = subjectId;
             var definition = new WorkflowDefinition { Id = PageDefinitionId, Name = "Collect payment", CreatedAt = DateTimeOffset.UnixEpoch, LastModifiedAt = DateTimeOffset.UnixEpoch };
             return Task.FromResult(new WorkflowLibraryPage([new(definition, Organization(PageDefinitionId), true,
                 LatestVersionId: "version-latest", LatestVersion: "2.0.0", PublishedVersionId: "version-published", PublishedVersion: "1.0.0", PublicationState: "published")], "next-page", 123));
+        }
+        public Task<WorkflowLibraryPage> ListDefinitionsAsync(WorkflowLibraryQuery query, string? subjectId,
+            WorkflowLibraryReadScope readScope, CancellationToken cancellationToken = default)
+        {
+            ReadScope = readScope;
+            if (CandidateIds is null) return ListDefinitionsAsync(query, subjectId, cancellationToken);
+            Query = query; Subject = subjectId;
+            var visible = CandidateIds.Where(id => (readScope.AllowedDefinitionIds is null || readScope.AllowedDefinitionIds.Contains(id, StringComparer.Ordinal)) &&
+                !(readScope.DeniedDefinitionIds?.Contains(id, StringComparer.Ordinal) ?? false)).ToArray();
+            var rows = visible.Take(query.PageSize).Select(id => new WorkflowLibraryDefinition(
+                new WorkflowDefinition { Id = id, Name = id }, Organization(id), false)).ToArray();
+            return Task.FromResult(new WorkflowLibraryPage(rows, visible.Length > query.PageSize ? "next-page" : null, visible.Length));
         }
         public Task<WorkflowOrganization?> GetOrganizationAsync(string definitionId, CancellationToken cancellationToken = default) => Task.FromResult<WorkflowOrganization?>(Organization(definitionId));
         public Task<IReadOnlyDictionary<string, string>> GetVersionLabelsAsync(IReadOnlyList<string> versionIds, CancellationToken cancellationToken = default)

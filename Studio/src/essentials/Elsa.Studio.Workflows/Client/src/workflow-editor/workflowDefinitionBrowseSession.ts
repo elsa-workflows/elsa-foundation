@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { authSessionEndedEvent, authSessionStartedEvent, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { defaultDefinitionPageSize } from "./constants";
+import { defaultDefinitionPageSize, definitionPageSizes } from "./constants";
 import {
   parseWorkflowDefinitionBrowseLocation,
   updateWorkflowDefinitionBrowseUrl,
@@ -8,6 +8,39 @@ import {
   workflowLibraryFilterKey,
   type WorkflowDefinitionBrowseLocation
 } from "./workflowDefinitionBrowseLocation";
+
+const historyKey = "elsa.workflow-definition-browse";
+interface BrowseHistoryEntry {
+  sessionId: string;
+  baseUrl: string;
+  authorityRevision: number;
+  locationKey: string;
+  page: number;
+  pageSize: number;
+  continuationTokens: Record<number, string>;
+  effectiveFolderKey: string | null;
+}
+function locationKey(location: WorkflowDefinitionBrowseLocation) {
+  return JSON.stringify([workflowFolderSelectionKey(location.folderSelection), location.listState, location.search,
+    workflowLibraryFilterKey(location), location.viewId ?? "", location.columns ?? []]);
+}
+function historyState() {
+  return window.history.state && typeof window.history.state === "object" && !Array.isArray(window.history.state)
+    ? { ...window.history.state } as Record<string, unknown> : {};
+}
+function readHistoryEntry(next: WorkflowDefinitionBrowseLocation, current: BrowseHistoryEntry): BrowseHistoryEntry | null {
+  const raw = historyState()[historyKey];
+  if (!raw || typeof raw !== "object") return null;
+  const entry = raw as Partial<BrowseHistoryEntry>;
+  if (entry.sessionId !== current.sessionId || entry.baseUrl !== current.baseUrl
+    || entry.authorityRevision !== current.authorityRevision || entry.locationKey !== locationKey(next)
+    || !Number.isInteger(entry.page) || entry.page! < 1 || !definitionPageSizes.includes(entry.pageSize!)
+    || !entry.continuationTokens || typeof entry.continuationTokens !== "object" || Array.isArray(entry.continuationTokens)
+    || !Object.entries(entry.continuationTokens).every(([page, cursor]) => Number.isInteger(Number(page)) && Number(page) >= 2 && typeof cursor === "string")
+    || (entry.page! > 1 && typeof entry.continuationTokens[entry.page!] !== "string")
+    || (entry.effectiveFolderKey !== null && typeof entry.effectiveFolderKey !== "string")) return null;
+  return entry as BrowseHistoryEntry;
+}
 
 export interface WorkflowDefinitionBrowseSession {
   browseLocation: WorkflowDefinitionBrowseLocation;
@@ -53,13 +86,28 @@ export function useWorkflowDefinitionBrowseSession(context: StudioEndpointContex
   const [effectiveFolderKey, setEffectiveFolderKey] = useState<string | null>(null);
   const [requestsPaused, setRequestsPaused] = useState(false);
   const [blockedReason, setBlockedReason] = useState<string | null>(null);
+  const [historySessionId] = useState(() => crypto.randomUUID());
   const requestGenerationRef = useRef(0);
   const activeControllerRef = useRef<AbortController | null>(null);
   const effectiveFolderKeyRef = useRef<string | null>(null);
+  const restoringFolderKeyRef = useRef<string | null>(null);
   const searchTimerRef = useRef<number | null>(null);
   const baseUrlRef = useRef(context.baseUrl);
   const requestsPausedRef = useRef(requestsPaused);
   requestsPausedRef.current = requestsPaused;
+  const snapshot: BrowseHistoryEntry = { sessionId: historySessionId, baseUrl: authorityBaseUrl, authorityRevision,
+    locationKey: locationKey(browseLocation), page, pageSize, continuationTokens, effectiveFolderKey };
+  const snapshotRef = useRef(snapshot);
+  snapshotRef.current = snapshot;
+
+  const saveHistoryEntry = useCallback(() => {
+    const current = snapshotRef.current;
+    // A pending effect from the previous query must not overwrite the entry just reached by Back.
+    if (locationKey(parseWorkflowDefinitionBrowseLocation(window.location.search)) !== current.locationKey) return;
+    window.history.replaceState({ ...historyState(), [historyKey]: current }, "", window.location.href);
+  }, []);
+
+  useEffect(() => { saveHistoryEntry(); }, [browseLocation, page, pageSize, continuationTokens, authorityBaseUrl, authorityRevision, effectiveFolderKey, saveHistoryEntry]);
 
   const invalidateRequests = useCallback(() => {
     requestGenerationRef.current += 1;
@@ -78,9 +126,10 @@ export function useWorkflowDefinitionBrowseSession(context: StudioEndpointContex
     historyMode: "push" | "replace",
     clearSelection = false
   ) => {
+    saveHistoryEntry();
     const url = updateWorkflowDefinitionBrowseUrl(new URL(window.location.href), next);
     window.history[historyMode === "push" ? "pushState" : "replaceState"](
-      {},
+      { ...(historyMode === "replace" ? historyState() : {}), [historyKey]: { ...snapshotRef.current, locationKey: locationKey(next), page: 1, continuationTokens: {} } },
       "",
       `${url.pathname}${url.search}${url.hash}`
     );
@@ -94,13 +143,13 @@ export function useWorkflowDefinitionBrowseSession(context: StudioEndpointContex
     if (clearSelection) setScopeRevision(value => value + 1);
     setRequestsPaused(false);
     setBlockedReason(null);
-  }, [clearSearchTimer, invalidateRequests]);
+  }, [clearSearchTimer, invalidateRequests, saveHistoryEntry]);
 
   const changeSearch = useCallback((value: string) => {
     if (value === browseLocation.search) return;
     const next = { ...browseLocation, search: value };
     const url = updateWorkflowDefinitionBrowseUrl(new URL(window.location.href), next);
-    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    window.history.replaceState({ ...historyState(), [historyKey]: { ...snapshotRef.current, locationKey: locationKey(next), page: 1, continuationTokens: {} } }, "", `${url.pathname}${url.search}${url.hash}`);
     invalidateRequests();
     setBrowseLocation(next);
     setPage(1);
@@ -165,10 +214,12 @@ export function useWorkflowDefinitionBrowseSession(context: StudioEndpointContex
 
   const observeEffectiveFolder = useCallback((key: string) => {
     const current = effectiveFolderKeyRef.current;
+    const restoring = restoringFolderKeyRef.current === key;
+    if (restoring) restoringFolderKeyRef.current = null;
     if (current === key) return;
     effectiveFolderKeyRef.current = key;
     setEffectiveFolderKey(key);
-    if (current === null) return;
+    if (current === null || restoring) return;
     invalidateRequests();
     setPage(1);
     setContinuationTokens({});
@@ -191,6 +242,7 @@ export function useWorkflowDefinitionBrowseSession(context: StudioEndpointContex
   const isRequestCurrent = useCallback((generation: number) => requestGenerationRef.current === generation, []);
 
   const pauseForAuthorityChange = useCallback((message: string) => {
+    restoringFolderKeyRef.current = null;
     invalidateRequests();
     setAuthorityRevision(value => value + 1);
     setPage(1);
@@ -223,28 +275,28 @@ export function useWorkflowDefinitionBrowseSession(context: StudioEndpointContex
   useEffect(() => {
     const syncFromLocation = () => {
       const next = parseWorkflowDefinitionBrowseLocation(window.location.search);
-      const changed = next.search !== browseLocation.search
-        || workflowLibraryFilterKey(next) !== workflowLibraryFilterKey(browseLocation)
-        || next.viewId !== browseLocation.viewId
-        || JSON.stringify(next.columns) !== JSON.stringify(browseLocation.columns)
-        || next.listState !== browseLocation.listState
-        || workflowFolderSelectionKey(next.folderSelection) !== workflowFolderSelectionKey(browseLocation.folderSelection);
-      if (!changed) return;
+      const current = snapshotRef.current;
+      const saved = readHistoryEntry(next, current);
+      const changed = locationKey(next) !== current.locationKey;
+      if (!changed && (!saved || (saved.page === current.page && saved.pageSize === current.pageSize
+        && JSON.stringify(saved.continuationTokens) === JSON.stringify(current.continuationTokens)))) return;
 
       clearSearchTimer();
       invalidateRequests();
       setBrowseLocation(next);
       setSettledSearch(next.search);
       setSearchPending(false);
-      setPage(1);
-      setContinuationTokens({});
+      restoringFolderKeyRef.current = saved && saved.effectiveFolderKey !== current.effectiveFolderKey ? saved.effectiveFolderKey : null;
+      setPage(saved?.page ?? 1);
+      setPageSize(saved?.pageSize ?? current.pageSize);
+      setContinuationTokens(saved?.continuationTokens ?? {});
       setScopeRevision(value => value + 1);
       setRequestsPaused(false);
       setBlockedReason(null);
     };
     window.addEventListener("popstate", syncFromLocation);
     return () => window.removeEventListener("popstate", syncFromLocation);
-  }, [browseLocation, clearSearchTimer, invalidateRequests]);
+  }, [clearSearchTimer, invalidateRequests]);
 
   useEffect(() => {
     if (baseUrlRef.current === context.baseUrl) return;

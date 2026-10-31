@@ -15,7 +15,10 @@ internal sealed partial class EfWorkflowLibraryStore
         return new(row.Id, row.Name, row.Shared, row.OwnerId, content.Query, content.Columns, row.Revision, content.SchemaVersion);
     }
 
-    public async Task<IReadOnlyList<WorkflowLibraryView>> ListViewsAsync(string subjectId, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<WorkflowLibraryView>> ListViewsAsync(string subjectId, CancellationToken cancellationToken = default) =>
+        EfDesignSupport.ReadAsync("listing workflow views", () => ListViewsCoreAsync(subjectId, cancellationToken));
+
+    private async Task<IReadOnlyList<WorkflowLibraryView>> ListViewsCoreAsync(string subjectId, CancellationToken cancellationToken)
     {
         ValidateActor(subjectId); var hash = EfDesignSupport.LookupHash(subjectId);
         var rows = await Scoped(db.LibraryViews).Where(row => row.Shared || row.OwnerHash == hash && row.OwnerId == subjectId)

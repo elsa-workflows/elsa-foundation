@@ -4,11 +4,15 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed partial class EfWorkflowLibraryStore
 {
-    public async Task<IReadOnlyDictionary<string, string>> GetVersionLabelsAsync(IReadOnlyList<string> versionIds,
-        CancellationToken cancellationToken = default)
+    public Task<IReadOnlyDictionary<string, string>> GetVersionLabelsAsync(IReadOnlyList<string> versionIds,
+        CancellationToken cancellationToken = default) =>
+        EfDesignSupport.ReadAsync("reading workflow version labels", () => GetVersionLabelsCoreAsync(versionIds, cancellationToken));
+
+    private async Task<IReadOnlyDictionary<string, string>> GetVersionLabelsCoreAsync(IReadOnlyList<string> versionIds,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(versionIds);
-        if (versionIds.Count > 100 || versionIds.Any(string.IsNullOrWhiteSpace))
+        if (versionIds.Count > 100 || versionIds.Any(string.IsNullOrWhiteSpace) || versionIds.Any(id => id.Length > 128))
             throw new ArgumentException("Select at most 100 nonblank workflow version identities.");
         if (versionIds.Count == 0) return new Dictionary<string, string>(StringComparer.Ordinal);
         var distinct = versionIds.Distinct(StringComparer.Ordinal).ToArray();

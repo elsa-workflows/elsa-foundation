@@ -26,6 +26,7 @@ Risk-based tests follow ADR 0080 D1. The approved delivery includes behavioral t
 - A tenant hierarchy fence serializes hierarchy edits, placement and create-in-folder; transaction-time read-committed ancestry checks alone permit races.
 - New SQL page projection selects latest/draft/count without legacy all-version enrichment. Legacy unbounded list remains compatible.
 - API owns explicit folder/organization/tag/view/favorite routes, action permissions, server-derived personal subject and source-generated wire metadata under `.../Design/Api/`.
+- Hosts with resource-specific read rules implement `IWorkflowLibraryVisibilityPolicy`: its trusted bounded allow/deny identity scope is applied before counts/paging and binds the cursor. The scope is never request or saved-view data. A resource-handler host without query-policy integration fails closed before inventory reads; tenant/action-only hosts keep their ordinary tenant scope.
 - Studio owns a separate organization API/dialog/filter/view surface and integrates every query dimension into URL, request identity, cursor/selection and stale-response boundaries under `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/`.
 - Views store bounded schema-versioned query/columns; source-owned content can remain read-only while organization is independently authorized. Soft-deleted targets retain metadata but reject organization edits.
 - Bounded moves are full-selection atomic; tag bulk writes are per-target atomic with safe retries and outcomes. Attributable facts commit with the mutation.

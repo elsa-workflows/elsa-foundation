@@ -170,7 +170,10 @@ internal sealed partial class EfWorkflowLibraryStore(WorkflowsDesignDbContext db
         return ids.Select(key => Folder(index[key])).ToArray();
     }
 
-    public async Task<WorkflowOrganization?> GetOrganizationAsync(string definitionId, CancellationToken cancellationToken = default)
+    public Task<WorkflowOrganization?> GetOrganizationAsync(string definitionId, CancellationToken cancellationToken = default) =>
+        EfDesignSupport.ReadAsync("reading workflow organization", () => GetOrganizationCoreAsync(definitionId, cancellationToken));
+
+    private async Task<WorkflowOrganization?> GetOrganizationCoreAsync(string definitionId, CancellationToken cancellationToken)
     {
         var hash = DefinitionHash(definitionId);
         var definition = await DefinitionRows.AsNoTracking().SingleOrDefaultAsync(row => row.IdLookupHash == hash, cancellationToken);

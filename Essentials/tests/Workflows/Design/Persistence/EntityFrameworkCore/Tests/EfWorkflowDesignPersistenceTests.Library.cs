@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Tests;
 public sealed partial class EfWorkflowDesignPersistenceTests
 {
     private static ServiceProvider LibraryHost(string connection, string tenant = "tenant-a", LibraryCommands? commands = null,
-        IWorkflowActivationAuthority? authority = null, IDistributedLockProvider? locking = null)
+        IWorkflowActivationAuthority? authority = null, IDistributedLockProvider? locking = null, DbCommandInterceptor? failure = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton<IPayloadSerializer, TestSerializer>();
@@ -32,6 +32,7 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         if (authority is not null) services.AddSingleton(authority);
         services.AddWorkflowsDesignEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = connection });
         if (commands is not null) services.AddDbContext<WorkflowsDesignSqliteDbContext>(options => options.AddInterceptors(commands));
+        if (failure is not null) services.AddDbContext<WorkflowsDesignSqliteDbContext>(options => options.AddInterceptors(failure));
         return services.BuildServiceProvider();
     }
 
@@ -96,9 +97,16 @@ public sealed partial class EfWorkflowDesignPersistenceTests
             var bulk = new WorkflowTagBulkEdit([new("one", retained.Revision), new("two", "stale"), new("missing", "0")], [], [new(marker.Id)], "bulk-remove-critical");
             var outcomes = await library.EditTagsAsync(bulk, "alice");
             Assert.Equal(new[] { "success", "conflict", "not-found" }, outcomes.Select(outcome => outcome.Status));
+            var auditCount = await db.LibraryAudit.CountAsync(row => row.OperationKey == bulk.OperationKey);
             var repeated = await library.EditTagsAsync(bulk, "alice");
             Assert.Equal(outcomes[0].Revision, repeated[0].Revision);
+            Assert.Equal(auditCount, await db.LibraryAudit.CountAsync(row => row.OperationKey == bulk.OperationKey));
             definitionRevision = outcomes[0].Revision!;
+            var secondary = await library.CreateTagAsync(new("Secondary"), "alice");
+            await library.ReplaceTagsAsync("two", "0", [new(secondary.Id)], "alice", "first-two-tags");
+            var initialAudit = await db.LibraryAudit.SingleAsync(row => row.TargetId == "two" && row.Operation == "workflow.tags.replace");
+            using var beforeAudit = System.Text.Json.JsonDocument.Parse(initialAudit.BeforeJson);
+            Assert.Equal("0", beforeAudit.RootElement.GetProperty("revision").GetString());
             await Assert.ThrowsAsync<ArgumentException>(() => library.UpdateTagAsync(retired.Id,
                 new(retired.Name, Mode: "controlled", Values: [new("", "Yes")], Revision: retired.Revision), "alice"));
         }
@@ -202,6 +210,93 @@ public sealed partial class EfWorkflowDesignPersistenceTests
         public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(DbCommand command, CommandEventData eventData,
             InterceptionResult<object> result, CancellationToken cancellationToken = default)
         { Sql.Add(command.CommandText); return ValueTask.FromResult(result); }
+    }
+
+    [Fact]
+    public async Task Library_visibility_scope_filters_before_counts_and_paging_and_invalidates_old_policy_cursors()
+    {
+        await using var database = new TemporarySqliteDatabase("workflow-library-policy-scope"); await using var host = LibraryHost(database.ConnectionString);
+        using var scope = host.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>(); await db.Database.EnsureCreatedAsync();
+        db.Definitions.AddRange(new WorkflowDefinition { Id = "one", Name = "A", TenantId = "tenant-a" },
+            new WorkflowDefinition { Id = "two", Name = "B", TenantId = "tenant-a" }, new WorkflowDefinition { Id = "three", Name = "C", TenantId = "tenant-a" },
+            new WorkflowDefinition { Id = "four", Name = "D", TenantId = "tenant-a" }); await db.SaveChangesAsync();
+        var library = scope.ServiceProvider.GetRequiredService<IWorkflowLibraryStore>();
+        var policy = new WorkflowLibraryReadScope("policy-1", ["ONE", "two", "three"], ["two"]);
+        var first = await library.ListDefinitionsAsync(new(PageSize: 1), "alice", policy);
+        Assert.Equal(2, first.TotalCount); Assert.Equal("one", Assert.Single(first.Items).Definition.Id); Assert.NotNull(first.NextContinuationToken);
+        var next = await library.ListDefinitionsAsync(new(PageSize: 1, ContinuationToken: first.NextContinuationToken), "alice", policy);
+        Assert.Equal(2, next.TotalCount); Assert.Equal("three", Assert.Single(next.Items).Definition.Id);
+        await Assert.ThrowsAsync<ArgumentException>(() => library.ListDefinitionsAsync(new(PageSize: 1, ContinuationToken: first.NextContinuationToken), "alice", policy with { Revision = "policy-2" }));
+        await Assert.ThrowsAsync<ArgumentException>(() => library.ListDefinitionsAsync(new(PageSize: 1, ContinuationToken: first.NextContinuationToken), "alice", policy with { DeniedDefinitionIds = [] }));
+        Assert.Equal(0, (await library.ListDefinitionsAsync(new(), "alice", new WorkflowLibraryReadScope("empty", []))).TotalCount);
+        Assert.Equal("two", Assert.Single((await library.ListDefinitionsAsync(new(), "alice", new WorkflowLibraryReadScope("denied", DeniedDefinitionIds: ["one", "three", "four"]))).Items).Definition.Id);
+        await Assert.ThrowsAnyAsync<ArgumentException>(() => library.ListDefinitionsAsync(new(), "alice", new WorkflowLibraryReadScope("", [])));
+        await Assert.ThrowsAnyAsync<ArgumentException>(() => library.ListDefinitionsAsync(new(), "alice", new WorkflowLibraryReadScope("invalid", [null!])));
+        await Assert.ThrowsAnyAsync<ArgumentException>(() => library.ListDefinitionsAsync(new(), "alice", new WorkflowLibraryReadScope("overflow", Enumerable.Repeat("one", 10001).ToArray())));
+    }
+
+    [Fact]
+    public async Task Library_read_surfaces_translate_native_provider_failures_and_preserve_the_cause()
+    {
+        await using var database = new TemporarySqliteDatabase("workflow-library-read-failures"); var failure = new LibraryReadFailure();
+        await using var host = LibraryHost(database.ConnectionString, failure: failure); using var scope = host.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>(); await db.Database.EnsureCreatedAsync();
+        db.Definitions.Add(new WorkflowDefinition { Id = "one", Name = "One", TenantId = "tenant-a" }); await db.SaveChangesAsync();
+        var library = scope.ServiceProvider.GetRequiredService<IWorkflowLibraryStore>();
+        var folder = await library.CreateFolderAsync("Finance", null, "alice"); var tag = await library.CreateTagAsync(new("Critical"), "alice");
+        failure.Enabled = true;
+        Func<Task>[] reads = [() => library.ListFoldersAsync(null), () => library.GetFolderAsync(folder.Id), () => library.ListTagsAsync(),
+            () => library.GetTagAsync(tag.Id), () => library.ListViewsAsync("alice"), () => library.GetOrganizationAsync("one"),
+            () => library.ListDefinitionsAsync(new(), "alice"), () => library.GetVersionLabelsAsync(["version"])];
+        foreach (var read in reads)
+        {
+            var exception = await Assert.ThrowsAsync<Elsa.Workflows.Design.Persistence.Core.Exceptions.DesignPersistenceException>(read);
+            Assert.Equal(Elsa.Workflows.Design.Persistence.Core.Exceptions.DesignPersistenceFailureKind.Provider, exception.FailureKind);
+            Assert.Same(failure.Exception, exception.InnerException);
+        }
+    }
+
+    private sealed class LibraryReadFailure : DbCommandInterceptor
+    {
+        public bool Enabled { get; set; }
+        public Microsoft.Data.Sqlite.SqliteException Exception { get; } = new("The native provider is unavailable.", 14);
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default) => Enabled
+            ? ValueTask.FromException<InterceptionResult<DbDataReader>>(Exception) : ValueTask.FromResult(result);
+    }
+
+    [Fact]
+    public async Task Library_backend_reconfiguration_retains_unrelated_observers_and_rebinds_the_one_library_observer()
+    {
+        await using var firstDatabase = new TemporarySqliteDatabase("workflow-library-first-provider");
+        await using var secondDatabase = new TemporarySqliteDatabase("workflow-library-reconfigured-provider");
+        var services = new ServiceCollection();
+        services.AddSingleton<IPayloadSerializer, TestSerializer>(); services.AddSingleton<IDistributedLockProvider, TestLockProvider>();
+        services.AddSingleton<IPersistenceAccessContextAccessor>(new TestAccessor(PersistenceAccessContext.Scoped(new PersistenceScope("tenant-a"))));
+        services.AddScoped<IWorkflowTriggerIndexObserver, UnrelatedLibraryObserver>();
+        services.AddWorkflowsDesignEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = firstDatabase.ConnectionString });
+        string firstFolder;
+        await using (var firstHost = services.BuildServiceProvider())
+        {
+            using var scope = firstHost.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>(); await db.Database.EnsureCreatedAsync();
+            firstFolder = (await scope.ServiceProvider.GetRequiredService<IWorkflowLibraryStore>().CreateFolderAsync("First database", null, "alice")).Id;
+        }
+        services.AddWorkflowsDesignEntityFrameworkCore(new() { Provider = "Sqlite", ConnectionString = secondDatabase.ConnectionString });
+        await using var secondHost = services.BuildServiceProvider(); using var secondScope = secondHost.CreateScope();
+        var current = secondScope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>(); await current.Database.EnsureCreatedAsync();
+        Assert.Equal(secondDatabase.ConnectionString, current.Database.GetConnectionString());
+        var observers = secondScope.ServiceProvider.GetServices<IWorkflowTriggerIndexObserver>().ToArray();
+        Assert.Equal(2, observers.Length); Assert.Single(observers.OfType<UnrelatedLibraryObserver>());
+        Assert.Single(observers.OfType<WorkflowLibraryPublicationObserver>());
+        var library = secondScope.ServiceProvider.GetRequiredService<IWorkflowLibraryStore>();
+        Assert.Null(await library.GetFolderAsync(firstFolder));
+        Assert.Equal("Second database", (await library.CreateFolderAsync("Second database", null, "alice")).Name);
+        Assert.Same(library, secondScope.ServiceProvider.GetRequiredService<Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores.EfWorkflowLibraryStore>());
+    }
+
+    private sealed class UnrelatedLibraryObserver : IWorkflowTriggerIndexObserver
+    {
+        public ValueTask OnTriggersIndexedAsync(WorkflowTriggerIndexSnapshot snapshot, CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
     }
 
     [Fact]
@@ -341,6 +436,24 @@ public sealed partial class EfWorkflowDesignPersistenceTests
             public void Dispose() { if (!disposed) { disposed = true; owner.Held = false; } }
             public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
         }
+    }
+
+    [Fact]
+    public async Task Library_first_publication_preserves_the_virtual_initial_manual_revision()
+    {
+        await using var database = new TemporarySqliteDatabase("workflow-library-initial-publication-revision");
+        var locking = new LibraryFenceLock(); var authority = new LibraryAuthority(() => locking.Held) { Published = true };
+        await using var host = LibraryHost(database.ConnectionString, authority: authority, locking: locking);
+        using var scope = host.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<WorkflowsDesignDbContext>(); await db.Database.EnsureCreatedAsync();
+        db.Definitions.Add(new WorkflowDefinition { Id = "unorganized", Name = "Unorganized", TenantId = "tenant-a" }); await db.SaveChangesAsync();
+        var library = scope.ServiceProvider.GetRequiredService<IWorkflowLibraryStore>();
+        var initial = (await library.GetOrganizationAsync("unorganized"))!; Assert.Equal("0", initial.Revision);
+        var observer = Assert.Single(scope.ServiceProvider.GetServices<IWorkflowTriggerIndexObserver>());
+        await observer.OnTriggersIndexedAsync(new("triggerless-artifact", []) { DefinitionId = "unorganized", RequiresProjectionRefresh = true });
+        var published = (await library.GetOrganizationAsync("unorganized"))!;
+        Assert.Equal(initial.Revision, published.Revision); Assert.Null(published.FolderId); Assert.Empty(published.Tags);
+        var manual = await library.ReplaceTagsAsync("unorganized", initial.Revision, [], "alice", "initial-manual-edit");
+        Assert.NotEqual("0", manual.Revision);
     }
 
     private sealed class LibraryAuthority(Func<bool> holdingFence) : IWorkflowActivationAuthority

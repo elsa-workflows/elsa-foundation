@@ -10,6 +10,7 @@ const prefix = process.env.ELSA_LIBRARY_NAME ?? "Workflow library delivery";
 const folderName = `${prefix} finance`;
 const workflowName = `${prefix} payment`;
 const tagName = `${prefix} critical`;
+const teamName = `${prefix} owning team`;
 const viewName = `${prefix} published finance`;
 
 async function openLibrary(page: Page) {
@@ -64,7 +65,21 @@ test("organizes and queries a real workflow through folders, tags, publication, 
   const catalog = page.getByRole("dialog", { name: "Manage workflow tags", exact: true });
   await catalog.getByLabel("Tag name", { exact: true }).fill(tagName);
   await catalog.getByRole("button", { name: "Create tag", exact: true }).click();
-  await expect(catalog.getByRole("alert")).toHaveCount(0);
+  await expect(catalog.getByRole("status")).toContainText(`Saved tag ${tagName}`);
+  await catalog.getByLabel("Tag to manage", { exact: true }).selectOption("");
+  await catalog.getByLabel("Tag name", { exact: true }).fill(teamName);
+  await catalog.getByLabel("Tag kind", { exact: true }).selectOption("controlled");
+  await catalog.getByRole("button", { name: "Add controlled value", exact: true }).click();
+  await catalog.getByLabel("Value name 1", { exact: true }).fill("Finance");
+  await catalog.getByRole("button", { name: "Add controlled value", exact: true }).click();
+  await catalog.getByLabel("Value name 2", { exact: true }).fill("Operations");
+  const controlledResponse = page.waitForResponse(response => response.request().method() === "POST" &&
+    new URL(response.url()).pathname.endsWith("/tags"));
+  await catalog.getByRole("button", { name: "Create tag", exact: true }).click();
+  const controlledTagReceipt = await (await controlledResponse).json() as { values: { id: string; name: string }[] };
+  await expect(catalog.getByRole("status")).toContainText(`Saved tag ${teamName}`);
+  expect(controlledTagReceipt.values).toHaveLength(2);
+  expect(controlledTagReceipt.values.every(value => value.id.startsWith("value-"))).toBe(true);
   await catalog.getByRole("button", { name: "Close", exact: true }).click();
 
   await workflowRow(page).getByRole("button", { name: `Actions for ${workflowName}`, exact: true }).click();
@@ -72,6 +87,7 @@ test("organizes and queries a real workflow through folders, tags, publication, 
   const organization = page.getByRole("dialog", { name: `Organize ${workflowName}`, exact: true });
   await expect(organization).toContainText(folderName);
   await organization.getByRole("checkbox", { name: tagName, exact: true }).check();
+  await organization.getByRole("group", { name: `${teamName} · choose one`, exact: true }).getByRole("checkbox", { name: "Finance", exact: true }).check();
   await organization.getByRole("button", { name: "Save tags", exact: true }).click();
   await expect(organization).toBeHidden();
 
@@ -91,6 +107,7 @@ test("organizes and queries a real workflow through folders, tags, publication, 
   await workflowRow(page).getByRole("button", { name: `Actions for ${workflowName}`, exact: true }).click();
   await page.getByRole("menuitem", { name: "Organization", exact: true }).click();
   await expect(organization.getByRole("checkbox", { name: tagName, exact: true })).not.toBeChecked();
+  await expect(organization.getByRole("group", { name: `${teamName} · choose one`, exact: true }).getByRole("checkbox", { name: "Finance", exact: true })).toBeChecked();
   await organization.getByRole("checkbox", { name: tagName, exact: true }).check();
   await organization.getByRole("button", { name: "Save tags", exact: true }).click();
   await expect(organization).toBeHidden();
@@ -131,7 +148,7 @@ test("organizes and queries a real workflow through folders, tags, publication, 
   await expect(page).toHaveURL(savedUrl);
   await expect(workflowRow(page)).toBeVisible();
 
-  await testInfo.attach("real-library-identities", { body: JSON.stringify({ creation, details, editorUrl, savedUrl, bulkReceipt }, null, 2), contentType: "application/json" });
+  await testInfo.attach("real-library-identities", { body: JSON.stringify({ creation, details, editorUrl, savedUrl, bulkReceipt, controlledTagReceipt }, null, 2), contentType: "application/json" });
   await testInfo.attach("real-library-desktop", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
 });
 
@@ -145,6 +162,7 @@ test("reopens persisted library organization after the owned host restart", asyn
   const organization = page.getByRole("dialog", { name: `Organize ${workflowName}`, exact: true });
   await expect(organization).toContainText(folderName);
   await expect(organization.getByRole("checkbox", { name: tagName, exact: true })).toBeChecked();
+  await expect(organization.getByRole("group", { name: `${teamName} · choose one`, exact: true }).getByRole("checkbox", { name: "Finance", exact: true })).toBeChecked();
   await organization.getByRole("button", { name: "Close", exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByLabel("Saved workflow view", { exact: true })).toBeVisible();

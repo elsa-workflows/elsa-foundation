@@ -1,6 +1,7 @@
 import { describe, expect, it, onTestFinished, vi } from "vitest";
+import { authSessionStartedEvent } from "@elsa-workflows/studio-sdk";
 import {
-  click, definition, pagedDefinitionCapabilities, renderWorkflowRoute, response, row,
+  button, click, definition, pagedDefinitionCapabilities, renderWorkflowRoute, response, row, select,
   waitForCondition, waitForText
 } from "./workflowDefinitionTestHelpers";
 import { parseWorkflowDefinitionBrowseLocation, updateWorkflowDefinitionBrowseUrl, workflowLibraryFilterKey } from "../workflow-editor/workflowDefinitionBrowseLocation";
@@ -96,5 +97,44 @@ describe("workflow library query boundaries", () => {
     await click(container.querySelector("button") && Array.from(container.querySelectorAll("button")).find(item => item.textContent === "Clear organization filters")!);
     await waitForText(container, "Unfiltered workflow");
     expect(new URL(window.location.href).searchParams.has("favoritesOnly")).toBe(false);
+  });
+
+  it.each([false, true])("restores a tagged history entry's page and cursors only while its access scope is valid (invalidate=%s)", async invalidate => {
+    const requests: URL[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (!url.pathname.endsWith("definition-pages")) return response({ items: [] });
+      requests.push(url);
+      const token = url.searchParams.get("continuationToken");
+      const page = token === "tag-page-three" ? 3 : token === "tag-page-two" ? 2 : 1;
+      const scope = url.searchParams.has("favoritesOnly") ? "Favorite" : "Tagged";
+      return response({ items: [definition({ name: `${scope} page ${page}` })], nextContinuationToken: page < 3 ? `tag-page-${page === 1 ? "two" : "three"}` : null, totalCount: 75 });
+    });
+    const tagged = encodeURIComponent(JSON.stringify([{ tagId: "critical", operator: "exists" }]));
+    const { container } = await renderWorkflowRoute(`/workflows/definitions?tagFilters=${tagged}`, fetchMock, libraryCapabilities());
+    await waitForText(container, "Tagged page 1");
+    await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "25");
+    await waitForCondition(() => expect(requests.at(-1)?.searchParams.get("pageSize")).toBe("25"));
+    await click(button(container, "Next")); await waitForText(container, "Tagged page 2");
+    await click(button(container, "Next")); await waitForText(container, "Tagged page 3");
+    await click(button(container, "Favorites")); await waitForText(container, "Favorite page 1");
+    if (!invalidate) {
+      await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "50");
+      await waitForCondition(() => expect(requests.at(-1)?.searchParams.get("pageSize")).toBe("50"));
+    }
+    if (invalidate) {
+      window.dispatchEvent(new Event(authSessionStartedEvent));
+      await click(button(container, "Refresh"));
+      await waitForText(container, "Favorite page 1");
+    }
+    const beforeBack = requests.length;
+    window.history.back();
+    await waitForCondition(() => expect(requests.length).toBeGreaterThan(beforeBack));
+    const restored = requests.at(-1)!;
+    expect(restored.searchParams.get("pageSize")).toBe("25");
+    expect(restored.searchParams.get("continuationToken")).toBe(invalidate ? null : "tag-page-three");
+    expect(restored.searchParams.has("favoritesOnly")).toBe(false);
+    expect(JSON.parse(restored.searchParams.get("tagFilters")!)).toEqual([{ tagId: "critical", operator: "exists" }]);
+    await waitForText(container, `Tagged page ${invalidate ? 1 : 3}`);
   });
 });

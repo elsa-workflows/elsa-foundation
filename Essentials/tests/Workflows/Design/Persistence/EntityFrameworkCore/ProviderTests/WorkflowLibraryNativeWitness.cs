@@ -53,6 +53,12 @@ internal static class WorkflowLibraryNativeWitness
             Assert.Equal(1, first.Items.Concat(second.Items).Sum(item => item.VersionCount));
             var alpha = first.Items.Concat(second.Items).Single(item => item.Definition.Id == "alpha");
             Assert.Equal("draft-z ", alpha.DraftId); Assert.Equal("1.0.0", alpha.DraftSourceVersion);
+            var policy = new WorkflowLibraryReadScope("native-policy-1", ["ALPHA", "alpha "]);
+            var policyPage = await library.ListDefinitionsAsync(new(PageSize: 1), "alice", policy);
+            Assert.Equal(2, policyPage.TotalCount); Assert.NotNull(policyPage.NextContinuationToken);
+            await Assert.ThrowsAsync<ArgumentException>(() => library.ListDefinitionsAsync(new(PageSize: 1, ContinuationToken: policyPage.NextContinuationToken), "alice", policy with { Revision = "native-policy-2" }));
+            var reduced = await library.ListDefinitionsAsync(new(PageSize: 1), "alice", policy with { DeniedDefinitionIds = ["alpha "] });
+            Assert.Equal(1, reduced.TotalCount); Assert.Equal("alpha", Assert.Single(reduced.Items).Definition.Id); Assert.Null(reduced.NextContinuationToken);
             await library.SetFavoriteAsync("alpha", true, "alice");
             var view = await library.SaveViewAsync(null, new("Published finance", new(FolderId: root.Id, IncludeDescendants: true), Shared: true, Columns: ["name", "location"]), "alice", true);
             Assert.Equal(view.Id, Assert.Single(await library.ListViewsAsync("bob")).Id);

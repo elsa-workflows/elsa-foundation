@@ -13,15 +13,22 @@ internal sealed partial class EfWorkflowLibraryStore
     private static WorkflowTag Tag(WorkflowTagEntity row) => new(row.Id, row.Name, row.Description, row.Mode,
         row.Cardinality, row.Deprecated, row.Revision, Values(row));
 
-    public async Task<WorkflowTag?> GetTagAsync(string id, CancellationToken cancellationToken = default)
+    public Task<WorkflowTag?> GetTagAsync(string id, CancellationToken cancellationToken = default) =>
+        EfDesignSupport.ReadAsync("reading workflow tag", () => GetTagCoreAsync(id, cancellationToken));
+
+    private async Task<WorkflowTag?> GetTagCoreAsync(string id, CancellationToken cancellationToken)
     {
         ValidateStoredId(id, "tag-");
         var row = await TagRows.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);
         return row is null ? null : Tag(row);
     }
 
-    public async Task<WorkflowTagPage> ListTagsAsync(string? search = null, int pageSize = 50,
-        string? continuationToken = null, CancellationToken cancellationToken = default)
+    public Task<WorkflowTagPage> ListTagsAsync(string? search = null, int pageSize = 50,
+        string? continuationToken = null, CancellationToken cancellationToken = default) =>
+        EfDesignSupport.ReadAsync("listing workflow tags", () => ListTagsCoreAsync(search, pageSize, continuationToken, cancellationToken));
+
+    private async Task<WorkflowTagPage> ListTagsCoreAsync(string? search, int pageSize,
+        string? continuationToken, CancellationToken cancellationToken)
     {
         ValidatePage(pageSize);
         if (search?.Length > 256) throw new ArgumentException("Tag search cannot exceed 256 characters.");
@@ -170,7 +177,8 @@ internal sealed partial class EfWorkflowLibraryStore
             db.TagAssignments.Add(new WorkflowTagAssignmentEntity { Id = NewId("assignment-"), TenantId = Tenant,
                 DefinitionHash = hash, TagId = assignment.TagId, ValueKey = assignment.ValueId ?? "",
                 CreatedAt = DateTimeOffset.UtcNow, LastModifiedAt = DateTimeOffset.UtcNow });
-        row ??= NewOrganization(definition); var before = new { row.FolderId, tags = old, row.Revision };
+        var before = new { FolderId = row?.FolderId, tags = old, Revision = row?.Revision ?? "0" };
+        row ??= NewOrganization(definition);
         row.Revision = Revision(); row.LastModifiedAt = DateTimeOffset.UtcNow;
         // The definition's existing concurrency token makes a concurrent soft-delete compete
         // with this write, rather than allowing tags to land on a target deleted after preflight.

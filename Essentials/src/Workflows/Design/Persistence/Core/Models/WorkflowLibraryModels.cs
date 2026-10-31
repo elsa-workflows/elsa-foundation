@@ -32,6 +32,14 @@ public sealed record WorkflowLibraryDefinition(WorkflowDefinition Definition, Wo
 public sealed record WorkflowLibraryPage(IReadOnlyList<WorkflowLibraryDefinition> Items,
     string? NextContinuationToken, int TotalCount);
 
+/// <summary>
+/// Trusted query visibility supplied by host policy, never accepted from a client or saved view.
+/// Null allowed identities means the tenant inventory; exclusions further restrict that set.
+/// Revision changes whenever the policy's result or meaning changes, invalidating prior cursors.
+/// </summary>
+public sealed record WorkflowLibraryReadScope(string Revision,
+    IReadOnlyList<string>? AllowedDefinitionIds = null, IReadOnlyList<string>? DeniedDefinitionIds = null);
+
 public sealed record WorkflowTagEdit(string DefinitionId, string Revision);
 public sealed record WorkflowTagEditOutcome(string DefinitionId, string Status, string? Revision = null,
     string? Message = null);
@@ -42,8 +50,5 @@ public sealed record WorkflowLibraryView(string Id, string Name, bool Shared, st
     WorkflowLibraryQuery Query, IReadOnlyList<string> Columns, string Revision, int SchemaVersion = 1);
 public sealed record WorkflowLibraryViewInput(string Name, WorkflowLibraryQuery Query, bool Shared = false,
     IReadOnlyList<string>? Columns = null, string? Revision = null);
-public sealed record WorkflowOrganizationChange(string Id, string TargetId, string ActorId, string Operation,
-    DateTimeOffset Timestamp, string Before, string After, string OperationKey);
-
 /// <summary>A stale organization or hierarchy write; callers must reload before intentionally retrying.</summary>
 public sealed class WorkflowLibraryConflictException(string message) : Exception(message);

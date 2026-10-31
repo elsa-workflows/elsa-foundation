@@ -3,6 +3,8 @@ using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -41,6 +43,27 @@ internal static class WorkflowLibraryAccess
             await AllowsAsync(context, WorkflowDesignPermissions.Manage, resource, cancellationToken),
             await AllowsAsync(context, WorkflowDesignPermissions.ManageTags, resource, cancellationToken),
             await AllowsAsync(context, WorkflowDesignPermissions.ShareViews, resource, cancellationToken));
+
+    public static async ValueTask<WorkflowLibraryReadScope> ReadScopeAsync(HttpContext context, CancellationToken cancellationToken)
+    {
+        var policy = context.RequestServices.GetService<IWorkflowLibraryVisibilityPolicy>();
+        if (policy is null)
+        {
+            // A handler may hide a definition on a different page. Authorizing only returned rows
+            // would still reveal that hidden inventory through counts and continuation tokens.
+            if (context.RequestServices.GetServices<IPermissionResourceHandler>().Any())
+                throw new WorkflowLibraryAuthorizationException("This host must configure workflow library query visibility before browsing.");
+            return new("tenant-action-v1");
+        }
+        var scope = await policy.GetScopeAsync(context.User, cancellationToken);
+        static bool InvalidIdentities(IReadOnlyList<string>? ids) => ids is not null &&
+            (ids.Count > 10_000 || ids.Any(id => string.IsNullOrWhiteSpace(id) || id.Length > 128));
+        if (scope is null || string.IsNullOrWhiteSpace(scope.Revision) || scope.Revision.Length > 256 ||
+            scope.Revision.Any(char.IsControl) || InvalidIdentities(scope.AllowedDefinitionIds) || InvalidIdentities(scope.DeniedDefinitionIds))
+            throw new WorkflowLibraryAuthorizationException("The host did not provide a valid bounded workflow library visibility scope.");
+        // Snapshot a host-supplied mutable collection before it reaches cursor binding and SQL.
+        return scope with { AllowedDefinitionIds = scope.AllowedDefinitionIds?.ToArray(), DeniedDefinitionIds = scope.DeniedDefinitionIds?.ToArray() };
+    }
 
     public static void ValidateTargets(IReadOnlyList<string>? ids)
     {

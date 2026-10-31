@@ -7,8 +7,12 @@ namespace Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed partial class EfWorkflowLibraryStore
 {
-    public async Task<WorkflowFolderPage> ListFoldersAsync(string? parentId, int pageSize = 50,
-        string? continuationToken = null, CancellationToken cancellationToken = default)
+    public Task<WorkflowFolderPage> ListFoldersAsync(string? parentId, int pageSize = 50,
+        string? continuationToken = null, CancellationToken cancellationToken = default) =>
+        EfDesignSupport.ReadAsync("listing workflow folders", () => ListFoldersCoreAsync(parentId, pageSize, continuationToken, cancellationToken));
+
+    private async Task<WorkflowFolderPage> ListFoldersCoreAsync(string? parentId, int pageSize,
+        string? continuationToken, CancellationToken cancellationToken)
     {
         ValidatePage(pageSize);
         if (parentId is not null) await FolderAsync(parentId, cancellationToken);
@@ -23,7 +27,10 @@ internal sealed partial class EfWorkflowLibraryStore
             ? Encode(new(binding, page[^1].NormalizedName, page[^1].Id)) : null);
     }
 
-    public async Task<WorkflowFolderDetail?> GetFolderAsync(string id, CancellationToken cancellationToken = default)
+    public Task<WorkflowFolderDetail?> GetFolderAsync(string id, CancellationToken cancellationToken = default) =>
+        EfDesignSupport.ReadAsync("reading workflow folder", () => GetFolderCoreAsync(id, cancellationToken));
+
+    private async Task<WorkflowFolderDetail?> GetFolderCoreAsync(string id, CancellationToken cancellationToken)
     {
         ValidateStoredId(id, "folder-");
         var row = await FolderRows.AsNoTracking().SingleOrDefaultAsync(candidate => candidate.Id == id, cancellationToken);

@@ -136,7 +136,8 @@ public sealed class DefinitionPageEndpoint(IWorkflowLibraryStore? store = null,
         }
         var query = new WorkflowLibraryQuery(request.SearchTerm, request.State, request.FolderId, request.Unfiled,
             request.IncludeDescendants, filters, request.FavoritesOnly, request.Sort, request.PageSize, request.ContinuationToken, request.PublicationState);
-        var page = await library.ListDefinitionsAsync(query, actor, cancellationToken);
+        var readScope = await WorkflowLibraryAccess.ReadScopeAsync(HttpContext, cancellationToken);
+        var page = await library.ListDefinitionsAsync(query, actor, readScope, cancellationToken);
         foreach (var item in page.Items)
             await WorkflowLibraryAccess.RequireAsync(HttpContext, WorkflowDesignPermissions.Read, new WorkflowLibraryResource(DefinitionId: item.Definition.Id), cancellationToken);
         var definitionIds = page.Items.Select(item => item.Definition.Id).ToArray();

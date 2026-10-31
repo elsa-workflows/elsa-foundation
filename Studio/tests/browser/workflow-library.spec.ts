@@ -31,7 +31,7 @@ test("a workflow keeps its identity while tags, saved views and favorites organi
   await expect(payment).toBeVisible();
   const observations = await page.evaluate(() => (window as unknown as Window & { workflowLibraryRequests: { method: string; url: string; body?: unknown }[]; workflowLibraryDefinitions: unknown[] }).workflowLibraryRequests);
   const write = observations.find(request => request.method === "PUT" && request.url.includes("organization/collect-payment"));
-  expect(write?.body).toMatchObject({ revision: "1", tags: [{ tagId: "team", valueId: "billing" }, { tagId: "critical" }] });
+  expect(write?.body).toMatchObject({ revision: "1", tags: [{ tagId: "team", valueId: "value-billing" }, { tagId: "critical" }] });
   expect(observations.some(request => /draft|version|publish/.test(request.url))).toBe(false);
 });
 
@@ -47,8 +47,8 @@ test("bulk edits preview explicit identities and keep mixed outcomes visible", a
   await expect(dialog.getByRole("region", { name: "Bulk tag preview" })).toContainText("collect-payment");
   await expect(dialog.getByRole("region", { name: "Bulk tag preview" })).toContainText("welcome");
   await dialog.getByRole("button", { name: "Apply tag changes" }).click();
-  await expect(dialog.getByRole("status")).toContainText("success");
-  await expect(dialog.getByRole("status")).toContainText("conflict");
+  await expect(dialog.getByRole("status", { name: "Bulk tag results" })).toContainText("success");
+  await expect(dialog.getByRole("status", { name: "Bulk tag results" })).toContainText("conflict");
   const box = await dialog.boundingBox();
   expect(box!.x).toBeGreaterThanOrEqual(0); expect(box!.x + box!.width).toBeLessThanOrEqual(390);
   expect(box!.y).toBeGreaterThanOrEqual(0); expect(box!.y + box!.height).toBeLessThanOrEqual(780);
@@ -85,8 +85,21 @@ test("catalog management creates controlled values and retires their stable tag 
   await dialog.getByRole("button", { name: "Save tag", exact: true }).click();
   await expect(dialog.getByRole("status")).toContainText("Saved tag Region");
   const writes = await page.evaluate(() => (window as unknown as Window & { workflowLibraryRequests: { method: string; url: string; body?: unknown }[] }).workflowLibraryRequests.filter(request => request.method === "POST" || request.method === "PUT"));
-  const created = writes[0].body as { values: { id: string }[] };
-  expect(writes[1].body).toMatchObject({ deprecated: true, revision: "1", values: [{ id: created.values[0].id, name: "Europe" }] });
+  expect(writes[0].body).toMatchObject({ values: [{ id: "", name: "Europe" }] });
+  expect(writes[1].body).toMatchObject({ deprecated: true, revision: "1", values: [{ id: expect.stringMatching(/^value-/), name: "Europe" }] });
+});
+
+test("catalog management preserves existing server identities when adding controlled values", async ({ page }) => {
+  await page.goto("/?mode=workflow-library");
+  await page.getByRole("button", { name: "Manage tags", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Manage workflow tags" });
+  await dialog.getByRole("combobox", { name: "Tag to manage" }).selectOption("team");
+  await dialog.getByRole("button", { name: "Add controlled value" }).click();
+  await dialog.getByRole("textbox", { name: "Value name 3" }).fill("Operations");
+  await dialog.getByRole("button", { name: "Save tag", exact: true }).click();
+  await expect(dialog.getByRole("status")).toContainText("Saved tag Owning team");
+  const write = await page.evaluate(() => (window as unknown as { workflowLibraryRequests: { method: string; url: string; body?: unknown }[] }).workflowLibraryRequests.find(request => request.method === "PUT" && request.url.endsWith("/tags/team")));
+  expect(write?.body).toMatchObject({ revision: "1", values: [{ id: "value-billing", name: "Billing" }, { id: "value-support", name: "Support" }, { id: "", name: "Operations" }] });
 });
 
 test("reader permissions preserve browsing and private views while withholding mutations", async ({ page }) => {
@@ -118,4 +131,31 @@ test("bulk removal can clear different values of a single-valued classification 
   await expect(dialog.getByRole("region", { name: "Bulk tag preview" })).toContainText("Remove 2 tag assignments");
   await dialog.getByRole("button", { name: "Apply tag changes" }).click();
   await expect(dialog.getByRole("status")).toContainText("success");
+});
+
+test("browser Back restores the tagged query's cursor page and page size after toggling favorites", async ({ page }) => {
+  const filters = encodeURIComponent(JSON.stringify([{ tagId: "critical", operator: "exists" }]));
+  await page.goto(`/?mode=workflow-library&paging=history&tagFilters=${filters}`);
+  await expect(page.getByRole("row", { name: "Open workflow definition Tagged workflow page 1", exact: true })).toBeVisible();
+  await page.getByRole("combobox", { name: "Rows" }).selectOption("25");
+  await expect(page.locator(".wf-pagination-summary")).toHaveText("Showing 1-25 of 75");
+  await page.getByRole("button", { name: "Next page", exact: true }).click();
+  await expect(page.getByRole("row", { name: "Open workflow definition Tagged workflow page 2", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Next page", exact: true }).click();
+  await expect(page.getByRole("row", { name: "Open workflow definition Tagged workflow page 3", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Favorites", exact: true }).click();
+  await expect(page.getByRole("row", { name: "Open workflow definition Favorite workflow page 1", exact: true })).toBeVisible();
+  await page.getByRole("combobox", { name: "Rows" }).selectOption("50");
+  await expect(page.locator(".wf-pagination-summary")).toHaveText("Showing 1-50 of 75");
+  await page.goBack();
+  await expect(page.getByRole("row", { name: "Open workflow definition Tagged workflow page 3", exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Rows" })).toHaveValue("25");
+  await expect(page.locator(".wf-pagination-summary")).toHaveText("Showing 51-75 of 75");
+  const query = await page.evaluate(() => {
+    const requests = (window as unknown as { workflowLibraryRequests: { method: string; url: string }[] }).workflowLibraryRequests;
+    const url = requests.filter(request => request.method === "GET" && request.url.startsWith("/fixture/library/pages")).at(-1)!.url;
+    return Object.fromEntries(new URL(url, location.origin).searchParams);
+  });
+  expect(query).toMatchObject({ pageSize: "25", continuationToken: "tag-page-three", tagFilters: JSON.stringify([{ tagId: "critical", operator: "exists" }]) });
+  expect(query.favoritesOnly).toBeUndefined();
 });

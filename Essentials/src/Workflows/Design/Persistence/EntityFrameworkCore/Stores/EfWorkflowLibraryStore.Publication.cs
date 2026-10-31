@@ -21,8 +21,14 @@ internal sealed partial class EfWorkflowLibraryStore
             EfDesignSupport.EnsureDefinitionIdentity(definitionId, definition.Id, "library publication projection");
             var slots = await authority.ListByDefinitionAsync(definition.Id, token);
             var published = slots.Any(slot => slot.ActiveActivationId is not null);
-            var organization = await OrganizationRows.SingleOrDefaultAsync(row => row.DefinitionHash == hash, token)
-                ?? NewOrganization(definition);
+            var organization = await OrganizationRows.SingleOrDefaultAsync(row => row.DefinitionHash == hash, token);
+            if (organization is null)
+            {
+                organization = NewOrganization(definition);
+                // Persisting serving membership does not constitute a manual organization edit.
+                // Preserve the same initial revision a reader saw while this row was virtual.
+                organization.Revision = "0";
+            }
             organization.Published = published;
             return published;
         }, cancellationToken);

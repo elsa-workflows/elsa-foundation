@@ -25,6 +25,7 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 | `IDraftStateDiffEngine` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `DraftStateDiffEngine` (`.Persistence.Core`) | You want to change which mutation events are emitted or the match-key semantics. |
 | `IWorkflowDefinitionPublicationStateLookup` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `NullWorkflowDefinitionPublicationStateLookup` (`Elsa.Workflows.Design.Api.Services`); Publishing replaces with `WorkflowDefinitionPublicationStateLookup` | Publishing is composed and definition list/detail views should distinguish Retracted and Retired from Published. Design-only hosts keep the null-object and leave `publicationState` unset. |
 | `IWorkflowLibraryStore` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `EfWorkflowLibraryStore` (`Elsa.Workflows.Design.Persistence.EntityFrameworkCore`) | A host replaces the durable, tenant-scoped organization and bounded workflow-library read/write backend. |
+| `IWorkflowLibraryVisibilityPolicy` | Contract — `Elsa.Workflows.Design.Persistence.Core` | Host-supplied; no inferred resource-policy adapter | A host registers any permission resource handlers and must provide their complete workflow query visibility before counts and paging. |
 
 ### `IWorkflowLibraryStore` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
 
@@ -38,7 +39,7 @@ direct requests to optional routes.
 `CreateFolderAsync(name, parentId, actorId)`, `RenameFolderAsync(id, name, revision, actorId)`,
 `MoveFolderAsync(id, parentId, revision, actorId)`, `DeleteEmptyFolderAsync(id, revision, actorId)`,
 `MoveDefinitionsAsync(ids, folderId, actorId, operationKey)`,
-`ListDefinitionsAsync(query, subjectId)`, `GetVersionLabelsAsync(versionIds)`, `GetOrganizationAsync(definitionId)`,
+`ListDefinitionsAsync(query, subjectId, readScope)`, `GetVersionLabelsAsync(versionIds)`, `GetOrganizationAsync(definitionId)`,
 `ReplaceTagsAsync(definitionId, revision, tags, actorId, operationKey)`,
 `EditTagsAsync(edit, actorId)`, `ListTagsAsync(search, pageSize, cursor)`, `GetTagAsync(id)`,
 `CreateTagAsync(input, actorId)`, `UpdateTagAsync(id, input, actorId)`,
@@ -58,10 +59,20 @@ state or runtime behavior.
 
 The API derives actors through `IAuthSessionService` and evaluates permissions through
 `IPermissionAuthorizationService`, including per-target host resource handlers. Host handlers receive
-`WorkflowLibraryResource` with a definition or folder identity. A denied page fails closed without
-returning rows or counts; hosts that implement arbitrary per-definition visibility must integrate
-that policy into their query backend before returning a reduced authorized count. Filtering a
-completed page is not a supported substitute.
+`WorkflowLibraryResource` with a definition or folder identity. Before querying the library, the API
+obtains `WorkflowLibraryReadScope` from the host's `IWorkflowLibraryVisibilityPolicy.GetScopeAsync(
+ClaimsPrincipal, CancellationToken)`. The scope has a nonblank revision (at most 256 characters), an
+optional allow-list and an optional deny-list (each at most 10,000 bounded definition identities).
+The persistence query applies this trusted scope before counts, ordering, page selection and cursor
+generation. The provider binds the policy revision and identity membership into continuation tokens.
+Clients and saved views cannot supply or replace the scope.
+
+The host policy must cover all current resource visibility rules for the normalized principal and
+change revision when its meaning or result changes. If any `IPermissionResourceHandler` is registered
+and no query visibility policy is composed, the API refuses the page before invoking the store and
+returns neither rows, counts nor cursors. Hosts with only tenant/action authorization and no resource
+handlers use an unrestricted tenant query scope. Per-item authorization remains a second defense;
+filtering an already completed page is not a supported substitute for query visibility.
 
 Paged rows retain the library query's membership/count and enrich only that bounded page through
 `IWorkflowDefinitionPublicationStateLookup`. `GetVersionLabelsAsync` resolves at most 100 explicitly

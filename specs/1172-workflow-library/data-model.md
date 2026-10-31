@@ -9,5 +9,6 @@ All rows belong to the authoritative Workflow Design physical tenant scope. User
 - **View:** ID, server-derived owner, private/shared flag, name, bounded schema-versioned query/columns and revision.
 - **Favorite:** tenant/user/definition unique personal reference.
 - **Change record:** actor, target, timestamp, operation/idempotency identity and semantic before/after committed atomically.
+- **Read scope:** transient server-derived visibility restriction and policy revision, separate from saved queries and client inputs; bounded allowed/denied definition identities filter counts and paging and participate in cursor identity.
 
 Hierarchy admission and create/placement use one tenant fence. Manual organization survives reconciliation and soft delete/restore; deleted targets reject edits until restored.

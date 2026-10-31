@@ -55,16 +55,42 @@ internal sealed partial class EfWorkflowLibraryStore
         }
     }
 
-    public async Task<WorkflowLibraryPage> ListDefinitionsAsync(WorkflowLibraryQuery query, string? subjectId,
-        CancellationToken cancellationToken = default)
+    public Task<WorkflowLibraryPage> ListDefinitionsAsync(WorkflowLibraryQuery query, string? subjectId,
+        CancellationToken cancellationToken = default) =>
+        ListDefinitionsAsync(query, subjectId, new WorkflowLibraryReadScope("unrestricted"), cancellationToken);
+
+    public Task<WorkflowLibraryPage> ListDefinitionsAsync(WorkflowLibraryQuery query, string? subjectId,
+        WorkflowLibraryReadScope readScope, CancellationToken cancellationToken = default) =>
+        EfDesignSupport.ReadAsync("listing workflow library", () => ListDefinitionsCoreAsync(query, subjectId, readScope, cancellationToken));
+
+    private async Task<WorkflowLibraryPage> ListDefinitionsCoreAsync(WorkflowLibraryQuery query, string? subjectId,
+        WorkflowLibraryReadScope readScope, CancellationToken cancellationToken)
     {
         query = NormalizeQuery(query);
+        ArgumentNullException.ThrowIfNull(readScope); ArgumentException.ThrowIfNullOrWhiteSpace(readScope.Revision);
+        if (readScope.Revision.Length > 256 || (readScope.AllowedDefinitionIds?.Count ?? 0) + (readScope.DeniedDefinitionIds?.Count ?? 0) > 10000)
+            throw new ArgumentException("A workflow visibility scope supports a revision up to 256 characters and at most 10000 identities.");
+        string[]? NormalizeIdentities(IReadOnlyList<string>? ids)
+        {
+            if (ids is null) return null;
+            foreach (var id in ids)
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(id);
+                if (id.Length > 128) throw new ArgumentException("Workflow visibility identities cannot exceed 128 characters.");
+            }
+            return ids.Select(DefinitionHash).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        }
+        var allowed = NormalizeIdentities(readScope.AllowedDefinitionIds);
+        var denied = NormalizeIdentities(readScope.DeniedDefinitionIds) ?? [];
         if (subjectId is not null) ValidateActor(subjectId);
         if (query.FavoritesOnly && subjectId is null) throw new ArgumentException("Favorites require an authenticated personal subject.");
         await ValidateQueryReferencesAsync(query, cancellationToken);
-        var binding = Binding("definitions", query with { ContinuationToken = null }, subjectId);
+        var binding = Binding("definitions", new { query = query with { ContinuationToken = null },
+            readScope = new { readScope.Revision, allowed, denied } }, subjectId);
         var cursor = Decode(query.ContinuationToken, binding);
         var source = DefinitionRows.AsNoTracking();
+        if (allowed is not null) source = source.Where(row => allowed.Contains(row.IdLookupHash));
+        if (denied is { Length: > 0 }) source = source.Where(row => !denied.Contains(row.IdLookupHash));
         if (query.State == "active") source = source.Where(row => row.DeletedAt == null);
         else if (query.State == "deleted") source = source.Where(row => row.DeletedAt != null);
         if (query.SearchTerm is not null)

@@ -15,10 +15,10 @@ const date = "2026-10-31T12:00:00Z";
 const folder: WorkflowFolder = { id: "finance", parentId: null, name: "Finance", normalizedName: "FINANCE", createdAt: date, lastModifiedAt: date, revision: "1" };
 const tags: WorkflowTag[] = [
   { id: "critical", name: "Critical", mode: "marker", cardinality: "single", deprecated: false, revision: "1", values: [] },
-  { id: "team", name: "Owning team", mode: "controlled", cardinality: "single", deprecated: false, revision: "1", values: [{ id: "billing", name: "Billing" }, { id: "support", name: "Support" }] }
+  { id: "team", name: "Owning team", mode: "controlled", cardinality: "single", deprecated: false, revision: "1", values: [{ id: "value-billing", name: "Billing" }, { id: "value-support", name: "Support" }] }
 ];
 const definitions: WorkflowDefinitionSummary[] = [
-  { id: "collect-payment", name: "Collect overdue payment", createdAt: date, lastModifiedAt: date, draftId: "draft-payment", latestVersionId: "version-payment", versionCount: 1, publicationState: "published", folderId: folder.id, folderBreadcrumb: [{ id: folder.id, name: folder.name }], tags: [{ tagId: "team", valueId: "billing" }], favorite: false },
+  { id: "collect-payment", name: "Collect overdue payment", createdAt: date, lastModifiedAt: date, draftId: "draft-payment", latestVersionId: "version-payment", versionCount: 1, publicationState: "published", folderId: folder.id, folderBreadcrumb: [{ id: folder.id, name: folder.name }], tags: [{ tagId: "team", valueId: "value-billing" }], favorite: false },
   { id: "welcome", name: "Welcome new customer", createdAt: date, lastModifiedAt: date, draftId: "draft-welcome", versionCount: 0, folderId: null, folderBreadcrumb: [], tags: [], favorite: false }
 ];
 const organizations = new Map(definitions.map(definition => [definition.id, {
@@ -50,6 +50,14 @@ Object.assign(window, { workflowLibraryRequests: requests, workflowLibraryDefini
 
 const record = (method: string, url: string, body?: unknown) => { requests.push({ method, url, ...(body === undefined ? {} : { body }) }); };
 const revision = (value: string) => String(Number(value) + 1);
+function controlledValues(input: WorkflowTagInput, previous?: WorkflowTag) {
+  return (input.values ?? []).map(value => {
+    if (value.id && !previous?.values.some(existing => existing.id === value.id)) {
+      throw new Error("New controlled values must have an empty ID; the server allocates value-* identities.");
+    }
+    return { ...value, id: value.id || `value-fixture-${nextIdentity++}` };
+  });
+}
 const context = { baseUrl: `${window.location.origin}/`, http: {
   getJson: async (url: string) => {
     record("GET", url);
@@ -74,6 +82,17 @@ const context = { baseUrl: `${window.location.origin}/`, http: {
     }
     if (target.pathname === "/fixture/library/pages") {
       const query = target.searchParams;
+      if (parameters.get("paging") === "history") {
+        const cursor = query.get("continuationToken");
+        const page = cursor === "tag-page-three" ? 3 : cursor === "tag-page-two" ? 2 : 1;
+        const scope = query.get("favoritesOnly") === "true" ? "Favorite" : "Tagged";
+        const items = Array.from({ length: Number(query.get("pageSize") ?? 10) }, (_, index) => ({
+          ...definitions[0], id: `${scope.toLowerCase()}-${page}-${index}`,
+          name: index === 0 ? `${scope} workflow page ${page}` : `${scope} workflow ${page}-${index}`,
+          favorite: scope === "Favorite", tags: [{ tagId: "critical" }]
+        }));
+        return { items, nextContinuationToken: page < 3 ? `tag-page-${page === 1 ? "two" : "three"}` : null, totalCount: 75, permissions };
+      }
       let matches = definitions.filter(definition => !definition.deletedAt);
       if (query.get("folderId")) matches = matches.filter(definition => definition.folderId === query.get("folderId"));
       if (query.get("unfiled") === "true") matches = matches.filter(definition => !definition.folderId);
@@ -113,7 +132,7 @@ const context = { baseUrl: `${window.location.origin}/`, http: {
     if (target.pathname.includes("/tags/")) {
       const index = tags.findIndex(tag => tag.id === id); const request = body as WorkflowTagInput;
       if (tags[index].revision !== request.revision) throw new Error("Tag changed concurrently (409)");
-      tags[index] = { ...tags[index], ...request, deprecated: request.deprecated ?? false, values: request.values ?? [], revision: revision(tags[index].revision) };
+      tags[index] = { ...tags[index], ...request, deprecated: request.deprecated ?? false, values: controlledValues(request, tags[index]), revision: revision(tags[index].revision) };
       return structuredClone(tags[index]);
     }
     if (target.pathname.includes("/views/")) { const index = views.findIndex(view => view.id === id); views[index] = { ...views[index], ...(body as object), revision: revision(views[index].revision) }; return views[index]; }
@@ -122,7 +141,7 @@ const context = { baseUrl: `${window.location.origin}/`, http: {
   postJson: async (url: string, body: unknown) => {
     record("POST", url, structuredClone(body));
     if (readonly) throw new Error("Permission denied");
-    if (url.endsWith("/tags")) { const input = body as WorkflowTagInput; const created: WorkflowTag = { ...input, id: `tag-${nextIdentity++}`, deprecated: false, revision: "1", values: input.values ?? [] }; tags.push(created); return structuredClone(created); }
+    if (url.endsWith("/tags")) { const input = body as WorkflowTagInput; const created: WorkflowTag = { ...input, id: `tag-${nextIdentity++}`, deprecated: false, revision: "1", values: controlledValues(input) }; tags.push(created); return structuredClone(created); }
     if (url.endsWith("/views")) { const created: WorkflowLibraryView = { ...(body as WorkflowLibraryView), id: `view-${nextIdentity++}`, ownerId: "current-user", revision: "1", schemaVersion: 1, canEdit: true, canDelete: true }; views.push(created); return created; }
     if (url.endsWith("/bulk")) {
       const input = body as { targets: { definitionId: string; revision: string }[]; add: WorkflowTagAssignment[]; remove: WorkflowTagAssignment[] };

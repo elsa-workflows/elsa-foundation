@@ -6,6 +6,7 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Commands;
 using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Design.Persistence.Core.Services;
 using Elsa.Workflows.Runtime.Core.Extensions;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -75,9 +76,12 @@ public static class WorkflowsDesignEntityFrameworkCoreRegistration
         DesignPersistenceBackend.Register(services, new DesignPersistenceBackend(
             DesignPersistenceBackend.EntityFramework,
             services.Skip(registrationStart)
-                // Startup tasks are additive host services. The validator is idempotent, but the
-                // selected persistence backend must never claim exclusive ownership of the type.
-                .Where(descriptor => descriptor.ServiceType != typeof(IStartupTask))
+                // Startup tasks and trigger-index observers are additive host services. Their
+                // idempotent descriptors stay registered across provider replacement; the library
+                // observer resolves the newly owned concrete store in its new scope. A backend
+                // must never claim exclusive ownership of either shared service type.
+                .Where(descriptor => descriptor.ServiceType != typeof(IStartupTask) &&
+                    descriptor.ServiceType != typeof(IWorkflowTriggerIndexObserver))
                 .ToArray()));
         return services;
     }
