@@ -78,11 +78,14 @@ const manifest = JSON.parse(await readFile(resolve(outputRoot, ".vite/manifest.j
 // and limiting affordances to the proved explain/layout journeys reduced these to 387.22 / 378.34 kB.
 // Add 3 kB to the previous 384.50 / 376.00 kB limits for this measured ownership cost; entry, stylesheet,
 // individual-chunk and heavy-surface guards are unchanged. The parent tree was not rebuilt separately.
-// Workflow library organization (#3500): the same installed dependencies measure the exact parent
-// Definitions landing at 387,191 bytes on main dec598d99 and this candidate at 400,923 bytes. Canonical query/access
-// boundaries, scoped cursor-history restoration and list integration justify a 402,000-byte limit;
-// filters/editors/catalog remain deferred.
-// Every other budget is unchanged, and those three new surfaces join the eager-regression guards.
+// Workflow library organization (#3500): include the controls that load automatically after
+// capability discovery, not only the route's static imports. The corrected closure initially
+// measured 422,373 bytes against parent main dec598d99's 387,191-byte legacy closure. Moving
+// React Flow and graph-only node/port/edge styles to their shared rendering boundary brings
+// the complete supported-host landing below the existing 402,000-byte limit. Controls stay
+// immediately visible; organization/catalog dialogs remain action-loaded. Canvas closure and
+// computed-style guards preserve authoring, Activity Definition, BPMN and read-only rendering.
+// All budget limits and the 16 deferred-entry guards remain unchanged.
 const budgets = {
   entryJavaScript: 127_500,
   stylesheet: 185_000,
@@ -110,7 +113,10 @@ const deferredHeavySurfaces = [
   "workflowTestHttpAction"
 ];
 
-const excludedFromDefinitionsLanding = deferredHeavySurfaces.filter(name => name !== "WorkflowDefinitions");
+// Controls load automatically after capability discovery on a supported host.
+// They belong to its normal landing closure even though Vite emits a lazy entry.
+const excludedFromDefinitionsLanding = deferredHeavySurfaces.filter(name =>
+  name !== "WorkflowDefinitions" && name !== "WorkflowLibraryControls");
 const deferredInspectorSharedChunks = ["conversionSettings"];
 const variableTargetPickerMarker = "Loading visible variables… The current target is preserved.";
 const testDriveSetupMarker = "Test the captured draft with workflow inputs and one selected start.";
@@ -145,7 +151,7 @@ async function measure(files) {
   return result;
 }
 
-async function readJavaScript(files) {
+async function readAssetText(files) {
   return (await Promise.all([...files].map(file => readFile(resolve(outputRoot, file), "utf8")))).join("\n");
 }
 
@@ -181,9 +187,24 @@ const workflowPages = findChunk("pages");
 if (!workflowPages.isDynamicEntry) throw new Error("The workflow pages are no longer emitted as a deferred entry.");
 collectStaticEntryFiles(workflowPages, definitionsLandingFiles);
 collectStaticEntryFiles(findChunk("WorkflowDefinitions"), definitionsLandingFiles);
+collectStaticEntryFiles(findChunk("WorkflowLibraryControls"), definitionsLandingFiles);
 const upgradeLandingFiles = new Set(entryFiles);
 collectStaticFiles("src/ActivityUpgradeWorkbenchPage.tsx", upgradeLandingFiles);
 const workflowEditorFiles = collectStaticEntryFiles(findChunk("WorkflowEditor"));
+// Canvas styles belong to their renderers. Verify every authoring/read-only entry
+// downloads them, while a definition list downloads neither React Flow nor node CSS.
+const canvasStylesMarker = ".react-flow__renderer";
+const landingStyles = await readAssetText(filesWithExtension(definitionsLandingFiles, ".css"));
+if (landingStyles.includes(canvasStylesMarker)) {
+  throw new Error("React Flow canvas styles leaked into the Definitions landing closure.");
+}
+for (const name of ["WorkflowEditor", "ActivityGraphImplementationEditor", "WorkflowExecutableInspector", "WorkflowInstances"]) {
+  const files = collectStaticEntryFiles(findChunk(name));
+  const styles = await readAssetText(filesWithExtension(files, ".css"));
+  if (!styles.includes(canvasStylesMarker) || !styles.includes(".wf-node{")) {
+    throw new Error(`${name} is missing the shared React Flow or workflow-node styles.`);
+  }
+}
 const entryJavaScriptFiles = filesWithExtension(entryFiles, ".js");
 const stylesheetFiles = filesWithExtension(entryFiles, ".css");
 const definitionsLandingJavaScriptFiles = filesWithExtension(definitionsLandingFiles, ".js");
@@ -210,8 +231,8 @@ for (const chunkName of deferredInspectorSharedChunks) {
 }
 
 const [authenticatedLandingJavaScript, workflowEditorJavaScript] = await Promise.all([
-  readJavaScript(authenticatedLandingJavaScriptFiles),
-  readJavaScript(workflowEditorJavaScriptFiles)
+  readAssetText(authenticatedLandingJavaScriptFiles),
+  readAssetText(workflowEditorJavaScriptFiles)
 ]);
 if (!workflowEditorJavaScript.includes(variableTargetPickerMarker)) {
   throw new Error("The Workflow Editor closure is missing the variable-target picker.");
@@ -236,7 +257,7 @@ if (authenticatedLandingJavaScript.includes(httpStarterMarker)) {
 }
 
 const activityIconTableMarker = "FlagTriangleRight";
-if (await readJavaScript(entryJavaScriptFiles).then(source => source.includes(activityIconTableMarker))) {
+if (await readAssetText(entryJavaScriptFiles).then(source => source.includes(activityIconTableMarker))) {
   throw new Error("The activity icon table leaked into the Workflows JavaScript entry.");
 }
 if (authenticatedLandingJavaScript.includes(activityIconTableMarker)) {
@@ -267,7 +288,7 @@ const [entrySize, stylesheetSize, definitionsLandingSize, definitionsLandingTota
 ]);
 
 const jsFiles = [...new Set(Object.values(manifest).map(entry => entry.file).filter(file => file.endsWith(".js")))];
-const allJavaScript = await readJavaScript(jsFiles);
+const allJavaScript = await readAssetText(jsFiles);
 if (!allJavaScript.includes(testDriveSetupMarker)) {
   throw new Error("The Test Drive setup panel is missing from the Workflows bundle.");
 }
