@@ -104,6 +104,21 @@ describe("activity property values", () => {
     expect(definition?.resultType.alias).not.toContain("System.Private.CoreLib");
   });
 
+  it("preserves separators between nested generic arguments while removing their assembly qualifiers", () => {
+    const definition = withWorkflowInputExpressionArgument(
+      "args.Orders",
+      "JavaScript",
+      {
+        ...textDescriptor,
+        typeName: "System.Collections.Generic.List`1[[System.Collections.Generic.Dictionary`2[[System.String, System.Private.CoreLib],[System.Int32, System.Private.CoreLib]], System.Private.CoreLib]], System.Private.CoreLib"
+      } as StudioActivityInputDescriptor,
+      { referenceKey: "input-orders", name: "Orders", displayName: "Orders" } as WorkflowInput
+    );
+
+    expect(definition?.resultType.alias).toBe("System.Collections.Generic.List`1[[System.Collections.Generic.Dictionary`2[[System.String],[System.Int32]]]]");
+    expect(definition?.resultType.alias).not.toContain("System.Private.CoreLib");
+  });
+
   it("refuses to replace a JavaScript argument already bound to another source", () => {
     const definition = {
       language: "JavaScript",

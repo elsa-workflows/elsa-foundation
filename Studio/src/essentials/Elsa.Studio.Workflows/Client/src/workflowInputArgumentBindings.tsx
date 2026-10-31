@@ -67,11 +67,12 @@ function portableResultType(input: StudioActivityInputDescriptor): Record<string
 }
 
 function stripAssemblyQualifiers(typeName: string): string {
+  const trimmed = typeName.trim();
   let result = "";
   let depth = 0;
 
-  for (let index = 0; index < typeName.length; index++) {
-    const char = typeName[index];
+  for (let index = 0; index < trimmed.length; index++) {
+    const char = trimmed[index];
     if (char === "[") {
       depth++;
       result += char;
@@ -80,23 +81,78 @@ function stripAssemblyQualifiers(typeName: string): string {
       result += char;
     } else if (char === "," && depth === 0) {
       break;
-    } else if (char === "," && depth >= 2) {
-      let nestedDepth = depth;
-      let end = index + 1;
-      for (; end < typeName.length; end++) {
-        if (typeName[end] === "[") nestedDepth++;
-        else if (typeName[end] === "]") {
-          if (nestedDepth === depth) break;
-          nestedDepth--;
-        }
-      }
-      index = end - 1;
     } else {
       result += char;
     }
   }
 
-  return result.trim();
+  return stripGenericArgumentAssemblyQualifiers(result.trim());
+}
+
+function stripGenericArgumentAssemblyQualifiers(typeName: string): string {
+  let result = "";
+
+  for (let index = 0; index < typeName.length; index++) {
+    if (typeName[index] !== "`") {
+      result += typeName[index];
+      continue;
+    }
+
+    let open = index + 1;
+    while (open < typeName.length && /\d/.test(typeName[open]!)) open++;
+    if (open === index + 1 || typeName[open] !== "[") {
+      result += typeName[index];
+      continue;
+    }
+
+    const close = findMatchingBracket(typeName, open);
+    if (close < 0) {
+      result += typeName.slice(index);
+      break;
+    }
+
+    const arguments_ = splitGenericArguments(typeName.slice(open + 1, close)).map(argument => {
+      const trimmed = argument.trim();
+      if (isBracketedTypeArgument(trimmed)) {
+        return `[${stripAssemblyQualifiers(trimmed.slice(1, -1))}]`;
+      }
+      return stripAssemblyQualifiers(trimmed);
+    });
+    result += `${typeName.slice(index, open + 1)}${arguments_.join(",")}]`;
+    index = close;
+  }
+
+  return result;
+}
+
+function splitGenericArguments(text: string): string[] {
+  const arguments_: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index];
+    if (char === "[") depth++;
+    else if (char === "]") depth--;
+    else if (char === "," && depth === 0) {
+      arguments_.push(text.slice(start, index));
+      start = index + 1;
+    }
+  }
+  arguments_.push(text.slice(start));
+  return arguments_.filter(argument => argument.trim().length > 0);
+}
+
+function findMatchingBracket(text: string, open: number): number {
+  let depth = 0;
+  for (let index = open; index < text.length; index++) {
+    if (text[index] === "[") depth++;
+    else if (text[index] === "]" && --depth === 0) return index;
+  }
+  return -1;
+}
+
+function isBracketedTypeArgument(text: string): boolean {
+  return text.startsWith("[") && findMatchingBracket(text, 0) === text.length - 1;
 }
 
 interface WorkflowInputArgumentBindingsProps {
