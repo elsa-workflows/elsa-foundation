@@ -45,8 +45,13 @@ also requires M3/M5/M7 evidence.
 **Independent test**: Restart between turns/acceptance/delivery, force scope/revision/fence/uncertainty
 and cancellation races, and verify journal and process independently.
 
-- [ ] T014 [US3] Implement durable existing `IConnectionRepository` semantics in `Essentials/src/Connections/Persistence/EntityFrameworkCore/`, including four provider mappings/migrations, consumer-owned DbContext, TryAdd/version-CAS/conditional-delete and secret-reference behavior.
-- [ ] T015 [US3] Prove restart/concurrent save/revoke/create rollback/secret-reference isolation and HTTP connection regressions in `Essentials/tests/Connections/Persistence/EntityFrameworkCore/`; publish real durable backend capability through Connections Core.
+T014–T015 are locally implemented/qualified by prerequisite [#3578](https://github.com/elsa-workflows/elsa-foundation/issues/3578)
+under existing Connections owner #2854. Their checks record source/package qualification; required
+CI, review/merge and resulting-main qualification remain open. They do not establish M3 specialist
+execution or later product acceptance.
+
+- [x] T014 [US3] Implement durable existing `IConnectionRepository` semantics in `Essentials/src/Connections/Persistence/EntityFrameworkCore/`, including four provider mappings/migrations, consumer-owned DbContext, TryAdd/version-CAS/conditional-delete and secret-reference behavior.
+- [x] T015 [US3] Prove restart/concurrent save/revoke/create rollback/secret-reference isolation and HTTP connection regressions in `Essentials/tests/Connections/Persistence/EntityFrameworkCore/`; publish real durable backend capability through Connections Core.
 - [ ] T016 [US3] Implement concrete model connection/client/capability contributors in `Extensions/Agent/src/Specialists/Anthropic/` and `Extensions/Agent/src/Specialists/AzureOpenAI/`, with point-of-use auth, allowed hosts, provider setting/schema support and no Weaver harness activation.
 - [ ] T017 [US3] Test actual provider SDK request/options/response loss/disabled opaque retries and capability drift using protocol servers in `Extensions/Agent/tests/Specialists/Providers/`; count physical requests rather than only outer agent runs.
 - [ ] T018 [US3] Implement conversation/turn/evaluation EF records, CQS/CAS/unexpired fencing and four provider migrations in `Extensions/Agent/src/Specialists/Persistence/EntityFrameworkCore/`; preserve the model in `data-model.md`.
