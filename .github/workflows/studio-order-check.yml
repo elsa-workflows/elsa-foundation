@@ -1,0 +1,60 @@
+name: Studio test order checks
+
+# Keep the normal unit, browser, package and .NET checks on pull requests and main.
+# Repeat the complete Workflows unit suite nightly, on demand and when this workflow changes.
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/studio-order-check.yml']
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: studio-order-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.event_name == 'schedule' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+jobs:
+  shuffled-unit-tests:
+    name: Workflows unit tests (three shuffled orders)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: Studio/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: Studio/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: Studio
+
+      - name: Unit tests (Workflows, shuffled)
+        working-directory: Studio/src/essentials/Elsa.Studio.Workflows/Client
+        env:
+          SHUFFLE_SEEDS: '1 11 29'
+        run: |
+          for seed in $SHUFFLE_SEEDS; do
+            echo "::group::Shuffle seed $seed"
+            if ! pnpm exec vitest run --sequence.shuffle --sequence.seed="$seed"; then
+              echo "::endgroup::"
+              echo "::error::Order-dependent test failure on shuffle seed $seed. Reproduce locally with: pnpm --filter @elsa-workflows/studio-workflows exec vitest run --sequence.shuffle --sequence.seed=$seed"
+              exit 1
+            fi
+            echo "::endgroup::"
+          done
