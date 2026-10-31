@@ -277,7 +277,7 @@ internal sealed class BpmnModelRuntime(IWorkflowExecutableStore materials, IWork
             {
                 RuntimeModelExecutionCommand? command;
                 try { command = work.Payload?.Deserialize<RuntimeModelExecutionCommand>(Web); }
-                catch (JsonException exception)
+                catch (Exception exception) when (exception is JsonException or ArgumentException)
                 {
                     throw new BpmnModelValidationException($"BPMN execution '{executionId}', request '{requestId}' has invalid owned queued-command JSON in work '{work.WorkItemId}'.", exception);
                 }

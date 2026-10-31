@@ -56,10 +56,15 @@ internal sealed class BpmnEmbeddingDelivery(BpmnEmbeddingBoundary boundary, Bpmn
             if (source.Intent.WorkflowExecutionId != invocation.NativeExecutionId || source.Intent.ActivityExecutionId != invocation.NativeInvocationId ||
                 !source.Intent.IsEquivalentTo(BpmnEmbeddingCheckpointEnricher.Intent(invocation, source.Intent.Kind == BpmnEmbeddingBoundary.CancelKind, source.Intent.RecordedAt)))
                 throw BpmnEmbeddingJson.Invalid();
-            if (await reader.FindAsync(invocation.ExecutionId, cancellationToken) is { } retained)
+            if (await reader.FindAsync(invocation.ExecutionId, cancellationToken) is not null)
             {
-                await boundary.RequireModelAsync(invocation, cancellationToken);
-                if (source.Intent.Kind == BpmnEmbeddingBoundary.StartKind || retained.TerminalResult is not null) return;
+                var retained = await boundary.RequireModelAsync(invocation, cancellationToken);
+                if (source.Intent.Kind == BpmnEmbeddingBoundary.StartKind) return;
+                if (retained.TerminalResult is not null)
+                {
+                    BpmnEmbeddingBoundary.RequireWorkerCancellationSettled(retained);
+                    return;
+                }
             }
             inputKind = source.Intent.Kind == BpmnEmbeddingBoundary.StartKind ? "start-embedded" : "cancel-embedded";
         }
