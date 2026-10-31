@@ -27,7 +27,7 @@ const media = (matches: Record<string, boolean>) => (query: string) => ({ matche
 describe("appearance model", () => {
   it("defaults to the configured theme, system mode and theme navigation", () => {
     expect(readAppearancePreferences(memoryStorage())).toEqual(defaultAppearancePreferences);
-    expect(defaultAppearancePreferences).toEqual({ themeId: null, workspaceStyle: null, colorSchemeId: null, mode: "system", navigation: "theme" });
+    expect(defaultAppearancePreferences).toEqual({ themeId: null, workspaceStyle: "linen", colorSchemeId: null, mode: "system", navigation: "theme" });
   });
 
   it("reads the existing storage keys so earlier choices survive", () => {

@@ -284,3 +284,57 @@ html[data-workspace-style][data-theme-appearance="high-contrast"] {
 html[data-workspace-style][data-theme-appearance="high-contrast"] :is(.studio-button, .settings-radio-card, .sidebar-environment) {
   border: 1px solid var(--studio-edge-control);
 }
+
+/* Linen: the same modular workbench with soft edges and a quiet contrast in the chrome. */
+html[data-workspace-style="linen"] {
+  --studio-canvas: color-mix(in srgb, var(--studio-panel) 60%, var(--studio-bg));
+  --studio-workspace-page-background: linear-gradient(130deg, color-mix(in srgb, var(--studio-accent) 3%, var(--studio-bg)), var(--studio-bg) 48%);
+  --studio-workspace-panel-background: linear-gradient(155deg, color-mix(in srgb, var(--studio-accent) 2%, var(--studio-panel)), var(--studio-panel) 60%);
+}
+
+html[data-workspace-style="linen"] .studio-shell { background: var(--studio-workspace-page-background); }
+html[data-workspace-style="linen"] .sidebar {
+  --sidebar: var(--studio-nav-bg);
+  --sidebar-foreground: var(--studio-nav-text);
+  --sidebar-active: var(--studio-nav-active);
+  --sidebar-active-foreground: var(--studio-nav-active-text);
+  --studio-text: var(--studio-nav-text);
+  --studio-text-muted: var(--studio-nav-muted);
+  --foreground: var(--studio-nav-text);
+  --muted-foreground: var(--studio-nav-muted);
+  --studio-surface-muted: color-mix(in srgb, var(--studio-nav-text) 7%, var(--studio-nav-bg));
+  --studio-surface: var(--studio-nav-bg);
+  --studio-accent-soft: var(--studio-nav-active);
+  --studio-focus: var(--studio-nav-text);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--studio-nav-text) 3%, var(--studio-nav-bg)), var(--studio-nav-bg) 65%);
+  color: var(--studio-nav-text);
+  padding: 22px 12px 14px;
+}
+html[data-workspace-style="linen"] .brand { padding: 4px; gap: 10px; }
+html[data-workspace-style="linen"] .brand strong { font-size: 14px; overflow-wrap: anywhere; }
+html[data-workspace-style="linen"] :is(.brand small, .nav-heading) { opacity: 1; }
+html[data-workspace-style="linen"] .nav-heading { font-size: 10px; margin-top: 22px; }
+html[data-workspace-style="linen"] :is(.nav-section a.active, .nav-section a.nav-child.active, .nav-section a:hover) { color: var(--studio-nav-active-text); background: var(--studio-nav-active); }
+html[data-workspace-style="linen"] .nav-section a { min-height: 38px; }
+html[data-workspace-style="linen"] .sidebar .sidebar-collapse-toggle { color: var(--studio-nav-text); }
+html[data-workspace-style="linen"] .sidebar-account .user-menu-button { color: var(--studio-nav-text); }
+html[data-workspace-style="linen"] :is(.sidebar-environment, .sidebar-search) { border: 1px solid color-mix(in srgb, var(--studio-nav-text) 13%, transparent); }
+html[data-workspace-style="linen"] .main-frame { min-width: 0; background: transparent; }
+html[data-workspace-style="linen"] :is(.topbar, .content) { background: transparent; }
+html[data-workspace-style="linen"] .topbar { min-height: 58px; }
+html[data-workspace-style="linen"] :is(.settings-card, .settings-section-list) { background: var(--studio-workspace-panel-background); border: 1px solid var(--studio-edge-subtle); border-radius: var(--studio-radius-lg); padding: 24px; }
+html[data-workspace-style="linen"] :is(.settings-radio-card, .studio-input, .studio-select) { border-radius: var(--studio-radius); }
+html[data-workspace-style="linen"] .workspace-style-preview[data-style="linen"] i:first-child { background: var(--studio-nav-bg); }
+html[data-workspace-style="linen"][data-theme-appearance="high-contrast"] { --studio-workspace-page-background: var(--studio-bg); --studio-workspace-panel-background: var(--studio-panel); }
+html[data-workspace-style="linen"][data-theme-appearance="high-contrast"] .sidebar { background: var(--studio-nav-bg); }
+@media (min-width: 1025px) {
+  html[data-workspace-style="linen"] .studio-shell { grid-template-columns: 208px minmax(0, 1fr); }
+  html[data-workspace-style="linen"][data-nav-mode="top"] .studio-shell { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-workspace-style="linen"] :is(.sidebar, .nav-section a, .studio-button) { transition: none; }
+}
+html[data-workspace-style="linen"] .nav-section a:hover:not(.active) {
+  background: color-mix(in srgb, var(--studio-nav-text) 8%, var(--studio-nav-bg));
+  color: var(--studio-nav-text);
+}
