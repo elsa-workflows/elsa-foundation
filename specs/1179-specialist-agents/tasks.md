@@ -18,6 +18,10 @@ proof covers plain registration; add a feature-specific test only where wiring h
 - [ ] T003 Implement shared bounded JsonSchema.Net validation without a Design dependency in `Extensions/Agent/src/Specialists/JsonSchema/`, plus typed contract-to-schema compilation in `Extensions/Agent/src/Specialists/Design/Services/SpecialistSchemaCompiler.cs`; test malformed/remote references, required/null/unknown members and compatible field constraints.
 - [ ] T004 Qualify the normal central MEAI10.10.1/MAF1.27.0 graph in `Directory.Packages.props` and owned `packages.lock.json` files, including existing `Extensions/Agent/tests/` suites, actual CShells/shared-assembly/package closure and reviewed public/nuspec changes.
 
+The central dependency enabler[#3544](https://github.com/elsa-workflows/elsa-foundation/issues/3544)
+promotes the normal MEAI pin/locks and current Agent compatibility. T004 stays open until the later
+actual production specialist MAF runtime/package closure is qualified.
+
 ## Phase 2 — Author, publish and execute the first fresh specialist (US1; M2)
 
 **Goal**: A real published contract with the final facade/worker shape, not a throwaway inline path.
