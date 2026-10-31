@@ -16,7 +16,7 @@ Each preparation uses an isolated engine registry; no process-wide schema cache 
 
 The generic activity contract owns required/nullability/type declarations. Constraint keys are opaque
 member reference keys; public `Name` values become JSON field names. Output names that overlap another
-output's dotted-path root, or collapse to an empty path, are refused to keep native projection unambiguous. A constraint may refine a public
+output's dotted-path root ignoring case, use the reserved `$` whole-result name, or collapse to an empty path, are refused to keep native projection unambiguous. A constraint may refine a public
 type, never widen it. Runtime validation also checks the declared native conversion (for example Guid,
 DateTimeOffset and bounded integers); a schema-valid string alone does not establish that conversion.
 

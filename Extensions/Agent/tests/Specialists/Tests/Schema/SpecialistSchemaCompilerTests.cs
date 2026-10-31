@@ -111,6 +111,9 @@ public sealed class SpecialistSchemaCompilerTests
 
     [Theory]
     [InlineData("Article.body")]
+    [InlineData("article.body")]
+    [InlineData("article")]
+    [InlineData("$")]
     [InlineData("Article..body")]
     [InlineData("Article.")]
     [InlineData(".")]

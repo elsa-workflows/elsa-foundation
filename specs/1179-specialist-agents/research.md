@@ -290,7 +290,7 @@ Authoring consumes `ISpecialistModelCapabilitiesSource`; execution consumes
 `ISpecialistModelClientFactory`. Metadata-only contributors no longer implement a throwing runtime
 method. The shared JSON library is an internal helper with scoped registrations in each consuming
 feature, without a feature identity of its own. Journal authentication failures retain their original
-exception as the cause while exposing a fixed business message. The whole specialist suite now passes
+exception as the cause while exposing a fixed business message. The first correction suite passed
 105 cases, including explicit-null and encryption-required input refusal before opening a client.
 
 The first immutable package run at `f3d5cb2` failed at Author restore, after actual product and model
@@ -300,3 +300,21 @@ under warnings-as-errors. The fixture now derives the existing native bundle ver
 producer and uses the framework's logging reference. The failed receipt is retained; a new immutable
 run must qualify the corrected head. This is a consumer-configuration correction, not a product package
 or final support-matrix pass.
+
+
+The second review found case-insensitive projection aliases and the reserved whole-result name,
+additional parser wrappers losing their cause, and root-variable capture destinations whose stronger
+policy was discovered after dispatch. Before-fix native/schema cases failed four times while the
+ordinary sensitive capture completed. Publication now refuses ambiguous names ignoring case and `$`.
+The runtime reads capture policies from the scoped committed root frame at entry and on the worker's
+native binding checks; encryption-required or withheld destinations refuse before opening a client.
+The model and descriptor parser wrappers retain their original JsonException causes.
+
+The whole specialist suite passes 116 cases. Added native cases establish ordinary sensitivity with
+redacted inspection evidence, secret business-input refusal, result/projection encryption-policy
+refusal and sensitive-versus-encryption-required root captures. Result-policy cases seed a changed
+runtime contract as an artifact backstop; the current generic authoring contract has no policy fields.
+These cases do not claim a new public specialist policy editor or the final support matrix. The
+architecture suite passed all 592 checks after the new metadata interface was tracked; normal maps,
+locked restore and all 163 catalog links also passed. The first architecture run's sole untracked-link
+failure is retained separately. Final package qualification and independent review remain pending.

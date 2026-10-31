@@ -68,9 +68,9 @@ internal sealed class SpecialistModelRunner(IEnumerable<ISpecialistModelClientFa
             using var document = JsonDocument.Parse(response.Text, new JsonDocumentOptions { MaxDepth = SpecialistSchemaValidator.MaximumDepth });
             result = document.RootElement.Clone();
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
-            throw Failure("specialist.result.json", "The model result is not valid bounded JSON.");
+            throw Failure("specialist.result.json", "The model result is not valid bounded JSON.", exception);
         }
         if (resultSchema.Validate(result).Count != 0 || SpecialistWireTypes.Validate(result,
                 request.Contract.Result.Projections.Values.Select(x => new SpecialistJsonMember(x.Path, x.Type.Alias, x.Type.CollectionKind, x.IsRequired,

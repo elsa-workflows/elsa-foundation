@@ -5,12 +5,15 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
 using Elsa.Agent.Specialists.Core.Contracts;
 using Elsa.Agent.Specialists.Core.Models;
+using Elsa.Agent.Specialists.Services;
 using Elsa.Agent.Specialists.Tests.Publication;
 using Elsa.Primitives.Models;
 using Elsa.Secrets.Features;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Services.Values;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
 using Microsoft.Extensions.AI;
@@ -69,6 +72,119 @@ public sealed class SpecialistNativeTests
         Assert.Equal(WorkflowExecutionStatus.Faulted, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
         Assert.Equal(0, factory.Calls);
         Assert.Equal(0, factory.Opens);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Native_capture_admission_respects_the_destination_policy_before_dispatch(bool requiresEncryption)
+    {
+        var factory = new FixtureFactory("{\"Article\":\"private result\"}");
+        await using var provider = await ServicesAsync(factory);
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: requiresEncryption);
+        var captures = new Dictionary<string, RuntimeOutputCapture>
+        {
+            ["article-key"] = new("article-key", "variable:Article", new("String", "elsa.json", null), DurableValueLifecycle.Instance, DurableValueStorage.Custom, true,
+                new Dictionary<string, string> { [RuntimeMetadataKeys.TargetVariableReferenceKey] = "article-variable" })
+        };
+        var executable = await ExecutableAsync(provider, outputCaptures: captures, variables: [new("article-variable", "Article", new("String"), policy)]);
+        var (actor, _) = await StartAsync(provider, executable);
+        var claim = await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2));
+        if (requiresEncryption) Assert.Null(claim);
+        else
+        {
+            Assert.NotNull(claim);
+            await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim);
+            await DrainAsync(actor);
+        }
+        var workflow = (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!;
+        Assert.Equal(requiresEncryption ? WorkflowExecutionStatus.Faulted : WorkflowExecutionStatus.Completed, workflow.Status);
+        Assert.Equal(requiresEncryption ? 0 : 1, factory.Opens);
+        Assert.Equal(requiresEncryption ? 0 : 1, factory.Calls);
+        var value = workflow.RootVariableFrame!.Values["article-variable"];
+        Assert.True(value.Policy.IsSensitive);
+        Assert.True(value.Policy.HidesValue());
+        if (!requiresEncryption) Assert.Equal("private result", value.InlineValue!.Value.GetString());
+    }
+
+    [Fact]
+    public async Task Secret_business_input_is_refused_before_opening_a_client()
+    {
+        var factory = new FixtureFactory("{\"Article\":\"must not dispatch\"}");
+        await using var provider = await ServicesAsync(factory);
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true, requiresEncryption: true);
+        var input = new RuntimeInputBinding("brief-key", new("String"), policy, RuntimeInputBindingSource.SecretRead, secret: new("logical-secret"));
+        await StartAsync(provider, await ExecutableAsync(provider, briefBinding: input));
+        Assert.Null(await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2)));
+        Assert.Equal(WorkflowExecutionStatus.Faulted, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
+        Assert.Equal(0, factory.Opens);
+        Assert.Equal(0, factory.Calls);
+    }
+
+    [Theory]
+    [InlineData("result")]
+    [InlineData("projection")]
+    public async Task Encryption_required_result_policy_is_refused_before_opening_a_client(string mode)
+    {
+        var factory = new FixtureFactory("{\"Article\":\"must not dispatch\"}");
+        await using var provider = await ServicesAsync(factory);
+        await StartAsync(provider, await ExecutableAsync(provider, resultPolicyMode: mode));
+        Assert.Null(await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2)));
+        Assert.Equal(WorkflowExecutionStatus.Faulted, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
+        Assert.Equal(0, factory.Opens);
+        Assert.Equal(0, factory.Calls);
+    }
+
+    [Fact]
+    public async Task Sensitive_native_values_execute_with_redacted_inspection_evidence()
+    {
+        var factory = new FixtureFactory("{\"Article\":\"private result\"}");
+        await using var provider = await ServicesAsync(factory);
+        var policy = new ValueProtectionPolicy(DurableValueLifecycle.Instance, DurableValueStorage.Inline, isSensitive: true);
+        var input = new RuntimeInputBinding("brief-key", new("String"), policy, RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(new("String"), Json("\"private brief\""), policy));
+        var executable = await ExecutableAsync(provider, briefBinding: input, resultPolicyMode: "sensitive");
+        var (actor, _) = await StartAsync(provider, executable);
+        var claim = await provider.GetRequiredService<IBackgroundActivityWorkStore>().ClaimNextAsync("test", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(2));
+        Assert.NotNull(claim);
+        await provider.GetRequiredService<BackgroundActivityWorker>().ExecuteClaimAsync(new("default"), claim);
+        await DrainAsync(actor);
+        Assert.Equal(WorkflowExecutionStatus.Completed, (await provider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("run"))!.Status);
+        Assert.Equal(1, factory.Calls);
+        var boundary = (await provider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync("run"))
+            .Single(x => x.Execution.ExecutableNodeId == executable.RootActivity.ExecutableNodeId);
+        Assert.True(boundary.Completion!.Result.Policy.IsSensitive);
+        Assert.False(boundary.Completion.Result.Policy.RequiresEncryption);
+        var inspection = (await provider.GetRequiredService<IActivityExecutionInspectionStore>().FindAsync("run", boundary.InvocationId))!;
+        Assert.Contains(inspection.ValueSnapshots, x => x.Subject == ActivityExecutionInspectionValueSubject.ActivityInput && x.IsSensitive);
+        Assert.All(inspection.ValueSnapshots.Where(x => x.IsSensitive), x =>
+        {
+            Assert.Equal(RuntimePayloadCaptureMode.None, x.CaptureMode);
+            Assert.Null(x.Payload);
+        });
+        Assert.DoesNotContain("private brief", JsonSerializer.Serialize(inspection), StringComparison.Ordinal);
+        Assert.DoesNotContain("private result", JsonSerializer.Serialize(inspection), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Malformed_model_json_retains_the_parser_cause()
+    {
+        await using var provider = await ServicesAsync(new FixtureFactory("not JSON"));
+        var node = (await ExecutableAsync(provider)).RootActivity;
+        var request = new SpecialistTurnRequest(new(null, "default", "run", "activity", "operation", "artifact", "hash", "copywriter-v1", "template"),
+            SpecialistNativeBinding.Descriptor(node), node.ActivityContract!, Json("{\"Brief\":\"brief\"}"), "binding");
+        var exception = await Assert.ThrowsAsync<SpecialistTurnException>(async () => await provider.GetRequiredService<SpecialistModelRunner>().RunAsync(request, CancellationToken.None));
+        Assert.IsAssignableFrom<JsonException>(exception.InnerException);
+        Assert.Equal("The model result is not valid bounded JSON.", exception.Message);
+    }
+
+    [Fact]
+    public void Malformed_descriptor_json_retains_the_parser_cause()
+    {
+        var node = new ExecutableNode("specialist", "specialist", "type", "1", new RuntimeActivityDescriptor(SpecialistRuntimeIds.ConsumerKey, "1", Json("{\"instructions\":{}}")),
+            new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>());
+        var exception = Assert.Throws<SpecialistTurnException>(() => SpecialistNativeBinding.Descriptor(node));
+        Assert.IsAssignableFrom<JsonException>(exception.InnerException);
     }
 
     [Theory]
@@ -147,6 +263,7 @@ public sealed class SpecialistNativeTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddWorkflowRuntime();
+        services.AddSingleton<IRuntimeDurableValueStorageDriverRegistry>(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
         new ActivitiesRuntimeFeature().ConfigureServices(services);
         new SerializationFeature().ConfigureServices(services);
         new BackgroundActivitiesFeature { RunWorkers = false }.ConfigureServices(services);
@@ -164,13 +281,28 @@ public sealed class SpecialistNativeTests
         return provider;
     }
 
-    private static async ValueTask<WorkflowExecutable> ExecutableAsync(ServiceProvider provider, string outputName = "Article", string outputType = "String", bool outputNullable = false, bool optionalBrief = false, RuntimeInputBinding? briefBinding = null)
+    private static async ValueTask<WorkflowExecutable> ExecutableAsync(ServiceProvider provider, string outputName = "Article", string outputType = "String", bool outputNullable = false, bool optionalBrief = false, RuntimeInputBinding? briefBinding = null, IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null, IReadOnlyCollection<RuntimeVariableDeclaration>? variables = null, string? resultPolicyMode = null)
     {
         // The authoring fixture is disposed, including its three SQLite stores, before execution starts.
-        var published = await SpecialistPublicationTests.PublishAndPlaceAsync(outputName, outputType, outputNullable, optionalBrief, briefBinding);
-        var executable = new WorkflowExecutable(new("editorial", "workflow", "workflow-v1", "1.0.0", "artifact-hash"), published.Placement.Root,
-            published.Placement.ResumeTargets, DateTimeOffset.UtcNow, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference,
-            published.Placement.RuntimeRequirements, published.Storage);
+        var published = await SpecialistPublicationTests.PublishAndPlaceAsync(outputName, outputType, outputNullable, optionalBrief, briefBinding, outputCaptures);
+        var root = published.Placement.Root;
+        if (resultPolicyMode is not null)
+        {
+            // A seeded artifact backstop: generic publication currently has no authored policy fields.
+            var original = root.ActivityContract!;
+            var policy = ActivityValuePolicy.Default with { IsSensitive = true, RequiresEncryption = resultPolicyMode != "sensitive" };
+            var result = new ActivityResultContract(original.Result.Type, original.Result.IsRequired,
+                resultPolicyMode == "projection" ? original.Result.Policy : policy,
+                original.Result.Projections.Values.Select(x => new ActivityResultProjectionContract(x.Key, x.Path, x.Type, x.IsRequired,
+                    resultPolicyMode == "result" ? x.Policy : policy, x.SourceRepresentation)), original.Result.SourceRepresentation);
+            var contract = new ActivityContract(original.ActivityTypeKey, original.ContractVersion, original.DescriptorKind, original.DescriptorPayload,
+                original.Inputs.Values, result, original.Outcomes, original.Activation, original.SideEffectProfile, original.SupportsBackgroundExecution);
+            root = new(root.ExecutableNodeId, root.AuthoredActivityId, root.ActivityType, root.ActivityTypeVersion, root.Descriptor,
+                root.InputBindings, root.Metadata, root.ChildSlots, root.Structure, contract);
+        }
+        var executable = new WorkflowExecutable(new("editorial", "workflow", "workflow-v1", "1.0.0", "artifact-hash"), root,
+            published.Placement.ResumeTargets, DateTimeOffset.UtcNow, new Dictionary<string, string>(), inputContract: null, dependencies: null,
+            published.Placement.RuntimeRequirements, published.Storage, IncidentStrategyBuiltIns.FaultReference, workflowVariables: variables);
         await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(executable);
         return executable;
     }

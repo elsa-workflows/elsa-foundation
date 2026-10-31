@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Agent.Specialists.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Agent.Specialists.Services;
@@ -50,7 +51,7 @@ internal sealed class SpecialistNativeBinding(IWorkflowExecutionStateStore workf
     {
         SpecialistRuntimeDescriptor? descriptor;
         try { descriptor = node.DescriptorPayload.Deserialize<SpecialistRuntimeDescriptor>(SpecialistJson.Options); }
-        catch (JsonException) { throw Failure(); }
+        catch (JsonException exception) { throw Failure(exception); }
         if (descriptor is null || node.DescriptorType != SpecialistRuntimeIds.ConsumerKey || node.DescriptorSchemaVersion != SpecialistRuntimeIds.DescriptorSchema ||
             node.ActivityContract?.Activation.Capability != SpecialistRuntimeIds.FacadeCapability ||
             node.ActivityContract.DescriptorKind != SpecialistRuntimeIds.ConsumerKey ||
@@ -80,6 +81,17 @@ internal sealed class SpecialistNativeBinding(IWorkflowExecutionStateStore workf
     private static SpecialistInvocationIdentity Identity(WorkflowExecutionState workflow, ActivityExecutionState state, ExecutableNode node)
     {
         var descriptor = Descriptor(node);
+        foreach (var capture in node.OutputCaptures.Values.Where(x => x.CaptureOnSuccessfulCompletion))
+        {
+            // Graph-owned captures have no stronger destination policy in this profile. Root variable
+            // destinations carry their policy in the canonical committed frame, including absent values.
+            if (capture.Metadata.ContainsKey(RuntimeMetadataKeys.CaptureTargetScopeId) ||
+                !capture.Metadata.TryGetValue(RuntimeMetadataKeys.TargetVariableReferenceKey, out var variableKey)) continue;
+            if (workflow.RootVariableFrame is null || !workflow.RootVariableFrame.Values.TryGetValue(variableKey, out var destination))
+                throw SpecialistModelRunner.Failure("specialist.capture.target", "The specialist capture has no declared destination in this native workflow.");
+            if (destination.Policy.RequiresEncryption || destination.Presence == ValuePresence.Withheld)
+                throw SpecialistModelRunner.Failure("specialist.value.encryption", "This specialist profile cannot dispatch into encryption-required or withheld capture destinations.");
+        }
         if (state.ContractIdentity?.SchemaFingerprint != node.ActivityContract!.SchemaFingerprint || state.InputSnapshot is null ||
             state.InputSnapshot.ContractFingerprint != node.ActivityContract.SchemaFingerprint || state.InputSnapshot.InvocationId != state.InvocationId)
             throw Failure();
@@ -89,5 +101,5 @@ internal sealed class SpecialistNativeBinding(IWorkflowExecutionStateStore workf
 
     private static bool Stamped(ExecutableNode node, string key, string? value) =>
         !string.IsNullOrWhiteSpace(value) && node.Metadata.TryGetValue("activity." + key, out var actual) && actual == value;
-    private static SpecialistTurnException Failure() => SpecialistModelRunner.Failure("specialist.native.binding", "The specialist request does not match the committed native execution and artifact.");
+    private static SpecialistTurnException Failure(Exception? innerException = null) => SpecialistModelRunner.Failure("specialist.native.binding", "The specialist request does not match the committed native execution and artifact.", innerException);
 }

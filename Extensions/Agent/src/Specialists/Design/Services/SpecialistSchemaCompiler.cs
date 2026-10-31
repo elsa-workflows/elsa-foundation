@@ -41,10 +41,10 @@ internal sealed class SpecialistSchemaCompiler(SpecialistSchemaValidator validat
         if (path == "/resultConstraints" && fields.Any(member =>
         {
             var segments = member.Name.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            return segments.Length == 0 || fields.Any(other => other.Key != member.Key && other.Name == segments[0]);
+            return member.Name == "$" || segments.Length == 0 || fields.Any(other => other.Key != member.Key && StringComparer.OrdinalIgnoreCase.Equals(other.Name, segments[0]));
         }))
         {
-            problems.Add(new(path, "specialist.schema.projection-name", "Output names must not overlap another output's dotted-path root or collapse to an empty path."));
+            problems.Add(new(path, "specialist.schema.projection-name", "Output names must not overlap another output's dotted-path root ignoring case, use the reserved whole-result name, or collapse to an empty path."));
             return null;
         }
         var properties = new JsonObject();

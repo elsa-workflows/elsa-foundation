@@ -47,7 +47,7 @@ namespace Elsa.Agent.Specialists.Tests.Publication;
 
 public sealed class SpecialistPublicationTests
 {
-    internal static async ValueTask<(ActivityTemplatePlacement Placement, IReadOnlyCollection<RuntimeStorageDriverRequirement> Storage)> PublishAndPlaceAsync(string outputName, string outputType, bool outputNullable = false, bool optionalBrief = false, RuntimeInputBinding? briefBinding = null)
+    internal static async ValueTask<(ActivityTemplatePlacement Placement, IReadOnlyCollection<RuntimeStorageDriverRequirement> Storage)> PublishAndPlaceAsync(string outputName, string outputType, bool outputNullable = false, bool optionalBrief = false, RuntimeInputBinding? briefBinding = null, IReadOnlyDictionary<string, RuntimeOutputCapture>? outputCaptures = null)
     {
         await using var fixture = await Fixture.CreateAsync(outputName, outputType, outputNullable, optionalBrief);
         Assert.Equal(ActivityPublicationReceiptStatus.Applied, (await fixture.PublishAsync()).Status);
@@ -65,7 +65,7 @@ public sealed class SpecialistPublicationTests
                 ["brief-key"] = briefBinding ?? new("brief-key", new("String"), ValueProtectionPolicy.InstanceInline, RuntimeInputBindingSource.Literal,
                     literal: optionalBrief ? ValueEnvelope.Absent(new("String"), ValueProtectionPolicy.InstanceInline) :
                         ValueEnvelope.Inline(new("String"), Json("\"moss gardens\""), ValueProtectionPolicy.InstanceInline))
-            }, new Dictionary<string, RuntimeOutputCapture>()));
+            }, outputCaptures ?? new Dictionary<string, RuntimeOutputCapture>()));
         return (placement, template.StorageDriverRequirements);
     }
 

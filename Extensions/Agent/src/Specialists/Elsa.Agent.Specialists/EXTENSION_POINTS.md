@@ -28,6 +28,8 @@ Current execution is fresh-only, with a new MAF session for every turn and no to
 admission. A definition's continuity capability does not implicitly reuse history. Validate business
 inputs and outputs against both the exact schema and declared native conversion. Withheld,
 encryption-required and secret-reference business inputs are refused before model dispatch.
+Root-variable captures resolve their current committed destination policy at native entry and worker
+binding checks; encryption-required or withheld destinations are refused before opening a client.
 
 `SpecialistsInMemoryJournal` is an explicit development/test profile, retaining at most 10,000 turns
 for one host lifetime. Requests/results are protected with purpose/scope/provenance checks inside
