@@ -102,7 +102,7 @@ Known implementations: none in the foundation host; feature modules opt in by re
 - **Contract:** `Elsa.Workflows.Design.Core.Contracts.IActivityStructureHandler`.
 - **Members:**
   - `Kind` / `SchemaVersion` — identify the structure shape this handler owns.
-  - `ProjectChildren(activity)` / `ReplaceChildren(activity, projections)` — expose and rewrite the activity's child slots.
+  - `ProjectChildren(activity)` / `ReplaceChildren(activity, projections)` — expose and rewrite the activity's child slots. Each non-persisted `ActivityChildProjection` can also carry `OutcomeProjections`: per-child `ActivityChildOutcomeProjection` declarations with the expected activity type, additional outcome names and an optional literal-outcome input key. Publishing checks the resolved child type before pinning those names; the structure handler owns payload interpretation.
   - `CompileExecutableStructure(activity)` — materialize the authored structure into the executable structure the runtime consumes.
   - `SupportsScopedVariables` *(default `false`)* — whether this activity is a **container scope** that can own container-scoped variable declarations (ADR 0027). Container activities (`Sequence`, `Flowchart`) return `true`.
   - `ProjectScopedVariables(activity)` *(default empty)* — the container-scoped `VariableDefinition`s the activity declares, visible to its descendant activities. These flow through publishing into the compiled executable structure's `variables`, so the runtime materializes the visible variable scope chain (`RuntimeVariableScopeFactory` / `RuntimeContainerScopeService` in `Elsa.Workflows.Runtime.Core`) without re-reading the design document.
