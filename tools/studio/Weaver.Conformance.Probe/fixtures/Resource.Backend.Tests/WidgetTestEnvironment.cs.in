@@ -1,0 +1,153 @@
+using System.Security.Claims;
+using System.Text.Json;
+using Acme.Home.Weaver;
+using Elsa.Agent.Core.Contracts;
+using Elsa.Agent.Core.Models;
+using Elsa.Foundation.Identity.Core.Authentication;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Studio.Preferences.Core;
+using Elsa.Studio.Preferences.Core.Contracts;
+using Elsa.Studio.Preferences.Core.Models;
+using Elsa.Studio.Preferences.Core.Services;
+using Microsoft.AspNetCore.Http;
+
+namespace Acme.Home.Weaver.Tests;
+
+internal sealed class WidgetTestEnvironment
+{
+    internal const string HostId = "weaver-conformance3438";
+    internal const string InitialJson = """
+        {"widgets":[
+          {"id":"home.recent-workflows","visible":true,"size":"wide","options":{"secret":"UNRELATED_WIDGET_CANARY"}},
+          {"id":"acme.home:status","visible":true,"size":"medium","options":{"secret":"OWN_OPTIONS_CANARY","precise":9007199254740993.123456789},"future":{"keep":[null,false,7]}},
+          {"id":"other.module:card","visible":false,"options":{"private":"OTHER_WIDGET_CANARY"}}
+        ],"futureRoot":{"private":"ROOT_CANARY","order":[3,2,1]}}
+        """;
+    internal readonly StudioPreferenceKey Key = new("actor-a", "tenant-a", HostId, StudioPreferenceNamespaces.HomeLayout);
+    internal readonly InMemoryStudioPreferenceStore Store = new();
+    internal readonly FakeAuth Auth = new();
+    internal readonly FakePermissions Permissions = new();
+    internal readonly FakeSessions Sessions = new();
+    internal readonly FakeHttpContextAccessor Http = new();
+    internal TrackingPreferences Preferences { get; }
+    internal WidgetResource Resource { get; }
+    internal ReadWidgetTool Read { get; }
+    internal SetWidgetVisibilityTool Write { get; }
+    internal WidgetContextSource Context { get; }
+
+    private WidgetTestEnvironment()
+    {
+        Http.HttpContext!.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "actor-a")], "fixture-test"));
+        var registry = new StudioPreferenceNamespaceRegistry([new HomeNamespace()]);
+        Preferences = new(new StudioPreferenceService(registry, Store, TimeProvider.System));
+        Resource = new(Http, Auth, Permissions, Preferences, new(HostId));
+        Read = new(Resource);
+        Write = new(Resource);
+        Context = new(Resource, Sessions);
+    }
+
+    internal static async Task<WidgetTestEnvironment> CreateAsync(string? json = InitialJson, int schemaVersion = 1)
+    {
+        var env = new WidgetTestEnvironment();
+        if (json is not null)
+            await env.Store.WriteAsync(env.Key, new(schemaVersion, JsonSerializer.Deserialize<JsonElement>(json)), StudioPreferenceWriteCondition.MustNotExist, DateTimeOffset.UtcNow);
+        return env;
+    }
+
+    internal AgentToolInvocation Invocation(string name, IReadOnlyDictionary<string, object?>? arguments = null, AgentContextAttachment[]? context = null) =>
+        new("call-a", name, "session-a", "actor-a", arguments ?? new Dictionary<string, object?>(), context ?? []) { TenantId = "tenant-a", TurnId = "turn-a" };
+
+    internal async Task<AgentContextAttachment> SnapshotAsync() => Assert.Single((await Context.CollectAsync(new("session-a", "acme-home", new Dictionary<string, string>()))).Attachments,
+        attachment => attachment.ContentType == WidgetContract.ContextType);
+
+    internal async Task<AgentResult<AgentToolPreparation>> PrepareAsync(bool visible = false) => await Write.PrepareAsync(Invocation(WidgetContract.WriteTool,
+        new Dictionary<string, object?> { ["visible"] = visible }, [await SnapshotAsync()]));
+
+    internal static AgentPreparedToolInvocation Freeze(AgentToolPreparation preparation, string name = WidgetContract.WriteTool) => new(
+        "invocation-a", "session-a", "turn-a", "call-a", name, "1", WidgetContract.Module, "actor-a", "tenant-a", preparation.Target,
+        preparation.Arguments, "engine-owned-digest", preparation.Risk, preparation.Preview, AgentExecutionLocation.Server,
+        preparation.RequiresApproval, preparation.Client, DateTimeOffset.UtcNow.AddMinutes(5));
+
+    internal async Task<StudioPreferenceDocument> DocumentAsync() => (await Store.FindAsync(Key))!;
+
+    internal sealed class HomeNamespace : IStudioPreferenceNamespace
+    {
+        public string Name => StudioPreferenceNamespaces.HomeLayout;
+        public int CurrentSchemaVersion => 1;
+        public int MaxBytes => 256 * 1024;
+        public bool Validate(JsonElement value) => StudioHomeLayout.IsValid(value);
+        public JsonElement? Migrate(JsonElement value, int fromSchemaVersion) => null;
+    }
+}
+
+internal sealed class TrackingPreferences(IStudioPreferenceService inner) : IStudioPreferenceService
+{
+    internal int WriteAttempts;
+    internal int Committed;
+    internal bool FailConfirmation;
+    internal bool ThrowAfterCommit;
+    internal bool CancelAfterCommit;
+    internal Func<Task>? BeforeWrite;
+    internal StudioPreferenceWriteCondition? LastCondition;
+    internal StudioPreferenceKey? LastKey;
+
+    public ValueTask<StudioPreferenceDocument?> FindAsync(StudioPreferenceKey key, CancellationToken cancellationToken = default)
+    {
+        if (FailConfirmation && Volatile.Read(ref Committed) > 0) throw new IOException("owned confirmation test fault");
+        return inner.FindAsync(key, cancellationToken);
+    }
+    public async ValueTask<StudioPreferenceDocument> WriteAsync(StudioPreferenceKey key, StudioPreferenceWrite write,
+        StudioPreferenceWriteCondition condition, CancellationToken cancellationToken = default)
+    {
+        Interlocked.Increment(ref WriteAttempts);
+        LastKey = key;
+        LastCondition = condition;
+        if (BeforeWrite is not null) await BeforeWrite();
+        var result = await inner.WriteAsync(key, write, condition, cancellationToken);
+        Interlocked.Increment(ref Committed);
+        if (ThrowAfterCommit) throw new IOException("owned postcommit test fault");
+        if (CancelAfterCommit) throw new OperationCanceledException("owned postcommit cancellation");
+        return result;
+    }
+    public ValueTask<bool> DeleteAsync(StudioPreferenceKey key, CancellationToken cancellationToken = default) => inner.DeleteAsync(key, cancellationToken);
+}
+
+internal sealed class FakeAuth : IAuthSessionService
+{
+    internal AuthSession Session = new("authenticated", "actor-a", "Actor A", "tenant-a", new HashSet<string>(), new HashSet<string>(), "fresh", "fixture-test");
+    public ValueTask<AuthSession> GetAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default) => ValueTask.FromResult(Session);
+}
+
+// Tests own their request directly; no ambient AsyncLocal state leaks between parallel cases.
+internal sealed class FakeHttpContextAccessor : IHttpContextAccessor
+{
+    public HttpContext? HttpContext { get; set; } = new DefaultHttpContext();
+}
+
+internal sealed class FakePermissions : IPermissionAuthorizationService
+{
+    internal readonly List<PermissionEvaluationContext> Calls = [];
+    internal string? DeniedPermission;
+    internal Func<bool>? DenyRead;
+    public ValueTask<PermissionEvaluationResult> AuthorizeAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default)
+    {
+        lock (Calls) Calls.Add(context);
+        return ValueTask.FromResult(context.Permission == DeniedPermission || (context.Permission == WidgetContract.ReadPermission && DenyRead?.Invoke() == true)
+            ? PermissionEvaluationResult.Denied() : PermissionEvaluationResult.Success);
+    }
+}
+
+internal sealed class FakeSessions : IAgentSessionService
+{
+    internal AgentSession? Session = new("session-a", "Fixture", "tenant-a", "actor-a", "conversation-a", "provider-a", "build", AgentPolicy.Default,
+        AgentSessionStatus.Active, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, null, new Dictionary<string, string>());
+    public Task<AgentSession?> FindAsync(string sessionId, CancellationToken cancellationToken = default) => Task.FromResult(Session?.Id == sessionId ? Session : null);
+    public Task<AgentSession> CreateAsync(AgentSessionCreateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<AgentMessage> AddMessageAsync(string sessionId, AgentMessageCreateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<IReadOnlyCollection<AgentMessage>> ListMessagesAsync(string sessionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<AgentMessage?> FindMessageAsync(string sessionId, string messageId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<AgentMessage?> FindLatestMessageAsync(string sessionId, AgentRole? role = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task SetMessageStatusAsync(string sessionId, string messageId, AgentMessageStatus status, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task AddContextAsync(string sessionId, IReadOnlyCollection<AgentContextAttachment> attachments, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<IReadOnlyCollection<AgentContextAttachment>> ListContextAsync(string sessionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+}

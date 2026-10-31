@@ -1,4 +1,4 @@
-import { type KeyboardEvent as ReactKeyboardEvent, memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, lazy, memo, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Braces, Cable, Code2, KeyRound, Maximize2, SlidersHorizontal, Type, X, type LucideIcon } from "lucide-react";
 import { AdvancedSection, AnchoredPopover } from "@elsa-workflows/studio-ui";
@@ -40,6 +40,7 @@ import {
   describeDictionaryForInput,
   getLiteralDefaultValue,
   isRepeaterOptOut,
+  isStringType,
   readPortableExpressionDefinition,
   readWrappedInput,
   secretSyntax,
@@ -89,6 +90,8 @@ const inlineSyntaxEditorIds = new Set([
 const inlineTextTypeNames = new Set(["string", "system.string", "text", "uri", "system.uri"]);
 // The built-in masked editor: the only editor a masked literal is given.
 const maskedPropertyEditorId = "studio.property.password";
+const WorkflowInputArgumentBindings = lazy(() => import("./workflowInputArgumentBindings"));
+
 export interface ActivityPropertiesPanelProps {
   context?: StudioEndpointContext;
   draftId?: string;
@@ -580,6 +583,11 @@ function PropertyRow({
   const valueMasked = !secretOnly && isMaskedInput(input) && !showsMaskedValue(editingMode);
   const value = getLiteralEditorValue(activity, input);
   const portableDefinition = wrapped ? readPortableExpressionDefinition(value, syntax) : null;
+  const workflowInputs = readWorkflowInputs(workflowState.inputs);
+  const hasWorkflowInputBinding = Object.values(portableDefinition?.parameters ?? {}).some(binding => {
+    const record = asRecord(binding);
+    return typeof record?.kind === "string" && record.kind.toLowerCase() === "workflowrequest";
+  });
   const editorValue = portableDefinition?.source ?? value;
   const expressionSource = valueMasked || secretOnly || editorValue == null ? "" : String(editorValue);
   const documentVersions = useRef(new Map<string, { source: string; version: number }>());
@@ -719,6 +727,8 @@ function PropertyRow({
   const [pendingTransition, setPendingTransition] = useState<{
     descriptor: StudioExpressionDescriptor;
     nextValue: unknown;
+    replacesValue: boolean;
+    discardedBindingCount: number;
   } | null>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   const cancelTransitionRef = useRef<HTMLButtonElement>(null);
@@ -853,19 +863,38 @@ function PropertyRow({
     if (!wrapped || nextSyntax === syntax) return;
     const nextDescriptor = expressionDescriptors.find(descriptor => descriptor.type === nextSyntax);
     if (!nextDescriptor || getUnavailableReason(nextDescriptor)) return;
+    const transitionValue = portableDefinition?.source ?? value;
     const transition = planInputSyntaxTransition(
       input,
       editingMode ?? "structured",
       nextDescriptor.editingMode,
-      value,
+      transitionValue,
       getTargetDefaultValue(nextDescriptor)
     );
-    if (transition.requiresConfirmation) {
+    const discardedBindingCount = portableDefinition && nextDescriptor.editingMode !== "text"
+      ? Object.keys(portableDefinition.parameters).length
+      : 0;
+    const requiresConfirmation = transition.requiresConfirmation || discardedBindingCount > 0;
+    const nextValue = portableDefinition
+      ? nextDescriptor.editingMode === "text"
+        ? { ...portableDefinition, language: nextSyntax }
+        : nextDescriptor.editingMode === "literal"
+          ? isStringType(input.typeName)
+            ? portableDefinition.source
+            : transition.nextValue
+          : transition.nextValue
+      : transition.nextValue;
+    if (requiresConfirmation) {
       setExpandRequested(false);
-      setPendingTransition({ descriptor: nextDescriptor, nextValue: transition.nextValue });
+      setPendingTransition({
+        descriptor: nextDescriptor,
+        nextValue,
+        replacesValue: transition.requiresConfirmation,
+        discardedBindingCount
+      });
       return;
     }
-    applyTransition(nextDescriptor, transition.nextValue);
+    applyTransition(nextDescriptor, nextValue);
   };
   // The whole collection concept resolves to a single node: a collection-scoped editor when one claims
   // the value (e.g. a multi-select for option sets), otherwise a repeater of per-element editors.
@@ -946,6 +975,9 @@ function PropertyRow({
   ) : dictionaryEditor ?? collectionEditor ?? contributedExpressionEditor ?? (editingMode === "literal"
     ? renderEditor(editor, effectiveInput, value, editorDisabled, context, setRaw, disclosureSignalKey, reportEditorValidation, reportEditorFallback)
     : <UnavailableExpressionEditor syntax={syntax} />);
+  const canEditWorkflowInputArguments = wrapped != null && !secretOnly && !valueMasked && editingMode === "text" &&
+    syntax.toLowerCase() === "javascript" && (workflowInputs.length > 0 || hasWorkflowInputBinding) &&
+    (value == null || typeof value !== "object" || portableDefinition != null);
   // A single session must never be mounted into two editor engines at once. While the dialog owns the
   // text document, unmount the compact surface; closing remounts it from the same URI-scoped session.
   const renderedValueEditor = expanded && editingMode === "text" ? null : valueEditor;
@@ -1033,6 +1065,19 @@ function PropertyRow({
           {renderExpressionDiagnostics(inlineDiagnostics)}
         </>
       )}
+      {canEditWorkflowInputArguments ? (
+        <Suspense fallback={null}>
+          <WorkflowInputArgumentBindings
+            inputs={workflowInputs}
+            value={value}
+            syntax={syntax}
+            activityInput={input}
+            wrapped={wrapped!}
+            disabled={readOnly}
+            onChange={next => onChange(writeInputValue(activity, input, next), input)}
+          />
+        </Suspense>
+      ) : null}
       {wrapped && !secretOnly && (conversionOpen || conversionAuthored) ? (
         <div id={conversionRegionId} className="wf-conversion-region">
           {conversionOpen ? (
@@ -1080,14 +1125,22 @@ function PropertyRow({
           }}
         >
           <p id={transitionDescriptionId}>
-            Switching to {pendingTransition.descriptor.displayName || pendingTransition.descriptor.type} will replace the current value.
+            {pendingTransition.discardedBindingCount > 0
+              ? pendingTransition.replacesValue
+                ? `Switching to ${pendingTransition.descriptor.displayName || pendingTransition.descriptor.type} will replace the current value and remove ${pendingTransition.discardedBindingCount} expression binding${pendingTransition.discardedBindingCount === 1 ? "" : "s"}.`
+                : `Switching to ${pendingTransition.descriptor.displayName || pendingTransition.descriptor.type} will keep the source text as a Literal value and remove ${pendingTransition.discardedBindingCount} expression binding${pendingTransition.discardedBindingCount === 1 ? "" : "s"}.`
+              : `Switching to ${pendingTransition.descriptor.displayName || pendingTransition.descriptor.type} will replace the current value.`}
           </p>
           <div>
             <button
               type="button"
               onClick={() => applyTransition(pendingTransition.descriptor, pendingTransition.nextValue)}
             >
-              Replace value
+              {pendingTransition.discardedBindingCount > 0
+                ? pendingTransition.replacesValue
+                  ? `Replace value and remove ${pendingTransition.discardedBindingCount} binding${pendingTransition.discardedBindingCount === 1 ? "" : "s"}`
+                  : `Remove ${pendingTransition.discardedBindingCount} binding${pendingTransition.discardedBindingCount === 1 ? "" : "s"}`
+                : "Replace value"}
             </button>
             <button
               ref={cancelTransitionRef}
@@ -1187,9 +1240,11 @@ function arePropertyRowPropsEqual(previous: PropertyRowProps, next: PropertyRowP
     previous.onChange !== next.onChange
   ) return false;
 
-  // Dynamic option providers and the active code editor intentionally observe workflow state. Inactive
-  // expression previews do not: their source and document identity are their only changing inputs.
-  if ((previous.toolingActive || readOptionsProvider(previous.input)) && previous.workflowState !== next.workflowState) {
+  // Input bindings, dynamic options and the active code editor observe workflow state; inactive previews do not.
+  if (previous.workflowState !== next.workflowState && (
+    previous.workflowState.inputs !== next.workflowState.inputs ||
+    previous.toolingActive || readOptionsProvider(previous.input)
+  )) {
     return false;
   }
 

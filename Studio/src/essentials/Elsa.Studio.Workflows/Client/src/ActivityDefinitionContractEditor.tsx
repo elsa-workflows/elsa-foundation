@@ -278,7 +278,7 @@ export const ActivityDefinitionContractEditor = forwardRef<ActivityDefinitionCon
 
   return <section className="ad-contract-editor" aria-labelledby="activity-contract-title">
     <header className="ad-contract-header">
-      <div><h2 id="activity-contract-title">Public interface</h2><p>Choose an input, output or outcome to edit its details. Changes save automatically.</p></div>
+      <div><h2 id="activity-contract-title">Public interface</h2><p>Define what this activity accepts and returns.</p></div>
     </header>
     {capabilitiesUnavailable ? <div className="ad-inline-error" role="alert"><strong>Contract options unavailable</strong><span>Studio could not load the available types and storage options. Existing members remain visible, but their type settings cannot be changed safely.</span></div> : null}
     {!capabilitiesUnavailable && capabilities && authorableTypes.length === 0 ? <div className="ad-inline-error" role="alert">No supported type with an active storage option is available, so inputs and outputs cannot be added.</div> : null}
@@ -479,7 +479,7 @@ function InputEditor({ member, index, selected, nameInputRef, capabilities, auth
   const type = findContractType(capabilities, member.type.alias);
   const available = isContractTypeSelectionAuthorable(type, member.type.collectionKind, member.storageDriverKey, capabilities);
   return <section className="ad-contract-workbench-member" hidden={!selected} data-contract-selected={selected ? "true" : undefined} aria-labelledby={`contract-input-${index}-title`} data-contract-kind="input" data-contract-index={index} data-contract-reference-key={member.referenceKey} tabIndex={-1}>
-    <header className="ad-contract-workbench-member-header"><div><span>Input {index + 1}</span><h3 id={`contract-input-${index}-title`}>{member.name || "Unnamed input"}</h3></div><button type="button" className="ad-danger-action" onClick={onRemove} disabled={readOnly}><Trash2 size={15} aria-hidden /> Remove input</button></header>
+    <header className="ad-contract-workbench-member-header"><div><span>Input</span><h3 id={`contract-input-${index}-title`}>{member.name || "Unnamed input"}</h3></div><button type="button" className="ad-danger-action" onClick={onRemove} disabled={readOnly}><Trash2 size={15} aria-hidden /> Remove input</button></header>
     {capabilities && !available ? <UnavailableType alias={member.type.alias} /> : null}
     <div className="ad-contract-fields">
       <StagedNameField field="name" value={member.name} readOnly={readOnly} inputRef={nameInputRef} onApply={name => onChange({ ...member, name })} />
@@ -517,7 +517,7 @@ function OutputEditor({ member, index, selected, nameInputRef, capabilities, aut
   const type = findContractType(capabilities, member.type.alias);
   const available = isContractTypeSelectionAuthorable(type, member.type.collectionKind, member.storageDriverKey, capabilities);
   return <section className="ad-contract-workbench-member" hidden={!selected} data-contract-selected={selected ? "true" : undefined} aria-labelledby={`contract-output-${index}-title`} data-contract-kind="output" data-contract-index={index} data-contract-reference-key={member.referenceKey} tabIndex={-1}>
-    <header className="ad-contract-workbench-member-header"><div><span>Output {index + 1}</span><h3 id={`contract-output-${index}-title`}>{member.name || "Unnamed output"}</h3></div><button type="button" className="ad-danger-action" onClick={onRemove} disabled={readOnly}><Trash2 size={15} aria-hidden /> Remove output</button></header>
+    <header className="ad-contract-workbench-member-header"><div><span>Output</span><h3 id={`contract-output-${index}-title`}>{member.name || "Unnamed output"}</h3></div><button type="button" className="ad-danger-action" onClick={onRemove} disabled={readOnly}><Trash2 size={15} aria-hidden /> Remove output</button></header>
     {capabilities && !available ? <UnavailableType alias={member.type.alias} /> : null}
     <div className="ad-contract-fields">
       <StagedNameField field="name" value={member.name} readOnly={readOnly} inputRef={nameInputRef} onApply={name => onChange({ ...member, name })} />
@@ -545,7 +545,7 @@ function OutcomeEditor({ member, index, selected, nameInputRef, providerRequired
   onRemove(): void;
 }) {
   return <section className="ad-contract-workbench-member" hidden={!selected} data-contract-selected={selected ? "true" : undefined} aria-labelledby={`contract-outcome-${index}-title`} data-contract-kind="outcome" data-contract-index={index} data-contract-reference-key={member.referenceKey} tabIndex={-1}>
-    <header className="ad-contract-workbench-member-header"><div><span>Outcome {index + 1}</span><h3 id={`contract-outcome-${index}-title`}>{member.name || "Unnamed outcome"}</h3></div>{!providerRequired ? <button type="button" className="ad-danger-action" onClick={onRemove} disabled={readOnly}><Trash2 size={15} aria-hidden /> Remove outcome</button> : null}</header>
+    <header className="ad-contract-workbench-member-header"><div><span>Outcome</span><h3 id={`contract-outcome-${index}-title`}>{member.name || "Unnamed outcome"}</h3></div>{!providerRequired ? <button type="button" className="ad-danger-action" onClick={onRemove} disabled={readOnly}><Trash2 size={15} aria-hidden /> Remove outcome</button> : null}</header>
     {providerRequired ? <div className="ad-inline-status" role="status"><strong>Required by the implementation provider</strong><span>This outcome is supplied by provider capability metadata and cannot be removed or made non-emitted.</span></div> : null}
     <div className="ad-contract-fields">
       <StagedNameField field="name" value={member.name} readOnly={readOnly || providerRequired} inputRef={nameInputRef} onApply={name => onChange({ ...member, name })} />

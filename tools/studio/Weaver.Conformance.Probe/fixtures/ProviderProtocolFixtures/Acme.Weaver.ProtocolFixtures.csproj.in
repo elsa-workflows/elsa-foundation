@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <PackageId>Acme.Weaver.ProtocolFixtures</PackageId>
+    <AssemblyName>Acme.Weaver.ProtocolFixtures</AssemblyName>
+    <Version>__FIXTURE_VERSION__</Version>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <Description>Deterministic public-client protocol fixtures; no live-provider or resource implementation.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" Version="__CSHELLS_VERSION__" />
+    <PackageReference Include="Elsa.Agent.Anthropic" Version="__PRODUCT_VERSION__" />
+    <PackageReference Include="Elsa.Agent.GitHubCopilot" Version="__PRODUCT_VERSION__" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.5.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="Tests/**/*.cs" />
+  </ItemGroup>
+</Project>
