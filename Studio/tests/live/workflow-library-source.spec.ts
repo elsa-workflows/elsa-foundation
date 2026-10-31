@@ -20,7 +20,9 @@ async function inspectDetails(page: Page, name: string) {
     new URL(value.url()).pathname.endsWith(`/definitions/${definitionId}`));
   await page.getByRole("row").filter({ has: page.getByText(name, { exact: true }) }).getByText(name, { exact: true }).click();
   const result = await (await response).json() as Details;
-  await page.getByRole("button", { name: "Definitions", exact: true }).click();
+  // Source-owned definitions have no draft and retain the existing read-only
+  // empty-editor surface, whose return action is Browse workflows.
+  await page.getByRole("button", { name: "Browse workflows", exact: true }).click();
   return result;
 }
 
