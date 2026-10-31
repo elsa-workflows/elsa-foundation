@@ -1,0 +1,32 @@
+{
+  "reviewedHead": "d1449c0bff679212f8a64766a95b1c29cfadbcea",
+  "productSource": "9c7681c56c529c8a1a4ab4d9fc91934ec07d0448",
+  "sourceEquality": "Essentials tree equality checked in ../evidence-audit.json",
+  "products": [
+    {
+      "name": "Elsa.Activities.Bpmn.dll",
+      "sha256": "09f846db57a0f8cdca89137baa2ea089a58b9907fe4b4e9579a7342a3e4e5219",
+      "matchingFrontendManifest": true,
+      "declaredVersion": "1.0.0+9c7681c56c529c8a1a4ab4d9fc91934ec07d0448"
+    },
+    {
+      "name": "Elsa.Activities.Bpmn.Core.dll",
+      "sha256": "344e4eb921d18729adeb4c62fd6a0dee8faf59bb9cbd799a87bae379a52c7857",
+      "matchingFrontendManifest": false,
+      "declaredVersion": "Not listed separately in host manifest"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.Core.dll",
+      "sha256": "643dbb88062872b91b6658a4fae60c9a1dc6d720e401ac2b0962a0f47d01f74f",
+      "matchingFrontendManifest": true,
+      "declaredVersion": "1.0.0+9c7681c56c529c8a1a4ab4d9fc91934ec07d0448"
+    },
+    {
+      "name": "Elsa.Workflows.Runtime.dll",
+      "sha256": "e084c28cbe3aa9a6f386dca4519395c1c042930618c63fa30b399abb2d18024e",
+      "matchingFrontendManifest": true,
+      "declaredVersion": "1.0.0+9c7681c56c529c8a1a4ab4d9fc91934ec07d0448"
+    }
+  ],
+  "scope": "Focused in-process contract probe using inert stores; no database, host process, queue, receipt or authority edits. SDK outputs outside repo. No source mutation or fix."
+}

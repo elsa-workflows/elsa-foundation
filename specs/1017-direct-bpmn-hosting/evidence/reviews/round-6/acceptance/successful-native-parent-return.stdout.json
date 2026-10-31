@@ -1,0 +1,61 @@
+{
+  "sourceRevision": "cdef9b87e136ac082fbf1ef332ca3abb115a0018",
+  "actualSuccessfulNativeParentReturnJourneys": [
+    {
+      "parent": "Root",
+      "stage": "pending"
+    },
+    {
+      "parent": "Root",
+      "stage": "consumed"
+    },
+    {
+      "parent": "Root",
+      "stage": "settled"
+    },
+    {
+      "parent": "Sequence",
+      "stage": "pending"
+    },
+    {
+      "parent": "Sequence",
+      "stage": "consumed"
+    },
+    {
+      "parent": "Sequence",
+      "stage": "settled"
+    },
+    {
+      "parent": "Flowchart",
+      "stage": "pending"
+    },
+    {
+      "parent": "Flowchart",
+      "stage": "consumed"
+    },
+    {
+      "parent": "Flowchart",
+      "stage": "settled"
+    },
+    {
+      "parent": "CompensationScope",
+      "stage": "pending"
+    },
+    {
+      "parent": "CompensationScope",
+      "stage": "consumed"
+    },
+    {
+      "parent": "CompensationScope",
+      "stage": "settled"
+    }
+  ],
+  "wholeStoresVerified": 108,
+  "actualWorkbenchProcesses": 48,
+  "actualSdkProcesses": 12,
+  "actualHttpProcesses": 12,
+  "runBpmnEtlIntegrationProved": true,
+  "successfulParentResultCrashProved": true,
+  "allNativeParentSuccessConsumptionSettlementAndPreAckCrashProved": true,
+  "modelHeldFaultRetryProved": false
+}

@@ -1,0 +1,150 @@
+{
+  "capturedAt": "2026-10-31T00:56:43.837460+00:00",
+  "files": [
+    {
+      "file": "discussion-snapshot.json",
+      "bytes": 25920,
+      "sha256": "9bf8ff51e2f2e10911e994d65c3550dedb74754015f18a873690392cf844edec"
+    },
+    {
+      "file": "head-checks.json",
+      "bytes": 38969,
+      "sha256": "131da7f6df3b2fcefdc7e58db811f2d3879df7d3e2d95fd48201df5aa23fa9e7"
+    },
+    {
+      "file": "issue-2892-comments-new.json",
+      "bytes": 32231,
+      "sha256": "b4af784b6f2ef4b3b2f65960b419c1bc5f41e9b48366dd659d40f5c2d905bbd4"
+    },
+    {
+      "file": "issue-2892-comments.json",
+      "bytes": 3023892,
+      "sha256": "fd543e083832340ca953c5b102c1a1f546f641e8898e6bdb3f67c9f9587d84af"
+    },
+    {
+      "file": "issue-2892.json",
+      "bytes": 38912,
+      "sha256": "fc58b8c0360b1fa1fd72d8a953d3b650d422cf4b54de7d0bfb8f0f75b7d35a8e"
+    },
+    {
+      "file": "issue-2898-comments-new.json",
+      "bytes": 32231,
+      "sha256": "cbc0e77c89779c46fca9492b0fb2e926312505f45118d9243ce419b74586cf60"
+    },
+    {
+      "file": "issue-2898-comments.json",
+      "bytes": 1002586,
+      "sha256": "ab3053b5c3ee3cd9b983dd63c27ce32c74677bf5a23b62a28d629e88b422d889"
+    },
+    {
+      "file": "issue-2898.json",
+      "bytes": 8092,
+      "sha256": "57dee6ef7447a11fa6c77f4a5bb194f9b7608c087e359f2dc7127895bc93098c"
+    },
+    {
+      "file": "issue-2907-comments-new.json",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "file": "issue-2907-comments.json",
+      "bytes": 114537,
+      "sha256": "1fc1df4b790e6d84b99b1e21b84255e4ccc9740f08cf6438e579acb58eb0f48a"
+    },
+    {
+      "file": "issue-2907.json",
+      "bytes": 8486,
+      "sha256": "85edfd56986373ec9dfbce6b3dc0aaa872b34a118c84d94f39edb71360d98a6e"
+    },
+    {
+      "file": "issue-2908-comments-new.json",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "file": "issue-2908-comments.json",
+      "bytes": 229891,
+      "sha256": "7b546c61eb0ed29b20ee2ccd638fc0fc6668ab5fc262a0a8fb204bc73041254d"
+    },
+    {
+      "file": "issue-2908.json",
+      "bytes": 9237,
+      "sha256": "099b58f0ef731e0ed3655310a283ede04bb84dc5301292872a62b54aa69af8d7"
+    },
+    {
+      "file": "issue-3410-comments-new.json",
+      "bytes": 147355,
+      "sha256": "4d1d52850d591c0096979b63feaa78d1283c594879eaa596b7552119e33119c9"
+    },
+    {
+      "file": "issue-3410-comments.json",
+      "bytes": 3012267,
+      "sha256": "30b4aca777f66b9cc933a6b586210a79ae9fe724eca0144535ca1ac02e217d6f"
+    },
+    {
+      "file": "issue-3410.json",
+      "bytes": 7271,
+      "sha256": "f2ff96241950a7842512d1224d5977ac8226d68e82e121310b04d2240a82e8b7"
+    },
+    {
+      "file": "main-red.json",
+      "bytes": 97,
+      "sha256": "145a6ef46a0f11fd1b04234b3ddcc7c274e51e026d4456b3b4400a3bb98d27d1"
+    },
+    {
+      "file": "org-AGENTS.md",
+      "bytes": 28054,
+      "sha256": "ed7b301dc6211e5ed6f48cdc4b4eb2271fd03ee92f906adcbf0cf94762d42623"
+    },
+    {
+      "file": "org-agents.json",
+      "bytes": 39524,
+      "sha256": "fc48c35d94ed53a4707b9cd3283cb7015e40667f2e79b19b618e73befc17578e"
+    },
+    {
+      "file": "pr-3410-comments-new.json",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "file": "pr-3410-comments.json",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "file": "pr-3410-reviews-new.json",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "file": "pr-3410-reviews.json",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "file": "pr-3410-threads.json",
+      "bytes": 327,
+      "sha256": "fe0aa71970051c9a07e84570cf6fc98163c099588c40509e0897600c6d6197d1"
+    },
+    {
+      "file": "pr-3410.json",
+      "bytes": 24530,
+      "sha256": "4f5205368246e2ff6988f21d9b7e5c58dd744c58386dcafdbad87907aa1b73ad"
+    },
+    {
+      "file": "project.json",
+      "bytes": 6484,
+      "sha256": "ecf24fb6556132d426eb0538050e557082315f2398a10a25334610b0905c86b2"
+    },
+    {
+      "file": "review-boundary.json",
+      "bytes": 455,
+      "sha256": "4f297d06e9afa57934ecbf0174d5eda8fd5727b0459f5ae8f1967dc5a9b546bf"
+    },
+    {
+      "file": "round6-start.json",
+      "bytes": 10170,
+      "sha256": "c03ea91d11a7ac172ab96f44e136a2e783ace4adb15ad6076d9dc904f42dac59"
+    }
+  ]
+}

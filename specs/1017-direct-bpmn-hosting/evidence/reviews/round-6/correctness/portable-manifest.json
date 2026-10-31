@@ -1,0 +1,363 @@
+{
+  "schemaVersion": 1,
+  "kind": "explicit portable round6 correctness evidence",
+  "root": "paths relative to evidence root",
+  "manifestOwnHashExcluded": true,
+  "files": {
+    "after-expiry-raw-model-and-queue.json": {
+      "size": 12893,
+      "sha256": "4ceeafd0e0e2ff63848d9b1ab4688f0ecafe80c4bb44398d96d0ef0d87d3fb99",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    },
+    "after-expiry-raw-queue.json": {
+      "size": 4264,
+      "sha256": "9f6bb51b9586596eba8c4b7c251795483b76d1d91d2cba163bb8902d26aafbd4",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    },
+    "after-expiry-runtime.sqlite.gz": {
+      "size": 36462,
+      "sha256": "b2d11893782fa8deb82cd021fba2b022cb95efa905c6bcb37ca1270170ad6508",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    },
+    "attempt1-host.log": {
+      "size": 19625,
+      "sha256": "db3e347ab60056a31a7fc3756e1e209500647053e78a4c94f5a9393edcc33b1c",
+      "role": "failed setup diagnostic; excluded from qualification"
+    },
+    "attempt2-host.log": {
+      "size": 19625,
+      "sha256": "910dd245c010d989d68c4e8bbd60d3af74cd19e87929fd26148150f14fe28779",
+      "role": "failed setup diagnostic; excluded from qualification"
+    },
+    "before-restart-raw-model-and-queue.json": {
+      "size": 12893,
+      "sha256": "414a7ad1754fb055832f23537c12daf9c1682c19733f8c7a2d41623bc9343b6e",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    },
+    "before-restart-runtime.sqlite.gz": {
+      "size": 36243,
+      "sha256": "1d2e077e1d14a75cfb020fe82d22ebde4167ddd54dd8a678debd65d94783f7a2",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    },
+    "changed-source-files.txt": {
+      "size": 17931,
+      "sha256": "ad4828723a9636479474d8b8e9700402e4b3288e65e8338f12eb10ec7aa371c8",
+      "role": "frozen review input or scope"
+    },
+    "controller.log": {
+      "size": 8231,
+      "sha256": "dcdf8ff865f05f8e0f0ed2ed022344e8ee7ad15069cf9dcabd75e5147e8580fc",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    },
+    "diagnostic-history.json": {
+      "size": 712,
+      "sha256": "733bd109fcd3f43f62b8e635ae0a6ef5ee941785b601a397cf93f0582fc91d26",
+      "role": "failed setup diagnostic; excluded from qualification"
+    },
+    "discussion-counts-final.json": {
+      "size": 74,
+      "sha256": "d734ca794777800e950d6cee483c2469636c4dd11389c81771c83b2f84b31f54",
+      "role": "frozen review input or scope"
+    },
+    "durable-checkpoint-summary.json": {
+      "size": 2642,
+      "sha256": "6594effeed5b3c916fcfd0cf288c657fea94731e86b84898f968fb6af905fc48",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    },
+    "expiry-controller.log": {
+      "size": 106,
+      "sha256": "e22d539aadae8ae944439ab690b259b8611ca43b4fa03e3deb2873406d9ced25",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    },
+    "final-raw-model-and-queue.json": {
+      "size": 12893,
+      "sha256": "414a7ad1754fb055832f23537c12daf9c1682c19733f8c7a2d41623bc9343b6e",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    },
+    "final-runtime.sqlite.gz": {
+      "size": 36234,
+      "sha256": "84064993c03d93abab8cfa159b2ff59d8dfdc13d13fed175d1e56fb8822db76c",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    },
+    "first-host.log": {
+      "size": 19624,
+      "sha256": "b85f14a63fdeeb45d00c905aff3391e7880c9d7fe09074279c4d77345cf64ed0",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    },
+    "frozen-inputs/discussion-snapshot.json": {
+      "size": 25920,
+      "sha256": "9bf8ff51e2f2e10911e994d65c3550dedb74754015f18a873690392cf844edec",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/head-checks.json": {
+      "size": 38969,
+      "sha256": "131da7f6df3b2fcefdc7e58db811f2d3879df7d3e2d95fd48201df5aa23fa9e7",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/issue-2892-comments-new.json": {
+      "size": 32231,
+      "sha256": "b4af784b6f2ef4b3b2f65960b419c1bc5f41e9b48366dd659d40f5c2d905bbd4",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/issue-2892-comments.json": {
+      "size": 3023892,
+      "sha256": "fd543e083832340ca953c5b102c1a1f546f641e8898e6bdb3f67c9f9587d84af",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/issue-2892.json": {
+      "size": 38912,
+      "sha256": "fc58b8c0360b1fa1fd72d8a953d3b650d422cf4b54de7d0bfb8f0f75b7d35a8e",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/issue-2898-comments-new.json": {
+      "size": 32231,
+      "sha256": "cbc0e77c89779c46fca9492b0fb2e926312505f45118d9243ce419b74586cf60",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/issue-2898-comments.json": {
+      "size": 1002586,
+      "sha256": "ab3053b5c3ee3cd9b983dd63c27ce32c74677bf5a23b62a28d629e88b422d889",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/issue-2898.json": {
+      "size": 8092,
+      "sha256": "57dee6ef7447a11fa6c77f4a5bb194f9b7608c087e359f2dc7127895bc93098c",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/issue-2907-comments-new.json": {
+      "size": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/issue-2907-comments.json": {
+      "size": 114537,
+      "sha256": "1fc1df4b790e6d84b99b1e21b84255e4ccc9740f08cf6438e579acb58eb0f48a",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/issue-2907.json": {
+      "size": 8486,
+      "sha256": "85edfd56986373ec9dfbce6b3dc0aaa872b34a118c84d94f39edb71360d98a6e",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/issue-2908-comments-new.json": {
+      "size": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/issue-2908-comments.json": {
+      "size": 229891,
+      "sha256": "7b546c61eb0ed29b20ee2ccd638fc0fc6668ab5fc262a0a8fb204bc73041254d",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/issue-2908.json": {
+      "size": 9237,
+      "sha256": "099b58f0ef731e0ed3655310a283ede04bb84dc5301292872a62b54aa69af8d7",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/issue-3410-comments-new.json": {
+      "size": 147355,
+      "sha256": "4d1d52850d591c0096979b63feaa78d1283c594879eaa596b7552119e33119c9",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/issue-3410-comments.json": {
+      "size": 3012267,
+      "sha256": "30b4aca777f66b9cc933a6b586210a79ae9fe724eca0144535ca1ac02e217d6f",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/issue-3410.json": {
+      "size": 7271,
+      "sha256": "f2ff96241950a7842512d1224d5977ac8226d68e82e121310b04d2240a82e8b7",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/main-red.json": {
+      "size": 97,
+      "sha256": "145a6ef46a0f11fd1b04234b3ddcc7c274e51e026d4456b3b4400a3bb98d27d1",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/org-AGENTS.md": {
+      "size": 28054,
+      "sha256": "ed7b301dc6211e5ed6f48cdc4b4eb2271fd03ee92f906adcbf0cf94762d42623",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/org-agents.json": {
+      "size": 39524,
+      "sha256": "fc48c35d94ed53a4707b9cd3283cb7015e40667f2e79b19b618e73befc17578e",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/pr-3410-comments-new.json": {
+      "size": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/pr-3410-comments.json": {
+      "size": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/pr-3410-reviews-new.json": {
+      "size": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/pr-3410-reviews.json": {
+      "size": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/pr-3410-threads.json": {
+      "size": 327,
+      "sha256": "fe0aa71970051c9a07e84570cf6fc98163c099588c40509e0897600c6d6197d1",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/pr-3410.json": {
+      "size": 24530,
+      "sha256": "4f5205368246e2ff6988f21d9b7e5c58dd744c58386dcafdbad87907aa1b73ad",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/project.json": {
+      "size": 6484,
+      "sha256": "ecf24fb6556132d426eb0538050e557082315f2398a10a25334610b0905c86b2",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/review-boundary.json": {
+      "size": 455,
+      "sha256": "4f297d06e9afa57934ecbf0174d5eda8fd5727b0459f5ae8f1967dc5a9b546bf",
+      "role": "frozen review input or scope"
+    },
+    "frozen-inputs/round6-start.json": {
+      "size": 10170,
+      "sha256": "c03ea91d11a7ac172ab96f44e136a2e783ace4adb15ad6076d9dc904f42dac59",
+      "role": "frozen review input or scope"
+    },
+    "manifest.json": {
+      "size": 1790,
+      "sha256": "20afef90f4a3d3659510c790d0cb47cbbe695e6e1ed31ba0efb32bcaa94ebc0a",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    },
+    "portable/README.md": {
+      "size": 6242,
+      "sha256": "b5c26d06549c5024376c04d8b68f5abfd6c63b2845aa0a9e8f23b0d576dc771a",
+      "role": "same-round portable adapter or packaging metadata; no new behavioral pass"
+    },
+    "portable/adapter-help.txt": {
+      "size": 1336,
+      "sha256": "8e1ea7fe0f6879309e44d5b99c73f8f6662f91c14302a25d3e0ac3f8c393bef5",
+      "role": "same-round portable adapter or packaging metadata; no new behavioral pass"
+    },
+    "portable/adapter-validation.json": {
+      "size": 467,
+      "sha256": "6f4444926f5c8ea31f634751dd66a41e39b8eb0163612f11a52f55e8b349d15a",
+      "role": "same-round portable adapter or packaging metadata; no new behavioral pass"
+    },
+    "portable/allowlist.txt": {
+      "size": 2131,
+      "sha256": "d96373fa67b39ef8734df5f2b507ea4cf3790ed702a07c23bd008f29682b6308",
+      "role": "same-round portable adapter or packaging metadata; no new behavioral pass"
+    },
+    "portable/case-inputs.json": {
+      "size": 4144,
+      "sha256": "aa8ea4c7bc3a1473110c7d83a3ba67454a0da5eabe9029cade29e75b051487d4",
+      "role": "same-round portable adapter or packaging metadata; no new behavioral pass"
+    },
+    "portable/diagnostics/attempt1-runtime.sqlite.gz": {
+      "size": 36257,
+      "sha256": "8c4ab70477f792d5623a856cbb89f53857d34027bb89875a92b42aa60d025676",
+      "role": "failed setup diagnostic; excluded from qualification"
+    },
+    "portable/diagnostics/attempt2-runtime.sqlite.gz": {
+      "size": 36233,
+      "sha256": "f6cd32937fdc8eb08676390a77377946dc331728336cf9dbd93a1b1c178769de",
+      "role": "failed setup diagnostic; excluded from qualification"
+    },
+    "portable/diagnostics/attempts.json": {
+      "size": 2200,
+      "sha256": "c2d1d8cdd5e61512369571daf6ba9ede7bc05e2cb8caa5d63f3e672f74cc909a",
+      "role": "failed setup diagnostic; excluded from qualification"
+    },
+    "portable/original-script-hashes.json": {
+      "size": 272,
+      "sha256": "a1afba2762f296548858c3e74573994ac374510a92c5879421c7953014b8dac3",
+      "role": "same-round portable adapter or packaging metadata; no new behavioral pass"
+    },
+    "portable/packaging-verification.json": {
+      "size": 2629,
+      "sha256": "5d503a6a7038b91c546c74a310c2d8d3afbd2bc1a900bf835481d7506bc73b6f",
+      "role": "same-round portable adapter or packaging metadata; no new behavioral pass"
+    },
+    "portable/reproduce_explicit_products.py": {
+      "size": 16470,
+      "sha256": "00fdce33d73cd5bfa6fa8817320bc8ac9b9b8dd304c1875666a14d1a4a71e396",
+      "role": "same-round portable adapter or packaging metadata; no new behavioral pass"
+    },
+    "post-expiry-host.log": {
+      "size": 14101,
+      "sha256": "d325e06efce7a6a90e5bece4f534ab7212f7069751028a3823410a12886e6a26",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    },
+    "probe-verification.json": {
+      "size": 716,
+      "sha256": "2d62ac3961f16705024327386c899c0b9a879958c5bd34a34d9fc336f866bf84",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    },
+    "probe_timer_admission.py": {
+      "size": 7289,
+      "sha256": "8c568cc79c2f98c2503ec87f9c926038cc6eeeb28d04ef9e70ccfd2ae206dc2a",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    },
+    "production-files.json": {
+      "size": 10161,
+      "sha256": "a47e77401c61953de49ea3598444526f5c81c9bce1c2739cdce3e9547ac5b5d5",
+      "role": "frozen review input or scope"
+    },
+    "production.diff": {
+      "size": 486508,
+      "sha256": "daa2db1f774ff83168b5f3b0a74b4fdb67b841114e353ae2f9d66e0f2d6cbf5a",
+      "role": "frozen review input or scope"
+    },
+    "report.md": {
+      "size": 10713,
+      "sha256": "0fe5fe05b4f9cb0567aca9209b017ddd081ac3d85d7938e7b3b04e2fd28f4b06",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    },
+    "restarted-host.log": {
+      "size": 11059,
+      "sha256": "b2c21aca3ce575efdaf00bc8a6098623c3f02b29ebd585b961bfbeb5f25c5adf",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    },
+    "resume_timer_probe.py": {
+      "size": 3931,
+      "sha256": "11729447af705e0d2c8b1f6b8670fac1dac6ae0e5b762bb1738ed40848732788",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    },
+    "review-scope.json": {
+      "size": 513,
+      "sha256": "d34becc9e04e3516fb1920d629359d6b334feeff3bcf1d5501d8f88a7be5f5f2",
+      "role": "frozen review input or scope"
+    },
+    "tests-files.json": {
+      "size": 5303,
+      "sha256": "c2e1d6ae2e550bd142b50e2acaf499f879193fe78f3444be39fbb8e2eb990304",
+      "role": "frozen review input or scope"
+    },
+    "tests.diff": {
+      "size": 588020,
+      "sha256": "61b377af318798ddfe64d8800f268c3d9b5e300d14bc692c9da4a954a6c1a77c",
+      "role": "frozen review input or scope"
+    },
+    "threads.json": {
+      "size": 326,
+      "sha256": "481611904d8520115ed531afbfd83034a0b85a7b5e3cf42aad3496d2729cdfc9",
+      "role": "frozen review input or scope"
+    },
+    "timer-admission-result.json": {
+      "size": 18434,
+      "sha256": "edc79c7d111fbadfb8429342adfa708e63a6220ecc4437d14bfb8b6f1197a4fe",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    },
+    "timer-after-expiry-result.json": {
+      "size": 23794,
+      "sha256": "59180835a2b877b41f5dc5a5c0c089564eae68a6b60d2c4968ff697075b4da21",
+      "role": "original source-bound report, script, request, log, store or read-only observation"
+    }
+  }
+}

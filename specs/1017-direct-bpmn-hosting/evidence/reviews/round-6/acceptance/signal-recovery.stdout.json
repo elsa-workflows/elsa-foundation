@@ -1,0 +1,40 @@
+{
+  "kind": "actual-model-signal-recovery-matrix",
+  "sourceRevision": "8a1aa37942393923b4f55330d6da75a1d5eb5b12",
+  "cases": [
+    {
+      "parent": "direct",
+      "wholeStores": 6,
+      "ownedProcesses": 3,
+      "nativeEventWorkers": 2
+    },
+    {
+      "parent": "root",
+      "wholeStores": 6,
+      "ownedProcesses": 3,
+      "nativeEventWorkers": 2
+    },
+    {
+      "parent": "sequence",
+      "wholeStores": 6,
+      "ownedProcesses": 3,
+      "nativeEventWorkers": 2
+    },
+    {
+      "parent": "flowchart",
+      "wholeStores": 6,
+      "ownedProcesses": 3,
+      "nativeEventWorkers": 2
+    },
+    {
+      "parent": "compensationscope",
+      "wholeStores": 6,
+      "ownedProcesses": 3,
+      "nativeEventWorkers": 2
+    }
+  ],
+  "wholeStores": 30,
+  "ownedProcesses": 15,
+  "laterListenerAndRearmRetryProved": false,
+  "finalUpgradeAndStudioProved": false
+}

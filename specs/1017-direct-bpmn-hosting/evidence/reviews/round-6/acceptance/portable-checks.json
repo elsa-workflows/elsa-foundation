@@ -1,0 +1,119 @@
+[
+  {
+    "name": "parallel-native",
+    "command": [
+      "python3",
+      "tools/bpmn/verify_parallel_embedding.py",
+      "--manifest",
+      "specs/1017-direct-bpmn-hosting/evidence/embedding/parallel-native-recovery/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.232
+  },
+  {
+    "name": "human-duration",
+    "command": [
+      "python3",
+      "tools/bpmn/verify_duration_timer.py",
+      "--manifest",
+      "specs/1017-direct-bpmn-hosting/evidence/races/human-duration/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.131
+  },
+  {
+    "name": "service-duration",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_service_duration.py",
+      "--manifest",
+      "specs/1017-direct-bpmn-hosting/evidence/races/service-duration/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 1.42
+  },
+  {
+    "name": "held-retry",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_held_service_retry.py",
+      "--manifest",
+      "specs/1017-direct-bpmn-hosting/evidence/pipeline/held-service-retry/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.5
+  },
+  {
+    "name": "held-cancellation",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_held_service_cancellation.py",
+      "--manifest",
+      "specs/1017-direct-bpmn-hosting/evidence/pipeline/held-service-cancellation/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.678
+  },
+  {
+    "name": "held-command-race",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_held_command_race.py",
+      "--manifest",
+      "specs/1017-direct-bpmn-hosting/evidence/races/held-command-race/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.813
+  },
+  {
+    "name": "budget-exhaustion",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_service_budget_exhaustion.py",
+      "--manifest",
+      "specs/1017-direct-bpmn-hosting/evidence/pipeline/service-budget-exhaustion/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.389
+  },
+  {
+    "name": "signal-recovery",
+    "command": [
+      "python3",
+      "e2e-tests/bpmn/verify_signal_recovery.py",
+      "specs/1017-direct-bpmn-hosting/evidence/events/signal-recovery/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.246
+  },
+  {
+    "name": "model-broadcast",
+    "command": [
+      "python3",
+      "e2e-tests/bpmn/verify_model_broadcast.py",
+      "specs/1017-direct-bpmn-hosting/evidence/events/model-broadcast/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.174
+  },
+  {
+    "name": "signal-interruption",
+    "command": [
+      "python3",
+      "e2e-tests/bpmn/verify_signal_interruption.py",
+      "specs/1017-direct-bpmn-hosting/evidence/events/pending-sibling-interruption/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.243
+  },
+  {
+    "name": "runtime-only-rollback",
+    "command": [
+      "python3",
+      "e2e-tests/bpmn/verify_model_rollback.py",
+      "specs/1017-direct-bpmn-hosting/evidence/retention/runtime-only-rollback/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.24
+  }
+]

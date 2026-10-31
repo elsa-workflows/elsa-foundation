@@ -1,0 +1,79 @@
+[
+  {
+    "name": "direct-http-recovery",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_http_recovery.py",
+      "--manifest",
+      "specs/1017-direct-bpmn-hosting/evidence/pipeline/direct-http-recovery/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.116
+  },
+  {
+    "name": "embedded-native-recovery",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_http_recovery.py",
+      "--manifest",
+      "specs/1017-direct-bpmn-hosting/evidence/pipeline/embedded-native-recovery/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.407
+  },
+  {
+    "name": "business-error-native-recovery",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_http_recovery.py",
+      "--manifest",
+      "specs/1017-direct-bpmn-hosting/evidence/pipeline/business-error-native-recovery/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.414
+  },
+  {
+    "name": "technical-fault-native-recovery",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_http_recovery.py",
+      "--manifest",
+      "specs/1017-direct-bpmn-hosting/evidence/pipeline/technical-fault-native-recovery/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.25
+  },
+  {
+    "name": "consumed-before-ack",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_http_recovery.py",
+      "--manifest",
+      "specs/1017-direct-bpmn-hosting/evidence/pipeline/consumed-before-ack/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.158
+  },
+  {
+    "name": "pending-native-parent-return",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_http_recovery.py",
+      "--manifest",
+      "specs/1017-direct-bpmn-hosting/evidence/pipeline/pending-native-parent-return/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.265
+  },
+  {
+    "name": "successful-native-parent-return",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_http_recovery.py",
+      "--manifest",
+      "specs/1017-direct-bpmn-hosting/evidence/pipeline/successful-native-parent-return/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.688
+  }
+]

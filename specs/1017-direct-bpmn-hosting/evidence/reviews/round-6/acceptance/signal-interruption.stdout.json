@@ -1,0 +1,40 @@
+{
+  "kind": "actual-pending-event-sibling-interruption-matrix",
+  "sourceRevision": "f4c923ed9bb01f764e648ee45d1c76b081f51098",
+  "cases": [
+    {
+      "parent": "direct",
+      "wholeStores": 6,
+      "ownedHosts": 3,
+      "pendingModelSettlementCrashProved": true
+    },
+    {
+      "parent": "root",
+      "wholeStores": 6,
+      "ownedHosts": 3,
+      "pendingModelSettlementCrashProved": true
+    },
+    {
+      "parent": "sequence",
+      "wholeStores": 6,
+      "ownedHosts": 3,
+      "pendingModelSettlementCrashProved": true
+    },
+    {
+      "parent": "flowchart",
+      "wholeStores": 6,
+      "ownedHosts": 3,
+      "pendingModelSettlementCrashProved": true
+    },
+    {
+      "parent": "compensationscope",
+      "wholeStores": 6,
+      "ownedHosts": 3,
+      "pendingModelSettlementCrashProved": true
+    }
+  ],
+  "wholeStores": 30,
+  "ownedHosts": 15,
+  "pendingModelSettlementCrashProved": true,
+  "finalUpgradeAndStudioProved": false
+}

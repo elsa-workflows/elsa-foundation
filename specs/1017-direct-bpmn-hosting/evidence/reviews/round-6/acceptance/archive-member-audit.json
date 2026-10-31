@@ -1,0 +1,944 @@
+[
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/whole-host-evidence.tar.gz",
+    "path": "completed.sqlite.gz",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/whole-host-evidence.tar.gz",
+    "path": "direct-process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/whole-host-evidence.tar.gz",
+    "path": "legacy-partial-forks/process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/whole-host-evidence.tar.gz",
+    "path": "legacy-partial-forks/upgraded-design.sqlite.gz",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/whole-host-evidence.tar.gz",
+    "path": "legacy-partial-forks/upgraded-runtime.sqlite.gz",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/whole-host-evidence.tar.gz",
+    "path": "template-design-upgrade/process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/whole-host-evidence.tar.gz",
+    "path": "template-design-upgrade/upgraded-design.sqlite.gz",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/whole-host-evidence.tar.gz",
+    "path": "template-design-upgrade/upgraded-runtime.sqlite.gz",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-3ac1c6757/whole-host-evidence.tar.gz",
+    "path": "waiting.sqlite.gz",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "compensationscope/broadcast-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "compensationscope/finished-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "compensationscope/finished-parent.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "compensationscope/finished-workers.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "compensationscope/process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "compensationscope/recovered-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "compensationscope/retained-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "compensationscope/waiting-api.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "compensationscope/waiting-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "compensationscope/waiting-workers.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "compensationscope-cancel/case.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "compensationscope-cancel/completed-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "compensationscope-cancel/retained-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "compensationscope-cancel/waiting-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "compensationscope-complete/case.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "compensationscope-complete/completed-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "compensationscope-complete/retained-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "compensationscope-complete/waiting-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "direct/broadcast-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "direct/finished-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "direct/finished-workers.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "direct/process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "direct/recovered-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "direct/retained-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "direct/waiting-api.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "direct/waiting-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "direct/waiting-workers.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "direct-process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "flowchart/broadcast-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "flowchart/finished-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "flowchart/finished-parent.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "flowchart/finished-workers.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "flowchart/process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "flowchart/recovered-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "flowchart/retained-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "flowchart/waiting-api.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "flowchart/waiting-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "flowchart/waiting-workers.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "flowchart-cancel/case.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "flowchart-cancel/completed-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "flowchart-cancel/retained-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "flowchart-cancel/waiting-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "flowchart-complete/case.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "flowchart-complete/completed-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "flowchart-complete/retained-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "flowchart-complete/waiting-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "human-first/before-api.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "human-first/before-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "human-first/decided-api.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "human-first/decided-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "human-first/finished-api.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "human-first/finished-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "human-first/process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "human-first/recovered-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "human-first/retained-api.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "human-first/retained-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "legacy-broadcast/process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "legacy-called-ack/process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "legacy-controls/process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "legacy-multi-instance/process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "legacy-native-terminals/process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "legacy-partial-forks/process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "legacy-pending-parent/process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "one-worker-cancel/after.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "one-worker-cancel/before.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "one-worker-cancel/process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "one-worker-cancel/retained.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-compensationscope/bothWaiting-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-compensationscope/case.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-compensationscope/final-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-compensationscope/joined-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-compensationscope/partial-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-compensationscope/recovered-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-compensationscope/retained-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-flowchart/bothWaiting-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-flowchart/case.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-flowchart/final-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-flowchart/joined-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-flowchart/partial-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-flowchart/recovered-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-flowchart/retained-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-root/bothWaiting-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-root/case.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-root/final-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-root/joined-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-root/partial-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-root/recovered-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-root/retained-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-sequence/bothWaiting-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-sequence/case.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-sequence/final-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-sequence/joined-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-sequence/partial-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-sequence/recovered-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "parallel-sequence/retained-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root/broadcast-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root/finished-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root/finished-parent.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root/finished-workers.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root/process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root/recovered-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root/retained-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root/waiting-api.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root/waiting-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root/waiting-workers.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root-cancel/case.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root-cancel/completed-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root-cancel/retained-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root-cancel/waiting-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root-cancel-before-admission/cancelled-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root-cancel-before-admission/case.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root-cancel-before-admission/completed-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root-cancel-before-admission/prepared-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root-cancel-before-admission/retained-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root-complete/case.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root-complete/completed-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root-complete/retained-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "root-complete/waiting-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "runtime-only-parallel/process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "sequence/broadcast-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "sequence/finished-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "sequence/finished-parent.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "sequence/finished-workers.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "sequence/process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "sequence/recovered-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "sequence/retained-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "sequence/waiting-api.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "sequence/waiting-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "sequence/waiting-workers.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "sequence-cancel/case.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "sequence-cancel/completed-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "sequence-cancel/retained-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "sequence-cancel/waiting-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "sequence-complete/case.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "sequence-complete/completed-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "sequence-complete/retained-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "sequence-complete/waiting-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "template-design-upgrade/process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "timer-first/before-api.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "timer-first/before-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "timer-first/decided-api.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "timer-first/decided-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "timer-first/finished-api.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "timer-first/finished-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "timer-first/process.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "timer-first/recovered-checked.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "timer-first/retained-api.json",
+    "hashAndSizeMatch": true
+  },
+  {
+    "manifest": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/archive-assets.json",
+    "archive": "specs/1017-direct-bpmn-hosting/evidence/main-adoption/931123c7e/repair/fixed-38c402d31/host-observations.tar.gz",
+    "path": "timer-first/retained-checked.json",
+    "hashAndSizeMatch": true
+  }
+]

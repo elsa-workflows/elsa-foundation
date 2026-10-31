@@ -1,0 +1,27 @@
+{
+  "sourceRevision": "a2c2e47751d595c9489f889593ed4d7427ef6076",
+  "actualHumanDurationJourneys": [
+    {
+      "order": "human-first",
+      "wholeStoresVerified": 4,
+      "actualWorkbenchProcesses": 4,
+      "lateInputDoesNotAdvance": true,
+      "timerAcknowledgedFromExactReceipt": true
+    },
+    {
+      "order": "timer-first",
+      "wholeStoresVerified": 4,
+      "actualWorkbenchProcesses": 4,
+      "lateInputDoesNotAdvance": true,
+      "timerAcknowledgedFromExactReceipt": true
+    }
+  ],
+  "wholeStoresVerified": 8,
+  "actualWorkbenchProcesses": 8,
+  "noNativeCarrierOrDesignStorage": true,
+  "actualBothHumanTimerOrdersProved": true,
+  "actualWorkerTimerOrdersProved": false,
+  "heldServiceTimerInterruptionProved": false,
+  "simultaneousCommitOrdersProved": false,
+  "finalUpgradeAndStudioProved": false
+}

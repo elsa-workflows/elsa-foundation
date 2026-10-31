@@ -1,0 +1,702 @@
+{
+  "reviewedHead": "d1449c0bff679212f8a64766a95b1c29cfadbcea",
+  "reviewedBase": "d481d6a5e624e35bba9fbf32033ed02aff64cbef",
+  "scope": "Round6 reports/audits and frozen668-comment input corpus; original decoded bytes retained. Temp paths are provenance, not reproduction dependencies. Correctness accepted-input capture is added separately before any writer correction.",
+  "files": [
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-standards/report.md",
+      "retained": "standards/report.md",
+      "sourceSha256": "ba41712901f7a6c265cf7350623d2ac9ef0ef10c8b2b6c5ccead1f42d521e16a"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-standards/findings.json",
+      "retained": "standards/findings.json",
+      "sourceSha256": "c2185a48d0d960e85deb54b15041bf77011fbb021d870996ff189e57d5a6c784"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-standards/diff-scope.json",
+      "retained": "standards/diff-scope.json",
+      "sourceSha256": "6ae4cd9735be8491c7fd3b94823e1ae2d6d1f48e6efe3c5ca23dec13f2ab01a1"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-standards/input-provenance.json",
+      "retained": "standards/input-provenance.json",
+      "sourceSha256": "1e45d7ca3ddc31f0d717e8dbabaff13997eaa2407a57d2a21db5406ae51ae118"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-standards/discussion-counts.json",
+      "retained": "standards/discussion-counts.json",
+      "sourceSha256": "fe7714382c2817a6a8ae09fa1c43ca4c4ee7df46dfe0226dd9d57f689c7350c3"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-standards/evidence-audit.json",
+      "retained": "standards/evidence-audit.json",
+      "sourceSha256": "fdcbc4564e31898a7dba56e63854dcbb99c4bb7ee07c781bfb45c5a932e575f6"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-standards/independent-discovery-audit.json",
+      "retained": "standards/independent-discovery-audit.json",
+      "sourceSha256": "af3caf92838fb567dfe6289c25985c628c499cee82105e616a01bbcfa3c35200"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-standards/sqlite-integrity-audit.json",
+      "retained": "standards/sqlite-integrity-audit.json",
+      "sourceSha256": "f87d2f16c21b7883975cdcaa05fa4e28300805dd44f8a91a0081f09be0e60514"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-standards/audit_evidence.py",
+      "retained": "standards/audit_evidence.py",
+      "sourceSha256": "16a83ee3d0936e54b0ebf3965d78dc483ece8fbd808070a4abd0b31ad9341eba"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-standards/audit_discovery.py",
+      "retained": "standards/audit_discovery.py",
+      "sourceSha256": "d23fcd2b46cf9ae74a2bc4c6b1119da2594292ff5e42568e2baf343a9fd6bc2a"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-standards/audit_sqlite.py",
+      "retained": "standards/audit_sqlite.py",
+      "sourceSha256": "4798a348a72fc6f29bd389b054e58db2ae22545a1df1da6ce9a24bc0ed75dfca"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-standards/embedding-json-probe/README.md",
+      "retained": "standards/embedding-json-probe/README.md",
+      "sourceSha256": "fb3e11ceb4facded9e5f4b154b2e087861edae9213b933ed33566dfc95fc5def"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-standards/embedding-json-probe/Program.cs",
+      "retained": "standards/embedding-json-probe/Program.cs",
+      "sourceSha256": "6c29d52b3f225812606c81182fc7b0f819e601109cf790c601b3628a8e19012e"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-standards/embedding-json-probe/generate-probe-project.py",
+      "retained": "standards/embedding-json-probe/generate-probe-project.py",
+      "sourceSha256": "4ac422fc08fa1f38573872cfd217a438b2f0b6fba7cc2be766ee51b27923e12e"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-standards/embedding-json-probe/output.log",
+      "retained": "standards/embedding-json-probe/output.log.gz",
+      "sourceSha256": "8961f0543fef21652a1fb47906e325980bd237122216fa481266526bc8b60f2b"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-standards/embedding-json-probe/provenance.json",
+      "retained": "standards/embedding-json-probe/provenance.json",
+      "sourceSha256": "b50b9ef00c1b3f6133717c32fbf3792acfddf1770d123569b808fc2929d51ab0"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-standards/embedding-json-probe/Probe.csproj.gz",
+      "retained": "standards/embedding-json-probe/Probe.csproj.gz",
+      "sourceSha256": "fcc6c3d04849afbf202fca9d8d92dda222ecd5e042222c94ab240810189cc67f"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-standards/embedding-json-probe/configuration.json",
+      "retained": "standards/embedding-json-probe/configuration.json",
+      "sourceSha256": "85ba02975d5428792f02e4d564b62991fe231c1e9bbd883155d74c39de03accb"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-standards/evidence-allowlist.json",
+      "retained": "standards/evidence-allowlist.json",
+      "sourceSha256": "0fc405074659a5ef0b4851583757250ad425363421fa8f8b2f776412d894681e"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/all-comment-index.txt",
+      "retained": "acceptance/all-comment-index.txt.gz",
+      "sourceSha256": "afe38ac4821381dfc7f5e71f194f1cd5be3f80b50f0800958262db882ef84eeb"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/archive-member-audit.json",
+      "retained": "acceptance/archive-member-audit.json",
+      "sourceSha256": "386e5492f4803d1c12af22da1e80f76bec42d24c2ad5ba61c80b1fc6846ca965"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/audit_closed_stores.py",
+      "retained": "acceptance/audit_closed_stores.py",
+      "sourceSha256": "9bdced1437e1508c9906a7ded43f3ea1210d7f00e7b67ff507193ff9b4891049"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/audit_evidence.py",
+      "retained": "acceptance/audit_evidence.py",
+      "sourceSha256": "3b6f5120254b571bfdb9307e8b1bb77ee38be4995095f769733828545d3eec8f"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/audit_nested_assets.py",
+      "retained": "acceptance/audit_nested_assets.py",
+      "sourceSha256": "53f25d9c8eaabcf5ee204f03374e3d85ac816fcb2d697a812939366a72d53a6c"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/budget-exhaustion.stderr.log",
+      "retained": "acceptance/budget-exhaustion.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/budget-exhaustion.stdout.json",
+      "retained": "acceptance/budget-exhaustion.stdout.json",
+      "sourceSha256": "da19e5c6be61bfe35d5c1610d42df94bbac949b7a004dab712232cfeb2828482"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/business-error-native-recovery.stderr.log",
+      "retained": "acceptance/business-error-native-recovery.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/business-error-native-recovery.stdout.json",
+      "retained": "acceptance/business-error-native-recovery.stdout.json",
+      "sourceSha256": "6464e3d8df34ac5f8978213e5c5851bbbbcd5dd4db94baf5c81ac32b7ee3b02d"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/cancellation-checks.json",
+      "retained": "acceptance/cancellation-checks.json",
+      "sourceSha256": "2ad939d53d793efe2b1ae222d1c1562a61e6bc3f40a5be56412a7e6b6e5a5f8d"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/closed-store-audit.json",
+      "retained": "acceptance/closed-store-audit.json",
+      "sourceSha256": "743b71dd7c8761fd78b6e9fc55b5f690776bb531b96ade58d16b4429aca0eff1"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/consumed-before-ack.stderr.log",
+      "retained": "acceptance/consumed-before-ack.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/consumed-before-ack.stdout.json",
+      "retained": "acceptance/consumed-before-ack.stdout.json",
+      "sourceSha256": "6c53eeb2aa3088f0f8f1683a57ca04fa1cdce07b2f09204676bc38a064b4b091"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/diff-paths.txt",
+      "retained": "acceptance/diff-paths.txt",
+      "sourceSha256": "cb959f0d2a3b797469232fa4b341627cc8ef6daa812afaed8d63989b87c51b52"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/direct-http-recovery.stderr.log",
+      "retained": "acceptance/direct-http-recovery.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/direct-http-recovery.stdout.json",
+      "retained": "acceptance/direct-http-recovery.stdout.json",
+      "sourceSha256": "fdd54fbceb1d4934d48a9797db68b76d9743158737aa223beda149c2949f18e6"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/discussion-2892.md",
+      "retained": "acceptance/discussion-2892.md.gz",
+      "sourceSha256": "efe9916bdf066ce70aa451097ea52919b635f54582f526338e7f4324cd1ed1c8"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/discussion-2898.md",
+      "retained": "acceptance/discussion-2898.md.gz",
+      "sourceSha256": "bb3ae7a4792d7280d628a8c66479be82959deb8cd240d9c60b889ccdc1445a00"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/discussion-2907.md",
+      "retained": "acceptance/discussion-2907.md",
+      "sourceSha256": "4626ee318c53083574c94924110380837cfb1998fc536879131e8155aa03a242"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/discussion-2908.md",
+      "retained": "acceptance/discussion-2908.md",
+      "sourceSha256": "867b4bc441e9b614a65e0c3ece98777ef000ba3cf29e250778833c9dd4da6c12"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/discussion-3410.md",
+      "retained": "acceptance/discussion-3410.md.gz",
+      "sourceSha256": "251cc4953414ef72796ab63a39f11a0e5fab80c3197659b4e05bdbc1b7934bd6"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/discussion-acceptance-digest.md",
+      "retained": "acceptance/discussion-acceptance-digest.md.gz",
+      "sourceSha256": "d4d69a234bb06934ca50252fa659c5a44407b97008243a5796f4892c953c769f"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/discussion-audit-final.json",
+      "retained": "acceptance/discussion-audit-final.json.gz",
+      "sourceSha256": "7226642b888de3db389ad4e053278bb9fe628274906e670075af29542f5d6375"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/discussion-audit.json",
+      "retained": "acceptance/discussion-audit.json.gz",
+      "sourceSha256": "121e157c717547778adaa13a0b10961dc0b03cb253b6bd10743f299c921b420e"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/embedded-native-recovery.stderr.log",
+      "retained": "acceptance/embedded-native-recovery.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/embedded-native-recovery.stdout.json",
+      "retained": "acceptance/embedded-native-recovery.stdout.json",
+      "sourceSha256": "2366270d096186137696e4a1ccdadddd1097c4f3df94f01120031d9665a0d23e"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/etl-origin-compensationscope.stderr.log",
+      "retained": "acceptance/etl-origin-compensationscope.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/etl-origin-compensationscope.stdout.json",
+      "retained": "acceptance/etl-origin-compensationscope.stdout.json",
+      "sourceSha256": "db523b9a25ec7612d201358efe7d0060af1e37acaa87f3e4cc90e92106bf01ea"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/etl-origin-flowchart.stderr.log",
+      "retained": "acceptance/etl-origin-flowchart.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/etl-origin-flowchart.stdout.json",
+      "retained": "acceptance/etl-origin-flowchart.stdout.json",
+      "sourceSha256": "ef46c46ba14f9515809088e4c557d478da9af35c41d311c19c9fad5b51844e6b"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/etl-origin-root.stderr.log",
+      "retained": "acceptance/etl-origin-root.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/etl-origin-root.stdout.json",
+      "retained": "acceptance/etl-origin-root.stdout.json",
+      "sourceSha256": "b40643b67a41798730c1a73576fda75ab73cc93e498c13bba7501211877d0b97"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/etl-origin-sequence.stderr.log",
+      "retained": "acceptance/etl-origin-sequence.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/etl-origin-sequence.stdout.json",
+      "retained": "acceptance/etl-origin-sequence.stdout.json",
+      "sourceSha256": "3b05730cc388839943a90c896724984e1af4618758d98a5e8c72805d109d39cf"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/full-diff-check.log",
+      "retained": "acceptance/full-diff-check.log.gz",
+      "sourceSha256": "a1725c2368b9257d69dde2e8fe18342c7bf23e3808f7d0d7994b593a91acd5a9"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/full-diff-paths.txt",
+      "retained": "acceptance/full-diff-paths.txt.gz",
+      "sourceSha256": "43c8d153c9489e33cacbafab6c99e8f1d27101736f98f91ab7940a4de342a960"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/held-cancellation.stderr.log",
+      "retained": "acceptance/held-cancellation.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/held-cancellation.stdout.json",
+      "retained": "acceptance/held-cancellation.stdout.json",
+      "sourceSha256": "f0dd4e38c324c551521fd310f2c502ecfae00464ebe4492a43ee5edd0e0d4424"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/held-command-race.stderr.log",
+      "retained": "acceptance/held-command-race.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/held-command-race.stdout.json",
+      "retained": "acceptance/held-command-race.stdout.json",
+      "sourceSha256": "f21b8d2bc3f2e08937182a9f9bcbb10d5155458cdd6945a456099f7762a03925"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/held-retry.stderr.log",
+      "retained": "acceptance/held-retry.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/held-retry.stdout.json",
+      "retained": "acceptance/held-retry.stdout.json",
+      "sourceSha256": "c65151884f1d25fb8ae50785e6a3dc0f00369c95f8b5ca70cc642a11a5e5d73c"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/human-duration.stderr.log",
+      "retained": "acceptance/human-duration.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/human-duration.stdout.json",
+      "retained": "acceptance/human-duration.stdout.json",
+      "sourceSha256": "4f0d2b8c82dd858cb528a5f081cb213158ab49d3f37439f983a5606fada6c738"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/inverse-cancel-compensationscope.stderr.log",
+      "retained": "acceptance/inverse-cancel-compensationscope.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/inverse-cancel-compensationscope.stdout.json",
+      "retained": "acceptance/inverse-cancel-compensationscope.stdout.json",
+      "sourceSha256": "44a2d625ad4d6087030c42d2c3e8431bec176d4ea1bfd0e5ffdce4000770d2a8"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/inverse-cancel-direct.stderr.log",
+      "retained": "acceptance/inverse-cancel-direct.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/inverse-cancel-direct.stdout.json",
+      "retained": "acceptance/inverse-cancel-direct.stdout.json",
+      "sourceSha256": "296b5b61f4fdf529044a990ae3e92a2703ce31c507f5ef04b6001edbda7d45ff"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/inverse-cancel-flowchart.stderr.log",
+      "retained": "acceptance/inverse-cancel-flowchart.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/inverse-cancel-flowchart.stdout.json",
+      "retained": "acceptance/inverse-cancel-flowchart.stdout.json",
+      "sourceSha256": "d82f6e5ba764ae5f6216c9559f907ba69b4bb20bb5f2fdbbb6d6902f35b4ffbd"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/inverse-cancel-root.stderr.log",
+      "retained": "acceptance/inverse-cancel-root.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/inverse-cancel-root.stdout.json",
+      "retained": "acceptance/inverse-cancel-root.stdout.json",
+      "sourceSha256": "879e7bdafba3449744d6dee33efcf02923a813fe1bf8d755b2a73e77a9ae4b05"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/inverse-cancel-sequence.stderr.log",
+      "retained": "acceptance/inverse-cancel-sequence.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/inverse-cancel-sequence.stdout.json",
+      "retained": "acceptance/inverse-cancel-sequence.stdout.json",
+      "sourceSha256": "16ebff29c74f7b197a0c790b4fc2c0207af3e3b2b5626269b15b04d2c1a17ddd"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/manifest-assets.json",
+      "retained": "acceptance/manifest-assets.json.gz",
+      "sourceSha256": "8ebc98ee9fa6d4a84042a1d09387ad1e962e3c1dfdd82f383e01141bf39d2d2f"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/manifest-audit-initial-loose-file-probe.json",
+      "retained": "acceptance/manifest-audit-initial-loose-file-probe.json",
+      "sourceSha256": "48982a39d3ca8db464ee85bf4fbbebe4e2355343341cb97e9213c4fab1549bd4"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/manifest-audit.json",
+      "retained": "acceptance/manifest-audit.json",
+      "sourceSha256": "7cbc639dec0e0236b1e7a47ac86b5e67c9cbf00d41e5296f845d64264f4073dd"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/model-broadcast.stderr.log",
+      "retained": "acceptance/model-broadcast.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/model-broadcast.stdout.json",
+      "retained": "acceptance/model-broadcast.stdout.json",
+      "sourceSha256": "65ce5d44a3545e7560ccf5b3de5efedc64699516d141f28dda36fc37d7bf9f4d"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/nested-asset-audit.json",
+      "retained": "acceptance/nested-asset-audit.json",
+      "sourceSha256": "d9a75ce7bb527f212ce8ccf69997608197ff24bed7a3f7e5495dd1dcae975758"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/nested-asset-records.json",
+      "retained": "acceptance/nested-asset-records.json.gz",
+      "sourceSha256": "b777a46d80cbdee6dd1c9d890e11a67938c05caef62c2d7bcefb0fb440d57cdb"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/old-fault-observation-audit.json",
+      "retained": "acceptance/old-fault-observation-audit.json",
+      "sourceSha256": "ed7af093cc668ebf1d2c556fbb26857223ff3299e992fb3253fc0965eaf94d6a"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/outcome-checks.json",
+      "retained": "acceptance/outcome-checks.json",
+      "sourceSha256": "e2c07a91b14a141f4273c8e8db6f613548835ae48be0755b11faf06899536977"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/parallel-native.stderr.log",
+      "retained": "acceptance/parallel-native.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/parallel-native.stdout.json",
+      "retained": "acceptance/parallel-native.stdout.json",
+      "sourceSha256": "2a5127880c02bb525f2d3d059308d0cb068ca3ee053f014fbeaad7014c1770d6"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/pending-native-parent-return.stderr.log",
+      "retained": "acceptance/pending-native-parent-return.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/pending-native-parent-return.stdout.json",
+      "retained": "acceptance/pending-native-parent-return.stdout.json",
+      "sourceSha256": "df930cecf6610639f9fa679192e8e0758a53ce3b5eeef5d6a3253ff2960d4cf4"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/portable-checks.json",
+      "retained": "acceptance/portable-checks.json",
+      "sourceSha256": "1f3437a99bfc7177fd18b740e63e66fe309972eeede692a124623cea1b576978"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/product-diff-check.log",
+      "retained": "acceptance/product-diff-check.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/production-review.diff",
+      "retained": "acceptance/production-review.diff.gz",
+      "sourceSha256": "dcd69f71e90adc3b6bf76da5ef0ecad25fe80dd915df4a5467d0388a2a411284"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/report.md",
+      "retained": "acceptance/report.md",
+      "sourceSha256": "63cb51ed4826b34f1ae5e30ce97b006303fd0a8052d7e83b123c45fd06669502"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/review-output-manifest.json",
+      "retained": "acceptance/review-output-manifest.json",
+      "sourceSha256": "7fd368a5eba6f9c3d162daac279c7301c25a9208fb2a35e17622197046f05268"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/run_cancellation_checks.py",
+      "retained": "acceptance/run_cancellation_checks.py",
+      "sourceSha256": "ac884541fa2259f1350244339bcd9a34781454b8ce8aff95c469203e8a101dcd"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/run_outcome_checks.py",
+      "retained": "acceptance/run_outcome_checks.py",
+      "sourceSha256": "14c7196f507170e0ea8bd1e995c8c92b118bcefbc1b16a37a53597bb1427f820"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/run_portable_checks.py",
+      "retained": "acceptance/run_portable_checks.py",
+      "sourceSha256": "df9b098fa94418b9594a1cb6994f6cf15f98640f6c36977003cdfe5c17544c33"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/runtime-only-rollback.stderr.log",
+      "retained": "acceptance/runtime-only-rollback.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/runtime-only-rollback.stdout.json",
+      "retained": "acceptance/runtime-only-rollback.stdout.json",
+      "sourceSha256": "5f1eac02dd22eb7543d4426f4edb4ed731e0b8ae19b920e1eab4c4daf4b33f90"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/service-duration.stderr.log",
+      "retained": "acceptance/service-duration.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/service-duration.stdout.json",
+      "retained": "acceptance/service-duration.stdout.json",
+      "sourceSha256": "e018705f9430be88c6913d0478145274c84f98292ac6d64ce16395a65373aeea"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/signal-interruption.stderr.log",
+      "retained": "acceptance/signal-interruption.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/signal-interruption.stdout.json",
+      "retained": "acceptance/signal-interruption.stdout.json",
+      "sourceSha256": "44a1f58165076c8c15ca04e658abaab0b96deff856c063869b2bdd8e53b3c00b"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/signal-recovery.stderr.log",
+      "retained": "acceptance/signal-recovery.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/signal-recovery.stdout.json",
+      "retained": "acceptance/signal-recovery.stdout.json",
+      "sourceSha256": "1abd0a5e3eb8d40f662dd2d31c2cb98fcd9c03c29482a61d6e1fcc0656c55406"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/source-equivalence-current-head.json",
+      "retained": "acceptance/source-equivalence-current-head.json",
+      "sourceSha256": "73b29d7cbd5b2ef8f399e9e7cc8c957ac46b41992d44d07a3a418e2da3b5317b"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/studio-verifier-current-bundle.json",
+      "retained": "acceptance/studio-verifier-current-bundle.json",
+      "sourceSha256": "9707636fc37f8e32f3801076f0aca7d6383da7b98d9fc6b5a0c283725093ac9a"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/successful-native-parent-return.stderr.log",
+      "retained": "acceptance/successful-native-parent-return.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/successful-native-parent-return.stdout.json",
+      "retained": "acceptance/successful-native-parent-return.stdout.json",
+      "sourceSha256": "ad64efe17bd9ddf1bcaf02a0d407cabbcd3d0d8825f9127f96694f6efe098aa2"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/summary.json",
+      "retained": "acceptance/summary.json",
+      "sourceSha256": "7a782130180fcdaaecfd186ad835e215bb17ed1d1d297d2c1373cbbb432b9aac"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/technical-fault-native-recovery.stderr.log",
+      "retained": "acceptance/technical-fault-native-recovery.stderr.log.gz",
+      "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/technical-fault-native-recovery.stdout.json",
+      "retained": "acceptance/technical-fault-native-recovery.stdout.json",
+      "sourceSha256": "f21b0c9fdb3c567548a3ebd8283b6eca2dff27e3b913d8a860c440a22a8118ec"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-full-pr-r6-acceptance/trx-audit.json",
+      "retained": "acceptance/trx-audit.json",
+      "sourceSha256": "3fe4594d059f6b1396ffb12b611556c274d148237c7c9220fe5feb0352b2f1f8"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/discussion-snapshot.json",
+      "retained": "discussion/discussion-snapshot.json.gz",
+      "sourceSha256": "9bf8ff51e2f2e10911e994d65c3550dedb74754015f18a873690392cf844edec"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/head-checks.json",
+      "retained": "discussion/head-checks.json.gz",
+      "sourceSha256": "131da7f6df3b2fcefdc7e58db811f2d3879df7d3e2d95fd48201df5aa23fa9e7"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/issue-2892-comments-new.json",
+      "retained": "discussion/issue-2892-comments-new.json.gz",
+      "sourceSha256": "b4af784b6f2ef4b3b2f65960b419c1bc5f41e9b48366dd659d40f5c2d905bbd4"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/issue-2892-comments.json",
+      "retained": "discussion/issue-2892-comments.json.gz",
+      "sourceSha256": "fd543e083832340ca953c5b102c1a1f546f641e8898e6bdb3f67c9f9587d84af"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/issue-2892.json",
+      "retained": "discussion/issue-2892.json.gz",
+      "sourceSha256": "fc58b8c0360b1fa1fd72d8a953d3b650d422cf4b54de7d0bfb8f0f75b7d35a8e"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/issue-2898-comments-new.json",
+      "retained": "discussion/issue-2898-comments-new.json.gz",
+      "sourceSha256": "cbc0e77c89779c46fca9492b0fb2e926312505f45118d9243ce419b74586cf60"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/issue-2898-comments.json",
+      "retained": "discussion/issue-2898-comments.json.gz",
+      "sourceSha256": "ab3053b5c3ee3cd9b983dd63c27ce32c74677bf5a23b62a28d629e88b422d889"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/issue-2898.json",
+      "retained": "discussion/issue-2898.json.gz",
+      "sourceSha256": "57dee6ef7447a11fa6c77f4a5bb194f9b7608c087e359f2dc7127895bc93098c"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/issue-2907-comments-new.json",
+      "retained": "discussion/issue-2907-comments-new.json.gz",
+      "sourceSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/issue-2907-comments.json",
+      "retained": "discussion/issue-2907-comments.json.gz",
+      "sourceSha256": "1fc1df4b790e6d84b99b1e21b84255e4ccc9740f08cf6438e579acb58eb0f48a"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/issue-2907.json",
+      "retained": "discussion/issue-2907.json.gz",
+      "sourceSha256": "85edfd56986373ec9dfbce6b3dc0aaa872b34a118c84d94f39edb71360d98a6e"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/issue-2908-comments-new.json",
+      "retained": "discussion/issue-2908-comments-new.json.gz",
+      "sourceSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/issue-2908-comments.json",
+      "retained": "discussion/issue-2908-comments.json.gz",
+      "sourceSha256": "7b546c61eb0ed29b20ee2ccd638fc0fc6668ab5fc262a0a8fb204bc73041254d"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/issue-2908.json",
+      "retained": "discussion/issue-2908.json.gz",
+      "sourceSha256": "099b58f0ef731e0ed3655310a283ede04bb84dc5301292872a62b54aa69af8d7"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/issue-3410-comments-new.json",
+      "retained": "discussion/issue-3410-comments-new.json.gz",
+      "sourceSha256": "4d1d52850d591c0096979b63feaa78d1283c594879eaa596b7552119e33119c9"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/issue-3410-comments.json",
+      "retained": "discussion/issue-3410-comments.json.gz",
+      "sourceSha256": "30b4aca777f66b9cc933a6b586210a79ae9fe724eca0144535ca1ac02e217d6f"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/issue-3410.json",
+      "retained": "discussion/issue-3410.json.gz",
+      "sourceSha256": "f2ff96241950a7842512d1224d5977ac8226d68e82e121310b04d2240a82e8b7"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/main-red.json",
+      "retained": "discussion/main-red.json.gz",
+      "sourceSha256": "145a6ef46a0f11fd1b04234b3ddcc7c274e51e026d4456b3b4400a3bb98d27d1"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/org-AGENTS.md",
+      "retained": "discussion/org-AGENTS.md",
+      "sourceSha256": "ed7b301dc6211e5ed6f48cdc4b4eb2271fd03ee92f906adcbf0cf94762d42623"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/org-agents.json",
+      "retained": "discussion/org-agents.json.gz",
+      "sourceSha256": "fc48c35d94ed53a4707b9cd3283cb7015e40667f2e79b19b618e73befc17578e"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/pr-3410-comments-new.json",
+      "retained": "discussion/pr-3410-comments-new.json.gz",
+      "sourceSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/pr-3410-comments.json",
+      "retained": "discussion/pr-3410-comments.json.gz",
+      "sourceSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/pr-3410-reviews-new.json",
+      "retained": "discussion/pr-3410-reviews-new.json.gz",
+      "sourceSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/pr-3410-reviews.json",
+      "retained": "discussion/pr-3410-reviews.json.gz",
+      "sourceSha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/pr-3410-threads.json",
+      "retained": "discussion/pr-3410-threads.json.gz",
+      "sourceSha256": "fe0aa71970051c9a07e84570cf6fc98163c099588c40509e0897600c6d6197d1"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/pr-3410.json",
+      "retained": "discussion/pr-3410.json.gz",
+      "sourceSha256": "4f5205368246e2ff6988f21d9b7e5c58dd744c58386dcafdbad87907aa1b73ad"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/project.json",
+      "retained": "discussion/project.json.gz",
+      "sourceSha256": "ecf24fb6556132d426eb0538050e557082315f2398a10a25334610b0905c86b2"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/review-boundary.json",
+      "retained": "discussion/review-boundary.json.gz",
+      "sourceSha256": "4f297d06e9afa57934ecbf0174d5eda8fd5727b0459f5ae8f1967dc5a9b546bf"
+    },
+    {
+      "sourceFile": "/tmp/elsa-2898-round6-inputs/round6-start.json",
+      "retained": "discussion/round6-start.json.gz",
+      "sourceSha256": "c03ea91d11a7ac172ab96f44e136a2e783ace4adb15ad6076d9dc904f42dac59"
+    }
+  ]
+}

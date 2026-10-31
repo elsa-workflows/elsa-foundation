@@ -1,0 +1,18 @@
+{
+  "sourceRevision": "ef833d12dc288202bf6e538884837b6e2526dc7e",
+  "actualCancelledNativeParentShapes": [
+    "Root",
+    "Sequence",
+    "Flowchart",
+    "CompensationScope"
+  ],
+  "wholeStoresVerified": 36,
+  "actualWorkbenchProcesses": 16,
+  "actualSdkProcesses": 4,
+  "actualHttpProcesses": 4,
+  "runBpmnEtlIntegrationProved": true,
+  "pendingParentResultCrashProved": true,
+  "allNativeParentCancellationPendingReturnProved": true,
+  "successParentResultCrashProved": false,
+  "modelHeldFaultRetryProved": false
+}

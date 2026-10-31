@@ -1,0 +1,402 @@
+[
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/broadcast/after-cohort.sqlite.gz",
+    "decodedSha256": "311ba0112bdd16d5230b7db16f583c3116e9245e4b71004893610e5e5b1cb420",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/broadcast/after-resume.sqlite.gz",
+    "decodedSha256": "cccc0662754866a6cd76cf805d29198306638552297a67b69cfc75dba54c5a52",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/broadcast/before-selection.sqlite.gz",
+    "decodedSha256": "4e0196ca97faa9cda136f320c7b2c6581c353593593fc78f1fccd5906c45b7ec",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/broadcast/empty-cohort.sqlite.gz",
+    "decodedSha256": "750e5fa8db93ac6aa1c0d1f6893aa9525e16c314ee3b69ed5b69767687720b72",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/called-ack/notice-held.sqlite.gz",
+    "decodedSha256": "b65fb08f0195855d245a4e49fc37cbb1d0fee8ecdf8aa5b373df6571d7ac9f23",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/called-ack/terminal-held.sqlite.gz",
+    "decodedSha256": "1a3ef138229fd69f06c4d27eb6ecaf61157895a4faf134e6bb3171d48a37a647",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/legacy-controls/design.sqlite.gz",
+    "decodedSha256": "fdd2380accab14587c603a635a84df404ae0d9306bcd8f2892560e78c18e1be5",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/legacy-controls/runtime.sqlite.gz",
+    "decodedSha256": "c4dcab66a693e1e28520f81df287200b3d91324290e386222c7d6ff539e307bc",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/multi-instance-and-studio/design.sqlite.gz",
+    "decodedSha256": "b4dabf4f0a1c8bb03ec598023af350d59318fba4db472ab85f0dfc773aef0a0f",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/multi-instance-and-studio/runtime.sqlite.gz",
+    "decodedSha256": "c62347ebb3cde510f07c2848eaf0b58c403c92ac605d23f78dfffcb167ea7540",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/native-parent-pending/compensationscope-balanced.sqlite.gz",
+    "decodedSha256": "f38f7fef99755d53994805f78de33de002d65c8bf771cf7dd6472fd0f7a4c580",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/native-parent-pending/compensationscope-durable.sqlite.gz",
+    "decodedSha256": "01a653c07564b12377fb10b92f37b1a01e5081bc6ca718753fb6ebf4b8ce804e",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/native-parent-pending/flowchart-balanced.sqlite.gz",
+    "decodedSha256": "1c32b03bf03848bfd7bd35e6c3e8e6b1c7ae237cb6e5321dd1ae1333d288c703",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/native-parent-pending/flowchart-durable.sqlite.gz",
+    "decodedSha256": "c498006eb9f5a6abddbb6f56ca921f072b8847556cbd3de2f4b74a5b19704422",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/native-parent-pending/sequence-balanced.sqlite.gz",
+    "decodedSha256": "0b6952d80b42b5e79e2f00389dd5185af09096074a913769d01b7ee00008ab3e",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/native-parent-pending/sequence-durable.sqlite.gz",
+    "decodedSha256": "42ba933efd4f8e8d75bec9df2bfdcf5c9e97a36fa8baa5173c45e62fffa7ea95",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/native-parents/design.sqlite.gz",
+    "decodedSha256": "083a15d0b0c8b5693448ae650f1e134aec4ad66ee8d1e533367f4ce18e4f7366",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/native-parents/runtime.sqlite.gz",
+    "decodedSha256": "8a903ba228baca4c815843e23686ecdc6c789739373e7c8986a60efeadacf0e7",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/design.sqlite",
+    "decodedSha256": "73984412998c1f418f52b422e279402e2e9b01cd240c50d67dcb8efd5c306d6e",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/partial-forks/runtime.sqlite",
+    "decodedSha256": "494db0de530ad83335c7ba5c9bb65b2fd2bff9f2ae3cd2cdef6dac8baa6fa5cb",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/studio/design.sqlite.gz",
+    "decodedSha256": "5cc4ec0511e723cb27a679e22e53945860d66d7c5b30949399f9ae289a569afd",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/baseline/studio/runtime.sqlite.gz",
+    "decodedSha256": "4a46cf7dd2ba7a9a3c3a482b5afe5dc84d3c6951575849c5ed9efb913252f0b1",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/frontend-adoption/layout/finished-design.sqlite.gz",
+    "decodedSha256": "e66b0a38ab58b7f1c547e7df74d121e13b8b27584cad0b422040e2d1dd42c124",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/frontend-adoption/layout/finished-runtime.sqlite.gz",
+    "decodedSha256": "652fb1b9d2cf2c118a723d02efc6706a84c2b24531158306786211eacfaebcbe",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/frontend-adoption/layout/recovered-design.sqlite.gz",
+    "decodedSha256": "e66b0a38ab58b7f1c547e7df74d121e13b8b27584cad0b422040e2d1dd42c124",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/frontend-adoption/layout/recovered-runtime.sqlite.gz",
+    "decodedSha256": "deba03a083c7a6a4d375e7b119771c8e41e3aaea85a435bd3b77432abc66f0ab",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/frontend-adoption/original/finished-design.sqlite.gz",
+    "decodedSha256": "c3bc6f9a320e2e053868d6923e472c433b7b568afe08cbbe6a7650c1ce2e0c74",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/frontend-adoption/original/finished-runtime.sqlite.gz",
+    "decodedSha256": "6aa7e60254fffe0474b56327e1a285394aee5f9b29104d47d84106a5bf7e9f0b",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/frontend-adoption/original/recovered-design.sqlite.gz",
+    "decodedSha256": "c3bc6f9a320e2e053868d6923e472c433b7b568afe08cbbe6a7650c1ce2e0c74",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/frontend-adoption/original/recovered-runtime.sqlite.gz",
+    "decodedSha256": "db02fe96f160073dc4681189f7d2f3e1117e1b901a7a3eddce6a5aceb9b29b2a",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/fault-recovery/old-admitted-fault/completed-runtime.sqlite.gz",
+    "decodedSha256": "1d35fd22a300361a1c809b976d7a9e0760a51bb9d72506622ac8753e7124a4b6",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/fault-recovery/old-admitted-fault/retained-runtime.sqlite.gz",
+    "decodedSha256": "1d35fd22a300361a1c809b976d7a9e0760a51bb9d72506622ac8753e7124a4b6",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/fault-recovery/old-admitted-waiting-fault/completed-runtime.sqlite.gz",
+    "decodedSha256": "11d38f755cdec56919a8e5df045ef850074173da5f7aba179a8a1d058e04501d",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/fault-recovery/old-admitted-waiting-fault/retained-runtime.sqlite.gz",
+    "decodedSha256": "11d38f755cdec56919a8e5df045ef850074173da5f7aba179a8a1d058e04501d",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/fault-recovery/old-pending-parent-fault/completed-runtime.sqlite.gz",
+    "decodedSha256": "01b9564b40419c402be6c71bb1edde9c9b200710a5ae121cadcc5cb3a18070a2",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/fault-recovery/old-pending-parent-fault/retained-runtime.sqlite.gz",
+    "decodedSha256": "01b9564b40419c402be6c71bb1edde9c9b200710a5ae121cadcc5cb3a18070a2",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/fault-recovery/old-unadmitted-fault/completed-runtime.sqlite.gz",
+    "decodedSha256": "1354bdf9c79de102aba51938466f1f91c8f3136d42b62227478b2ca8eefa8f1b",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/fault-recovery/old-unadmitted-fault/retained-runtime.sqlite.gz",
+    "decodedSha256": "1354bdf9c79de102aba51938466f1f91c8f3136d42b62227478b2ca8eefa8f1b",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/studio/layout/finished-design.sqlite.gz",
+    "decodedSha256": "1ae284a67b2b6a46eb5eb063d05b888b69484bd7e82136254044633c27d1eddc",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/studio/layout/finished-runtime.sqlite.gz",
+    "decodedSha256": "164f1cae8a42a41ea4ec14534304ce23691582a53d35529f4fc1035a30b065a0",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/studio/layout/recovered-design.sqlite.gz",
+    "decodedSha256": "98fe060491e6dba2ca6a9748356d3bf0a366b6fee7d849fdfc1aea737d5efefb",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/studio/layout/recovered-runtime.sqlite.gz",
+    "decodedSha256": "da0a3cae03b35de27da25712d9f5a25010359bbdb3585db0194baa8f32c098c0",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/studio/layout/restarted-design.sqlite.gz",
+    "decodedSha256": "32563e411699c92a15c4f9575c83ed8730afff216d8e374ccdb3d0f6dd546714",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/studio/layout/restarted-runtime.sqlite.gz",
+    "decodedSha256": "d6b214400865e55f0ee1355e26865ef6dc102986c5e56c758fcd0beb747e8f30",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/studio/original/finished-design.sqlite.gz",
+    "decodedSha256": "cd2f71855162ea37271d5fa7b93c78a69a20802fbae35d055b78354d83d4eb81",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/studio/original/finished-runtime.sqlite.gz",
+    "decodedSha256": "bc6a5c8775bf6bf9ff2ff20c01f83642bca19fe6816b82e46e1ee57d5f52e465",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/studio/original/recovered-design.sqlite.gz",
+    "decodedSha256": "0d921a194f388859795bc04d173b127d1131202d540352dda8d19ac3c048e6b7",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/studio/original/recovered-runtime.sqlite.gz",
+    "decodedSha256": "fce167a9f740e455bf3e5d3ddf8bc170bdeb4a589682353cca949c9b71514526",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/studio/original/restarted-design.sqlite.gz",
+    "decodedSha256": "d4c3e8407a77e2160df559d3302fd7d96ce2cfe187ab3ba6f22a834f46bd503c",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  },
+  {
+    "path": "specs/1017-direct-bpmn-hosting/evidence/reviews/round-5/qualification/studio/original/restarted-runtime.sqlite.gz",
+    "decodedSha256": "14ecea9a4668d475cdf9bc8e3562f6c9d43c2a3554449009e547fcc1ae91974a",
+    "integrity": [
+      "ok"
+    ],
+    "mode": "ro immutable"
+  }
+]

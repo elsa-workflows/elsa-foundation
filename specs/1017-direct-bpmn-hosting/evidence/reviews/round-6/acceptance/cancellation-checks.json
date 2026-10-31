@@ -1,0 +1,96 @@
+[
+  {
+    "name": "etl-origin-root",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_http_recovery.py",
+      "--manifest",
+      "specs/1017-direct-bpmn-hosting/evidence/pipeline/embedded-pipeline-cancellation/root/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.114
+  },
+  {
+    "name": "etl-origin-sequence",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_http_recovery.py",
+      "--manifest",
+      "specs/1017-direct-bpmn-hosting/evidence/pipeline/embedded-pipeline-cancellation/sequence/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.108
+  },
+  {
+    "name": "etl-origin-flowchart",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_http_recovery.py",
+      "--manifest",
+      "specs/1017-direct-bpmn-hosting/evidence/pipeline/embedded-pipeline-cancellation/flowchart/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.105
+  },
+  {
+    "name": "etl-origin-compensationscope",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_http_recovery.py",
+      "--manifest",
+      "specs/1017-direct-bpmn-hosting/evidence/pipeline/embedded-pipeline-cancellation/compensationscope/manifest.json"
+    ],
+    "exitCode": 0,
+    "seconds": 0.106
+  },
+  {
+    "name": "inverse-cancel-direct",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_inverse_cancellation.py",
+      "specs/1017-direct-bpmn-hosting/evidence/pipeline/inverse-cancellation-order/direct"
+    ],
+    "exitCode": 0,
+    "seconds": 0.101
+  },
+  {
+    "name": "inverse-cancel-root",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_inverse_cancellation.py",
+      "specs/1017-direct-bpmn-hosting/evidence/pipeline/inverse-cancellation-order/root"
+    ],
+    "exitCode": 0,
+    "seconds": 0.103
+  },
+  {
+    "name": "inverse-cancel-sequence",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_inverse_cancellation.py",
+      "specs/1017-direct-bpmn-hosting/evidence/pipeline/inverse-cancellation-order/sequence"
+    ],
+    "exitCode": 0,
+    "seconds": 0.104
+  },
+  {
+    "name": "inverse-cancel-flowchart",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_inverse_cancellation.py",
+      "specs/1017-direct-bpmn-hosting/evidence/pipeline/inverse-cancellation-order/flowchart"
+    ],
+    "exitCode": 0,
+    "seconds": 0.106
+  },
+  {
+    "name": "inverse-cancel-compensationscope",
+    "command": [
+      "python3",
+      "e2e-tests/etl/verify_inverse_cancellation.py",
+      "specs/1017-direct-bpmn-hosting/evidence/pipeline/inverse-cancellation-order/compensationscope"
+    ],
+    "exitCode": 0,
+    "seconds": 0.111
+  }
+]

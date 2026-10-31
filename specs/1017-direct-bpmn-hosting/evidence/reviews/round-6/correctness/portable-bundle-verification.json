@@ -1,0 +1,14 @@
+{
+  "archive": "round6-correctness-portable.tar.gz",
+  "sha256": "980c6c4b1eaed15d8733450d00f1f2078a71adb8de6112e8b33635d5280ef9a3",
+  "bytes": 1090226,
+  "allowlist": "portable/allowlist.txt",
+  "manifest": "portable/manifest.json",
+  "entryCount": 72,
+  "archiveEntriesEqualExplicitAllowlist": true,
+  "archivePayloadHashesMatchManifest": true,
+  "allEntriesRegularFiles": true,
+  "noPrivateLiveHostOrIdentityDirectory": true,
+  "originalScriptsAndReportUnchanged": true,
+  "newReviewOrActualHostRun": false
+}
