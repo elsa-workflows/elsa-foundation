@@ -34,11 +34,15 @@ html[data-workspace-style] .wf-grid-head {
   font-weight: 500;
 }
 
-html[data-workspace-style] .wf-grid-row,
-html[data-workspace-style] .wf-definitions-list .wf-definition-grid > .wf-grid-row {
+html[data-workspace-style] .wf-grid-row {
   min-height: 64px;
   border-bottom-color: transparent;
   padding-block: 14px;
+}
+
+html[data-workspace-style] .wf-definitions-list .wf-definition-grid > .wf-grid-row {
+  min-height: 44px;
+  padding-block: 6px;
 }
 
 html[data-workspace-style] .wf-definitions-list > .wf-toolbar {

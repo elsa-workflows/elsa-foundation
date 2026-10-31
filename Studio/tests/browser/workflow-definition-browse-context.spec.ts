@@ -456,3 +456,36 @@ for (const variant of searchStatusVariants) {
     expect(clearedRequest?.continuationToken).toBeUndefined();
   });
 }
+
+for (const theme of ["light", "dark"]) {
+  for (const width of [1280, 1920]) {
+    for (const workspaceStyle of [false, true]) {
+      test(`workflow definition timestamps stay on one line in compact rows (${theme}, ${width}px, workspace ${workspaceStyle})`, async ({ page }, testInfo) => {
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(`${browseUrl}&theme=${theme}`);
+        const row = page.getByRole("row", { name: "Open workflow definition First page renewal", exact: true });
+        await expect(row).toBeVisible();
+        if (workspaceStyle) await page.evaluate(() => document.documentElement.setAttribute("data-workspace-style", "browser-fixture"));
+        const geometry = await row.evaluate(element => {
+          const cells = element.querySelectorAll("[role=cell]");
+          const modified = cells[6];
+          const range = document.createRange();
+          range.selectNodeContents(modified);
+          return {
+            timestampLines: range.getClientRects().length,
+            rowHeight: element.getBoundingClientRect().height,
+            timestampWidth: range.getBoundingClientRect().width,
+            columnWidth: modified.getBoundingClientRect().width
+          };
+        });
+        expect(geometry.timestampLines).toBe(1);
+        expect(geometry.timestampWidth).toBeLessThanOrEqual(geometry.columnWidth);
+        expect(geometry.rowHeight).toBeLessThanOrEqual(44);
+        await expect(row.getByRole("button", { name: "Actions for First page renewal" })).toBeVisible();
+        if (width === 1920 && workspaceStyle) {
+          await page.screenshot({ path: testInfo.outputPath(`compact-definitions-${theme}.png`), fullPage: true });
+        }
+      });
+    }
+  }
+}
