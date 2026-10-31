@@ -18,7 +18,7 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-public sealed class ActivityInputSnapshotCheckpointTests : IDisposable
+public sealed partial class ActivityInputSnapshotCheckpointTests : IDisposable
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 16, 10, 0, 0, TimeSpan.Zero);
     private static readonly ValueTypeDescriptor StringType = new("String");

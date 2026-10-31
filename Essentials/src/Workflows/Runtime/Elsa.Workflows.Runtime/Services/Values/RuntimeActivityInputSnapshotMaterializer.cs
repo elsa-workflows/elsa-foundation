@@ -27,6 +27,18 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
     {
         var inputMaterializer = serviceProvider.GetService<IRuntimeActivityInputMaterializer>()
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires an input snapshot materializer.");
+        cancellationToken.ThrowIfCancellationRequested();
+        // The default materializer cannot consult execution state without an input binding. Custom
+        // materializers still receive the complete context, even when the pinned contract is empty.
+        if (inputMaterializer is RuntimeActivityInputMaterializer &&
+            executableNode.ActivityContract?.Inputs.Count == 0 && executableNode.InputBindings.Count == 0)
+            return await inputMaterializer.MaterializeSnapshotAsync(
+                executableNode,
+                state.InvocationId,
+                new RuntimeInputBindingResolutionContext(state.Execution.WorkflowExecutionId, state.InvocationId, state, executable: executable),
+                materializedAt,
+                cancellationToken);
+
         var resolvedDurableValueStateStore = durableValueStateStore
             ?? throw new InvalidOperationException($"Typed activity invocation '{state.InvocationId}' requires a durable value state store.");
         var durableValues = await resolvedDurableValueStateStore.ListAllDurableValueStatesAsync(state.Execution.WorkflowExecutionId, cancellationToken);
