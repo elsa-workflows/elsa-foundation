@@ -75,6 +75,18 @@ The initial umbrella research is split into the SDK/source-compatibility spike #
 [publication/lifecycle witness #3533](https://github.com/elsa-workflows/elsa-foundation/issues/3533).
 The latter preserves the remaining M0 gates; SDK success alone cannot advance M1 or freeze contracts.
 
+[M0 publication/lifecycle PR #3537](https://github.com/elsa-workflows/elsa-foundation/pull/3537)
+merged with the bounded research disposition: specialist/native packages are Design-free; existing
+BPMN package coupling remains a production obligation. M1 must resolve the package split before
+contract freeze, and M4 must implement/qualify it. Resulting-main qualification remains distinct from
+the merged research receipt.
+
+[M1 design leaf #3538](https://github.com/elsa-workflows/elsa-foundation/issues/3538) is preparing
+[spec 1179](../../specs/1179-specialist-agents/spec.md), its architecture/state/support/UX packet and
+ordered M2–M7 implementation tasks. The packet is draft design; neither the plan nor the wireframe
+establishes implemented product acceptance. One design implementation leaf proceeds alongside the
+research qualification lane.
+
 ## Completion
 
 Published Copywriter and Proofreader execute a bounded editorial process with human approval through
