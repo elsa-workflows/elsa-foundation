@@ -100,8 +100,8 @@ persistability, and commits the invocation identity plus immutable input snapsho
 or invoking user activity code. Retries and resumptions retain one stable logical `InvocationId` and
 the same input snapshot while receiving a new `AttemptId` and a fresh CLR activity object.
 
-Successful completion commits one typed result payload and one authored control outcome before any
-downstream work is scheduled. Named outputs are typed projections from that atomic result; they are
+Successful completion commits one typed result payload and one authored outcome selection (see the
+§6 amendment for decision D-4) before any downstream work is scheduled. Named outputs are typed projections from that atomic result; they are
 not independently writable output slots. A committed invocation is not re-executed merely because
 downstream scheduling was interrupted.
 
@@ -220,6 +220,70 @@ variable-write mechanism. (Proposed amendment:
 third write form, with `context.Variables.Set` as an exception to the sentence below; see §4.) The activity
 invocation contract returns that transition directly; it does
 not publish successful values or outcomes through mutable execution-context `Set` methods.
+
+**Amendment (epic #3052, decision D-4, 2026-10-27): activities select their outcomes explicitly, several per
+completion.** A successful completion carries an *outcome selection* instead of exactly one outcome.
+
+- **A selection** is one of three things:
+  - unspecified, which means the activity's default outcome, `Done`;
+  - one or more declared outcome names;
+  - explicitly empty, meaning a successful completion with no outgoing path.
+
+  Unspecified and explicitly empty stay distinct through completion, parent and join handling, persistence and
+  recovery.
+- **Selecting.** A C# activity returns the selection in its `Complete` transition.
+  - A script selects through `setOutcome(name)` and `setOutcomes([names])`. Each call replaces the pending selection,
+    so the last call wins.
+  - The selection is independent of the returned data. A script selects outcomes **only** through the setters; its
+    return value is data only. This replaces RunJavaScript's routing by return value (#1114, recorded in
+    `docs/reports/elsa-4-activity-behavioural-drive-2026-08.md`) and its `Unmatched` outcome: two mechanisms side by
+    side would give one activity two contradictory rules for "nothing selected" (`Done` here, `Unmatched` there), for
+    an unknown name (a fault here, a silent `Unmatched` there) and for several outcomes.
+  - A pending selection takes effect only on successful completion. A fault or cancellation dispatches nothing, and a
+    selection never dispatches a branch while the script is still running.
+  - The script setters are therefore part of the step's transaction (D-3). They are a sanctioned exception to the
+    sentence above about mutable `Set` methods, because the selection is applied as the completion's own data.
+- **Declared outcomes per node.** The set of outcomes a node may select is resolved at design time. It combines the
+  activity's statically declared outcomes with outcomes derived by design-time providers from the node's
+  configuration. For example, `SendHttpRequest`'s expected status codes and RunJavaScript's possible outcomes each
+  become a port.
+  - Studio and publication use the same provider rules.
+  - When provider-relevant configuration changes, the ports refresh and affected connections are exposed for repair.
+  - Publication pins the resolved per-node set in the executable.
+  - Outcome names are never invented at run time.
+- **Validation in two layers,** depending on how a name is written:
+  - a literal name (`setOutcome('Approved')`) that is not in the node's set is a publish diagnostic, so a typo is
+    caught before run time;
+  - a computed name (`setOutcome(variables.status)`) is checked at run time against the node's pinned set. An unknown
+    name faults the step with `VF-ACT-006` by default, unless the node or activity explicitly configures a fallback
+    outcome. Dynamic outcomes stay possible, within the set the designer declared.
+- **Unconnected outcomes.** A declared outcome with no connected edge is valid; selecting it ends that path.
+- **Several outcomes.** An activity contract declares whether its completions may select more than one outcome.
+  - The connections of every selected outcome are scheduled.
+  - Path analysis, joins ([ADR 0064](0064-flowchart-infers-joins-from-propagated-dead-paths.md)), the unordered-write
+    warning ([ADR 0048](0048-container-output-captures-resolve-through-producer-visible-variable-frames.md), spec 266)
+    and inspection treat a node that may select several outcomes as an inclusive fork.
+  - This replaces the "one outcome per completion" invariant proposed in issue #3285.
+
+*Effect on Elsa 3 conversion.* These become convertible:
+- Elsa 3's `setOutcome` / `setOutcomes`;
+- Switch in "match any" mode;
+- `Complete` with several outcomes.
+
+Elsa 3 had no checked outcome set, so for a computed `setOutcome(…)` the converter derives the possible outcomes (from
+the node's `PossibleOutcomes` and the literal names in the script). If it cannot, it refuses with guidance
+(faithful-or-refuse).
+
+A RunJavaScript with no selection completes with `Done`, in Elsa 3 and here. The converter's rule that maps Elsa 3's
+`Done` to `Unmatched` (spec 239 R8, spec 236 member map) existed only because of routing by return value; it becomes
+`Done` to `Done`, which fixes #3295 at its cause.
+
+*Left to the implementing spec (S-3):*
+- removing RunJavaScript's routing by return value and its `Unmatched` outcome, and the converter's R8 rule;
+- the shape of the selection in the transition and in persisted completion records;
+- how a multi-outcome declaration appears in the activity contract and in Studio;
+- the fallback configuration;
+- the changes to scheduling, joins and spec 266's exclusivity analysis.
 
 ### 7. Provide a generated method-call authoring facade
 
