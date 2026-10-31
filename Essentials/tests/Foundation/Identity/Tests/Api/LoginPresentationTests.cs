@@ -8,6 +8,19 @@ namespace Elsa.Foundation.Identity.Tests.Api;
 public sealed class LoginPresentationTests
 {
     [Fact]
+    public async Task Default_login_uses_public_bundled_Elsa_logo()
+    {
+        await using var fixture = await TokenEndpointFixture.StartAsync();
+        var html = await fixture.Client.GetStringAsync("/_elsa/identity/login");
+        Assert.Contains("src=\"/_elsa/identity/login-assets/elsa-logo.png\"", html);
+        var response = await fixture.Client.GetAsync("/_elsa/identity/login-assets/elsa-logo.png");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        Assert.Equal(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }, bytes[..8]);
+    }
+
+    [Fact]
     public async Task Presentation_replacement_receives_validated_return_and_real_security_fields()
     {
         LoginPageContext? received = null;
