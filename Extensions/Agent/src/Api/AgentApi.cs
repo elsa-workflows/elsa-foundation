@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using System.Security.Cryptography;
 
@@ -173,7 +174,9 @@ public static class AgentApi
         var sessions = context.RequestServices.GetRequiredService<IAgentSessionService>();
         var data = new AgentSessionDetailsResponse(session!.Id, session.Status.ToContractString(), session.Title,
             (await sessions.ListContextAsync(sessionId, context.RequestAborted)).Select(x => x.ToResponse()).ToList(),
-            (await sessions.ListMessagesAsync(sessionId, context.RequestAborted)).Select(x => x.ToViewModel()).ToList());
+            (await sessions.ListMessagesAsync(sessionId, context.RequestAborted))
+                .Where(x => x.Role != AgentRole.Assistant || x.Content.Length > 0 || x.DisclosureHistory is null)
+                .Select(x => x.ToViewModel()).ToList());
         await WriteAsync(context, AgentApiResponse<AgentSessionDetailsResponse>.Success(data), AgentJsonContext.Default.AgentApiResponseAgentSessionDetailsResponse);
     }
 
@@ -251,10 +254,23 @@ public static class AgentApi
         var requestedStored = requestedContextIds.Count == 0 ? [] : stored.Where(x => requestedContextIds.Contains(x.Id)).ToList();
         var requestContext = requestedStored.Concat(contextAttachments.Select(x => x.ToDomain())).ToList();
         AgentResult<AgentContextContribution> collected;
+        var surface = request.ActiveSurface ?? new AgentSurfaceRequest
+        {
+            Route = session.Metadata.GetValueOrDefault("route", "/"),
+            ResourceType = session.Metadata.GetValueOrDefault("resourceType"),
+            ResourceId = session.Metadata.GetValueOrDefault("resourceId")
+        };
+        var surfaceInputs = new Dictionary<string, string>
+        {
+            ["route"] = surface.Route,
+            ["resourceType"] = surface.ResourceType ?? string.Empty,
+            ["resourceId"] = surface.ResourceId ?? string.Empty,
+            ["selection"] = JsonSerializer.Serialize(surface.Selection)
+        };
         try
         {
             collected = await context.RequestServices.GetRequiredService<IAgentContextCollector>().CollectAsync(session.Policy,
-                new(sessionId, string.Empty, new Dictionary<string, string>()) { CallerAttachments = requestContext }, context.RequestAborted);
+                new(sessionId, surface.Route, surfaceInputs) { CallerAttachments = requestContext }, context.RequestAborted);
         }
         catch (AgentContributionException)
         {
@@ -275,7 +291,8 @@ public static class AgentApi
             Source = request.Source,
             Client = bindings.Count == 1 ? bindings[0] : null,
             PromptMode = request.PromptMode,
-            DeliveryFingerprint = fingerprint
+            DeliveryFingerprint = fingerprint,
+            HasDisclosureProvenance = true
         };
         AgentMessage message;
         try { message = await sessions.AddMessageAsync(sessionId, messageRequest, context.RequestAborted); }
@@ -319,8 +336,20 @@ public static class AgentApi
             await WriteEventAsync(context, new(AgentProviderPrimitives.NewId(), AgentStreamEventKind.Error, null, null, error, DateTimeOffset.UtcNow));
             return;
         }
-        await foreach (var item in context.RequestServices.GetRequiredService<IAgentStreamingService>().StreamAsync(sessionId, context.RequestAborted))
-            await WriteEventAsync(context, item);
+        try
+        {
+            await foreach (var item in context.RequestServices.GetRequiredService<IAgentStreamingService>().StreamAsync(sessionId, context.RequestAborted))
+                await WriteEventAsync(context, item);
+        }
+        catch (AgentContributionException failure)
+        {
+            // The feature exposes its domain cause to this transport caller. Keep the causal
+            // exception on the server; the browser receives only the fixed recovery disposition.
+            context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(OwnerId)
+                .LogError(failure, "Agent disclosure {Operation} failed for session {SessionId}.", "stream", sessionId);
+            await WriteEventAsync(context, new(AgentProviderPrimitives.NewId(), AgentStreamEventKind.Error, null, null,
+                new("agent.history.provenance_unavailable", "Complete disclosure history could not be retained or authorized. Recorded effects remain unchanged; retry when storage and authority are available.", 503), DateTimeOffset.UtcNow));
+        }
     }
 
     private static async Task HandleFeedbackAsync(HttpContext context)

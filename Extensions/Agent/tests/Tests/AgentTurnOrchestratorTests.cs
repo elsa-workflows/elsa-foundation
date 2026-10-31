@@ -134,11 +134,16 @@ public sealed class AgentTurnOrchestratorTests
     {
         var clock = new TurnTestClock();
         var tool = new PendingClientTool();
+        var attachment = new AgentContextAttachment("client-snapshot", "test", "resource-1", "Local resource", "test.snapshot", AgentContextSensitivity.Internal,
+            "selection", "Local resource snapshot", new { revision = "revision-1" }, new Dictionary<string, string>())
+        { ModuleId = tool.Descriptor.ModuleId, Target = tool.Target, Client = tool.Binding, Origin = AgentContextOrigin.ClientSnapshot };
+        var source = new AgentTestContextSource(PendingClientTool.ContextSourceId, tool.Descriptor.ModuleId, [attachment], [tool]);
         using var root = AgentTestServices.Create(services =>
         {
             services.Replace(ServiceDescriptor.Singleton<TimeProvider>(clock));
             services.AddSingleton<IAgentProvider, DeterministicAgentProvider>();
             services.AddSingleton<IAgentTool>(tool);
+            services.AddSingleton<IAgentContextProvider>(source);
         });
         using var scope = root.CreateScope();
         var sessions = scope.ServiceProvider.GetRequiredService<IAgentSessionService>();
@@ -146,10 +151,12 @@ public sealed class AgentTurnOrchestratorTests
         var proposals = scope.ServiceProvider.GetRequiredService<IAgentProposalService>();
         var states = scope.ServiceProvider.GetRequiredService<IAgentTurnStateStore>();
         var session = await CreateSessionAsync(sessions, DeterministicAgentProvider.Id);
-        var attachment = new AgentContextAttachment("client-snapshot", "test", "resource-1", "Local resource", "test.snapshot", AgentContextSensitivity.Internal,
-            "selection", "Local resource snapshot", new { revision = "revision-1" }, new Dictionary<string, string>())
-        { ModuleId = tool.Descriptor.ModuleId, Target = tool.Target, Client = tool.Binding, Origin = AgentContextOrigin.ClientSnapshot };
-        await sessions.AddMessageAsync(session.Id, new(AgentRole.User, "mutate the resource", AgentMessageStatus.Pending, null, [attachment.Id], [attachment]) { Client = tool.Binding });
+        var collected = await scope.ServiceProvider.GetRequiredService<IAgentContextCollector>().CollectAsync(session.Policy,
+            new(session.Id, source.ScopeKind, new Dictionary<string, string>()) { CallerAttachments = [attachment] });
+        Assert.True(collected.Succeeded, collected.Error?.Message);
+        var context = collected.Value!.Attachments;
+        await sessions.AddMessageAsync(session.Id, new(AgentRole.User, "mutate the resource", AgentMessageStatus.Pending, null,
+            context.Select(item => item.Id).ToArray(), context) { Client = tool.Binding });
         var first = await Collect(streaming.StreamAsync(session.Id));
         var proposal = Assert.IsType<AgentActionProposal>(Assert.Single(first, x => x.Kind == AgentStreamEventKind.ProposalCreated).Payload);
         Assert.True((await proposals.ApproveAsync(proposal.Id, session.ActorId, proposal.BaseRevision)).Succeeded);
@@ -378,12 +385,14 @@ public sealed class AgentTurnOrchestratorTests
 
     private sealed class PendingClientTool : IAgentTool, IAgentClientTool
     {
+        public const string ContextSourceId = "test.expiry.disclosure";
         public AgentResourceTarget Target { get; } = new("test.expiry", "test.local-resource", "resource-1", "revision-1");
         public AgentClientBinding Binding { get; } = new("client-1", "generation-1");
         public int ServerExecutions { get; private set; }
         public AgentToolDescriptor Descriptor { get; } = new(DeterministicAgentProvider.MutatingToolName, "Edit local resource", "Reviewed local change.",
             AgentToolMutability.Mutating, AgentRisk.ReviewRequired, "{}", [], [])
-        { ModuleId = "test.expiry", ExecutionLocation = AgentExecutionLocation.ClientWorkingState, ResultType = "test.local-change", ResultSchemaVersion = "1" };
+        { ModuleId = "test.expiry", DisclosureSourceId = ContextSourceId, ExecutionLocation = AgentExecutionLocation.ClientWorkingState,
+            ResultType = "test.local-change", ResultSchemaVersion = "1" };
         public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
             => Task.FromResult(AgentResult<AgentToolPreparation>.Success(new(Target, JsonSerializer.SerializeToElement(invocation.Arguments), AgentRisk.ReviewRequired,
                 new("test.local-change", "1", JsonSerializer.SerializeToElement(new { summary = "Edit local resource" })), true) { Client = Binding }));

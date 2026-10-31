@@ -57,7 +57,8 @@ internal sealed class ReadWidgetTool(WidgetResource resource) : IAgentTool
         [WidgetContract.ReadPermission], WidgetContract.Scopes)
     {
         ModuleId = WidgetContract.Module, ResultType = WidgetContract.ReadResult, ResultSchemaVersion = "1",
-        ResultJsonSchema = WidgetToolValidation.StateSchema, ResultRendererId = WidgetContract.Renderer
+        ResultJsonSchema = WidgetToolValidation.StateSchema, ResultRendererId = WidgetContract.Renderer,
+        DisclosureSourceId = "acme.home.widget-context"
     };
     public AgentToolDescriptor Descriptor => ToolDescriptor;
 
@@ -104,7 +105,8 @@ internal sealed class SetWidgetVisibilityTool(WidgetResource resource) : IAgentT
         [WidgetContract.ReadPermission, WidgetContract.WritePermission], WidgetContract.Scopes)
     {
         ModuleId = WidgetContract.Module, ResultType = WidgetContract.ChangeResult, ResultSchemaVersion = "1",
-        ResultJsonSchema = WidgetToolValidation.ChangeSchema, ResultRendererId = WidgetContract.Renderer
+        ResultJsonSchema = WidgetToolValidation.ChangeSchema, ResultRendererId = WidgetContract.Renderer,
+        DisclosureSourceId = "acme.home.widget-context"
     };
     public AgentToolDescriptor Descriptor => ToolDescriptor;
 

@@ -21,11 +21,35 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 | Contract | Layer | Default impl | Override when |
 |---|---|---|---|
 | `IWorkflowDefinitionLookup` | Core — `Elsa.Workflows.Design.Core` | `WorkflowDefinitionLookup` (`.Persistence.Core`) | You want a different read strategy (caching, projection store) while keeping the write path. |
+| `IWorkflowDefinitionAuthorizer` | Core — `Elsa.Workflows.Design.Core` | `HttpWorkflowDefinitionAuthorizer` (`.Api`) | A host replaces current per-definition read/manage authority. Select one scoped implementation; duplicates fail startup and missing/ambiguous authority refuses resource access. |
 | Command interfaces (`IUpdateDraftCommand` + 5 lifecycle) | Core — `Elsa.Workflows.Design.Persistence.Core` | EF Core command implementations (`.Persistence.EntityFrameworkCore`) | You want different mutation/lifecycle behaviour while keeping the built-in `IWorkflowDefinitionLookup`. |
 | `IDraftStateDiffEngine` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `DraftStateDiffEngine` (`.Persistence.Core`) | You want to change which mutation events are emitted or the match-key semantics. |
 | `IWorkflowDefinitionPublicationStateLookup` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `NullWorkflowDefinitionPublicationStateLookup` (`Elsa.Workflows.Design.Api.Services`); Publishing replaces with `WorkflowDefinitionPublicationStateLookup` | Publishing is composed and definition list/detail views should distinguish Retracted and Retired from Published. Design-only hosts keep the null-object and leave `publicationState` unset. |
 | `IWorkflowLibraryStore` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `EfWorkflowLibraryStore` (`Elsa.Workflows.Design.Persistence.EntityFrameworkCore`) | A host replaces the durable, tenant-scoped organization and bounded workflow-library read/write backend. |
 | `IWorkflowLibraryVisibilityPolicy` | Contract — `Elsa.Workflows.Design.Persistence.Core` | Host-supplied optional replacement; at most one implementation, duplicates fail shell startup | A host registers any permission resource handlers and must provide their complete workflow query visibility before counts and paging. |
+
+### `IWorkflowDefinitionAuthorizer` *(Contract — `Elsa.Workflows.Design.Core`)*
+
+`CanReadAsync(definitionId, cancellationToken)` and `CanManageAsync(definitionId, cancellationToken)`
+return current owner decisions without accepting a principal, permission string, client revision or
+Weaver model. The default uses the normalized HTTP principal, typed `WorkflowLibraryResource`
+permission checks, tenant-scoped `IWorkflowDefinitionStore.FindByIdAsync` existence and the existing
+`IWorkflowDefinitionDetailsReader.AuthorizeReadAsync` preflight for definition/folder/ancestor visibility.
+Management includes read visibility plus the typed management permission. Infrastructure failures
+from permission, metadata-store or reader operations become
+`WorkflowDefinitionAuthorizationException` from Workflow Design Core, with the definition identity,
+requested read/manage operation and original `InnerException`. Its outer message excludes infrastructure
+details. An existing authorization exception is preserved without another wrapper. Known native
+authorization refusals remain false, cancellation propagates, and failures never become permission grants.
+
+The startup validator captures the configuring collection's metadata only. Copied child-shell
+registrations rebind it to the child's collection, and repeated configuration retains one validator;
+an inherited application-wide `IServiceCollection` registration cannot hide a child duplicate.
+
+The built-in reader's preflight reads organization metadata only. A replacement details reader's
+compatibility default may call its complete `ReadAsync`. The definition GET honors the selected
+authorizer before returning details and preserves the existing reader's not-found response. This
+contract does not replace the bounded query visibility policy used before counts and paging.
 
 ### `IWorkflowLibraryStore` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
 
