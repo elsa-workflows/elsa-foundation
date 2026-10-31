@@ -177,6 +177,7 @@ export function WorkflowEditor({
   operations?: {publishing:import("@elsa-workflows/studio-sdk").StudioContributionAvailability;testRuns:import("@elsa-workflows/studio-sdk").StudioContributionAvailability};
   onBack(): void;
 }) {
+  const publicationUnavailableReason = operations?.publishing.state === "unavailable" ? operations.publishing.reason ?? "Publication is unavailable on this backend." : undefined;
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [templateNavigationPending, setTemplateNavigationPending] = useState(false);
   const [templatesAvailable, setTemplatesAvailable] = useState(false);
@@ -1388,7 +1389,7 @@ export function WorkflowEditor({
           }).catch(() => undefined).finally(() => setTemplateNavigationPending(false));
         }}
         onSave={() => { void flushDefinitionMeta().then(saved => { if (saved) void save(); }); }}
-        publicationUnavailableReason={operations?.publishing.state === "unavailable" ? operations.publishing.reason ?? "Publication is unavailable on this backend." : undefined}
+        publicationUnavailableReason={publicationUnavailableReason}
         onPublish={mode => { if (operations?.publishing.state !== "unavailable") void preparePublication(mode); }}
         onRun={() => { if (operations?.testRuns.state !== "unavailable") void run(); }}
         canRun={canRunTest}
@@ -1523,6 +1524,15 @@ export function WorkflowEditor({
             artifactId={publishedRuntimeExecutable?.artifactId ?? null}
             authoredActivityId={httpTestRequestActivityId}
             onClose={() => setHttpTestRequestActivityId(null)}
+            publicationUnavailableReason={publicationUnavailableReason}
+            onPublishDraft={() => {
+              setHttpTestRequestActivityId(null);
+              void preparePublication("review");
+            }}
+            onOpenPublishedVersion={() => {
+              setHttpTestRequestActivityId(null);
+              openPublishedExecutable();
+            }}
           />
         </React.Suspense>
       ) : null}
