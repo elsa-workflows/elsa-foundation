@@ -1,0 +1,35 @@
+{
+  "productionCorrection": "9032ca8e4a405da8c91469a354af7ac6f6e0f3ea",
+  "actualRecoverySource": "9c1eda25205d4153b6ea9709295e22ba3f9d5d0c",
+  "sourceBoundary": "Only the host test wait-for-ACK assertion changed after9032; production source is identical. Earlier red/green focused tests used test/source overlays before the correction commit; they are not labelled clean-source qualification.",
+  "wholeSuites": {
+    "source": "9032ca8e4a405da8c91469a354af7ac6f6e0f3ea",
+    "bpmn": 504,
+    "behavioral": 220,
+    "skipped": 0
+  },
+  "focused": {
+    "beforeFix": {
+      "failed": 3,
+      "passed": 4,
+      "skipped": 0
+    },
+    "afterFix": {
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "initialHostAttempt": {
+    "source": "9032ca8e4a405da8c91469a354af7ac6f6e0f3ea",
+    "status": "failed",
+    "reason": "The model had accepted cancellation but its result source was still retryable. The test stopped before acknowledgement and its unchanged Delivered assertion failed. This was not a passing host test."
+  },
+  "correctedHostTest": {
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "change": "Wait for actual native-result ACK, all original model sources Delivered and empty model queue before restart; preserve the Delivered assertion and compare complete physical views after restart."
+  },
+  "broaderAcceptance": "Alternative pending-child delivery order, broader ETL/Studio/provider acceptance and full current-main/required/review/protected/resulting-main gates remain separate."
+}

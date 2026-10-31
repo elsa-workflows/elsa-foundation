@@ -67,7 +67,7 @@ The [final affected-source repeat](evidence/final-compatibility/README.md) quali
 
 ## Delivery receipt
 
-One concise receipt maps FR-001–FR-022, SC-001–SC-006 and all #2898 criteria to committed assets/commands/results, explains provider/profile limits and lists remaining #2907/program obligations. Verify every recorded asset hash and relative link. Complete the independent full-PR loop within six rounds, green exact-head required checks and protected merge, then verify actual resulting main. Keep issue/PR/Project62 current and release only the completed specific claim.
+One concise receipt maps FR-001–FR-022, SC-001–SC-006 and all #2898 criteria to committed assets/commands/results, explains provider/profile limits and lists remaining #2907/program obligations. Verify every recorded asset hash and relative link. Complete the independent full-PR loop within the owner-authorized16-round bound for PR3410 (original6 plus10 additional rounds), green exact-head required checks and protected merge, then verify actual resulting main. Keep issue/PR/Project62 current and release only the completed specific claim.
 
 ### Preserve the CLR source identity when relocating a saved catalog
 

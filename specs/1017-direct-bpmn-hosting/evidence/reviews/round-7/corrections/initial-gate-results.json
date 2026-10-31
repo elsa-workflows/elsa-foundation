@@ -1,0 +1,58 @@
+[
+  {
+    "name": "bpmn",
+    "source": "9032ca8e4a405da8c91469a354af7ac6f6e0f3ea",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Bpmn/Tests/Elsa.Activities.Bpmn.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=bpmn.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-round7-correction"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 32.65980792045593
+  },
+  {
+    "name": "behavioral",
+    "source": "9032ca8e4a405da8c91469a354af7ac6f6e0f3ea",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=behavioral.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-round7-correction"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 6.918515920639038
+  },
+  {
+    "name": "actual-nested-recovery",
+    "source": "9032ca8e4a405da8c91469a354af7ac6f6e0f3ea",
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--filter",
+      "FullyQualifiedName~LegacyNestedCancellationWorkbenchTests",
+      "--logger",
+      "trx;LogFileName=actual-nested-recovery.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-round7-correction"
+    ],
+    "exitCode": 1,
+    "elapsedSeconds": 13.95271611213684
+  }
+]
