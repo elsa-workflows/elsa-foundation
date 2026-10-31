@@ -20,6 +20,9 @@ namespace Elsa.Workflows.Design.Api.Endpoints.Definitions;
 /// </remarks>
 public interface IWorkflowDefinitionDetailsReader
 {
+    /// <summary>Checks that a mutation may return its details before committing. Existing
+    /// readers can use the complete read; the default reader checks only organization metadata.</summary>
+    Task AuthorizeReadAsync(string definitionId, CancellationToken cancellationToken) => ReadAsync(definitionId, cancellationToken);
     Task<WorkflowDefinitionDetailsView> ReadAsync(string definitionId, CancellationToken cancellationToken);
 }
 
@@ -31,6 +34,17 @@ public sealed class WorkflowDefinitionDetailsReader(
     IWorkflowLibraryStore? library = null,
     IHttpContextAccessor? httpContextAccessor = null) : IWorkflowDefinitionDetailsReader
 {
+    public async Task AuthorizeReadAsync(string definitionId, CancellationToken cancellationToken)
+    {
+        if (library is null) return;
+        var context = httpContextAccessor?.HttpContext
+            ?? throw new InvalidOperationException("Workflow library details require an authenticated HTTP request context.");
+        await WorkflowLibraryAccess.RequireAsync(context, WorkflowDesignPermissions.Read,
+            new WorkflowLibraryResource(DefinitionId: definitionId), cancellationToken);
+        if (await library.GetOrganizationAsync(definitionId, cancellationToken) is { } organization)
+            await WorkflowLibraryAccess.RequireOrganizationReadAsync(context, organization, cancellationToken);
+    }
+
     public async Task<WorkflowDefinitionDetailsView> ReadAsync(string definitionId, CancellationToken cancellationToken)
     {
         var context = library is null ? null : httpContextAccessor?.HttpContext

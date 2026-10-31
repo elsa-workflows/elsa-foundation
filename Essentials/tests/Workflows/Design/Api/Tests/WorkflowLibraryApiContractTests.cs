@@ -413,6 +413,23 @@ public sealed class WorkflowLibraryApiContractTests
         else Assert.Contains("Secret finance root", body);
     }
 
+    [Theory]
+    [InlineData(true, HttpStatusCode.Forbidden)]
+    [InlineData(false, HttpStatusCode.OK)]
+    public async Task Metadata_updates_authorize_their_response_before_any_write(bool denyAncestor, HttpStatusCode expected)
+    {
+        var probe = new LibraryProbe { IncludeHiddenFolder = true };
+        await using var host = await StartAsync(probe, services =>
+        {
+            if (denyAncestor) services.AddSingleton<IPermissionResourceHandler, DeniedFolderPolicy>();
+        });
+        using var response = await SendAsync(host, "PATCH", "/design/workflows/definitions/orders", "library-all",
+            "{\"name\":\"Renamed invoice\"}");
+        Assert.Equal(expected, response.StatusCode);
+        if (denyAncestor) Assert.Null(host.Domain.LastSavedDefinition);
+        else Assert.Equal("Renamed invoice", host.Domain.LastSavedDefinition!.Name);
+    }
+
     [Fact]
     public async Task Stale_organization_writes_are_structured_conflicts()
     {

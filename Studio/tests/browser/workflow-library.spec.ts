@@ -69,6 +69,37 @@ test("a stale organization write retains the intended change until an explicit r
   await expect(dialog.getByRole("checkbox", { name: "Critical", exact: true })).not.toBeChecked();
 });
 
+test("moving from Organization contains Tab and Shift+Tab in the active move dialog", async ({ page }) => {
+  await page.goto("/?mode=workflow-library");
+  await page.getByRole("button", { name: "Actions for Collect overdue payment" }).click();
+  await page.getByRole("menuitem", { name: "Organization", exact: true }).click();
+  await page.getByRole("button", { name: "Move to folder", exact: true }).click();
+  const move = page.getByRole("dialog", { name: "Move workflow definitions", exact: true });
+  const first = move.getByRole("radio", { name: "Unfiled", exact: true });
+  const last = move.getByRole("button", { name: "Move", exact: true });
+  await last.focus();
+  await page.keyboard.press("Tab");
+  await expect(first).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(last).toBeFocused();
+});
+
+test("Escape cancels the nested move and restores Organization keyboard focus", async ({ page }) => {
+  await page.goto("/?mode=workflow-library");
+  await page.getByRole("button", { name: "Actions for Collect overdue payment" }).click();
+  await page.getByRole("menuitem", { name: "Organization", exact: true }).click();
+  const organization = page.getByRole("dialog", { name: "Organize Collect overdue payment", exact: true });
+  await organization.getByRole("button", { name: "Move to folder", exact: true }).click();
+  const move = page.getByRole("dialog", { name: "Move workflow definitions", exact: true });
+  await expect(move).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(move).toBeHidden();
+  await expect(organization.getByRole("button", { name: "Move to folder", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(organization).toBeHidden();
+  await expect(page.getByRole("button", { name: "Refresh workflow definitions", exact: true })).toBeFocused();
+});
+
 test("catalog management creates controlled values and retires their stable tag identity", async ({ page }) => {
   await page.goto("/?mode=workflow-library");
   await page.getByRole("button", { name: "Manage tags", exact: true }).click();

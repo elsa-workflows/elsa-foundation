@@ -22,7 +22,7 @@ export function WorkflowOrganizationDialog({ context, definitionId, name, onClos
   const [refresh, setRefresh] = useState(0);
   const [moveOpen, setMoveOpen] = useState(false);
   const operationKey = useRef(workflowOperationKey());
-  useDialogFocus(ref, busy || moveOpen ? null : onClose);
+  useDialogFocus(ref, busy ? null : onClose, true, undefined, !moveOpen);
   useEffect(() => {
     let active = true;
     setLoading(true); setError(""); setOrganization(null);

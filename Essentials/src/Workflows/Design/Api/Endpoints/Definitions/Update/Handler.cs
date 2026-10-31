@@ -28,6 +28,7 @@ public sealed class Handler(
 {
     public async Task<WorkflowDefinitionDetailsView> Handle(UpdateDefinition command, CancellationToken cancellationToken)
     {
+        await reader.AuthorizeReadAsync(command.Id, cancellationToken);
         var draft = await draftStore.FindByWorkflowDefinitionIdAsync(command.Id, cancellationToken)
                     ?? throw new ArgumentException($"Workflow definition '{command.Id}' has no draft to update.");
 
