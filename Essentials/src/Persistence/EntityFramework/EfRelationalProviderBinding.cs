@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace Elsa.Persistence.EntityFramework;
 
@@ -14,6 +15,11 @@ namespace Elsa.Persistence.EntityFramework;
 /// </summary>
 public static class EfRelationalProviderBinding
 {
+    // Cache executable factory code by the actual provider delegate type, not an assembly name.
+    // Weak ownership permits provider unload; configuration and migration assemblies are arguments,
+    // never cache keys or captured constants in this process-wide preparation.
+    private static readonly ConditionalWeakTable<Type, RelationalConfigureFactories> ConfigureFactories = new();
+    private static readonly ConditionalWeakTable<Type, MethodInfo> ExtensionMethods = new();
     /// <summary>
     /// The one configuration key a host whose modules arrive as packages selects its engine with.
     /// Nuplane's own key, not an Elsa one: every EF module package declares the <c>ef-provider</c>
@@ -207,8 +213,7 @@ public static class EfRelationalProviderBinding
 
         var method = ResolveExtensionMethod(engine);
         var actionType = method.GetParameters()[2].ParameterType;
-        var optionsBuilderType = actionType.GenericTypeArguments[0];
-        var configure = BuildRelationalConfigure(actionType, optionsBuilderType, historyTableName, migrationsAssembly, schema);
+        var configure = BuildRelationalConfigure(actionType, historyTableName, migrationsAssembly, schema);
         method.Invoke(null, [builder, connectionString, configure]);
         // Microsoft.Data.Sqlite can lend one pooled connection to two opens that check out at once (#2209).
         if (engine == SqliteEngine)
@@ -236,7 +241,11 @@ public static class EfRelationalProviderBinding
                             ?? LoadType(engine)
                             ?? throw EngineMissing(engine);
 
-        return extensionType
+        return ExtensionMethods.GetValue(extensionType, type => ResolveExtensionMethod(engine, type));
+    }
+
+    private static MethodInfo ResolveExtensionMethod(ProviderEngine engine, Type extensionType) =>
+        extensionType
                    .GetMethods(BindingFlags.Public | BindingFlags.Static)
                    .FirstOrDefault(candidate =>
                        candidate.Name == engine.MethodName &&
@@ -246,30 +255,55 @@ public static class EfRelationalProviderBinding
                        parameters[2].ParameterType.IsGenericType &&
                        parameters[2].ParameterType.GetGenericTypeDefinition() == typeof(Action<>))
                ?? throw ExtensionMethodMissing(engine, extensionType);
-    }
 
     private static Delegate BuildRelationalConfigure(
         Type actionType,
-        Type optionsBuilderType,
         string historyTableName,
         ConstantExpression? migrationsAssembly,
         string? schema)
+        => ConfigureFactories.GetValue(actionType, static type => new RelationalConfigureFactories(type))
+            .Create(historyTableName, schema, migrationsAssembly);
+
+    private sealed class RelationalConfigureFactories(Type actionType)
     {
+        private readonly Lazy<Func<string, string?, object?, Delegate>> _withoutAssembly =
+            new(() => CompileRelationalConfigureFactory(actionType, null));
+        private readonly Lazy<Func<string, string?, object?, Delegate>> _withName =
+            new(() => CompileRelationalConfigureFactory(actionType, typeof(string)));
+        private readonly Lazy<Func<string, string?, object?, Delegate>> _withAssembly =
+            new(() => CompileRelationalConfigureFactory(actionType, typeof(Assembly)));
+
+        public Delegate Create(string historyTableName, string? schema, ConstantExpression? migrationsAssembly)
+        {
+            var factory = migrationsAssembly is null ? _withoutAssembly :
+                migrationsAssembly.Type == typeof(string) ? _withName : _withAssembly;
+            return factory.Value(historyTableName, schema, migrationsAssembly?.Value);
+        }
+    }
+
+    private static Func<string, string?, object?, Delegate> CompileRelationalConfigureFactory(Type actionType, Type? migrationsType)
+    {
+        var optionsBuilderType = actionType.GenericTypeArguments[0];
         var parameter = Expression.Parameter(optionsBuilderType, "relational");
+        var historyTableName = Expression.Parameter(typeof(string), "historyTableName");
+        var schema = Expression.Parameter(typeof(string), "schema");
+        var migrationsAssembly = Expression.Parameter(typeof(object), "migrationsAssembly");
         // The module's own history table goes in the module's own schema, so the history a validate reads is the
         // history the tables beside it were created from.
         Expression body = Expression.Call(
             parameter,
             ResolveMigrationsHistoryTable(optionsBuilderType),
-            Expression.Constant(historyTableName),
-            Expression.Constant(schema, typeof(string)));
+            historyTableName,
+            schema);
 
         // One overload, never both: EF Core resolves a name before it looks at an assembly, so a name beside an assembly
         // would reach an assembly of that name from EF Core's own load context after all.
-        if (migrationsAssembly is not null)
-            body = Expression.Call(body, ResolveMigrationsAssembly(optionsBuilderType, migrationsAssembly.Type), migrationsAssembly);
+        if (migrationsType is not null)
+            body = Expression.Call(body, ResolveMigrationsAssembly(optionsBuilderType, migrationsType), Expression.Convert(migrationsAssembly, migrationsType));
 
-        return Expression.Lambda(actionType, body, parameter).Compile();
+        var configure = Expression.Lambda(actionType, body, parameter);
+        return Expression.Lambda<Func<string, string?, object?, Delegate>>(
+            Expression.Convert(configure, typeof(Delegate)), historyTableName, schema, migrationsAssembly).Compile();
     }
 
     private static MethodInfo ResolveMigrationsHistoryTable(Type optionsBuilderType) =>

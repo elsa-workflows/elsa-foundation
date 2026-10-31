@@ -34,7 +34,9 @@ with a complete transitive package lock. Package source tag `dotnet-1.27.0` reso
 Package metadata declares MIT. This is actual package execution, distinct from reading the latest docs.
 
 The package graph requires `Microsoft.Extensions.AI.Abstractions` 10.10.1 and `Microsoft.Extensions.AI`
-10.10.0. Foundation currently pins AI abstractions 10.5.1. The experiment isolates its dependencies in
+10.10.0. At the M0 source snapshot, Foundation pinned AI abstractions 10.5.1;
+[the later central enabler #3544](https://github.com/elsa-workflows/elsa-foundation/issues/3544) promotes 10.10.1.
+The experiment isolates its dependencies in
 an owned temporary project; it does not upgrade Foundation. Shared-host package resolution, adapter
 compatibility and the production version selection remain open. An isolated successful run cannot
 prove all Foundation composition paths will resolve that dependency graph safely.
