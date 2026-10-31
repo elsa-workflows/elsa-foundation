@@ -213,6 +213,12 @@ jobs:
           python3 tools/ci/verify_studio_nuget_packages.py --self-test
           python3 tools/ci/verify_studio_nuget_packages.py --packages "$RUNNER_TEMP/studio-nuget" --version "$STUDIO_PACKAGE_VERSION" --report "$RUNNER_TEMP/studio-archive-verification.json"
 
+      - name: Pack matching governed Preferences dependency without publishing
+        run: >-
+          dotnet pack Essentials/src/Studio/Preferences/Core/Elsa.Studio.Preferences.Core.csproj -c Release
+          -p:RestoreLockedMode=true "-p:Version=$STUDIO_PACKAGE_VERSION" "-p:SourceRevisionId=$GITHUB_SHA"
+          -o "$RUNNER_TEMP/studio-modularity-nuget"
+
       - name: Pack matching lightweight Modularity candidates without publishing
         run: |
           for module in Core Nuplane; do

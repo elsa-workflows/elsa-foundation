@@ -44,7 +44,7 @@ import type {
   StudioAgentPromptRequest,
   StudioPanelContribution
 } from "../sdk";
-import { AuthProvider, AnonymousAuthProvider, evaluateBackendRequirements, isHomeRunDetailPath, recordHomeRunDetailOpened, requestStudioNavigation, studioBackendCapabilitiesChangedEvent, useAuthContext } from "../sdk";
+import { AuthProvider, AnonymousAuthProvider, evaluateBackendRequirements, isHomeRunDetailPath, recordHomeRunDetailOpened, qualifyStudioBackendPath, requestStudioNavigation, studioBackendCapabilitiesChangedEvent, useAuthContext } from "@elsa-workflows/studio-sdk";
 import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
 import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, getStudioRuntimeSettings } from "./runtime";
@@ -95,7 +95,7 @@ import "./themes/workspaceStyles.css";
 import { AgentLauncher, createAgentClient, type AgentSessionIndicatorSession } from "./agent";
 import "./agent/agent.css";
 import "./weaver/weaver.css";
-import { BackendConnections, PreparedBackend } from "./backends/connections";
+import { BackendConnections, PreparedBackend, reloadRetiredBackendOnPageRestore } from "./backends/connections";
 import { BackendConnectionNotice, BackendSwitcher, backendNavigation } from "./backends/BackendsPage";
 import { HostAuthContext } from "./backends/HostAuthContext";
 
@@ -194,6 +194,7 @@ function AppContent({ authManager,backendSession,connections }: { authManager: A
   useEffect(() => {
     const onPopState = () => {
       const qualified = connections.qualifyPath(currentRelativeLocation());
+      if (!qualified) {window.history.replaceState(window.history.state,"",acceptedLocationRef.current);return;}
       if (qualified !== currentRelativeLocation()) window.history.replaceState(window.history.state,"",qualified);
       const nextPath = normalizePath(window.location.pathname);
       const nextLocation = currentRelativeLocation();
@@ -208,11 +209,13 @@ function AppContent({ authManager,backendSession,connections }: { authManager: A
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, []);
+  }, [connections]);
 
   const navigateTo = useCallback((nextPath: string) => {
     if (!requestStudioNavigation(acceptedLocationRef.current, nextPath)) return;
-    window.history.pushState({}, "", connections.qualifyPath(nextPath));
+    const qualified=connections.qualifyPath(nextPath);
+    if (!qualified) return;
+    window.history.pushState({}, "", qualified);
     acceptedPathRef.current = normalizePath(window.location.pathname);
     acceptedLocationRef.current = currentRelativeLocation();
     setPath(acceptedPathRef.current);
@@ -661,7 +664,7 @@ export function ShellFrame({
     <div className={navCollapsed && !topNav ? "studio-shell sidebar-collapsed" : "studio-shell"}>
       <aside className="sidebar">
         <div className="sidebar-top">
-          <a className="brand" href="/" onClick={event => { event.preventDefault(); navigateFromMainNavigation("/"); }}>
+          <a className="brand" href={qualifyStudioBackendPath("/")} onClick={event => { event.preventDefault(); navigateFromMainNavigation("/"); }}>
             <span className="brand-mark" aria-hidden="true">
               <img src={branding.logoUrl ?? elsaLogo} alt="" onError={event => { event.currentTarget.onerror = null; event.currentTarget.src = elsaLogo; }} />
             </span>
@@ -800,7 +803,7 @@ export function ShellFrame({
           <nav className="nav-section" aria-label="Settings">
             <a
               className={settingsActive ? "active" : ""}
-              href="/settings"
+              href={qualifyStudioBackendPath("/settings")}
               aria-current={settingsActive ? "page" : undefined}
               aria-label="Settings"
               title={navCollapsed ? "Settings" : undefined}
@@ -1122,7 +1125,7 @@ export function Diagnostics({
               <li key={destination.id}>
                 <a
                   className="diagnostics-task-link"
-                  href={destination.path}
+                  href={qualifyStudioBackendPath(destination.path)}
                   onClick={event => {
                     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                     event.preventDefault();
@@ -1342,11 +1345,12 @@ function NavItemGroup({
     <div className="nav-item-group">
       <a
         className={[itemActive ? "active" : "", hasActiveChild ? "has-active-child" : ""].filter(Boolean).join(" ")}
-        href={item.path}
+        href={qualifyStudioBackendPath(item.path)}
         aria-current={itemActive ? "page" : undefined}
         aria-label={item.label}
         title={collapsed ? item.label : undefined}
         onClick={event => {
+          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
           event.preventDefault();
           onNavigate(item.path);
         }}
@@ -1362,9 +1366,10 @@ function NavItemGroup({
               <a
                 key={child.id}
                 className={childActive ? "active nav-child" : "nav-child"}
-                href={child.path}
+                href={qualifyStudioBackendPath(child.path)}
                 aria-current={childActive ? "page" : undefined}
                 onClick={event => {
+                  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                   event.preventDefault();
                   onNavigate(child.path);
                 }}
@@ -1610,8 +1615,17 @@ function BackendApplication({authManager}:{authManager:AuthProviderManager|null}
   const hostAuth = useAuthContext();
   const [connections] = useState(() => new BackendConnections(getStudioRuntimeConfig(),createStudioEndpointContext(window.location.origin,authManager),authManager,hostAuth.session));
   const snapshot = useSyncExternalStore(connections.subscribe,connections.getSnapshot);
-  useEffect(() => {void connections.initialize();},[connections]);
+  useEffect(() => {void connections.initialize();return reloadRetiredBackendOnPageRestore(connections);},[connections]);
   if (!snapshot.active) return <ThemeProvider storeContext={connections.hostContext}><ShellFrame navigation={[backendNavigation,appearanceNavigation]} panels={[]} path="/settings/backends" title="Backends" backendBaseUrl={resolveRuntimeBaseUrl(getStudioRuntimeConfig().backendBaseUrl,window.location.origin)} backendAction={<BackendSwitcher connections={connections} onNavigate={path => window.location.assign(path)} />} onNavigate={path => window.location.assign(path)} accountAction={<UserMenu />}><BackendConnectionNotice connections={connections} /><Suspense fallback={<SkeletonRows rows={3} />}><BackendsPage connections={connections} navigate={path => window.location.assign(path)} /></Suspense></ShellFrame></ThemeProvider>;
-  const content = <AppContent authManager={authManager} backendSession={snapshot.active} connections={connections} />;
+  const content = <SelectedBackendApplication authManager={authManager} backendSession={snapshot.active} connections={connections} />;
   return <HostAuthContext.Provider value={hostAuth}>{snapshot.active.manager === authManager ? content : snapshot.active.manager ? <AuthProvider manager={snapshot.active.manager}>{content}</AuthProvider> : <AnonymousAuthProvider>{content}</AnonymousAuthProvider>}</HostAuthContext.Provider>;
+}
+
+
+function SelectedBackendApplication({authManager,backendSession,connections}:{authManager:AuthProviderManager|null;backendSession:PreparedBackend;connections:BackendConnections}) {
+  const {session}=useAuthContext();
+  const changed=session.status !== backendSession.identity.status || session.subject !== backendSession.identity.subject || session.tenantId !== backendSession.identity.tenantId;
+  useEffect(()=>{if (changed) window.location.reload();},[changed]);
+  if (changed) return <p role="status">Your backend identity changed. Reloading the connection…</p>;
+  return <AppContent authManager={authManager} backendSession={backendSession} connections={connections} />;
 }

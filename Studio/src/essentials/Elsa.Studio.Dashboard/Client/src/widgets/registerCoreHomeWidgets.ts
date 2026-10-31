@@ -1,5 +1,6 @@
-import { lazy } from "react";
+import { createElement, lazy } from "react";
 import {
+  evaluateBackendRequirements,
   hasHomeRunDetailOpened,
   homeWidgetIds,
   registerHomeWidget,
@@ -45,7 +46,7 @@ export function registerCoreHomeWidgets(api: ElsaStudioModuleApi) {
     defaultVisible: true,
     defaultSize: "M",
     supportedSizes: ["S", "M", "wide"],
-    component: QuickActionsWidget
+    component: () => createElement(QuickActionsWidget,{runtimeAvailable:evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.runtime",contractVersion:"1"}]).state === "available"})
   });
 
   registerHomeWidget(api, {

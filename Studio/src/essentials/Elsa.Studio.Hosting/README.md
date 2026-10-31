@@ -148,7 +148,9 @@ fragment. Authentication profiles contain public provider settings only: Enabled
 TokenEndpoint/RefreshEndpoint. They are references to the existing backend identity protocol, not secret stores.
 Each backend authenticates independently; selected-backend bearers and SignalR token factories never inherit another
 backend's credentials. An anonymous probe omits cookies. Backends must allow the exact Studio origin through CORS
-and their identity return-URL policy.
+and their identity return-URL policy. For cookie-based identity, the browser must also be permitted to send that
+backend's session cookie: use the same site, or configure the identity host for cross-site cookies over HTTPS.
+Studio does not override browser cookie policy or transfer cookies/tokens between backends.
 
 Studio:BackendBaseUrl remains supported as the browser-facing **stable Studio-host identity authority**. When absent,
 the configured default profile supplies that authority at startup. Studio:BackendServerBaseUrl may independently

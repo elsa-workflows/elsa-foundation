@@ -474,7 +474,7 @@ export function FeatureManagementPage() {
   const session = useAuthSession();
   const permissions = usePermissions();
   const hosts = useMemo(() => getFeatureHosts(moduleApi), []);
-  const [activeHostId, setActiveHostId] = useState<FeatureHostId>(() => featureCompletion?.hostId ?? "server");
+  const [activeHostId, setActiveHostId] = useState<FeatureHostId>(() => {const target=new URLSearchParams(window.location.search).get("target");return target === "studio" || target === "server" ? target : featureCompletion?.hostId ?? "server";});
   const completionRef = useRef<HTMLDivElement | null>(null);
   const [reviewSnapshot, setReviewSnapshot] = useState<FeatureReviewSnapshot | null>(null);
   const reviewSnapshotRef = useRef<FeatureReviewSnapshot | null>(null);

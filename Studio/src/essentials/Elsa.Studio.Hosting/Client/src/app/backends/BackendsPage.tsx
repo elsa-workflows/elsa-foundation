@@ -20,7 +20,7 @@ export function BackendSwitcher({connections,onNavigate}:{connections:BackendCon
     <AnchoredPopover open={open} anchorRef={button} className="backend-switcher-popover" minWidth={260} maxHeight={420} onDismiss={() => setOpen(false)}>
       <div aria-label="Backend connections">
       <strong>Connect to backend</strong>
-      {snapshot.profiles.map(profile => <button type="button" key={profile.id} disabled={snapshot.busy || profile.id === active?.profile.id} onClick={() => { setOpen(false); void connections.connect(profile.id); }}>
+      {snapshot.profiles.map(profile => <button type="button" key={profile.id} disabled={snapshot.busy || profile.id === active?.profile.id && !active?.disposed && !active?.discoveryError} onClick={() => { setOpen(false); void connections.connect(profile.id); }}>
         <span><strong>{profile.name}</strong><small>{profile.environment} · {new URL(profile.baseUrl).host}</small></span><span>{profile.id === active?.profile.id ? "Active" : "Connect"}</span>
       </button>)}
       <button type="button" onClick={() => {setOpen(false);onNavigate("/settings/backends");}}>Manage backends</button>
@@ -79,10 +79,10 @@ function BackendDetails({connections,profile,navigate,detailPath,featureManageme
   return <section className="backends-page" aria-label={`${profile.name} backend`}>
     <button className="backend-back" type="button" onClick={() => navigate("/settings/backends")}><ArrowLeft size={15} aria-hidden="true" />Backends</button>
     <div className="backends-heading"><div><h2>{profile.name}</h2><p className="backend-url">{profile.baseUrl}</p></div><div className="backend-actions">
-      <button className="primary" type="button" disabled={snapshot.busy || active && !snapshot.active?.discoveryError} onClick={() => {void connections.connect(profile.id);}}>{active && !snapshot.active?.discoveryError ? "Connected" : "Connect"}</button>
+      <button className="primary" type="button" disabled={snapshot.busy || active && !snapshot.active?.disposed && !snapshot.active?.discoveryError} onClick={() => {void connections.connect(profile.id);}}>{active && !snapshot.active?.disposed && !snapshot.active?.discoveryError ? "Connected" : "Connect"}</button>
       <button type="button" disabled={checking || snapshot.busy} onClick={() => {void inspect();}}>{checking ? "Checking…" : "Test connection"}</button>
       {profile.source === "personal" && connections.allowPersonal ? <button type="button" onClick={() => navigate(`${detailPath}/edit`)}>Edit</button> : null}
-      {active && featureManagementAvailable ? <button type="button" onClick={() => navigate("/settings/feature-management?target=server")}>Manage features</button> : null}
+      {active && featureManagementAvailable ? <button type="button" onClick={() => navigate("/features?target=server")}>Manage features</button> : null}
     </div></div>
     {error ? <StudioAlert tone="warning">{error}</StudioAlert> : null}
     <StudioTabs baseId={tabsId} tabs={[{id:"connection",label:"Connection"},{id:"capabilities",label:"Capabilities"}]} activeTab={tab} onSelect={setTab} ariaLabel="Backend details" />

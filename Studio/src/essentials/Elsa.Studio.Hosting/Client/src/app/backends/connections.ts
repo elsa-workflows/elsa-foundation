@@ -3,7 +3,7 @@ import {
   requestStudioNavigation, resolveBackendPath, StudioHttpError, studioBackendCapabilitiesChangedEvent,
   type AuthProviderManager, type AuthSession, type StudioApiCapabilityDocument, type StudioBackendProfile,
   type StudioBackendSession, type StudioEndpointContext, type StudioHttpClient, type StudioRequestInit
-} from "../../sdk";
+} from "@elsa-workflows/studio-sdk";
 import { anonymousAuthSession } from "../../auth/types";
 import { createStudioEndpointContext } from "../auth/studioAuth";
 import type { StudioRuntimeConfig } from "../runtime";
@@ -58,6 +58,8 @@ export class PreparedBackend implements StudioBackendSession {
   discoveryError?: string;
 
   constructor(readonly profile: StudioBackendProfile, readonly manager: AuthProviderManager | null, readonly identity: AuthSession) {
+    profile = this.profile = Object.freeze({...profile});
+    identity = this.identity = Object.freeze({...identity,roles:[...identity.roles],permissions:[...identity.permissions]});
     this.key = JSON.stringify([profile.id,profile.baseUrl,identity.subject ?? "anonymous",identity.tenantId ?? "default",crypto.randomUUID()]);
     const boundAuth = manager ? {
       getAccessToken:async () => {this.assertActive();const token = await manager.getAccessToken();this.assertActive();return token;},
@@ -96,7 +98,11 @@ export class PreparedBackend implements StudioBackendSession {
     this.context = {...raw,http,accessTokenFactory:manager ? async () => { this.assertActive(); const token = await manager.getAccessToken(); this.assertActive(); return token ?? ""; } : undefined};
   }
   get pendingWrites() { return this.writes; }
-  get disposed() { return this.ended; }
+  private identityMatches() {
+    const current = this.manager?.getSession();
+    return !current || current.status === this.identity.status && current.subject === this.identity.subject && current.tenantId === this.identity.tenantId;
+  }
+  get disposed() { return this.ended || !this.identityMatches(); }
   private assertActive() {
     if (this.ended) throw new DOMException("The previous backend connection has ended.","AbortError");
     if (this.manager) {
@@ -324,7 +330,21 @@ export class BackendConnections {
   qualifyPath(path:string) {
     const url = new URL(path,window.location.origin);
     if (url.origin !== window.location.origin) throw new Error("Studio navigation must stay on the Studio host.");
-    if (this.snapshot.active) url.searchParams.set("backend",this.snapshot.active.profile.id);
+    const target=url.searchParams.get("backend");
+    const active=this.snapshot.active?.profile.id;
+    if (target && active && target !== active) {
+      this.update({error:"This link targets another backend. Connect to that backend before opening the resource."});
+      return null;
+    }
+    if (active) url.searchParams.set("backend",active);
     return `${url.pathname}${url.search}${url.hash}`;
   }
+}
+
+
+/** A retired document can return from the browser's back-forward cache with its old JavaScript state intact. */
+export function reloadRetiredBackendOnPageRestore(connections:BackendConnections,reload=()=>window.location.reload()) {
+  const restore=(event:PageTransitionEvent)=>{if(event.persisted && connections.getSnapshot().active?.disposed) reload();};
+  window.addEventListener("pageshow",restore);
+  return ()=>window.removeEventListener("pageshow",restore);
 }

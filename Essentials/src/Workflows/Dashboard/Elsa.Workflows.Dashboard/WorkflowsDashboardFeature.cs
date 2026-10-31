@@ -1,3 +1,5 @@
+using Elsa.Api.Capabilities.Extensions;
+using Elsa.Api.Capabilities.Models;
 using CShells.Features;
 using CShells.AspNetCore.Features;
 using Elsa.Api.AspNetCore;
@@ -20,12 +22,14 @@ namespace Elsa.Workflows.Dashboard;
     name: "WorkflowsDashboard",
     DisplayName = "Workflow Dashboard",
     Description = "Provides exact workflow run-health dashboard data.",
-    DependsOn = new object[] { "WorkflowsRuntimeApi", "WorkflowsDesignApi", "WorkflowDesignValidations" })]
+    DependsOn = new object[] { "WorkflowsRuntimeApi", "WorkflowsDesignApi", "WorkflowDesignValidations", "ApiCapabilities" })]
 public sealed class WorkflowsDashboardFeature : IWebShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddElsaEndpoints();
+        services.AddApiCapability(new ApiCapabilityDeclaration("elsa.api.workflow-dashboard",1,
+            [new("workflow-portfolio","_elsa/workflows/dashboard/definitions"),new("workflow-run-health","_elsa/workflows/dashboard/runs")],"WorkflowsDashboard"));
         services.TryAddScoped<IWorkflowRunHealthDataSource>(provider =>
         {
             var executions = provider.GetRequiredService<IWorkflowExecutionStateStore>();

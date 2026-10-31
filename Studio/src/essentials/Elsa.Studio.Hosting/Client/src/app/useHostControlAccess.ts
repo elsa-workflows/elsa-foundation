@@ -1,5 +1,5 @@
 import { useContext, useMemo } from "react";
-import { AuthContext } from "../auth/AuthContext";
+import { useOptionalAuthContext } from "@elsa-workflows/studio-sdk";
 import { hostControlPermissions, moduleManagementReadKeys } from "./hostControlPermissions";
 import { HostAuthContext } from "./backends/HostAuthContext";
 
@@ -17,7 +17,7 @@ export interface HostControlAccess {
 }
 
 export function useHostControlAccess(): HostControlAccess {
-  const currentAuth = useContext(AuthContext);
+  const currentAuth = useOptionalAuthContext();
   const hostAuth = useContext(HostAuthContext);
   const auth = hostAuth ?? currentAuth;
 

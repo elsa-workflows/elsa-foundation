@@ -42,7 +42,8 @@ test("configuration ownership, capability tabs and keyboard switching",async({pa
   await expect(page.locator("html")).toHaveAttribute("data-committed-backend-url","/?backend=runtime");
 });
 
-for (const width of [320,390,768,1440]) test(`long profile names fit at ${width}px`,async({page})=>{
+for (const mode of ["light","dark"] as const) for (const width of [320,390,768,1440]) test(`long profile names fit at ${width}px in ${mode}`,async({page})=>{
+  await page.emulateMedia({colorScheme:mode});
   await page.setViewportSize({width,height:900});
   await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   await page.getByRole("button",{name:/^Authoring ·/}).last().click();

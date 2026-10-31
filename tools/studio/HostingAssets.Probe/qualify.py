@@ -102,11 +102,13 @@ def main(args):
         producer = None
         if args.packages:
             found = {}
-            for path in args.packages.resolve().rglob("*.nupkg"):
-                package_id, version = package_identity(path)
-                if package_id in IDS:
-                    check(package_id not in found, "Duplicate candidate " + package_id)
-                    found[package_id] = (path, version)
+            for directory in dict.fromkeys([args.packages.resolve(),*( [args.support_packages.resolve()] if args.support_packages else [] )]):
+                for path in directory.rglob("*.nupkg"):
+                    package_id, version = package_identity(path)
+                    if package_id in IDS:
+                        if package_id in found and found[package_id][0].read_bytes() == path.read_bytes(): continue
+                        check(package_id not in found, "Duplicate candidate " + package_id)
+                        found[package_id] = (path, version)
             check(set(found) == set(IDS) and len({version for _, version in found.values()}) == 1, "Supply exactly one version of all production candidates")
             version = next(iter(found.values()))[1]
             for path, _ in found.values():
@@ -329,6 +331,7 @@ app.Run();
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--support-packages", type=Path, help="Matching Preferences.Core dependency archive when separate from Studio candidates")
     parser.add_argument("--packages", type=Path, help="Existing production candidate artifact directory")
     parser.add_argument("--version", default="4.0.0-asset-consumer-probe", help="Local candidate version when packing")
     parser.add_argument("--output", type=Path, help="New owned artifact directory")

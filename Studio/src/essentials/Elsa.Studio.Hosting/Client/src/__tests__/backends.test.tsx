@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BackendConnections, PreparedBackend, canonicalBackendUrl, validatePersonalProfiles } from "../app/backends/connections";
+import { BackendConnections, PreparedBackend, canonicalBackendUrl, validatePersonalProfiles, reloadRetiredBackendOnPageRestore } from "../app/backends/connections";
 import {
   evaluateBackendRequirements, getBackendCapabilities, resolveBackendPath, qualifyStudioBackendPath, validateApiCapabilities,
   createEndpointContext, StudioHttpError, studioNavigationRequestedEvent,
@@ -169,5 +169,26 @@ describe("backend isolation regressions",() => {
     const storage=vi.spyOn(Storage.prototype,"setItem").mockImplementation(()=>{throw new Error("blocked storage");});
     try {await connections.connect(b.id);expect(commit).toHaveBeenCalled();expect(active.disposed).toBe(false);await expect(active.context.http.getJson("/capabilities")).resolves.toEqual(document);}
     finally {storage.mockRestore();}
+  });
+});
+
+describe("resource navigation lifetime admission",()=>{
+  it("rejects an explicit foreign target rather than reinterpreting its resource on the active backend",async()=>{
+    vi.stubGlobal("fetch",vi.fn(async()=>response(document)));
+    const {connections}=controller();await connections.initialize();
+    expect(connections.qualifyPath("/workflows/instances/b-only?backend=b")).toBeNull();
+    expect(connections.getSnapshot().error).toContain("another backend");
+    expect(connections.getSnapshot().active?.profile.id).toBe("a");
+  });
+  it("reloads a retired connection restored from the browser cache",async()=>{
+    vi.stubGlobal("fetch",vi.fn(async()=>response(document)));
+    const {connections}=controller();await connections.initialize();
+    const reload=vi.fn();const cleanup=reloadRetiredBackendOnPageRestore(connections,reload);
+    try {
+      window.dispatchEvent(new PageTransitionEvent("pageshow",{persisted:true}));expect(reload).not.toHaveBeenCalled();
+      connections.getSnapshot().active!.dispose();
+      window.dispatchEvent(new PageTransitionEvent("pageshow",{persisted:false}));expect(reload).not.toHaveBeenCalled();
+      window.dispatchEvent(new PageTransitionEvent("pageshow",{persisted:true}));expect(reload).toHaveBeenCalledTimes(1);
+    } finally {cleanup();}
   });
 });

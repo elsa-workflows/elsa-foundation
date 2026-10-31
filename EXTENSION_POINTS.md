@@ -217,9 +217,5 @@ not automatic constitution violations.
 
 ## Studio backend connections
 
-Hosting composes the governed Preferences.Core store contract at the stable root host and exposes public SDK
-backend requirements/session/discovery seams to Studio modules. See the [Hosting backend connections guide](Studio/src/essentials/Elsa.Studio.Hosting/README.md#backend-connections).
-ConnectionsApi, SecretsApi, AttentionApi, FoundationAgentApi and DiagnosticsOpenTelemetry declare their API contracts
-through the existing capability aggregation extension. DiagnosticsStructuredLogs contributes an IApiCapabilitySource
-whose links follow its configured routes. These declarations do not grant permissions or enable shell features;
-see [API capability composition](Essentials/src/Api/Capabilities/README.md).
+- [Hosting backend connection composition and SDK seams](Studio/src/essentials/Elsa.Studio.Hosting/README.md#backend-connections)
+- [API capability contributor catalog](Essentials/src/Api/Capabilities/EXTENSION_POINTS.md)

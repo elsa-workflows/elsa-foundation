@@ -30,6 +30,7 @@ public sealed class DomainApiCapabilityRegistrationTests
 {
     public static TheoryData<Type, ApiCapabilityDeclaration> DomainFeatures => new()
     {
+        { typeof(Elsa.Workflows.Dashboard.WorkflowsDashboardFeature), new("elsa.api.workflow-dashboard",1,[new("workflow-portfolio","_elsa/workflows/dashboard/definitions"),new("workflow-run-health","_elsa/workflows/dashboard/runs")],"WorkflowsDashboard") },
         { typeof(Elsa.Connections.Api.Features.ConnectionsApiFeature), new("elsa.api.connections",1,[new("connections","connections"),new("connection-picker","connections/picker")],"ConnectionsApi") },
         { typeof(Elsa.Secrets.Api.Features.SecretsApiFeature), new("elsa.api.secrets",1,[new("secrets","secrets"),new("secret-picker","secrets/picker")],"SecretsApi") },
         { typeof(Elsa.Attention.Api.AttentionApiFeature), new("elsa.api.attention",1,[new("attention-items","_elsa/attention/items")],"AttentionApi") },
