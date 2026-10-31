@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3531-backend-connections`
 **Created**: 2026-10-31
-**Status**: Approved
+**Status**: Implemented
 **Input**: Owner-approved backend connection design and instruction to deliver end to end; #3531. Program-goal state: none/free-flow.
 
 ## User Scenarios & Testing
