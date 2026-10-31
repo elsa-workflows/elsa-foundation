@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "preCorrectionProductionSource": "d21f5131ce7920be180788d03de0eab28bbfc713",
+  "testAndCorrectionSource": "d21f5131ce7920be180788d03de0eab28bbfc713 plus the committed correction diff",
+  "negativeCases": 4,
+  "correctedControls": 21,
+  "assets": [
+    {
+      "path": "corrupt-green.trx.gz",
+      "bytes": 3725,
+      "sha256": "e883192739e4956d48f3a6b0e8109f70252ddaf1e27ff48463c4959c5c3be1ad",
+      "decodedSha256": "baa379c0de8803b8e1b333e4b7aafc5e6b99546fa01b18016f43072dbb1aaaac"
+    },
+    {
+      "path": "corrupt-projection-red.log.gz",
+      "bytes": 2128,
+      "sha256": "a7f4593eed36ac8a7941837d58fecf684dd87651e7e80803cdc4973b37231d7e",
+      "decodedSha256": "8d30b673adf23a15a0d481c6bdc6c40f08dcc306858b42b75540a66b25fe0b9d"
+    },
+    {
+      "path": "corrupt-red.trx.gz",
+      "bytes": 2207,
+      "sha256": "5edbfc9eb79b9ccb2298bec90ae353b4fb4a84bb8a7aa4af1eb1e36f1118d708",
+      "decodedSha256": "2c02a63ac0f8ecbd6d775a4a68e506d541e824905acb7bdd383f19e67938cf52"
+    },
+    {
+      "path": "prior-source-final-controls.log.gz",
+      "bytes": 1771,
+      "sha256": "8a5b9eb70d1806639228b34662aa985d355b5e62ad3552e7baa86c1162131bb7",
+      "decodedSha256": "4380038ed239ea9372bce32d959450e4c80a23cfb9ac6f163151dacfcff654c1"
+    },
+    {
+      "path": "prior-source-green.log.gz",
+      "bytes": 2204,
+      "sha256": "fc0fdbafcdb50d2500c5e4be822de3653eb42a7abb7a4df39b50d06e69d2fe4e",
+      "decodedSha256": "8f3af43da5b8a62847f7f36c7721401224d4e798c196e07465b4e127d343b04e"
+    },
+    {
+      "path": "source-final-controls.trx.gz",
+      "bytes": 3896,
+      "sha256": "f5d0c1ac67815ab6546394e461ba34ce0e841d4d7b21c79e9c8a867a2ec5f75f",
+      "decodedSha256": "f1ca21fceed9ec28b6971ff9fa9aa85905836ffbffb43c6a82483a666796c567"
+    }
+  ]
+}

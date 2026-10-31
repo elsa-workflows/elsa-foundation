@@ -25,6 +25,7 @@ public interface IPostCommitOutboxLookupStore
     /// Finds an undelivered physically committed source owned by this execution, excluding the supplied result kind.
     /// Includes delayed, claimed, retryable and final failures from every checkpoint. Ignores working-set overlays.
     /// Null proves that all other retained sources are Delivered; it is not a due-now or claimable-source query.
+    /// The caller must establish a terminal producer before using absence as a settlement proof.
     /// Requires explicit scope and refuses caller-owned transactions. Legacy providers refuse this capability.
     /// </summary>
     ValueTask<RuntimePostCommitOutboxItem?> FindUndeliveredDurableAsync(string workflowExecutionId, string excludedIntentKind,

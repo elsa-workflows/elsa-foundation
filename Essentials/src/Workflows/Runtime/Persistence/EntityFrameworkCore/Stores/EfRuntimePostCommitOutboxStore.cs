@@ -191,16 +191,31 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
         try
         {
-            var excludedHash = EfRuntimeOperationalStoreSupport.Hash(excludedIntentKind);
-            var row = await Rows(scope, workflowExecutionId, null)
-                .Where(item => item.Status != (int)RuntimePostCommitOutboxStatus.Delivered &&
-                    (item.IntentKindHash != excludedHash || item.IntentKind != excludedIntentKind))
-                .OrderBy(item => item.Id).FirstOrDefaultAsync(cancellationToken);
-            var source = row is null ? null : ReadChecked(row, scope);
-            if (source is not null && (source.Intent.WorkflowExecutionId != workflowExecutionId || source.Intent.Kind == excludedIntentKind ||
-                source.Status == RuntimePostCommitOutboxStatus.Delivered))
-                throw new InvalidDataException("The undelivered source differs from its exact execution query.");
-            return source;
+            var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
+            var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
+            var executionKey = EfRuntimeOperationalStoreSupport.Encode(workflowExecutionId);
+            var executionHash = EfRuntimeOperationalStoreSupport.Hash(workflowExecutionId);
+            string? after = null;
+            while (true)
+            {
+                // Either identity projection can reveal a corrupt owned row. Do not filter on status or
+                // kind projections before checking their payload: a damaged projection cannot prove absence.
+                var query = context.RuntimePostCommitOutbox.AsNoTracking().Where(row =>
+                    (row.ScopeKeyHash == scopeHash || row.ScopeKey == scopeKey) &&
+                    (row.WorkflowExecutionIdHash == executionHash || row.WorkflowExecutionId == executionKey));
+                if (after is not null) query = query.Where(row => row.Id.CompareTo(after) > 0);
+                var page = await query.OrderBy(row => row.Id).Take(ProviderPageSize).ToArrayAsync(cancellationToken);
+                foreach (var row in page)
+                {
+                    var source = ReadChecked(row, scope);
+                    if (source.Intent.WorkflowExecutionId != workflowExecutionId)
+                        throw new InvalidDataException("The durable source differs from its exact execution query.");
+                    if (source.Intent.Kind != excludedIntentKind && source.Status != RuntimePostCommitOutboxStatus.Delivered)
+                        return source;
+                }
+                if (page.Length < ProviderPageSize) return null;
+                after = page[^1].Id;
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
