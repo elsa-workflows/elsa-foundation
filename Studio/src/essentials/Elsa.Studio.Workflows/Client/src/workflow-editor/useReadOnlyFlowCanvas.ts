@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { applyNodeChanges, useNodesInitialized, useReactFlow, useStore, type Node, type NodeChange } from "@xyflow/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { applyNodeChanges, useNodesInitialized, useReactFlow, useStore, type Node, type NodeChange, type Viewport } from "@xyflow/react";
 import { readOnlyMinimapFitViewOptions, shouldShowReadOnlyMiniMap } from "./readOnlyMinimap";
+
+function isSameViewport(left: Viewport, right: Viewport): boolean {
+  return left.x === right.x && left.y === right.y && left.zoom === right.zoom;
+}
 
 export function mergeMeasuredNodeDimensions<T extends Node>(nodes: T[], measuredNodes: T[]): T[] {
   const measuredById = new Map(measuredNodes.map(node => [node.id, node]));
@@ -34,17 +38,37 @@ export function useReadOnlyFlowNodes<T extends Node>(nodes: T[]) {
   return { flowNodes, onNodesChange };
 }
 
-/** Re-fit after xyflow measures nodes, and again when the pane shrinks (status line, error card). */
-export function FitReadOnlyFlowView({ nodeCount }: { nodeCount: number }) {
+/**
+ * Re-fit after xyflow measures nodes, and again when the pane shrinks (status line, error card),
+ * but only while the viewport is still the one the last auto-fit produced. A user pan/zoom or a
+ * focus/zoom-to-node request releases ownership until this canvas remounts for a new graph.
+ */
+export function FitReadOnlyFlowView({ nodeCount, focusRequestId = 0 }: { nodeCount: number; focusRequestId?: number }) {
   const initialized = useNodesInitialized();
-  const { fitView } = useReactFlow();
+  const { fitView, getViewport } = useReactFlow();
   const paneWidth = useStore(state => state.width);
   const paneHeight = useStore(state => state.height);
+  const lastAutoFitViewport = useRef<Viewport | null>(null);
+  const seenFocusRequestId = useRef(focusRequestId);
+  const autoFitReleased = useRef(false);
 
   useEffect(() => {
-    if (!initialized || paneWidth <= 0 || paneHeight <= 0) return;
-    void fitView(shouldShowReadOnlyMiniMap(nodeCount) ? readOnlyMinimapFitViewOptions : { padding: 0.12 });
-  }, [fitView, initialized, nodeCount, paneHeight, paneWidth]);
+    if (focusRequestId !== seenFocusRequestId.current) {
+      seenFocusRequestId.current = focusRequestId;
+      autoFitReleased.current = true;
+    }
+    if (!initialized || paneWidth <= 0 || paneHeight <= 0 || autoFitReleased.current) return;
+
+    const lastViewport = lastAutoFitViewport.current;
+    if (lastViewport && !isSameViewport(getViewport(), lastViewport)) {
+      autoFitReleased.current = true;
+      return;
+    }
+
+    void fitView(shouldShowReadOnlyMiniMap(nodeCount) ? readOnlyMinimapFitViewOptions : { padding: 0.12 }).then(() => {
+      lastAutoFitViewport.current = getViewport();
+    });
+  }, [fitView, focusRequestId, getViewport, initialized, nodeCount, paneHeight, paneWidth]);
 
   return null;
 }

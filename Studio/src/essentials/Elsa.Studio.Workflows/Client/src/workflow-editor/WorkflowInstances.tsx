@@ -2043,12 +2043,13 @@ function WorkflowInstanceCanvas({
           />
         ) : canvas.nodes.length > 0 ? (
           <ReadOnlyWorkflowFlow
-            key={scopeKey}
+            key={`${details.instance.workflowExecutionId}:${scopeKey}`}
             nodes={animatedCanvas.nodes}
             edges={animatedCanvas.edges}
             onInit={setFlowInstance}
             onSelectActivity={onSelectActivity}
             onSelectEvidence={onSelectEvidence}
+            focusRequestId={focusRequestId}
           />
         ) : null}
       </div>
@@ -2061,13 +2062,15 @@ function ReadOnlyWorkflowFlow({
   edges,
   onInit,
   onSelectActivity,
-  onSelectEvidence
+  onSelectEvidence,
+  focusRequestId
 }: {
   nodes: Node<WorkflowNodeData>[];
   edges: Edge<WorkflowEdgeData>[];
   onInit(instance: WorkflowRunFlowInstance): void;
   onSelectActivity(nodeId: string): void;
   onSelectEvidence(evidenceId: string | null): void;
+  focusRequestId: number;
 }) {
   const { flowNodes, onNodesChange } = useReadOnlyFlowNodes(nodes);
 
@@ -2088,7 +2091,7 @@ function ReadOnlyWorkflowFlow({
       onPaneClick={() => onSelectEvidence(null)}
     >
       <Background />
-      <FitReadOnlyFlowView nodeCount={flowNodes.length} />
+      <FitReadOnlyFlowView nodeCount={flowNodes.length} focusRequestId={focusRequestId} />
       <WorkflowReadOnlyMiniMap nodeCount={flowNodes.length} />
       <Controls />
     </ReactFlow>
