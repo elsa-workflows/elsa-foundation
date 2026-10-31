@@ -893,7 +893,8 @@ public sealed partial class AgentCumulativeDisclosureTests
     private sealed class ProjectionSource : IAgentContextProvider
     {
         internal bool ShowDetail = true;
-        internal bool AddSection, RefreshPayload;
+        internal bool AddSection, RefreshPayload, OfferToolScope, RevokeToolScope;
+        internal string? TargetPresentation;
         private int payloadRevision;
         internal string? BindingDrift;
         internal string DetailRevision = "detail-v1";
@@ -909,6 +910,15 @@ public sealed partial class AgentCumulativeDisclosureTests
             var current = new List<AgentContextAttachment> { Attachment("original", "original-resource", "original-v1") };
             if (ShowDetail) current.Add(Attachment("detail", "detail-resource", DetailRevision));
             if (AddSection) current.Add(Attachment("section", "section-resource", "section-v1"));
+            if (OfferToolScope && !RevokeToolScope) current = current.Select(item => item with { AgentScopes = ["scope-s"] }).ToList();
+            if (TargetPresentation is { } presentation) current = current.Select(item => item with
+            {
+                Target = item.Target is null ? null : item.Target with
+                {
+                    DisplayName = presentation is "label" or "both" ? "Refreshed authorized label" : item.Target.DisplayName,
+                    Route = presentation is "route" or "both" ? "/refreshed/authorized/route" : item.Target.Route
+                }
+            }).ToList();
             if (BindingDrift == "scopes") current = current.Select(item => item with { AgentScopes = ["new-scope"] }).ToList();
             if (BindingDrift == "revision") current = current.Select(item => item.Target?.ResourceId == "detail-resource"
                 ? item with { Target = item.Target with { Revision = "detail-v2" } } : item).ToList();
@@ -951,12 +961,16 @@ public sealed partial class AgentCumulativeDisclosureTests
     private sealed class NeutralReadTool : IAgentTool
     {
         internal int Preparations, Executions;
-        public AgentToolDescriptor Descriptor { get; } = new("cumulative_neutral_read", "Read another owned resource", "A neutral owner read.",
+        internal bool RequireScope;
+        internal IReadOnlyCollection<AgentContextAttachment>? PreparedContext;
+        private static readonly AgentToolDescriptor BaseDescriptor = new("cumulative_neutral_read", "Read another owned resource", "A neutral owner read.",
             AgentToolMutability.ReadOnly, AgentRisk.ReadOnly, "{}", [], [])
         { ModuleId = "test.module", DisclosureSourceId = AgentTestContextSource.TestModuleSourceId, ResultType = "neutral.result", ResultSchemaVersion = "1" };
+        public AgentToolDescriptor Descriptor => BaseDescriptor with { AgentScopes = RequireScope ? ["scope-s"] : [] };
         public Task<AgentResult<AgentToolPreparation>> PrepareAsync(AgentToolInvocation invocation, CancellationToken cancellationToken = default)
         {
             Preparations++;
+            PreparedContext = invocation.Context;
             return Task.FromResult(AgentResult<AgentToolPreparation>.Success(new(null, JsonSerializer.SerializeToElement(invocation.Arguments),
                 AgentRisk.ReadOnly, new("neutral.preview", "1", JsonSerializer.SerializeToElement(new { read = true })), false)));
         }

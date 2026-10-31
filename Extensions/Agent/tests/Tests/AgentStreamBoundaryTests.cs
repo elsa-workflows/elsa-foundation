@@ -300,6 +300,7 @@ public sealed partial class AgentCumulativeDisclosureTests
 
     private class FailingProvider(IAgentProvider inner, string phase, Exception failure, bool asynchronous) : IAgentProvider
     {
+        protected IAgentProvider Inner => inner;
         public string ProviderId => inner.ProviderId;
         public Task<AgentProviderSession> CreateSessionAsync(AgentSession session, CancellationToken cancellationToken = default) => inner.CreateSessionAsync(session, cancellationToken);
         public Task<AgentToolApprovalResult> ApproveToolAsync(AgentProviderToolApprovalRequest request, CancellationToken cancellationToken = default) => inner.ApproveToolAsync(request, cancellationToken);
@@ -312,9 +313,9 @@ public sealed partial class AgentCumulativeDisclosureTests
     private sealed class FailingHarness(IAgentProvider provider, string phase, Exception failure, bool asynchronous)
         : FailingProvider(provider, phase, failure, asynchronous), IAgentHarness
     {
-        public AgentHarnessCapabilities Capabilities => ((IAgentHarness)provider).Capabilities;
+        public AgentHarnessCapabilities Capabilities => ((IAgentHarness)Inner).Capabilities;
         public IAsyncEnumerable<AgentStreamEvent> RunTurnAsync(AgentHarnessTurnRequest request, CancellationToken cancellationToken = default)
-            => Guard(((IAgentHarness)provider).RunTurnAsync(request, cancellationToken));
+            => Guard(((IAgentHarness)Inner).RunTurnAsync(request, cancellationToken));
     }
     private sealed class FailingEnumerable(IAsyncEnumerable<AgentStreamEvent> inner, string phase, Exception failure, bool asynchronous) : IAsyncEnumerable<AgentStreamEvent>
     {

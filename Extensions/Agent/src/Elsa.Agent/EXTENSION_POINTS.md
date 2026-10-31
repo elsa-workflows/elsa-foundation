@@ -169,10 +169,14 @@ before any disclosure does not later journal that unexposed projection in cleanu
 
 A successful checkpoint is followed by current owner/host admission of the exact retained
 dependencies before provider entry, callback dispatch or result delivery, including the UI result
-events. Persistence grants no authority. Tool admission is refreshed after the write. Dispatch
+events. Persistence grants no authority. Tool admission uses a fresh ordinary source projection
+after the write, so withdrawn scopes remove tools while still-authorized explanation can continue.
+That projection determines the tool set without replacing the checkpointed provider context. Dispatch
 retains the checkpointed context and refuses changes to its generic ownership, schema, target,
 client, sensitivity or scope bindings; an authorized refresh of opaque content, summaries or
-references does not replace that frozen payload or require byte-for-byte equality.
+references does not replace that frozen payload or require byte-for-byte equality. Canonical target
+identity is module, resource type, resource ID and revision, matching preparation/receipt checks;
+authorized display-name and route refreshes preserve the checkpointed presentation for dispatch.
 
 Pre-disclosure writes honor foreground cancellation. Terminal and accepted-effect journals retain
 their non-cancellable truth policy. Cleanup always releases the foreground lease, and does not

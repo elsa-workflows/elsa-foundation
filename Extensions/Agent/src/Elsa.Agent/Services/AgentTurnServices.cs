@@ -287,7 +287,15 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     yield return Error(checkpointError.Code, checkpointError.Message, checkpointError.StatusCode);
                     yield break;
                 }
-                tools = await boundary.CallAsync("discover-current-tools", () => GetAdmittedToolsAsync(session, prepared, token), token);
+                var currentTools = await boundary.CallAsync("discover-current-tools",
+                    () => GetCurrentAdmittedToolsAsync(session, prepared, source, observedResults, token), token);
+                if (!currentTools.Succeeded || currentTools.Value is null)
+                {
+                    var error = currentTools.Error!;
+                    yield return Error(error.Code, error.Message, error.StatusCode);
+                    yield break;
+                }
+                tools = currentTools.Value;
                 if (await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, checkpoint.History, token)) is { } postWriteDenial)
                 {
                     yield return Error(postWriteDenial.Code, postWriteDenial.Message, postWriteDenial.StatusCode);
@@ -395,7 +403,15 @@ internal sealed class DefaultAgentTurnOrchestrator(
                     yield return Error(checkpointError.Code, checkpointError.Message, checkpointError.StatusCode);
                     yield break;
                 }
-                tools = await boundary.CallAsync("discover-current-tools", () => GetAdmittedToolsAsync(session, prepared, token), token);
+                var currentTools = await boundary.CallAsync("discover-current-tools",
+                    () => GetCurrentAdmittedToolsAsync(session, prepared, source, observedResults, token), token);
+                if (!currentTools.Succeeded || currentTools.Value is null)
+                {
+                    var error = currentTools.Error!;
+                    yield return Error(error.Code, error.Message, error.StatusCode);
+                    yield break;
+                }
+                tools = currentTools.Value;
                 if (await TrackAsync(async () => await AuthorizeDisclosuresAsync(session, checkpoint.History, token)) is { } postWriteDenial)
                 {
                     yield return Error(postWriteDenial.Code, postWriteDenial.Message, postWriteDenial.StatusCode);
@@ -729,17 +745,20 @@ internal sealed class DefaultAgentTurnOrchestrator(
     private static bool SameContextBindings(IReadOnlyCollection<AgentContextAttachment> left,
         IReadOnlyCollection<AgentContextAttachment> right)
     {
-        static object[] Envelopes(IReadOnlyCollection<AgentContextAttachment> attachments) => attachments
-            .Select(item => new
-            {
-                item.Id, item.Source, item.SourceId, item.ContributorId, item.ModuleId, item.ContentType,
-                item.SchemaVersion, item.Target, item.Origin, item.Client, item.Sensitivity,
-                AgentScopes = item.AgentScopes.Distinct(StringComparer.Ordinal).OrderBy(scope => scope, StringComparer.Ordinal).ToArray()
-            }).OrderBy(item => item.ContributorId, StringComparer.Ordinal).ThenBy(item => item.Id, StringComparer.Ordinal)
-            .Cast<object>().ToArray();
-        // Summary, content and references are opaque module evidence. An authorized refresh of
-        // those fields cannot retarget an already checkpointed invocation or change its scopes.
-        return AgentInvocationIntegrity.Digest(Envelopes(left)) == AgentInvocationIntegrity.Digest(Envelopes(right));
+        static AgentContextAttachment[] Ordered(IReadOnlyCollection<AgentContextAttachment> attachments) => attachments
+            .OrderBy(item => item.ContributorId, StringComparer.Ordinal).ThenBy(item => item.Id, StringComparer.Ordinal).ToArray();
+        static object[] Envelopes(IEnumerable<AgentContextAttachment> attachments) => attachments.Select(item => new
+        {
+            item.Id, item.Source, item.SourceId, item.ContributorId, item.ModuleId, item.ContentType,
+            item.SchemaVersion, item.Origin, item.Client, item.Sensitivity,
+            AgentScopes = item.AgentScopes.Distinct(StringComparer.Ordinal).OrderBy(scope => scope, StringComparer.Ordinal).ToArray()
+        }).Cast<object>().ToArray();
+        var before = Ordered(left);
+        var after = Ordered(right);
+        // Targets use the same canonical identity as preparation/receipts; presentation labels
+        // and routes, like opaque summaries/content/references, do not retarget the operation.
+        return before.Length == after.Length && before.Zip(after).All(pair => AgentInvocationIntegrity.SameTarget(pair.First.Target, pair.Second.Target))
+            && AgentInvocationIntegrity.Digest(Envelopes(before)) == AgentInvocationIntegrity.Digest(Envelopes(after));
     }
 
     private sealed record ToolInvocationAdmission(AgentToolInvocation? Invocation, AgentError? Error, bool StopProvider = false);
@@ -1005,6 +1024,19 @@ internal sealed class DefaultAgentTurnOrchestrator(
 
     private static PreparedTurn Rejected(AgentMessage source, string code, string message, int status)
         => Rejected(source, new AgentError(code, message, status));
+
+    private async Task<AgentResult<IReadOnlyCollection<IAgentTool>>> GetCurrentAdmittedToolsAsync(AgentSession session,
+        PreparedTurn prepared, AgentMessage source, IReadOnlyList<AgentToolResult> results, CancellationToken token)
+    {
+        if (prepared.IsContinuation) return AgentResult<IReadOnlyCollection<IAgentTool>>.Success([]);
+        var current = await AdmitAsync(session, source.Context, results, false, false, token);
+        if (!current.Succeeded || current.Value is null)
+            return new(null, current.Error ?? new("agent.context.incomplete", "Current module tool admission is unavailable.", 409));
+        // The current projection determines tool scopes/authority only. It does not replace the
+        // exact checkpointed evidence sent to the provider or establish a new execution target.
+        return AgentResult<IReadOnlyCollection<IAgentTool>>.Success(await GetAdmittedToolsAsync(session,
+            prepared with { Context = current.Value.Attachments }, token));
+    }
 
     private async Task<IReadOnlyCollection<IAgentTool>> GetAdmittedToolsAsync(AgentSession session, PreparedTurn prepared, CancellationToken token)
     {
