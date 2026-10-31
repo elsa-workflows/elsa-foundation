@@ -462,12 +462,12 @@
   border-bottom: 0;
 }
 
-.wf-run-filters > .wf-toolbar {
+.wf-run-filters > .studio-collection-toolbar {
   align-items: flex-start;
   flex-wrap: wrap;
 }
 
-.wf-run-filters > .wf-toolbar > button {
+.wf-run-filters > .studio-collection-toolbar > button {
   flex-shrink: 0;
   white-space: nowrap;
 }

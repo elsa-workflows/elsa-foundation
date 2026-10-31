@@ -234,7 +234,7 @@ function Fixture() {
   };
 
   const ai = { promptActions: { list: () => [] } } as unknown as StudioAiContributionApi;
-  const page = <ThemeProvider><main className={`wf-page${route.workflowExecutionId ? " wf-page--run-workbench" : ""} golden-runs-page`}>
+  const page = <ThemeProvider><main className={`studio-page wf-page${route.workflowExecutionId ? " wf-page--run-workbench" : ""} golden-runs-page`}>
     {route.workflowExecutionId ? <header className="wf-page-header">
       <div><span className="wf-kicker">Workflow management</span><h2>{route.workflowExecutionId ? "Run" : "Runs"}</h2></div>
       {route.workflowExecutionId ? <div className="wf-page-context"><span>Workflow Instance ID</span><code>{route.workflowExecutionId}</code></div> : null}

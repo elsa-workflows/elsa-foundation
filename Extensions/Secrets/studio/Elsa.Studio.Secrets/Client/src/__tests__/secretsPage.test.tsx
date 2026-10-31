@@ -565,7 +565,7 @@ describe("secrets page", () => {
     clickButton(container, "Search");
 
     await waitFor(() => container.querySelector(".secrets-count")?.textContent === "0 shown · 0 loaded · 0 results for “missing-secret”");
-    expect(container.querySelector(".studio-result-state h2")?.textContent).toBe("No results for “missing-secret”");
+    expect(container.querySelector(".studio-result-state h3")?.textContent).toBe("No results for “missing-secret”");
     expect(status.value).toBe("Revoked");
   });
 

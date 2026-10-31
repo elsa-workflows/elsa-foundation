@@ -54,9 +54,9 @@ export function WeatherPage() {
         description="This module contributes both server behavior and React UI."
         actions={<StudioButton onClick={() => void load()} disabled={loading}>Refresh</StudioButton>} />
       {loading ? <SkeletonRows label="Loading weather forecast" /> : error ? (
-        <StudioResultState tone="danger" title="Weather forecast could not be loaded" description={error}
+        <StudioResultState headingLevel={3} tone="danger" title="Weather forecast could not be loaded" description={error}
           actions={<StudioButton onClick={() => void load()}>Retry</StudioButton>} />
-      ) : forecasts.length === 0 ? <StudioResultState title="No forecast available" description="Refresh to check for new forecasts." /> : (
+      ) : forecasts.length === 0 ? <StudioResultState headingLevel={3} title="No forecast available" description="Refresh to check for new forecasts." /> : (
         <StudioTableContainer role="region" aria-label="Weather forecast table" tabIndex={0}>
           <table className="studio-table" aria-label="Weather forecast">
             <thead><tr><th scope="col">Date</th><th scope="col">Summary</th><th scope="col">Temperature</th></tr></thead>

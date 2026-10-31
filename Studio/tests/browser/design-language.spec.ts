@@ -59,6 +59,7 @@ test("a disabled sample module uses public styles for failure, retry, populated 
     : route.fulfill({ json: empty ? [] : [{ date: "2026-10-31", summary: "Sunny", temperatureC: 20, temperatureF: 68 }] }));
   await page.goto("/module-ui.html");
   await expect(page.getByRole("alert")).toContainText("Weather forecast could not be loaded");
+  await expect(page.getByRole("heading", { name: "Weather forecast could not be loaded", level: 3 })).toBeVisible();
   await expect(page.locator(".studio-page").getByRole("table")).toHaveCount(0);
   fail = false;
   await page.getByRole("button", { name: "Retry", exact: true }).press("Enter");
@@ -66,6 +67,7 @@ test("a disabled sample module uses public styles for failure, retry, populated 
   empty = true;
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.locator(".studio-page").getByRole("status")).toContainText("No forecast available");
+  await expect(page.getByRole("heading", { name: "No forecast available", level: 3 })).toBeVisible();
   await expect(page.locator(".studio-page").getByRole("table")).toHaveCount(0);
   await expect(page.locator(".studio-collection-footer")).toHaveText("0 forecasts");
 });
