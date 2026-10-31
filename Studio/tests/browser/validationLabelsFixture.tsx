@@ -1,4 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
+import { createEndpointContext } from "@elsa-workflows/studio-sdk";
+import { useTestRunObservation } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useTestRunObservation";
 import { ValidationPanel, WorkflowRuntimePanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorPanels";
 import {
   createValidationActivityLabels,
@@ -81,15 +83,19 @@ const rawReason = `VF-ACT-003: Activity node '${namedId}' omits required input '
 
 const before = new URLSearchParams(window.location.search).get("mode") === "validation-labels-before";
 
+const context = createEndpointContext(`${window.location.origin}/rejected-fixture-api`);
+
 export function ValidationLabelsFixture() {
   const errors = before ? rawErrors : humanizeValidationErrors(rawErrors, activityLabels);
-  const testRun: WorkflowTestRunView = {
+  const [testRun, setTestRun] = useState<WorkflowTestRunView>({
     testRunId: "test-run-1",
     definitionId: "definition-1",
     definitionVersionId: "draft:1",
     status: "Rejected",
     reason: rawReason
-  };
+  });
+  const runState = { draftSignature: "draft", view: testRun, endpointContext: context };
+  const observation = useTestRunObservation({ context, testRun: runState, onRunViewUpdated: setTestRun });
 
   return (
     <main className="wf-editor validation-labels-fixture" data-testid="validation-labels-fixture" data-copy={before ? "before" : "after"}>
@@ -97,7 +103,10 @@ export function ValidationLabelsFixture() {
         <ValidationPanel draft={draft} errors={errors} onRepair={() => {}} onSelectNode={() => {}} />
       </section>
       <WorkflowRuntimePanel
-        testRun={testRun}
+        testRun={runState}
+        context={context}
+        onRunViewUpdated={setTestRun}
+        observation={observation}
         onOpenRun={() => {}}
         activityLabels={before ? undefined : activityLabels}
       />

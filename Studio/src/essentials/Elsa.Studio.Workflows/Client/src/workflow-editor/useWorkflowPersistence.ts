@@ -31,6 +31,7 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
   const holdForReview = useCallback((hold: boolean) => { const previous = reviewHoldRef.current; reviewHoldGenerationRef.current++; reviewHoldRef.current = hold; setReviewHeld(hold); return previous; }, []);
   const [saving, setSaving] = useState(false);
   const lastSavedDraftSignatureRef = useRef("");
+  const [persistedDraft, setPersistedDraft] = useState<WorkflowDraft | null>(null);
   const saveRequestIdRef = useRef(0);
   const saveQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const inFlightSavesRef = useRef(0);
@@ -42,6 +43,7 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
     reviewHoldGenerationRef.current++;
     reviewHoldRef.current = false; setReviewHeld(false);
     lastSavedDraftSignatureRef.current = savedDraft ? getDraftSignature(savedDraft) : "";
+    setPersistedDraft(savedDraft);
   }, []);
 
   const saveDraft = useCallback(async (draftSnapshot: WorkflowDraft, savedStatus: string) => {
@@ -59,6 +61,7 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
         const saved = await (documentAdapter?.save ?? updateDraft)(context, draftSnapshot);
         const savedSignature = getDraftSignature(saved);
         lastSavedDraftSignatureRef.current = savedSignature;
+        setPersistedDraft(saved);
         const live = latestDraftRef.current;
         const coversLiveDraft = live?.id === draftSnapshot.id && live.definitionId === draftSnapshot.definitionId && getDraftSignature(live) === requestedSignature;
         const coversReviewGeneration = requestedReviewGeneration === reviewHoldGenerationRef.current;
@@ -115,5 +118,5 @@ export function useWorkflowPersistence({ context, draft, documentAdapter, autosa
     return () => window.clearTimeout(timeoutId);
   }, [autosaveEnabled, autosavePaused, reviewHeld, draft, saveDraft, setStatus]);
 
-  return { holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, autosavePaused, setAutosavePaused, markSaved };
+  return { persistedDraft, holdForReview, reviewHeld, saveDraft, flushPendingSave, saving, autosaveEnabled, setAutosaveEnabled, autosavePaused, setAutosavePaused, markSaved };
 }

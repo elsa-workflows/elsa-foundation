@@ -662,7 +662,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
                     </span>
                     <span className="wf-definition-version" role="cell"><LatestDefinitionVersion definition={definition} />{isDeleted ? <span className="wf-status-badge" data-status="cancelled">Deleted</span> : null}</span>
                     <span className="wf-definition-version" role="cell"><PublishedDefinitionVersion definition={definition} /></span>
-                    <span role="cell">{formatDate(definition.lastModifiedAt)}</span>
+                    <span className="wf-definition-modified" role="cell">{formatDate(definition.lastModifiedAt)}</span>
                     <span className="wf-row-actions" role="cell" onClick={isCurrentData ? event => event.stopPropagation() : undefined}>
                       {isCurrentData ? <OverflowMenu items={menuItems} ariaLabel={`Actions for ${definition.name}`} /> : null}
                     </span>

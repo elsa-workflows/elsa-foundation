@@ -158,7 +158,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
             PublishedAt: null,
             expiresAt,
             ArtifactPrefix,
-            TestRunCompatibilityMetadata("test-run-options"))
+            TestRunCompatibilityMetadata("test-run-options"),
+            TenantId: accessContextAccessor?.Current.Scope?.Value)
         {
             Source = new WorkflowExecutableCompileSource(
                 DefinitionId: request.DefinitionId,
@@ -390,7 +391,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
                 PublishedAt: null,
                 expiresAt,
                 ArtifactPrefix,
-                TestRunCompatibilityMetadata(testRunId)),
+                TestRunCompatibilityMetadata(testRunId),
+                TenantId: accessContextAccessor?.Current.Scope?.Value),
             testRunId,
             fallbackDefinitionId: request.VersionId,
             fallbackDefinitionVersionId: request.VersionId,
@@ -447,7 +449,8 @@ public sealed class StartWorkflowTestRunRequestHandler(
                 PublishedAt: null,
                 expiresAt,
                 ArtifactPrefix,
-                TestRunCompatibilityMetadata(testRunId))
+                TestRunCompatibilityMetadata(testRunId),
+                TenantId: accessContextAccessor?.Current.Scope?.Value)
             {
                 Source = new WorkflowExecutableCompileSource(
                     DefinitionId: request.DefinitionId,
@@ -1146,6 +1149,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
             Layout: WorkflowExecutableLayoutSidecar.CopyFrom(layout),
             LayoutSidecar: placementSidecars?.Get(identity.DefinitionVersionId),
             AuthoredInputs: authoredInputs,
+            TenantId: accessContextAccessor?.Current.Scope?.Value,
             ActivityPresentation:
                 WorkflowExecutableActivityPresentationSidecar.CopyFrom(
                     activityPresentation,
