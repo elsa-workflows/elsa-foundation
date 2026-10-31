@@ -33,7 +33,7 @@ public sealed partial class BpmnDirectExecutionTests
         }, activityIds: Enumerable.Range(1, 32).Select(i => "delayed-compensation-" + i).ToArray());
         var worker = new WorkflowExecutable(WorkflowExecutionHarness.Identity, DelayedCompensationWorker(),
             new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UtcNow, new Dictionary<string, string>(),
-            inputContract: new(1, []), incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
+            inputContract: new(1, []), dependencies: null, incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
         await host.PublishAsync(worker, "delayed-compensation-worker");
         await using var scope = await ScopeAsync(host);
         var services = scope.ServiceProvider;
@@ -51,21 +51,31 @@ public sealed partial class BpmnDirectExecutionTests
         var started = await runtime.StartAsync(publication.SourceReferenceId, "delayed-compensation-start", null, caller);
         var before = (await reader.FindAsync(started.ExecutionId))!;
         var origin = Assert.Single(BpmnDirectExecutionDriver.Read(before).Work).NativeWork!;
-        await processor.ProcessAsync(new(workflowExecutionId: before.ExecutionId, intentKind: BpmnNativeWorkBoundary.StartKind));
+        await processor.ProcessAsync(new(limit: 100, workflowExecutionId: before.ExecutionId, intentKind: BpmnNativeWorkBoundary.StartKind));
+        // The delivery can leave the admitted worker's protected continuations queued. Drive its ordinary
+        // outbox and scheduler until the future retry is the remaining source, rather than assuming inline work.
+        for (var pass = 0; pass < 8; pass++)
+        {
+            await processor.ProcessAsync(new(limit: 100, workflowExecutionId: origin.WorkerExecutionId));
+            await DrainModelAsync(host, origin.WorkerExecutionId);
+            if (await lookup.FindUndeliveredDurableAsync(origin.WorkerExecutionId, BpmnNativeWorkBoundary.ResultKind) is { } pending &&
+                pending.AvailableAt > DateTimeOffset.UtcNow.AddMinutes(50)) break;
+        }
         var delayed = (await lookup.FindUndeliveredDurableAsync(origin.WorkerExecutionId, BpmnNativeWorkBoundary.ResultKind))!;
+        await CaptureAsync("waiting");
+        Assert.NotNull(delayed);
         Assert.Equal(RuntimePostCommitIntentKinds.EnqueueSchedulerWork, delayed.Intent.Kind);
         Assert.Equal(WorkflowExecutionCommandKind.ScheduleActivity, delayed.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!.CommandKind);
         Assert.True(delayed.AvailableAt > DateTimeOffset.UtcNow.AddMinutes(50));
         Assert.Equal(WorkflowExecutionStatus.Running,
             (await services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(origin.WorkerExecutionId))!.Status);
-        await CaptureAsync("waiting");
 
         await runtime.CancelAsync(before.ExecutionId, "cancel-delayed-compensation", "Cancel during retry wait.", caller);
-        await processor.ProcessAsync(new(workflowExecutionId: before.ExecutionId, intentKind: BpmnNativeWorkBoundary.CancelKind));
+        await processor.ProcessAsync(new(limit: 100, workflowExecutionId: before.ExecutionId, intentKind: BpmnNativeWorkBoundary.CancelKind));
         await DrainModelAsync(host, origin.WorkerExecutionId);
         Assert.Equal(WorkflowExecutionStatus.Cancelled,
             (await services.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(origin.WorkerExecutionId))!.Status);
-        await processor.ProcessAsync(new(workflowExecutionId: origin.WorkerExecutionId, intentKind: BpmnNativeWorkBoundary.ResultKind));
+        await processor.ProcessAsync(new(limit: 100, workflowExecutionId: origin.WorkerExecutionId, intentKind: BpmnNativeWorkBoundary.ResultKind));
         var originalInput = Assert.Single((await queue.ListAsync(new(before.ExecutionId))).Items);
         Assert.Equal(origin.ResultInputId, originalInput.CommandId);
         await CaptureAsync("queued-result");
