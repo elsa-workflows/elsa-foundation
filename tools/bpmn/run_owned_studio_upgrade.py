@@ -81,6 +81,8 @@ def main():
     for name in ("ActivitiesDesignEntityFrameworkCore", "WorkflowsDesignEntityFrameworkCore", "WorkflowsPublishingEntityFrameworkCore"):
         if name in features:
             features[name]["ConnectionString"] = "Data Source=design.db"
+    if "FoundationIdentityAspNetCoreIdentity" in features:
+        features["FoundationIdentityAspNetCoreIdentity"]["AllowedReturnUrlOrigins"] = [studio_url]
     clr_source_binding = json.loads(subprocess.check_output(["dotnet", str(args.reader_assembly),
         "--read-clr-source-identities", str(backend_root / "design.db")], text=True))
     if clr_source_binding.get("readOnly") is not True:
