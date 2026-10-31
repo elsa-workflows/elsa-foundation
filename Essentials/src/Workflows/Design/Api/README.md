@@ -45,6 +45,22 @@ The authoring-schema endpoints make the design API a complete headless authoring
 
 ## Extension points
 
+Workflow library pages enforce visibility before counting and paging. A host that registers any
+`IPermissionResourceHandler` must also register an `IWorkflowLibraryVisibilityPolicy` whose
+server-derived revision and bounded allow/deny definition identities describe the complete workflow
+visibility for the current normalized principal. Without that integration the page returns HTTP 403
+before reading the inventory, including when the handler is registered for another resource domain.
+Tenant/action-only hosts without resource handlers use the unrestricted tenant scope. The read scope
+never comes from a request or saved view; its revision/membership is bound into continuation tokens.
+The visibility policy is an optional single-implementation contract. Multiple registrations fail
+shell startup with a diagnostic rather than selecting the last registration. Definition details and
+organization responses also authorize the definition and every returned folder/ancestor; a denied
+resource produces HTTP 403 without returning its organization metadata. Definition mutations
+preflight that read decision before committing. Replacement details readers can implement
+`AuthorizeReadAsync`; its compatibility default reads the details, while the built-in reader
+checks only organization metadata.
+See the [visibility contract](EXTENSION_POINTS.md#overridable-contracts).
+
 See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) for persistence ports, structure handlers, and input-option providers. API clients should use the published HTTP contracts rather than implementation services.
 
 

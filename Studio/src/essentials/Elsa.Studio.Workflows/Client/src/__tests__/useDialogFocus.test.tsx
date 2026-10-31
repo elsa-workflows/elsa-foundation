@@ -87,10 +87,29 @@ describe("dialog focus management", () => {
     const autofocus = container.querySelector<HTMLInputElement>("input")!;
     expect(document.activeElement).toBe(autofocus);
   });
+
+  it("pauses keyboard containment and resumes focus while retaining the original opener", () => {
+    const onEscape = vi.fn();
+    flushSync(() => root.render(<Dialog onEscape={onEscape} active />));
+    flushSync(() => root.render(<Dialog onEscape={onEscape} active={false} />));
+    opener.focus();
+    for (const key of ["Tab", "Escape"]) {
+      const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true });
+      opener.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+      expect(document.activeElement).toBe(opener);
+    }
+    expect(onEscape).not.toHaveBeenCalled();
+
+    flushSync(() => root.render(<Dialog onEscape={onEscape} active />));
+    expect(document.activeElement).toBe(container.querySelector("button"));
+    flushSync(() => root.unmount());
+    expect(document.activeElement).toBe(opener);
+  });
 });
 
-function Dialog({ onEscape, children }: { onEscape(): void; children?: ReactNode }) {
+function Dialog({ onEscape, children, active = true }: { onEscape(): void; children?: ReactNode; active?: boolean }) {
   const ref = useRef<HTMLElement>(null);
-  useDialogFocus(ref, onEscape);
+  useDialogFocus(ref, onEscape, true, undefined, active);
   return <section ref={ref} role="dialog" tabIndex={-1}><button type="button">Publish</button><button type="button">Cancel</button>{children}</section>;
 }

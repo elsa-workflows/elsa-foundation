@@ -1,4 +1,3 @@
-import "@xyflow/react/dist/style.css";
 import { lazy, type ReactNode } from "react";
 import { authSessionEndedEvent, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 import { setDialogs } from "./workflow-editor/dialogs";

@@ -49,6 +49,9 @@ export interface WorkflowDefinitionSummary {
   folderId?: string | null;
   /** Root-to-containing-folder projection for result navigation; IDs are opaque. */
   folderBreadcrumb?: WorkflowFolderBreadcrumbItem[];
+  tags?: { tagId: string; valueId?: string | null }[];
+  favorite?: boolean;
+  permissions?: { canAssignTags?: boolean; canManageFolders?: boolean; canManageTags?: boolean; canShareViews?: boolean };
 }
 
 export interface WorkflowFolderBreadcrumbItem {
@@ -63,6 +66,7 @@ export interface WorkflowFolder {
   normalizedName: string;
   createdAt: string;
   lastModifiedAt: string;
+  revision?: string;
 }
 
 export interface WorkflowFolderDetail {

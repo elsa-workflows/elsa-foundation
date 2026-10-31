@@ -1,6 +1,7 @@
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Models;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
@@ -43,6 +44,38 @@ internal static class WorkflowsDesignJsonOptions
 }
 
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, GenerationMode = JsonSourceGenerationMode.Metadata)]
+[JsonSerializable(typeof(ListWorkflowFolders))]
+[JsonSerializable(typeof(GetWorkflowFolder))]
+[JsonSerializable(typeof(CreateWorkflowFolder))]
+[JsonSerializable(typeof(RenameWorkflowFolder))]
+[JsonSerializable(typeof(MoveWorkflowFolder))]
+[JsonSerializable(typeof(DeleteEmptyWorkflowFolder))]
+[JsonSerializable(typeof(MoveWorkflowDefinitions))]
+[JsonSerializable(typeof(ListWorkflowLibrary))]
+[JsonSerializable(typeof(GetWorkflowOrganization))]
+[JsonSerializable(typeof(ReplaceWorkflowTags))]
+[JsonSerializable(typeof(ListWorkflowTags))]
+[JsonSerializable(typeof(GetWorkflowTag))]
+[JsonSerializable(typeof(SaveWorkflowTag))]
+[JsonSerializable(typeof(ListWorkflowViews))]
+[JsonSerializable(typeof(SaveWorkflowView))]
+[JsonSerializable(typeof(DeleteWorkflowView))]
+[JsonSerializable(typeof(SetWorkflowFavorite))]
+[JsonSerializable(typeof(WorkflowFolder))]
+[JsonSerializable(typeof(WorkflowFolderDetail))]
+[JsonSerializable(typeof(WorkflowFolderPage))]
+[JsonSerializable(typeof(WorkflowTag))]
+[JsonSerializable(typeof(WorkflowTagInput))]
+[JsonSerializable(typeof(WorkflowTagBulkEdit))]
+[JsonSerializable(typeof(IReadOnlyList<WorkflowTagEditOutcome>))]
+[JsonSerializable(typeof(IReadOnlyList<WorkflowTagFilter>))]
+[JsonSerializable(typeof(WorkflowLibraryViewInput))]
+[JsonSerializable(typeof(WorkflowLibraryView))]
+[JsonSerializable(typeof(WorkflowLibraryViewView))]
+[JsonSerializable(typeof(WorkflowOrganizationView))]
+[JsonSerializable(typeof(WorkflowLibraryPageView))]
+[JsonSerializable(typeof(WorkflowTagPageView))]
+[JsonSerializable(typeof(WorkflowLibraryViewsView))]
 [JsonSerializable(typeof(ListWorkflowTemplates))]
 [JsonSerializable(typeof(GetWorkflowTemplate))]
 [JsonSerializable(typeof(SaveWorkflowTemplate))]

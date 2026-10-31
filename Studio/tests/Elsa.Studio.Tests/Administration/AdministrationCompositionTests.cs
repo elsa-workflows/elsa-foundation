@@ -75,9 +75,19 @@ internal sealed class AdministrationHost : IAsyncDisposable
 {
     private readonly bool _keepFiles;
     private WebApplicationBuilder? _builder;
-    private AdministrationHost(string? root, bool keepFiles)
+    private AdministrationHost(string? root, bool keepFiles, bool nativeStore)
     {
-        Root = root ?? Directory.CreateTempSubdirectory("studio-admin-").FullName;
+        if (root is not null) Root = root;
+        else if (nativeStore && OperatingSystem.IsLinux())
+        {
+            // Nuplane qualifies ext4 on Linux. Keep its integration roots on the
+            // workspace volume rather than an image-dependent /tmp mount. The
+            // native preview below still refuses an unsupported filesystem.
+            var workspace = Environment.GetEnvironmentVariable("RUNNER_TEMP");
+            if (string.IsNullOrWhiteSpace(workspace)) workspace = AppContext.BaseDirectory;
+            Root = Directory.CreateDirectory(Path.Combine(workspace, $"studio-admin-{Guid.NewGuid():N}")).FullName;
+        }
+        else Root = Directory.CreateTempSubdirectory("studio-admin-").FullName;
         _keepFiles = keepFiles;
     }
     public string Root { get; }
@@ -88,7 +98,7 @@ internal sealed class AdministrationHost : IAsyncDisposable
 
     public static async Task<AdministrationHost> StartAsync(Action<NuplaneBuilder>? configureNuplane = null, bool addAdministration = true, bool managedFeatures = false, Action<WebApplicationBuilder>? beforeStudio = null, Action<WebApplicationBuilder>? afterStudio = null, bool nativeStore = false, bool loadPackages = false, Action<WebApplication>? configurePipeline = null, string? root = null, bool keepFiles = false, Action<StudioNuplaneOptions>? configureAdministration = null, Action<IEndpointRouteBuilder>? mapAdministration = null)
     {
-        var host = new AdministrationHost(root, keepFiles);
+        var host = new AdministrationHost(root, keepFiles, nativeStore);
         try
         {
             var builder = host._builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { ContentRootPath = host.Root, EnvironmentName = Environments.Production });
@@ -138,9 +148,9 @@ internal sealed class AdministrationHost : IAsyncDisposable
                 if (preview.Membership == "Unenrolled")
                 {
                     var enrolled = await maintenance.EnrollAsync(new("default", preview.RootIdentity!, 1, true, ["studio"], []));
-                    Assert.Equal("Complete", enrolled.Status);
+                    Assert.True(enrolled.Status == "Complete", $"Native store enrollment: {enrolled.Status ?? "<unknown>"}; {string.Join("; ", enrolled.Diagnostics)}");
                 }
-                else Assert.Equal("Complete", preview.Membership);
+                else Assert.True(preview.Membership == "Complete", $"Native store preview: {preview.Membership ?? "<unknown>"}; {string.Join("; ", preview.Diagnostics)}");
             }
             await host.App.StartAsync();
             host.Client = host.App.GetTestClient();
