@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { flowchartActivity } from "./fixtures/workflowCatalog";
-import { authSessionEndedEvent, requestStudioNavigation, type StudioRuntimeIdentity } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, requestStudioNavigation, type StudioBackendSession, type StudioRuntimeIdentity } from "@elsa-workflows/studio-sdk";
 import { register, type WorkflowDesignerPanelContext } from "../module";
 import { activationSlotReadsUnavailableReason, type Publication } from "../api/publishing";
 import type { WorkflowActivationSlot } from "../api/runtime";
@@ -26,11 +26,11 @@ describe("workflows module", () => {
     if (!authoring) capabilities.capabilities = capabilities.capabilities.filter(item => item.id !== "elsa.api.workflow-design");
     vi.stubGlobal("fetch", vi.fn(async () => response({ executables: [] })));
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables?backend=selected", api => {
-      api.backendSession = {
+      Object.defineProperty(api, "backendSession", { value: {
         key: "selected-lifetime", profile: { id: "selected", name: "Selected", baseUrl: api.backend.baseUrl, environment: "Test", source: "configuration" },
         context: api.backend, identity: { status: "anonymous", roles: [], permissions: [] }, capabilities,
         pendingWrites: 0, disposed: false, refreshCapabilities: async () => capabilities
-      };
+      } satisfies StudioBackendSession });
     }, false, capabilities);
     await waitForText(container, "No workflow executables");
     const action = buttonByText(container, "Open workflow definitions");
