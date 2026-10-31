@@ -1,0 +1,26 @@
+{
+  "sourceHead": "1731c4fdc711c163abbdb35befdb7aa4924186c1",
+  "changes": "Existing EF test partial plus one production exception filter. Red before filter, green after; not host recovery proof.",
+  "assets": [
+    {
+      "path": "s1-red.log.gz",
+      "sha256": "4c81c307ef0cbc68227f62aad69cecacca37b2677f3c914bfb98ec92039dcfe7",
+      "decodedSha256": "6c9b3b7b3a489289ca74cd6ac5cb64477bea4aaf03eda1e2df0cfb5b92834972"
+    },
+    {
+      "path": "s1-red.trx.gz",
+      "sha256": "3e8772d6e1dfb605903996311b370a277675e44ee1ce0ecf43f0fbfbbd957c9f",
+      "decodedSha256": "26722b009353b07185fb6731ebc4b4f706de8b5d049e7e26c24d3232d6d15851"
+    },
+    {
+      "path": "s1-green.log.gz",
+      "sha256": "0c48b7bd8e3f0010ca7316f027c770991a553c3af25890e4e30eef5fab44bd2a",
+      "decodedSha256": "65f3e52df4bbca602ef4a2819a57d278a9797c8b45fe057cb51b949d2e06881e"
+    },
+    {
+      "path": "s1-green.trx.gz",
+      "sha256": "1de737e3432c93eeca890ed56bcaaac27a60b71d0c6b8cc1e381bf3053f920fa",
+      "decodedSha256": "3154648fc9c006f8ebdabf9f8bd16409590ae9b6938896766e6e971e27cf36eb"
+    }
+  ]
+}

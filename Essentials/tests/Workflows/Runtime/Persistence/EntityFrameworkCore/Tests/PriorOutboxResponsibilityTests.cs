@@ -1,6 +1,8 @@
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -8,6 +10,38 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 
 public sealed partial class StimulusDeliveryStoreTests
 {
+    [Theory]
+    [InlineData("io")]
+    [InlineData("unrequested-cancellation")]
+    [InlineData("provider")]
+    public async Task Durable_responsibility_read_preserves_failure_cause_and_scope_without_proving_absence(string failureKind)
+    {
+        Exception cause = failureKind switch
+        {
+            "io" => new IOException("provider read failed"),
+            "unrequested-cancellation" => new OperationCanceledException("provider cancellation"),
+            _ => new SqliteException("provider read failed", 10)
+        };
+        var fault = new RetentionReadFailure(cause);
+        await using var harness = await Harness.Create(true, fault);
+        var source = Pending("earlier-checkpoint", true, kind: "child.cancel");
+        await harness.SavePending(source);
+        fault.Armed = true;
+        var failure = await Assert.ThrowsAsync<RuntimeSchedulerWorkUnavailableException>(() =>
+            harness.Lookup.FindUndeliveredDurableAsync("publisher", "worker.result").AsTask());
+        Assert.Same(cause, failure.InnerException);
+        Assert.Contains(Scope.Value, failure.Message);
+        Assert.Contains("publisher", failure.Message);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var requested = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            harness.Lookup.FindUndeliveredDurableAsync("publisher", "worker.result", cancellation.Token).AsTask());
+        Assert.Equal(cancellation.Token, requested.CancellationToken);
+        fault.Armed = false;
+        Assert.Equal(source.OutboxItemId,
+            (await harness.Lookup.FindUndeliveredDurableAsync("publisher", "worker.result"))!.OutboxItemId);
+    }
+
     [Fact]
     public async Task Durable_responsibility_lookup_crosses_a_full_page_of_excluded_history_before_proving_settlement()
     {

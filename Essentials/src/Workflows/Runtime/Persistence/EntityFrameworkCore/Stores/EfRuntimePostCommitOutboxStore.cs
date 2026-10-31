@@ -218,7 +218,8 @@ public sealed class EfRuntimePostCommitOutboxStore : IRuntimePostCommitOutboxSto
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-        catch (Exception exception) when (EfRelationalExceptionClassifier.IsProviderFailure(exception))
+        catch (Exception exception) when (exception is IOException or OperationCanceledException ||
+            EfRelationalExceptionClassifier.IsProviderFailure(exception))
         {
             throw new RuntimeSchedulerWorkUnavailableException("runtime.outbox-state-unavailable",
                 $"Prior outbox responsibility could not be read in persistence scope '{scope}' for execution '{workflowExecutionId}'.", exception);
