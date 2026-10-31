@@ -13,23 +13,34 @@ from disclosure_journeys import (require_native_denial, require_no_adapter_admis
 
 class DisclosureQualificationTests(unittest.TestCase):
     def stream(self, code="agent.context.incomplete", status=400, *, http=200, extra=None):
-        values = [{"kind": "error", "error": {"code": code, "statusCode": status}}]
+        values = [{"kind": "contextAdmitted", "payload": {"attachments": [], "diagnostics": [
+            {"contributorId": "host", "code": code, "required": True, "message": "Localized diagnostic"}]}},
+            {"kind": "error", "error": {"code": code, "statusCode": status, "message": "Localized aggregate"}}]
         values.extend(extra or [])
         return SimpleNamespace(status=http, error_type=None, frames=[SimpleNamespace(value=value) for value in values])
 
-    def test_wrong_auth_session_provider_or_phase_failure_never_qualifies(self):
+    def test_accepted_message_requires_history_first_context_refusal(self):
         require_native_denial(self.stream(), "accepted-message")
-        require_native_denial(self.stream("agent.result.disclosure_denied", 403), "accepted-receipt")
-        for code, status in (("agent.session.forbidden", 403), ("agent.session.unavailable", 404),
-                             ("agent.turn.source_missing", 409), ("agent.provider.anthropic.turn_failed", 502),
-                             ("agent.context.incomplete", 401), ("agent.result.disclosure_denied", 403)):
-            with self.subTest(code=code, status=status):
-                with self.assertRaises(RuntimeError): require_native_denial(self.stream(code, status), "accepted-message")
-        with self.assertRaises(RuntimeError): require_native_denial(self.stream(), "accepted-receipt")
-        with self.assertRaises(RuntimeError): require_native_denial(self.stream(http=401), "accepted-message")
+
+    def test_accepted_receipt_requires_history_first_context_refusal(self):
+        try: require_native_denial(self.stream(), "accepted-receipt")
+        except RuntimeError as error: self.fail(str(error))
+
+    def test_wrong_auth_session_provider_or_result_only_failure_never_qualifies(self):
+        for phase in ("accepted-message", "accepted-receipt"):
+            for code, status in (("agent.session.forbidden", 403), ("agent.session.unavailable", 404),
+                                 ("agent.turn.source_missing", 409), ("agent.provider.anthropic.turn_failed", 502),
+                                 ("agent.context.incomplete", 401), ("agent.context.incomplete", 403),
+                                 ("agent.history.provenance_unavailable", 409), ("agent.result.disclosure_denied", 403)):
+                with self.subTest(phase=phase, code=code, status=status):
+                    with self.assertRaises(RuntimeError): require_native_denial(self.stream(code, status), phase)
+            with self.assertRaises(RuntimeError): require_native_denial(self.stream(http=401), phase)
+            broken = self.stream(); broken.error_type = "OSError"
+            with self.assertRaises(RuntimeError): require_native_denial(broken, phase)
 
     def test_provider_output_or_multiple_errors_cannot_hide_behind_correct_denial(self):
-        for kind in ("messageDelta", "completed", "proposalCreated", "toolCallStarted", "toolCallCompleted", "error"):
+        for kind in ("messageDelta", "completed", "proposalCreated", "toolCallStarted", "toolCallCompleted",
+                     "contributedResult", "started", "contextAdmitted", "error"):
             with self.subTest(kind=kind):
                 with self.assertRaises(RuntimeError):
                     require_native_denial(self.stream(extra=[{"kind": kind}]), "accepted-message")
@@ -114,6 +125,37 @@ class DisclosureQualificationTests(unittest.TestCase):
         self.assertEqual([], section["records"])
         self.assertEqual("copilot-accepted-message-authority-withdrawal", section["activeCase"])
         self.assertEqual("failed", section["stages"][-1]["status"])
+
+
+def _reject_context_mutation(mutate):
+    def test(self):
+        stream = self.stream()
+        mutate(stream)
+        with self.assertRaises(RuntimeError): require_native_denial(stream, "accepted-message")
+    return test
+
+
+# Each malformed/admitted envelope is a separately discovered case, not native evidence.
+for _name, _mutate in {
+    "missing_context_frame": lambda stream: stream.frames.pop(0),
+    "reversed_context_and_error": lambda stream: stream.frames.reverse(),
+    "multiple_context_frames": lambda stream: stream.frames.insert(0, copy.deepcopy(stream.frames[0])),
+    "missing_payload": lambda stream: stream.frames[0].value.pop("payload"),
+    "malformed_payload": lambda stream: stream.frames[0].value.update(payload=None),
+    "missing_attachments": lambda stream: stream.frames[0].value["payload"].pop("attachments"),
+    "malformed_attachments": lambda stream: stream.frames[0].value["payload"].update(attachments={}),
+    "admitted_content": lambda stream: stream.frames[0].value["payload"].update(attachments=[{"id": "protected-resource"}]),
+    "missing_diagnostics": lambda stream: stream.frames[0].value["payload"].pop("diagnostics"),
+    "empty_diagnostics": lambda stream: stream.frames[0].value["payload"].update(diagnostics=[]),
+    "multiple_diagnostics": lambda stream: stream.frames[0].value["payload"]["diagnostics"].append({"code": "extra"}),
+    "malformed_diagnostic": lambda stream: stream.frames[0].value["payload"].update(diagnostics=[None]),
+    "missing_required": lambda stream: stream.frames[0].value["payload"]["diagnostics"][0].pop("required"),
+    "nonrequired_diagnostic": lambda stream: stream.frames[0].value["payload"]["diagnostics"][0].update(required=False),
+    "numeric_required": lambda stream: stream.frames[0].value["payload"]["diagnostics"][0].update(required=1),
+    "foreign_contributor": lambda stream: stream.frames[0].value["payload"]["diagnostics"][0].update(contributorId="unrelated"),
+    "mismatched_diagnostic_code": lambda stream: stream.frames[0].value["payload"]["diagnostics"][0].update(code="agent.result.disclosure_denied"),
+}.items():
+    setattr(DisclosureQualificationTests, "test_history_first_refusal_rejects_" + _name, _reject_context_mutation(_mutate))
 
 
 if __name__ == "__main__":

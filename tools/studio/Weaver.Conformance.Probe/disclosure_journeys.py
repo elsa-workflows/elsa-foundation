@@ -24,7 +24,9 @@ EXPECTED_CASES = {
     f"{provider}-{phase}-authority-withdrawal"
     for provider in ("copilot", "anthropic") for phase in ("accepted-message", "accepted-receipt")
 }
-EXPECTED_ERRORS = {"accepted-message": "agent.context.incomplete", "accepted-receipt": "agent.result.disclosure_denied"}
+# Both journeys retain context before their first provider entry. Receipt continuation must
+# re-admit that checkpoint history before it can reach the result-only authority boundary.
+EXPECTED_ERRORS = {phase: "agent.context.incomplete" for phase in ("accepted-message", "accepted-receipt")}
 
 
 @contextmanager
@@ -60,14 +62,23 @@ def require_native_denial(stream, phase):
     expected = EXPECTED_ERRORS[phase]
     check(stream.status == 200 and stream.error_type is None, "Disclosure refusal needs a successful native SSE transport")
     values = [frame.value for frame in stream.frames]
-    errors = [value.get("error") for value in values if value.get("kind") == "error"]
-    check(len(errors) == 1 and isinstance(errors[0], dict) and errors[0].get("code") == expected,
+    check(all(isinstance(value, dict) for value in values)
+          and [value.get("kind") for value in values] == ["contextAdmitted", "error"],
+          "A history-first refusal needs exactly one context admission followed by one error, without provider or result frames")
+    contribution = values[0].get("payload")
+    check(isinstance(contribution, dict) and contribution.get("attachments") == [],
+          "A withheld context admission must contain no resource attachments")
+    diagnostics = contribution.get("diagnostics")
+    check(isinstance(diagnostics, list) and len(diagnostics) == 1 and isinstance(diagnostics[0], dict)
+          and diagnostics[0].get("contributorId") == "host" and diagnostics[0].get("code") == expected
+          and diagnostics[0].get("required") is True,
+          "The history refusal must retain its required mapped admission diagnostic")
+    error = values[1].get("error")
+    check(isinstance(error, dict) and error.get("code") == expected,
           "Wrong native disclosure refusal; expected " + expected)
-    check(errors[0].get("statusCode") == (400 if phase == "accepted-message" else 403),
+    check(error.get("statusCode") == 400,
           "The disclosure refusal has the wrong native status")
-    check(not any(value.get("kind") in {"messageDelta", "completed", "proposalCreated", "toolCallStarted", "toolCallCompleted"}
-                  for value in values), "A withheld turn emitted provider content, a proposal or tool execution")
-    return errors[0]
+    return error
 
 
 def require_no_adapter_admission(records):
