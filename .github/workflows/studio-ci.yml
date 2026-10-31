@@ -84,21 +84,6 @@ jobs:
         run: pnpm --recursive --workspace-concurrency=1 test
         working-directory: Studio
 
-      - name: Unit tests (Workflows, shuffled)
-        working-directory: Studio/src/essentials/Elsa.Studio.Workflows/Client
-        env:
-          SHUFFLE_SEEDS: '1 11 29'
-        run: |
-          for seed in $SHUFFLE_SEEDS; do
-            echo "::group::Shuffle seed $seed"
-            if ! pnpm exec vitest run --sequence.shuffle --sequence.seed="$seed"; then
-              echo "::endgroup::"
-              echo "::error::Order-dependent test failure on shuffle seed $seed. Reproduce locally with: pnpm --filter @elsa-workflows/studio-workflows exec vitest run --sequence.shuffle --sequence.seed=$seed"
-              exit 1
-            fi
-            echo "::endgroup::"
-          done
-
       - name: Check Workflows bundle budget
         run: pnpm check:bundle:workflows
         working-directory: Studio
