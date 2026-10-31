@@ -50,8 +50,8 @@ Optionally supply `--font-display` (title face; defaults to `--font-sans`).
 ### Modes and the `<html>` attributes
 
 Studio offers four modes: `light`, `dark`, `dim` and `high-contrast`. Every theme defines Light
-and Dark; Dim and High contrast are optional per theme (the eight signature themes — Classic,
-Meridian, Drift, Schematic, Atelier, Elsa Cloud, Signal, Dusk — define all four). ThemeProvider sets two attributes:
+and Dark. All built-in themes define all four modes; custom themes may omit Dim and High contrast.
+ThemeProvider sets two attributes:
 
 | Attribute | Values | Meaning |
 | --- | --- | --- |
@@ -59,7 +59,7 @@ Meridian, Drift, Schematic, Atelier, Elsa Cloud, Signal, Dusk — define all fou
 | `data-theme-appearance` | `light` \| `dark` \| `dim` \| `high-contrast` | the exact mode the user picked |
 
 A third attribute carries the theme's **layout** — `data-theme-layout`, one of `classic`
-(default), `floating` (Drift), `workbench` (Schematic) or `editorial` (Atelier). Layout is the one
+(default), `floating` (Drift), `workbench` (Schematic) or `editorial` (Atelier Original, ID `atelier`). Layout is the one
 theme property that changes arrangement rather than paint:
 
 | Layout | Shell | Graph-authoring workbench |
