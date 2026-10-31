@@ -59,14 +59,14 @@ test("a disabled sample module uses public styles for failure, retry, populated 
     : route.fulfill({ json: empty ? [] : [{ date: "2026-10-31", summary: "Sunny", temperatureC: 20, temperatureF: 68 }] }));
   await page.goto("/module-ui.html");
   await expect(page.getByRole("alert")).toContainText("Weather forecast could not be loaded");
-  await expect(page.getByRole("table")).toHaveCount(0);
+  await expect(page.locator(".studio-page").getByRole("table")).toHaveCount(0);
   fail = false;
   await page.getByRole("button", { name: "Retry", exact: true }).press("Enter");
   await expect(page.getByRole("cell", { name: "Sunny", exact: true })).toBeVisible();
   empty = true;
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.locator(".studio-page").getByRole("status")).toContainText("No forecast available");
-  await expect(page.getByRole("table")).toHaveCount(0);
+  await expect(page.locator(".studio-page").getByRole("table")).toHaveCount(0);
   await expect(page.locator(".studio-collection-footer")).toHaveText("0 forecasts");
 });
 
@@ -76,7 +76,7 @@ test("public identifier styles keep exact copying accessible without changing la
   await page.setViewportSize({ width: 320, height: 800 });
   await page.route("**/samples/weather-forecast", route => route.fulfill({ json: [] }));
   await page.goto("/module-ui.html");
-  const identifier = page.locator(".studio-copyable-identifier");
+  const identifier = page.getByRole("region", { name: "Public identifier", exact: true }).locator(".studio-copyable-identifier");
   const before = await identifier.boundingBox();
   await page.getByRole("button", { name: "Copy Example ID" }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("module-example-0123456789abcdef0123456789abcdef");
@@ -85,6 +85,49 @@ test("public identifier styles keep exact copying accessible without changing la
   expect((await identifier.boundingBox())?.height).toBe(before?.height);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
+test("nested copy controls keep native keyboard activation without selecting their row", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.route("**/samples/weather-forecast", route => route.fulfill({ json: [] }));
+  await page.goto("/module-ui.html");
+  const table = page.getByRole("region", { name: "Selectable public collection" }).getByRole("table");
+  const row = table.getByRole("row").nth(2);
+  const copy = row.getByRole("button", { name: "Copy Row ID" });
+  for (const key of ["Enter", "Space"]) {
+    await page.evaluate(() => navigator.clipboard.writeText(""));
+    await copy.focus();
+    await copy.press(key);
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("second-row");
+    await expect(row).toHaveAttribute("aria-selected", "false");
+  }
+  await copy.click();
+  await expect(row).toHaveAttribute("aria-selected", "false");
+  await row.focus();
+  await row.press("Enter");
+  await expect(row).toHaveAttribute("aria-selected", "true");
+  const firstRow = table.getByRole("row").nth(1);
+  await firstRow.focus();
+  await firstRow.press("Space");
+  await expect(firstRow).toHaveAttribute("aria-selected", "true");
+});
+
+for (const width of [320, 1440]) {
+  test(`Home header actions retain spacing when viewed and edited at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/?mode=home");
+    const header = page.locator(".home-page > .studio-page-header");
+    for (const editing of [false, true]) {
+      if (editing) await header.getByRole("button", { name: "Edit home" }).click();
+      const refresh = header.getByRole("button", { name: "Refresh all" });
+      const next = header.getByRole("button", { name: editing ? "Add widget" : "Edit home", exact: true });
+      const a = (await refresh.boundingBox())!;
+      const b = (await next.boundingBox())!;
+      const gap = Math.abs(a.y - b.y) < 1 ? b.x - a.x - a.width : b.y - a.y - a.height;
+      expect(gap).toBeGreaterThanOrEqual(8);
+      expect(await header.evaluate(element => element.getBoundingClientRect().right <= innerWidth)).toBe(true);
+    }
+  });
+}
 
 for (const url of ["/?mode=workflow-definition-browse", "/workflow-run-deletion.html"]) {
   test(`selected rows retain a visible highlight in ${url}`, async ({ page }) => {

@@ -187,7 +187,7 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
 
   return (
     <section ref={pageRef} className={`studio-page dashboard-page home-page${editing ? " home-page--editing" : ""}`}>
-      <StudioPageHeader headingLevel={2} title={<>Home</>} description={<>{editing ? "Add, remove and reorder widgets. Changes save as you go." : "What to know and do next."}</>} actions={<><div>
+      <StudioPageHeader headingLevel={2} title="Home" description={editing ? "Add, remove and reorder widgets. Changes save as you go." : "What to know and do next."} actions={<>
           <label>Refresh <select value={refreshIntervalMs} onChange={event => setRefreshIntervalMs(Number(event.target.value))}>
             {([[0, "Off"], [60_000, "1 minute"], [300_000, "5 minutes"], [900_000, "15 minutes"], [1_800_000, "30 minutes"]] as const)
               .map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -201,7 +201,7 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
               <StudioButton type="button" onClick={() => { setEditing(false); closePicker(); }}>Done</StudioButton>
             </>
           ) : <StudioButton type="button" onClick={() => setEditing(true)}>Edit home</StudioButton>}
-        </div></>} />
+        </>} />
       <HomeTaskGroup api={api} />
       <div className="visually-hidden" aria-live="polite">{liveMessage}</div>
       {preferenceError ? <div role="status">{preferenceError}</div> : null}
