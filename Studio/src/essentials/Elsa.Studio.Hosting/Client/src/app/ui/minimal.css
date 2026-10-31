@@ -32,6 +32,7 @@
 :root[data-workspace-style="minimal"] .studio-page-header :is(h1, h2) { letter-spacing: -.025em; }
 :root[data-workspace-style="minimal"] .studio-page-header p { max-width: 70ch; }
 :root[data-workspace-style="minimal"] .studio-button { font-weight: 550; }
+:root[data-workspace-style="minimal"] input:is([type="checkbox"], [type="radio"]) { accent-color: var(--studio-selection-mark); }
 :root[data-workspace-style="minimal"] .studio-button[data-variant="primary"] {
   background: var(--studio-action-primary-bg);
   border-color: var(--studio-action-primary-bg);

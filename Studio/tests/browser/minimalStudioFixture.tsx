@@ -14,6 +14,7 @@ import { StructuredLogsPage, register as registerLogs } from "../../../Extension
 import { WorkflowDefinitionBrowseFixture } from "./workflowDefinitionBrowseFixture";
 import { ActivityDuplicateEditorFixture } from "./activityDuplicateEditorFixture";
 import { WorkflowTemplatesFixture } from "./workflowTemplatesFixture";
+import { WorkflowLibraryFixture } from "./workflowLibraryFixture";
 import { minimalWorkflowNames } from "./minimalStudioData";
 import "../../src/essentials/Elsa.Studio.Hosting/Client/src/app/settings/settings.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/workspaceAppearance.css";
@@ -60,7 +61,7 @@ function Fixture() {
   const path = view === "appearance" ? "/settings/appearance" : view === "runs" || view === "inspection" ? "/workflows/instances" : view === "templates" ? "/workflows/templates" : view === "logs" ? "/diagnostics/structured-logs" : "/workflows/definitions";
   return <ThemeProvider><ShellFrame navigation={navigation} panels={[]} path={path} title={view === "appearance" ? "Appearance" : view === "runs" || view === "inspection" ? "Runs" : "Workflows"}
     backendBaseUrl="https://backend.example/" themeAction={<ThemeSwitcher />} accountAction={<AuthContext.Provider value={{ session: { status: "authenticated", displayName: "Administrator", roles: [], permissions: [] }, capabilities: null, login: async () => undefined, logout: async () => undefined, refresh: async () => ({ status: "authenticated", roles: [], permissions: [] }) }}><UserMenu /></AuthContext.Provider>} onNavigate={next => setView(next.startsWith("/settings") ? "appearance" : next.includes("instances") ? "runs" : next.includes("templates") ? "templates" : next.includes("diagnostics") ? "logs" : "list")}>
-    {view === "appearance" ? <SettingsShell activeId="appearance" groups={[{ id: "studio", label: "Studio", sections: [{ id: "appearance", label: "Appearance", path: "/settings/appearance" }] }]} onNavigate={() => undefined}><AppearancePage onNavigate={() => undefined} /></SettingsShell> : view === "list" ? <WorkflowDefinitionBrowseFixture /> : view === "runs" ? <Runs /> : view === "templates" ? <WorkflowTemplatesFixture /> : view === "logs" ? <StructuredLogsPage /> : <ActivityDuplicateEditorFixture />}
+    {view === "appearance" ? <SettingsShell activeId="appearance" groups={[{ id: "studio", label: "Studio", sections: [{ id: "appearance", label: "Appearance", path: "/settings/appearance" }] }]} onNavigate={() => undefined}><AppearancePage onNavigate={() => undefined} /></SettingsShell> : view === "list" ? <WorkflowDefinitionBrowseFixture /> : view === "library" ? <WorkflowLibraryFixture /> : view === "runs" ? <Runs /> : view === "templates" ? <WorkflowTemplatesFixture /> : view === "logs" ? <StructuredLogsPage /> : <ActivityDuplicateEditorFixture />}
   </ShellFrame></ThemeProvider>;
 }
 

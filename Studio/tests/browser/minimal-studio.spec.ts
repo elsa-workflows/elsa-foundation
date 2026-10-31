@@ -19,7 +19,7 @@ test("Atelier keeps the account readable in top navigation and renders its small
   const account = page.getByRole("button", { name: "Account: Administrator", exact: true });
   await expect(account.locator(".user-menu-name")).toBeVisible();
   await page.addScriptTag({ content: axe.source });
-  const violations = await account.evaluate(async element => (window as Window & { axe: typeof axe }).axe.run(element, { runOnly: ["color-contrast"] }).then(result => result.violations.map(v => v.id)));
+  const violations = await account.evaluate(async element => (window as unknown as Window & { axe: typeof axe }).axe.run(element, { runOnly: ["color-contrast"] }).then(result => result.violations.map(v => v.id)));
   expect(violations).toEqual([]);
 });
 
@@ -46,8 +46,10 @@ for (const item of presets) test(`${item.name} is a complete, persistent preset 
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("wf-study-1");
   await expect(page.getByRole("heading", { name: "Workflow definitions", exact: true })).toHaveCSS("font-size", "28px");
   await expect(page.locator(".sidebar")).toHaveCSS("width", "216px");
+  const boundary = page.getByRole("region", { name: "Workflow definitions table", exact: true });
+  expect(await boundary.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
   await page.addScriptTag({ content: axe.source });
-  const violations = await page.evaluate(async () => (window as Window & { axe: typeof axe }).axe.run(document.querySelector(".studio-shell")!, { runOnly: ["color-contrast", "button-name", "label"] }).then(result => result.violations.map(v => ({ id: v.id, nodes: v.nodes.map(n => n.failureSummary) }))));
+  const violations = await page.evaluate(async () => (window as unknown as Window & { axe: typeof axe }).axe.run(document.querySelector(".studio-shell")!, { runOnly: ["color-contrast", "button-name", "label"] }).then(result => result.violations.map(v => ({ id: v.id, nodes: v.nodes.map(n => n.failureSummary) }))));
   expect(violations).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath(`${item.id}-definitions.png`), fullPage: true });
 });
@@ -102,4 +104,43 @@ test("a public UI consumer opts into Minimal without host CSS", async ({ page })
   await row.focus();
   await row.press("Enter");
   await expect(row).toHaveAttribute("aria-selected", "true");
+});
+
+for (const item of presets) for (const width of [320, 1440]) test(`${item.name} integrates folders, tags, favorites and saved views at ${width}px`, async ({ page }, testInfo) => {
+  await preset(page, item.name, width);
+  await view(page, "library");
+  const payment = page.getByRole("row", { name: "Open workflow definition Collect overdue payment", exact: true });
+  await expect(payment).toBeVisible();
+  await payment.getByRole("button", { name: "Actions for Collect overdue payment", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Organization", exact: true }).click();
+  const organize = page.getByRole("dialog", { name: "Organize Collect overdue payment", exact: true });
+  await expect(organize.getByText("Finance", { exact: true })).toBeVisible();
+  await organize.getByRole("checkbox", { name: "Critical", exact: true }).check();
+  await expect(organize.getByRole("button", { name: "Save tags", exact: true })).toBeEnabled();
+  await page.screenshot({ path: testInfo.outputPath(`${item.name}-organization-${width}.png`), fullPage: true });
+  await organize.getByRole("button", { name: "Save tags", exact: true }).click();
+  await expect(organize).toBeHidden();
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
+  await page.getByRole("button", { name: "Add tag filter", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Tags", exact: true }).check();
+  await page.getByRole("checkbox", { name: "Location", exact: true }).check();
+  await page.getByRole("button", { name: "Save view", exact: true }).click();
+  const save = page.getByRole("dialog", { name: "Save workflow view", exact: true });
+  await save.getByRole("textbox", { name: "View name", exact: true }).fill("Critical workflows");
+  await save.getByRole("checkbox", { name: "Share within this tenant", exact: true }).check();
+  await save.getByRole("button", { name: "Save as new view", exact: true }).click();
+  await expect(save).toBeHidden();
+  await page.getByRole("combobox", { name: "Saved workflow view", exact: true }).selectOption({ label: "Critical workflows · Shared" });
+  await expect(page).toHaveURL(/view=view-/);
+  await expect(page.getByRole("columnheader", { name: "Tags", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Location", exact: true })).toBeVisible();
+  const boundary = (await page.getByRole("region", { name: "Workflow definitions table", exact: true }).boundingBox())!;
+  const actions = (await payment.getByRole("button", { name: "Actions for Collect overdue payment", exact: true }).boundingBox())!;
+  expect(actions.x + actions.width).toBeLessThanOrEqual(boundary.x + boundary.width + 1);
+  await payment.getByRole("button", { name: "Actions for Collect overdue payment", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Add to favorites", exact: true }).click();
+  await page.getByRole("button", { name: "Favorites", exact: true }).click();
+  await expect(payment).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath(`${item.name}-library-${width}.png`), fullPage: true });
 });
