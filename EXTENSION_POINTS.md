@@ -213,3 +213,13 @@ not automatic constitution violations.
 - §2.22.1 — per-domain extension-points catalog (overridable contracts + implementable contributor interfaces + Events section); layer badge convention; Known implementations with intra/cross-domain tags; mandatory maintenance obligation.
 - §2.22.2 — this repo-wide extension-points index (pure links, no inline entries).
 - §2.24.2 — contributor interface + single aggregating handler (the sanctioned pattern catalog).
+
+
+## Studio backend connections
+
+Hosting composes the governed Preferences.Core store contract at the stable root host and exposes public SDK
+backend requirements/session/discovery seams to Studio modules. See the [Hosting backend connections guide](Studio/src/essentials/Elsa.Studio.Hosting/README.md#backend-connections).
+ConnectionsApi, SecretsApi, AttentionApi, FoundationAgentApi and DiagnosticsOpenTelemetry declare their API contracts
+through the existing capability aggregation extension. DiagnosticsStructuredLogs contributes an IApiCapabilitySource
+whose links follow its configured routes. These declarations do not grant permissions or enable shell features;
+see [API capability composition](Essentials/src/Api/Capabilities/README.md).

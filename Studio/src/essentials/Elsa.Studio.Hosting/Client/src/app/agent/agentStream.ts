@@ -1,4 +1,4 @@
-import { withDefaultHeaders, type StudioAgentToolResult, type StudioEndpointContext } from "../../sdk";
+import { resolveBackendPath, withDefaultHeaders, type StudioAgentToolResult, type StudioEndpointContext } from "../../sdk";
 import type { AgentActionProposalPayload, AgentClarificationRequest, AgentStreamEvent } from "./agentTypes";
 
 export interface AgentStreamSubscription {
@@ -39,7 +39,7 @@ async function readStream(
   defaultMessageId?: string
 ) {
   try {
-    const response = await request(new URL(streamUrl, context.baseUrl).toString(), await withStreamHeaders(context, {
+    const response = await request(new URL(resolveBackendPath(context.baseUrl,streamUrl), context.baseUrl).toString(), await withStreamHeaders(context, {
       cache: "no-store",
       headers: { Accept: "text/event-stream, application/x-ndjson, application/json" },
       signal

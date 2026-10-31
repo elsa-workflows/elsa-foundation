@@ -21,7 +21,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 REPO = Path(__file__).resolve().parents[3]
-IDS = ("Elsa.Studio.Core", "Elsa.Studio.Api", "Elsa.Studio.Hosting", "Elsa.Studio.Dashboard")
+IDS = ("Elsa.Studio.Core", "Elsa.Studio.Api", "Elsa.Studio.Hosting", "Elsa.Studio.Dashboard", "Elsa.Studio.Preferences.Core")
 RUNTIME_HOST_ID = "package-consumer-proof"
 
 
@@ -107,7 +107,7 @@ def main(args):
                 if package_id in IDS:
                     check(package_id not in found, "Duplicate candidate " + package_id)
                     found[package_id] = (path, version)
-            check(set(found) == set(IDS) and len({version for _, version in found.values()}) == 1, "Supply exactly one version of all four production candidates")
+            check(set(found) == set(IDS) and len({version for _, version in found.values()}) == 1, "Supply exactly one version of all production candidates")
             version = next(iter(found.values()))[1]
             for path, _ in found.values():
                 shutil.copy2(path, feed / path.name)
@@ -127,7 +127,7 @@ def main(args):
                 source_assets[package_id] = {path.relative_to(source).as_posix(): path.read_bytes() for path in source.rglob("*") if path.is_file()}
                 shutil.copytree(source, producer / relative)
             for package_id in IDS:
-                project = producer / "Studio/src/essentials" / package_id / (package_id + ".csproj")
+                project = producer / ("Essentials/src/Studio/Preferences/Core" if package_id == "Elsa.Studio.Preferences.Core" else "Studio/src/essentials/" + package_id) / (package_id + ".csproj")
                 run("pack-" + package_id, [dotnet, "pack", str(project), "-c", "Release", "-p:Version=" + version,
                                           "-p:SourceRevisionId=" + revision, "-o", str(feed)], producer)
             report.update(producer="owned committed source snapshot with unchanged production project files", producerSourceRevision=revision)

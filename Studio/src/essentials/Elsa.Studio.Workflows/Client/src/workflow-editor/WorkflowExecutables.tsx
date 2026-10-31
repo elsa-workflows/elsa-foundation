@@ -1,3 +1,4 @@
+import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { StudioPageHeader, StudioButton, StudioSearchInput } from "@elsa-workflows/studio-ui";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ChevronDown, ChevronRight, Play, RotateCcw, ScanSearch, Search, Sparkles, X } from "lucide-react";
@@ -38,7 +39,7 @@ import {
 
 export function openExecutableInspector(artifactId: string, sourceReferenceId?: string | null) {
   const query = sourceReferenceId ? `?ref=${encodeURIComponent(sourceReferenceId)}` : "";
-  window.history.pushState({}, "", `/workflows/executables/${encodeURIComponent(artifactId)}${query}`);
+  window.history.pushState({}, "", qualifyStudioBackendPath(`/workflows/executables/${encodeURIComponent(artifactId)}${query}`));
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
@@ -300,7 +301,7 @@ function WorkflowExecutableOrigins({ executable, definitionNames, onCopied, onCo
   const definitionIds = getExecutableDefinitionIds(executable);
 
   const openSourceDefinition = (definitionId: string) => {
-    window.history.pushState({}, "", `/workflows/definitions?definition=${encodeURIComponent(definitionId)}`);
+    window.history.pushState({}, "", qualifyStudioBackendPath(`/workflows/definitions?definition=${encodeURIComponent(definitionId)}`));
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
@@ -414,7 +415,7 @@ export function WorkflowArtifactsPanel({ context, ai, runInputEditors, definitio
   ].filter((command): command is string => Boolean(command));
 
   const openExecutablePage = () => {
-    window.history.pushState({}, "", `/workflows/executables?definition=${encodeURIComponent(definitionId)}`);
+    window.history.pushState({}, "", qualifyStudioBackendPath(`/workflows/executables?definition=${encodeURIComponent(definitionId)}`));
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 

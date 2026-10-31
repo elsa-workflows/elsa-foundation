@@ -1,3 +1,4 @@
+import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ChevronLeft, ChevronRight, Database, RefreshCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -211,7 +212,7 @@ function writeRouteState(route: RouteState, mode: "push" | "replace", collection
   const metadata = readActivityHistoryMetadata(state) ?? {};
   if (collection === null) delete metadata.collection;
   else if (collection) metadata.collection = collection;
-  window.history[mode === "push" ? "pushState" : "replaceState"]({ ...state, [activityHistoryStateKey]: metadata }, "", `/workflows/activity-definitions${query ? `?${query}` : ""}`);
+  window.history[mode === "push" ? "pushState" : "replaceState"]({ ...state, [activityHistoryStateKey]: metadata }, "", qualifyStudioBackendPath(`/workflows/activity-definitions${query ? `?${query}` : ""}`));
 }
 
 function ActivityDefinitionCollection({ context, baseUrl, authorityRevision, authorizationInvalidating, activityEditors, onHistoryContextChange, onImport, onPlanUpgrade, onOpen, onCreated }: { context: StudioEndpointContext; baseUrl: string; authorityRevision: number; authorizationInvalidating: boolean; activityEditors: StudioActivityDefinitionImplementationEditorContribution[]; onHistoryContextChange(context: ActivityCollectionHistoryContext): void; onImport(): void; onPlanUpgrade(): void; onOpen(definitionId: string): void; onCreated(definitionId: string, draftId: string): void }) {

@@ -1,6 +1,6 @@
 import { StudioPageHeader } from "./ui";
 import { getStudioBranding } from "./runtime";
-import React, { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   Activity,
   Blocks,
@@ -44,7 +44,7 @@ import type {
   StudioAgentPromptRequest,
   StudioPanelContribution
 } from "../sdk";
-import { isHomeRunDetailPath, recordHomeRunDetailOpened, requestStudioNavigation } from "../sdk";
+import { AuthProvider, AnonymousAuthProvider, evaluateBackendRequirements, isHomeRunDetailPath, recordHomeRunDetailOpened, requestStudioNavigation, studioBackendCapabilitiesChangedEvent, useAuthContext } from "../sdk";
 import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
 import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, getStudioRuntimeSettings } from "./runtime";
@@ -95,11 +95,15 @@ import "./themes/workspaceStyles.css";
 import { AgentLauncher, createAgentClient, type AgentSessionIndicatorSession } from "./agent";
 import "./agent/agent.css";
 import "./weaver/weaver.css";
+import { BackendConnections, PreparedBackend } from "./backends/connections";
+import { BackendConnectionNotice, BackendSwitcher, backendNavigation } from "./backends/BackendsPage";
+import { HostAuthContext } from "./backends/HostAuthContext";
 
 const DevDisclosurePage = import.meta.env.DEV
   ? lazy(() => import("./ui/disclosure/DisclosureFixturePage").then(module => ({ default: module.DisclosureFixturePage })))
   : null;
 const SettingsRoute = lazy(() => import("./settings/SettingsRoute").then(module => ({ default: module.SettingsRoute })));
+const BackendsPage = lazy(() => import("./backends/BackendsPage").then(module => ({default:module.BackendsPage})));
 
 type LoadState = "loading" | "ready" | "failed";
 type NavigationSection = StudioNavigationSection;
@@ -163,7 +167,7 @@ const minBottomPanelHeight = 140;
 const maxBottomPanelHeight = 560;
 const minWorkspaceHeight = 280;
 
-function AppContent({ authManager }: { authManager: AuthProviderManager | null }) {
+function AppContent({ authManager,backendSession,connections }: { authManager: AuthProviderManager | null;backendSession:PreparedBackend;connections:BackendConnections }) {
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState<string | null>(null);
   const [api, setApi] = useState<ElsaStudioModuleApi | null>(null);
@@ -177,7 +181,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   const acceptedLocationRef = useRef(currentRelativeLocation());
   const runtimeConfig = getStudioRuntimeConfig();
   const shellBaseUrl = window.location.origin;
-  const backendBaseUrl = resolveRuntimeBaseUrl(runtimeConfig.backendBaseUrl, shellBaseUrl);
+  const backendBaseUrl = backendSession.profile.baseUrl;
   // The shell endpoint context (host origin) routed through the authenticated HTTP client: the manifest
   // query fetches `/_elsa/studio/modules` through this, so the boot document carries the bearer token
   // (when a user provider is configured). Anonymous boot — no provider — falls back to the plain SDK client.
@@ -189,6 +193,8 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
 
   useEffect(() => {
     const onPopState = () => {
+      const qualified = connections.qualifyPath(currentRelativeLocation());
+      if (qualified !== currentRelativeLocation()) window.history.replaceState(window.history.state,"",qualified);
       const nextPath = normalizePath(window.location.pathname);
       const nextLocation = currentRelativeLocation();
       if (nextPath !== acceptedPathRef.current && !requestStudioNavigation(acceptedLocationRef.current, nextLocation)) {
@@ -206,13 +212,13 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
 
   const navigateTo = useCallback((nextPath: string) => {
     if (!requestStudioNavigation(acceptedLocationRef.current, nextPath)) return;
-    window.history.pushState({}, "", nextPath);
+    window.history.pushState({}, "", connections.qualifyPath(nextPath));
     acceptedPathRef.current = normalizePath(window.location.pathname);
     acceptedLocationRef.current = currentRelativeLocation();
     setPath(acceptedPathRef.current);
     if (isHomeRunDetailPath(acceptedPathRef.current)) recordHomeRunDetailOpened();
     window.dispatchEvent(new PopStateEvent("popstate"));
-  }, []);
+  }, [connections]);
 
   // Cross-surface prompt dispatch (e.g. an "Explain this workflow" action) opens the Weaver dock and forwards the prompt.
   useEffect(() => {
@@ -235,6 +241,10 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   useEffect(() => {
     if (!api) return;
     let disposed = false;
+    if (evaluateBackendRequirements(api.backendSession,[{id:"elsa.api.agent",contractVersion:"1"}]).state !== "available") {
+      api.agent.providerAvailability.set(false);
+      return;
+    }
     void createAgentClient(api.backend).bootstrap()
       .then(result => {
         if (!disposed) api.agent.providerAvailability.set(result.enabled && result.providerStatus !== "unavailable" && result.providerStatus !== "disabled");
@@ -249,6 +259,14 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   // the manifest request carries auth + management-key headers; the effect below turns manifest data
   // into a loaded registry (module loading + contribution registration are side effects, not cacheable data).
   const manifestQuery = useStudioManifest(shellContext.http);
+  useEffect(() => {
+    const refresh = (event:Event) => {
+      if ((event as CustomEvent<{key:string}>).detail?.key !== backendSession.key) return;
+      void backendSession.refreshCapabilities().catch(() => undefined).finally(() => setModuleRegistryRevision(value => value+1));
+    };
+    window.addEventListener(studioBackendCapabilitiesChangedEvent,refresh);
+    return () => window.removeEventListener(studioBackendCapabilitiesChangedEvent,refresh);
+  },[backendSession]);
 
   useEffect(() => {
     let disposed = false;
@@ -306,7 +324,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         // header rides any request (ADR 0037 / #248). The manifest document itself was already fetched
         // (through the same authenticated shell context) by useStudioManifest; here we only turn it into
         // a loaded registry.
-        const backendContext = createStudioEndpointContext(backendBaseUrl, authManager);
+        const backendContext = backendSession.context;
         const enabledFeatures = [...new Set((manifest.modules ?? []).flatMap(module => [module.id, ...(module.capabilities ?? [])]))];
         const registry = createStudioRegistry({
           hostVersion: manifest.hostVersion,
@@ -318,8 +336,11 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         }, {
           backendBaseUrl,
           backendHttp: backendContext.http,
+          backendContext,
+          backendSession,
+          hostSession: connections.hostIdentity,
           runtime: {
-            ...getStudioRuntimeSettings(runtimeConfig, authManager?.getSession()),
+            ...getStudioRuntimeSettings(runtimeConfig, backendSession.identity),
             enabledFeatures
           }
         });
@@ -334,6 +355,8 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
           sdkVersion: manifest.sdkVersion
         });
         registerBuiltInContributions(registry);
+        registry.navigation.add(backendNavigation);
+        registry.routes.add({id:"backends",path:"/settings/backends",label:"Backends",component:({navigate}) => <Suspense fallback={<SkeletonRows rows={3} />}><BackendsPage connections={connections} navigate={navigate} featureManagementAvailable={registry.routes.list({includeUnavailable:true}).some(route => route.id === "feature-management")} /></Suspense>});
 
         if (!disposed) {
           setApi(registry);
@@ -355,9 +378,9 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
     // runtimeConfig reads the stable window.__ELSA_STUDIO_RUNTIME__ global (constant for the page lifetime), so it is
     // intentionally not a dependency — listing it would re-run boot on every render for a value that never changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authManager, backendBaseUrl, manifestQuery.data, manifestQuery.isError, manifestQuery.error, manifestQuery.isPending, moduleRegistryRevision, shellBaseUrl]);
+  }, [authManager, backendBaseUrl, backendSession, connections, manifestQuery.data, manifestQuery.isError, manifestQuery.error, manifestQuery.isPending, moduleRegistryRevision, shellBaseUrl]);
 
-  const routes = useMemo(() => api?.routes.list() ?? [], [api, state]);
+  const routes = useMemo(() => api?.routes.list({includeUnavailable:true}) ?? [], [api, state]);
   const enabledFeatures = useMemo(() => {
     const features = new Set<string>();
     for (const module of manifestQuery.data?.modules ?? []) {
@@ -387,7 +410,8 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   if (state === "loading") {
     return (
       <ThemeProvider storeContext={shellContext}>
-        <ShellFrame navigation={navigation} panels={[]} path={path} title="Loading modules" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} enabledFeatures={enabledFeatures} accountAction={<UserMenu />}>
+        <ShellFrame navigation={[backendNavigation,...navigation]} panels={[]} path={path} title="Loading modules" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} backendAction={<BackendSwitcher connections={connections} onNavigate={navigateTo} />} enabledFeatures={enabledFeatures} accountAction={<UserMenu />}>
+          <BackendConnectionNotice connections={connections} />
           <SkeletonRows rows={8} label="Loading Studio modules" />
         </ShellFrame>
       </ThemeProvider>
@@ -397,8 +421,10 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   if (state === "failed") {
     return (
       <ThemeProvider storeContext={shellContext}>
-        <ShellFrame navigation={navigation} panels={[]} path={path} title="Startup failed" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} enabledFeatures={enabledFeatures} accountAction={<UserMenu />}>
+        <ShellFrame navigation={[backendNavigation,...navigation]} panels={[]} path={path} title="Startup failed" onNavigate={navigateTo} backendBaseUrl={backendBaseUrl} backendAction={<BackendSwitcher connections={connections} onNavigate={navigateTo} />} enabledFeatures={enabledFeatures} accountAction={<UserMenu />}>
           <div className="error-state">{error}</div>
+          <BackendConnectionNotice connections={connections} />
+          <Suspense fallback={null}><BackendsPage connections={connections} navigate={navigateTo} /></Suspense>
         </ShellFrame>
       </ThemeProvider>
     );
@@ -406,6 +432,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
 
   const activeRoute = findRouteForPath(routes, path);
   const ActiveComponent = activeRoute?.component;
+  const routeAvailability = evaluateBackendRequirements(backendSession,activeRoute?.requiresBackend);
   const owningFeatureArea = findFeatureAreaForPath(featureAreas, path);
   const settingsSection = settingsSurface ? resolveSettingsSection(path, settingsGroups) : undefined;
   const pageTitle = settingsSection?.label
@@ -423,11 +450,13 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         title={pageTitle}
         onNavigate={navigateTo}
         backendBaseUrl={backendBaseUrl}
+        backendAction={<BackendSwitcher connections={connections} onNavigate={navigateTo} />}
         enabledFeatures={enabledFeatures}
-        assistantAction={<AgentLauncher open={assistantOpen} sessions={agentSessions} onClick={() => setAssistantOpen(current => !current)} />}
+        assistantAction={evaluateBackendRequirements(backendSession,[{id:"elsa.api.agent",contractVersion:"1"}]).state === "available" ? <AgentLauncher open={assistantOpen} sessions={agentSessions} onClick={() => setAssistantOpen(current => !current)} /> : null}
         themeAction={themeCapabilities.pickerEnabled ? <ThemeSwitcher /> : null}
         accountAction={<UserMenu />}
       >
+        <BackendConnectionNotice connections={connections} />
         {settingsSurface ? (
           <Suspense fallback={<SkeletonRows rows={8} label="Loading settings" />}>
             {/* Legacy /modules, /package-feeds and /theme-builder URLs must stay on this surface so the host-control gate applies. */}
@@ -447,7 +476,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
             <DevDisclosurePage />
           </Suspense>
         ) : null}
-        {!settingsSurface && ActiveComponent ? <ActiveComponent navigate={navigateTo} /> : null}
+        {!settingsSurface && ActiveComponent ? routeAvailability.state === "available" ? <ActiveComponent navigate={navigateTo} /> : <div className="empty-state" role="status">{routeAvailability.reason}<button type="button" onClick={() => navigateTo("/settings/backends")}>Choose backend</button></div> : null}
         {!settingsSurface && !ActiveComponent && path !== "/diagnostics" && path !== "/diagnostics/modules" && !(DevDisclosurePage && path === "/dev/disclosure") ? (
           <div className="empty-state">
             {owningFeatureArea
@@ -485,6 +514,7 @@ export function ShellFrame({
   assistantAction,
   themeAction,
   accountAction,
+  backendAction,
   enabledFeatures,
   onNavigate,
   children
@@ -497,6 +527,7 @@ export function ShellFrame({
   assistantAction?: React.ReactNode;
   themeAction?: React.ReactNode;
   accountAction?: React.ReactNode;
+  backendAction?: React.ReactNode;
   enabledFeatures?: ReadonlySet<string> | readonly string[];
   onNavigate: (path: string) => void;
   children: React.ReactNode;
@@ -787,13 +818,13 @@ export function ShellFrame({
         ) : null}
 
         <div className="sidebar-footer" role="group" aria-label="Environment and account">
-          <div className="sidebar-environment" role="group" aria-label={`Configured backend endpoint: ${backendHost}`} title="Configured backend endpoint; connectivity is not measured">
+          {backendAction ?? <div className="sidebar-environment" role="group" aria-label={`Configured backend endpoint: ${backendHost}`} title="Configured backend endpoint; connectivity is not measured">
             <span className="sidebar-environment-icon" aria-hidden="true"><Server size={16} /></span>
             <span className="sidebar-environment-copy">
               <strong>Backend API</strong>
               <small>{backendHost}</small>
             </span>
-          </div>
+          </div>}
           <div className="sidebar-account">{topNav ? null : accountAction}</div>
         </div>
       </aside>
@@ -821,7 +852,7 @@ export function ShellFrame({
       {panels.length > 0 ? <BottomPanel panels={panels} /> : null}
       {topNav ? (
         <footer className="studio-statusbar" aria-label="Environment status">
-          <span title="Configured backend endpoint; connectivity is not measured"><span className="sidebar-status-dot" aria-hidden="true" />Backend API · {backendHost}</span>
+          {backendAction ?? <span title="Configured backend endpoint; connectivity is not measured"><span className="sidebar-status-dot" aria-hidden="true" />Backend API · {backendHost}</span>}
           <span>Studio / {title}</span>
         </footer>
       ) : null}
@@ -1561,10 +1592,26 @@ export function App() {
   // data fetching, and dialogs — and so an unauthenticated session never renders backend-bound UI.
   return (
     <StudioAuthBoundary manager={authManager}>
-      <QueryProvider>
-        <AppContent authManager={authManager} />
-        <DialogHost />
-      </QueryProvider>
+      <StableHostApplication authManager={authManager} />
     </StudioAuthBoundary>
   );
+}
+
+function StableHostApplication({authManager}:{authManager:AuthProviderManager|null}) {
+  const {session} = useAuthContext();
+  const scope = JSON.stringify([session.status,session.subject,session.tenantId]);
+  const initial = useRef(scope);
+  useEffect(() => {if (initial.current !== scope) window.location.reload();},[scope]);
+  if (initial.current !== scope) return <p role="status">Your Studio identity changed. Reloading connections…</p>;
+  return <QueryProvider><BackendApplication authManager={authManager} /><DialogHost /></QueryProvider>;
+}
+
+function BackendApplication({authManager}:{authManager:AuthProviderManager|null}) {
+  const hostAuth = useAuthContext();
+  const [connections] = useState(() => new BackendConnections(getStudioRuntimeConfig(),createStudioEndpointContext(window.location.origin,authManager),authManager,hostAuth.session));
+  const snapshot = useSyncExternalStore(connections.subscribe,connections.getSnapshot);
+  useEffect(() => {void connections.initialize();},[connections]);
+  if (!snapshot.active) return <ThemeProvider storeContext={connections.hostContext}><ShellFrame navigation={[backendNavigation,appearanceNavigation]} panels={[]} path="/settings/backends" title="Backends" backendBaseUrl={resolveRuntimeBaseUrl(getStudioRuntimeConfig().backendBaseUrl,window.location.origin)} backendAction={<BackendSwitcher connections={connections} onNavigate={path => window.location.assign(path)} />} onNavigate={path => window.location.assign(path)} accountAction={<UserMenu />}><BackendConnectionNotice connections={connections} /><Suspense fallback={<SkeletonRows rows={3} />}><BackendsPage connections={connections} navigate={path => window.location.assign(path)} /></Suspense></ShellFrame></ThemeProvider>;
+  const content = <AppContent authManager={authManager} backendSession={snapshot.active} connections={connections} />;
+  return <HostAuthContext.Provider value={hostAuth}>{snapshot.active.manager === authManager ? content : snapshot.active.manager ? <AuthProvider manager={snapshot.active.manager}>{content}</AuthProvider> : <AnonymousAuthProvider>{content}</AnonymousAuthProvider>}</HostAuthContext.Provider>;
 }

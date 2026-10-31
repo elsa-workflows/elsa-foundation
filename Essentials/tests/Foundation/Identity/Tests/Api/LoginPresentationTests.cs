@@ -8,6 +8,15 @@ namespace Elsa.Foundation.Identity.Tests.Api;
 public sealed class LoginPresentationTests
 {
     [Fact]
+    public async Task Shell_login_form_and_builtin_artwork_keep_the_request_path_base()
+    {
+        await using var fixture = await TokenEndpointFixture.StartAsync(pathBase:"/tenant-a");
+        var html = await fixture.Client.GetStringAsync("/tenant-a/_elsa/identity/login?returnUrl=/studio");
+        Assert.Contains("action=\"/tenant-a/_elsa/identity/login\"",html);
+        Assert.Contains("/tenant-a/_elsa/identity/login-assets/",html);
+    }
+
+    [Fact]
     public async Task Presentation_replacement_receives_validated_return_and_real_security_fields()
     {
         LoginPageContext? received = null;

@@ -1,6 +1,7 @@
 import { StudioPageHeader, StudioButton } from "@elsa-workflows/studio-ui";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { resolveBackendPath } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
 
 type StructuredLogLevel = "Trace" | "Debug" | "Information" | "Warning" | "Error" | "Critical";
@@ -99,7 +100,7 @@ export function register(api: ElsaStudioModuleApi) {
   moduleApi = api;
 
   api.navigation.add({
-    id: "structured-logs",
+    id: "structured-logs", requiresBackend:[{id:"elsa.api.structured-logs",contractVersion:"1"}],
     label: "Structured logs",
     path: "/diagnostics/structured-logs",
     order: 860,
@@ -108,14 +109,14 @@ export function register(api: ElsaStudioModuleApi) {
   });
 
   api.routes.add({
-    id: "structured-logs",
+    id: "structured-logs", requiresBackend:[{id:"elsa.api.structured-logs",contractVersion:"1"}],
     label: "Structured logs",
     path: "/diagnostics/structured-logs",
     component: StructuredLogsPage
   });
 
   api.panels.add({
-    id: "structured-logs",
+    id: "structured-logs", requiresBackend:[{id:"elsa.api.structured-logs",contractVersion:"1"}],
     title: "Structured Logs",
     order: 1_010,
     component: StructuredLogsPanel
@@ -622,7 +623,7 @@ export function createStreamUrl(context: StudioEndpointContext, filters: Structu
   const query = createStructuredLogQuery(filters);
   const queryString = query.toString();
   const suffix = queryString ? `?${queryString}` : "";
-  return new URL(`${structuredLogsEndpointPrefix}/stream${suffix}`, context.baseUrl).toString();
+  return new URL(resolveBackendPath(context.baseUrl,`${structuredLogsEndpointPrefix}/stream${suffix}`), context.baseUrl).toString();
 }
 
 export function appendStructuredLogEntries(current: StructuredLogEntry[], entries: StructuredLogEntry[]): AppendStructuredLogResult {

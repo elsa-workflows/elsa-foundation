@@ -1,6 +1,6 @@
 # Production Hosting browser package qualification
 
-This tool packs the actual Core, Api, Hosting and Dashboard projects from an owned committed source snapshot, or consumes those four production candidates from `--packages`. It uses public Hosting/CShells composition in external Web SDK consumers; it creates no replacement library or host implementation.
+This tool packs the actual Core, Api, Hosting, Dashboard and Preferences.Core projects from an owned committed source snapshot, or consumes those five production candidates from `--packages`. It uses public Hosting/CShells composition in external Web SDK consumers; it creates no replacement library or host implementation.
 
 Build the Studio frontend and commit production inputs first, then run from the repository root:
 

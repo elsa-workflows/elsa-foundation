@@ -1,3 +1,4 @@
+import { qualifyStudioBackendPath } from "@elsa-workflows/studio-sdk";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { AlertCircle, Check, Package, Plus, Search } from "lucide-react";
 import { StudioHttpError, type StudioAgentRegistry, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
@@ -376,7 +377,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session, homeCreateRe
   };
 
   const openDefinitionArtifacts = (definitionId: string) => {
-    window.history.pushState({}, "", `/workflows/executables?definition=${encodeURIComponent(definitionId)}`);
+    window.history.pushState({}, "", qualifyStudioBackendPath(`/workflows/executables?definition=${encodeURIComponent(definitionId)}`));
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
