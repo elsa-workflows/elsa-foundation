@@ -9,7 +9,7 @@ const { chromium, expect } = require("@playwright/test");
 const configPath = process.argv[2];
 if (!configPath || !path.isAbsolute(configPath)) throw new Error("Supply an absolute private browser configuration path.");
 const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount"]);
+const supported = new Set(["resource", "workflow", "duplicate-execute", "duplicate-ack", "deny-before-effect", "client-binding-removed", "malformed-result", "lost-confirmation", "renderer-unavailable", "consumed-intent-remount", "sdk-incompatible"]);
 if (!supported.has(config.journey)) throw new Error("Unsupported browser journey: " + config.journey);
 const witness = JSON.parse(fs.readFileSync(new URL("./witness.json", import.meta.url), "utf8"));
 function need(condition, message) { if (!condition) throw new Error(message); }
@@ -52,6 +52,9 @@ const page = await context.newPage();
 const streamCapture = await captureNativeStreams(page);
 page.setDefaultTimeout(30000);
 const requests = [], owningWrites = [], pageErrors = [], consoleMessages = [], failedRequests = [];
+const resourceInteractions = [], moduleOwnerReads = [], pendingOwnerReads = [];
+await context.exposeBinding("qualificationObserveResourceInteraction", (_source, value) => resourceInteractions.push(value));
+await context.addInitScript(observeResourceInteractions, { route: witness.route });
 let owningDraftPath;
 page.on("pageerror", error => pageErrors.push(error.message));
 page.on("console", message => {
@@ -72,7 +75,64 @@ page.on("request", request => {
   if (url.origin !== backend || !url.pathname.startsWith("/_elsa/agent/") || request.method() !== "POST") return;
   requests.push({ url: request.url(), method: request.method(), body: request.postDataJSON() });
 });
+page.on("response", response => {
+  const url = new URL(response.url());
+  if (url.origin !== backend || url.pathname !== witness.ownerEndpoint || response.request().method() !== "GET") return;
+  const observation = { url: diagnosticUrl(response.url()), status: response.status(), completed: false };
+  moduleOwnerReads.push(observation);
+  pendingOwnerReads.push(response.text().then(rawBody => Object.assign(observation, { rawBody, completed: true }))
+    .catch(error => { observation.error = error.message; }));
+});
 const dock = () => page.getByRole("region", { name: "Weaver assistant", exact: true });
+function observeResourceInteractions({ route }) {
+  const labels = ["Read with Weaver", "Review visibility change", "Show Acme status card on Home"];
+  let pressed = null, sequence = 0;
+  function control(target) {
+    if (!(target instanceof Element)) return null;
+    const node = target.closest('button, input[type="checkbox"]');
+    const label = node?.tagName === "BUTTON" ? node.textContent?.trim() : node?.closest("label")?.textContent?.trim();
+    return labels.includes(label) ? { node, label } : null;
+  }
+  function identity(target) {
+    return { tag: target instanceof Element ? target.tagName : null, label: control(target)?.label ?? null };
+  }
+  function rect(node) {
+    const { x, y, width, height } = node.getBoundingClientRect();
+    return { x, y, width, height };
+  }
+  function emit(type, event, active, phase) {
+    // Only exact fixture control labels and geometry leave the page. Unknown
+    // release/focus targets contribute their tag, never text or input values.
+    const target = control(event?.target);
+    const value = { type, phase, label: target?.label ?? null, isTrusted: event?.isTrusted,
+      disabled: target?.node.disabled, checked: target?.node.tagName === "INPUT" ? target.node.checked : undefined,
+      target: identity(event?.target), activeElement: identity(document.activeElement),
+      clientX: event?.clientX, clientY: event?.clientY, pointerId: event?.pointerId,
+      at: performance.now(), timeOrigin: performance.timeOrigin };
+    if (active) Object.assign(value, { activationId: active.id, pressedLabel: active.label,
+      pressedElementConnected: active.node.isConnected, pressedElementDisabled: active.node.disabled,
+      originalRect: active.rect, currentRect: rect(active.node),
+      targetInsidePressedElement: event?.target instanceof Node ? active.node.contains(event.target) : undefined,
+      hitAtPressPoint: identity(document.elementFromPoint(active.x, active.y)) });
+    void window.qualificationObserveResourceInteraction(value).catch(() => undefined);
+  }
+  for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "change", "pointercancel"])
+    document.addEventListener(type, event => {
+      if (location.pathname !== route) return;
+      const target = control(event.target);
+      if (type === "pointerdown") {
+        pressed = target ? { ...target, id: ++sequence, rect: rect(target.node), x: event.clientX, y: event.clientY } : null;
+        if (pressed) {
+          const active = pressed;
+          queueMicrotask(() => emit("activation-snapshot", null, active, "microtask"));
+          requestAnimationFrame(() => emit("activation-snapshot", null, active, "animation-frame"));
+        }
+      }
+      if (!target && !pressed) return;
+      emit(type, event, pressed);
+      if (type === "click" || type === "pointercancel") pressed = null;
+    }, { capture: true, passive: true });
+}
 async function captureNativeStreams(target) {
   // Observe the existing browser request only. A clone/second fetch would change
   // stream consumption, and response.body() loses bytes when Studio aborts it.
@@ -623,6 +683,55 @@ async function rendererUnavailable() {
   await screenshot("renderer-fallback");
 }
 
+async function incompatibleModule() {
+  const expected = config.incompatibleModule;
+  need(expected?.moduleId === witness.moduleId && typeof expected.packageId === "string" && expected.packageId
+    && typeof expected.version === "string" && expected.version && expected.requiredSdkVersion === "999.0.0",
+  "The incompatible journey requires the actually installed incompatible archive identity.");
+  need(config.ownerPath === "/_elsa/studio/preferences/home-layout",
+    "Observe the normal persisted owner while the resource backend extension is absent.");
+  await page.goto(studio + "/diagnostics/modules");
+  await expect(page.getByRole("heading", { name: "Module load status", exact: true })).toBeVisible();
+  const before = await owner("owner-before", config.ownerPath, { "X-Elsa-Studio-Host-Id": witness.hostId });
+  result.ownerBefore = before.receipt;
+  const diagnostic = page.locator(".diagnostic-row").filter({ has: page.locator("strong", { hasText: expected.moduleId }) })
+    .filter({ has: page.locator('[data-status="incompatible"]') });
+  await expect(diagnostic.first()).toBeVisible();
+  await expect(diagnostic.first()).toContainText(expected.requiredSdkVersion);
+  const observedStatus = await diagnostic.first().locator('[data-status="incompatible"]').getAttribute("data-status");
+  result.evidence.push(retain("incompatible-module-diagnostic", { expectedArchive: expected,
+    url: diagnosticUrl(page.url()), status: observedStatus, text: await diagnostic.allTextContents() }));
+  await screenshot("incompatible-diagnostic-before-removal");
+  await page.goto(studio + witness.route);
+  await expect(page.locator(".empty-state")).toContainText("No Studio route is registered for " + witness.route);
+  await expect(page.getByRole("link", { name: "Acme status card", exact: true })).toHaveCount(0);
+  await expect(page.locator(".acme-home-settings, .acme-home-card, .acme-home-result")).toHaveCount(0);
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Home", exact: true }).click();
+  await expect(page.locator(".topbar h1")).toHaveText("Home");
+  await expect(page.getByTestId("acme-home-widget")).toHaveCount(0);
+  await page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Workflows", exact: true }).click();
+  await expect(page.locator(".topbar h1")).toContainText("Workflow");
+  await expect(page.locator("main")).not.toContainText("No Studio route is registered");
+  await page.getByRole("button", { name: /^Weaver/ }).click();
+  await expect(dock().getByTestId("weaver-provider-status")).toBeVisible();
+  await expect(dock().getByRole("button", { name: "Close assistant", exact: true })).toBeEnabled();
+  await expect(dock().locator(".agent-context-chip").filter({ hasText: "Acme status card" })).toHaveCount(0);
+  await expect(dock().getByTestId("acme-home-result")).toHaveCount(0);
+  result.evidence.push(retain("common-studio-usable", { url: diagnosticUrl(page.url()), title: await page.locator(".topbar h1").innerText(),
+    providerStatus: await dock().getByTestId("weaver-provider-status").innerText(), noPromptSubmitted: requests.length === 0 }));
+  await screenshot("incompatible-common-studio-usable");
+  await dock().getByRole("button", { name: "Close assistant", exact: true }).click();
+  const after = await owner("owner-after", config.ownerPath, { "X-Elsa-Studio-Host-Id": witness.hostId });
+  expect(after.value).toEqual(before.value);
+  expect(requests).toEqual([]);
+  result.ownerAfter = after.receipt;
+  result.observations = { ownerObserved: true, noFalseSuccess: true, noReplay: true,
+    browserContributionsAbsent: true, commonStudioUsable: true };
+  result.status = "failed";
+  result.expectedFailureObserved = true;
+  result.actual = { stage: "module-admission", diagnostic: observedStatus };
+}
+
 async function consumedIntentRemount() {
   need(path.isAbsolute(config.traceFile ?? "") && fs.existsSync(config.traceFile), "Remount proof needs the actual selected provider trace.");
   const offset = fs.statSync(config.traceFile).size;
@@ -725,7 +834,8 @@ function xpathString(value) {
   return "'" + value + "'";
 }
 try {
-  if (config.journey === "renderer-unavailable") await rendererUnavailable();
+  if (config.journey === "sdk-incompatible") await incompatibleModule();
+  else if (config.journey === "renderer-unavailable") await rendererUnavailable();
   else if (config.journey === "consumed-intent-remount") await consumedIntentRemount();
   else if (["workflow", "duplicate-ack", "client-binding-removed", "malformed-result", "lost-confirmation"].includes(config.journey)) await workflow();
   else await resource();
@@ -741,6 +851,8 @@ try {
 } finally {
   result.completedAt = new Date().toISOString();
   result.evidence.push(retain("agent-streams", await streamCapture()));
+  await Promise.all(pendingOwnerReads);
+  result.evidence.push(retain("resource-dispatch-boundaries", { resourceInteractions, moduleOwnerReads }));
   result.evidence.push(retain("agent-requests", requests));
   result.evidence.push(retain("owning-write-attempts", owningWrites));
   result.evidence.push(retain("browser-diagnostics", { consoleMessages, failedRequests }));

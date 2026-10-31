@@ -16,7 +16,7 @@ afterEach(() => {
 });
 
 describe("shell-owned Weaver intent", () => {
-  it.each(["close/reopen", "registry reconciliation"])("does not repeat consumed intent after %s, and admits a new request", async transition => {
+  it.each(["same dock", "close/reopen", "registry reconciliation"])("does not repeat consumed intent after %s, and admits a new request", async transition => {
     const registries: ElsaStudioModuleApi[] = [];
     let releaseRegistry: (() => void) | undefined;
     vi.spyOn(loader, "loadStudioModules").mockImplementation(async (_modules, api) => {
@@ -55,7 +55,7 @@ describe("shell-owned Weaver intent", () => {
         flushSync(() => container.querySelector<HTMLButtonElement>('button[aria-label="Close assistant"]')!.click());
         expect(container.querySelector('[aria-label="Weaver assistant"]')).toBeNull();
         flushSync(() => container.querySelector<HTMLButtonElement>(".agent-launcher")!.click());
-      } else {
+      } else if (transition === "registry reconciliation") {
         flushSync(() => window.dispatchEvent(new Event("elsa-studio:modules-changed")));
         await vi.waitFor(() => expect(releaseRegistry).toBeTypeOf("function"));
         await vi.waitFor(() => expect(container.querySelector('[aria-label="Weaver assistant"]')).toBeNull());

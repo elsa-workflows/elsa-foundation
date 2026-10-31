@@ -8,10 +8,33 @@ from unittest.mock import patch
 
 from agent_transport import Response, AgentTransportError
 from journey_runtime import expect_error, same, BASE_GRANTS, browser_inputs, JourneyRuntime
-from journeys import _unchanged, _seed_principals, qualify_distributions, _semantic_refusal
+from journeys import _unchanged, _seed_principals, qualify_distributions, _semantic_refusal, _remove
 
 
 class JourneyBoundariesTests(unittest.TestCase):
+    def test_changed_disable_and_reconcile_generations_cannot_mask_package_still_installed(self):
+        package = {"id": "Resource.Package", "version": "1.2.3", "sha256": "a" * 64}
+        inventory = {"resource.package": {"id": package["id"], "version": package["version"], "installPath": "/owned/native/resource"}}
+        class Native:
+            def __init__(self, removal_generation): self.removal_generation = removal_generation
+            def membership(self, *args, **kwargs): return inventory, {"receipt": {}, "body": {}}
+            def generation(self, client, name):
+                return {"generation": self.removal_generation if name.endswith("removed-generation") else "before-disable", "tools": [], "contextSources": []}, {"receipt": {}}
+            def feature(self, *args, **kwargs): return {"after": {"generation": "after-disable"}, "evidence": []}
+            def reconcile(self, *args, **kwargs): return {}, {"receipt": {}}
+        runtime = SimpleNamespace(snapshot=lambda name: ({"unchanged": True}, {}, {}),
+            prepare=lambda name: SimpleNamespace(evidence=[]), approve=lambda turn: None,
+            backend=object(), studio=object(), witness={"backendFeature": "resource-feature"},
+            run=SimpleNamespace(report={"authors": {"backend": {"packed": {"package": package}}}}))
+        for generation in ("after-remove", "after-disable"):
+            runtime.native = Native(generation)
+            with self.subTest(removalGeneration=generation), patch("journeys.remove_resource_archives") as remove:
+                # The same strict membership failure must be reached whether removal
+                # produces another serving generation or keeps the already-disabled one.
+                with self.assertRaisesRegex(RuntimeError, "left the resource package installed"):
+                    _remove(runtime, SimpleNamespace(), {"backend": {}})
+                remove.assert_called_once()
+
     def test_controls_get_a_fresh_private_parent_without_changing_protocol_directory(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -256,7 +256,7 @@ class JourneyRuntime:
         check(not observed.get("failure"), "Browser control stopped with an unexpected cause: " + name)
         observed["evidence"].append(self.save(root, "browser-inputs", browser_inputs(config)))
         if workflow: observed["evidence"].extend(config["workflow"]["evidence"])
-        if name not in ("malformed-result", "lost-confirmation", "deny-before-effect", "client-binding-removed"):
+        if name not in ("malformed-result", "lost-confirmation", "deny-before-effect", "client-binding-removed", "sdk-incompatible"):
             correlation = correlate_browser_protocol(t, output, provider, offset=offset)
             observed["evidence"].extend([correlation["receipt"], correlation["trace"]])
             observed["observations"]["actualAdapter"] = True

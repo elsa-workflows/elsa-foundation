@@ -20,6 +20,39 @@ from runtime import private_json
 RETAINED_HEADERS = {"content-type", "content-length", "content-encoding", "cache-control", "etag", "last-modified", "retry-after", "content-range"}
 
 
+def package_inventory(snapshot, *, studio=False):
+    """Read actual active-package rows, never module/feature/feed presence.
+
+    Backend returns Nuplane's ActivePackagesSnapshot directly. Studio's protected
+    registry projects its packages from that same public admin snapshot.
+    """
+    check(isinstance(snapshot, dict) and isinstance(snapshot.get("packages"), list), "Native active-package inventory is absent")
+    if not studio:
+        check(all(isinstance(snapshot.get(key), str) and snapshot[key] for key in ("snapshotAtUtc", "persistedAtUtc", "correlationId")),
+              "Native package response lacks the public active-catalog snapshot provenance")
+    inventory = {}
+    for row in snapshot["packages"]:
+        key = "id" if studio else "packageId"
+        check(isinstance(row, dict) and all(isinstance(row.get(field), str) and row[field] for field in (key, "version", "installPath")),
+              "Native inventory contains an incomplete active-package descriptor")
+        identity = row[key].casefold()
+        check(identity not in inventory, "Native inventory ambiguously reports multiple active versions of one package")
+        inventory[identity] = {"id": row[key], "version": row["version"], "installPath": row["installPath"]}
+    return inventory
+
+
+def require_installed_package(inventory, package):
+    identity = package["id"].casefold()
+    check(identity in inventory and inventory[identity]["version"] == package["version"],
+          "The exact independently authored archive is not present in native active membership")
+
+
+def require_removed_package(before, after, package):
+    require_installed_package(before, package)
+    check(package["id"].casefold() not in after,
+          "Native reconciliation left the resource package installed; feature disable/generation change is not package removal")
+
+
 class NativeObservationError(RuntimeError):
     def __init__(self, message, observation):
         super().__init__(message)
@@ -77,6 +110,11 @@ class NativeObservations:
         if "featureConfiguration" in value:
             check(value["featureConfiguration"]["rootGuardUses"] == 0, "Feature operations escaped their actual shell owner")
         return value, record
+
+    def membership(self, client, name, *, studio=False):
+        endpoint = "/_elsa/module-management/registry" if studio else "/__qualification/packages"
+        value, record = self.json(client, name, endpoint)
+        return package_inventory(value, studio=studio), record
 
     def reconcile(self, client, name):
         value, record = self.json(client, name, "/__qualification/reconcile", {}, method="POST")

@@ -19,9 +19,10 @@ from case_records import CaseRecords, retained
 from consumers import (configure_runtime, freeze_consumer_baseline, capture_consumer_after,
                        select_native_archives, stage_native_archives, prepare_consumers)
 from evidence import CONTROL_IDS, REQUIRED_CASES, validate_report
-from journey_runtime import (BASE_GRANTS, NATIVE_HOME, HOST_HEADER, JourneyRuntime,
+from journey_runtime import (BASE_GRANTS, HOME_PREFERENCES_PATH, NATIVE_HOME, HOST_HEADER, JourneyRuntime,
                              atomic_json, expect_error, same)
-from native_lifecycle import add_resource_archives, remove_resource_archives, restore_resource_archives
+from native_lifecycle import (add_resource_archives, remove_resource_archives, restore_resource_archives,
+                              require_installed_package, require_removed_package)
 from owner_resources import seed_personal_layout
 from runtime import Http, owned_origin, private_json, server, RUNTIME_ENVIRONMENT
 
@@ -104,7 +105,9 @@ def _seed_principals(run):
 
 def _bootstrap(runtime):
     runtime.sign_in()
+    runtime.baseline_membership = {}
     for name, client in (("backend", runtime.backend), ("studio", runtime.studio)):
+        runtime.baseline_membership[name], _ = runtime.native.membership(client, name + "-baseline-membership", studio=name == "studio")
         generation, _ = runtime.native.generation(client, name + "-baseline-generation")
         if name == "backend":
             check(not any(item["moduleId"] == runtime.witness["moduleId"] for item in generation["tools"] + generation["contextSources"]),
@@ -157,7 +160,12 @@ def _active_resource(runtime, name):
     runtime.resource_manifest = copy.deepcopy(modules[0]["manifest"])
     state, _, owner = runtime.state(name + "-resource-owner")
     check(state["hostId"] == w["hostId"] and state["widgetId"] == w["widgetId"] and bool(state["revision"]), "Actual resource owner identity differs")
-    return [gen["receipt"], reg["receipt"], owner, *assets]
+    membership = []
+    for host, client in (("backend", runtime.backend), ("studio", runtime.studio)):
+        inventory, observed = runtime.native.membership(client, name + "-" + host + "-membership", studio=host == "studio")
+        require_installed_package(inventory, runtime.run.report["authors"][host]["packed"]["package"])
+        membership.append(observed["receipt"])
+    return [gen["receipt"], reg["receipt"], owner, *assets, *membership]
 
 
 def _install(runtime, records):
@@ -412,19 +420,35 @@ def _remove(runtime, records, deltas):
     pending = runtime.prepare("pending-before-removal"); runtime.approve(pending)
     evidence = [bread, *pending.evidence]
     before_generations = {}
+    membership_transitions = {}
     for name in ("backend", "studio"):
         client = runtime.backend if name == "backend" else runtime.studio
+        package = runtime.run.report["authors"][name]["packed"]["package"]
+        installed, installed_record = runtime.native.membership(client, name + "-membership-before-disable", studio=name == "studio")
+        require_installed_package(installed, package)
+        evidence.append(installed_record["receipt"])
         generation, record = runtime.native.generation(client, name + "-before-module-removal")
         before_generations[name] = generation["generation"]; evidence.append(record["receipt"])
         feature = runtime.witness[name + "Feature"]
         disabled = runtime.native.feature(client, name + "-disable-module", feature, enabled=False)
         evidence.extend(disabled["evidence"])
+        disabled_inventory, disabled_record = runtime.native.membership(client, name + "-membership-after-disable", studio=name == "studio")
+        require_installed_package(disabled_inventory, package)
+        evidence.append(disabled_record["receipt"])
         remove_resource_archives(runtime.run, name, deltas[name])
         _, record = runtime.native.reconcile(client, name + "-native-remove")
         evidence.append(record["receipt"])
         current, record = runtime.native.generation(client, name + "-removed-generation")
-        check(current["generation"] != before_generations[name], "Actual module removal did not change the serving generation")
         evidence.append(record["receipt"])
+        removed, removed_record = runtime.native.membership(client, name + "-membership-after-reconcile", studio=name == "studio")
+        require_removed_package(disabled_inventory, removed, package)
+        check(all(identity in removed and removed[identity]["version"] == row["version"] for identity, row in runtime.baseline_membership[name].items()),
+              "Resource removal changed unrelated baseline native package membership")
+        evidence.append(removed_record["receipt"])
+        membership_transitions[name] = {"archive": {"id": package["id"], "version": package["version"], "sha256": package["sha256"]},
+            "beforeDisable": installed_record["body"], "afterDisable": disabled_record["body"], "afterReconcile": removed_record["body"],
+            "generationBeforeDisable": before_generations[name], "generationAfterDisable": disabled["after"]["generation"], "generationAfterRemoval": current["generation"],
+            "removalReloadedServingShell": current["generation"] != disabled["after"]["generation"]}
         if name == "backend":
             check(not any(row["moduleId"] == runtime.witness["moduleId"] for row in current["tools"] + current["contextSources"]), "Removed package still contributes resource contracts")
     registry, reg = runtime.native.json(runtime.studio, "removed-registry", "/_elsa/module-management/registry")
@@ -446,11 +470,12 @@ def _remove(runtime, records, deltas):
     checks = _unchanged(before, after)
     runtime.record(records, "pending-module-removed", bref, aref, evidence + [response.receipt, aread], checks,
         actual={"stage": "proposal-lookup", "diagnostic": value["error"]["code"]},
-        extra={"generationBoundRetention": "The native reload replaced shell-local in-memory Agent stores; the old proposal is absent and was never retargeted or replayed.", "originalProposalId": pending.proposal["id"]})
+        extra={"generationBoundRetention": "The native reload replaced shell-local in-memory Agent stores; the old proposal is absent and was never retargeted or replayed.",
+               "originalProposalId": pending.proposal["id"], "nativeMembership": membership_transitions})
     bootstrap = current.bootstrap().require_status(200)
     check(bootstrap.json()["data"]["providerStatus"] == "available", "Removing the resource made the unrelated actual provider unavailable")
     runtime.record(records, "module-remove", bref, aref, evidence + [aread, bootstrap.receipt],
-        {"membership": True, "servingGeneration": True, "contributions": True, "providerAvailable": True})
+        {"membership": True, "servingGeneration": True, "contributions": True, "providerAvailable": True}, extra={"nativeMembership": membership_transitions})
 
 
 def _incompatible(runtime, records):
@@ -463,14 +488,30 @@ def _incompatible(runtime, records):
     _, reconciled = runtime.native.reconcile(runtime.studio, "incompatible-native-install")
     # Enable the actual feature so admission is tested rather than hidden behind disabled status.
     applied = runtime.native.feature(runtime.studio, "incompatible-feature-enable", runtime.witness["studioFeature"], enabled=True)
+    installed, installed_record = runtime.native.membership(runtime.studio, "incompatible-active-membership", studio=True)
+    require_installed_package(installed, package)
     registry, record = runtime.native.json(runtime.studio, "incompatible-registry", "/_elsa/module-management/registry")
     module = next((item for item in registry["modules"] if item["id"] == runtime.witness["moduleId"]), None)
     check(module is not None and module["version"] == package["version"] and module["requiredSdkVersion"] == "999.0.0" and module["requiredHostVersion"] == "*"
           and module["compatibility"] == "incompatible" and module["status"] != "available", "Real unsupported SDK declaration was not the cause of native module refusal")
-    after, aref, aread = runtime.snapshot("incompatible-owner-after")
-    runtime.record(records, "sdk-incompatible", bref, aref, [bread, aread, reconciled["receipt"], record["receipt"], *applied["evidence"],
-        runtime.save(runtime.output("incompatible-input"), "artifact", package)], _unchanged(before, after),
-        actual={"stage": "module-admission", "diagnostic": module["compatibility"]})
+    native_evidence = [bread, reconciled["receipt"], installed_record["receipt"], record["receipt"], *applied["evidence"],
+        runtime.save(runtime.output("incompatible-input"), "artifact", package)]
+    class BrowserAndNativeRecords:
+        def add(self, name, observation):
+            check(name == "sdk-incompatible" and observation.get("observations", {}).get("browserContributionsAbsent") is True
+                  and observation["observations"].get("commonStudioUsable") is True, "SDK control lacks actual browser exclusion and common Studio usability observations")
+            after, aref, aread = runtime.snapshot("incompatible-owner-after-browser")
+            _unchanged(before, after)
+            current, current_record = runtime.native.membership(runtime.studio, "incompatible-membership-after-browser", studio=True)
+            require_installed_package(current, package)
+            observation.update(ownerBefore=bref, ownerAfter=aref, nativeIncompatibleModule={
+                "packageId": package["id"], "version": package["version"], "sha256": package["sha256"],
+                "requiredSdkVersion": module["requiredSdkVersion"], "compatibility": module["compatibility"]})
+            observation["evidence"].extend([*native_evidence, aread, current_record["receipt"]])
+            return records.add(name, observation)
+    runtime.browser(BrowserAndNativeRecords(), "sdk-incompatible", "sdk-incompatible", extra={
+        "ownerPath": HOME_PREFERENCES_PATH, "incompatibleModule": {"moduleId": runtime.witness["moduleId"],
+        "packageId": package["id"], "version": package["version"], "requiredSdkVersion": author["requiredSdkVersion"]}})
     author["runtimeRejectionObserved"] = True
     runtime.run.save()
     runtime.native.feature(runtime.studio, "incompatible-feature-disable", runtime.witness["studioFeature"], enabled=False)

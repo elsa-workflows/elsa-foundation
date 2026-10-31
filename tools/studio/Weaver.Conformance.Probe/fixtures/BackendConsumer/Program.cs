@@ -147,6 +147,8 @@ var generations = new ConditionalWeakTable<object, GenerationIdentity>();
 app.MapGet("/health/live", () => Results.Ok(new { status = "live" }));
 app.MapPost("/__qualification/reconcile", async (INuplaneAdminOperations operations, CancellationToken cancellationToken) =>
     await operations.TriggerReconcileAsync(cancellationToken)).RequirePermission(ModuleManagementPermissionKeys.Manage);
+app.MapGet("/__qualification/packages", async (INuplaneAdminOperations operations, CancellationToken cancellationToken) =>
+    await operations.GetPackagesAsync(cancellationToken)).RequirePermission(ModuleManagementPermissionKeys.Read);
 app.MapGet("/__qualification/generation", async (IShellRegistry registry, CancellationToken cancellationToken) => {
     var shell = await registry.GetOrActivateAsync(shellName, cancellationToken);
     await using var scope = shell.BeginScope();
