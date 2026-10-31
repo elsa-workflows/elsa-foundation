@@ -40,6 +40,7 @@ import {
   describeDictionaryForInput,
   getLiteralDefaultValue,
   isRepeaterOptOut,
+  isStringType,
   readPortableExpressionDefinition,
   readWrappedInput,
   secretSyntax,
@@ -878,7 +879,9 @@ function PropertyRow({
       ? nextDescriptor.editingMode === "text"
         ? { ...portableDefinition, language: nextSyntax }
         : nextDescriptor.editingMode === "literal"
-          ? portableDefinition.source
+          ? isStringType(input.typeName)
+            ? portableDefinition.source
+            : transition.nextValue
           : transition.nextValue
       : transition.nextValue;
     if (requiresConfirmation) {

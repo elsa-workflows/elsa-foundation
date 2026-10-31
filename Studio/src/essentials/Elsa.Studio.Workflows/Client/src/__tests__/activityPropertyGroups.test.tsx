@@ -1397,6 +1397,37 @@ describe("activity property organization", () => {
     });
   });
 
+  it("uses the literal default when switching a bound non-string expression to Literal", () => {
+    const changes: ActivityNode[] = [];
+    const definition = {
+      language: "JavaScript",
+      source: "args.Count",
+      resultType: { alias: "Int32", collectionKind: "Single" },
+      parameters: { Count: { kind: "WorkflowRequest", memberKey: "Count" } },
+      options: {},
+      capabilityProfile: "binding-pure-v1"
+    };
+    const container = renderPanel([
+      input("Count", { referenceKey: "count", typeName: "System.Int32", defaultValue: 42, isWrapped: true })
+    ], {
+      activity: activity({ count: { typeName: "System.Int32", expression: { type: "JavaScript", value: definition } } }),
+      onChange: next => changes.push(next)
+    });
+
+    openAndSelect(container, "Literal");
+
+    const confirmation = container.querySelector<HTMLElement>("[role='alertdialog']")!;
+    expect(confirmation.textContent).toContain("will replace the current value and remove 1 expression binding");
+    const replace = [...confirmation.querySelectorAll<HTMLButtonElement>("button")]
+      .find(button => button.textContent === "Replace value and remove 1 binding")!;
+    flushSync(() => replace.click());
+
+    expect((changes.at(-1)!.count as { expression: { type: string; value: unknown } }).expression).toEqual({
+      type: "Literal",
+      value: 42
+    });
+  });
+
   it("preserves an ordinary string expression as a Literal without confirmation", () => {
     const changes: ActivityNode[] = [];
     const container = renderPanel([
