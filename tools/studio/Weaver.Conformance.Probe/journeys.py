@@ -553,7 +553,7 @@ def _restore(runtime, records, deltas):
     check(same(before, after), "Restoring original archive bytes changed the owner")
     for name, delta in deltas.items():
         for item in delta["added"]:
-            check(sha(item["path"]) == sha(item["sourceArchive"]) == item["sha256"], "Restoration did not use the original independent artifact bytes")
+            check(sha(Path(item["path"])) == sha(Path(item["sourceArchive"])) == item["sha256"], "Restoration did not use the original independent artifact bytes")
     runtime.record(records, "module-restore", bref, aref, [*evidence, aread], {"originalArchive": True, "membership": True, "servingGeneration": True, "contributions": True})
 
 

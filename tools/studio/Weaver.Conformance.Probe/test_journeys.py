@@ -1,6 +1,7 @@
 """Fail-closed coordinator boundaries; these tests are not runtime witness evidence."""
 from pathlib import Path
 import copy
+import hashlib
 import json
 import tempfile
 from types import SimpleNamespace
@@ -9,10 +10,47 @@ from unittest.mock import Mock, patch
 
 from agent_transport import Response, AgentTransportError
 from journey_runtime import expect_error, same, BASE_GRANTS, browser_inputs, JourneyRuntime
-from journeys import _unchanged, _seed_principals, qualify_distributions, _semantic_refusal, _remove, _incompatible
+from journeys import _unchanged, _seed_principals, qualify_distributions, _semantic_refusal, _remove, _incompatible, _restore
 
 
 class JourneyBoundariesTests(unittest.TestCase):
+    def restore_runtime(self, root):
+        deltas = {}
+        for name in ("backend", "studio"):
+            original, staged = root / (name + "-author.nupkg"), root / (name + "-feed.nupkg")
+            data = ("synthetic retained " + name + " archive bytes").encode()
+            original.write_bytes(data); staged.write_bytes(data)
+            deltas[name] = {"added": [{"sourceArchive": str(original), "path": str(staged), "sha256": hashlib.sha256(data).hexdigest()}]}
+        runtime = SimpleNamespace(run=SimpleNamespace(root=root), backend=object(), studio=object(),
+            witness={"hostId": "test-host", "backendFeature": "backend", "studioFeature": "studio"},
+            cas_control=root / "control", cas_receipt=root / "receipt", record=Mock(),
+            snapshot=Mock(return_value=({"revision": "r1", "value": {"unchanged": True}}, {}, {})),
+            native=SimpleNamespace(reconcile=Mock(return_value=({}, {"receipt": {}})), feature=Mock(return_value={"evidence": []})))
+        return runtime, json.loads(json.dumps(deltas))
+
+    def test_restore_identity_guard_reads_actual_files_from_serialized_delta_paths(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            runtime, deltas = self.restore_runtime(Path(temporary))
+            self.assertIsInstance(deltas["backend"]["added"][0]["path"], str)
+            self.assertIsInstance(deltas["backend"]["added"][0]["sourceArchive"], str)
+            with patch("journeys.restore_resource_archives") as restore, patch("journeys._active_resource", return_value=[]) as active:
+                _restore(runtime, object(), deltas)
+            self.assertEqual(2, restore.call_count); self.assertEqual(2, runtime.native.reconcile.call_count)
+            active.assert_called_once(); runtime.record.assert_called_once()
+
+    def test_restore_refuses_changed_copy_original_expected_digest_or_owner(self):
+        for kind in ("copy", "original", "expected-sha", "both-archives", "owner"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temporary:
+                runtime, deltas = self.restore_runtime(Path(temporary)); item = deltas["studio"]["added"][0]
+                if kind in ("copy", "both-archives"): Path(item["path"]).write_bytes(b"changed bytes")
+                if kind in ("original", "both-archives"): Path(item["sourceArchive"]).write_bytes(b"changed bytes")
+                if kind == "expected-sha": item["sha256"] = "f" * 64
+                if kind == "owner": runtime.snapshot.side_effect = [({"value": True}, {}, {}), ({"value": False}, {}, {})]
+                with patch("journeys.restore_resource_archives"), patch("journeys._active_resource", return_value=[]):
+                    with self.assertRaisesRegex(RuntimeError, "Restor"):
+                        _restore(runtime, object(), deltas)
+                runtime.record.assert_not_called()
+
     class BrowserObserved(Exception):
         pass
 
