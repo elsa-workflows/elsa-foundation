@@ -1,0 +1,82 @@
+{
+  "executingProductSource": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+  "mainAdopted": "3e93e06d9bd22763c81767ca296c8924142d030b",
+  "collectionCssCorrectionSource": "4d62b2f30331bc5e14d1a6d1a66ff7f6f68cc9df",
+  "frontendPassed": 4092,
+  "frontendPackages": 22,
+  "affectedWorkflowsFrontend": 2812,
+  "studioDotnetPassed": 675,
+  "browserFirstSuite": {
+    "startTime": "2026-10-31T14:53:28.073Z",
+    "duration": 147145.949,
+    "expected": 165,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "browserRootReconciled": {
+    "startTime": "2026-10-31T14:51:16.122Z",
+    "duration": 131356.333,
+    "expected": 76,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "browserInheritedFirstRun": {
+    "passed": 66,
+    "failed": 10,
+    "skipped": 0,
+    "productionStudioTreeIdenticalToMainAtFirstFailure": true,
+    "nameAssertion": "Target existing strong name element",
+    "rowFailure": "General .wf-grid-row small rule defeats default description hiding; row is49px in the regression browser",
+    "discardedSeparatorHypothesis": "68passed/8failed; clientHeight also49; original measurement restored",
+    "cssCorrection": "Qualify default hiding with .wf-definitions-list; retain existing Minimal override and original <=48px geometry guard"
+  },
+  "cancelledInitialSelection": "Default822-case selection intentionally cancelled as too broad; not a passing gate",
+  "initialPrivateRootConfig": "No tests ran because relative vite.config.ts was resolved from wrong cwd; exact inherited config cwd restored",
+  "freshStudio": {
+    "actualStudioFamiliesVerified": 2,
+    "completedNewRuns": 4,
+    "originalRunObservations": 9,
+    "wholeStoresVerified": 12,
+    "retainedNativeMaterialCounts": [
+      84,
+      92
+    ],
+    "frozenAuthoringPreserved": true,
+    "sourceRevision": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+    "existingStudioCompatibilityProved": true,
+    "directModelStudioAcceptanceProved": false
+  },
+  "controls": {
+    "source": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+    "testsRun": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "successful": true,
+    "unchangedControlSource": true,
+    "controlSourceSha256": "b2b933c857e208881c7064ae83370f1aad003905eed030b3170d486993731214"
+  },
+  "frozenAssetsUnchanged": 104,
+  "earlierWholeHosting": {
+    "source": "8e9b31360d4c71c4cdd70f18cb93d70bedc57bb0",
+    "passed": 43,
+    "failed": 0,
+    "skipped": 0,
+    "backendAndHostingTreesUnchangedInB7": true
+  },
+  "publicApiComparisons": {
+    "passed": 15,
+    "executingSource": "0f5f6c6efaada666f40766478ef63ad488b28e58",
+    "backendSourceUnchangedInB7": true
+  },
+  "completeReviewRounds": 7,
+  "cleanReviewRounds": 0,
+  "authorizedReviewLimit": 16,
+  "round8Started": false,
+  "requiredCandidateCiGreenClaimed": false,
+  "firstClassDirectModelStudioAccepted": false,
+  "broaderEtlAccepted": false,
+  "programComplete": false
+}

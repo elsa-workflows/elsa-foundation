@@ -4,9 +4,9 @@
 
 **Created**: 2026-10-28
 
-**Status**: In progress
+**Status**: Implemented
 
-**Delivery**: Round7 adopted two correctness findings; correction and affected qualification are in progress. Earlier actual-host/Studio evidence retains its executing sources. Clean full-PR review, exact-head/protected/resulting-main delivery and broader program acceptance remain open.
+**Delivery**: Runtime acceptance and saved Studio compatibility are evidenced in the [current qualification](evidence/main-adoption/3e93e06d9/README.md). Implemented takes effect when this implementation PR merges, as the lifecycle policy requires. Clean exact-head review, required checks, protected merge and resulting-main verification remain open; broader program acceptance remains separate.
 
 **Input**: Deliver existing [#2898](https://github.com/elsa-workflows/elsa-foundation/issues/2898) within [program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892), after verified #2735 adoption: direct and embedded BPMN hosting, restart and operational races, real recoverable pipeline invocation, and supported human-task/incident commands. Preserve authoring and saved executions. Broader operational and Studio acceptance remains [#2907](https://github.com/elsa-workflows/elsa-foundation/issues/2907).
 

@@ -1,0 +1,14 @@
+{
+  "source": "b7e23ab0984b201ab9b3eaaaf4b5d964222ca3a8",
+  "arguments": [
+    "pnpm",
+    "exec",
+    "playwright",
+    "test",
+    "--config",
+    "/tmp/elsa-2898-main-3e93-qualification/playwright.root.config.ts"
+  ],
+  "exitCode": 1,
+  "elapsedSeconds": 140.57795524597168,
+  "initialAttempt": "No tests ran: private config cwd could not resolve relative vite.config.ts; repaired cwd matches existing config location; no source changes"
+}

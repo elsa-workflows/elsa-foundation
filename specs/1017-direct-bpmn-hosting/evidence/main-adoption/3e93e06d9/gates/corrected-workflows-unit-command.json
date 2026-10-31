@@ -1,0 +1,15 @@
+{
+  "source": "4d62b2f30331bc5e14d1a6d1a66ff7f6f68cc9df",
+  "arguments": [
+    "pnpm",
+    "--filter",
+    "@elsa-workflows/studio-workflows",
+    "test",
+    "--maxWorkers=2",
+    "--minWorkers=1",
+    "--reporter=json",
+    "--outputFile=/tmp/elsa-2898-main-3e93-qualification/corrected-workflows-unit.json"
+  ],
+  "elapsedSeconds": 112.22642612457275,
+  "exitCode": 0
+}

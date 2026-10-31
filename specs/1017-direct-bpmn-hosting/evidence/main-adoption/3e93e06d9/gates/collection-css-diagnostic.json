@@ -1,0 +1,35 @@
+{
+  "sourceBeforeCorrection": "313e4cbb8",
+  "actualPriorObservation": {
+    "browser": "IAB",
+    "viewport": "1280x900",
+    "rowHeight": 48,
+    "descriptionDisplay": "block",
+    "descriptionFontSize": "12px",
+    "descriptionMarginTop": "2px",
+    "descriptionExpectedHiddenOutsideMinimal": true
+  },
+  "regressionRunnerPriorObservation": {
+    "originalSource": "b7e23ab098",
+    "initialPassed": 66,
+    "initialFailed": 10,
+    "nameTargetCorrectedPassed": 68,
+    "nameTargetCorrectedFailed": 8,
+    "rowHeight": 49,
+    "clientHeight": 49
+  },
+  "diagnosedCascade": {
+    "generalRule": ".wf-grid-row small { display: block; }",
+    "priorRule": ".wf-definition-description { display: none; }",
+    "correction": ".wf-definitions-list .wf-definition-description { display: none; }",
+    "minimalOverrideUnchanged": true
+  },
+  "afterCssHotReload": {
+    "browser": "IAB",
+    "rowHeight": 48,
+    "clientHeight": 48,
+    "descriptionDisplay": "none"
+  },
+  "assertionRestored": "Original getBoundingClientRect height <=48; no density relaxation",
+  "singleCauseOfEarlierAuthenticationLoopConfirmed": false
+}

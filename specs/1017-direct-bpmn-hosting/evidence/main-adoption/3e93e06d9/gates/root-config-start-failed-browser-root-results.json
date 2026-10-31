@@ -1,0 +1,86 @@
+{
+  "config": {
+    "argv": [
+      "/Users/sipke/Library/Application Support/fnm/node-versions/v22.23.4/installation/bin/node",
+      "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/node_modules/@playwright/test/cli.js",
+      "test",
+      "--config",
+      "/tmp/elsa-2898-main-3e93-qualification/playwright.root.config.ts"
+    ],
+    "configFile": "/tmp/elsa-2898-main-3e93-qualification/playwright.root.config.ts",
+    "rootDir": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/tests/browser",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {},
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "/tmp/elsa-2898-main-3e93-qualification/browser-root-output",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {},
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio/tests/browser",
+        "testIgnore": [],
+        "testMatch": [
+          "/(?:workflow-library|workflow-definition-browse-context|workflow-definition-move|workflow-folder-restructure|workflow-canvas-styles|adaptive-graph-ports|activity-definition-graph-authoring|instance-live-canvas)\\.spec\\.ts/"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json",
+        {
+          "outputFile": "/tmp/elsa-2898-main-3e93-qualification/browser-root-results.json"
+        }
+      ],
+      [
+        "line",
+        null
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.61.1",
+    "workers": 1,
+    "webServer": {
+      "command": "pnpm exec vite --config vite.config.ts --port 4208 --strictPort",
+      "url": "http://127.0.0.1:4208",
+      "reuseExistingServer": false,
+      "stdout": "pipe",
+      "stderr": "pipe",
+      "cwd": "/Users/sipke/.codex/worktrees/f236/elsa-foundation/Studio"
+    }
+  },
+  "suites": [],
+  "errors": [
+    {
+      "message": "Error: Process from config.webServer was not able to start. Exit code: 1",
+      "stack": "Error: Process from config.webServer was not able to start. Exit code: 1"
+    }
+  ],
+  "stats": {
+    "startTime": "2026-10-31T14:36:08.345Z",
+    "duration": 371.82700000000006,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

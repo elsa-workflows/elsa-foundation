@@ -1,0 +1,72 @@
+{
+  "sourceRevision": "82f6202a5f2e56521525092f0d06698fdeb7d10c",
+  "backendUrl": "http://127.0.0.1:54213",
+  "studioUrl": "http://127.0.0.1:54214",
+  "formFlow": "Supported password form with issued antiforgery input; values are never recorded",
+  "redirects": [
+    {
+      "status": 302,
+      "destination": "http://127.0.0.1:54214/workflows/definitions?definition=14iBsLEuiJS&authProviderId=aspnetcore-identity"
+    }
+  ],
+  "landing": {
+    "status": 200,
+    "url": "http://127.0.0.1:54214/workflows/definitions?definition=14iBsLEuiJS&authProviderId=aspnetcore-identity"
+  },
+  "cookies": [
+    {
+      "name": ".AspNetCore.Antiforgery.4mRrbW1yrEs",
+      "domain": "127.0.0.1",
+      "path": "/",
+      "secure": false,
+      "valueLength": 155
+    },
+    {
+      "name": "Elsa.Identity.Cookie",
+      "domain": "127.0.0.1",
+      "path": "/",
+      "secure": false,
+      "valueLength": 8
+    },
+    {
+      "name": "Elsa.Identity.CookieC1",
+      "domain": "127.0.0.1",
+      "path": "/",
+      "secure": false,
+      "valueLength": 3994
+    },
+    {
+      "name": "Elsa.Identity.CookieC2",
+      "domain": "127.0.0.1",
+      "path": "/",
+      "secure": false,
+      "valueLength": 1686
+    }
+  ],
+  "requests": [
+    {
+      "name": "session",
+      "status": 200,
+      "sessionStatus": "authenticated",
+      "hasAccessToken": false,
+      "allowOrigin": null,
+      "allowCredentials": null
+    },
+    {
+      "name": "crossOriginSession",
+      "status": 200,
+      "sessionStatus": "authenticated",
+      "hasAccessToken": false,
+      "allowOrigin": "http://127.0.0.1:54214",
+      "allowCredentials": "true"
+    },
+    {
+      "name": "crossOriginToken",
+      "status": 200,
+      "sessionStatus": null,
+      "hasAccessToken": true,
+      "allowOrigin": "http://127.0.0.1:54214",
+      "allowCredentials": "true"
+    }
+  ]
+}

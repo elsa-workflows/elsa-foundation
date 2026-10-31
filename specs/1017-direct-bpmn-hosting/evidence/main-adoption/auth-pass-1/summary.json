@@ -1,0 +1,75 @@
+{
+  "executingStudioSource": "82f6202a5f2e56521525092f0d06698fdeb7d10c",
+  "archiveGuardRepairSource": "8e9b31360d4c71c4cdd70f18cb93d70bedc57bb0",
+  "authorization": "Owner selected Authorize one bounded diagnostic pass; receipt PR3410 comment6544070098",
+  "boundedPassCompleted": true,
+  "supportedLoginBeforeAndAfterRestart": "Form redirects to the owned Studio origin; session/token responses200 with expected CORS headers. Cookie/token values were never retained.",
+  "browserProcedure": "One owned pair at a time; supported form sign-in with provider navigation awaited; existing original/layout fixtures only.",
+  "additionalIdentityProductCodeChanged": false,
+  "singleEarlierLoopCauseConfirmed": false,
+  "freshStudio": {
+    "actualStudioFamiliesVerified": 2,
+    "completedNewRuns": 4,
+    "originalRunObservations": 9,
+    "wholeStoresVerified": 12,
+    "retainedNativeMaterialCounts": [
+      84,
+      92
+    ],
+    "frozenAuthoringPreserved": true,
+    "sourceRevision": "82f6202a5f2e56521525092f0d06698fdeb7d10c",
+    "existingStudioCompatibilityProved": true,
+    "directModelStudioAcceptanceProved": false
+  },
+  "controls": {
+    "source": "82f6202a5f2e56521525092f0d06698fdeb7d10c",
+    "testsRun": 13,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "successful": true,
+    "unchangedControlSource": true,
+    "controlSourceSha256": "b2b933c857e208881c7064ae83370f1aad003905eed030b3170d486993731214"
+  },
+  "architectureInitialCi": {
+    "head": "82f6202a5f2e56521525092f0d06698fdeb7d10c",
+    "runId": 41205725963,
+    "jobId": 124550405733,
+    "passed": 593,
+    "failed": 1,
+    "retryFailed": 1,
+    "cause": "Archived standalone restore lock file was named packages.lock.json and treated as active solution input."
+  },
+  "localInitialRed": "The first local run began before the old Git-index lock path was removed;593pass/1fail. Retained separately.",
+  "architectureCorrected": {
+    "passed": 594,
+    "failed": 0,
+    "skipped": 0,
+    "guardSourceChanged": false,
+    "inputFormat": "Exact original bytes retained compressed with decoded hashes"
+  },
+  "wholeHosting": {
+    "source": "8e9b31360d4c71c4cdd70f18cb93d70bedc57bb0",
+    "passed": 43,
+    "failed": 0,
+    "skipped": 0,
+    "arguments": [
+      "dotnet",
+      "test",
+      "Essentials/tests/Activities/Bpmn/Hosting/Tests/Elsa.Activities.Bpmn.Hosting.Tests.csproj",
+      "-c",
+      "Release",
+      "--no-restore",
+      "--logger",
+      "trx;LogFileName=hosting-whole.trx",
+      "--results-directory",
+      "/tmp/elsa-2898-auth-pass-1"
+    ]
+  },
+  "fullReviewRoundsCompleted": 7,
+  "cleanReviewRounds": 0,
+  "authorizedReviewLimit": 16,
+  "round8Started": false,
+  "currentRequiredCiGreenClaimed": false,
+  "programComplete": false
+}

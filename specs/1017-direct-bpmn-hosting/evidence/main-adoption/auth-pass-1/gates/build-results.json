@@ -1,0 +1,30 @@
+[
+  {
+    "source": "82f6202a5f2e56521525092f0d06698fdeb7d10c",
+    "name": "workbench",
+    "arguments": [
+      "dotnet",
+      "build",
+      "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+      "-c",
+      "Release",
+      "--no-restore"
+    ],
+    "exitCode": 0,
+    "seconds": 9.707957983016968
+  },
+  {
+    "source": "82f6202a5f2e56521525092f0d06698fdeb7d10c",
+    "name": "studio",
+    "arguments": [
+      "dotnet",
+      "build",
+      "Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj",
+      "-c",
+      "Release",
+      "--no-restore"
+    ],
+    "exitCode": 0,
+    "seconds": 5.4824841022491455
+  }
+]

@@ -1,0 +1,60 @@
+[
+  {
+    "name": "browser-root",
+    "source": "4d62b2f30331bc5e14d1a6d1a66ff7f6f68cc9df",
+    "arguments": [
+      "pnpm",
+      "exec",
+      "playwright",
+      "test",
+      "--config",
+      "/tmp/elsa-2898-main-3e93-qualification/playwright.root.config.ts"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 131.86641573905945
+  },
+  {
+    "name": "browser",
+    "source": "4d62b2f30331bc5e14d1a6d1a66ff7f6f68cc9df",
+    "arguments": [
+      "pnpm",
+      "exec",
+      "playwright",
+      "test",
+      "--config",
+      "/tmp/elsa-2898-main-3e93-qualification/playwright.config.ts"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 147.73670506477356
+  },
+  {
+    "name": "test-typecheck",
+    "source": "4d62b2f30331bc5e14d1a6d1a66ff7f6f68cc9df",
+    "arguments": [
+      "pnpm",
+      "typecheck"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 10.03436803817749
+  },
+  {
+    "name": "test-lint",
+    "source": "4d62b2f30331bc5e14d1a6d1a66ff7f6f68cc9df",
+    "arguments": [
+      "pnpm",
+      "lint"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 9.310577869415283
+  },
+  {
+    "name": "corrected-frontend-build",
+    "source": "4d62b2f30331bc5e14d1a6d1a66ff7f6f68cc9df",
+    "arguments": [
+      "pnpm",
+      "build"
+    ],
+    "exitCode": 0,
+    "elapsedSeconds": 16.10865616798401
+  }
+]

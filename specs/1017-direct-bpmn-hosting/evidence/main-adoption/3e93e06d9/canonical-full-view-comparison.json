@@ -1,0 +1,12 @@
+{
+  "original": {
+    "canonicalBeforeSha256": "cc7b2ad67b824d0c01fb95bd09882332dcfdc5fefcb7df57992917f22eee51e1",
+    "canonicalAfterSha256": "cc7b2ad67b824d0c01fb95bd09882332dcfdc5fefcb7df57992917f22eee51e1",
+    "identicalFullViews": true
+  },
+  "layout": {
+    "canonicalBeforeSha256": "79167dd3ad3c5f11b4e8804c5e4509577bbb53c5b2677a90522f927ac4fc62ff",
+    "canonicalAfterSha256": "79167dd3ad3c5f11b4e8804c5e4509577bbb53c5b2677a90522f927ac4fc62ff",
+    "identicalFullViews": true
+  }
+}
